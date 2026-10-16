@@ -69,6 +69,7 @@ class ReleaseArtifactVerifierTests(unittest.TestCase):
             "current/XE-Local-AI-Engine.Client.dll": b"managed application",
             "current/XE-Local-AI-Engine.Client.deps.json": b"{}",
             "current/XE-Local-AI-Engine.Client.runtimeconfig.json": b"{}",
+            "current/uninstall-xe-local-ai-engine.ps1": b"# uninstaller",
             "current/licenses/dotnet/DOTNET-APPHOST-LICENSE.txt": b"MIT terms",
             "current/licenses/dotnet/DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt": b"apphost notices",
             "current/wwwroot/licenses/dotnet/DOTNET-APPHOST-LICENSE.txt": b"MIT terms",
@@ -268,6 +269,7 @@ class ReleaseArtifactVerifierTests(unittest.TestCase):
             "current/XE-Local-AI-Engine.Client.dll",
             "current/XE-Local-AI-Engine.Client.deps.json",
             "current/XE-Local-AI-Engine.Client.runtimeconfig.json",
+            "current/uninstall-xe-local-ai-engine.ps1",
         ):
             with self.subTest(path=path), tempfile.TemporaryDirectory() as temporary_directory:
                 files = self.windows_compliance_files()
@@ -275,6 +277,27 @@ class ReleaseArtifactVerifierTests(unittest.TestCase):
                 archive = self.make_archive(Path(temporary_directory), files)
                 with self.assertRaisesRegex(ValueError, "missing required"):
                     MODULE.verify_zip_archive(archive, "win-x64")
+
+    def test_windows_uninstall_script_must_sit_exactly_beside_the_launcher(self) -> None:
+        for substitute in (
+            "current/wrong/uninstall-xe-local-ai-engine.ps1",
+            "current/not-uninstall-xe-local-ai-engine.ps1",
+        ):
+            with self.subTest(substitute=substitute), tempfile.TemporaryDirectory() as temporary_directory:
+                files = self.windows_compliance_files()
+                files[substitute] = files.pop("current/uninstall-xe-local-ai-engine.ps1")
+                archive = self.make_archive(Path(temporary_directory), files)
+                with self.assertRaisesRegex(ValueError, "missing required CURRENT/UNINSTALL-XE-LOCAL-AI-ENGINE.PS1"):
+                    MODULE.verify_zip_archive(archive, "win-x64")
+
+    def test_publish_directory_needs_the_uninstall_script_at_its_root(self) -> None:
+        paths = [name.removeprefix("current/") for name in self.windows_compliance_files()]
+        MODULE.assert_required_paths(paths, "win-x64", "publish dir")
+        for substitute in ("wrong/uninstall-xe-local-ai-engine.ps1", "not-uninstall-xe-local-ai-engine.ps1"):
+            with self.subTest(substitute=substitute):
+                moved = [substitute if path == "uninstall-xe-local-ai-engine.ps1" else path for path in paths]
+                with self.assertRaisesRegex(ValueError, "missing required UNINSTALL-XE-LOCAL-AI-ENGINE.PS1"):
+                    MODULE.assert_required_paths(moved, "win-x64", "publish dir")
 
     def test_backend_corpus_file_hash_must_match_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
@@ -622,7 +623,7 @@ internal sealed partial class ExternalAppService
         return _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
     }
 
-    /// <summary>The three per-scope dependencies every entry point and every pipeline resolves, resolved in one place.</summary>
+    /// <summary>The per-scope dependencies every entry point and every pipeline resolves, resolved in one place.</summary>
     private sealed record ScopedServices
     {
         public required IExternalAppInstanceStore Store { get; init; }
@@ -631,13 +632,17 @@ internal sealed partial class ExternalAppService
 
         public required IContainerRuntimeResolver Resolver { get; init; }
 
+        /// <summary>The host's startup read, or <see langword="null" /> in a composition that registers none (a test host).</summary>
+        public required NodeStartupSettings? StartupSettings { get; init; }
+
         public static ScopedServices From(IServiceProvider provider)
         {
             return new ScopedServices
             {
                 Store = provider.GetRequiredService<IExternalAppInstanceStore>(),
                 Catalog = provider.GetRequiredService<IApplicationCatalogProvider>(),
-                Resolver = provider.GetRequiredService<IContainerRuntimeResolver>()
+                Resolver = provider.GetRequiredService<IContainerRuntimeResolver>(),
+                StartupSettings = provider.GetService<NodeStartupSettings>()
             };
         }
     }

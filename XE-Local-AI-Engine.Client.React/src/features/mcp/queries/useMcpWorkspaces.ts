@@ -7,12 +7,11 @@ import {
 	listWorkspacesOptions,
 	listWorkspacesQueryKey,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toMcpWorkspace } from "@/features/mcp/models/McpWorkspaceModels";
 
 export function useMcpWorkspaces() {
 	return useQuery({
-		...withResponseValidation(listWorkspacesOptions()),
+		...listWorkspacesOptions(),
 		select: (data) => (data.items ?? []).map(toMcpWorkspace),
 	});
 }
@@ -25,7 +24,7 @@ export function useCreateMcpWorkspace() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(createWorkspaceMutation()),
+		...createWorkspaceMutation(),
 		onSuccess: (_data: CreateWorkspaceResponse) => invalidateWorkspaces(queryClient),
 	});
 }
@@ -34,7 +33,7 @@ export function useDeleteMcpWorkspace() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(deleteWorkspaceMutation()),
+		...deleteWorkspaceMutation(),
 		onSuccess: (_data: DeleteWorkspaceResponse) => invalidateWorkspaces(queryClient),
 	});
 }

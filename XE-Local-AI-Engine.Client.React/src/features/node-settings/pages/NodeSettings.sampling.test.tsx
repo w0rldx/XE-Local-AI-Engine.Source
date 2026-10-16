@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 function installJsdomEnvironmentMocks(): void {
@@ -88,10 +89,6 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	updateLlamaCppRuntimeMutation: () => ({ mutationFn: vi.fn() }),
 	downloadRecommendedRerankerMutation: () => ({ mutationFn: vi.fn() }),
 	downloadRecommendedEmbeddingMutation: () => ({ mutationFn: vi.fn() }),
-}));
-
-vi.mock("@/core/api/ResponseValidation", () => ({
-	withResponseValidation: (x: unknown) => x,
 }));
 
 // The recommended-reranker download reuses the shared GgufDownload feed (SignalR hub + cancel mutation); stub it so

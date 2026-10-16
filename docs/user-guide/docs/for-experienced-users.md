@@ -19,12 +19,33 @@ guessing.
 | **Launch flags** | Benchmarked per machine, then frozen — **not visible, not editable**. A developer-mode-only panel can append extra raw flags per llama.cpp model — see below |
 | **BYO binary** | `XE_LLAMACPP_SERVER_PATH` (env var only) |
 | **Import existing GGUFs** | **Supported** — one file at a time, copied into the managed directory. Packaged desktop app only. [Details](#using-ggufs-you-already-have) |
-| **Local API** | `/api/local/v1`, loopback-only, OpenAPI at `/openapi/local/v1/…` |
+| **Local API** | `/api/local/v1`, loopback-only, additive-only within 1.x; the spec ships with every release as `openapi-v1.json` ([stability](#api-stability)) |
 | **OpenAI-compatible surface** | Opt-in inbound proxy at `/api/local/v1/proxy/v1`, bearer-key gated, loopback-only |
 | **MCP** | Both directions — outbound servers plus loopback Streamable HTTP inbound MCP; `delegate` exposes 8 shared tools, `agentic` additionally exposes the administration tools listed in the [skill reference](../../../skills/xe-local-ai-engine/references/mcp-tools.md) |
 | **Fine-tuning** | QLoRA, **Linux + NVIDIA only**, in a pinned uv-managed Python runtime. [Details](#fine-tuning-training) |
 | **Benchmarks** | One frozen task, many models; KV-cache type per run, launch receipts, optional 1–5 judge. [Details](#benchmarks) |
 | **Multi-GPU / tensor split** | Unverified — ask me |
+
+### API stability
+
+What an outside client can rely on from 1.0. The binding text is in the wiki; this is the summary.
+
+- **HTTP API.** `/api/local/v1` is additive-only within 1.x: new routes and new optional request or response fields
+  may appear. Removing, renaming or retyping a route or field waits for the next major version.
+  [Rule](../../wiki/09-api-and-hubs.md#1-the-inbound-http-api-fastendpoints)
+- **SignalR hubs.** Hub paths, event names and the wire records follow the same rule.
+  [Rule](../../wiki/09-api-and-hubs.md#2-signalr-hubs-inbound-browser--node)
+- **Inbound MCP tools.** Each tool carries a stability column; all 25 are `stable`, and a `preview` tool would be
+  the only kind allowed to change without notice. [Tool table](../../../skills/xe-local-ai-engine/references/mcp-tools.md)
+- **Preview.** No HTTP route and no hub is marked preview: everything under `/api/local/v1` is stable as of 1.0.
+- **Announcing a break.** A `CHANGELOG.md` deprecation note at least one minor release ahead, then the next major
+  version. The version follows Semantic Versioning.
+- **The spec.** Production builds do not serve the OpenAPI document. Each release carries it as the asset
+  `openapi-v1.json`, a copy of the tagged `openapi/v1.json`, covered by the release checksums and SPDX file.
+  Non-production hosts also serve it at `/openapi/local/v1/v1.json`.
+- **Loopback only.** Every route and hub is bound to the loopback interface and gated by the Host/Origin check;
+  the stability promise is for clients on the same machine. The one non-loopback listener is the container
+  bridge, which serves only the model endpoints for containers. [Security](../../wiki/12-security-and-privacy.md)
 
 ---
 

@@ -18,6 +18,7 @@ import {
 	externalAppSummary,
 	externalAppTestIds,
 } from "@/features/externalApps/test/ExternalAppFixtures";
+import de from "@/locales/de.json";
 import { jsonRoute, localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
@@ -74,6 +75,14 @@ describe("ExternalAppCatalogPage", () => {
 
 		await waitFor(() => expect(screen.getByTestId(`external-app-card-install-${applicationId}`)).toBeDefined());
 		expect((screen.getByTestId(`external-app-card-install-${applicationId}`) as HTMLButtonElement).disabled).toBe(true);
+
+		// The reason is reachable by keyboard: the wrapper takes the tab stop the disabled button cannot.
+		const wrapper = screen.getByTestId(`external-app-card-install-${applicationId}`).parentElement as HTMLElement;
+		expect(wrapper.getAttribute("tabindex")).toBe("0");
+		fireEvent.focus(wrapper);
+		expect((await screen.findByRole("tooltip")).textContent).toBe(
+			"The container runtime has to be ready before you can install an application.",
+		);
 	});
 
 	it("shows the status badge and a Details link for an installed application, with no instances query in play", async () => {
@@ -204,11 +213,73 @@ describe("ExternalAppCatalogPage", () => {
 		expect(screen.queryByTestId("external-app-catalog-refresh-failure")).toBeNull();
 	});
 
-	it("shows an empty state for an empty catalog", async () => {
-		server.use(...baseRoutes(externalAppCatalog({ applications: [] })));
+	// Decision D6: an empty catalog reads as "off" with the way to turn it on, not as a bare empty list, and the
+	// runtime card is not the next step there. Refresh stays, because it is how the gate lifts.
+	it("shows the enable card instead of the runtime card for an empty catalog", async () => {
+		server.use(...baseRoutes(externalAppCatalog({ applications: [], restartRequired: true })));
 		renderPage();
 
-		await waitFor(() => expect(screen.getByTestId("external-app-catalog-empty")).toBeDefined());
-		expect(screen.getByTestId("external-app-catalog-empty").textContent).toBe("No applications are available yet.");
+		const card = await screen.findByTestId("external-app-catalog-disabled");
+		expect(card.getAttribute("data-state")).toBe("emptyAtStartup");
+		expect(card.textContent).toContain("External apps stay off until the catalog lists an application");
+		expect(card.textContent).toContain("no online catalog is set up");
+		expect(card.textContent).toContain("ExternalApps:Catalog:RefreshUrl");
+		expect(screen.queryByTestId("external-app-runtime-card")).toBeNull();
+		expect(screen.queryByTestId("external-app-catalog-empty")).toBeNull();
+		expect(screen.getByTestId("external-app-catalog-refresh")).toBeDefined();
+	});
+
+	// The node started on an empty catalog and a refresh has since added entries: installing waits for a restart, so
+	// the card says that, and no Install button invites a click the node will refuse.
+	it("asks for a restart when the catalog gained entries after an empty-catalog start", async () => {
+		server.use(...baseRoutes(externalAppCatalog({ restartRequired: true })));
+		renderPage();
+
+		const card = await screen.findByTestId("external-app-catalog-disabled");
+		expect(card.textContent).toContain("Restart the node to enable External Apps");
+		expect(screen.queryByTestId(`external-app-card-${applicationId}`)).toBeNull();
+		expect(screen.queryByTestId("external-app-runtime-card")).toBeNull();
+		expect(card.getAttribute("data-state")).toBe("restartRequired");
+		// German carries the same instruction, not an untranslated copy of the English one.
+		expect(de.pages.externalApps.catalog.restartTitle).toBe("Starten Sie den Node neu, um Externe Apps zu aktivieren");
+	});
+
+	// A refresh emptied the catalog after a populated start: the feature is off, but the bridge listener opened at
+	// startup is still bound until a restart, and the card must not imply it closed with the catalog.
+	it("says the bridge stays open until a restart when a refresh emptied the catalog", async () => {
+		server.use(...baseRoutes(externalAppCatalog({ applications: [], bridgeOpenUntilRestart: true })));
+		renderPage();
+
+		const card = await screen.findByTestId("external-app-catalog-disabled");
+		expect(card.getAttribute("data-state")).toBe("emptyNow");
+		const warning = screen.getByTestId("external-app-catalog-bridge-open");
+		expect(warning.textContent).toContain("The container bridge stays open until a restart");
+		expect(screen.queryByTestId("external-app-runtime-card")).toBeNull();
+	});
+
+	// Codex round 2 (P3): a populated start whose bridge never opened, then a refresh to empty. The state is "empty now"
+	// and clears on the next refresh that lists an application: it claims no missing online catalog, asks for no
+	// restart, and shows no listener warning because no listener is open.
+	it("explains a catalog emptied after a populated start without claiming a missing catalog or a restart", async () => {
+		server.use(...baseRoutes(externalAppCatalog({ applications: [], refreshUrlConfigured: true })));
+		renderPage();
+
+		const card = await screen.findByTestId("external-app-catalog-disabled");
+		expect(card.getAttribute("data-state")).toBe("emptyNow");
+		expect(card.textContent).toContain("External apps come back without a restart");
+		expect(card.textContent).not.toContain("no online catalog is set up");
+		expect(card.textContent?.toLowerCase()).not.toContain("restart the node");
+		expect(screen.queryByTestId("external-app-catalog-bridge-open")).toBeNull();
+		expect(de.pages.externalApps.catalog.emptyNowTitle).toBe("Externe Apps sind aus, solange der Katalog leer ist");
+	});
+
+	it("names the configured online catalog when it was empty at startup", async () => {
+		server.use(...baseRoutes(externalAppCatalog({ applications: [], restartRequired: true, refreshUrlConfigured: true })));
+		renderPage();
+
+		const card = await screen.findByTestId("external-app-catalog-disabled");
+		expect(card.getAttribute("data-state")).toBe("emptyAtStartup");
+		expect(card.textContent).toContain("the online catalog this node is set up with listed none");
+		expect(card.textContent).not.toContain("no online catalog is set up");
 	});
 });

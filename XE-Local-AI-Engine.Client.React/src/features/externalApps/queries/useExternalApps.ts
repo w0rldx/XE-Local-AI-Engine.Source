@@ -1,5 +1,5 @@
 // Server state for the External Apps surface. Every call goes through the generated hey-api `*Options()` /
-// `*Mutation()` wrapped in withResponseValidation, exactly as `useDevWorkflows.ts` does — no hand-wired axios, no
+// `*Mutation()`, exactly as `useDevWorkflows.ts` does — no hand-wired axios, no
 // hand-written request types.
 //
 // The generated query keys are single-element arrays `[{ _id: "<operationId>", path, query, … }]`, and TanStack
@@ -30,7 +30,6 @@ import {
 	updateExternalAppMutation,
 	updateExternalAppVariablesMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { isExternalAppBusy, toExternalAppStatus } from "@/features/externalApps/models/ExternalAppModels";
 
 /** Generated operationIds, which are also the generated SDK fn names and the `_id` of every generated query key. */
@@ -76,7 +75,7 @@ interface FeedOptions {
  * "Check again" action plus a hub ping on a terminal status are what refresh it.
  */
 export function useExternalAppRuntime() {
-	return useQuery({ ...withResponseValidation(getExternalAppRuntimeOptions()) });
+	return useQuery({ ...getExternalAppRuntimeOptions() });
 }
 
 /**
@@ -89,7 +88,7 @@ export function useRefreshExternalAppRuntime() {
 	const invalidateRuntime = (): Promise<void> =>
 		queryClient.invalidateQueries({ queryKey: externalAppInvalidationKey(externalAppQueryIds.runtime) });
 	return useMutation({
-		...withResponseValidation(refreshExternalAppRuntimeMutation()),
+		...refreshExternalAppRuntimeMutation(),
 		onSuccess: invalidateRuntime,
 		// A refusal is itself news about the daemon: the 400 means the id the card OFFERED is no longer the observed
 		// one, so the card has to be re-read or it keeps offering to approve an identity the node has already rejected.
@@ -98,14 +97,14 @@ export function useRefreshExternalAppRuntime() {
 }
 
 export function useExternalAppCatalog() {
-	return useQuery({ ...withResponseValidation(listExternalAppCatalogOptions()) });
+	return useQuery({ ...listExternalAppCatalogOptions() });
 }
 
 /** A refresh can change every application's manifest, so it drops the catalog AND every single-application entry. */
 export function useRefreshExternalAppCatalog() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(refreshExternalAppCatalogMutation()),
+		...refreshExternalAppCatalogMutation(),
 		onSuccess: async () => {
 			await queryClient.invalidateQueries({ queryKey: externalAppInvalidationKey(externalAppQueryIds.catalog) });
 			await queryClient.invalidateQueries({ queryKey: externalAppInvalidationKey(externalAppQueryIds.application) });
@@ -115,7 +114,7 @@ export function useRefreshExternalAppCatalog() {
 
 export function useExternalAppApplication(applicationId: string | undefined) {
 	return useQuery({
-		...withResponseValidation(getExternalAppCatalogApplicationOptions({ path: { applicationId: applicationId ?? "" } })),
+		...getExternalAppCatalogApplicationOptions({ path: { applicationId: applicationId ?? "" } }),
 		enabled: Boolean(applicationId),
 	});
 }
@@ -127,7 +126,7 @@ export function useExternalAppApplication(applicationId: string | undefined) {
  */
 export function useExternalAppInstallPreview(applicationId: string | undefined, enabled: boolean) {
 	return useQuery({
-		...withResponseValidation(getExternalAppInstallPreviewOptions({ path: { applicationId: applicationId ?? "" } })),
+		...getExternalAppInstallPreviewOptions({ path: { applicationId: applicationId ?? "" } }),
 		enabled: enabled && Boolean(applicationId),
 		staleTime: 0,
 	});
@@ -139,7 +138,7 @@ export function useExternalAppInstallPreview(applicationId: string | undefined, 
  */
 export function useExternalAppInstances() {
 	return useQuery({
-		...withResponseValidation(listExternalAppInstancesOptions()),
+		...listExternalAppInstancesOptions(),
 		refetchInterval: (query) => externalAppListPollInterval(query.state.data?.items),
 	});
 }
@@ -159,7 +158,7 @@ export function externalAppListPollInterval(items: readonly { readonly status?: 
 /** The full instance: manifest snapshot, variables and published ports. The hub hook supplies a poll only when down. */
 export function useExternalAppInstance(instanceId: string | undefined, options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(getExternalAppInstanceOptions({ path: { instanceId: instanceId ?? "" } })),
+		...getExternalAppInstanceOptions({ path: { instanceId: instanceId ?? "" } }),
 		enabled: (options.enabled ?? true) && Boolean(instanceId),
 		refetchInterval: options.pollIntervalMs ?? false,
 	});
@@ -174,12 +173,10 @@ export function useExternalAppInstanceEvents(
 	options: FeedOptions & { readonly afterSequence?: number } = {},
 ) {
 	return useQuery({
-		...withResponseValidation(
-			listExternalAppInstanceEventsOptions({
-				path: { instanceId: instanceId ?? "" },
-				query: { afterSequence: options.afterSequence ?? 0, limit: externalAppEventsPageSize },
-			}),
-		),
+		...listExternalAppInstanceEventsOptions({
+			path: { instanceId: instanceId ?? "" },
+			query: { afterSequence: options.afterSequence ?? 0, limit: externalAppEventsPageSize },
+		}),
 		enabled: (options.enabled ?? true) && Boolean(instanceId),
 		refetchInterval: options.pollIntervalMs ?? false,
 	});
@@ -192,7 +189,7 @@ export function useExternalAppInstanceEvents(
  */
 export function useExternalAppUpdatePreview(instanceId: string | undefined, enabled: boolean) {
 	return useQuery({
-		...withResponseValidation(getExternalAppUpdatePreviewOptions({ path: { instanceId: instanceId ?? "" } })),
+		...getExternalAppUpdatePreviewOptions({ path: { instanceId: instanceId ?? "" } }),
 		enabled: enabled && Boolean(instanceId),
 		staleTime: 0,
 	});
@@ -206,9 +203,7 @@ export function useExternalAppInstanceLogs(
 	options: FeedOptions = {},
 ) {
 	return useQuery({
-		...withResponseValidation(
-			getExternalAppInstanceLogsOptions({ path: { instanceId: instanceId ?? "" }, query: { service, tail } }),
-		),
+		...getExternalAppInstanceLogsOptions({ path: { instanceId: instanceId ?? "" }, query: { service, tail } }),
 		enabled: (options.enabled ?? true) && Boolean(instanceId),
 		staleTime: 0,
 	});
@@ -221,7 +216,7 @@ export function useExternalAppInstanceLogs(
 export function useInstallExternalApp() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(installExternalAppMutation()),
+		...installExternalAppMutation(),
 		onSuccess: async () => {
 			await queryClient.invalidateQueries({ queryKey: externalAppInvalidationKey(externalAppQueryIds.instances) });
 			await queryClient.invalidateQueries({ queryKey: externalAppInvalidationKey(externalAppQueryIds.catalog) });
@@ -266,7 +261,7 @@ export function invalidateExternalAppInstance(queryClient: QueryClient, instance
 export function useStartExternalApp() {
 	const invalidate = useInstanceInvalidation();
 	return useMutation({
-		...withResponseValidation(startExternalAppMutation()),
+		...startExternalAppMutation(),
 		onSuccess: (_data, variables) => invalidate(variables.path?.instanceId),
 	});
 }
@@ -274,7 +269,7 @@ export function useStartExternalApp() {
 export function useStopExternalApp() {
 	const invalidate = useInstanceInvalidation();
 	return useMutation({
-		...withResponseValidation(stopExternalAppMutation()),
+		...stopExternalAppMutation(),
 		onSuccess: (_data, variables) => invalidate(variables.path?.instanceId),
 	});
 }
@@ -282,7 +277,7 @@ export function useStopExternalApp() {
 export function useRestartExternalApp() {
 	const invalidate = useInstanceInvalidation();
 	return useMutation({
-		...withResponseValidation(restartExternalAppMutation()),
+		...restartExternalAppMutation(),
 		onSuccess: (_data, variables) => invalidate(variables.path?.instanceId),
 	});
 }
@@ -291,7 +286,7 @@ export function useRestartExternalApp() {
 export function useUpdateExternalApp() {
 	const invalidate = useInstanceInvalidation();
 	return useMutation({
-		...withResponseValidation(updateExternalAppMutation()),
+		...updateExternalAppMutation(),
 		onSuccess: (_data, variables) => invalidate(variables.path?.instanceId),
 	});
 }
@@ -299,7 +294,7 @@ export function useUpdateExternalApp() {
 export function useResetExternalApp() {
 	const invalidate = useInstanceInvalidation();
 	return useMutation({
-		...withResponseValidation(resetExternalAppMutation()),
+		...resetExternalAppMutation(),
 		onSuccess: (_data, variables) => invalidate(variables.path?.instanceId),
 	});
 }
@@ -308,7 +303,7 @@ export function useResetExternalApp() {
 export function useUninstallExternalApp() {
 	const invalidate = useInstanceInvalidation();
 	return useMutation({
-		...withResponseValidation(uninstallExternalAppMutation()),
+		...uninstallExternalAppMutation(),
 		onSuccess: (_data, variables) => invalidate(variables.path?.instanceId, true),
 	});
 }
@@ -320,7 +315,7 @@ export function useUninstallExternalApp() {
 export function useCancelExternalAppOperation() {
 	const invalidate = useInstanceInvalidation();
 	return useMutation({
-		...withResponseValidation(cancelExternalAppOperationMutation()),
+		...cancelExternalAppOperationMutation(),
 		onSuccess: (_data, variables) => invalidate(variables.path?.instanceId),
 	});
 }
@@ -332,7 +327,7 @@ export function useCancelExternalAppOperation() {
 export function useUpdateExternalAppVariables() {
 	const invalidate = useInstanceInvalidation();
 	return useMutation({
-		...withResponseValidation(updateExternalAppVariablesMutation()),
+		...updateExternalAppVariablesMutation(),
 		// The LIST carries a `version` too, and a save bumps it. Dropping only the detail left the installed table
 		// serving the pre-save token for its whole poll window, which Start then echoed into a 409.
 		onSuccess: (_data, variables) => invalidate(variables.path?.instanceId),

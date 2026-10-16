@@ -16,7 +16,6 @@ import {
 	putModelKindMutation,
 	selectLocalModelMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
@@ -48,8 +47,8 @@ export function ModelManagement() {
 	const { confirm } = useConfirm();
 
 	// Reads run through the generated hey-api `*Options()` (which wire the shared axios instance + TanStack Query
-	// AbortSignal automatically), wrapped in withResponseValidation so a zod response-shape failure surfaces as an
-	// ApiError. The list query keeps the generated response envelope (isAvailable / selectedModelName / error) and
+	// AbortSignal automatically); a zod response-shape failure throws a ZodError the shared error sinks handle.
+	// The list query keeps the generated response envelope (isAvailable / selectedModelName / error) and
 	// maps its optional-field items to the strict view-models in a memo. Invalidation uses the generated query-key
 	// factories so every cached variant of an endpoint refetches.
 	const {
@@ -58,7 +57,7 @@ export function ModelManagement() {
 		error: modelsError,
 		refetch: modelsRefetch,
 		isFetching: modelsIsFetching,
-	} = useQuery(withResponseValidation(listLocalModelsOptions()));
+	} = useQuery(listLocalModelsOptions());
 	// External-provider registrations ride the same list so the chat picker can offer them, but this page is the model
 	// STORE: its table hands out Set default / Delete / Reset, none of which mean anything for a remote endpoint (the
 	// delete endpoint answers 409, and D10 puts their whole lifecycle on the External providers page). Filtered out
@@ -95,7 +94,7 @@ export function ModelManagement() {
 	);
 
 	const selectMutation = useMutation({
-		...withResponseValidation(selectLocalModelMutation()),
+		...selectLocalModelMutation(),
 		onSuccess: async (selection) => {
 			toast.success(t("pages.models.local.setDefaultSuccess", { name: selection.selectedModelName ?? "" }));
 			await invalidateListAndDetails();
@@ -104,7 +103,7 @@ export function ModelManagement() {
 	});
 
 	const deleteMutation = useMutation({
-		...withResponseValidation(deleteLocalModelMutation()),
+		...deleteLocalModelMutation(),
 		onSuccess: async (response) => {
 			toast.success(t("pages.models.local.deleteSuccess", { name: response.modelName ?? "" }));
 			detailsDialog.clear();
@@ -114,7 +113,7 @@ export function ModelManagement() {
 	});
 
 	const setKindMutation = useMutation({
-		...withResponseValidation(putModelKindMutation()),
+		...putModelKindMutation(),
 		// Setting an override does NOT probe Ollama, so the response's detectedKind may still be Unknown. Invalidate
 		// the list so the next refetch runs lazy detection and the row reflects the freshly detected kind, not the
 		// override response.
@@ -125,7 +124,7 @@ export function ModelManagement() {
 	});
 
 	const resetKindMutation = useMutation({
-		...withResponseValidation(deleteModelKindMutation()),
+		...deleteModelKindMutation(),
 		onSuccess: async () => {
 			await invalidateList();
 		},

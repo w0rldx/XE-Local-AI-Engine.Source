@@ -7,7 +7,6 @@ import { useTranslation } from "react-i18next";
 import type { UiMode } from "@/capabilities/NodeCapabilities";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { getNodeSettingsQueryKey, saveNodeSettingsMutation } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { StandaloneScreenControls } from "@/core/ui/components/StandaloneScreenControls/StandaloneScreenControls";
 
@@ -24,7 +23,7 @@ export function UiModeSetup() {
 	const queryClient = useQueryClient();
 	const [choice, setChoice] = useState<UiMode | null>(null);
 
-	const saveMutation = useMutation(withResponseValidation(saveNodeSettingsMutation()));
+	const saveMutation = useMutation(saveNodeSettingsMutation());
 
 	const submit = (): void => {
 		if (choice === null) {

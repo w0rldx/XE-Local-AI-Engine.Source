@@ -5,7 +5,6 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { DisabledReasonTooltip } from "@/core/ui/components/DisabledReasonTooltip/DisabledReasonTooltip";
 import { GenerationAssistDialog } from "@/features/assist/components/GenerationAssistDialog";
 import {
@@ -37,7 +36,7 @@ export function AssistActions({ surface, existing, onApply, onDiscard }: AssistA
 	const { t } = useTranslation();
 	const [mode, setMode] = useState<AssistMode | null>(null);
 
-	const { data: modelsData } = useQuery(withResponseValidation(listLocalModelsOptions()));
+	const { data: modelsData } = useQuery(listLocalModelsOptions());
 	const loadedModelsQuery = useLoadedModels();
 	const runningModelsQuery = useRunningModels();
 

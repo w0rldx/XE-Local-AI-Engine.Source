@@ -32,7 +32,7 @@ export const graphWorkflowTestIds = {
 /**
  * A readable GUID for a fixture row: `graphWorkflowTestGuid(3)` → `00000000-0000-4000-8000-000000000003`. Every
  * id-shaped member of these DTOs is `z.guid()` in the generated RESPONSE validators, so a friendly `nr-start` fails
- * `withResponseValidation` the moment a fixture is served over MSW rather than read straight out of this file.
+ * response validation the moment a fixture is served over MSW rather than read straight out of this file.
  */
 export function graphWorkflowTestGuid(index: number): string {
 	return `00000000-0000-4000-8000-${index.toString().padStart(12, "0")}`;

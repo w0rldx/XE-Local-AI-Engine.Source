@@ -10,7 +10,6 @@ import {
 	listExternalProviderConnectionsQueryKey,
 	saveExternalProviderConnectionMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
@@ -41,11 +40,7 @@ export function ExternalProviders() {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
 	const { confirm } = useConfirm();
-	const {
-		data: connectionsData,
-		isLoading,
-		error: listError,
-	} = useQuery(withResponseValidation(listExternalProviderConnectionsOptions()));
+	const { data: connectionsData, isLoading, error: listError } = useQuery(listExternalProviderConnectionsOptions());
 
 	const [formState, dispatch] = useReducer(formReducer, initialFormState);
 	const { values, touched, submitted, modelRowIds, headerRowIds, probe } = formState;
@@ -147,7 +142,7 @@ export function ExternalProviders() {
 	);
 
 	const saveMutation = useMutation({
-		...withResponseValidation(saveExternalProviderConnectionMutation()),
+		...saveExternalProviderConnectionMutation(),
 		onSuccess: (result: ExternalProviderConnectionsDto) =>
 			onWriteSuccess(result, t("pages.externalProviders.saved", "Connection saved.")),
 		onError: (error) => {
@@ -162,7 +157,7 @@ export function ExternalProviders() {
 	});
 
 	const deleteMutation = useMutation({
-		...withResponseValidation(deleteExternalProviderConnectionMutation()),
+		...deleteExternalProviderConnectionMutation(),
 		onSuccess: (result: ExternalProviderConnectionsDto) =>
 			onWriteSuccess(result, t("pages.externalProviders.deleted", "Connection deleted.")),
 		onError: (error) => {

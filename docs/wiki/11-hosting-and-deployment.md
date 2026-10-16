@@ -92,7 +92,7 @@ Only service discovery and the standard resilience/discovery HTTP defaults remai
 
 ## 3. The node host pipeline (`Program.cs`)
 
-`XE-Local-AI-Engine.Client/Program.cs` builds a `WebApplication`. Startup order matters:
+`XE-Local-AI-Engine.Client/Program.cs` builds a `WebApplication`. It holds the entry point, `CreateAppAsync` and `ConfigureRequestPipeline`, which lists every `Use*`/`Map*` step in execution order. `Program.Host.cs` holds `CreateAppCoreAsync`: launch mode, the builder, the vault, migrations and the one-shot commands. Each multi-line pipeline step is an extension method in `Hosting/Pipeline/`. The `MapHub` calls stay in `Program.cs`, because the SignalR proxy-path drift guards read that file. Startup order matters:
 
 1. **Resolve launch mode early** — `DesktopLaunch.ResolveLaunchMode(args, VelopackInstall.IsManaged())`
    yields Headless, Desktop, or McpOnly. For either local mode, startup (a) resolves the per-user data
@@ -102,7 +102,7 @@ Only service discovery and the standard resilience/discovery HTTP defaults remai
    reads configuration.
 2. `AddServiceDefaults()` then `AddServices(builder.Configuration)`.
 3. After `Build()`: apply node-chat + node-identity EF migrations, recover interrupted chat messages, reconcile stale scheduled runs, eagerly activate the invocation-resume registry, and register the **worker shutdown drain** on `ApplicationStopping`.
-4. Pipeline: Serilog request logging (with access-token query redaction), `UseExceptionHandler` (RFC7807), **HTTPS redirect + HSTS bypassed in desktop mode**, antiforgery, static files, health checks, `LocalApiSecurityMiddleware`, routing, rate limiter, auth, FastEndpoints (route prefix `LocalApiRoutes.Prefix`), 10 unconditional SignalR hubs plus conditional `DevelopmentAttemptHub` (all `RequireAuthorization(Operator)`), Scalar/Swagger (non-Production), and `MapFallbackToFile("index.html")` for the SPA.
+4. Pipeline (`ConfigureRequestPipeline`): Serilog request logging (with access-token query redaction), `UseExceptionHandler` (RFC7807), **HTTPS redirect + HSTS bypassed in desktop mode**, antiforgery, static files, health checks, `LocalApiSecurityMiddleware`, routing, rate limiter, auth, FastEndpoints (route prefix `LocalApiRoutes.Prefix`), 18 unconditional SignalR hubs plus conditional `DevelopmentAttemptHub` (all `RequireAuthorization(Operator)`), Scalar/Swagger (non-Production), and `MapFallbackToFile("index.html")` for the SPA.
 5. **Desktop only**: `ActivateDesktopLifecycle(app)` installs the console-close → graceful-stop triggers and the on-started browser launch.
 
 See [API & Hubs](09-api-and-hubs.md) for endpoint/hub detail and [Security & Privacy](12-security-and-privacy.md) for the loopback / `LocalApiSecurityMiddleware` invariants.
@@ -231,7 +231,22 @@ These options are set only through configuration (`appsettings*.json`, environme
 
 The sandbox security profile is the opposite case and is not a row above: `SandboxSecurityProfile` is a stored node setting (`StoredNodeSettings`, literals `low`, `high`, `pending`; null means undecided and backfillable) with **no configuration seed**. It is written only through the Operator settings endpoint (REST), never through an agentic surface, and read on every sandbox create through `INodeRuntimeSettings`, so a change applies without a restart. The two `RequireEgressDenial` keys above stay configuration-only and tighten on top of it. Meaning and consequences: [ADR 0020](../adr/0020-sandbox-security-profile.md); backfill: [Upgrade backfills](#upgrade-backfills-and-their-discriminators).
 
-### Registration-time closures
+### Stored settings with no Node settings form field
+
+The Node settings page edits nearly every `StoredNodeSettings` property. A property counts as UI-reachable when a
+component under `features/node-settings/` binds it, which is a name match, not a behavioural proof. The five below have
+no field there. Two are edited elsewhere in the SPA, one is generated, and two are reachable only through
+`node-settings.json` (edit it with the node stopped) or the API. The KV-cache type, the speculative-decoding knobs and
+the llama.cpp timeouts all have form fields.
+
+| Setting | Edited where | Default | Meaning |
+|---|---|---|---|
+| `ToolApprovalPolicy` | `node-settings.json` only; a settings save carries it over unchanged | absent: no node-level tightening | Tighten-only approval map per tool category and per tool name, plus `DisableSkillSessionScope`. Read once at composition, so a restart applies it. |
+| `RecommendedLlamaCppTag` | `node-settings.json` or the settings save request; the SPA never sends it | the pinned llama.cpp tag (`LlamaCppReleasePins.PinnedTag`) | The release tag the UI shows as "Recommended". Must be of the form `b<number>`. |
+| `UpdateChannel` | The app-update channel selector (`PUT app-update/channel`) | absent: the channel baked into the artifact | Which release channel (`stable`, `preview`, `development`) this node follows. |
+| `TranscriptionSelectedModelId` | The transcription model manager; not in the settings wire DTO | absent: the hardware recommendation | The operator's explicit whisper model choice. A settings save carries it over. |
+| `MachineKey` | Generated on first use | absent until generated | Stable local machine identifier that keys inference profiles; never reported or logged. |
+
 
 Two registrations in `ConfigureServices` are written the way they are purely so a disposed host can be collected, and both were measured at roughly 20 MB per test host (gcroot evidence in `docs/agent-knowledge.md` §1).
 

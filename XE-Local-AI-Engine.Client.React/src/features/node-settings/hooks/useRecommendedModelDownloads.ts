@@ -7,7 +7,6 @@ import {
 	downloadRecommendedEmbeddingMutation,
 	downloadRecommendedRerankerMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toast } from "@/core/ui/notifications/Toast";
 import { useActiveGgufDownloads, useCancelGgufDownload } from "@/features/models/queries/useGgufDownload";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
@@ -33,7 +32,7 @@ export function useRecommendedModelDownloads() {
 	);
 
 	const reranker = useMutation({
-		...withResponseValidation(downloadRecommendedRerankerMutation()),
+		...downloadRecommendedRerankerMutation(),
 		onSuccess: (response) => {
 			setRerankerName(response.modelName);
 			if (response.alreadyInstalled) {
@@ -69,7 +68,7 @@ export function useRecommendedModelDownloads() {
 	});
 
 	const embedding = useMutation({
-		...withResponseValidation(downloadRecommendedEmbeddingMutation()),
+		...downloadRecommendedEmbeddingMutation(),
 		onSuccess: (response) => {
 			setEmbeddingName(response.modelName);
 			if (response.alreadyInstalled) {

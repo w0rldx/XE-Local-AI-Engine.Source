@@ -13,7 +13,7 @@ import {
 } from "@/features/agents/models/GoldenConversationModels";
 
 // The response-shape validation that the former hand-zod schemas owned now lives in the generated zod validator
-// (`validator: true`) + the withResponseValidation bridge at the hook, so these tests no longer assert reject-on-
+// (`validator: true`), so these tests no longer assert reject-on-
 // malformed behaviour. Instead they cover (1) the coalescing mappers that project the optional-field generated wire
 // shape into the strict domain view-model, (2) the surviving FORM-cap validator, and (3) the 409 promote-conflict
 // body parser (consumed by PlaybookActionMappers). A generated-shaped DTO has every field optional (`x?: T`).

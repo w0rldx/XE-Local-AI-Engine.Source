@@ -23,11 +23,8 @@ import {
 	getWorkSessionCapabilityQueryKey,
 	saveNodeSettingsMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { useUiMode } from "@/core/layout/hooks/useUiMode";
-import { useEffectiveToolCapableModels } from "@/features/node-settings/queries/useEffectiveToolCapableModels";
-import { useOllamaRuntimeConfigured } from "@/features/node-settings/queries/useOllamaRuntimeConfigured";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
@@ -79,7 +76,9 @@ import {
 	nodeSettingsSectionIds,
 	nodeSettingsSectionOf,
 } from "@/features/node-settings/models/NodeSettingsSections";
+import { useEffectiveToolCapableModels } from "@/features/node-settings/queries/useEffectiveToolCapableModels";
 import { useHfTokenStatus, useSetHfToken } from "@/features/node-settings/queries/useLocalRuntime";
+import { useOllamaRuntimeConfigured } from "@/features/node-settings/queries/useOllamaRuntimeConfigured";
 import { useHfTokenStore } from "@/features/node-settings/stores/HfTokenStore";
 import { VoiceSettingsCard } from "@/features/voice/components/VoiceSettingsCard";
 
@@ -108,7 +107,7 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 		error: settingsError,
 		refetch: settingsRefetch,
 		isFetching: settingsIsFetching,
-	} = useQuery(withResponseValidation(getNodeSettingsOptions()));
+	} = useQuery(getNodeSettingsOptions());
 	const developerMode = useDeveloperModeStore((state) => state.developerMode);
 	const { toggle: toggleDeveloperMode } = useDeveloperModeStore((state) => state.actions);
 	const savedUiMode = useUiMode();
@@ -146,7 +145,7 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 	// The workloads the high profile would refuse on this host. Read only while the Sandbox section is open; it shares the
 	// development capability cache entry, which a saved profile change invalidates below.
 	const capabilityQuery = useQuery({
-		...withResponseValidation(getDevelopmentCapabilityOptions()),
+		...getDevelopmentCapabilityOptions(),
 		enabled: activeSection === "sandbox",
 	});
 
@@ -230,7 +229,7 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 	};
 
 	const saveMutation = useMutation({
-		...withResponseValidation(saveNodeSettingsMutation()),
+		...saveNodeSettingsMutation(),
 		onSuccess: async (updatedSettings: SaveNodeSettingsResponse, variables: { body: SaveNodeSettingsRequest }) => {
 			// Restart-gated fields (see restartGatedNodeSettingsFields) persist immediately but the running node keeps its
 			// old value, so the save notice has to say so instead of implying the change is already live.

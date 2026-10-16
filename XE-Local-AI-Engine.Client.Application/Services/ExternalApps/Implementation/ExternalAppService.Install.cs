@@ -27,6 +27,40 @@ internal sealed partial class ExternalAppService
         "This application reads the node's container bridge, and this node did not open one. Turn it on with "
         + $"'{ContainerBridgeOptions.SectionName}:{nameof(ContainerBridgeOptions.Enabled)}' and an IPv4 host interface it can bind.";
 
+    /// <summary>Admission's wording when the catalog listed no application at node startup, so External Apps stayed off until a restart.</summary>
+    internal const string RestartRequiredDetail =
+        "The catalog listed no application when this node started, so External Apps stayed off. Restart the node to enable External Apps.";
+
+    /// <summary>Admission's wording when a refresh has emptied the catalog since startup.</summary>
+    internal const string CatalogEmptyDetail =
+        "The catalog lists no application now, so External Apps are off. Stopping and uninstalling stay available.";
+
+    /// <summary>Rc.3 decision D6 for every verb that would start an application: why it may not, or <see langword="null" />.</summary>
+    /// <remarks>
+    ///     <c>RestartRequired</c> after an empty-catalog start, whatever the catalog holds now, because only a restart
+    ///     opens the bridge. Otherwise <c>CatalogEmpty</c> while the catalog the provider serves now lists nothing,
+    ///     which is how a refresh to an empty document reaches admission. Read per call, never cached.
+    /// </remarks>
+    private static async Task<ExternalAppBlockedReason?> CatalogPolicyAsync(ScopedServices services, CancellationToken cancellationToken)
+    {
+        if (services.StartupSettings?.ExternalAppsAwaitingCatalog == true)
+        {
+            return ExternalAppBlockedReason.RestartRequired;
+        }
+
+        var snapshot = await services.Catalog.GetCatalogAsync(cancellationToken);
+        return snapshot.Document.Applications.Count == 0 ? ExternalAppBlockedReason.CatalogEmpty : null;
+    }
+
+    /// <summary>The policy for install and update, where an empty catalog answers with the empty catalog's own 404.</summary>
+    private static async Task<ExternalAppBlockedReason?> RequireCatalogPolicyAsync(ScopedServices services, CancellationToken cancellationToken)
+    {
+        var policy = await CatalogPolicyAsync(services, cancellationToken);
+        return policy == ExternalAppBlockedReason.CatalogEmpty
+            ? throw new ExternalAppNotFoundException(CatalogEmptyDetail)
+            : policy;
+    }
+
     public async Task<InstallPreview> PreviewInstallAsync(string applicationId, CancellationToken cancellationToken = default)
     {
         await EnsureEnabledAsync(cancellationToken);
@@ -95,7 +129,7 @@ internal sealed partial class ExternalAppService
                     ?? throw new ExternalAppOperationInFlightException("An operation is already running on this instance.");
 
             var createdAtUtc = Now();
-            var version = await InsertInstanceAsync(services.Store,
+            var version = await InsertInstanceAsync(services,
                 command,
                 manifest,
                 granted,
@@ -150,7 +184,7 @@ internal sealed partial class ExternalAppService
         }
     }
 
-    private async Task<long> InsertInstanceAsync(IExternalAppInstanceStore store,
+    private async Task<long> InsertInstanceAsync(ScopedServices services,
         InstallCommand command,
         ApplicationManifest manifest,
         IReadOnlyList<string> granted,
@@ -163,6 +197,14 @@ internal sealed partial class ExternalAppService
         using var applicationLease = await _gate.TryEnterAsync(ExternalAppInstanceGate.ApplicationKey(command.ApplicationId))
                                      ?? throw new ExternalAppOperationInFlightException("Another install of this application is already being admitted.");
 
+        // D6 is authoritative HERE, under the lock and ahead of the one-per-application read: the admission read let
+        // AlreadyInstalled through, and an uninstall finishing since then must not turn that into an install.
+        if (await RequireCatalogPolicyAsync(services, cancellationToken) == ExternalAppBlockedReason.RestartRequired)
+        {
+            throw Refuse(ExternalAppBlockedReason.RestartRequired, RestartRequiredDetail);
+        }
+
+        var store = services.Store;
         var existing = await store.ListByApplicationAsync(command.ApplicationId, cancellationToken);
         if (existing.Count > 0)
         {
@@ -287,14 +329,21 @@ internal sealed partial class ExternalAppService
         ApplicationManifest manifest,
         CancellationToken cancellationToken)
     {
+        var policy = await RequireCatalogPolicyAsync(services, cancellationToken);
         var existing = await services.Store.ListByApplicationAsync(manifest.Id, cancellationToken);
         var resolution = await services.Resolver.ResolveAsync(cancellationToken: cancellationToken);
         var missing = resolution.Capabilities.FindMissing(manifest.Requires);
         var resources = await _resourceGate.EvaluateAsync(manifest, _layout.Root, cancellationToken);
 
+        // An empty catalog at startup kept the bridge closed, and only a restart opens it, so a refresh that has since
+        // added this application must not admit an install the startup state no longer matches (rc.3 decision D6).
+        var awaitingRestart = existing.Count == 0 && policy == ExternalAppBlockedReason.RestartRequired;
+
         return new InstallAdmission
         {
-            BlockedReason = BlockingReason(existing.Count > 0, BridgeUnavailableFor(manifest), resolution, manifest, missing, resources),
+            BlockedReason = awaitingRestart
+                ? ExternalAppBlockedReason.RestartRequired
+                : BlockingReason(existing.Count > 0, BridgeUnavailableFor(manifest), resolution, manifest, missing, resources),
             Runtime = resolution,
             MissingCapabilities = missing,
             Resources = resources,
@@ -359,6 +408,8 @@ internal sealed partial class ExternalAppService
             ExternalAppBlockedReason.RuntimeUnavailable => admission.Runtime.Message,
             ExternalAppBlockedReason.InsufficientMemory or ExternalAppBlockedReason.InsufficientDisk => admission.Resources.Message,
             ExternalAppBlockedReason.BridgeUnavailable => BridgeUnavailableDetail,
+            ExternalAppBlockedReason.RestartRequired => RestartRequiredDetail,
+            ExternalAppBlockedReason.CatalogEmpty => CatalogEmptyDetail,
             _ => "This application cannot be installed on this node right now."
         };
 

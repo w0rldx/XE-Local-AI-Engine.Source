@@ -7,7 +7,6 @@ import {
 	harvestGoldenConversationsMutation,
 	listGoldenConversationsOptions,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import {
 	toCreateGoldenConversationRequest,
 	toGoldenConversations,
@@ -17,9 +16,7 @@ import type { CreateGoldenConversationRequestDto, GoldenHarvestResult } from "@/
 
 // Server state for an agent's golden conversation set (with harvested candidates). The read uses the generated
 // hey-api `*Options()` (which wires the shared axios instance + TanStack Query AbortSignal automatically) and a
-// TanStack `select` that maps the optional-field generated response into the stricter domain view-model. Every
-// generated options object is wrapped in withResponseValidation so a zod response-shape failure surfaces as an
-// ApiError (never a raw ZodError). The create/delete/harvest/approve mutations invalidate the per-endpoint list
+// TanStack `select` that maps the optional-field generated response into the stricter domain view-model. The create/delete/harvest/approve mutations invalidate the per-endpoint list
 // cache on success. The list query is disabled when no persisted agent is selected so the panel never fetches with
 // an empty id. The harvest/approve POSTs are route-only — the generated client sends the empty body the backend
 // expects (the request bodies are `{ [key: string]: never }`).
@@ -36,7 +33,7 @@ export function goldenConversationsInvalidationKey(operationId: string): readonl
 
 export function useGoldenConversations(agentDefinitionId: string | null) {
 	return useQuery({
-		...withResponseValidation(listGoldenConversationsOptions({ path: { agentDefinitionId: agentDefinitionId ?? "" } })),
+		...listGoldenConversationsOptions({ path: { agentDefinitionId: agentDefinitionId ?? "" } }),
 		enabled: agentDefinitionId !== null && agentDefinitionId.length > 0,
 		select: toGoldenConversations,
 	});
@@ -56,7 +53,7 @@ export function useCreateGoldenConversation(agentDefinitionId: string) {
 
 	return useMutation({
 		mutationFn: async (request: CreateGoldenConversationRequestDto) => {
-			const options = withResponseValidation(createGoldenConversationMutation());
+			const options = createGoldenConversationMutation();
 			return options.mutationFn?.(
 				{ path: { agentDefinitionId }, body: toCreateGoldenConversationRequest(request) },
 				undefined as never,
@@ -73,7 +70,7 @@ export function useDeleteGoldenConversation(agentDefinitionId: string) {
 
 	return useMutation({
 		mutationFn: async (goldenId: string) => {
-			const options = withResponseValidation(deleteGoldenConversationMutation());
+			const options = deleteGoldenConversationMutation();
 			await options.mutationFn?.({ path: { agentDefinitionId, goldenConversationId: goldenId } }, undefined as never);
 		},
 		onSuccess: () => invalidateList(queryClient),
@@ -89,7 +86,7 @@ export function useHarvestGolden(agentDefinitionId: string) {
 
 	return useMutation({
 		mutationFn: async (): Promise<GoldenHarvestResult> => {
-			const options = withResponseValidation(harvestGoldenConversationsMutation());
+			const options = harvestGoldenConversationsMutation();
 			const data = await options.mutationFn?.({ path: { agentDefinitionId } }, undefined as never);
 			return toGoldenHarvestResult(data);
 		},
@@ -105,7 +102,7 @@ export function useApproveGolden(agentDefinitionId: string) {
 
 	return useMutation({
 		mutationFn: async (goldenId: string) => {
-			const options = withResponseValidation(approveGoldenConversationMutation());
+			const options = approveGoldenConversationMutation();
 			return options.mutationFn?.({ path: { agentDefinitionId, goldenConversationId: goldenId } }, undefined as never);
 		},
 		onSuccess: () => invalidateList(queryClient),

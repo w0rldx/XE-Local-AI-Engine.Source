@@ -1,11 +1,10 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
-import { axiosInstance } from "@/core/api/axios/AxiosInstance";
-import type {
-	XeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest as CreateImageJobRequest,
-	XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest as StartImageModelDownloadRequest,
-	XeLocalAiEngineClientEndpointsImagesV1UploadedImageResponse as UploadedImageResponse,
+import {
+	type XeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest as CreateImageJobRequest,
+	type XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest as StartImageModelDownloadRequest,
+	uploadImage,
 } from "@/core/api/generated";
 import {
 	browseImageRepositoriesOptions,
@@ -23,8 +22,6 @@ import {
 	listUploadedImagesOptions,
 	startImageModelDownloadMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
-import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import { imageBlobQueryKey } from "@/features/images/hooks/useImageObjectUrl";
 import {
 	toImageJobView,
@@ -38,8 +35,7 @@ import {
 
 // Server-state for the image feature. Reads use the generated hey-api `*Options()` (shared axios + TanStack
 // AbortSignal wired automatically) with a `select` mapping the optional-field generated response into the strict
-// domain view-model. Every options object is wrapped in withResponseValidation so a zod response-shape failure
-// surfaces as an ApiError. Job state lives ONLY in TanStack Query (never mirrored into a store); the
+// domain view-model. Job state lives ONLY in TanStack Query (never mirrored into a store); the
 // SignalR hub (useImageJobHub) drives cache invalidation on each coarse status push.
 
 // Generated keys are object arrays; TanStack partial matching on `_id` invalidates every endpoint variant.
@@ -83,7 +79,7 @@ export function useRefreshInstalledImageModels(): () => void {
 // cached between polls — a stale "Running" would recreate exactly the silent-hang bug this query exists to kill.
 export function useImageModelDownloads(pollWhilePending = false) {
 	return useQuery({
-		...withResponseValidation(listImageModelDownloadsOptions()),
+		...listImageModelDownloadsOptions(),
 		select: (data) => (data.items ?? []).map(toImageModelDownloadView),
 		enabled: pollWhilePending,
 		staleTime: 0,
@@ -98,7 +94,7 @@ export function useImageModelDownloads(pollWhilePending = false) {
 // manual refresh.
 export function useImageModels(pollWhilePending = false) {
 	return useQuery({
-		...withResponseValidation(listImageModelsOptions()),
+		...listImageModelsOptions(),
 		select: (data) => (data.items ?? []).map(toImageModelView),
 		staleTime: 30_000,
 		refetchInterval: pollWhilePending ? 5_000 : false,
@@ -113,7 +109,7 @@ export function useImageModels(pollWhilePending = false) {
 // transfer and until the next manual refresh, which invites a second download of weights already landing on disk.
 export function useImageModelCatalog(pollWhilePending = false) {
 	return useQuery({
-		...withResponseValidation(getImageModelCatalogOptions()),
+		...getImageModelCatalogOptions(),
 		select: (data) => (data.items ?? []).map(toImageModelCatalogEntryView),
 		staleTime: 30_000,
 		refetchInterval: pollWhilePending ? 5_000 : false,
@@ -124,11 +120,9 @@ export function useImageModelCatalog(pollWhilePending = false) {
 // somebody who opened this panel is looking for, and an unprompted fetch on mount costs a Hub round trip per page view.
 export function useBrowseImageRepositories(query: string) {
 	return useQuery({
-		...withResponseValidation(
-			browseImageRepositoriesOptions({
-				query: { query, limit: 20 },
-			}),
-		),
+		...browseImageRepositoriesOptions({
+			query: { query, limit: 20 },
+		}),
 		select: (data) => (data.items ?? []).map(toImageRepositoryView),
 		enabled: query.trim().length > 0,
 		staleTime: 60_000,
@@ -139,11 +133,9 @@ export function useBrowseImageRepositories(query: string) {
 // round trip per repo and the browse table lists twenty of them.
 export function useInspectImageRepository(repoId: string | null) {
 	return useQuery({
-		...withResponseValidation(
-			inspectImageRepositoryOptions({
-				query: { repoId: repoId ?? "" },
-			}),
-		),
+		...inspectImageRepositoryOptions({
+			query: { repoId: repoId ?? "" },
+		}),
 		select: (data) => ({
 			repoId: data.repoId,
 			isGated: data.isGated,
@@ -160,7 +152,7 @@ export function useInspectImageRepository(repoId: string | null) {
 // needed. The server orders the page; it is never re-sorted here.
 export function useImageJobs(limit: number, offset: number) {
 	return useQuery({
-		...withResponseValidation(listImageJobsOptions({ query: { limit, offset } })),
+		...listImageJobsOptions({ query: { limit, offset } }),
 		// `limit`/`offset` are part of the query key, so page 2 is a cache entry with no data of its own. Without the
 		// previous page held over, `totalCount` would read as 0 for a render, the pager would compute one page, and its
 		// clamp would send the operator back to page 1 while the page-2 request was still in flight.
@@ -176,7 +168,7 @@ export function useCreateImageJob() {
 
 	return useMutation({
 		mutationFn: async (body: CreateImageJobRequest) => {
-			const options = withResponseValidation(createImageJobMutation());
+			const options = createImageJobMutation();
 			return await options.mutationFn?.({ body }, undefined as never);
 		},
 		onSuccess: () => invalidate(queryClient, imageQueryIds.jobs),
@@ -190,7 +182,7 @@ export function useCancelImageJob() {
 
 	return useMutation({
 		mutationFn: async (jobId: string) => {
-			const options = withResponseValidation(cancelImageJobMutation());
+			const options = cancelImageJobMutation();
 			return await options.mutationFn?.({ path: { jobId } }, undefined as never);
 		},
 		onSuccess: () => invalidate(queryClient, imageQueryIds.jobs),
@@ -210,7 +202,7 @@ export function useDeleteImageJob() {
 
 	return useMutation({
 		mutationFn: async ({ jobId }: { jobId: string; imageId: string | null }) => {
-			const options = withResponseValidation(deleteImageJobMutation());
+			const options = deleteImageJobMutation();
 			return await options.mutationFn?.({ path: { jobId } }, undefined as never);
 		},
 		onSuccess: async (_data, variables) => {
@@ -230,7 +222,7 @@ export function useStartImageModelDownload() {
 
 	return useMutation({
 		mutationFn: async (body: StartImageModelDownloadRequest) => {
-			const options = withResponseValidation(startImageModelDownloadMutation());
+			const options = startImageModelDownloadMutation();
 			return await options.mutationFn?.({ body }, undefined as never);
 		},
 		onSuccess: async () => {
@@ -250,7 +242,7 @@ export function useCancelImageModelDownload() {
 
 	return useMutation({
 		mutationFn: async (modelName: string) => {
-			const options = withResponseValidation(cancelImageModelDownloadMutation());
+			const options = cancelImageModelDownloadMutation();
 			return await options.mutationFn?.({ body: { modelName } }, undefined as never);
 		},
 		onSuccess: () => invalidate(queryClient, imageQueryIds.downloads),
@@ -264,7 +256,7 @@ export function useDeleteImageModel() {
 
 	return useMutation({
 		mutationFn: async (modelName: string) => {
-			const options = withResponseValidation(deleteImageModelMutation());
+			const options = deleteImageModelMutation();
 			return await options.mutationFn?.({ path: { modelName } }, undefined as never);
 		},
 		onSuccess: async () => {
@@ -280,27 +272,22 @@ export function useDeleteImageModel() {
 // held over for the same reason as useImageJobs.
 export function useUploadedImages(limit: number, offset: number) {
 	return useQuery({
-		...withResponseValidation(listUploadedImagesOptions({ query: { limit, offset } })),
+		...listUploadedImagesOptions({ query: { limit, offset } }),
 		placeholderData: keepPreviousData,
 		select: (data) => ({ items: (data.items ?? []).map(toUploadedImageView), totalCount: data.totalCount ?? 0 }),
 		staleTime: 30_000,
 	});
 }
 
-// Uploads one PNG or JPEG as an edit source. Multipart goes through the shared axios instance rather than the generated
-// `uploadImage`, as useTranscriptionUpload and useKnowledgeUpload do: the instance defaults Content-Type to JSON and the
-// generated binary body does not reliably override it. Auth, XSRF and the ProblemDetails → ApiError mapping still
-// ride the instance interceptors, so the node's fixed 400 message reaches the caller as the error message.
+// Uploads one PNG or JPEG as an edit source. The generated `uploadImage` sends FormData (the instance's FormData
+// interceptor drops the JSON Content-Type default), and the ProblemDetails → ApiError mapping makes the node's fixed
+// 400 message reach the caller as the error message.
 export function useUploadImage() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
 		mutationFn: async (file: File) => {
-			const formData = new FormData();
-			formData.append("file", file);
-			const { data } = await axiosInstance.post<UploadedImageResponse>(buildLocalApiUrl("images/uploads"), formData, {
-				headers: { "Content-Type": "multipart/form-data" },
-			});
+			const { data } = await uploadImage({ body: { file } });
 			return toUploadedImageView(data);
 		},
 		onSuccess: () => invalidate(queryClient, imageQueryIds.uploads),
@@ -316,7 +303,7 @@ export function useDeleteUploadedImage() {
 
 	return useMutation({
 		mutationFn: async (imageId: string) => {
-			const options = withResponseValidation(deleteUploadedImageMutation());
+			const options = deleteUploadedImageMutation();
 			return await options.mutationFn?.({ path: { imageId } }, undefined as never);
 		},
 		onSuccess: async (_data, imageId) => {

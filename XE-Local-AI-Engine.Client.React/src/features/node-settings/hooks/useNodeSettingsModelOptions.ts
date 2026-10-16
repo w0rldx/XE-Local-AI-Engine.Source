@@ -3,7 +3,6 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { listGraphWorkflowDefinitionsOptions, listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toChatModelOptions, toDraftModelOptions } from "@/features/chat/pages/ChatModelOptions";
 import type { NodeSettingsFieldsForm } from "@/features/node-settings/models/NodeSettingsFieldsModel";
 
@@ -13,9 +12,9 @@ import type { NodeSettingsFieldsForm } from "@/features/node-settings/models/Nod
  */
 export function useNodeSettingsModelOptions(form: NodeSettingsFieldsForm, errors: Readonly<Record<string, string>>) {
 	const { t } = useTranslation();
-	const { data: localModels } = useQuery(withResponseValidation(listLocalModelsOptions()));
+	const { data: localModels } = useQuery(listLocalModelsOptions());
 	// A node with graph workflows off answers an error here; the picker then offers "none" and any stored id only.
-	const { data: graphDefinitions } = useQuery(withResponseValidation(listGraphWorkflowDefinitionsOptions()));
+	const { data: graphDefinitions } = useQuery(listGraphWorkflowDefinitionsOptions());
 	const draftModelOptions = useMemo(
 		() =>
 			toDraftModelOptions(localModels?.items ?? [], localModels?.isAvailable ?? false).map((option) => ({

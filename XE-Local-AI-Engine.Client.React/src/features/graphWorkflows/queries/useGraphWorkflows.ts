@@ -1,7 +1,6 @@
 // Server state for the Graph Workflows surface. Every call goes through the generated hey-api `*Options()` /
-// `*Mutation()` adapters wrapped in `withResponseValidation`, exactly as `useDevWorkflows.ts` does — no hand-wired
-// axios and no hand-written request types. The one exception is the paged event feed, which calls the generated SDK
-// fn through `callWithResponseValidation` because hey-api generates no `*InfiniteOptions` for its `afterSeq` cursor.
+// `*Mutation()` adapters, exactly as `useDevWorkflows.ts` does — no hand-wired axios and no hand-written request
+// types. The paged event feed uses the generated `*InfiniteOptions` with its own cursor rules.
 //
 // The generated query keys are single-element arrays `[{ _id: "<operationId>", path, query, … }]`, and TanStack
 // matches them by PARTIAL DEEP equality. So `[{ _id, path: { runId } }]` invalidates every cached variant of one
@@ -12,7 +11,6 @@ import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } f
 import {
 	exportGraphWorkflowDefinition,
 	type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse as LocalModelResponse,
-	listGraphWorkflowRunEvents,
 } from "@/core/api/generated";
 import {
 	cancelGraphWorkflowRunMutation,
@@ -28,7 +26,7 @@ import {
 	listAgentDefinitionsOptions,
 	listGraphWorkflowConversationRunsOptions,
 	listGraphWorkflowDefinitionsOptions,
-	listGraphWorkflowRunEventsQueryKey,
+	listGraphWorkflowRunEventsInfiniteOptions,
 	listGraphWorkflowRunsOptions,
 	listGraphWorkflowToolsOptions,
 	listLocalModelsOptions,
@@ -38,7 +36,6 @@ import {
 	updateGraphWorkflowDefinitionMutation,
 	validateGraphWorkflowDefinitionMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { callWithResponseValidation, withResponseValidation } from "@/core/api/ResponseValidation";
 import { EXTERNAL_PROVIDER, LLAMACPP_PROVIDER } from "@/core/models/LocalModelProviders";
 import { readGraphWorkflowConflict } from "@/features/graphWorkflows/api/GraphWorkflowConflict";
 import type {
@@ -98,7 +95,7 @@ function feedQuerySettings(id: string | undefined, options: FeedOptions) {
 /** The picker's definition list. Summaries only — the `graph` itself rides the single-definition read. */
 export function useGraphWorkflowDefinitions(options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(listGraphWorkflowDefinitionsOptions()),
+		...listGraphWorkflowDefinitionsOptions(),
 		enabled: options.enabled ?? true,
 	});
 }
@@ -109,7 +106,7 @@ export function useGraphWorkflowDefinitions(options: FeedOptions = {}) {
  */
 export function useGraphWorkflowDefinition(definitionId: string | undefined) {
 	return useQuery({
-		...withResponseValidation(getGraphWorkflowDefinitionOptions({ path: { definitionId: definitionId ?? "" } })),
+		...getGraphWorkflowDefinitionOptions({ path: { definitionId: definitionId ?? "" } }),
 		enabled: Boolean(definitionId),
 	});
 }
@@ -121,7 +118,7 @@ export function useGraphWorkflowDefinition(definitionId: string | undefined) {
  */
 export function useGraphWorkflowRuns(definitionId?: string, options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(listGraphWorkflowRunsOptions({ query: { limit: GRAPH_WORKFLOW_RUN_PAGE_SIZE } })),
+		...listGraphWorkflowRunsOptions({ query: { limit: GRAPH_WORKFLOW_RUN_PAGE_SIZE } }),
 		enabled: options.enabled ?? true,
 		refetchInterval: options.pollIntervalMs ?? false,
 		select: (data) => (definitionId ? (data.runs ?? []).filter((run) => run.definitionId === definitionId) : (data.runs ?? [])),
@@ -131,7 +128,7 @@ export function useGraphWorkflowRuns(definitionId?: string, options: FeedOptions
 /** The run payload: the run summary and one node run per node key of the pinned graph. Backs the whole run view. */
 export function useGraphWorkflowRun(runId: string | undefined, options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(getGraphWorkflowRunOptions({ path: { runId: runId ?? "" } })),
+		...getGraphWorkflowRunOptions({ path: { runId: runId ?? "" } }),
 		...feedQuerySettings(runId, options),
 	});
 }
@@ -139,7 +136,7 @@ export function useGraphWorkflowRun(runId: string | undefined, options: FeedOpti
 /** One node run WITH its `input` / `output` / `error` documents, addressed by node KEY rather than by row id. */
 export function useGraphWorkflowNodeRun(runId: string | undefined, nodeKey: string | undefined, options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(getGraphWorkflowNodeRunOptions({ path: { runId: runId ?? "", nodeKey: nodeKey ?? "" } })),
+		...getGraphWorkflowNodeRunOptions({ path: { runId: runId ?? "", nodeKey: nodeKey ?? "" } }),
 		...feedQuerySettings(runId && nodeKey ? nodeKey : undefined, options),
 	});
 }
@@ -162,7 +159,7 @@ export function useSettledGraphWorkflowNodeRuns(
 		data !== undefined && data.attempt >= attempt;
 	return useQueries({
 		queries: nodeRuns.map(({ nodeKey, attempt }) => ({
-			...withResponseValidation(getGraphWorkflowNodeRunOptions({ path: { runId: runId ?? "", nodeKey } })),
+			...getGraphWorkflowNodeRunOptions({ path: { runId: runId ?? "", nodeKey } }),
 			enabled: Boolean(runId),
 			staleTime: (query: { state: { data?: { attempt: number } } }) =>
 				isCurrent(query.state.data, attempt) ? Number.POSITIVE_INFINITY : 0,
@@ -194,27 +191,28 @@ export interface GraphWorkflowEventFeed {
  * exactly what the hub snapshot hands back — so the next cursor is that number. Requiring it to ADVANCE is what stops
  * a "load more" loop if a page ever reports truncation without carrying a higher sequence.
  *
- * Wired onto the generated SDK fn rather than `listGraphWorkflowRunEventsOptions`, because hey-api emits
- * `*InfiniteOptions` only for pagination parameters it recognises and `afterSeq` is not one. The generated query KEY
- * still identifies the cache entry, so `graphWorkflowInvalidationKey(events, { runId })` matches it by partial deep
- * equality and the hub's pings land where they always did.
+ * Built on the generated `listGraphWorkflowRunEventsInfiniteOptions` (`afterSeq` is a configured pagination keyword):
+ * a numeric page param becomes `query.afterSeq`. Its key still carries `_id` and `path`, so
+ * `graphWorkflowInvalidationKey(events, { runId })` matches it by partial deep equality and the hub's pings land.
  *
  * A ping invalidates this query and TanStack then refetches every loaded page in order, recomputing each cursor from
  * the page before it. Events are append-only and never re-stamped, so the cursors are stable.
  */
 export function useGraphWorkflowRunEvents(runId: string | undefined, options: FeedOptions = {}) {
+	// The first page's request, which is what this cache entry IS: the whole feed, from the start of the log.
+	const { queryKey, queryFn } = listGraphWorkflowRunEventsInfiniteOptions({
+		path: { runId: runId ?? "" },
+		query: { afterSeq: 0 },
+	});
 	return useInfiniteQuery({
-		// The first page's request, which is what this cache entry IS: the whole feed, from the start of the log.
-		queryKey: listGraphWorkflowRunEventsQueryKey({ path: { runId: runId ?? "" }, query: { afterSeq: 0 } }),
+		queryKey,
+		queryFn,
 		initialPageParam: 0,
-		getNextPageParam: (lastPage: ListGraphWorkflowRunEventsResponse, _pages, lastPageParam: number) =>
-			lastPage.replayTruncated === true && (lastPage.lastSeq ?? 0) > lastPageParam ? lastPage.lastSeq : undefined,
-		queryFn: async ({ pageParam, signal }) => {
-			const { data } = await callWithResponseValidation(
-				listGraphWorkflowRunEvents({ path: { runId: runId ?? "" }, query: { afterSeq: pageParam }, signal, throwOnError: true }),
-			);
-			return data;
-		},
+		// Every page param this feed mints is a number; the generated type also admits a `{ query }` object.
+		getNextPageParam: (lastPage: ListGraphWorkflowRunEventsResponse, _pages, lastPageParam) =>
+			lastPage.replayTruncated === true && typeof lastPageParam === "number" && (lastPage.lastSeq ?? 0) > lastPageParam
+				? lastPage.lastSeq
+				: undefined,
 		// One ascending list, deduplicated on the sequence: an overlap at a page boundary — a refetch racing a
 		// `fetchNextPage` — must not render a row twice under a repeated React key. Sequences are strictly increasing
 		// but NOT contiguous (the counter is shared with the node runs), so this sorts on the number itself.
@@ -237,7 +235,7 @@ export function useGraphWorkflowRunEvents(runId: string | undefined, options: Fe
  */
 export function useGraphWorkflowTools(options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(listGraphWorkflowToolsOptions()),
+		...listGraphWorkflowToolsOptions(),
 		enabled: options.enabled ?? true,
 	});
 }
@@ -249,7 +247,7 @@ export function useGraphWorkflowTools(options: FeedOptions = {}) {
  */
 export function useGraphWorkflowAgentOptions(options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(listAgentDefinitionsOptions()),
+		...listAgentDefinitionsOptions(),
 		enabled: options.enabled ?? true,
 		select: (data) =>
 			(data.items ?? []).map((agent) => ({
@@ -299,7 +297,7 @@ function toGraphWorkflowModelOption(model: LocalModelResponse) {
  */
 export function useGraphWorkflowModelOptions(options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(listLocalModelsOptions()),
+		...listLocalModelsOptions(),
 		enabled: options.enabled ?? true,
 		select: (data) => (data.items ?? []).filter((model) => model.kind === "Chat").map(toGraphWorkflowModelOption),
 	});
@@ -311,7 +309,7 @@ export function useGraphWorkflowModelOptions(options: FeedOptions = {}) {
  */
 export function useGraphWorkflowLlmModelOptions(options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(listLocalModelsOptions()),
+		...listLocalModelsOptions(),
 		enabled: options.enabled ?? true,
 		select: (data) =>
 			(data.items ?? [])
@@ -338,7 +336,7 @@ function useDefinitionRefresh(): (definitionId?: string) => Promise<void> {
 export function useCreateGraphWorkflowDefinition() {
 	const refresh = useDefinitionRefresh();
 	return useMutation({
-		...withResponseValidation(createGraphWorkflowDefinitionMutation()),
+		...createGraphWorkflowDefinitionMutation(),
 		onSuccess: () => refresh(),
 	});
 }
@@ -347,7 +345,7 @@ export function useCreateGraphWorkflowDefinition() {
 export function useImportGraphWorkflowDefinition() {
 	const refresh = useDefinitionRefresh();
 	return useMutation({
-		...withResponseValidation(importGraphWorkflowDefinitionMutation()),
+		...importGraphWorkflowDefinitionMutation(),
 		onSuccess: () => refresh(),
 	});
 }
@@ -359,7 +357,7 @@ export function useImportGraphWorkflowDefinition() {
 export function useExportGraphWorkflowDefinition() {
 	return useMutation({
 		mutationFn: async (options: { readonly path: { readonly definitionId: string } }) =>
-			(await callWithResponseValidation(exportGraphWorkflowDefinition({ path: options.path, throwOnError: true }))).data,
+			(await exportGraphWorkflowDefinition({ path: options.path })).data,
 	});
 }
 
@@ -371,7 +369,7 @@ export function useExportGraphWorkflowDefinition() {
 export function useUpdateGraphWorkflowDefinition() {
 	const refresh = useDefinitionRefresh();
 	return useMutation({
-		...withResponseValidation(updateGraphWorkflowDefinitionMutation()),
+		...updateGraphWorkflowDefinitionMutation(),
 		onSuccess: (_data, variables) => refresh(variables.path?.definitionId),
 	});
 }
@@ -380,7 +378,7 @@ export function useUpdateGraphWorkflowDefinition() {
 export function useDeleteGraphWorkflowDefinition() {
 	const refresh = useDefinitionRefresh();
 	return useMutation({
-		...withResponseValidation(deleteGraphWorkflowDefinitionMutation()),
+		...deleteGraphWorkflowDefinitionMutation(),
 		onSuccess: (_data, variables) => refresh(variables.path?.definitionId),
 	});
 }
@@ -390,7 +388,7 @@ export function useDeleteGraphWorkflowDefinition() {
  * invalidates nothing: its answer is the response body the validation strip renders.
  */
 export function useValidateGraphWorkflowDefinition() {
-	return useMutation(withResponseValidation(validateGraphWorkflowDefinitionMutation()));
+	return useMutation(validateGraphWorkflowDefinitionMutation());
 }
 
 /**
@@ -401,7 +399,7 @@ export function useValidateGraphWorkflowDefinition() {
 export function useStartGraphWorkflowRun() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(startGraphWorkflowRunMutation()),
+		...startGraphWorkflowRunMutation(),
 		onSuccess: async (data) => {
 			if (data.runId) {
 				await queryClient.invalidateQueries({
@@ -426,7 +424,7 @@ export function useStartGraphWorkflowRun() {
  */
 export function useGraphWorkflowCapability(options: { readonly enabled?: boolean } = {}) {
 	return useQuery({
-		...withResponseValidation(getGraphWorkflowCapabilityOptions()),
+		...getGraphWorkflowCapabilityOptions(),
 		enabled: options.enabled ?? true,
 		staleTime: 30_000,
 	});
@@ -434,12 +432,10 @@ export function useGraphWorkflowCapability(options: { readonly enabled?: boolean
 
 export function useGraphWorkflowConversationRuns(conversationId: string | undefined, options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(
-			listGraphWorkflowConversationRunsOptions({
-				path: { conversationId: conversationId ?? "" },
-				query: { limit: GRAPH_WORKFLOW_CONVERSATION_RUN_PAGE_SIZE },
-			}),
-		),
+		...listGraphWorkflowConversationRunsOptions({
+			path: { conversationId: conversationId ?? "" },
+			query: { limit: GRAPH_WORKFLOW_CONVERSATION_RUN_PAGE_SIZE },
+		}),
 		...feedQuerySettings(conversationId, options),
 		select: (data) => data.runs ?? [],
 	});
@@ -454,7 +450,7 @@ export function useGraphWorkflowConversationRuns(conversationId: string | undefi
 export function useSendGraphWorkflowChatMessage() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(sendGraphWorkflowChatMessageMutation()),
+		...sendGraphWorkflowChatMessageMutation(),
 		onSuccess: async (_data, variables) => {
 			const conversationId = variables.path?.conversationId;
 			if (conversationId) {
@@ -474,7 +470,7 @@ export function useSendGraphWorkflowChatMessage() {
 export function useCancelGraphWorkflowRun() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(cancelGraphWorkflowRunMutation()),
+		...cancelGraphWorkflowRunMutation(),
 		onSuccess: async (_data, variables) => {
 			const runId = variables.path?.runId;
 			if (runId) {
@@ -492,7 +488,7 @@ export function useCancelGraphWorkflowRun() {
 export function useDeleteGraphWorkflowRun() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(deleteGraphWorkflowRunMutation()),
+		...deleteGraphWorkflowRunMutation(),
 		onSuccess: async (_data, variables) => {
 			const runId = variables.path?.runId;
 			if (runId) {
@@ -527,7 +523,7 @@ export function useDecideGraphWorkflowNodeRun() {
 	};
 
 	return useMutation({
-		...withResponseValidation(decideGraphWorkflowNodeRunMutation()),
+		...decideGraphWorkflowNodeRunMutation(),
 		onSuccess: (_data, variables) => refresh(variables.path?.runId, variables.path?.nodeKey),
 		// A 409 means the server disagrees with what this panel is showing — the gate was already answered, or the run
 		// has moved on. Re-reading is what takes the live buttons away; without it the panel keeps offering a decision
@@ -544,7 +540,7 @@ export function useDecideGraphWorkflowNodeRun() {
 export function useSteerGraphWorkflowNodeRun() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(steerGraphWorkflowNodeRunMutation()),
+		...steerGraphWorkflowNodeRunMutation(),
 		onSuccess: async (_data, variables) => {
 			const { runId, nodeKey } = variables.path;
 			await Promise.all([

@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { getRuntimeResourcesOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toRuntimeResources } from "@/features/runtime-resources/models/RuntimeResourcesModels";
 
 // Poll cadence (ms) for the top-bar gauge. Each node sample spawns nvidia-smi (a console host on Windows), so the gauge
@@ -12,7 +11,7 @@ const runtimeResourcesPollIntervalMs = 15_000;
 // Live whole-machine RAM and VRAM. `enabled` keeps a signed-out shell from polling an Operator-only endpoint.
 export function useRuntimeResources(enabled = true) {
 	return useQuery({
-		...withResponseValidation(getRuntimeResourcesOptions()),
+		...getRuntimeResourcesOptions(),
 		select: toRuntimeResources,
 		enabled,
 		refetchInterval: runtimeResourcesPollIntervalMs,

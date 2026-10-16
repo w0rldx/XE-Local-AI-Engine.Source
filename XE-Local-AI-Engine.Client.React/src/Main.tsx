@@ -13,6 +13,7 @@ import { installCollectors, rootErrorHandlers } from "@/core/diagnostics/Diagnos
 import { installPreloadErrorReload } from "@/core/integrations/vite/PreloadErrorReload";
 import { installAutoCapture } from "@/features/diagnostics/BuildSnapshot";
 
+import { renderWhenI18nReady } from "./BootI18n";
 import { i18nReady } from "./i18n";
 
 // Install always-on diagnostics collectors before the first render so early errors are captured,
@@ -36,24 +37,21 @@ if (import.meta.env.DEV) {
 const rootElement = document.querySelector("#root");
 if (rootElement && !rootElement.innerHTML) {
 	const root = ReactDOM.createRoot(rootElement, rootErrorHandlers);
-	// Hold the first render until the detected locale is renderable. i18nReady is already resolved for the
-	// statically-bundled fallback ("en"), so English sessions are unaffected; any other language waits on its
-	// own chunk rather than painting English text and swapping it a frame later. It never rejects — a failed
-	// chunk fetch renders against the English fallback.
-	i18nReady
-		.then(() => {
-			root.render(
-				<StrictMode>
-					<LazyMotion features={domAnimation}>
-						{/* "user" honours the OS `prefers-reduced-motion` setting: transform and layout animations
-						    (the sidebar collapse, the mobile drawer, the content-area reflow) snap to their end
-						    state, while opacity still crossfades, so nothing becomes invisible. */}
-						<MotionConfig reducedMotion="user">
-							<App />
-						</MotionConfig>
-					</LazyMotion>
-				</StrictMode>,
-			);
-		})
-		.catch(() => undefined);
+	// Hold the first render until the fallback ("en") and the detected locale are renderable: both are lazy chunks,
+	// so painting earlier would show raw keys, or English text swapped a frame later. If `en` failed to load, an
+	// untranslated load-error screen is shown instead of an app full of raw keys; its Retry reloads the document.
+	renderWhenI18nReady(
+		root,
+		i18nReady,
+		<StrictMode>
+			<LazyMotion features={domAnimation}>
+				{/* "user" honours the OS `prefers-reduced-motion` setting: transform and layout animations
+				    (the sidebar collapse, the mobile drawer, the content-area reflow) snap to their end
+				    state, while opacity still crossfades, so nothing becomes invisible. */}
+				<MotionConfig reducedMotion="user">
+					<App />
+				</MotionConfig>
+			</LazyMotion>
+		</StrictMode>,
+	).catch(() => undefined);
 }

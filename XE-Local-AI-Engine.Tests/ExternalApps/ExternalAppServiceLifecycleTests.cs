@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
@@ -530,6 +531,60 @@ public sealed class ExternalAppServiceLifecycleTests
         AssertEx.Equal(row.Version, after.Version, "Nothing was written, so nothing bumped the version.");
         AssertEx.Empty(harness.Runtime.StoppedGracePeriods, "The refusal is at admission, before the runtime is asked anything.");
         AssertEx.Empty(harness.Runtime.RemovedContainerIds, "Nor was a container removed.");
+    }
+
+    /// <summary>
+    ///     Rc.3 decision D6 holds for stored instances too. After an empty-catalog start, Start and Restart refuse with
+    ///     the restart reason, whether or not the manifest reads the bridge, and the row does not move.
+    /// </summary>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task StartAndRestart_AfterAnEmptyCatalogStart_AreRefusedWithTheRestartReason(bool needsBridge)
+    {
+        var manifest = needsBridge ? BridgeNeedingManifest() : SingleServiceManifest();
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest,
+            withBridge: false,
+            startupSettings: new NodeStartupSettings { ExternalAppsAwaitingCatalog = true });
+        var stopped = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Stopped);
+        var running = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Running, ExternalAppDesiredState.Running);
+
+        var start = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => harness.Service.StartAsync(stopped.Id, stopped.Version));
+        var restart = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => harness.Service.RestartAsync(running.Id, running.Version));
+
+        AssertEx.Contains(start.Message, nameof(ExternalAppBlockedReason.RestartRequired));
+        AssertEx.Contains(restart.Message, nameof(ExternalAppBlockedReason.RestartRequired));
+        AssertEx.Equal(stopped.Version, AssertEx.NotNull(await harness.ReadAsync(stopped.Id)).Version, "A refused start writes nothing.");
+        AssertEx.Equal(running.Version, AssertEx.NotNull(await harness.ReadAsync(running.Id)).Version, "A refused restart stops nothing.");
+        AssertEx.Empty(harness.Runtime.CreatedContainerIds, "No container was created.");
+    }
+
+    /// <summary>
+    ///     A refresh that emptied the catalog after a populated start: nothing may start, and Stop and Uninstall stay
+    ///     admitted so the operator can still clear what runs.
+    /// </summary>
+    [Test]
+    public async Task Start_AfterARefreshEmptiedTheCatalog_IsRefusedWhileStopAndUninstallStayAdmitted()
+    {
+        var manifest = SingleServiceManifest();
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
+        var stopped = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Stopped);
+        var running = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Running, ExternalAppDesiredState.Running);
+        ExternalAppServiceHarness.Seed(harness.Catalog);
+
+        var start = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => harness.Service.StartAsync(stopped.Id, stopped.Version));
+        AssertEx.Contains(start.Message, nameof(ExternalAppBlockedReason.CatalogEmpty));
+        // Reset rebuilds and starts the application again, so it is a start too.
+        var reset = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => harness.Service.ResetAsync(stopped.Id, stopped.Version));
+        AssertEx.Contains(reset.Message, nameof(ExternalAppBlockedReason.CatalogEmpty));
+
+        // Admission is what the policy could refuse; both verbs pass it and reach their transient status.
+        var stopping = await harness.Service.StopAsync(running.Id, running.Version);
+        var uninstalling = await harness.Service.UninstallAsync(stopped.Id, stopped.Version);
+        AssertEx.Equal(ExternalAppInstanceStatus.Stopping, stopping.Status);
+        AssertEx.Equal(ExternalAppInstanceStatus.Uninstalling, uninstalling.Status);
+        await harness.WaitUntilIdleAsync(running.Id);
+        await harness.WaitUntilIdleAsync(stopped.Id);
     }
 
     /// <summary>

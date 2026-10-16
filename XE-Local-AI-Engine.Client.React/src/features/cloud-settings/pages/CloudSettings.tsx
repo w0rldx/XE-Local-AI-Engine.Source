@@ -12,7 +12,6 @@ import {
 	getCloudSettingsQueryKey,
 	saveCloudSettingsMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toHeaderRequests } from "@/core/http-headers/CustomHeaders";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
@@ -65,7 +64,7 @@ export function CloudSettings() {
 		error: settingsError,
 		refetch: settingsRefetch,
 		isFetching: settingsIsFetching,
-	} = useQuery(withResponseValidation(getCloudSettingsOptions()));
+	} = useQuery(getCloudSettingsOptions());
 	const [formState, dispatch] = useReducer(formReducer, initialFormState);
 	const { values: formValues, touched: touchedFields, submitted, modelRowIds, headerRowIds, hostSuffixRowIds } = formState;
 
@@ -104,7 +103,7 @@ export function CloudSettings() {
 	);
 
 	const saveMutation = useMutation({
-		...withResponseValidation(saveCloudSettingsMutation()),
+		...saveCloudSettingsMutation(),
 		onSuccess: async (settings: SaveCloudSettingsResponse) => {
 			// A successful save resets the values and clears the touched/submitted flags together.
 			const values = settingsToFormValues(settings);
@@ -117,7 +116,7 @@ export function CloudSettings() {
 	});
 
 	const clearMutation = useMutation({
-		...withResponseValidation(clearCloudSettingsMutation()),
+		...clearCloudSettingsMutation(),
 		onSuccess: async (settings: ClearCloudSettingsResponse) => {
 			// Clearing only replaces the values; the touched/submitted flags are left untouched.
 			const values = settingsToFormValues(settings);

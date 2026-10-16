@@ -6,7 +6,6 @@ import {
 	getTutorialStateQueryKey,
 	saveTutorialStateMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 
 export type TutorialStatus = "completed" | "skipped";
@@ -74,9 +73,9 @@ export interface UseTutorialStateResult {
 export function useTutorialState(): UseTutorialStateResult {
 	const queryClient = useQueryClient();
 	const isAuthenticated = useNodeAuthStore((state) => Boolean(state.accessToken));
-	const stateQuery = useQuery(withResponseValidation({ ...getTutorialStateOptions(), enabled: isAuthenticated }));
+	const stateQuery = useQuery({ ...getTutorialStateOptions(), enabled: isAuthenticated });
 	const saveMutation = useMutation({
-		...withResponseValidation(saveTutorialStateMutation()),
+		...saveTutorialStateMutation(),
 		scope: { id: "tutorial-state" },
 	});
 

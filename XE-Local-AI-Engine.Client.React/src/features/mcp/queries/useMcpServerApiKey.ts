@@ -1,11 +1,11 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
 import {
 	generateMcpServerApiKeyMutation,
 	getMcpServerApiKeyOptions,
 	getMcpServerApiKeyQueryKey,
 	revokeMcpServerApiKeyMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 // Server state for the INBOUND MCP credential — the key an external MCP client (Claude Code, an IDE) presents to this
 // node's own MCP endpoint. This is the opposite direction to useMcpServers, which manages the OUTBOUND registrations
@@ -30,7 +30,7 @@ export interface McpServerApiKeyView {
 
 export function useMcpServerApiKey() {
 	return useQuery({
-		...withResponseValidation(getMcpServerApiKeyOptions()),
+		...getMcpServerApiKeyOptions(),
 		select: (data): McpServerApiKeyView => ({
 			configured: data.configured ?? false,
 			prefix: data.apiKey?.prefix ?? null,
@@ -50,7 +50,7 @@ export function useGenerateMcpServerApiKey() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(generateMcpServerApiKeyMutation()),
+		...generateMcpServerApiKeyMutation(),
 		onSuccess: () => invalidateApiKey(queryClient),
 	});
 }
@@ -59,7 +59,7 @@ export function useRevokeMcpServerApiKey() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(revokeMcpServerApiKeyMutation()),
+		...revokeMcpServerApiKeyMutation(),
 		onSuccess: () => invalidateApiKey(queryClient),
 	});
 }

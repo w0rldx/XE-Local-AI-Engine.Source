@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
+using System.Collections.Concurrent;
 using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -55,6 +56,60 @@ public sealed class MigratedDatabaseTemplateTests : IDisposable
             $"A template stopped at {target} must record exactly the migrations a replay to {target} records.");
         AssertEx.True(!copiedMigrations.Contains(HeadDeclaredChatMigration()),
             "A template stopped short of head must not record the head migration — otherwise the tail no longer runs for real.");
+
+        await AssertSameSchemaObjectsAsync(replayed, copied);
+    }
+
+    [Test]
+    public async Task ChatTemplateBuiltInAnEmptyDirectory_BuildsEveryPredecessorAndMatchesAReplayOnMigrationIdsAndSchemaSql()
+    {
+        // An isolated, empty directory and cache: the shared one may hold a template the full-replay code built under
+        // the same assembly key, which would let this pass without ever copying a predecessor.
+        var declared = DeclaredChatMigrations();
+        AssertEx.True(declared.Count > 3, "The chat context must declare more than three migrations for a two-link chain to mean anything.");
+        var target = declared[2];
+        var templateDirectory = Path.Combine(_rootPath, "isolated-templates");
+        var moduleVersionId = typeof(NodeChatDbContext).Assembly.ManifestModule.ModuleVersionId.ToString("N", CultureInfo.InvariantCulture);
+
+        var templatePath = await MigratedDatabaseTemplate.ChatAtPathAsync(templateDirectory, new ConcurrentDictionary<string, Lazy<Task<string>>>(StringComparer.Ordinal), target);
+
+        var built = Directory.EnumerateFiles(templateDirectory).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToArray();
+        var expected = declared.Take(3).Select(id => $"{moduleVersionId}-chat-at-{id}.sqlite").Order(StringComparer.Ordinal).ToArray();
+        AssertEx.True(built.SequenceEqual(expected),
+            $"A cold build of {target} must build exactly its predecessors and itself; built [{string.Join(", ", built)}].");
+
+        var copyPath = Path.Combine(_rootPath, "isolated-copy.sqlite");
+        File.Copy(templatePath, copyPath);
+        await using var replayed = await MigrationSchemaProbe.MigrateChatAsync("isolated-replayed.sqlite", target);
+
+        var replayedMigrations = await replayed.AppliedMigrationsAsync(identityContext: false);
+        var copiedMigrations = await MigrationIdsAsync(copyPath);
+        AssertEx.True(copiedMigrations.SetEquals(replayedMigrations),
+            $"A template chained up to {target} must record exactly the migration ids a replay to {target} records.");
+
+        var replayedObjects = await SchemaObjectsAsync(replayed.DatabasePath);
+        var copiedObjects = await SchemaObjectsAsync(copyPath);
+        AssertEx.True(copiedObjects.SetEquals(replayedObjects),
+            $"A template chained up to {target} must carry the same schema SQL as a replay; "
+            + $"only in the replay [{string.Join(", ", replayedObjects.Except(copiedObjects, StringComparer.Ordinal))}], "
+            + $"only in the chain [{string.Join(", ", copiedObjects.Except(replayedObjects, StringComparer.Ordinal))}].");
+    }
+
+    [Test]
+    public async Task ChatTemplateFromTheSharedCache_MatchesAReplayOnMigrationIdsAndSchemaSql()
+    {
+        // The shared directory as suites use it, warm or cold; the isolated case above is the one that proves chaining.
+        var declared = DeclaredChatMigrations();
+        AssertEx.True(declared.Count > 2, "The chat context must declare more than two migrations for a chained step to mean anything.");
+        var target = declared[1];
+
+        await using var replayed = await MigrationSchemaProbe.MigrateChatAsync("chained-replayed.sqlite", target);
+        await using var copied = await MigrationSchemaProbe.FromChatTemplateAsync("chained-copied.sqlite", target);
+
+        var replayedMigrations = await replayed.AppliedMigrationsAsync(identityContext: false);
+        var copiedMigrations = await copied.AppliedMigrationsAsync(identityContext: false);
+        AssertEx.True(copiedMigrations.SetEquals(replayedMigrations),
+            $"A template chained onto {declared[0]} must record exactly the migrations a replay to {target} records.");
 
         await AssertSameSchemaObjectsAsync(replayed, copied);
     }
@@ -184,6 +239,24 @@ public sealed class MigratedDatabaseTemplateTests : IDisposable
 
         SqliteConnection.ClearPool(connection);
         return names;
+    }
+
+    private static async Task<IReadOnlySet<string>> MigrationIdsAsync(string databasePath)
+    {
+        await using var connection = new SqliteConnection($"Data Source={databasePath}");
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT MigrationId FROM __EFMigrationsHistory;";
+
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            _ = ids.Add(reader.GetString(ordinal: 0));
+        }
+
+        SqliteConnection.ClearPool(connection);
+        return ids;
     }
 
     private static string PenultimateDeclaredChatMigration()

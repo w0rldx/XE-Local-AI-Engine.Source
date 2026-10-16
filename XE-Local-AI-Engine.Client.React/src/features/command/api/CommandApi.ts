@@ -3,8 +3,8 @@ import { HubConnectionState } from "@microsoft/signalr";
 import { ApiError } from "@/core/api/errors/ApiError";
 import {
 	createNodeChatConversation,
-	invokeGraphWorkflowIntent,
 	type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowIntentResponse as GraphWorkflowIntentResponse,
+	invokeGraphWorkflowIntent,
 } from "@/core/api/generated";
 import type { ConflictProblemDetails } from "@/core/api/models/ProblemDetails";
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
@@ -23,7 +23,7 @@ const terminalChatEvents = new Set(["assistant-completed", "assistant-cancelled"
 export type IntentRefusal = "expired" | "unavailable" | "failed";
 
 export function invokeIntent(utterance: string, requestId: string, utteredAt: string): Promise<GraphWorkflowIntentResponse> {
-	return invokeGraphWorkflowIntent({ body: { utterance, requestId, utteredAt }, throwOnError: true }).then(({ data }) => data);
+	return invokeGraphWorkflowIntent({ body: { utterance, requestId, utteredAt } }).then(({ data }) => data);
 }
 
 export function toIntentRefusal(error: unknown): IntentRefusal {
@@ -44,7 +44,7 @@ export function toIntentRefusal(error: unknown): IntentRefusal {
 export async function createAgentConversation(utterance: string): Promise<string> {
 	const normalized = utterance.replace(/\s+/g, " ").trim();
 	const title = normalized.length > 48 ? `${normalized.slice(0, 45)}…` : normalized;
-	const { data } = await createNodeChatConversation({ body: { title }, throwOnError: true });
+	const { data } = await createNodeChatConversation({ body: { title } });
 	return data.conversationId;
 }
 

@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { getToolCatalogOptions, listAgentDefinitionsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import type { IntegrationAgentOption, IntegrationToolFacts } from "@/features/integrations/models/IntegrationModels";
 
 // Feature-local agent picker data. This calls the GENERATED sdk directly rather than reusing features/agents or
@@ -21,8 +20,8 @@ interface IntegrationAgentOptionsResult {
 }
 
 export function useIntegrationAgentOptions(): IntegrationAgentOptionsResult {
-	const agentsQuery = useQuery({ ...withResponseValidation(listAgentDefinitionsOptions()) });
-	const catalogQuery = useQuery({ ...withResponseValidation(getToolCatalogOptions()) });
+	const agentsQuery = useQuery({ ...listAgentDefinitionsOptions() });
+	const catalogQuery = useQuery({ ...getToolCatalogOptions() });
 
 	const options = useMemo<IntegrationAgentOption[]>(
 		() =>

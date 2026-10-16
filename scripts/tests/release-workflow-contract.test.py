@@ -488,18 +488,37 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
         self.assertNotIn("curl -f", body)
 
     def test_windows_test_job_is_advisory_and_never_passes_on_zero_tests(self) -> None:
-        windows_source = WINDOWS_WORKFLOW.read_text(encoding="utf-8")
-        # Advisory: no release gate may reach it, and nothing may call it as one.
-        for caller in (self.build_source, self.source, self.dev_source):
-            self.assertNotIn("windows-tests.yml", caller)
-        self.assertNotIn("workflow_call", windows_source)
-        self.assertIn("runs-on: windows-latest", windows_source)
+        # Moved into build-and-test.yml as its own job: advisory because the required aggregate never
+        # waits on it, and kept out of the release.yml/dev-build.yml calls, where any red job fails the caller.
+        self.assertFalse(WINDOWS_WORKFLOW.exists(), "windows-tests.yml moved into build-and-test.yml")
+        jobs = r"(?ms)^  {name}:\n(?P<body>.*?)(?=^  # |^  [a-z-]+:\n|\Z)"
+        job = re.search(jobs.format(name="windows-tests"), self.build_source)
+        self.assertIsNotNone(job)
+        body = job.group("body")
+        self.assertIn("    if: github.workflow == 'build-and-test'\n", body)
+        self.assertIn("runs-on: windows-", body)
+        self.assertRegex(body, r"(?m)^    timeout-minutes: \d+$")
+        self.assertIn("tzutil /s", body)
+        # Advisory: a newer push to the same ref cancels the older Windows run, develop included. The
+        # workflow-level policy (never cancel non-PR runs of the required jobs) must stay as it is.
+        self.assertIn(
+            "    concurrency:\n      group: windows-tests-${{ github.ref }}\n      cancel-in-progress: true\n", body
+        )
+        self.assertIn("cancel-in-progress: ${{ github.event_name == 'pull_request' }}", self.build_source)
+        aggregate = re.search(jobs.format(name="build-and-test"), self.build_source)
+        self.assertIsNotNone(aggregate)
+        needs = re.search(r"(?m)^    needs: \[(?P<jobs>[^\]]*)\]", aggregate.group("body"))
+        self.assertIsNotNone(needs)
+        self.assertNotIn("windows-tests", needs.group("jobs"))
+        sandbox = re.search(jobs.format(name="windows-sandbox"), self.build_source)
+        self.assertIsNotNone(sandbox)
+        self.assertNotIn("WindowsJobObjectTreeKillTests", sandbox.group("body"))
         # Native TUnit hosts with a tree-node filter; `dotnet test` reports zero tests for TUnit here.
-        self.assertNotRegex(windows_source, r"(?m)^\s+dotnet test\b")
-        self.assertNotIn(" --filter", windows_source)
-        self.assertIn("--treenode-filter", windows_source)
-        for hollow_guard in ("$exitCode -eq 8", "zero tests executed", "matched no test"):
-            self.assertIn(hollow_guard, windows_source)
+        self.assertNotRegex(body, r"(?m)^\s+dotnet test\b")
+        self.assertNotIn(" --filter", body)
+        self.assertIn("--treenode-filter", body)
+        for hollow_guard in ("$exitCode -eq 8", "zero tests executed", "matched no test", "skipped as Windows-only"):
+            self.assertIn(hollow_guard, body)
 
     def test_vpk_version_pin_is_consistent_across_every_release_surface(self) -> None:
         pins = [

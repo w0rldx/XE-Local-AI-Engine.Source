@@ -4,7 +4,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the generated hey-api TanStack mutation factories. Each returns an object carrying a `mutationFn` the hook
-// spreads (after withResponseValidation) into useMutation; the hooks layer their own onSuccess/onSettled
+// spreads into useMutation; the hooks layer their own onSuccess/onSettled
 // invalidation on top. The factory mocks let a test assert the variable shape the hook forwarded to the wire.
 const { mutationFns } = vi.hoisted(() => ({
 	mutationFns: {

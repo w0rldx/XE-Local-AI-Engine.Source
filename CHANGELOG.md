@@ -24,6 +24,8 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Added
 
+- Windows portable build ships `uninstall-xe-local-ai-engine.ps1` next to the app; it stops the node (and stops if a process survives), refuses a data folder that contains the extracted app or is a junction or symlink, and removes the data folder only on confirmation, with a typed `delete key` when `node.key` is present. The installer page and FAQ point at it.
+
 - **Delete a finished graph-workflow run** — the run toolbar offers "Delete run" on a finished run; after a
   confirmation the run, its node results and its event log are removed for good and the workflow itself is kept
   (`DELETE graph-workflows/runs/{runId}`, 409 while the run is still live).
@@ -299,6 +301,8 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
     translation of what it did.
 
 ### Fixed
+
+- External Apps is off while the app catalog is empty: with an empty catalog at startup the container bridge does not open, and install, update, Start, Restart and Reset refuse until a restart after the first catalog entry (`restartRequired` on the catalog response, restart card in English and German; Stop and Uninstall stay allowed). A catalog that empties while the node runs refuses the same operations and the page says the bridge stays open until a restart. Install and Open reasons on the External Apps page are keyboard-reachable through the shared disabled-reason tooltip.
 
 - The external-provider connection store wrote its encrypted file in place; a crash mid-write could lose every
   external connection. It now writes through the same atomic temp-file-and-rename path as the other credential stores.

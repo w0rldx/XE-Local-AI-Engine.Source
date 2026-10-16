@@ -20,7 +20,6 @@ import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { getInvocationMonitorOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
@@ -211,7 +210,7 @@ export function Invocations() {
 		refetch: monitorRefetch,
 		isFetching: monitorIsFetching,
 	} = useQuery({
-		...withResponseValidation(getInvocationMonitorOptions()),
+		...getInvocationMonitorOptions(),
 		// Case (d): chat in another tab, the scheduler, integrations and agents start invocations outside this page, and
 		// no hub announces them, so an idle monitor cannot tell that nothing will start.
 		refetchInterval: 5000,

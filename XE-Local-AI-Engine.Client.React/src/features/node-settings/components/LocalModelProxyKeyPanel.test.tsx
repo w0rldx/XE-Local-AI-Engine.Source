@@ -25,10 +25,6 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	revokeLocalModelProxyApiKeyMutation: () => ({ mutationFn: () => revokeMock() }),
 }));
 
-vi.mock("@/core/api/ResponseValidation", () => ({
-	withResponseValidation: (options: unknown) => options,
-}));
-
 // Deterministic i18n: t returns the supplied default (with {{var}} interpolation) so human copy is asserted rather
 // than raw keys — this doubles as the check that the panel never renders a bare dotted key.
 vi.mock("react-i18next", () => ({

@@ -1,4 +1,5 @@
 import { ApiError } from "@/core/api/errors/ApiError";
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 
 // Resolves the most specific human-readable message from an unknown thrown error, preferring the server's
 // ProblemDetails (detail → first field error → title) over a raw Error message, then falling back. Mirrors the
@@ -28,8 +29,6 @@ export function knowledgeErrorMessage(error: unknown, fallback: string): string 
 			return title;
 		}
 	}
-	if (error instanceof Error && error.message.trim().length > 0) {
-		return error.message;
-	}
-	return fallback;
+	// The shared sink keeps a contract-mismatch ZodError's issue list out of the toast.
+	return apiErrorMessage(error, fallback);
 }

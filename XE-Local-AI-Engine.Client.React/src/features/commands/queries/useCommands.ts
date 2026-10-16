@@ -8,12 +8,11 @@ import {
 	listSlashCommandsQueryKey,
 	updateSlashCommandMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toSlashCommands } from "@/features/commands/models/CommandMappers";
 
 export function useCommands() {
 	return useQuery({
-		...withResponseValidation(listSlashCommandsOptions()),
+		...listSlashCommandsOptions(),
 		select: (data) => toSlashCommands(data.items),
 	});
 }
@@ -25,7 +24,7 @@ function invalidateCommands(queryClient: ReturnType<typeof useQueryClient>): Pro
 export function useCreateCommand() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(createSlashCommandMutation()),
+		...createSlashCommandMutation(),
 		onSuccess: (_data: CreateSlashCommandResponse) => invalidateCommands(queryClient),
 	});
 }
@@ -33,7 +32,7 @@ export function useCreateCommand() {
 export function useUpdateCommand() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(updateSlashCommandMutation()),
+		...updateSlashCommandMutation(),
 		onSuccess: (_data: UpdateSlashCommandResponse) => invalidateCommands(queryClient),
 	});
 }
@@ -41,7 +40,7 @@ export function useUpdateCommand() {
 export function useDeleteCommand() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(deleteSlashCommandMutation()),
+		...deleteSlashCommandMutation(),
 		onSuccess: (_data: DeleteSlashCommandResponse) => invalidateCommands(queryClient),
 	});
 }

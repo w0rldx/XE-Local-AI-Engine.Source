@@ -6,6 +6,10 @@ Read when: editing `.github/workflows/**`, `HEAVY`/sharding, coverage merge, `pu
 
 ## CI and gates
 
+### A NuGet bump of a package with a curated upstream license needs a new exact mapping
+
+**Rule:** when a dependency round moves a package listed in `UPSTREAM_PACKAGE_LICENSE_TEXTS` (`scripts/compliance/generate_backend_license_corpus.py`: FastEndpoints, Scalar.AspNetCore, Scrutor, TimeZoneConverter), add a mapping for the new version in the same round. Fetch `LICENSE` at the nuspec's repository commit, store it with its `.source.txt` provenance under `third-party/nuget/upstream/`, drop the old pair and update the test fixtures. These packages ship MIT with no copyright line, so the generator refuses them without an exact mapping. **Prevents:** a green `build-and-test` followed by a red `dev-build` or release package job, because only `package-velopack.yml` runs the generator. **Authority:** `license_mapping` in `generate_backend_license_corpus.py`; `scripts/compliance/tests/generate_backend_license_corpus.test.py`.
+
 ### The GPU smoke is the only gate that proves the GPU did the work — and its exit codes are a taxonomy, not a scale
 
 **Rule:** run `scripts/run-gpu-smoke-local.sh` before a tester RC or after inference/runtime changes; a correct answer

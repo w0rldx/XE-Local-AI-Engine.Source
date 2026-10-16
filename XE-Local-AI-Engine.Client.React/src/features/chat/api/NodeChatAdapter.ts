@@ -19,7 +19,6 @@ import {
 	type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatBranchConversationResponse,
 	type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationContextStateResponse,
 } from "@/core/api/generated";
-import { callWithResponseValidation } from "@/core/api/ResponseValidation";
 import {
 	mapConversation,
 	mapConversationSummary,
@@ -180,13 +179,10 @@ export function toStreamRequest(request: SendMessageRequest): NodeChatStreamRequ
 
 export const nodeChatAdapter: NodeChatAdapter = {
 	async listConversations(options) {
-		const { data } = await callWithResponseValidation(
-			listNodeChatConversations({
-				query: { includeArchived: options?.includeArchived ?? false },
-				signal: options?.signal,
-				throwOnError: true,
-			}),
-		);
+		const { data } = await listNodeChatConversations({
+			query: { includeArchived: options?.includeArchived ?? false },
+			signal: options?.signal,
+		});
 		return {
 			conversations: (data.items ?? []).map(mapConversationSummary),
 			maxMessageSizeKb: data.maxMessageSizeKb,
@@ -194,42 +190,30 @@ export const nodeChatAdapter: NodeChatAdapter = {
 		};
 	},
 	async getConversation(conversationId, options) {
-		const { data } = await callWithResponseValidation(
-			getNodeChatConversation({ path: { conversationId }, signal: options?.signal, throwOnError: true }),
-		);
+		const { data } = await getNodeChatConversation({ path: { conversationId }, signal: options?.signal });
 		return mapConversation(data);
 	},
 	async createConversation(request, options) {
-		const { data } = await callWithResponseValidation(
-			createNodeChatConversation({ body: request ?? {}, signal: options?.signal, throwOnError: true }),
-		);
+		const { data } = await createNodeChatConversation({ body: request ?? {}, signal: options?.signal });
 		return mapConversation(data);
 	},
 	async deleteConversation(conversationId, purgeImmediately, options) {
-		await callWithResponseValidation(
-			deleteNodeChatConversation({
-				path: { conversationId },
-				body: { purgeImmediately: purgeImmediately ?? false },
-				signal: options?.signal,
-				throwOnError: true,
-			}),
-		);
+		await deleteNodeChatConversation({
+			path: { conversationId },
+			body: { purgeImmediately: purgeImmediately ?? false },
+			signal: options?.signal,
+		});
 	},
 	async renameConversation(conversationId, title, options) {
-		const { data } = await callWithResponseValidation(
-			renameNodeChatConversation({ path: { conversationId }, body: { title }, signal: options?.signal, throwOnError: true }),
-		);
+		const { data } = await renameNodeChatConversation({ path: { conversationId }, body: { title }, signal: options?.signal });
 		return mapConversation(data);
 	},
 	async compactConversation(conversationId, model, options) {
-		const { data } = await callWithResponseValidation(
-			compactNodeChatConversation({
-				path: { conversationId },
-				body: { model: model ?? null },
-				signal: options?.signal,
-				throwOnError: true,
-			}),
-		);
+		const { data } = await compactNodeChatConversation({
+			path: { conversationId },
+			body: { model: model ?? null },
+			signal: options?.signal,
+		});
 		return {
 			outcome: data.outcome,
 			summary: data.summary ?? undefined,
@@ -242,9 +226,7 @@ export const nodeChatAdapter: NodeChatAdapter = {
 	},
 	async getConversationContextState(conversationId, options) {
 		try {
-			const { data } = await callWithResponseValidation(
-				getNodeChatConversationContextState({ path: { conversationId }, signal: options?.signal, throwOnError: true }),
-			);
+			const { data } = await getNodeChatConversationContextState({ path: { conversationId }, signal: options?.signal });
 			return data;
 		} catch (error) {
 			// An unknown (or not yet persisted) conversation has no state to show: null renders the empty panel.
@@ -256,13 +238,10 @@ export const nodeChatAdapter: NodeChatAdapter = {
 	},
 	async getContextEstimate({ modelName, ...rest }, options) {
 		try {
-			const { data } = await callWithResponseValidation(
-				getNodeChatContextEstimate({
-					query: { modelName: modelName.length > 0 ? modelName : undefined, ...rest },
-					signal: options?.signal,
-					throwOnError: true,
-				}),
-			);
+			const { data } = await getNodeChatContextEstimate({
+				query: { modelName: modelName.length > 0 ? modelName : undefined, ...rest },
+				signal: options?.signal,
+			});
 			return data;
 		} catch (error) {
 			// A model the node does not know has no estimate: null renders the "after the first response" state.
@@ -273,26 +252,19 @@ export const nodeChatAdapter: NodeChatAdapter = {
 		}
 	},
 	async setConversationPinned(conversationId, isPinned, options) {
-		const { data } = await callWithResponseValidation(
-			pinNodeChatConversation({ path: { conversationId }, body: { isPinned }, signal: options?.signal, throwOnError: true }),
-		);
+		const { data } = await pinNodeChatConversation({ path: { conversationId }, body: { isPinned }, signal: options?.signal });
 		return mapConversation(data);
 	},
 	async setConversationArchived(conversationId, archived, options) {
-		const { data } = await callWithResponseValidation(
-			archiveNodeChatConversation({ path: { conversationId }, body: { archived }, signal: options?.signal, throwOnError: true }),
-		);
+		const { data } = await archiveNodeChatConversation({ path: { conversationId }, body: { archived }, signal: options?.signal });
 		return mapConversation(data);
 	},
 	async setConversationMemoryExcluded(conversationId, memoryExcluded, options) {
-		const { data } = await callWithResponseValidation(
-			setNodeChatConversationMemoryExcluded({
-				path: { conversationId },
-				body: { memoryExcluded },
-				signal: options?.signal,
-				throwOnError: true,
-			}),
-		);
+		const { data } = await setNodeChatConversationMemoryExcluded({
+			path: { conversationId },
+			body: { memoryExcluded },
+			signal: options?.signal,
+		});
 		return mapConversation(data);
 	},
 	async branchConversation(conversationId, messageId, selectedRevisions, options) {
@@ -300,21 +272,16 @@ export const nodeChatAdapter: NodeChatAdapter = {
 		// matches the revisions the user was viewing (variantGroupId -> selectedMessageId). Omitting it (undefined)
 		// serializes to `{}`, which keeps the server's newest-per-group default. A non-empty body also documents a
 		// request content-type, so FastEndpoints no longer 415s the (formerly body-less) POST at model-binding.
-		const { data } = await callWithResponseValidation(
-			branchNodeChatConversation({
-				path: { conversationId, messageId },
-				body: { selectedRevisions },
-				signal: options?.signal,
-				throwOnError: true,
-			}),
-		);
+		const { data } = await branchNodeChatConversation({
+			path: { conversationId, messageId },
+			body: { selectedRevisions },
+			signal: options?.signal,
+		});
 		return data;
 	},
 	async listMessageRevisions(conversationId, messageId, options) {
 		try {
-			const { data } = await callWithResponseValidation(
-				listNodeChatMessageRevisions({ path: { conversationId, messageId }, signal: options?.signal, throwOnError: true }),
-			);
+			const { data } = await listNodeChatMessageRevisions({ path: { conversationId, messageId }, signal: options?.signal });
 			return mapMessageRevisions(data);
 		} catch (error) {
 			// A message with no variants returns 404 — surface null (no revisions) rather than an error.
@@ -325,23 +292,18 @@ export const nodeChatAdapter: NodeChatAdapter = {
 		}
 	},
 	async setMessageFeedback(conversationId, messageId, rating, comment, options) {
-		const { data } = await callWithResponseValidation(
-			setNodeChatMessageFeedback({
-				path: { conversationId, messageId },
-				body: { rating, comment },
-				signal: options?.signal,
-				throwOnError: true,
-			}),
-		);
+		const { data } = await setNodeChatMessageFeedback({
+			path: { conversationId, messageId },
+			body: { rating, comment },
+			signal: options?.signal,
+		});
 		return mapMessageFeedback(data);
 	},
 	async cancelMessage(request, options) {
-		await callWithResponseValidation(cancelNodeChatMessage({ body: request, signal: options?.signal, throwOnError: true }));
+		await cancelNodeChatMessage({ body: request, signal: options?.signal });
 	},
 	async persistSelectedPath(conversationId, selectedPath, options) {
-		const { data } = await callWithResponseValidation(
-			setNodeChatSelectedPath({ path: { conversationId }, body: { selectedPath }, signal: options?.signal, throwOnError: true }),
-		);
+		const { data } = await setNodeChatSelectedPath({ path: { conversationId }, body: { selectedPath }, signal: options?.signal });
 		return data.selectedPath ?? {};
 	},
 	sendMessage(request, signal) {

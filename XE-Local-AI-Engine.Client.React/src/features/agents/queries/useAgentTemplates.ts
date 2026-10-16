@@ -5,19 +5,17 @@ import {
 	listAgentTemplatesOptions,
 	listAgentTemplatesQueryKey,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { agentDefinitionsInvalidationKey, agentDefinitionsQueryIds } from "@/features/agents/queries/useAgentDefinitions";
 
 // Server state for the starter-agent gallery. Reads use the generated hey-api `listAgentTemplatesOptions()` (which
-// wires the shared axios instance + TanStack Query AbortSignal automatically), wrapped in withResponseValidation so a
-// zod response-shape failure surfaces as an ApiError (never a raw ZodError). The import mutation invalidates BOTH the
+// wires the shared axios instance + TanStack Query AbortSignal automatically). The import mutation invalidates BOTH the
 // agent-definitions list (so newly-seeded rows appear on the agents surface) AND the templates list (so each summary's
 // `alreadyImported` flag refreshes and the gallery disables it).
 
 // Returns the array of template summaries (the generated response wraps them in `{ items?: [...] }`).
 export function useAgentTemplates() {
 	return useQuery({
-		...withResponseValidation(listAgentTemplatesOptions()),
+		...listAgentTemplatesOptions(),
 		select: (data) => data.items ?? [],
 	});
 }
@@ -29,7 +27,7 @@ export function useImportAgentTemplates() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(importAgentTemplatesMutation()),
+		...importAgentTemplatesMutation(),
 		onSuccess: () =>
 			Promise.all([
 				// Newly-seeded agents are ordinary definitions — refetch the definitions list so they appear.

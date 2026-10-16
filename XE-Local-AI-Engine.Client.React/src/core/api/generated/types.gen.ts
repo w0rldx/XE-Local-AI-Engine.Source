@@ -2376,6 +2376,9 @@ export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppCatalogRespon
 	fromBundledSeed: boolean;
 	refreshFailureMessage: string | null;
 	lastRefreshFailure: string | null;
+	restartRequired: boolean;
+	bridgeOpenUntilRestart: boolean;
+	refreshUrlConfigured: boolean;
 	applications: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppSummaryView>;
 };
 
@@ -15555,9 +15558,9 @@ export type RetrieveImageErrors = {
 
 export type RetrieveImageResponses = {
 	/**
-	 * No Content
+	 * Success
 	 */
-	204: void;
+	200: Blob | File;
 };
 
 export type RetrieveImageResponse = RetrieveImageResponses[keyof RetrieveImageResponses];

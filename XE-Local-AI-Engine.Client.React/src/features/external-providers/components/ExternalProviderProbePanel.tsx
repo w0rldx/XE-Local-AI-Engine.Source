@@ -5,7 +5,6 @@ import type { Dispatch } from "react";
 import { useTranslation } from "react-i18next";
 
 import { probeExternalProviderMutation } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import {
 	type ExternalProviderFormAction,
@@ -36,7 +35,7 @@ export function ExternalProviderProbePanel({
 	dispatch,
 }: ExternalProviderProbePanelProps) {
 	const { t } = useTranslation();
-	const probeMutation = useMutation(withResponseValidation(probeExternalProviderMutation()));
+	const probeMutation = useMutation(probeExternalProviderMutation());
 
 	const baseUrl = values.baseUrl.trim();
 

@@ -7,7 +7,6 @@ import { useTranslation } from "react-i18next";
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { getNodeSettingsOptions, listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
@@ -93,9 +92,9 @@ export function AgentsPage() {
 
 	const definitionsQuery = useAgentDefinitions();
 	const toolCapableModelsQuery = useToolCapableModels();
-	const { data: modelsData } = useQuery(withResponseValidation(listLocalModelsOptions()));
+	const { data: modelsData } = useQuery(listLocalModelsOptions());
 	// The node switches that withhold tools from the offer; the tool selector marks what they gate.
-	const { data: nodeSettings } = useQuery(withResponseValidation(getNodeSettingsOptions()));
+	const { data: nodeSettings } = useQuery(getNodeSettingsOptions());
 
 	const createMutation = useCreateAgentDefinition();
 	const updateMutation = useUpdateAgentDefinition();

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 // No test i18n instance; resolve inline defaults.
 vi.mock("i18next", () => ({ t: (key: string, fallback?: string) => fallback ?? key }));
@@ -21,6 +22,18 @@ describe("apiErrorMessage", () => {
 		const error = new ApiError(400, { type: "about:blank", title: "Bad Request", status: 400, detail: "Invalid backend" });
 
 		expect(apiErrorMessage(error, "fallback")).toBe("Invalid backend");
+	});
+
+	it("answers the generic sentence for a response-shape mismatch, never the ZodError's issue list", () => {
+		const parsed = z.object({ name: z.string() }).safeParse({ name: 12345 });
+		if (parsed.success) {
+			throw new Error("expected the parse to fail");
+		}
+
+		const message = apiErrorMessage(parsed.error, "fallback");
+
+		expect(message).toBe("The server returned a response in an unexpected shape.");
+		expect(message).not.toContain("name");
 	});
 
 	it("reads a raw axios body for the 401/429 path that bypasses the ProblemDetails interceptor", () => {

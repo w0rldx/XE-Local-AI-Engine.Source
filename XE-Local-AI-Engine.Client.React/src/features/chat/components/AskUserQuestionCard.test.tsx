@@ -7,7 +7,7 @@ import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Stub the generated resolve mutation's mutationFn so the wiring can be asserted without a backend.
-// `withResponseValidation` preserves the mutationFn, so the spy still receives the mutate variables.
+// The card spreads the mutationFn, so the spy still receives the mutate variables.
 const resolveQuestionSpy = vi.fn().mockResolvedValue({});
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@/core/api/generated/@tanstack/react-query.gen")>()),

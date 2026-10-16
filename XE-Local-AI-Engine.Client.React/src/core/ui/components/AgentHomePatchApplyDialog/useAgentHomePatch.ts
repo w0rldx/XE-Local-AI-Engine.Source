@@ -1,7 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 
 import { applyAgentHomePatchMutation, previewAgentHomePatchMutation } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 
 // Both routes are POSTs — the preview runs `git apply --check` against the host folders, which is a command rather
 // than a read — so both arrive from the generated client as mutations rather than query options. The dialog fires the
@@ -10,7 +9,7 @@ import { withResponseValidation } from "@/core/api/ResponseValidation";
 
 /** The non-mutating dry run: the per-file plan, the rejections, and the hash an apply has to echo back. */
 export function usePreviewAgentHomePatch() {
-	return useMutation({ ...withResponseValidation(previewAgentHomePatchMutation()) });
+	return useMutation({ ...previewAgentHomePatchMutation() });
 }
 
 /**
@@ -18,5 +17,5 @@ export function usePreviewAgentHomePatch() {
  * ones the operator read — the approval is bound to the diff, not to the run id.
  */
 export function useApplyAgentHomePatch() {
-	return useMutation({ ...withResponseValidation(applyAgentHomePatchMutation()) });
+	return useMutation({ ...applyAgentHomePatchMutation() });
 }

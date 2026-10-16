@@ -56,7 +56,7 @@ vi.mock("@microsoft/signalr", () => {
 });
 
 vi.mock("@/core/auth/stores/NodeAuthStore", () => ({
-	useNodeAuthStore: { getState: () => ({ accessToken: "token" }) },
+	useNodeAuthStore: { getState: () => ({ accessToken: "token" }), subscribe: () => () => undefined },
 }));
 
 function push(payload: Record<string, unknown>): void {

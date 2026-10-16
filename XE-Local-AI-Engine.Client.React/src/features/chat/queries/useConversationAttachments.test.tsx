@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ZodError } from "zod";
 
-// Mock the generated SDK (list/delete), the axios instance (multipart upload posts through it directly), and the
-// toast surface so error/validation paths can be asserted. No network.
+// Mock the generated SDK (list/upload/delete) and the toast surface so error/validation paths can be asserted. No
+// network.
 const { listMock, postMock, deleteMock, toastErrorMock } = vi.hoisted(() => ({
 	listMock: vi.fn(),
 	postMock: vi.fn(),
@@ -14,11 +15,8 @@ const { listMock, postMock, deleteMock, toastErrorMock } = vi.hoisted(() => ({
 
 vi.mock("@/core/api/generated", () => ({
 	listConversationFiles: listMock,
+	uploadConversationFile: postMock,
 	deleteConversationFile: deleteMock,
-}));
-
-vi.mock("@/core/api/axios/AxiosInstance", () => ({
-	axiosInstance: { post: postMock },
 }));
 
 vi.mock("@/core/ui/notifications/Toast", () => ({
@@ -26,6 +24,7 @@ vi.mock("@/core/ui/notifications/Toast", () => ({
 }));
 
 import { useConversationAttachments } from "@/features/chat/queries/useConversationAttachments";
+import en from "@/locales/en.json";
 import { createProvidersWrapper } from "@/test/RenderWithProviders";
 
 function makeWrapper() {
@@ -89,13 +88,49 @@ describe("useConversationAttachments", () => {
 		await waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
 
 		expect(ensureConversationId).toHaveBeenCalledTimes(1);
-		// The upload posts a real FormData (field "file") through the shared axios instance with a multipart
-		// content type, targeting the conversation's uploads endpoint.
-		const [url, body, config] = postMock.mock.calls[0] as [string, FormData, { headers: Record<string, string> }];
-		expect(url).toContain("chat/conversations/conversation-1/uploads");
-		expect(body).toBeInstanceOf(FormData);
-		expect((body.get("file") as File).name).toBe("notes.txt");
-		expect(config.headers["Content-Type"]).toBe("multipart/form-data");
+		// The generated op gets the File itself (it serializes the multipart body) for the resolved conversation.
+		const [options] = postMock.mock.calls[0] as [{ path: { conversationId: string }; body: { file: File } }];
+		expect(options.path.conversationId).toBe("conversation-1");
+		expect(options.body.file).toBe(file);
+	});
+
+	it("reports upload progress through the SDK call's onUploadProgress until the upload settles", async () => {
+		let finishUpload: (value: { data: { fileId: string } }) => void = () => undefined;
+		postMock.mockReturnValue(
+			new Promise((resolve) => {
+				finishUpload = resolve;
+			}),
+		);
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useConversationAttachments({ conversationId: "conversation-1", ensureConversationId }), {
+			wrapper,
+		});
+
+		result.current.uploadFiles([new File(["hello"], "notes.txt", { type: "text/plain" })]);
+		await waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
+		const [options] = postMock.mock.calls[0] as [{ onUploadProgress: (event: { loaded: number; total?: number }) => void }];
+
+		act(() => options.onUploadProgress({ loaded: 50, total: 100 }));
+		await waitFor(() => expect(result.current.pendingUploads[0]?.percent).toBe(50));
+
+		finishUpload({ data: { fileId: "file-3" } });
+		await waitFor(() => expect(result.current.pendingUploads).toHaveLength(0));
+	});
+
+	// A 200 whose body breaks the contract rejects with a ZodError; its issue list must never reach the toast.
+	it("toasts the generic contract-mismatch sentence when the upload's success response is malformed", async () => {
+		postMock.mockRejectedValue(
+			new ZodError([{ code: "invalid_type", expected: "string", path: ["fileId"], message: "Invalid input" }]),
+		);
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useConversationAttachments({ conversationId: "conversation-1", ensureConversationId }), {
+			wrapper,
+		});
+
+		result.current.uploadFiles([new File(["hello"], "notes.txt", { type: "text/plain" })]);
+
+		await waitFor(() => expect(toastErrorMock).toHaveBeenCalledTimes(1));
+		expect(toastErrorMock).toHaveBeenCalledWith(en.errorMessages.unexpectedResponseShape);
 	});
 
 	it("rejects a file over the node's reported limit client-side with a toast and never calls the upload endpoint", async () => {

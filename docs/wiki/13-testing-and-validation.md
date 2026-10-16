@@ -38,7 +38,7 @@ Test stack at a glance: **TUnit** on **Microsoft.Testing.Platform (MTP)** for th
 |---|---|---|---|---|
 | `XE-Local-AI-Engine.Tests` | Backend integration (in-process host via `TestServerWebAppFactory`) | TUnit + NSubstitute | The whole node host: endpoints, hubs, auth, chat, agents, scheduler, model-fit, capacity, MCP, providers, memory, shutdown, and development mode | [Architecture](01-architecture-overview.md), [API & Hubs](09-api-and-hubs.md) |
 | `XE-Local-AI-Engine.AI.Agent.Tests` | Unit/component for the agent runtime | TUnit + NSubstitute | MAF/MEAI wiring: `Chat/`, `Eval/`, `Invocation/`, `Tools/`, plus project smoke tests | [Agent Mode](04-agent-mode.md), [Chat](05-chat.md) |
-| `XE-Local-AI-Engine.Client.Persistence.Tests` | Persistence + EF migration tests | TUnit | SQLite stores with selected encrypted fields, AEAD cipher, migration tests — **most migrations have their own `*MigrationTests.cs`, and `MigrationChainTests` guarantees that every declared migration in both the chat and identity chains is applied from an empty database and recorded in its history table** (`ls Client.Persistence/Migrations/*.cs` minus `.Designer.cs`/`*ModelSnapshot.cs` is the current count) — and the `NegativeFence/` compile-fence | [Data & Persistence](08-data-and-persistence.md) |
+| `XE-Local-AI-Engine.Client.Persistence.Tests` | Persistence + EF migration tests | TUnit | SQLite stores with selected encrypted fields, AEAD cipher, migration tests — **most migrations have their own `*MigrationTests.cs`, and `MigrationChainTests` guarantees that every declared migration in both the chat and identity chains is applied from an empty database and recorded in its history table** (`ls Client.Persistence/Migrations/*.cs` minus `.Designer.cs`/`*ModelSnapshot.cs` is the current count) | [Data & Persistence](08-data-and-persistence.md) |
 | `XE-Local-AI-Engine.Tests.E2ETests` | Browser E2E | Playwright + TUnit.Playwright | Real Chromium against the in-process host serving the real built React SPA (one `*E2ETests.cs` per surface: Chat, Agents, Scheduler, Models, NodeSettings, Dashboard, Graph Workflows, Development Workflows, Work Sessions, Live Transcription, smoke, viewport, …; `ls XE-Local-AI-Engine.Tests.E2ETests/Tests/*E2ETests.cs` is the current inventory) | [React Client](10-react-client.md), [Hosting](11-hosting-and-deployment.md) |
 | `XE-Local-AI-Engine.Testing.FakeOllama` | Support library (not a test suite) | — | In-memory fake Ollama HTTP server + deterministic embeddings, so backend tests never need a real model runtime | [Local Runtime & Providers](03-local-runtime-and-providers.md) |
 | `XE-Local-AI-Engine.Testing.FakeDocker` | Support library (not a test suite) | — | In-memory fake Docker Engine API (loopback HTTP), so the container and External Apps tests need no daemon | [External Apps](23-external-apps.md) |
@@ -82,7 +82,7 @@ Two more read source because the shape they pin leaves no mark in IL, and both f
 
 **`CommentBudgetConventionTests`** fences the same roots through `Support/EnforcedSourceFiles`, and ratchets the nine comment and XML-doc rules of [Code Conventions](16-code-conventions.md). Five are length budgets: a `<summary>` over 240 characters, a `<param>`/`<returns>`/`<value>` over 160, a `<remarks>` over 5 content lines or 600 characters, a `///` block over 15 lines, and more than 2 consecutive own-line `//` lines. Four are shapes that satisfy a budget while being wrong: a block carrying a second `<summary>` or `<remarks>` (`multi`), a `<seealso>` carrying a prose body (`seealso`), a block with `<remarks>` but no `<summary>` or `<inheritdoc>` (`nosummary`), and a block that is not well-formed XML (`xml`) — csc parses one too, since `Directory.Build.props` sets `GenerateDocumentationFile` to make IDE0005 run, but it reports only well-formedness (`CS1570`) and not any of the other eight rules. `Architecture/CommentBudgetAllowlist.txt` records a COUNT per file and rule rather than a per-item key, because the items are prose and a count is the only key that rewording cannot break; it is shrink-only in both directions, and `XE_COMMENT_BUDGET_SHRINK=1` regenerates it downward and then fails so the regeneration is never a green run. Test projects are ratcheted exactly like production; production measures zero for the four shape rules.
 
-`LayerDependencyTests` grew in the same slice: the test and support projects now have their exact `ProjectReference` sets pinned alongside the production ones (seven entries as of 2026-09-16, keyed by repository-relative csproj path because the negative-fence probe nests inside its parent project's directory), cross-checked against the solution's `/Tests` folder membership so a newly added test or fixture project cannot ship unpinned.
+`LayerDependencyTests` grew in the same slice: the test and support projects now have their exact `ProjectReference` sets pinned alongside the production ones (seven entries as of 2026-09-16, keyed by repository-relative csproj path), cross-checked against the solution's `/Tests` folder membership so a newly added test or fixture project cannot ship unpinned.
 
 Every one of these asserts a **non-vacuity floor**, a minimum number of types, files or list entries scanned, before the rule itself runs, because a marker type resolving to the wrong assembly, an allowlist emptied by a bad merge and a directory walk that found nothing all look identical to "scanned everything, found no violation" in a pass/fail summary. Floors are measured through the guard itself, never from a grep over source; the two populations differ. A guard whose scan target is missing reports **skipped** with a reason rather than passing.
 
@@ -121,7 +121,7 @@ This is the heaviest suite and the heart of validation. `TestServerWebAppFactory
 
 `Integration/ApplicationStartupTests.cs` and `Integration/EmbeddingSmokeTests.cs` are the boot/smoke anchors — if these fail, nothing else is trustworthy.
 
-### `XE-Local-AI-Engine.Client.Persistence.Tests` — migrations & the negative fence
+### `XE-Local-AI-Engine.Client.Persistence.Tests` — migrations and entity visibility
 
 EF migrations have dedicated `*MigrationTests.cs` files that apply the migration to a fresh SQLite DB and
 assert the resulting shape. Every migration implementation in `Client.Persistence/Migrations/` is named by a test.
@@ -134,12 +134,11 @@ The file follows the migration
 name rather than always taking an `Add*` prefix (for example, `NodeChatOriginMigrationTests.cs` and
 `NodeMessageLifecycleMigrationTests.cs`), and the table/column/index queries come from the shared
 `Testing/MigrationSchemaProbe.cs` rather than hand-rolled `PRAGMA` SQL per file. The AEAD cipher (`INodeAeadCipher` → `AesGcmNodeAeadCipher`)
-and persistence encryption are tested directly. The `NegativeFence/` folder is a separate **compile-only** project
-(`XE-Local-AI-Engine.Client.Persistence.NegativeFence`) whose `Program.cs` constructs a `NodeMessage`;
-it guards a compile-time visibility/constructibility contract rather than runtime behavior. Its build is meant to
-FAIL: `PersistenceEncryptionTests.NegativeFenceProbe_WhenBuilt_FailsBecausePersistenceEntitiesAreInternal` builds it
-and asserts the failure, so it stays out of `XE-Local-AI-Engine.slnx` (a solution build would go red) and needs no gate
-enrolment of its own. See [Data & Persistence](08-data-and-persistence.md).
+and persistence encryption are tested directly.
+`PersistenceEncryptionTests.ChatModelEntityTypes_WhenScanned_AreAllInvisibleOutsideThePersistenceAssembly` proves every
+chat-model entity is internal, and `LayerDependencyTests.Persistence_GrantsItsInternalsToNoProductionAssembly` proves no
+production assembly is a friend. Together they keep callers off the entities without a build inside the test run (the
+former compile-only `NegativeFence` project is gone). See [Data & Persistence](08-data-and-persistence.md).
 
 ### `XE-Local-AI-Engine.Tests.E2ETests` — Playwright
 
@@ -200,7 +199,12 @@ changes then and `+moved` when HEAD changed during the run; a suffixed tip certi
 `scope` (`full` only when this invocation built and ran every lane unsharded; otherwise the first of `no-build`, `shard`,
 `siblings-only` or `contracts-skipped`, the last meaning the diff needed the release contract tests but
 `XE_GATE_CONTRACT_TESTS=skip` or `GITHUB_ACTIONS=true` suppressed them; `Contracts=skipped` alone does not tell a
-bypass from a lane that was not needed), wall seconds and exit code. A failing test
+bypass from a lane that was not needed), wall seconds, `reason`, `skips` and exit code, always last. `reason` is `ok`
+on exit 0, else `lock-timeout` (69), `contaminated` (75), `killed` (130/143), `build`, `fail-fast` (the Architecture
+pre-lane), `tests` (a lane red) or `setup`. `skips` groups the finished lanes' skipped tests by reason as
+`<slug>:<count>,...`: a sibling project's slug is its TUnit skip text from the TRX, cut to 24 characters, and a skip
+without a recorded reason counts as `unreported`, which is every skip of the batched module (its runner writes no TRX
+without `COVERAGE_DIR`). A failing test
 named in [`scripts/known-flakes.txt`](../../scripts/known-flakes.txt) is printed with `[KNOWN FLAKE: <note>]`, and
 the run stays red.
 
@@ -224,8 +228,8 @@ log is the evidence for what ran. Explicit `JOBS`, `PAR`, `XE_TEST_WIDTH_*` and 
 still win over the computed value; unknown memory (no `/proc/meminfo`, e.g. macOS) falls back to the measured
 default unchanged.
 
-Two operating rules for that script are stated once, in the script header and the backend-tests topic of
-[agent knowledge](../agent-knowledge.md), and not repeated here: what `COVERAGE_DIR` costs you in contamination
+Two operating rules for that script are stated once, in the script header and the
+[backend-tests runner topic](../agent-knowledge/backend-tests-runner.md) of agent knowledge, and not repeated here: what `COVERAGE_DIR` costs you in contamination
 detection, and how to cancel a non-interactive run without orphaning its lanes.
 
 Each sibling runs at a pinned `--maximum-parallel-tests`, not at TUnit's default: TUnit runs tests in parallel with
@@ -338,6 +342,16 @@ git read-tree HEAD                                     # resync the shared index
 The three-argument `update-ref` is the guard: if another agent committed after `read-tree`, it fails instead of
 writing a tree that silently reverts their commit; start again from the first line. The last line, `git read-tree HEAD`, is what resyncs the shared index: a commit that skips it leaves the shared index at the old tree, and the next committer's `git diff --cached --quiet` guard fires although nothing is staged. `git diff --cached --quiet <previous HEAD>` exiting 0 means the index is only stale; `git read-tree HEAD` clears it. The message follows the commit
 rules in `AGENTS.md`, and `commit-tree` takes the identity from the repository config like a plain `git commit`.
+
+### Generated and sorted files: regenerate, never merge
+
+`.gitattributes` marks the hey-api client (`src/core/api/generated/**`), `openapi/v1.json`, `routeTree.gen.ts` and EF
+`Migrations/*.Designer.cs` as `linguist-generated`. On a merge conflict in any of them, or in the sorted
+`src/locales/*.json`, never hand-merge: take either side, regenerate, and commit the result. The client and spec:
+`OPENAPI_LIVE_SCRIPT=openapi scripts/openapi-live-check.sh`. The route tree: any `vite` run (`pnpm run build`)
+rewrites it through the TanStack Router plugin. Locales: re-add the other side's new keys (`lint` names any key the
+code uses but the file lacks), then `pnpm run locales:sort` (its `--check` runs in `lint`). A designer
+file: drop the branch's migration and re-add it on top of `develop` with `dotnet ef migrations add` ([wiki 08](08-data-and-persistence.md)).
 
 ### Landing a branch on develop
 
@@ -477,9 +491,9 @@ One design choice worth preserving in the file: **`TZ=Europe/Berlin`** on the ba
 
 **`e2e.yml`** runs on manual dispatch, or on a `develop` PR opted in with the `run-e2e` label — it is deliberately not a blocking merge gate, since it builds the SPA in-fixture and needs Playwright browsers. E2E is otherwise a manual lane: [`scripts/run-e2e-local.sh`](../../scripts/run-e2e-local.sh), or the raw commands with `-p:RunE2ETests=true`.
 
-**`windows-tests.yml`** is the one Windows test job, on the same triggers as `build-and-test.yml`. It is advisory: not a required status check, not part of `build-and-test.yml`, so neither `release.yml` nor `dev-build.yml` waits on it. On `windows-latest`, with the machine time zone set non-UTC through `tzutil`, it builds `XE-Local-AI-Engine.Tests` and `XE-Local-AI-Engine.Client.Persistence.Tests` in Release and runs their native test hosts directly (the bash gate scripts are Linux-bound): the Windows-gated and Windows-product classes of the former by `--treenode-filter`, all of the latter. It fails on a host exit, a filter or filter class that matched nothing, zero executed tests, or a test skipped for a not-Windows reason, and writes per-host counts and every skip reason to the step summary.
+**The `windows-sandbox` job** in `build-and-test.yml` is the one required Windows job, and is part of the `build-and-test` cross-check. On `windows-2025` it downloads `wxc-host-prep.exe` from the MXC 1.0.0 release (SHA-256 pinned), runs `prepare-system-drive` and `prepare-null-device`, builds `XE-Local-AI-Engine.Tests` in Release and runs only the Windows sandbox classes (`MxcSandboxRuntimeWindowsTests`, `MxcAclResidueSweeperWindowsTests`, `ProcessSandboxAppContainerWindowsTests`, `ComputeSandboxAppContainerWindowsTests`) by `--treenode-filter`. Because the host prep runs first, it fails on ANY skip as well as on exit 8, a missing TRX, zero executed tests or a filter class that matched nothing.
 
-**The `windows-sandbox` job** in `build-and-test.yml` is the one required Windows leg, and is part of the `build-and-test` cross-check. On `windows-2025` it downloads `wxc-host-prep.exe` from the MXC 1.0.0 release (SHA-256 pinned), runs `prepare-system-drive` and `prepare-null-device`, builds `XE-Local-AI-Engine.Tests` in Release and runs only the Windows sandbox classes (`MxcSandboxRuntimeWindowsTests`, `MxcAclResidueSweeperWindowsTests`, `ProcessSandboxAppContainerWindowsTests`) by `--treenode-filter`. Because the host prep runs first, it fails on ANY skip as well as on exit 8, a missing TRX, zero executed tests or a filter class that matched nothing. `windows-tests.yml` lists the same classes. These are the real-SDK proof of the MXC AppContainer boundary ([ADR 0019](../adr/0019-execution-previews-and-the-appcontainer-boundary.md)); every other MXC test is a Linux unit test over the `IMxcSandboxRuntime` seam.
+**The `windows-tests` job** in `build-and-test.yml` (formerly its own `windows-tests.yml`) is **advisory**: the `build-and-test` aggregate does not list it in `needs`, so the required check neither waits for it nor turns red with it. It runs only when this workflow runs on its own triggers (`if: github.workflow == 'build-and-test'`), never when `release.yml` or `dev-build.yml` call the file, because a red job inside a called workflow fails the caller. On `windows-2025`, with the machine time zone set non-UTC through `tzutil`, it builds `XE-Local-AI-Engine.Tests` and `XE-Local-AI-Engine.Client.Persistence.Tests` in Release and runs their native test hosts directly (the bash gate scripts are Linux-bound): the Windows-gated and Windows-product classes of the former by `--treenode-filter`, all of the latter. It fails on a host exit, a filter or filter class that matched nothing, zero executed tests, or a test skipped for a not-Windows reason, writes per-host counts and every skip reason to the step summary, and uploads its TRX reports on failure. The sandbox classes above are the real-SDK proof of the MXC AppContainer boundary ([ADR 0019](../adr/0019-execution-previews-and-the-appcontainer-boundary.md)); every other MXC test is a Linux unit test over the `IMxcSandboxRuntime` seam.
 
 ### Release-path gates
 
@@ -540,7 +554,7 @@ retained transcript their operating status is unknown. See [Hosting & Deployment
 - Use `--treenode-filter`, never `--filter`, when targeting individual MTP tests.
 - New EF migration → add a `<Name>MigrationTests.cs` in `Client.Persistence.Tests`, built on the shared `Testing/MigrationSchemaProbe.cs`. Every migration must be named by a test; prefer a dedicated file (most have one) so a schema regression fails in a file named after its migration.
 - New or changed tool schema → run the schema/compiler unit tests and the live `run-tool-grammar-smoke-local.sh`; the negative control is required evidence, not optional diagnostics.
-- New persistence entity surface change → re-check the `NegativeFence` compile fence still builds.
+- New persistence entity → it stays `internal`; the entity-visibility test fails by name otherwise.
 - New backend behavior that touches a model → drive it through `FakeOllama` (script the response) rather than a live runtime; only flip `RUN_LOCAL_INTEGRATION=true` for fidelity runs.
 - React change → run `pnpm run lint` + `pnpm test`; if you touched API calls, run the fast snapshot-only `pnpm run openapi:check`. The full validator additionally compares against a freshly launched desktop backend.
 - Before claiming done: backend + frontend transcripts green and uncontaminated, `openapi:check` clean, and (for RC) the complete draft/hash/desktop smoke evidence captured.

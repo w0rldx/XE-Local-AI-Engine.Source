@@ -8,7 +8,6 @@ import {
 	listSkillsQueryKey,
 	previewSkillImportMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 
 // Server state for skill import + bundled resources. Import is deliberately TWO calls: `preview` writes nothing and
 // returns a report plus a token; `commit` persists exactly the materialised payload behind that token, so the report
@@ -16,7 +15,7 @@ import { withResponseValidation } from "@/core/api/ResponseValidation";
 
 /** Dry run. Writes nothing on the node; returns the report (candidates, refused scripts, conflicts, problems). */
 export function usePreviewSkillImport() {
-	return useMutation(withResponseValidation(previewSkillImportMutation()));
+	return useMutation(previewSkillImportMutation());
 }
 
 /** Persists the operator's selection from a preview token. Imported skills land DISABLED (backend invariant). */
@@ -24,7 +23,7 @@ export function useCommitSkillImport() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(commitSkillImportMutation()),
+		...commitSkillImportMutation(),
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: listSkillsQueryKey() }).then(() => undefined),
 	});
 }
@@ -32,7 +31,7 @@ export function useCommitSkillImport() {
 /** Resource summaries (name/media type/size — no content) bundled with a stored skill. */
 export function useSkillResources(skillId: string | null) {
 	return useQuery({
-		...withResponseValidation(listSkillResourcesOptions({ path: { skillId: skillId ?? "" } })),
+		...listSkillResourcesOptions({ path: { skillId: skillId ?? "" } }),
 		enabled: skillId !== null,
 		select: (data) => data.items ?? [],
 	});
@@ -44,7 +43,7 @@ export function useSkillResources(skillId: string | null) {
  */
 export function useSkillResourceContent(skillId: string | null, resourceName: string | null) {
 	return useQuery({
-		...withResponseValidation(getSkillResourceOptions({ path: { resourceName: resourceName ?? "", skillId: skillId ?? "" } })),
+		...getSkillResourceOptions({ path: { resourceName: resourceName ?? "", skillId: skillId ?? "" } }),
 		enabled: skillId !== null && resourceName !== null,
 	});
 }
@@ -56,9 +55,7 @@ export function useSkillResourceContent(skillId: string | null, resourceName: st
  */
 export function useSkillImportPreviewResource(token: string, skillName: string, resourceName: string | null) {
 	return useQuery({
-		...withResponseValidation(
-			getSkillImportPreviewResourceOptions({ path: { resourceName: resourceName ?? "", skillName, token } }),
-		),
+		...getSkillImportPreviewResourceOptions({ path: { resourceName: resourceName ?? "", skillName, token } }),
 		enabled: resourceName !== null,
 	});
 }

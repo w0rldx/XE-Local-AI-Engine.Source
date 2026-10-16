@@ -12,7 +12,6 @@ import {
 	runTrainingArtifactSmokeMutation,
 	startTrainingExportMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toTrainingArtifactView } from "@/features/training/models/TrainingModels";
 
 // Server-state for one run's staged export artifacts. An export runs for minutes and reports its phases over the run
@@ -39,7 +38,7 @@ function useArtifactMutation<TData, TError, TVariables, TContext>(
 
 export function useTrainingArtifacts(runId: string | null, pollWhileExporting = false) {
 	return useQuery({
-		...withResponseValidation(listTrainingArtifactsOptions({ path: { runId: runId ?? "" } })),
+		...listTrainingArtifactsOptions({ path: { runId: runId ?? "" } }),
 		select: (data) => (data.items ?? []).map(toTrainingArtifactView),
 		enabled: runId != null,
 		staleTime: 0,

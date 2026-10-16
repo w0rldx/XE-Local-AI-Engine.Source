@@ -30,9 +30,8 @@ The solution is an `.slnx` (XML-format) file, not a classic `.sln`. Source: `XE-
 | `/Tests/` | Unit + E2E test projects. |
 | `/Tests/Fixture/` | `Testing.FakeOllama`, `Testing.FakeDocker` and `Testing.FakeOpenAiGateway` test fixtures. |
 
-Two `.csproj` files on disk are intentionally **not** in `XE-Local-AI-Engine.slnx`:
+One `.csproj` file on disk is intentionally **not** in `XE-Local-AI-Engine.slnx`:
 
-- `XE-Local-AI-Engine.Client.Persistence.Tests/NegativeFence/...NegativeFence.csproj` — a compile-only "negative fence" guard project under the persistence tests folder (verified absent from `XE-Local-AI-Engine.slnx`).
 - `tools/AgentTemplateGenerator/AgentTemplateGenerator.csproj` — a standalone code/asset generator with its **own** `Directory.Build.props` so it escapes the repo-wide analyzer wall (`tools/AgentTemplateGenerator/Directory.Build.props`).
 
 One top-level folder holds source that is neither a project nor build tooling: `catalog/external-apps/` is the
@@ -97,7 +96,6 @@ Provider projects reference `Providers.Abstractions` and, for the two that speak
 | `XE-Local-AI-Engine.Testing.FakeOllama` | library | In-memory fake Ollama server fixture so tests never hit a real model runtime. |
 | `XE-Local-AI-Engine.Testing.FakeDocker` | library | In-memory fake Docker Engine API server fixture (the subset of routes `DockerDotNetRuntimeClient` calls) so tests never need a real daemon for wire-shape coverage. |
 | `XE-Local-AI-Engine.Testing.FakeOpenAiGateway` | `Exe` | Loopback fake OpenAI-compatible gateway fixture (bearer and required-header checks, SSE, scripted tool calls, fault queue, request log); also runnable by hand with `dotnet run`. |
-| `...Client.Persistence.NegativeFence` | library, **not in slnx** | Compile-only negative-fence guard over `Client.Persistence`. |
 | `tools/AgentTemplateGenerator` | `Exe`, **not in slnx** | Standalone agent-template generator; own `Directory.Build.props`. |
 
 ## Dependency graph

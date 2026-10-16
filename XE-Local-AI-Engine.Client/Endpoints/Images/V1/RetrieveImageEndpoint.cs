@@ -27,6 +27,7 @@ public sealed class RetrieveImageEndpoint : Endpoint<RetrieveImageRequest>
     {
         Get(LocalApiRoutes.Images.ImageById);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.Produces<byte[]>(StatusCodes.Status200OK, "image/png", "image/jpeg"));
     }
 
     public override async Task HandleAsync(RetrieveImageRequest req, CancellationToken ct)

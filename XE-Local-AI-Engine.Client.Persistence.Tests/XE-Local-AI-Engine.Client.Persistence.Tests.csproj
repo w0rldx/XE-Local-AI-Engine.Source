@@ -23,7 +23,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Remove="NegativeFence/**/*.cs"/>
     <Compile Remove="Knowledge/RetrievalEval/LiveCorpus/**"/>
   </ItemGroup>
 

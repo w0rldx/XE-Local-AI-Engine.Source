@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { http, HttpResponse } from "msw";
+import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { ApiError } from "@/core/api/errors/ApiError";
@@ -13,12 +13,12 @@ import { assertNoUnhandledRequests, setupMswServer } from "@/test/UseMswServer";
 setupMswServer();
 
 async function probe(name: string) {
-	const { data } = await validationProblemProbe({ body: { name }, throwOnError: true });
+	const { data } = await validationProblemProbe({ body: { name } });
 	return data;
 }
 
 // This suite deliberately does NOT mock the generated SDK. Going over the wire through MSW exercises what actually
-// breaks in production — the shared axios instance and its baseURL, the auth request interceptor, and the
+// breaks in production — the shared axios instance and its baseURL, the `auth` callback's bearer, and the
 // ProblemDetails response interceptor that produces every ApiError the UI renders.
 
 describe("validationProblemProbe over the real client", () => {

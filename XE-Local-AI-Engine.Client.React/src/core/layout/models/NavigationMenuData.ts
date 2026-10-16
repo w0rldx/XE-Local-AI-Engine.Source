@@ -25,7 +25,6 @@ import type { UiMode } from "@/capabilities/NodeCapabilities";
 import { nodeCapabilities, nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 import type { XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse as NodeSettingsResponse } from "@/core/api/generated";
 import { getGraphWorkflowCapabilityOptions, getNodeSettingsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 
 // Capability flags that gate individual navigation entries (top-level or nested). A link with no
 // capability is always shown; a link with a capability is shown only when that node capability is on.
@@ -412,7 +411,7 @@ const NO_DISABLED_CAPABILITIES: ReadonlySet<NavigationCapabilityKey> = new Set<N
 export function useServerDisabledNavigationCapabilities(): ReadonlySet<NavigationCapabilityKey> {
 	const { data: settings } = useQuery(getNodeSettingsOptions());
 	const { data: graphCapability } = useQuery({
-		...withResponseValidation(getGraphWorkflowCapabilityOptions()),
+		...getGraphWorkflowCapabilityOptions(),
 		enabled: nodeCapabilities.graphWorkflows,
 		staleTime: 30_000,
 	});

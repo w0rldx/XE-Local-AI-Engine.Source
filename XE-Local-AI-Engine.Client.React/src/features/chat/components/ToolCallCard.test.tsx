@@ -12,7 +12,7 @@ import type { ToolCatalogEntry } from "@/features/tools/models/ToolCatalogModels
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 // The Approve/Deny controls fire the generated resolve-approval mutation; stub its mutationFn so the click wiring can
-// be asserted without a backend. `withResponseValidation` (which the card composes over the mutation) preserves the
+// be asserted without a backend. The card spreads the mutation, which preserves the
 // mutationFn, so the spy still receives the mutate variables. Only this one export is overridden.
 const resolveApprovalSpy = vi.fn().mockResolvedValue({ requestId: "approval-42", approved: true });
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal) => ({

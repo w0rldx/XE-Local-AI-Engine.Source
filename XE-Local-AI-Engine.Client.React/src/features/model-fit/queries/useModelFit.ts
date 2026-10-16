@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import type { XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsResponse } from "@/core/api/generated";
 import {
 	getHardwareProfileOptions,
 	getLatestRecommendationsOptions,
@@ -7,16 +8,13 @@ import {
 	refreshModelCatalogMutation,
 	refreshRecommendationsMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import type { XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsResponse } from "@/core/api/generated";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toHardwareProfile, toLatestRecommendations, toModelFitCatalogInfo } from "@/features/model-fit/models/ModelFitMappers";
 import type { ModelFitRecommendationFilters, ModelFitUseCase } from "@/features/model-fit/models/ModelFitModels";
 
 // Server state for the model-fit advisor surface. Reads use the generated hey-api `*Options()` (which wire the
 // shared axios instance + TanStack Query AbortSignal automatically) and a TanStack `select` that maps the
-// optional-field generated response into the stricter domain view-model. Every generated options object is wrapped
-// in withResponseValidation so a zod response-shape failure surfaces as an ApiError (never a raw ZodError). All
-// reads are cache-only.
+// optional-field generated response into the stricter domain view-model. All reads
+// are cache-only.
 //
 // NOTE: the GGUF browse/download, llama.cpp runtime, HF token, and running-models hooks were relocated to the
 // Model Management / Node Settings / Loaded Models features (this page is now the advisor only). A download started
@@ -37,11 +35,9 @@ export function modelFitInvalidationKey(operationId: string): readonly [{ _id: s
 
 export function useLatestRecommendations(filters: ModelFitRecommendationFilters) {
 	return useQuery({
-		...withResponseValidation(
-			getLatestRecommendationsOptions({
-				query: { useCase: filters.useCase },
-			}),
-		),
+		...getLatestRecommendationsOptions({
+			query: { useCase: filters.useCase },
+		}),
 		select: toLatestRecommendations,
 	});
 }
@@ -50,7 +46,7 @@ export function useLatestRecommendations(filters: ModelFitRecommendationFilters)
 // serving the briefly-cached profile; the page passes it from the explicit "refresh hardware" action.
 export function useHardwareProfile(refresh = false) {
 	return useQuery({
-		...withResponseValidation(getHardwareProfileOptions({ query: { refresh } })),
+		...getHardwareProfileOptions({ query: { refresh } }),
 		select: toHardwareProfile,
 	});
 }
@@ -77,7 +73,7 @@ export function useRefreshRecommendations() {
 		mutationFn: async (
 			variables: RefreshRecommendationsVariables,
 		): Promise<XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsResponse | undefined> => {
-			const options = withResponseValidation(refreshRecommendationsMutation());
+			const options = refreshRecommendationsMutation();
 			return await options.mutationFn?.({ body: { ...variables } }, undefined as never);
 		},
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: modelFitInvalidationKey(modelFitQueryIds.latest) }),
@@ -88,7 +84,7 @@ export function useRefreshRecommendations() {
 // reads above.
 export function useModelFitCatalog() {
 	return useQuery({
-		...withResponseValidation(getModelCatalogInfoOptions()),
+		...getModelCatalogInfoOptions(),
 		select: toModelFitCatalogInfo,
 	});
 }
@@ -100,7 +96,7 @@ export function useRefreshModelFitCatalog() {
 
 	return useMutation({
 		mutationFn: async () => {
-			const options = withResponseValidation(refreshModelCatalogMutation());
+			const options = refreshModelCatalogMutation();
 			return await options.mutationFn?.({}, undefined as never);
 		},
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: modelFitInvalidationKey(modelFitQueryIds.catalog) }),

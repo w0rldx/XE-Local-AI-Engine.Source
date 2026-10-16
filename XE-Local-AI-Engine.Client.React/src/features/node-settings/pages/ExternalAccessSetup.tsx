@@ -5,7 +5,6 @@ import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { getNodeSettingsQueryKey, saveNodeSettingsMutation } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { StandaloneScreenControls } from "@/core/ui/components/StandaloneScreenControls/StandaloneScreenControls";
 import type { ExternalAccessPreset } from "@/features/node-settings/models/NodeSettingsFieldsModel";
@@ -18,7 +17,7 @@ export function ExternalAccessSetup() {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 
-	const saveMutation = useMutation(withResponseValidation(saveNodeSettingsMutation()));
+	const saveMutation = useMutation(saveNodeSettingsMutation());
 
 	const choose = (preset: ExternalAccessPreset): void => {
 		// The profile NAME alone: the server mapper writes the preset's three switches. The client never sends them, and

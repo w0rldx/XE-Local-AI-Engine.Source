@@ -1898,7 +1898,7 @@ export type Options<
 	meta?: keyof ClientMeta extends never ? Record<string, unknown> : ClientMeta;
 };
 
-export const listAgentHomeRuns = <ThrowOnError extends boolean = false>(
+export const listAgentHomeRuns = <ThrowOnError extends boolean = true>(
 	options?: Options<ListAgentHomeRunsData, ThrowOnError>,
 ): RequestResult<ListAgentHomeRunsResponses, ListAgentHomeRunsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListAgentHomeRunsResponses, ListAgentHomeRunsErrors, ThrowOnError>({
@@ -1920,7 +1920,7 @@ export const listAgentHomeRuns = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const deleteAgentHomeRun = <ThrowOnError extends boolean = false>(
+export const deleteAgentHomeRun = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteAgentHomeRunData, ThrowOnError>,
 ): RequestResult<DeleteAgentHomeRunResponses, DeleteAgentHomeRunErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteAgentHomeRunResponses, DeleteAgentHomeRunErrors, ThrowOnError>({
@@ -1941,7 +1941,7 @@ export const deleteAgentHomeRun = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getAgentHomeRunLog = <ThrowOnError extends boolean = false>(
+export const getAgentHomeRunLog = <ThrowOnError extends boolean = true>(
 	options: Options<GetAgentHomeRunLogData, ThrowOnError>,
 ): RequestResult<GetAgentHomeRunLogResponses, GetAgentHomeRunLogErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetAgentHomeRunLogResponses, GetAgentHomeRunLogErrors, ThrowOnError>({
@@ -1963,7 +1963,7 @@ export const getAgentHomeRunLog = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getAgentHomeRunPatch = <ThrowOnError extends boolean = false>(
+export const getAgentHomeRunPatch = <ThrowOnError extends boolean = true>(
 	options: Options<GetAgentHomeRunPatchData, ThrowOnError>,
 ): RequestResult<GetAgentHomeRunPatchResponses, GetAgentHomeRunPatchErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetAgentHomeRunPatchResponses, GetAgentHomeRunPatchErrors, ThrowOnError>({
@@ -1985,7 +1985,7 @@ export const getAgentHomeRunPatch = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const applyAgentHomePatch = <ThrowOnError extends boolean = false>(
+export const applyAgentHomePatch = <ThrowOnError extends boolean = true>(
 	options: Options<ApplyAgentHomePatchData, ThrowOnError>,
 ): RequestResult<ApplyAgentHomePatchResponses, ApplyAgentHomePatchErrors, ThrowOnError> =>
 	(options.client ?? client).post<ApplyAgentHomePatchResponses, ApplyAgentHomePatchErrors, ThrowOnError>({
@@ -2011,7 +2011,7 @@ export const applyAgentHomePatch = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const previewAgentHomePatch = <ThrowOnError extends boolean = false>(
+export const previewAgentHomePatch = <ThrowOnError extends boolean = true>(
 	options: Options<PreviewAgentHomePatchData, ThrowOnError>,
 ): RequestResult<PreviewAgentHomePatchResponses, PreviewAgentHomePatchErrors, ThrowOnError> =>
 	(options.client ?? client).post<PreviewAgentHomePatchResponses, PreviewAgentHomePatchErrors, ThrowOnError>({
@@ -2033,7 +2033,7 @@ export const previewAgentHomePatch = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listAgentDefinitions = <ThrowOnError extends boolean = false>(
+export const listAgentDefinitions = <ThrowOnError extends boolean = true>(
 	options?: Options<ListAgentDefinitionsData, ThrowOnError>,
 ): RequestResult<ListAgentDefinitionsResponses, ListAgentDefinitionsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListAgentDefinitionsResponses, ListAgentDefinitionsErrors, ThrowOnError>({
@@ -2055,7 +2055,7 @@ export const listAgentDefinitions = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createAgentDefinition = <ThrowOnError extends boolean = false>(
+export const createAgentDefinition = <ThrowOnError extends boolean = true>(
 	options: Options<CreateAgentDefinitionData, ThrowOnError>,
 ): RequestResult<CreateAgentDefinitionResponses, CreateAgentDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateAgentDefinitionResponses, CreateAgentDefinitionErrors, ThrowOnError>({
@@ -2081,7 +2081,7 @@ export const createAgentDefinition = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getDefaultAssistantToolOffer = <ThrowOnError extends boolean = false>(
+export const getDefaultAssistantToolOffer = <ThrowOnError extends boolean = true>(
 	options?: Options<GetDefaultAssistantToolOfferData, ThrowOnError>,
 ): RequestResult<GetDefaultAssistantToolOfferResponses, GetDefaultAssistantToolOfferErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetDefaultAssistantToolOfferResponses, GetDefaultAssistantToolOfferErrors, ThrowOnError>({
@@ -2103,7 +2103,7 @@ export const getDefaultAssistantToolOffer = <ThrowOnError extends boolean = fals
 		...options,
 	});
 
-export const draftAgentDefinition = <ThrowOnError extends boolean = false>(
+export const draftAgentDefinition = <ThrowOnError extends boolean = true>(
 	options: Options<DraftAgentDefinitionData, ThrowOnError>,
 ): RequestResult<DraftAgentDefinitionResponses, DraftAgentDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).post<DraftAgentDefinitionResponses, DraftAgentDefinitionErrors, ThrowOnError>({
@@ -2129,7 +2129,7 @@ export const draftAgentDefinition = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listRunEnvelopes = <ThrowOnError extends boolean = false>(
+export const listRunEnvelopes = <ThrowOnError extends boolean = true>(
 	options?: Options<ListRunEnvelopesData, ThrowOnError>,
 ): RequestResult<ListRunEnvelopesResponses, ListRunEnvelopesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListRunEnvelopesResponses, ListRunEnvelopesErrors, ThrowOnError>({
@@ -2151,7 +2151,7 @@ export const listRunEnvelopes = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listAgentTemplates = <ThrowOnError extends boolean = false>(
+export const listAgentTemplates = <ThrowOnError extends boolean = true>(
 	options?: Options<ListAgentTemplatesData, ThrowOnError>,
 ): RequestResult<ListAgentTemplatesResponses, ListAgentTemplatesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListAgentTemplatesResponses, ListAgentTemplatesErrors, ThrowOnError>({
@@ -2173,7 +2173,7 @@ export const listAgentTemplates = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const importAgentTemplates = <ThrowOnError extends boolean = false>(
+export const importAgentTemplates = <ThrowOnError extends boolean = true>(
 	options: Options<ImportAgentTemplatesData, ThrowOnError>,
 ): RequestResult<ImportAgentTemplatesResponses, ImportAgentTemplatesErrors, ThrowOnError> =>
 	(options.client ?? client).post<ImportAgentTemplatesResponses, ImportAgentTemplatesErrors, ThrowOnError>({
@@ -2199,7 +2199,7 @@ export const importAgentTemplates = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getToolCapableModels = <ThrowOnError extends boolean = false>(
+export const getToolCapableModels = <ThrowOnError extends boolean = true>(
 	options?: Options<GetToolCapableModelsData, ThrowOnError>,
 ): RequestResult<GetToolCapableModelsResponses, GetToolCapableModelsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetToolCapableModelsResponses, GetToolCapableModelsErrors, ThrowOnError>({
@@ -2221,7 +2221,7 @@ export const getToolCapableModels = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getAgentUsageSummary = <ThrowOnError extends boolean = false>(
+export const getAgentUsageSummary = <ThrowOnError extends boolean = true>(
 	options?: Options<GetAgentUsageSummaryData, ThrowOnError>,
 ): RequestResult<GetAgentUsageSummaryResponses, GetAgentUsageSummaryErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetAgentUsageSummaryResponses, GetAgentUsageSummaryErrors, ThrowOnError>({
@@ -2243,7 +2243,7 @@ export const getAgentUsageSummary = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const deleteAgentDefinition = <ThrowOnError extends boolean = false>(
+export const deleteAgentDefinition = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteAgentDefinitionData, ThrowOnError>,
 ): RequestResult<DeleteAgentDefinitionResponses, DeleteAgentDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteAgentDefinitionResponses, DeleteAgentDefinitionErrors, ThrowOnError>({
@@ -2264,7 +2264,7 @@ export const deleteAgentDefinition = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getAgentDefinition = <ThrowOnError extends boolean = false>(
+export const getAgentDefinition = <ThrowOnError extends boolean = true>(
 	options: Options<GetAgentDefinitionData, ThrowOnError>,
 ): RequestResult<GetAgentDefinitionResponses, GetAgentDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetAgentDefinitionResponses, GetAgentDefinitionErrors, ThrowOnError>({
@@ -2286,7 +2286,7 @@ export const getAgentDefinition = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const updateAgentDefinition = <ThrowOnError extends boolean = false>(
+export const updateAgentDefinition = <ThrowOnError extends boolean = true>(
 	options: Options<UpdateAgentDefinitionData, ThrowOnError>,
 ): RequestResult<UpdateAgentDefinitionResponses, UpdateAgentDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateAgentDefinitionResponses, UpdateAgentDefinitionErrors, ThrowOnError>({
@@ -2312,7 +2312,7 @@ export const updateAgentDefinition = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listAgentExecutionLogs = <ThrowOnError extends boolean = false>(
+export const listAgentExecutionLogs = <ThrowOnError extends boolean = true>(
 	options: Options<ListAgentExecutionLogsData, ThrowOnError>,
 ): RequestResult<ListAgentExecutionLogsResponses, ListAgentExecutionLogsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListAgentExecutionLogsResponses, ListAgentExecutionLogsErrors, ThrowOnError>({
@@ -2334,7 +2334,7 @@ export const listAgentExecutionLogs = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getAgentFeedbackInsights = <ThrowOnError extends boolean = false>(
+export const getAgentFeedbackInsights = <ThrowOnError extends boolean = true>(
 	options: Options<GetAgentFeedbackInsightsData, ThrowOnError>,
 ): RequestResult<GetAgentFeedbackInsightsResponses, GetAgentFeedbackInsightsErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetAgentFeedbackInsightsResponses, GetAgentFeedbackInsightsErrors, ThrowOnError>({
@@ -2356,7 +2356,7 @@ export const getAgentFeedbackInsights = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listGoldenConversations = <ThrowOnError extends boolean = false>(
+export const listGoldenConversations = <ThrowOnError extends boolean = true>(
 	options: Options<ListGoldenConversationsData, ThrowOnError>,
 ): RequestResult<ListGoldenConversationsResponses, ListGoldenConversationsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListGoldenConversationsResponses, ListGoldenConversationsErrors, ThrowOnError>({
@@ -2378,7 +2378,7 @@ export const listGoldenConversations = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createGoldenConversation = <ThrowOnError extends boolean = false>(
+export const createGoldenConversation = <ThrowOnError extends boolean = true>(
 	options: Options<CreateGoldenConversationData, ThrowOnError>,
 ): RequestResult<CreateGoldenConversationResponses, CreateGoldenConversationErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateGoldenConversationResponses, CreateGoldenConversationErrors, ThrowOnError>({
@@ -2404,7 +2404,7 @@ export const createGoldenConversation = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const harvestGoldenConversations = <ThrowOnError extends boolean = false>(
+export const harvestGoldenConversations = <ThrowOnError extends boolean = true>(
 	options: Options<HarvestGoldenConversationsData, ThrowOnError>,
 ): RequestResult<HarvestGoldenConversationsResponses, HarvestGoldenConversationsErrors, ThrowOnError> =>
 	(options.client ?? client).post<HarvestGoldenConversationsResponses, HarvestGoldenConversationsErrors, ThrowOnError>({
@@ -2426,7 +2426,7 @@ export const harvestGoldenConversations = <ThrowOnError extends boolean = false>
 		...options,
 	});
 
-export const deleteGoldenConversation = <ThrowOnError extends boolean = false>(
+export const deleteGoldenConversation = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteGoldenConversationData, ThrowOnError>,
 ): RequestResult<DeleteGoldenConversationResponses, DeleteGoldenConversationErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteGoldenConversationResponses, DeleteGoldenConversationErrors, ThrowOnError>({
@@ -2447,7 +2447,7 @@ export const deleteGoldenConversation = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const approveGoldenConversation = <ThrowOnError extends boolean = false>(
+export const approveGoldenConversation = <ThrowOnError extends boolean = true>(
 	options: Options<ApproveGoldenConversationData, ThrowOnError>,
 ): RequestResult<ApproveGoldenConversationResponses, ApproveGoldenConversationErrors, ThrowOnError> =>
 	(options.client ?? client).post<ApproveGoldenConversationResponses, ApproveGoldenConversationErrors, ThrowOnError>({
@@ -2469,7 +2469,7 @@ export const approveGoldenConversation = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listAgentPlaybookActions = <ThrowOnError extends boolean = false>(
+export const listAgentPlaybookActions = <ThrowOnError extends boolean = true>(
 	options: Options<ListAgentPlaybookActionsData, ThrowOnError>,
 ): RequestResult<ListAgentPlaybookActionsResponses, ListAgentPlaybookActionsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListAgentPlaybookActionsResponses, ListAgentPlaybookActionsErrors, ThrowOnError>({
@@ -2491,7 +2491,7 @@ export const listAgentPlaybookActions = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createPlaybookAction = <ThrowOnError extends boolean = false>(
+export const createPlaybookAction = <ThrowOnError extends boolean = true>(
 	options: Options<CreatePlaybookActionData, ThrowOnError>,
 ): RequestResult<CreatePlaybookActionResponses, CreatePlaybookActionErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreatePlaybookActionResponses, CreatePlaybookActionErrors, ThrowOnError>({
@@ -2517,7 +2517,7 @@ export const createPlaybookAction = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const analyzePlaybook = <ThrowOnError extends boolean = false>(
+export const analyzePlaybook = <ThrowOnError extends boolean = true>(
 	options: Options<AnalyzePlaybookData, ThrowOnError>,
 ): RequestResult<AnalyzePlaybookResponses, AnalyzePlaybookErrors, ThrowOnError> =>
 	(options.client ?? client).post<AnalyzePlaybookResponses, AnalyzePlaybookErrors, ThrowOnError>({
@@ -2539,7 +2539,7 @@ export const analyzePlaybook = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getAgentPlaybookMonitor = <ThrowOnError extends boolean = false>(
+export const getAgentPlaybookMonitor = <ThrowOnError extends boolean = true>(
 	options: Options<GetAgentPlaybookMonitorData, ThrowOnError>,
 ): RequestResult<GetAgentPlaybookMonitorResponses, GetAgentPlaybookMonitorErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetAgentPlaybookMonitorResponses, GetAgentPlaybookMonitorErrors, ThrowOnError>({
@@ -2561,7 +2561,7 @@ export const getAgentPlaybookMonitor = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const deletePlaybookAction = <ThrowOnError extends boolean = false>(
+export const deletePlaybookAction = <ThrowOnError extends boolean = true>(
 	options: Options<DeletePlaybookActionData, ThrowOnError>,
 ): RequestResult<DeletePlaybookActionResponses, DeletePlaybookActionErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeletePlaybookActionResponses, DeletePlaybookActionErrors, ThrowOnError>({
@@ -2582,7 +2582,7 @@ export const deletePlaybookAction = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const updatePlaybookAction = <ThrowOnError extends boolean = false>(
+export const updatePlaybookAction = <ThrowOnError extends boolean = true>(
 	options: Options<UpdatePlaybookActionData, ThrowOnError>,
 ): RequestResult<UpdatePlaybookActionResponses, UpdatePlaybookActionErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdatePlaybookActionResponses, UpdatePlaybookActionErrors, ThrowOnError>({
@@ -2608,7 +2608,7 @@ export const updatePlaybookAction = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const runPlaybookActionEval = <ThrowOnError extends boolean = false>(
+export const runPlaybookActionEval = <ThrowOnError extends boolean = true>(
 	options: Options<RunPlaybookActionEvalData, ThrowOnError>,
 ): RequestResult<RunPlaybookActionEvalResponses, RunPlaybookActionEvalErrors, ThrowOnError> =>
 	(options.client ?? client).post<RunPlaybookActionEvalResponses, RunPlaybookActionEvalErrors, ThrowOnError>({
@@ -2630,7 +2630,7 @@ export const runPlaybookActionEval = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const promoteSuggestedPlaybookAction = <ThrowOnError extends boolean = false>(
+export const promoteSuggestedPlaybookAction = <ThrowOnError extends boolean = true>(
 	options: Options<PromoteSuggestedPlaybookActionData, ThrowOnError>,
 ): RequestResult<PromoteSuggestedPlaybookActionResponses, PromoteSuggestedPlaybookActionErrors, ThrowOnError> =>
 	(options.client ?? client).post<PromoteSuggestedPlaybookActionResponses, PromoteSuggestedPlaybookActionErrors, ThrowOnError>({
@@ -2652,7 +2652,7 @@ export const promoteSuggestedPlaybookAction = <ThrowOnError extends boolean = fa
 		...options,
 	});
 
-export const rejectSuggestedPlaybookAction = <ThrowOnError extends boolean = false>(
+export const rejectSuggestedPlaybookAction = <ThrowOnError extends boolean = true>(
 	options: Options<RejectSuggestedPlaybookActionData, ThrowOnError>,
 ): RequestResult<RejectSuggestedPlaybookActionResponses, RejectSuggestedPlaybookActionErrors, ThrowOnError> =>
 	(options.client ?? client).post<RejectSuggestedPlaybookActionResponses, RejectSuggestedPlaybookActionErrors, ThrowOnError>({
@@ -2674,7 +2674,7 @@ export const rejectSuggestedPlaybookAction = <ThrowOnError extends boolean = fal
 		...options,
 	});
 
-export const updateSuggestedPlaybookAction = <ThrowOnError extends boolean = false>(
+export const updateSuggestedPlaybookAction = <ThrowOnError extends boolean = true>(
 	options: Options<UpdateSuggestedPlaybookActionData, ThrowOnError>,
 ): RequestResult<UpdateSuggestedPlaybookActionResponses, UpdateSuggestedPlaybookActionErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateSuggestedPlaybookActionResponses, UpdateSuggestedPlaybookActionErrors, ThrowOnError>({
@@ -2700,7 +2700,7 @@ export const updateSuggestedPlaybookAction = <ThrowOnError extends boolean = fal
 		},
 	});
 
-export const applyAppUpdate = <ThrowOnError extends boolean = false>(
+export const applyAppUpdate = <ThrowOnError extends boolean = true>(
 	options: Options<ApplyAppUpdateData, ThrowOnError>,
 ): RequestResult<ApplyAppUpdateResponses, ApplyAppUpdateErrors, ThrowOnError> =>
 	(options.client ?? client).post<ApplyAppUpdateResponses, ApplyAppUpdateErrors, ThrowOnError>({
@@ -2726,7 +2726,7 @@ export const applyAppUpdate = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const setAppUpdateChannel = <ThrowOnError extends boolean = false>(
+export const setAppUpdateChannel = <ThrowOnError extends boolean = true>(
 	options: Options<SetAppUpdateChannelData, ThrowOnError>,
 ): RequestResult<SetAppUpdateChannelResponses, SetAppUpdateChannelErrors, ThrowOnError> =>
 	(options.client ?? client).put<SetAppUpdateChannelResponses, SetAppUpdateChannelErrors, ThrowOnError>({
@@ -2752,7 +2752,7 @@ export const setAppUpdateChannel = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getAppUpdateStatus = <ThrowOnError extends boolean = false>(
+export const getAppUpdateStatus = <ThrowOnError extends boolean = true>(
 	options?: Options<GetAppUpdateStatusData, ThrowOnError>,
 ): RequestResult<GetAppUpdateStatusResponses, GetAppUpdateStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetAppUpdateStatusResponses, GetAppUpdateStatusErrors, ThrowOnError>({
@@ -2774,7 +2774,7 @@ export const getAppUpdateStatus = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const nodeChangePassword = <ThrowOnError extends boolean = false>(
+export const nodeChangePassword = <ThrowOnError extends boolean = true>(
 	options: Options<NodeChangePasswordData, ThrowOnError>,
 ): RequestResult<NodeChangePasswordResponses, NodeChangePasswordErrors, ThrowOnError> =>
 	(options.client ?? client).post<NodeChangePasswordResponses, NodeChangePasswordErrors, ThrowOnError>({
@@ -2799,7 +2799,7 @@ export const nodeChangePassword = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const nodeLogin = <ThrowOnError extends boolean = false>(
+export const nodeLogin = <ThrowOnError extends boolean = true>(
 	options: Options<NodeLoginData, ThrowOnError>,
 ): RequestResult<NodeLoginResponses, NodeLoginErrors, ThrowOnError> =>
 	(options.client ?? client).post<NodeLoginResponses, NodeLoginErrors, ThrowOnError>({
@@ -2813,7 +2813,7 @@ export const nodeLogin = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const nodeLogout = <ThrowOnError extends boolean = false>(
+export const nodeLogout = <ThrowOnError extends boolean = true>(
 	options?: Options<NodeLogoutData, ThrowOnError>,
 ): RequestResult<NodeLogoutResponses, NodeLogoutErrors, ThrowOnError> =>
 	(options?.client ?? client).post<NodeLogoutResponses, NodeLogoutErrors, ThrowOnError>({
@@ -2834,7 +2834,7 @@ export const nodeLogout = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const nodeRefresh = <ThrowOnError extends boolean = false>(
+export const nodeRefresh = <ThrowOnError extends boolean = true>(
 	options?: Options<NodeRefreshData, ThrowOnError>,
 ): RequestResult<NodeRefreshResponses, NodeRefreshErrors, ThrowOnError> =>
 	(options?.client ?? client).post<NodeRefreshResponses, NodeRefreshErrors, ThrowOnError>({
@@ -2844,7 +2844,7 @@ export const nodeRefresh = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const nodeSetup = <ThrowOnError extends boolean = false>(
+export const nodeSetup = <ThrowOnError extends boolean = true>(
 	options: Options<NodeSetupData, ThrowOnError>,
 ): RequestResult<NodeSetupResponses, NodeSetupErrors, ThrowOnError> =>
 	(options.client ?? client).post<NodeSetupResponses, NodeSetupErrors, ThrowOnError>({
@@ -2858,7 +2858,7 @@ export const nodeSetup = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const nodeAuthStatus = <ThrowOnError extends boolean = false>(
+export const nodeAuthStatus = <ThrowOnError extends boolean = true>(
 	options?: Options<NodeAuthStatusData, ThrowOnError>,
 ): RequestResult<NodeAuthStatusResponses, NodeAuthStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<NodeAuthStatusResponses, NodeAuthStatusErrors, ThrowOnError>({
@@ -2868,7 +2868,7 @@ export const nodeAuthStatus = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const nodeVaultConfirm = <ThrowOnError extends boolean = false>(
+export const nodeVaultConfirm = <ThrowOnError extends boolean = true>(
 	options: Options<NodeVaultConfirmData, ThrowOnError>,
 ): RequestResult<NodeVaultConfirmResponses, NodeVaultConfirmErrors, ThrowOnError> =>
 	(options.client ?? client).post<NodeVaultConfirmResponses, NodeVaultConfirmErrors, ThrowOnError>({
@@ -2894,7 +2894,7 @@ export const nodeVaultConfirm = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listSlashCommands = <ThrowOnError extends boolean = false>(
+export const listSlashCommands = <ThrowOnError extends boolean = true>(
 	options?: Options<ListSlashCommandsData, ThrowOnError>,
 ): RequestResult<ListSlashCommandsResponses, ListSlashCommandsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListSlashCommandsResponses, ListSlashCommandsErrors, ThrowOnError>({
@@ -2916,7 +2916,7 @@ export const listSlashCommands = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createSlashCommand = <ThrowOnError extends boolean = false>(
+export const createSlashCommand = <ThrowOnError extends boolean = true>(
 	options: Options<CreateSlashCommandData, ThrowOnError>,
 ): RequestResult<CreateSlashCommandResponses, CreateSlashCommandErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateSlashCommandResponses, CreateSlashCommandErrors, ThrowOnError>({
@@ -2942,7 +2942,7 @@ export const createSlashCommand = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const deleteSlashCommand = <ThrowOnError extends boolean = false>(
+export const deleteSlashCommand = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteSlashCommandData, ThrowOnError>,
 ): RequestResult<DeleteSlashCommandResponses, DeleteSlashCommandErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteSlashCommandResponses, DeleteSlashCommandErrors, ThrowOnError>({
@@ -2963,7 +2963,7 @@ export const deleteSlashCommand = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getSlashCommand = <ThrowOnError extends boolean = false>(
+export const getSlashCommand = <ThrowOnError extends boolean = true>(
 	options: Options<GetSlashCommandData, ThrowOnError>,
 ): RequestResult<GetSlashCommandResponses, GetSlashCommandErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetSlashCommandResponses, GetSlashCommandErrors, ThrowOnError>({
@@ -2985,7 +2985,7 @@ export const getSlashCommand = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const updateSlashCommand = <ThrowOnError extends boolean = false>(
+export const updateSlashCommand = <ThrowOnError extends boolean = true>(
 	options: Options<UpdateSlashCommandData, ThrowOnError>,
 ): RequestResult<UpdateSlashCommandResponses, UpdateSlashCommandErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateSlashCommandResponses, UpdateSlashCommandErrors, ThrowOnError>({
@@ -3011,7 +3011,7 @@ export const updateSlashCommand = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listEligibleBenchmarkAgents = <ThrowOnError extends boolean = false>(
+export const listEligibleBenchmarkAgents = <ThrowOnError extends boolean = true>(
 	options: Options<ListEligibleBenchmarkAgentsData, ThrowOnError>,
 ): RequestResult<ListEligibleBenchmarkAgentsResponses, ListEligibleBenchmarkAgentsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListEligibleBenchmarkAgentsResponses, ListEligibleBenchmarkAgentsErrors, ThrowOnError>({
@@ -3033,7 +3033,7 @@ export const listEligibleBenchmarkAgents = <ThrowOnError extends boolean = false
 		...options,
 	});
 
-export const listEligibleBenchmarkModels = <ThrowOnError extends boolean = false>(
+export const listEligibleBenchmarkModels = <ThrowOnError extends boolean = true>(
 	options?: Options<ListEligibleBenchmarkModelsData, ThrowOnError>,
 ): RequestResult<ListEligibleBenchmarkModelsResponses, ListEligibleBenchmarkModelsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListEligibleBenchmarkModelsResponses, ListEligibleBenchmarkModelsErrors, ThrowOnError>({
@@ -3055,7 +3055,7 @@ export const listEligibleBenchmarkModels = <ThrowOnError extends boolean = false
 		...options,
 	});
 
-export const listBenchmarkProjects = <ThrowOnError extends boolean = false>(
+export const listBenchmarkProjects = <ThrowOnError extends boolean = true>(
 	options?: Options<ListBenchmarkProjectsData, ThrowOnError>,
 ): RequestResult<ListBenchmarkProjectsResponses, ListBenchmarkProjectsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListBenchmarkProjectsResponses, ListBenchmarkProjectsErrors, ThrowOnError>({
@@ -3077,7 +3077,7 @@ export const listBenchmarkProjects = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createBenchmarkProject = <ThrowOnError extends boolean = false>(
+export const createBenchmarkProject = <ThrowOnError extends boolean = true>(
 	options: Options<CreateBenchmarkProjectData, ThrowOnError>,
 ): RequestResult<CreateBenchmarkProjectResponses, CreateBenchmarkProjectErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateBenchmarkProjectResponses, CreateBenchmarkProjectErrors, ThrowOnError>({
@@ -3103,7 +3103,7 @@ export const createBenchmarkProject = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const deleteBenchmarkProject = <ThrowOnError extends boolean = false>(
+export const deleteBenchmarkProject = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteBenchmarkProjectData, ThrowOnError>,
 ): RequestResult<DeleteBenchmarkProjectResponses, DeleteBenchmarkProjectErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteBenchmarkProjectResponses, DeleteBenchmarkProjectErrors, ThrowOnError>({
@@ -3128,7 +3128,7 @@ export const deleteBenchmarkProject = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getBenchmarkProject = <ThrowOnError extends boolean = false>(
+export const getBenchmarkProject = <ThrowOnError extends boolean = true>(
 	options: Options<GetBenchmarkProjectData, ThrowOnError>,
 ): RequestResult<GetBenchmarkProjectResponses, GetBenchmarkProjectErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetBenchmarkProjectResponses, GetBenchmarkProjectErrors, ThrowOnError>({
@@ -3150,7 +3150,7 @@ export const getBenchmarkProject = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const updateBenchmarkProject = <ThrowOnError extends boolean = false>(
+export const updateBenchmarkProject = <ThrowOnError extends boolean = true>(
 	options: Options<UpdateBenchmarkProjectData, ThrowOnError>,
 ): RequestResult<UpdateBenchmarkProjectResponses, UpdateBenchmarkProjectErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateBenchmarkProjectResponses, UpdateBenchmarkProjectErrors, ThrowOnError>({
@@ -3176,7 +3176,7 @@ export const updateBenchmarkProject = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listBenchmarkCells = <ThrowOnError extends boolean = false>(
+export const listBenchmarkCells = <ThrowOnError extends boolean = true>(
 	options: Options<ListBenchmarkCellsData, ThrowOnError>,
 ): RequestResult<ListBenchmarkCellsResponses, ListBenchmarkCellsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListBenchmarkCellsResponses, ListBenchmarkCellsErrors, ThrowOnError>({
@@ -3198,7 +3198,7 @@ export const listBenchmarkCells = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const compareBenchmarkCells = <ThrowOnError extends boolean = false>(
+export const compareBenchmarkCells = <ThrowOnError extends boolean = true>(
 	options: Options<CompareBenchmarkCellsData, ThrowOnError>,
 ): RequestResult<CompareBenchmarkCellsResponses, CompareBenchmarkCellsErrors, ThrowOnError> =>
 	(options.client ?? client).get<CompareBenchmarkCellsResponses, CompareBenchmarkCellsErrors, ThrowOnError>({
@@ -3220,7 +3220,7 @@ export const compareBenchmarkCells = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listBenchmarkComparisons = <ThrowOnError extends boolean = false>(
+export const listBenchmarkComparisons = <ThrowOnError extends boolean = true>(
 	options: Options<ListBenchmarkComparisonsData, ThrowOnError>,
 ): RequestResult<ListBenchmarkComparisonsResponses, ListBenchmarkComparisonsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListBenchmarkComparisonsResponses, ListBenchmarkComparisonsErrors, ThrowOnError>({
@@ -3242,7 +3242,7 @@ export const listBenchmarkComparisons = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const exportBenchmarkProject = <ThrowOnError extends boolean = false>(
+export const exportBenchmarkProject = <ThrowOnError extends boolean = true>(
 	options: Options<ExportBenchmarkProjectData, ThrowOnError>,
 ): RequestResult<ExportBenchmarkProjectResponses, ExportBenchmarkProjectErrors, ThrowOnError> =>
 	(options.client ?? client).get<ExportBenchmarkProjectResponses, ExportBenchmarkProjectErrors, ThrowOnError>({
@@ -3264,7 +3264,7 @@ export const exportBenchmarkProject = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const exportBenchmarkProjectCsv = <ThrowOnError extends boolean = false>(
+export const exportBenchmarkProjectCsv = <ThrowOnError extends boolean = true>(
 	options: Options<ExportBenchmarkProjectCsvData, ThrowOnError>,
 ): RequestResult<ExportBenchmarkProjectCsvResponses, ExportBenchmarkProjectCsvErrors, ThrowOnError> =>
 	(options.client ?? client).get<ExportBenchmarkProjectCsvResponses, ExportBenchmarkProjectCsvErrors, ThrowOnError>({
@@ -3286,7 +3286,7 @@ export const exportBenchmarkProjectCsv = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const updateBenchmarkProjectFidelity = <ThrowOnError extends boolean = false>(
+export const updateBenchmarkProjectFidelity = <ThrowOnError extends boolean = true>(
 	options: Options<UpdateBenchmarkProjectFidelityData, ThrowOnError>,
 ): RequestResult<UpdateBenchmarkProjectFidelityResponses, UpdateBenchmarkProjectFidelityErrors, ThrowOnError> =>
 	(options.client ?? client).patch<UpdateBenchmarkProjectFidelityResponses, UpdateBenchmarkProjectFidelityErrors, ThrowOnError>({
@@ -3312,7 +3312,7 @@ export const updateBenchmarkProjectFidelity = <ThrowOnError extends boolean = fa
 		},
 	});
 
-export const clearBenchmarkFidelityCache = <ThrowOnError extends boolean = false>(
+export const clearBenchmarkFidelityCache = <ThrowOnError extends boolean = true>(
 	options: Options<ClearBenchmarkFidelityCacheData, ThrowOnError>,
 ): RequestResult<ClearBenchmarkFidelityCacheResponses, ClearBenchmarkFidelityCacheErrors, ThrowOnError> =>
 	(options.client ?? client).delete<ClearBenchmarkFidelityCacheResponses, ClearBenchmarkFidelityCacheErrors, ThrowOnError>({
@@ -3333,7 +3333,7 @@ export const clearBenchmarkFidelityCache = <ThrowOnError extends boolean = false
 		...options,
 	});
 
-export const getBenchmarkKldDiskEstimate = <ThrowOnError extends boolean = false>(
+export const getBenchmarkKldDiskEstimate = <ThrowOnError extends boolean = true>(
 	options: Options<GetBenchmarkKldDiskEstimateData, ThrowOnError>,
 ): RequestResult<GetBenchmarkKldDiskEstimateResponses, GetBenchmarkKldDiskEstimateErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetBenchmarkKldDiskEstimateResponses, GetBenchmarkKldDiskEstimateErrors, ThrowOnError>({
@@ -3355,7 +3355,7 @@ export const getBenchmarkKldDiskEstimate = <ThrowOnError extends boolean = false
 		...options,
 	});
 
-export const listBenchmarkTaskItems = <ThrowOnError extends boolean = false>(
+export const listBenchmarkTaskItems = <ThrowOnError extends boolean = true>(
 	options: Options<ListBenchmarkTaskItemsData, ThrowOnError>,
 ): RequestResult<ListBenchmarkTaskItemsResponses, ListBenchmarkTaskItemsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListBenchmarkTaskItemsResponses, ListBenchmarkTaskItemsErrors, ThrowOnError>({
@@ -3377,7 +3377,7 @@ export const listBenchmarkTaskItems = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createBenchmarkTaskItem = <ThrowOnError extends boolean = false>(
+export const createBenchmarkTaskItem = <ThrowOnError extends boolean = true>(
 	options: Options<CreateBenchmarkTaskItemData, ThrowOnError>,
 ): RequestResult<CreateBenchmarkTaskItemResponses, CreateBenchmarkTaskItemErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateBenchmarkTaskItemResponses, CreateBenchmarkTaskItemErrors, ThrowOnError>({
@@ -3403,7 +3403,7 @@ export const createBenchmarkTaskItem = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const reorderBenchmarkTaskItems = <ThrowOnError extends boolean = false>(
+export const reorderBenchmarkTaskItems = <ThrowOnError extends boolean = true>(
 	options: Options<ReorderBenchmarkTaskItemsData, ThrowOnError>,
 ): RequestResult<ReorderBenchmarkTaskItemsResponses, ReorderBenchmarkTaskItemsErrors, ThrowOnError> =>
 	(options.client ?? client).put<ReorderBenchmarkTaskItemsResponses, ReorderBenchmarkTaskItemsErrors, ThrowOnError>({
@@ -3429,7 +3429,7 @@ export const reorderBenchmarkTaskItems = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const deleteBenchmarkTaskItem = <ThrowOnError extends boolean = false>(
+export const deleteBenchmarkTaskItem = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteBenchmarkTaskItemData, ThrowOnError>,
 ): RequestResult<DeleteBenchmarkTaskItemResponses, DeleteBenchmarkTaskItemErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteBenchmarkTaskItemResponses, DeleteBenchmarkTaskItemErrors, ThrowOnError>({
@@ -3454,7 +3454,7 @@ export const deleteBenchmarkTaskItem = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const updateBenchmarkTaskItem = <ThrowOnError extends boolean = false>(
+export const updateBenchmarkTaskItem = <ThrowOnError extends boolean = true>(
 	options: Options<UpdateBenchmarkTaskItemData, ThrowOnError>,
 ): RequestResult<UpdateBenchmarkTaskItemResponses, UpdateBenchmarkTaskItemErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateBenchmarkTaskItemResponses, UpdateBenchmarkTaskItemErrors, ThrowOnError>({
@@ -3480,7 +3480,7 @@ export const updateBenchmarkTaskItem = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const updateBenchmarkJudgePolicy = <ThrowOnError extends boolean = false>(
+export const updateBenchmarkJudgePolicy = <ThrowOnError extends boolean = true>(
 	options: Options<UpdateBenchmarkJudgePolicyData, ThrowOnError>,
 ): RequestResult<UpdateBenchmarkJudgePolicyResponses, UpdateBenchmarkJudgePolicyErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateBenchmarkJudgePolicyResponses, UpdateBenchmarkJudgePolicyErrors, ThrowOnError>({
@@ -3506,7 +3506,7 @@ export const updateBenchmarkJudgePolicy = <ThrowOnError extends boolean = false>
 		},
 	});
 
-export const getBenchmarkPairwiseEstimate = <ThrowOnError extends boolean = false>(
+export const getBenchmarkPairwiseEstimate = <ThrowOnError extends boolean = true>(
 	options: Options<GetBenchmarkPairwiseEstimateData, ThrowOnError>,
 ): RequestResult<GetBenchmarkPairwiseEstimateResponses, GetBenchmarkPairwiseEstimateErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetBenchmarkPairwiseEstimateResponses, GetBenchmarkPairwiseEstimateErrors, ThrowOnError>({
@@ -3528,7 +3528,7 @@ export const getBenchmarkPairwiseEstimate = <ThrowOnError extends boolean = fals
 		...options,
 	});
 
-export const rejudgeBenchmarkProject = <ThrowOnError extends boolean = false>(
+export const rejudgeBenchmarkProject = <ThrowOnError extends boolean = true>(
 	options: Options<RejudgeBenchmarkProjectData, ThrowOnError>,
 ): RequestResult<RejudgeBenchmarkProjectResponses, RejudgeBenchmarkProjectErrors, ThrowOnError> =>
 	(options.client ?? client).post<RejudgeBenchmarkProjectResponses, RejudgeBenchmarkProjectErrors, ThrowOnError>({
@@ -3554,7 +3554,7 @@ export const rejudgeBenchmarkProject = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listBenchmarkRuns = <ThrowOnError extends boolean = false>(
+export const listBenchmarkRuns = <ThrowOnError extends boolean = true>(
 	options: Options<ListBenchmarkRunsData, ThrowOnError>,
 ): RequestResult<ListBenchmarkRunsResponses, ListBenchmarkRunsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListBenchmarkRunsResponses, ListBenchmarkRunsErrors, ThrowOnError>({
@@ -3576,7 +3576,7 @@ export const listBenchmarkRuns = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const startBenchmarkRun = <ThrowOnError extends boolean = false>(
+export const startBenchmarkRun = <ThrowOnError extends boolean = true>(
 	options: Options<StartBenchmarkRunData, ThrowOnError>,
 ): RequestResult<StartBenchmarkRunResponses, StartBenchmarkRunErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartBenchmarkRunResponses, StartBenchmarkRunErrors, ThrowOnError>({
@@ -3602,7 +3602,7 @@ export const startBenchmarkRun = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const startBenchmarkRunBatch = <ThrowOnError extends boolean = false>(
+export const startBenchmarkRunBatch = <ThrowOnError extends boolean = true>(
 	options: Options<StartBenchmarkRunBatchData, ThrowOnError>,
 ): RequestResult<StartBenchmarkRunBatchResponses, StartBenchmarkRunBatchErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartBenchmarkRunBatchResponses, StartBenchmarkRunBatchErrors, ThrowOnError>({
@@ -3628,7 +3628,7 @@ export const startBenchmarkRunBatch = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getBenchmarkRubricPresets = <ThrowOnError extends boolean = false>(
+export const getBenchmarkRubricPresets = <ThrowOnError extends boolean = true>(
 	options?: Options<GetBenchmarkRubricPresetsData, ThrowOnError>,
 ): RequestResult<GetBenchmarkRubricPresetsResponses, GetBenchmarkRubricPresetsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetBenchmarkRubricPresetsResponses, GetBenchmarkRubricPresetsErrors, ThrowOnError>({
@@ -3650,7 +3650,7 @@ export const getBenchmarkRubricPresets = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const deleteBenchmarkRun = <ThrowOnError extends boolean = false>(
+export const deleteBenchmarkRun = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteBenchmarkRunData, ThrowOnError>,
 ): RequestResult<DeleteBenchmarkRunResponses, DeleteBenchmarkRunErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteBenchmarkRunResponses, DeleteBenchmarkRunErrors, ThrowOnError>({
@@ -3675,7 +3675,7 @@ export const deleteBenchmarkRun = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getBenchmarkRun = <ThrowOnError extends boolean = false>(
+export const getBenchmarkRun = <ThrowOnError extends boolean = true>(
 	options: Options<GetBenchmarkRunData, ThrowOnError>,
 ): RequestResult<GetBenchmarkRunResponses, GetBenchmarkRunErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetBenchmarkRunResponses, GetBenchmarkRunErrors, ThrowOnError>({
@@ -3697,7 +3697,7 @@ export const getBenchmarkRun = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const cancelBenchmarkRun = <ThrowOnError extends boolean = false>(
+export const cancelBenchmarkRun = <ThrowOnError extends boolean = true>(
 	options: Options<CancelBenchmarkRunData, ThrowOnError>,
 ): RequestResult<CancelBenchmarkRunResponses, CancelBenchmarkRunErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelBenchmarkRunResponses, CancelBenchmarkRunErrors, ThrowOnError>({
@@ -3723,7 +3723,7 @@ export const cancelBenchmarkRun = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const startBenchmarkRunFidelity = <ThrowOnError extends boolean = false>(
+export const startBenchmarkRunFidelity = <ThrowOnError extends boolean = true>(
 	options: Options<StartBenchmarkRunFidelityData, ThrowOnError>,
 ): RequestResult<StartBenchmarkRunFidelityResponses, StartBenchmarkRunFidelityErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartBenchmarkRunFidelityResponses, StartBenchmarkRunFidelityErrors, ThrowOnError>({
@@ -3744,7 +3744,7 @@ export const startBenchmarkRunFidelity = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const rejudgeBenchmarkRun = <ThrowOnError extends boolean = false>(
+export const rejudgeBenchmarkRun = <ThrowOnError extends boolean = true>(
 	options: Options<RejudgeBenchmarkRunData, ThrowOnError>,
 ): RequestResult<RejudgeBenchmarkRunResponses, RejudgeBenchmarkRunErrors, ThrowOnError> =>
 	(options.client ?? client).post<RejudgeBenchmarkRunResponses, RejudgeBenchmarkRunErrors, ThrowOnError>({
@@ -3770,7 +3770,7 @@ export const rejudgeBenchmarkRun = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const clearBenchmarkRunScore = <ThrowOnError extends boolean = false>(
+export const clearBenchmarkRunScore = <ThrowOnError extends boolean = true>(
 	options: Options<ClearBenchmarkRunScoreData, ThrowOnError>,
 ): RequestResult<ClearBenchmarkRunScoreResponses, ClearBenchmarkRunScoreErrors, ThrowOnError> =>
 	(options.client ?? client).delete<ClearBenchmarkRunScoreResponses, ClearBenchmarkRunScoreErrors, ThrowOnError>({
@@ -3796,7 +3796,7 @@ export const clearBenchmarkRunScore = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const scoreBenchmarkRun = <ThrowOnError extends boolean = false>(
+export const scoreBenchmarkRun = <ThrowOnError extends boolean = true>(
 	options: Options<ScoreBenchmarkRunData, ThrowOnError>,
 ): RequestResult<ScoreBenchmarkRunResponses, ScoreBenchmarkRunErrors, ThrowOnError> =>
 	(options.client ?? client).put<ScoreBenchmarkRunResponses, ScoreBenchmarkRunErrors, ThrowOnError>({
@@ -3822,7 +3822,7 @@ export const scoreBenchmarkRun = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const resolveToolApproval = <ThrowOnError extends boolean = false>(
+export const resolveToolApproval = <ThrowOnError extends boolean = true>(
 	options: Options<ResolveToolApprovalData, ThrowOnError>,
 ): RequestResult<ResolveToolApprovalResponses, ResolveToolApprovalErrors, ThrowOnError> =>
 	(options.client ?? client).post<ResolveToolApprovalResponses, ResolveToolApprovalErrors, ThrowOnError>({
@@ -3848,7 +3848,7 @@ export const resolveToolApproval = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const cancelNodeChatMessage = <ThrowOnError extends boolean = false>(
+export const cancelNodeChatMessage = <ThrowOnError extends boolean = true>(
 	options: Options<CancelNodeChatMessageData, ThrowOnError>,
 ): RequestResult<CancelNodeChatMessageResponses, CancelNodeChatMessageErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelNodeChatMessageResponses, CancelNodeChatMessageErrors, ThrowOnError>({
@@ -3874,7 +3874,7 @@ export const cancelNodeChatMessage = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getNodeChatContextEstimate = <ThrowOnError extends boolean = false>(
+export const getNodeChatContextEstimate = <ThrowOnError extends boolean = true>(
 	options?: Options<GetNodeChatContextEstimateData, ThrowOnError>,
 ): RequestResult<GetNodeChatContextEstimateResponses, GetNodeChatContextEstimateErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetNodeChatContextEstimateResponses, GetNodeChatContextEstimateErrors, ThrowOnError>({
@@ -3896,7 +3896,7 @@ export const getNodeChatContextEstimate = <ThrowOnError extends boolean = false>
 		...options,
 	});
 
-export const listNodeChatConversations = <ThrowOnError extends boolean = false>(
+export const listNodeChatConversations = <ThrowOnError extends boolean = true>(
 	options: Options<ListNodeChatConversationsData, ThrowOnError>,
 ): RequestResult<ListNodeChatConversationsResponses, ListNodeChatConversationsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListNodeChatConversationsResponses, ListNodeChatConversationsErrors, ThrowOnError>({
@@ -3918,7 +3918,7 @@ export const listNodeChatConversations = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createNodeChatConversation = <ThrowOnError extends boolean = false>(
+export const createNodeChatConversation = <ThrowOnError extends boolean = true>(
 	options: Options<CreateNodeChatConversationData, ThrowOnError>,
 ): RequestResult<CreateNodeChatConversationResponses, CreateNodeChatConversationErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateNodeChatConversationResponses, CreateNodeChatConversationErrors, ThrowOnError>({
@@ -3944,7 +3944,7 @@ export const createNodeChatConversation = <ThrowOnError extends boolean = false>
 		},
 	});
 
-export const deleteNodeChatConversation = <ThrowOnError extends boolean = false>(
+export const deleteNodeChatConversation = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteNodeChatConversationData, ThrowOnError>,
 ): RequestResult<DeleteNodeChatConversationResponses, DeleteNodeChatConversationErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteNodeChatConversationResponses, DeleteNodeChatConversationErrors, ThrowOnError>({
@@ -3970,7 +3970,7 @@ export const deleteNodeChatConversation = <ThrowOnError extends boolean = false>
 		},
 	});
 
-export const getNodeChatConversation = <ThrowOnError extends boolean = false>(
+export const getNodeChatConversation = <ThrowOnError extends boolean = true>(
 	options: Options<GetNodeChatConversationData, ThrowOnError>,
 ): RequestResult<GetNodeChatConversationResponses, GetNodeChatConversationErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetNodeChatConversationResponses, GetNodeChatConversationErrors, ThrowOnError>({
@@ -3992,7 +3992,7 @@ export const getNodeChatConversation = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const archiveNodeChatConversation = <ThrowOnError extends boolean = false>(
+export const archiveNodeChatConversation = <ThrowOnError extends boolean = true>(
 	options: Options<ArchiveNodeChatConversationData, ThrowOnError>,
 ): RequestResult<ArchiveNodeChatConversationResponses, ArchiveNodeChatConversationErrors, ThrowOnError> =>
 	(options.client ?? client).patch<ArchiveNodeChatConversationResponses, ArchiveNodeChatConversationErrors, ThrowOnError>({
@@ -4018,7 +4018,7 @@ export const archiveNodeChatConversation = <ThrowOnError extends boolean = false
 		},
 	});
 
-export const branchNodeChatConversation = <ThrowOnError extends boolean = false>(
+export const branchNodeChatConversation = <ThrowOnError extends boolean = true>(
 	options: Options<BranchNodeChatConversationData, ThrowOnError>,
 ): RequestResult<BranchNodeChatConversationResponses, BranchNodeChatConversationErrors, ThrowOnError> =>
 	(options.client ?? client).post<BranchNodeChatConversationResponses, BranchNodeChatConversationErrors, ThrowOnError>({
@@ -4044,7 +4044,7 @@ export const branchNodeChatConversation = <ThrowOnError extends boolean = false>
 		},
 	});
 
-export const compactNodeChatConversation = <ThrowOnError extends boolean = false>(
+export const compactNodeChatConversation = <ThrowOnError extends boolean = true>(
 	options: Options<CompactNodeChatConversationData, ThrowOnError>,
 ): RequestResult<CompactNodeChatConversationResponses, CompactNodeChatConversationErrors, ThrowOnError> =>
 	(options.client ?? client).post<CompactNodeChatConversationResponses, CompactNodeChatConversationErrors, ThrowOnError>({
@@ -4070,7 +4070,7 @@ export const compactNodeChatConversation = <ThrowOnError extends boolean = false
 		},
 	});
 
-export const getNodeChatConversationContextState = <ThrowOnError extends boolean = false>(
+export const getNodeChatConversationContextState = <ThrowOnError extends boolean = true>(
 	options: Options<GetNodeChatConversationContextStateData, ThrowOnError>,
 ): RequestResult<GetNodeChatConversationContextStateResponses, GetNodeChatConversationContextStateErrors, ThrowOnError> =>
 	(options.client ?? client).get<
@@ -4096,7 +4096,7 @@ export const getNodeChatConversationContextState = <ThrowOnError extends boolean
 		...options,
 	});
 
-export const setNodeChatConversationMemoryExcluded = <ThrowOnError extends boolean = false>(
+export const setNodeChatConversationMemoryExcluded = <ThrowOnError extends boolean = true>(
 	options: Options<SetNodeChatConversationMemoryExcludedData, ThrowOnError>,
 ): RequestResult<SetNodeChatConversationMemoryExcludedResponses, SetNodeChatConversationMemoryExcludedErrors, ThrowOnError> =>
 	(options.client ?? client).patch<
@@ -4126,7 +4126,7 @@ export const setNodeChatConversationMemoryExcluded = <ThrowOnError extends boole
 		},
 	});
 
-export const getNodeChatMessageFeedback = <ThrowOnError extends boolean = false>(
+export const getNodeChatMessageFeedback = <ThrowOnError extends boolean = true>(
 	options: Options<GetNodeChatMessageFeedbackData, ThrowOnError>,
 ): RequestResult<GetNodeChatMessageFeedbackResponses, GetNodeChatMessageFeedbackErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetNodeChatMessageFeedbackResponses, GetNodeChatMessageFeedbackErrors, ThrowOnError>({
@@ -4148,7 +4148,7 @@ export const getNodeChatMessageFeedback = <ThrowOnError extends boolean = false>
 		...options,
 	});
 
-export const setNodeChatMessageFeedback = <ThrowOnError extends boolean = false>(
+export const setNodeChatMessageFeedback = <ThrowOnError extends boolean = true>(
 	options: Options<SetNodeChatMessageFeedbackData, ThrowOnError>,
 ): RequestResult<SetNodeChatMessageFeedbackResponses, SetNodeChatMessageFeedbackErrors, ThrowOnError> =>
 	(options.client ?? client).put<SetNodeChatMessageFeedbackResponses, SetNodeChatMessageFeedbackErrors, ThrowOnError>({
@@ -4174,7 +4174,7 @@ export const setNodeChatMessageFeedback = <ThrowOnError extends boolean = false>
 		},
 	});
 
-export const listNodeChatMessageRevisions = <ThrowOnError extends boolean = false>(
+export const listNodeChatMessageRevisions = <ThrowOnError extends boolean = true>(
 	options: Options<ListNodeChatMessageRevisionsData, ThrowOnError>,
 ): RequestResult<ListNodeChatMessageRevisionsResponses, ListNodeChatMessageRevisionsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListNodeChatMessageRevisionsResponses, ListNodeChatMessageRevisionsErrors, ThrowOnError>({
@@ -4196,7 +4196,7 @@ export const listNodeChatMessageRevisions = <ThrowOnError extends boolean = fals
 		...options,
 	});
 
-export const createNodeChatMessageRevision = <ThrowOnError extends boolean = false>(
+export const createNodeChatMessageRevision = <ThrowOnError extends boolean = true>(
 	options: Options<CreateNodeChatMessageRevisionData, ThrowOnError>,
 ): RequestResult<CreateNodeChatMessageRevisionResponses, CreateNodeChatMessageRevisionErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateNodeChatMessageRevisionResponses, CreateNodeChatMessageRevisionErrors, ThrowOnError>({
@@ -4218,7 +4218,7 @@ export const createNodeChatMessageRevision = <ThrowOnError extends boolean = fal
 		...options,
 	});
 
-export const pinNodeChatConversation = <ThrowOnError extends boolean = false>(
+export const pinNodeChatConversation = <ThrowOnError extends boolean = true>(
 	options: Options<PinNodeChatConversationData, ThrowOnError>,
 ): RequestResult<PinNodeChatConversationResponses, PinNodeChatConversationErrors, ThrowOnError> =>
 	(options.client ?? client).patch<PinNodeChatConversationResponses, PinNodeChatConversationErrors, ThrowOnError>({
@@ -4244,7 +4244,7 @@ export const pinNodeChatConversation = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const renameNodeChatConversation = <ThrowOnError extends boolean = false>(
+export const renameNodeChatConversation = <ThrowOnError extends boolean = true>(
 	options: Options<RenameNodeChatConversationData, ThrowOnError>,
 ): RequestResult<RenameNodeChatConversationResponses, RenameNodeChatConversationErrors, ThrowOnError> =>
 	(options.client ?? client).patch<RenameNodeChatConversationResponses, RenameNodeChatConversationErrors, ThrowOnError>({
@@ -4270,7 +4270,7 @@ export const renameNodeChatConversation = <ThrowOnError extends boolean = false>
 		},
 	});
 
-export const setNodeChatSelectedPath = <ThrowOnError extends boolean = false>(
+export const setNodeChatSelectedPath = <ThrowOnError extends boolean = true>(
 	options: Options<SetNodeChatSelectedPathData, ThrowOnError>,
 ): RequestResult<SetNodeChatSelectedPathResponses, SetNodeChatSelectedPathErrors, ThrowOnError> =>
 	(options.client ?? client).put<SetNodeChatSelectedPathResponses, SetNodeChatSelectedPathErrors, ThrowOnError>({
@@ -4296,7 +4296,7 @@ export const setNodeChatSelectedPath = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listConversationFiles = <ThrowOnError extends boolean = false>(
+export const listConversationFiles = <ThrowOnError extends boolean = true>(
 	options: Options<ListConversationFilesData, ThrowOnError>,
 ): RequestResult<ListConversationFilesResponses, ListConversationFilesErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListConversationFilesResponses, ListConversationFilesErrors, ThrowOnError>({
@@ -4318,7 +4318,7 @@ export const listConversationFiles = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const uploadConversationFile = <ThrowOnError extends boolean = false>(
+export const uploadConversationFile = <ThrowOnError extends boolean = true>(
 	options: Options<UploadConversationFileData, ThrowOnError>,
 ): RequestResult<UploadConversationFileResponses, UploadConversationFileErrors, ThrowOnError> =>
 	(options.client ?? client).post<UploadConversationFileResponses, UploadConversationFileErrors, ThrowOnError>({
@@ -4345,7 +4345,7 @@ export const uploadConversationFile = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const deleteConversationFile = <ThrowOnError extends boolean = false>(
+export const deleteConversationFile = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteConversationFileData, ThrowOnError>,
 ): RequestResult<DeleteConversationFileResponses, DeleteConversationFileErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteConversationFileResponses, DeleteConversationFileErrors, ThrowOnError>({
@@ -4366,7 +4366,7 @@ export const deleteConversationFile = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const answerNowNodeChatMessage = <ThrowOnError extends boolean = false>(
+export const answerNowNodeChatMessage = <ThrowOnError extends boolean = true>(
 	options: Options<AnswerNowNodeChatMessageData, ThrowOnError>,
 ): RequestResult<AnswerNowNodeChatMessageResponses, AnswerNowNodeChatMessageErrors, ThrowOnError> =>
 	(options.client ?? client).post<AnswerNowNodeChatMessageResponses, AnswerNowNodeChatMessageErrors, ThrowOnError>({
@@ -4387,7 +4387,7 @@ export const answerNowNodeChatMessage = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const resolveUserQuestion = <ThrowOnError extends boolean = false>(
+export const resolveUserQuestion = <ThrowOnError extends boolean = true>(
 	options: Options<ResolveUserQuestionData, ThrowOnError>,
 ): RequestResult<ResolveUserQuestionResponses, ResolveUserQuestionErrors, ThrowOnError> =>
 	(options.client ?? client).post<ResolveUserQuestionResponses, ResolveUserQuestionErrors, ThrowOnError>({
@@ -4413,7 +4413,7 @@ export const resolveUserQuestion = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const clearCloudSettings = <ThrowOnError extends boolean = false>(
+export const clearCloudSettings = <ThrowOnError extends boolean = true>(
 	options?: Options<ClearCloudSettingsData, ThrowOnError>,
 ): RequestResult<ClearCloudSettingsResponses, ClearCloudSettingsErrors, ThrowOnError> =>
 	(options?.client ?? client).delete<ClearCloudSettingsResponses, ClearCloudSettingsErrors, ThrowOnError>({
@@ -4435,7 +4435,7 @@ export const clearCloudSettings = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getCloudSettings = <ThrowOnError extends boolean = false>(
+export const getCloudSettings = <ThrowOnError extends boolean = true>(
 	options?: Options<GetCloudSettingsData, ThrowOnError>,
 ): RequestResult<GetCloudSettingsResponses, GetCloudSettingsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetCloudSettingsResponses, GetCloudSettingsErrors, ThrowOnError>({
@@ -4457,7 +4457,7 @@ export const getCloudSettings = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const saveCloudSettings = <ThrowOnError extends boolean = false>(
+export const saveCloudSettings = <ThrowOnError extends boolean = true>(
 	options: Options<SaveCloudSettingsData, ThrowOnError>,
 ): RequestResult<SaveCloudSettingsResponses, SaveCloudSettingsErrors, ThrowOnError> =>
 	(options.client ?? client).put<SaveCloudSettingsResponses, SaveCloudSettingsErrors, ThrowOnError>({
@@ -4483,7 +4483,7 @@ export const saveCloudSettings = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const entraAuthCodeSignIn = <ThrowOnError extends boolean = false>(
+export const entraAuthCodeSignIn = <ThrowOnError extends boolean = true>(
 	options?: Options<EntraAuthCodeSignInData, ThrowOnError>,
 ): RequestResult<EntraAuthCodeSignInResponses, EntraAuthCodeSignInErrors, ThrowOnError> =>
 	(options?.client ?? client).post<EntraAuthCodeSignInResponses, EntraAuthCodeSignInErrors, ThrowOnError>({
@@ -4505,7 +4505,7 @@ export const entraAuthCodeSignIn = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const entraAuthCodeStatus = <ThrowOnError extends boolean = false>(
+export const entraAuthCodeStatus = <ThrowOnError extends boolean = true>(
 	options?: Options<EntraAuthCodeStatusData, ThrowOnError>,
 ): RequestResult<EntraAuthCodeStatusResponses, EntraAuthCodeStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<EntraAuthCodeStatusResponses, EntraAuthCodeStatusErrors, ThrowOnError>({
@@ -4527,7 +4527,7 @@ export const entraAuthCodeStatus = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const entraDeviceCodeSignIn = <ThrowOnError extends boolean = false>(
+export const entraDeviceCodeSignIn = <ThrowOnError extends boolean = true>(
 	options?: Options<EntraDeviceCodeSignInData, ThrowOnError>,
 ): RequestResult<EntraDeviceCodeSignInResponses, EntraDeviceCodeSignInErrors, ThrowOnError> =>
 	(options?.client ?? client).post<EntraDeviceCodeSignInResponses, EntraDeviceCodeSignInErrors, ThrowOnError>({
@@ -4549,7 +4549,7 @@ export const entraDeviceCodeSignIn = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const entraDeviceCodeStatus = <ThrowOnError extends boolean = false>(
+export const entraDeviceCodeStatus = <ThrowOnError extends boolean = true>(
 	options?: Options<EntraDeviceCodeStatusData, ThrowOnError>,
 ): RequestResult<EntraDeviceCodeStatusResponses, EntraDeviceCodeStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<EntraDeviceCodeStatusResponses, EntraDeviceCodeStatusErrors, ThrowOnError>({
@@ -4571,7 +4571,7 @@ export const entraDeviceCodeStatus = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const codexLogin = <ThrowOnError extends boolean = false>(
+export const codexLogin = <ThrowOnError extends boolean = true>(
 	options?: Options<CodexLoginData, ThrowOnError>,
 ): RequestResult<CodexLoginResponses, CodexLoginErrors, ThrowOnError> =>
 	(options?.client ?? client).post<CodexLoginResponses, CodexLoginErrors, ThrowOnError>({
@@ -4593,7 +4593,7 @@ export const codexLogin = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const codexLogout = <ThrowOnError extends boolean = false>(
+export const codexLogout = <ThrowOnError extends boolean = true>(
 	options?: Options<CodexLogoutData, ThrowOnError>,
 ): RequestResult<CodexLogoutResponses, CodexLogoutErrors, ThrowOnError> =>
 	(options?.client ?? client).post<CodexLogoutResponses, CodexLogoutErrors, ThrowOnError>({
@@ -4615,7 +4615,7 @@ export const codexLogout = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const codexStatus = <ThrowOnError extends boolean = false>(
+export const codexStatus = <ThrowOnError extends boolean = true>(
 	options?: Options<CodexStatusData, ThrowOnError>,
 ): RequestResult<CodexStatusResponses, CodexStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<CodexStatusResponses, CodexStatusErrors, ThrowOnError>({
@@ -4637,7 +4637,7 @@ export const codexStatus = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listCustomTools = <ThrowOnError extends boolean = false>(
+export const listCustomTools = <ThrowOnError extends boolean = true>(
 	options?: Options<ListCustomToolsData, ThrowOnError>,
 ): RequestResult<ListCustomToolsResponses, ListCustomToolsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListCustomToolsResponses, ListCustomToolsErrors, ThrowOnError>({
@@ -4659,7 +4659,7 @@ export const listCustomTools = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createCustomTool = <ThrowOnError extends boolean = false>(
+export const createCustomTool = <ThrowOnError extends boolean = true>(
 	options: Options<CreateCustomToolData, ThrowOnError>,
 ): RequestResult<CreateCustomToolResponses, CreateCustomToolErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateCustomToolResponses, CreateCustomToolErrors, ThrowOnError>({
@@ -4685,7 +4685,7 @@ export const createCustomTool = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const validateExecutable = <ThrowOnError extends boolean = false>(
+export const validateExecutable = <ThrowOnError extends boolean = true>(
 	options: Options<ValidateExecutableData, ThrowOnError>,
 ): RequestResult<ValidateExecutableResponses, ValidateExecutableErrors, ThrowOnError> =>
 	(options.client ?? client).post<ValidateExecutableResponses, ValidateExecutableErrors, ThrowOnError>({
@@ -4711,7 +4711,7 @@ export const validateExecutable = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const deleteCustomTool = <ThrowOnError extends boolean = false>(
+export const deleteCustomTool = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteCustomToolData, ThrowOnError>,
 ): RequestResult<DeleteCustomToolResponses, DeleteCustomToolErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteCustomToolResponses, DeleteCustomToolErrors, ThrowOnError>({
@@ -4732,7 +4732,7 @@ export const deleteCustomTool = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getCustomTool = <ThrowOnError extends boolean = false>(
+export const getCustomTool = <ThrowOnError extends boolean = true>(
 	options: Options<GetCustomToolData, ThrowOnError>,
 ): RequestResult<GetCustomToolResponses, GetCustomToolErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetCustomToolResponses, GetCustomToolErrors, ThrowOnError>({
@@ -4754,7 +4754,7 @@ export const getCustomTool = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const updateCustomTool = <ThrowOnError extends boolean = false>(
+export const updateCustomTool = <ThrowOnError extends boolean = true>(
 	options: Options<UpdateCustomToolData, ThrowOnError>,
 ): RequestResult<UpdateCustomToolResponses, UpdateCustomToolErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateCustomToolResponses, UpdateCustomToolErrors, ThrowOnError>({
@@ -4780,7 +4780,7 @@ export const updateCustomTool = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getDevWorkflowCapability = <ThrowOnError extends boolean = false>(
+export const getDevWorkflowCapability = <ThrowOnError extends boolean = true>(
 	options?: Options<GetDevWorkflowCapabilityData, ThrowOnError>,
 ): RequestResult<GetDevWorkflowCapabilityResponses, GetDevWorkflowCapabilityErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetDevWorkflowCapabilityResponses, GetDevWorkflowCapabilityErrors, ThrowOnError>({
@@ -4802,7 +4802,7 @@ export const getDevWorkflowCapability = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listDevWorkflowDefinitions = <ThrowOnError extends boolean = false>(
+export const listDevWorkflowDefinitions = <ThrowOnError extends boolean = true>(
 	options: Options<ListDevWorkflowDefinitionsData, ThrowOnError>,
 ): RequestResult<ListDevWorkflowDefinitionsResponses, ListDevWorkflowDefinitionsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListDevWorkflowDefinitionsResponses, ListDevWorkflowDefinitionsErrors, ThrowOnError>({
@@ -4824,7 +4824,7 @@ export const listDevWorkflowDefinitions = <ThrowOnError extends boolean = false>
 		...options,
 	});
 
-export const createDevWorkflowDefinition = <ThrowOnError extends boolean = false>(
+export const createDevWorkflowDefinition = <ThrowOnError extends boolean = true>(
 	options: Options<CreateDevWorkflowDefinitionData, ThrowOnError>,
 ): RequestResult<CreateDevWorkflowDefinitionResponses, CreateDevWorkflowDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateDevWorkflowDefinitionResponses, CreateDevWorkflowDefinitionErrors, ThrowOnError>({
@@ -4850,7 +4850,7 @@ export const createDevWorkflowDefinition = <ThrowOnError extends boolean = false
 		},
 	});
 
-export const archiveDevWorkflowDefinition = <ThrowOnError extends boolean = false>(
+export const archiveDevWorkflowDefinition = <ThrowOnError extends boolean = true>(
 	options: Options<ArchiveDevWorkflowDefinitionData, ThrowOnError>,
 ): RequestResult<ArchiveDevWorkflowDefinitionResponses, ArchiveDevWorkflowDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).delete<ArchiveDevWorkflowDefinitionResponses, ArchiveDevWorkflowDefinitionErrors, ThrowOnError>({
@@ -4871,7 +4871,7 @@ export const archiveDevWorkflowDefinition = <ThrowOnError extends boolean = fals
 		...options,
 	});
 
-export const getDevWorkflowDefinition = <ThrowOnError extends boolean = false>(
+export const getDevWorkflowDefinition = <ThrowOnError extends boolean = true>(
 	options: Options<GetDevWorkflowDefinitionData, ThrowOnError>,
 ): RequestResult<GetDevWorkflowDefinitionResponses, GetDevWorkflowDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetDevWorkflowDefinitionResponses, GetDevWorkflowDefinitionErrors, ThrowOnError>({
@@ -4893,7 +4893,7 @@ export const getDevWorkflowDefinition = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const updateDevWorkflowDefinition = <ThrowOnError extends boolean = false>(
+export const updateDevWorkflowDefinition = <ThrowOnError extends boolean = true>(
 	options: Options<UpdateDevWorkflowDefinitionData, ThrowOnError>,
 ): RequestResult<UpdateDevWorkflowDefinitionResponses, UpdateDevWorkflowDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateDevWorkflowDefinitionResponses, UpdateDevWorkflowDefinitionErrors, ThrowOnError>({
@@ -4919,7 +4919,7 @@ export const updateDevWorkflowDefinition = <ThrowOnError extends boolean = false
 		},
 	});
 
-export const listDevWorkflowRuleSets = <ThrowOnError extends boolean = false>(
+export const listDevWorkflowRuleSets = <ThrowOnError extends boolean = true>(
 	options?: Options<ListDevWorkflowRuleSetsData, ThrowOnError>,
 ): RequestResult<ListDevWorkflowRuleSetsResponses, ListDevWorkflowRuleSetsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListDevWorkflowRuleSetsResponses, ListDevWorkflowRuleSetsErrors, ThrowOnError>({
@@ -4941,7 +4941,7 @@ export const listDevWorkflowRuleSets = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createDevWorkflowRuleSet = <ThrowOnError extends boolean = false>(
+export const createDevWorkflowRuleSet = <ThrowOnError extends boolean = true>(
 	options: Options<CreateDevWorkflowRuleSetData, ThrowOnError>,
 ): RequestResult<CreateDevWorkflowRuleSetResponses, CreateDevWorkflowRuleSetErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateDevWorkflowRuleSetResponses, CreateDevWorkflowRuleSetErrors, ThrowOnError>({
@@ -4967,7 +4967,7 @@ export const createDevWorkflowRuleSet = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const deleteDevWorkflowRuleSet = <ThrowOnError extends boolean = false>(
+export const deleteDevWorkflowRuleSet = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteDevWorkflowRuleSetData, ThrowOnError>,
 ): RequestResult<DeleteDevWorkflowRuleSetResponses, DeleteDevWorkflowRuleSetErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteDevWorkflowRuleSetResponses, DeleteDevWorkflowRuleSetErrors, ThrowOnError>({
@@ -4988,7 +4988,7 @@ export const deleteDevWorkflowRuleSet = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getDevWorkflowRuleSet = <ThrowOnError extends boolean = false>(
+export const getDevWorkflowRuleSet = <ThrowOnError extends boolean = true>(
 	options: Options<GetDevWorkflowRuleSetData, ThrowOnError>,
 ): RequestResult<GetDevWorkflowRuleSetResponses, GetDevWorkflowRuleSetErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetDevWorkflowRuleSetResponses, GetDevWorkflowRuleSetErrors, ThrowOnError>({
@@ -5010,7 +5010,7 @@ export const getDevWorkflowRuleSet = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const updateDevWorkflowRuleSet = <ThrowOnError extends boolean = false>(
+export const updateDevWorkflowRuleSet = <ThrowOnError extends boolean = true>(
 	options: Options<UpdateDevWorkflowRuleSetData, ThrowOnError>,
 ): RequestResult<UpdateDevWorkflowRuleSetResponses, UpdateDevWorkflowRuleSetErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateDevWorkflowRuleSetResponses, UpdateDevWorkflowRuleSetErrors, ThrowOnError>({
@@ -5036,7 +5036,7 @@ export const updateDevWorkflowRuleSet = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listDevWorkflowRuns = <ThrowOnError extends boolean = false>(
+export const listDevWorkflowRuns = <ThrowOnError extends boolean = true>(
 	options: Options<ListDevWorkflowRunsData, ThrowOnError>,
 ): RequestResult<ListDevWorkflowRunsResponses, ListDevWorkflowRunsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListDevWorkflowRunsResponses, ListDevWorkflowRunsErrors, ThrowOnError>({
@@ -5058,7 +5058,7 @@ export const listDevWorkflowRuns = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getDevWorkflowRun = <ThrowOnError extends boolean = false>(
+export const getDevWorkflowRun = <ThrowOnError extends boolean = true>(
 	options: Options<GetDevWorkflowRunData, ThrowOnError>,
 ): RequestResult<GetDevWorkflowRunResponses, GetDevWorkflowRunErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetDevWorkflowRunResponses, GetDevWorkflowRunErrors, ThrowOnError>({
@@ -5080,7 +5080,7 @@ export const getDevWorkflowRun = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listDevWorkflowArtifacts = <ThrowOnError extends boolean = false>(
+export const listDevWorkflowArtifacts = <ThrowOnError extends boolean = true>(
 	options: Options<ListDevWorkflowArtifactsData, ThrowOnError>,
 ): RequestResult<ListDevWorkflowArtifactsResponses, ListDevWorkflowArtifactsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListDevWorkflowArtifactsResponses, ListDevWorkflowArtifactsErrors, ThrowOnError>({
@@ -5102,7 +5102,7 @@ export const listDevWorkflowArtifacts = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getDevWorkflowArtifactContent = <ThrowOnError extends boolean = false>(
+export const getDevWorkflowArtifactContent = <ThrowOnError extends boolean = true>(
 	options: Options<GetDevWorkflowArtifactContentData, ThrowOnError>,
 ): RequestResult<GetDevWorkflowArtifactContentResponses, GetDevWorkflowArtifactContentErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetDevWorkflowArtifactContentResponses, GetDevWorkflowArtifactContentErrors, ThrowOnError>({
@@ -5124,7 +5124,7 @@ export const getDevWorkflowArtifactContent = <ThrowOnError extends boolean = fal
 		...options,
 	});
 
-export const cancelDevWorkflowRun = <ThrowOnError extends boolean = false>(
+export const cancelDevWorkflowRun = <ThrowOnError extends boolean = true>(
 	options: Options<CancelDevWorkflowRunData, ThrowOnError>,
 ): RequestResult<CancelDevWorkflowRunResponses, CancelDevWorkflowRunErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelDevWorkflowRunResponses, CancelDevWorkflowRunErrors, ThrowOnError>({
@@ -5150,7 +5150,7 @@ export const cancelDevWorkflowRun = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listDevWorkflowRunEvents = <ThrowOnError extends boolean = false>(
+export const listDevWorkflowRunEvents = <ThrowOnError extends boolean = true>(
 	options: Options<ListDevWorkflowRunEventsData, ThrowOnError>,
 ): RequestResult<ListDevWorkflowRunEventsResponses, ListDevWorkflowRunEventsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListDevWorkflowRunEventsResponses, ListDevWorkflowRunEventsErrors, ThrowOnError>({
@@ -5172,7 +5172,7 @@ export const listDevWorkflowRunEvents = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getDevWorkflowNodeRun = <ThrowOnError extends boolean = false>(
+export const getDevWorkflowNodeRun = <ThrowOnError extends boolean = true>(
 	options: Options<GetDevWorkflowNodeRunData, ThrowOnError>,
 ): RequestResult<GetDevWorkflowNodeRunResponses, GetDevWorkflowNodeRunErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetDevWorkflowNodeRunResponses, GetDevWorkflowNodeRunErrors, ThrowOnError>({
@@ -5194,7 +5194,7 @@ export const getDevWorkflowNodeRun = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const decideDevWorkflowNodeRun = <ThrowOnError extends boolean = false>(
+export const decideDevWorkflowNodeRun = <ThrowOnError extends boolean = true>(
 	options: Options<DecideDevWorkflowNodeRunData, ThrowOnError>,
 ): RequestResult<DecideDevWorkflowNodeRunResponses, DecideDevWorkflowNodeRunErrors, ThrowOnError> =>
 	(options.client ?? client).post<DecideDevWorkflowNodeRunResponses, DecideDevWorkflowNodeRunErrors, ThrowOnError>({
@@ -5220,7 +5220,7 @@ export const decideDevWorkflowNodeRun = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const pauseDevWorkflowRun = <ThrowOnError extends boolean = false>(
+export const pauseDevWorkflowRun = <ThrowOnError extends boolean = true>(
 	options: Options<PauseDevWorkflowRunData, ThrowOnError>,
 ): RequestResult<PauseDevWorkflowRunResponses, PauseDevWorkflowRunErrors, ThrowOnError> =>
 	(options.client ?? client).post<PauseDevWorkflowRunResponses, PauseDevWorkflowRunErrors, ThrowOnError>({
@@ -5246,7 +5246,7 @@ export const pauseDevWorkflowRun = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const resumeDevWorkflowRun = <ThrowOnError extends boolean = false>(
+export const resumeDevWorkflowRun = <ThrowOnError extends boolean = true>(
 	options: Options<ResumeDevWorkflowRunData, ThrowOnError>,
 ): RequestResult<ResumeDevWorkflowRunResponses, ResumeDevWorkflowRunErrors, ThrowOnError> =>
 	(options.client ?? client).post<ResumeDevWorkflowRunResponses, ResumeDevWorkflowRunErrors, ThrowOnError>({
@@ -5272,7 +5272,7 @@ export const resumeDevWorkflowRun = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listDevWorkflowWorkItems = <ThrowOnError extends boolean = false>(
+export const listDevWorkflowWorkItems = <ThrowOnError extends boolean = true>(
 	options?: Options<ListDevWorkflowWorkItemsData, ThrowOnError>,
 ): RequestResult<ListDevWorkflowWorkItemsResponses, ListDevWorkflowWorkItemsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListDevWorkflowWorkItemsResponses, ListDevWorkflowWorkItemsErrors, ThrowOnError>({
@@ -5294,7 +5294,7 @@ export const listDevWorkflowWorkItems = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createDevWorkflowWorkItem = <ThrowOnError extends boolean = false>(
+export const createDevWorkflowWorkItem = <ThrowOnError extends boolean = true>(
 	options: Options<CreateDevWorkflowWorkItemData, ThrowOnError>,
 ): RequestResult<CreateDevWorkflowWorkItemResponses, CreateDevWorkflowWorkItemErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateDevWorkflowWorkItemResponses, CreateDevWorkflowWorkItemErrors, ThrowOnError>({
@@ -5320,7 +5320,7 @@ export const createDevWorkflowWorkItem = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const deleteDevWorkflowWorkItem = <ThrowOnError extends boolean = false>(
+export const deleteDevWorkflowWorkItem = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteDevWorkflowWorkItemData, ThrowOnError>,
 ): RequestResult<DeleteDevWorkflowWorkItemResponses, DeleteDevWorkflowWorkItemErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteDevWorkflowWorkItemResponses, DeleteDevWorkflowWorkItemErrors, ThrowOnError>({
@@ -5341,7 +5341,7 @@ export const deleteDevWorkflowWorkItem = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getDevWorkflowWorkItem = <ThrowOnError extends boolean = false>(
+export const getDevWorkflowWorkItem = <ThrowOnError extends boolean = true>(
 	options: Options<GetDevWorkflowWorkItemData, ThrowOnError>,
 ): RequestResult<GetDevWorkflowWorkItemResponses, GetDevWorkflowWorkItemErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetDevWorkflowWorkItemResponses, GetDevWorkflowWorkItemErrors, ThrowOnError>({
@@ -5363,7 +5363,7 @@ export const getDevWorkflowWorkItem = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const updateDevWorkflowWorkItem = <ThrowOnError extends boolean = false>(
+export const updateDevWorkflowWorkItem = <ThrowOnError extends boolean = true>(
 	options: Options<UpdateDevWorkflowWorkItemData, ThrowOnError>,
 ): RequestResult<UpdateDevWorkflowWorkItemResponses, UpdateDevWorkflowWorkItemErrors, ThrowOnError> =>
 	(options.client ?? client).patch<UpdateDevWorkflowWorkItemResponses, UpdateDevWorkflowWorkItemErrors, ThrowOnError>({
@@ -5389,7 +5389,7 @@ export const updateDevWorkflowWorkItem = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const startDevWorkflowRun = <ThrowOnError extends boolean = false>(
+export const startDevWorkflowRun = <ThrowOnError extends boolean = true>(
 	options: Options<StartDevWorkflowRunData, ThrowOnError>,
 ): RequestResult<StartDevWorkflowRunResponses, StartDevWorkflowRunErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartDevWorkflowRunResponses, StartDevWorkflowRunErrors, ThrowOnError>({
@@ -5415,7 +5415,7 @@ export const startDevWorkflowRun = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getDevelopmentCapability = <ThrowOnError extends boolean = false>(
+export const getDevelopmentCapability = <ThrowOnError extends boolean = true>(
 	options?: Options<GetDevelopmentCapabilityData, ThrowOnError>,
 ): RequestResult<GetDevelopmentCapabilityResponses, GetDevelopmentCapabilityErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetDevelopmentCapabilityResponses, GetDevelopmentCapabilityErrors, ThrowOnError>({
@@ -5437,7 +5437,7 @@ export const getDevelopmentCapability = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const confirmDevelopmentContainerRuntime = <ThrowOnError extends boolean = false>(
+export const confirmDevelopmentContainerRuntime = <ThrowOnError extends boolean = true>(
 	options: Options<ConfirmDevelopmentContainerRuntimeData, ThrowOnError>,
 ): RequestResult<ConfirmDevelopmentContainerRuntimeResponses, ConfirmDevelopmentContainerRuntimeErrors, ThrowOnError> =>
 	(options.client ?? client).post<
@@ -5467,7 +5467,7 @@ export const confirmDevelopmentContainerRuntime = <ThrowOnError extends boolean 
 		},
 	});
 
-export const listDevelopmentProjects = <ThrowOnError extends boolean = false>(
+export const listDevelopmentProjects = <ThrowOnError extends boolean = true>(
 	options?: Options<ListDevelopmentProjectsData, ThrowOnError>,
 ): RequestResult<ListDevelopmentProjectsResponses, ListDevelopmentProjectsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListDevelopmentProjectsResponses, ListDevelopmentProjectsErrors, ThrowOnError>({
@@ -5489,7 +5489,7 @@ export const listDevelopmentProjects = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createDevelopmentProject = <ThrowOnError extends boolean = false>(
+export const createDevelopmentProject = <ThrowOnError extends boolean = true>(
 	options: Options<CreateDevelopmentProjectData, ThrowOnError>,
 ): RequestResult<CreateDevelopmentProjectResponses, CreateDevelopmentProjectErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateDevelopmentProjectResponses, CreateDevelopmentProjectErrors, ThrowOnError>({
@@ -5515,7 +5515,7 @@ export const createDevelopmentProject = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getDevelopmentProject = <ThrowOnError extends boolean = false>(
+export const getDevelopmentProject = <ThrowOnError extends boolean = true>(
 	options: Options<GetDevelopmentProjectData, ThrowOnError>,
 ): RequestResult<GetDevelopmentProjectResponses, GetDevelopmentProjectErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetDevelopmentProjectResponses, GetDevelopmentProjectErrors, ThrowOnError>({
@@ -5537,7 +5537,7 @@ export const getDevelopmentProject = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listDevelopmentEvents = <ThrowOnError extends boolean = false>(
+export const listDevelopmentEvents = <ThrowOnError extends boolean = true>(
 	options: Options<ListDevelopmentEventsData, ThrowOnError>,
 ): RequestResult<ListDevelopmentEventsResponses, ListDevelopmentEventsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListDevelopmentEventsResponses, ListDevelopmentEventsErrors, ThrowOnError>({
@@ -5559,7 +5559,7 @@ export const listDevelopmentEvents = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const reconnectDevelopmentRepository = <ThrowOnError extends boolean = false>(
+export const reconnectDevelopmentRepository = <ThrowOnError extends boolean = true>(
 	options: Options<ReconnectDevelopmentRepositoryData, ThrowOnError>,
 ): RequestResult<ReconnectDevelopmentRepositoryResponses, ReconnectDevelopmentRepositoryErrors, ThrowOnError> =>
 	(options.client ?? client).post<ReconnectDevelopmentRepositoryResponses, ReconnectDevelopmentRepositoryErrors, ThrowOnError>({
@@ -5585,7 +5585,7 @@ export const reconnectDevelopmentRepository = <ThrowOnError extends boolean = fa
 		},
 	});
 
-export const getDevelopmentTask = <ThrowOnError extends boolean = false>(
+export const getDevelopmentTask = <ThrowOnError extends boolean = true>(
 	options: Options<GetDevelopmentTaskData, ThrowOnError>,
 ): RequestResult<GetDevelopmentTaskResponses, GetDevelopmentTaskErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetDevelopmentTaskResponses, GetDevelopmentTaskErrors, ThrowOnError>({
@@ -5607,7 +5607,7 @@ export const getDevelopmentTask = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const applyDevelopmentPatch = <ThrowOnError extends boolean = false>(
+export const applyDevelopmentPatch = <ThrowOnError extends boolean = true>(
 	options: Options<ApplyDevelopmentPatchData, ThrowOnError>,
 ): RequestResult<ApplyDevelopmentPatchResponses, ApplyDevelopmentPatchErrors, ThrowOnError> =>
 	(options.client ?? client).post<ApplyDevelopmentPatchResponses, ApplyDevelopmentPatchErrors, ThrowOnError>({
@@ -5633,7 +5633,7 @@ export const applyDevelopmentPatch = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listDevelopmentArtifacts = <ThrowOnError extends boolean = false>(
+export const listDevelopmentArtifacts = <ThrowOnError extends boolean = true>(
 	options: Options<ListDevelopmentArtifactsData, ThrowOnError>,
 ): RequestResult<ListDevelopmentArtifactsResponses, ListDevelopmentArtifactsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListDevelopmentArtifactsResponses, ListDevelopmentArtifactsErrors, ThrowOnError>({
@@ -5655,7 +5655,7 @@ export const listDevelopmentArtifacts = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getDevelopmentArtifact = <ThrowOnError extends boolean = false>(
+export const getDevelopmentArtifact = <ThrowOnError extends boolean = true>(
 	options: Options<GetDevelopmentArtifactData, ThrowOnError>,
 ): RequestResult<GetDevelopmentArtifactResponses, GetDevelopmentArtifactErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetDevelopmentArtifactResponses, GetDevelopmentArtifactErrors, ThrowOnError>({
@@ -5677,7 +5677,7 @@ export const getDevelopmentArtifact = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const cancelDevelopmentAttempt = <ThrowOnError extends boolean = false>(
+export const cancelDevelopmentAttempt = <ThrowOnError extends boolean = true>(
 	options: Options<CancelDevelopmentAttemptData, ThrowOnError>,
 ): RequestResult<CancelDevelopmentAttemptResponses, CancelDevelopmentAttemptErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelDevelopmentAttemptResponses, CancelDevelopmentAttemptErrors, ThrowOnError>({
@@ -5698,7 +5698,7 @@ export const cancelDevelopmentAttempt = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const startDevelopmentNextAction = <ThrowOnError extends boolean = false>(
+export const startDevelopmentNextAction = <ThrowOnError extends boolean = true>(
 	options: Options<StartDevelopmentNextActionData, ThrowOnError>,
 ): RequestResult<StartDevelopmentNextActionResponses, StartDevelopmentNextActionErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartDevelopmentNextActionResponses, StartDevelopmentNextActionErrors, ThrowOnError>({
@@ -5724,7 +5724,7 @@ export const startDevelopmentNextAction = <ThrowOnError extends boolean = false>
 		},
 	});
 
-export const previewDevelopmentPatch = <ThrowOnError extends boolean = false>(
+export const previewDevelopmentPatch = <ThrowOnError extends boolean = true>(
 	options: Options<PreviewDevelopmentPatchData, ThrowOnError>,
 ): RequestResult<PreviewDevelopmentPatchResponses, PreviewDevelopmentPatchErrors, ThrowOnError> =>
 	(options.client ?? client).post<PreviewDevelopmentPatchResponses, PreviewDevelopmentPatchErrors, ThrowOnError>({
@@ -5750,7 +5750,7 @@ export const previewDevelopmentPatch = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listDevelopmentRepositories = <ThrowOnError extends boolean = false>(
+export const listDevelopmentRepositories = <ThrowOnError extends boolean = true>(
 	options?: Options<ListDevelopmentRepositoriesData, ThrowOnError>,
 ): RequestResult<ListDevelopmentRepositoriesResponses, ListDevelopmentRepositoriesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListDevelopmentRepositoriesResponses, ListDevelopmentRepositoriesErrors, ThrowOnError>({
@@ -5772,7 +5772,7 @@ export const listDevelopmentRepositories = <ThrowOnError extends boolean = false
 		...options,
 	});
 
-export const registerDevelopmentRepository = <ThrowOnError extends boolean = false>(
+export const registerDevelopmentRepository = <ThrowOnError extends boolean = true>(
 	options: Options<RegisterDevelopmentRepositoryData, ThrowOnError>,
 ): RequestResult<RegisterDevelopmentRepositoryResponses, RegisterDevelopmentRepositoryErrors, ThrowOnError> =>
 	(options.client ?? client).post<RegisterDevelopmentRepositoryResponses, RegisterDevelopmentRepositoryErrors, ThrowOnError>({
@@ -5798,7 +5798,7 @@ export const registerDevelopmentRepository = <ThrowOnError extends boolean = fal
 		},
 	});
 
-export const createDevelopmentRepositoryFromTemplate = <ThrowOnError extends boolean = false>(
+export const createDevelopmentRepositoryFromTemplate = <ThrowOnError extends boolean = true>(
 	options: Options<CreateDevelopmentRepositoryFromTemplateData, ThrowOnError>,
 ): RequestResult<CreateDevelopmentRepositoryFromTemplateResponses, CreateDevelopmentRepositoryFromTemplateErrors, ThrowOnError> =>
 	(options.client ?? client).post<
@@ -5828,7 +5828,7 @@ export const createDevelopmentRepositoryFromTemplate = <ThrowOnError extends boo
 		},
 	});
 
-export const detectDevelopmentRepositoryProfile = <ThrowOnError extends boolean = false>(
+export const detectDevelopmentRepositoryProfile = <ThrowOnError extends boolean = true>(
 	options: Options<DetectDevelopmentRepositoryProfileData, ThrowOnError>,
 ): RequestResult<DetectDevelopmentRepositoryProfileResponses, DetectDevelopmentRepositoryProfileErrors, ThrowOnError> =>
 	(options.client ?? client).get<
@@ -5854,7 +5854,7 @@ export const detectDevelopmentRepositoryProfile = <ThrowOnError extends boolean 
 		...options,
 	});
 
-export const listDevelopmentTemplates = <ThrowOnError extends boolean = false>(
+export const listDevelopmentTemplates = <ThrowOnError extends boolean = true>(
 	options?: Options<ListDevelopmentTemplatesData, ThrowOnError>,
 ): RequestResult<ListDevelopmentTemplatesResponses, ListDevelopmentTemplatesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListDevelopmentTemplatesResponses, ListDevelopmentTemplatesErrors, ThrowOnError>({
@@ -5876,7 +5876,7 @@ export const listDevelopmentTemplates = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const registerDevelopmentTemplate = <ThrowOnError extends boolean = false>(
+export const registerDevelopmentTemplate = <ThrowOnError extends boolean = true>(
 	options: Options<RegisterDevelopmentTemplateData, ThrowOnError>,
 ): RequestResult<RegisterDevelopmentTemplateResponses, RegisterDevelopmentTemplateErrors, ThrowOnError> =>
 	(options.client ?? client).post<RegisterDevelopmentTemplateResponses, RegisterDevelopmentTemplateErrors, ThrowOnError>({
@@ -5902,7 +5902,7 @@ export const registerDevelopmentTemplate = <ThrowOnError extends boolean = false
 		},
 	});
 
-export const removeDevelopmentTemplate = <ThrowOnError extends boolean = false>(
+export const removeDevelopmentTemplate = <ThrowOnError extends boolean = true>(
 	options: Options<RemoveDevelopmentTemplateData, ThrowOnError>,
 ): RequestResult<RemoveDevelopmentTemplateResponses, RemoveDevelopmentTemplateErrors, ThrowOnError> =>
 	(options.client ?? client).delete<RemoveDevelopmentTemplateResponses, RemoveDevelopmentTemplateErrors, ThrowOnError>({
@@ -5923,7 +5923,7 @@ export const removeDevelopmentTemplate = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const unhandledExceptionProbe = <ThrowOnError extends boolean = false>(
+export const unhandledExceptionProbe = <ThrowOnError extends boolean = true>(
 	options?: Options<UnhandledExceptionProbeData, ThrowOnError>,
 ): RequestResult<UnhandledExceptionProbeResponses, UnhandledExceptionProbeErrors, ThrowOnError> =>
 	(options?.client ?? client).post<UnhandledExceptionProbeResponses, UnhandledExceptionProbeErrors, ThrowOnError>({
@@ -5944,7 +5944,7 @@ export const unhandledExceptionProbe = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getLogLevel = <ThrowOnError extends boolean = false>(
+export const getLogLevel = <ThrowOnError extends boolean = true>(
 	options?: Options<GetLogLevelData, ThrowOnError>,
 ): RequestResult<GetLogLevelResponses, GetLogLevelErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetLogLevelResponses, GetLogLevelErrors, ThrowOnError>({
@@ -5966,7 +5966,7 @@ export const getLogLevel = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const setLogLevel = <ThrowOnError extends boolean = false>(
+export const setLogLevel = <ThrowOnError extends boolean = true>(
 	options: Options<SetLogLevelData, ThrowOnError>,
 ): RequestResult<SetLogLevelResponses, SetLogLevelErrors, ThrowOnError> =>
 	(options.client ?? client).put<SetLogLevelResponses, SetLogLevelErrors, ThrowOnError>({
@@ -5992,7 +5992,7 @@ export const setLogLevel = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getNodeInfo = <ThrowOnError extends boolean = false>(
+export const getNodeInfo = <ThrowOnError extends boolean = true>(
 	options?: Options<GetNodeInfoData, ThrowOnError>,
 ): RequestResult<GetNodeInfoResponses, GetNodeInfoErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetNodeInfoResponses, GetNodeInfoErrors, ThrowOnError>({
@@ -6014,7 +6014,7 @@ export const getNodeInfo = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getSupportBundle = <ThrowOnError extends boolean = false>(
+export const getSupportBundle = <ThrowOnError extends boolean = true>(
 	options?: Options<GetSupportBundleData, ThrowOnError>,
 ): RequestResult<GetSupportBundleResponses, GetSupportBundleErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetSupportBundleResponses, GetSupportBundleErrors, ThrowOnError>({
@@ -6036,7 +6036,7 @@ export const getSupportBundle = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const validationProblemProbe = <ThrowOnError extends boolean = false>(
+export const validationProblemProbe = <ThrowOnError extends boolean = true>(
 	options: Options<ValidationProblemProbeData, ThrowOnError>,
 ): RequestResult<ValidationProblemProbeResponses, ValidationProblemProbeErrors, ThrowOnError> =>
 	(options.client ?? client).post<ValidationProblemProbeResponses, ValidationProblemProbeErrors, ThrowOnError>({
@@ -6062,7 +6062,7 @@ export const validationProblemProbe = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listExternalAppCatalog = <ThrowOnError extends boolean = false>(
+export const listExternalAppCatalog = <ThrowOnError extends boolean = true>(
 	options?: Options<ListExternalAppCatalogData, ThrowOnError>,
 ): RequestResult<ListExternalAppCatalogResponses, ListExternalAppCatalogErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListExternalAppCatalogResponses, ListExternalAppCatalogErrors, ThrowOnError>({
@@ -6084,7 +6084,7 @@ export const listExternalAppCatalog = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const refreshExternalAppCatalog = <ThrowOnError extends boolean = false>(
+export const refreshExternalAppCatalog = <ThrowOnError extends boolean = true>(
 	options?: Options<RefreshExternalAppCatalogData, ThrowOnError>,
 ): RequestResult<RefreshExternalAppCatalogResponses, RefreshExternalAppCatalogErrors, ThrowOnError> =>
 	(options?.client ?? client).post<RefreshExternalAppCatalogResponses, RefreshExternalAppCatalogErrors, ThrowOnError>({
@@ -6106,7 +6106,7 @@ export const refreshExternalAppCatalog = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getExternalAppCatalogApplication = <ThrowOnError extends boolean = false>(
+export const getExternalAppCatalogApplication = <ThrowOnError extends boolean = true>(
 	options: Options<GetExternalAppCatalogApplicationData, ThrowOnError>,
 ): RequestResult<GetExternalAppCatalogApplicationResponses, GetExternalAppCatalogApplicationErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetExternalAppCatalogApplicationResponses, GetExternalAppCatalogApplicationErrors, ThrowOnError>(
@@ -6130,7 +6130,7 @@ export const getExternalAppCatalogApplication = <ThrowOnError extends boolean = 
 		},
 	);
 
-export const getExternalAppInstallPreview = <ThrowOnError extends boolean = false>(
+export const getExternalAppInstallPreview = <ThrowOnError extends boolean = true>(
 	options: Options<GetExternalAppInstallPreviewData, ThrowOnError>,
 ): RequestResult<GetExternalAppInstallPreviewResponses, GetExternalAppInstallPreviewErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetExternalAppInstallPreviewResponses, GetExternalAppInstallPreviewErrors, ThrowOnError>({
@@ -6152,7 +6152,7 @@ export const getExternalAppInstallPreview = <ThrowOnError extends boolean = fals
 		...options,
 	});
 
-export const listExternalAppInstances = <ThrowOnError extends boolean = false>(
+export const listExternalAppInstances = <ThrowOnError extends boolean = true>(
 	options?: Options<ListExternalAppInstancesData, ThrowOnError>,
 ): RequestResult<ListExternalAppInstancesResponses, ListExternalAppInstancesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListExternalAppInstancesResponses, ListExternalAppInstancesErrors, ThrowOnError>({
@@ -6174,7 +6174,7 @@ export const listExternalAppInstances = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const installExternalApp = <ThrowOnError extends boolean = false>(
+export const installExternalApp = <ThrowOnError extends boolean = true>(
 	options: Options<InstallExternalAppData, ThrowOnError>,
 ): RequestResult<InstallExternalAppResponses, InstallExternalAppErrors, ThrowOnError> =>
 	(options.client ?? client).post<InstallExternalAppResponses, InstallExternalAppErrors, ThrowOnError>({
@@ -6200,7 +6200,7 @@ export const installExternalApp = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const uninstallExternalApp = <ThrowOnError extends boolean = false>(
+export const uninstallExternalApp = <ThrowOnError extends boolean = true>(
 	options: Options<UninstallExternalAppData, ThrowOnError>,
 ): RequestResult<UninstallExternalAppResponses, UninstallExternalAppErrors, ThrowOnError> =>
 	(options.client ?? client).delete<UninstallExternalAppResponses, UninstallExternalAppErrors, ThrowOnError>({
@@ -6222,7 +6222,7 @@ export const uninstallExternalApp = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getExternalAppInstance = <ThrowOnError extends boolean = false>(
+export const getExternalAppInstance = <ThrowOnError extends boolean = true>(
 	options: Options<GetExternalAppInstanceData, ThrowOnError>,
 ): RequestResult<GetExternalAppInstanceResponses, GetExternalAppInstanceErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetExternalAppInstanceResponses, GetExternalAppInstanceErrors, ThrowOnError>({
@@ -6244,7 +6244,7 @@ export const getExternalAppInstance = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const cancelExternalAppOperation = <ThrowOnError extends boolean = false>(
+export const cancelExternalAppOperation = <ThrowOnError extends boolean = true>(
 	options: Options<CancelExternalAppOperationData, ThrowOnError>,
 ): RequestResult<CancelExternalAppOperationResponses, CancelExternalAppOperationErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelExternalAppOperationResponses, CancelExternalAppOperationErrors, ThrowOnError>({
@@ -6264,7 +6264,7 @@ export const cancelExternalAppOperation = <ThrowOnError extends boolean = false>
 		...options,
 	});
 
-export const listExternalAppInstanceEvents = <ThrowOnError extends boolean = false>(
+export const listExternalAppInstanceEvents = <ThrowOnError extends boolean = true>(
 	options: Options<ListExternalAppInstanceEventsData, ThrowOnError>,
 ): RequestResult<ListExternalAppInstanceEventsResponses, ListExternalAppInstanceEventsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListExternalAppInstanceEventsResponses, ListExternalAppInstanceEventsErrors, ThrowOnError>({
@@ -6286,7 +6286,7 @@ export const listExternalAppInstanceEvents = <ThrowOnError extends boolean = fal
 		...options,
 	});
 
-export const getExternalAppInstanceLogs = <ThrowOnError extends boolean = false>(
+export const getExternalAppInstanceLogs = <ThrowOnError extends boolean = true>(
 	options: Options<GetExternalAppInstanceLogsData, ThrowOnError>,
 ): RequestResult<GetExternalAppInstanceLogsResponses, GetExternalAppInstanceLogsErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetExternalAppInstanceLogsResponses, GetExternalAppInstanceLogsErrors, ThrowOnError>({
@@ -6308,7 +6308,7 @@ export const getExternalAppInstanceLogs = <ThrowOnError extends boolean = false>
 		...options,
 	});
 
-export const resetExternalApp = <ThrowOnError extends boolean = false>(
+export const resetExternalApp = <ThrowOnError extends boolean = true>(
 	options: Options<ResetExternalAppData, ThrowOnError>,
 ): RequestResult<ResetExternalAppResponses, ResetExternalAppErrors, ThrowOnError> =>
 	(options.client ?? client).post<ResetExternalAppResponses, ResetExternalAppErrors, ThrowOnError>({
@@ -6334,7 +6334,7 @@ export const resetExternalApp = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const restartExternalApp = <ThrowOnError extends boolean = false>(
+export const restartExternalApp = <ThrowOnError extends boolean = true>(
 	options: Options<RestartExternalAppData, ThrowOnError>,
 ): RequestResult<RestartExternalAppResponses, RestartExternalAppErrors, ThrowOnError> =>
 	(options.client ?? client).post<RestartExternalAppResponses, RestartExternalAppErrors, ThrowOnError>({
@@ -6360,7 +6360,7 @@ export const restartExternalApp = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const startExternalApp = <ThrowOnError extends boolean = false>(
+export const startExternalApp = <ThrowOnError extends boolean = true>(
 	options: Options<StartExternalAppData, ThrowOnError>,
 ): RequestResult<StartExternalAppResponses, StartExternalAppErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartExternalAppResponses, StartExternalAppErrors, ThrowOnError>({
@@ -6386,7 +6386,7 @@ export const startExternalApp = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const stopExternalApp = <ThrowOnError extends boolean = false>(
+export const stopExternalApp = <ThrowOnError extends boolean = true>(
 	options: Options<StopExternalAppData, ThrowOnError>,
 ): RequestResult<StopExternalAppResponses, StopExternalAppErrors, ThrowOnError> =>
 	(options.client ?? client).post<StopExternalAppResponses, StopExternalAppErrors, ThrowOnError>({
@@ -6412,7 +6412,7 @@ export const stopExternalApp = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const updateExternalApp = <ThrowOnError extends boolean = false>(
+export const updateExternalApp = <ThrowOnError extends boolean = true>(
 	options: Options<UpdateExternalAppData, ThrowOnError>,
 ): RequestResult<UpdateExternalAppResponses, UpdateExternalAppErrors, ThrowOnError> =>
 	(options.client ?? client).post<UpdateExternalAppResponses, UpdateExternalAppErrors, ThrowOnError>({
@@ -6438,7 +6438,7 @@ export const updateExternalApp = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getExternalAppUpdatePreview = <ThrowOnError extends boolean = false>(
+export const getExternalAppUpdatePreview = <ThrowOnError extends boolean = true>(
 	options: Options<GetExternalAppUpdatePreviewData, ThrowOnError>,
 ): RequestResult<GetExternalAppUpdatePreviewResponses, GetExternalAppUpdatePreviewErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetExternalAppUpdatePreviewResponses, GetExternalAppUpdatePreviewErrors, ThrowOnError>({
@@ -6460,7 +6460,7 @@ export const getExternalAppUpdatePreview = <ThrowOnError extends boolean = false
 		...options,
 	});
 
-export const updateExternalAppVariables = <ThrowOnError extends boolean = false>(
+export const updateExternalAppVariables = <ThrowOnError extends boolean = true>(
 	options: Options<UpdateExternalAppVariablesData, ThrowOnError>,
 ): RequestResult<UpdateExternalAppVariablesResponses, UpdateExternalAppVariablesErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateExternalAppVariablesResponses, UpdateExternalAppVariablesErrors, ThrowOnError>({
@@ -6486,7 +6486,7 @@ export const updateExternalAppVariables = <ThrowOnError extends boolean = false>
 		},
 	});
 
-export const getExternalAppRuntime = <ThrowOnError extends boolean = false>(
+export const getExternalAppRuntime = <ThrowOnError extends boolean = true>(
 	options?: Options<GetExternalAppRuntimeData, ThrowOnError>,
 ): RequestResult<GetExternalAppRuntimeResponses, GetExternalAppRuntimeErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetExternalAppRuntimeResponses, GetExternalAppRuntimeErrors, ThrowOnError>({
@@ -6508,7 +6508,7 @@ export const getExternalAppRuntime = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const refreshExternalAppRuntime = <ThrowOnError extends boolean = false>(
+export const refreshExternalAppRuntime = <ThrowOnError extends boolean = true>(
 	options: Options<RefreshExternalAppRuntimeData, ThrowOnError>,
 ): RequestResult<RefreshExternalAppRuntimeResponses, RefreshExternalAppRuntimeErrors, ThrowOnError> =>
 	(options.client ?? client).post<RefreshExternalAppRuntimeResponses, RefreshExternalAppRuntimeErrors, ThrowOnError>({
@@ -6534,7 +6534,7 @@ export const refreshExternalAppRuntime = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listExternalProviderConnections = <ThrowOnError extends boolean = false>(
+export const listExternalProviderConnections = <ThrowOnError extends boolean = true>(
 	options?: Options<ListExternalProviderConnectionsData, ThrowOnError>,
 ): RequestResult<ListExternalProviderConnectionsResponses, ListExternalProviderConnectionsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListExternalProviderConnectionsResponses, ListExternalProviderConnectionsErrors, ThrowOnError>({
@@ -6556,7 +6556,7 @@ export const listExternalProviderConnections = <ThrowOnError extends boolean = f
 		...options,
 	});
 
-export const deleteExternalProviderConnection = <ThrowOnError extends boolean = false>(
+export const deleteExternalProviderConnection = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteExternalProviderConnectionData, ThrowOnError>,
 ): RequestResult<DeleteExternalProviderConnectionResponses, DeleteExternalProviderConnectionErrors, ThrowOnError> =>
 	(options.client ?? client).delete<
@@ -6582,7 +6582,7 @@ export const deleteExternalProviderConnection = <ThrowOnError extends boolean = 
 		...options,
 	});
 
-export const getExternalProviderConnection = <ThrowOnError extends boolean = false>(
+export const getExternalProviderConnection = <ThrowOnError extends boolean = true>(
 	options: Options<GetExternalProviderConnectionData, ThrowOnError>,
 ): RequestResult<GetExternalProviderConnectionResponses, GetExternalProviderConnectionErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetExternalProviderConnectionResponses, GetExternalProviderConnectionErrors, ThrowOnError>({
@@ -6604,7 +6604,7 @@ export const getExternalProviderConnection = <ThrowOnError extends boolean = fal
 		...options,
 	});
 
-export const saveExternalProviderConnection = <ThrowOnError extends boolean = false>(
+export const saveExternalProviderConnection = <ThrowOnError extends boolean = true>(
 	options: Options<SaveExternalProviderConnectionData, ThrowOnError>,
 ): RequestResult<SaveExternalProviderConnectionResponses, SaveExternalProviderConnectionErrors, ThrowOnError> =>
 	(options.client ?? client).put<SaveExternalProviderConnectionResponses, SaveExternalProviderConnectionErrors, ThrowOnError>({
@@ -6630,7 +6630,7 @@ export const saveExternalProviderConnection = <ThrowOnError extends boolean = fa
 		},
 	});
 
-export const probeExternalProvider = <ThrowOnError extends boolean = false>(
+export const probeExternalProvider = <ThrowOnError extends boolean = true>(
 	options: Options<ProbeExternalProviderData, ThrowOnError>,
 ): RequestResult<ProbeExternalProviderResponses, ProbeExternalProviderErrors, ThrowOnError> =>
 	(options.client ?? client).post<ProbeExternalProviderResponses, ProbeExternalProviderErrors, ThrowOnError>({
@@ -6656,7 +6656,7 @@ export const probeExternalProvider = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getGraphWorkflowCapability = <ThrowOnError extends boolean = false>(
+export const getGraphWorkflowCapability = <ThrowOnError extends boolean = true>(
 	options?: Options<GetGraphWorkflowCapabilityData, ThrowOnError>,
 ): RequestResult<GetGraphWorkflowCapabilityResponses, GetGraphWorkflowCapabilityErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetGraphWorkflowCapabilityResponses, GetGraphWorkflowCapabilityErrors, ThrowOnError>({
@@ -6678,7 +6678,7 @@ export const getGraphWorkflowCapability = <ThrowOnError extends boolean = false>
 		...options,
 	});
 
-export const sendGraphWorkflowChatMessage = <ThrowOnError extends boolean = false>(
+export const sendGraphWorkflowChatMessage = <ThrowOnError extends boolean = true>(
 	options: Options<SendGraphWorkflowChatMessageData, ThrowOnError>,
 ): RequestResult<SendGraphWorkflowChatMessageResponses, SendGraphWorkflowChatMessageErrors, ThrowOnError> =>
 	(options.client ?? client).post<SendGraphWorkflowChatMessageResponses, SendGraphWorkflowChatMessageErrors, ThrowOnError>({
@@ -6704,7 +6704,7 @@ export const sendGraphWorkflowChatMessage = <ThrowOnError extends boolean = fals
 		},
 	});
 
-export const listGraphWorkflowConversationRuns = <ThrowOnError extends boolean = false>(
+export const listGraphWorkflowConversationRuns = <ThrowOnError extends boolean = true>(
 	options: Options<ListGraphWorkflowConversationRunsData, ThrowOnError>,
 ): RequestResult<ListGraphWorkflowConversationRunsResponses, ListGraphWorkflowConversationRunsErrors, ThrowOnError> =>
 	(options.client ?? client).get<
@@ -6730,7 +6730,7 @@ export const listGraphWorkflowConversationRuns = <ThrowOnError extends boolean =
 		...options,
 	});
 
-export const listGraphWorkflowDefinitions = <ThrowOnError extends boolean = false>(
+export const listGraphWorkflowDefinitions = <ThrowOnError extends boolean = true>(
 	options?: Options<ListGraphWorkflowDefinitionsData, ThrowOnError>,
 ): RequestResult<ListGraphWorkflowDefinitionsResponses, ListGraphWorkflowDefinitionsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListGraphWorkflowDefinitionsResponses, ListGraphWorkflowDefinitionsErrors, ThrowOnError>({
@@ -6752,7 +6752,7 @@ export const listGraphWorkflowDefinitions = <ThrowOnError extends boolean = fals
 		...options,
 	});
 
-export const createGraphWorkflowDefinition = <ThrowOnError extends boolean = false>(
+export const createGraphWorkflowDefinition = <ThrowOnError extends boolean = true>(
 	options: Options<CreateGraphWorkflowDefinitionData, ThrowOnError>,
 ): RequestResult<CreateGraphWorkflowDefinitionResponses, CreateGraphWorkflowDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateGraphWorkflowDefinitionResponses, CreateGraphWorkflowDefinitionErrors, ThrowOnError>({
@@ -6778,7 +6778,7 @@ export const createGraphWorkflowDefinition = <ThrowOnError extends boolean = fal
 		},
 	});
 
-export const importGraphWorkflowDefinition = <ThrowOnError extends boolean = false>(
+export const importGraphWorkflowDefinition = <ThrowOnError extends boolean = true>(
 	options: Options<ImportGraphWorkflowDefinitionData, ThrowOnError>,
 ): RequestResult<ImportGraphWorkflowDefinitionResponses, ImportGraphWorkflowDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).post<ImportGraphWorkflowDefinitionResponses, ImportGraphWorkflowDefinitionErrors, ThrowOnError>({
@@ -6804,7 +6804,7 @@ export const importGraphWorkflowDefinition = <ThrowOnError extends boolean = fal
 		},
 	});
 
-export const validateGraphWorkflowDefinition = <ThrowOnError extends boolean = false>(
+export const validateGraphWorkflowDefinition = <ThrowOnError extends boolean = true>(
 	options: Options<ValidateGraphWorkflowDefinitionData, ThrowOnError>,
 ): RequestResult<ValidateGraphWorkflowDefinitionResponses, ValidateGraphWorkflowDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).post<ValidateGraphWorkflowDefinitionResponses, ValidateGraphWorkflowDefinitionErrors, ThrowOnError>({
@@ -6830,7 +6830,7 @@ export const validateGraphWorkflowDefinition = <ThrowOnError extends boolean = f
 		},
 	});
 
-export const deleteGraphWorkflowDefinition = <ThrowOnError extends boolean = false>(
+export const deleteGraphWorkflowDefinition = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteGraphWorkflowDefinitionData, ThrowOnError>,
 ): RequestResult<DeleteGraphWorkflowDefinitionResponses, DeleteGraphWorkflowDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteGraphWorkflowDefinitionResponses, DeleteGraphWorkflowDefinitionErrors, ThrowOnError>({
@@ -6851,7 +6851,7 @@ export const deleteGraphWorkflowDefinition = <ThrowOnError extends boolean = fal
 		...options,
 	});
 
-export const getGraphWorkflowDefinition = <ThrowOnError extends boolean = false>(
+export const getGraphWorkflowDefinition = <ThrowOnError extends boolean = true>(
 	options: Options<GetGraphWorkflowDefinitionData, ThrowOnError>,
 ): RequestResult<GetGraphWorkflowDefinitionResponses, GetGraphWorkflowDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetGraphWorkflowDefinitionResponses, GetGraphWorkflowDefinitionErrors, ThrowOnError>({
@@ -6873,7 +6873,7 @@ export const getGraphWorkflowDefinition = <ThrowOnError extends boolean = false>
 		...options,
 	});
 
-export const updateGraphWorkflowDefinition = <ThrowOnError extends boolean = false>(
+export const updateGraphWorkflowDefinition = <ThrowOnError extends boolean = true>(
 	options: Options<UpdateGraphWorkflowDefinitionData, ThrowOnError>,
 ): RequestResult<UpdateGraphWorkflowDefinitionResponses, UpdateGraphWorkflowDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateGraphWorkflowDefinitionResponses, UpdateGraphWorkflowDefinitionErrors, ThrowOnError>({
@@ -6899,7 +6899,7 @@ export const updateGraphWorkflowDefinition = <ThrowOnError extends boolean = fal
 		},
 	});
 
-export const exportGraphWorkflowDefinition = <ThrowOnError extends boolean = false>(
+export const exportGraphWorkflowDefinition = <ThrowOnError extends boolean = true>(
 	options: Options<ExportGraphWorkflowDefinitionData, ThrowOnError>,
 ): RequestResult<ExportGraphWorkflowDefinitionResponses, ExportGraphWorkflowDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).get<ExportGraphWorkflowDefinitionResponses, ExportGraphWorkflowDefinitionErrors, ThrowOnError>({
@@ -6921,7 +6921,7 @@ export const exportGraphWorkflowDefinition = <ThrowOnError extends boolean = fal
 		...options,
 	});
 
-export const startGraphWorkflowRun = <ThrowOnError extends boolean = false>(
+export const startGraphWorkflowRun = <ThrowOnError extends boolean = true>(
 	options: Options<StartGraphWorkflowRunData, ThrowOnError>,
 ): RequestResult<StartGraphWorkflowRunResponses, StartGraphWorkflowRunErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartGraphWorkflowRunResponses, StartGraphWorkflowRunErrors, ThrowOnError>({
@@ -6947,7 +6947,7 @@ export const startGraphWorkflowRun = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const invokeGraphWorkflowIntent = <ThrowOnError extends boolean = false>(
+export const invokeGraphWorkflowIntent = <ThrowOnError extends boolean = true>(
 	options: Options<InvokeGraphWorkflowIntentData, ThrowOnError>,
 ): RequestResult<InvokeGraphWorkflowIntentResponses, InvokeGraphWorkflowIntentErrors, ThrowOnError> =>
 	(options.client ?? client).post<InvokeGraphWorkflowIntentResponses, InvokeGraphWorkflowIntentErrors, ThrowOnError>({
@@ -6973,7 +6973,7 @@ export const invokeGraphWorkflowIntent = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listGraphWorkflowRuns = <ThrowOnError extends boolean = false>(
+export const listGraphWorkflowRuns = <ThrowOnError extends boolean = true>(
 	options: Options<ListGraphWorkflowRunsData, ThrowOnError>,
 ): RequestResult<ListGraphWorkflowRunsResponses, ListGraphWorkflowRunsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListGraphWorkflowRunsResponses, ListGraphWorkflowRunsErrors, ThrowOnError>({
@@ -6995,7 +6995,7 @@ export const listGraphWorkflowRuns = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const deleteGraphWorkflowRun = <ThrowOnError extends boolean = false>(
+export const deleteGraphWorkflowRun = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteGraphWorkflowRunData, ThrowOnError>,
 ): RequestResult<DeleteGraphWorkflowRunResponses, DeleteGraphWorkflowRunErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteGraphWorkflowRunResponses, DeleteGraphWorkflowRunErrors, ThrowOnError>({
@@ -7016,7 +7016,7 @@ export const deleteGraphWorkflowRun = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getGraphWorkflowRun = <ThrowOnError extends boolean = false>(
+export const getGraphWorkflowRun = <ThrowOnError extends boolean = true>(
 	options: Options<GetGraphWorkflowRunData, ThrowOnError>,
 ): RequestResult<GetGraphWorkflowRunResponses, GetGraphWorkflowRunErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetGraphWorkflowRunResponses, GetGraphWorkflowRunErrors, ThrowOnError>({
@@ -7038,7 +7038,7 @@ export const getGraphWorkflowRun = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const cancelGraphWorkflowRun = <ThrowOnError extends boolean = false>(
+export const cancelGraphWorkflowRun = <ThrowOnError extends boolean = true>(
 	options: Options<CancelGraphWorkflowRunData, ThrowOnError>,
 ): RequestResult<CancelGraphWorkflowRunResponses, CancelGraphWorkflowRunErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelGraphWorkflowRunResponses, CancelGraphWorkflowRunErrors, ThrowOnError>({
@@ -7060,7 +7060,7 @@ export const cancelGraphWorkflowRun = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listGraphWorkflowRunEvents = <ThrowOnError extends boolean = false>(
+export const listGraphWorkflowRunEvents = <ThrowOnError extends boolean = true>(
 	options: Options<ListGraphWorkflowRunEventsData, ThrowOnError>,
 ): RequestResult<ListGraphWorkflowRunEventsResponses, ListGraphWorkflowRunEventsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListGraphWorkflowRunEventsResponses, ListGraphWorkflowRunEventsErrors, ThrowOnError>({
@@ -7082,7 +7082,7 @@ export const listGraphWorkflowRunEvents = <ThrowOnError extends boolean = false>
 		...options,
 	});
 
-export const getGraphWorkflowNodeRun = <ThrowOnError extends boolean = false>(
+export const getGraphWorkflowNodeRun = <ThrowOnError extends boolean = true>(
 	options: Options<GetGraphWorkflowNodeRunData, ThrowOnError>,
 ): RequestResult<GetGraphWorkflowNodeRunResponses, GetGraphWorkflowNodeRunErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetGraphWorkflowNodeRunResponses, GetGraphWorkflowNodeRunErrors, ThrowOnError>({
@@ -7104,7 +7104,7 @@ export const getGraphWorkflowNodeRun = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const decideGraphWorkflowNodeRun = <ThrowOnError extends boolean = false>(
+export const decideGraphWorkflowNodeRun = <ThrowOnError extends boolean = true>(
 	options: Options<DecideGraphWorkflowNodeRunData, ThrowOnError>,
 ): RequestResult<DecideGraphWorkflowNodeRunResponses, DecideGraphWorkflowNodeRunErrors, ThrowOnError> =>
 	(options.client ?? client).post<DecideGraphWorkflowNodeRunResponses, DecideGraphWorkflowNodeRunErrors, ThrowOnError>({
@@ -7130,7 +7130,7 @@ export const decideGraphWorkflowNodeRun = <ThrowOnError extends boolean = false>
 		},
 	});
 
-export const steerGraphWorkflowNodeRun = <ThrowOnError extends boolean = false>(
+export const steerGraphWorkflowNodeRun = <ThrowOnError extends boolean = true>(
 	options: Options<SteerGraphWorkflowNodeRunData, ThrowOnError>,
 ): RequestResult<SteerGraphWorkflowNodeRunResponses, SteerGraphWorkflowNodeRunErrors, ThrowOnError> =>
 	(options.client ?? client).post<SteerGraphWorkflowNodeRunResponses, SteerGraphWorkflowNodeRunErrors, ThrowOnError>({
@@ -7156,7 +7156,7 @@ export const steerGraphWorkflowNodeRun = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listGraphWorkflowTools = <ThrowOnError extends boolean = false>(
+export const listGraphWorkflowTools = <ThrowOnError extends boolean = true>(
 	options?: Options<ListGraphWorkflowToolsData, ThrowOnError>,
 ): RequestResult<ListGraphWorkflowToolsResponses, ListGraphWorkflowToolsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListGraphWorkflowToolsResponses, ListGraphWorkflowToolsErrors, ThrowOnError>({
@@ -7178,7 +7178,7 @@ export const listGraphWorkflowTools = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listImageJobs = <ThrowOnError extends boolean = false>(
+export const listImageJobs = <ThrowOnError extends boolean = true>(
 	options?: Options<ListImageJobsData, ThrowOnError>,
 ): RequestResult<ListImageJobsResponses, ListImageJobsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListImageJobsResponses, ListImageJobsErrors, ThrowOnError>({
@@ -7200,7 +7200,7 @@ export const listImageJobs = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createImageJob = <ThrowOnError extends boolean = false>(
+export const createImageJob = <ThrowOnError extends boolean = true>(
 	options: Options<CreateImageJobData, ThrowOnError>,
 ): RequestResult<CreateImageJobResponses, CreateImageJobErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateImageJobResponses, CreateImageJobErrors, ThrowOnError>({
@@ -7226,7 +7226,7 @@ export const createImageJob = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const deleteImageJob = <ThrowOnError extends boolean = false>(
+export const deleteImageJob = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteImageJobData, ThrowOnError>,
 ): RequestResult<DeleteImageJobResponses, DeleteImageJobErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteImageJobResponses, DeleteImageJobErrors, ThrowOnError>({
@@ -7247,7 +7247,7 @@ export const deleteImageJob = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getImageJob = <ThrowOnError extends boolean = false>(
+export const getImageJob = <ThrowOnError extends boolean = true>(
 	options: Options<GetImageJobData, ThrowOnError>,
 ): RequestResult<GetImageJobResponses, GetImageJobErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetImageJobResponses, GetImageJobErrors, ThrowOnError>({
@@ -7269,7 +7269,7 @@ export const getImageJob = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const cancelImageJob = <ThrowOnError extends boolean = false>(
+export const cancelImageJob = <ThrowOnError extends boolean = true>(
 	options: Options<CancelImageJobData, ThrowOnError>,
 ): RequestResult<CancelImageJobResponses, CancelImageJobErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelImageJobResponses, CancelImageJobErrors, ThrowOnError>({
@@ -7290,7 +7290,7 @@ export const cancelImageJob = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listImageModels = <ThrowOnError extends boolean = false>(
+export const listImageModels = <ThrowOnError extends boolean = true>(
 	options?: Options<ListImageModelsData, ThrowOnError>,
 ): RequestResult<ListImageModelsResponses, ListImageModelsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListImageModelsResponses, ListImageModelsErrors, ThrowOnError>({
@@ -7312,7 +7312,7 @@ export const listImageModels = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const browseImageRepositories = <ThrowOnError extends boolean = false>(
+export const browseImageRepositories = <ThrowOnError extends boolean = true>(
 	options?: Options<BrowseImageRepositoriesData, ThrowOnError>,
 ): RequestResult<BrowseImageRepositoriesResponses, BrowseImageRepositoriesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<BrowseImageRepositoriesResponses, BrowseImageRepositoriesErrors, ThrowOnError>({
@@ -7334,7 +7334,7 @@ export const browseImageRepositories = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getImageModelCatalog = <ThrowOnError extends boolean = false>(
+export const getImageModelCatalog = <ThrowOnError extends boolean = true>(
 	options?: Options<GetImageModelCatalogData, ThrowOnError>,
 ): RequestResult<GetImageModelCatalogResponses, GetImageModelCatalogErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetImageModelCatalogResponses, GetImageModelCatalogErrors, ThrowOnError>({
@@ -7356,7 +7356,7 @@ export const getImageModelCatalog = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listImageModelDownloads = <ThrowOnError extends boolean = false>(
+export const listImageModelDownloads = <ThrowOnError extends boolean = true>(
 	options?: Options<ListImageModelDownloadsData, ThrowOnError>,
 ): RequestResult<ListImageModelDownloadsResponses, ListImageModelDownloadsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListImageModelDownloadsResponses, ListImageModelDownloadsErrors, ThrowOnError>({
@@ -7378,7 +7378,7 @@ export const listImageModelDownloads = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const startImageModelDownload = <ThrowOnError extends boolean = false>(
+export const startImageModelDownload = <ThrowOnError extends boolean = true>(
 	options: Options<StartImageModelDownloadData, ThrowOnError>,
 ): RequestResult<StartImageModelDownloadResponses, StartImageModelDownloadErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartImageModelDownloadResponses, StartImageModelDownloadErrors, ThrowOnError>({
@@ -7404,7 +7404,7 @@ export const startImageModelDownload = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const cancelImageModelDownload = <ThrowOnError extends boolean = false>(
+export const cancelImageModelDownload = <ThrowOnError extends boolean = true>(
 	options: Options<CancelImageModelDownloadData, ThrowOnError>,
 ): RequestResult<CancelImageModelDownloadResponses, CancelImageModelDownloadErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelImageModelDownloadResponses, CancelImageModelDownloadErrors, ThrowOnError>({
@@ -7430,7 +7430,7 @@ export const cancelImageModelDownload = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const inspectImageRepository = <ThrowOnError extends boolean = false>(
+export const inspectImageRepository = <ThrowOnError extends boolean = true>(
 	options?: Options<InspectImageRepositoryData, ThrowOnError>,
 ): RequestResult<InspectImageRepositoryResponses, InspectImageRepositoryErrors, ThrowOnError> =>
 	(options?.client ?? client).get<InspectImageRepositoryResponses, InspectImageRepositoryErrors, ThrowOnError>({
@@ -7452,7 +7452,7 @@ export const inspectImageRepository = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const deleteImageModel = <ThrowOnError extends boolean = false>(
+export const deleteImageModel = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteImageModelData, ThrowOnError>,
 ): RequestResult<DeleteImageModelResponses, DeleteImageModelErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteImageModelResponses, DeleteImageModelErrors, ThrowOnError>({
@@ -7473,7 +7473,7 @@ export const deleteImageModel = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const draftImagePrompt = <ThrowOnError extends boolean = false>(
+export const draftImagePrompt = <ThrowOnError extends boolean = true>(
 	options: Options<DraftImagePromptData, ThrowOnError>,
 ): RequestResult<DraftImagePromptResponses, DraftImagePromptErrors, ThrowOnError> =>
 	(options.client ?? client).post<DraftImagePromptResponses, DraftImagePromptErrors, ThrowOnError>({
@@ -7499,7 +7499,7 @@ export const draftImagePrompt = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getImageRuntimeStatus = <ThrowOnError extends boolean = false>(
+export const getImageRuntimeStatus = <ThrowOnError extends boolean = true>(
 	options?: Options<GetImageRuntimeStatusData, ThrowOnError>,
 ): RequestResult<GetImageRuntimeStatusResponses, GetImageRuntimeStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetImageRuntimeStatusResponses, GetImageRuntimeStatusErrors, ThrowOnError>({
@@ -7521,7 +7521,7 @@ export const getImageRuntimeStatus = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const ejectImageRuntime = <ThrowOnError extends boolean = false>(
+export const ejectImageRuntime = <ThrowOnError extends boolean = true>(
 	options: Options<EjectImageRuntimeData, ThrowOnError>,
 ): RequestResult<EjectImageRuntimeResponses, EjectImageRuntimeErrors, ThrowOnError> =>
 	(options.client ?? client).post<EjectImageRuntimeResponses, EjectImageRuntimeErrors, ThrowOnError>({
@@ -7547,7 +7547,7 @@ export const ejectImageRuntime = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const startStableDiffusionCppSourceBuild = <ThrowOnError extends boolean = false>(
+export const startStableDiffusionCppSourceBuild = <ThrowOnError extends boolean = true>(
 	options: Options<StartStableDiffusionCppSourceBuildData, ThrowOnError>,
 ): RequestResult<StartStableDiffusionCppSourceBuildResponses, StartStableDiffusionCppSourceBuildErrors, ThrowOnError> =>
 	(options.client ?? client).post<
@@ -7577,7 +7577,7 @@ export const startStableDiffusionCppSourceBuild = <ThrowOnError extends boolean 
 		},
 	});
 
-export const cancelStableDiffusionCppSourceBuild = <ThrowOnError extends boolean = false>(
+export const cancelStableDiffusionCppSourceBuild = <ThrowOnError extends boolean = true>(
 	options: Options<CancelStableDiffusionCppSourceBuildData, ThrowOnError>,
 ): RequestResult<CancelStableDiffusionCppSourceBuildResponses, CancelStableDiffusionCppSourceBuildErrors, ThrowOnError> =>
 	(options.client ?? client).post<
@@ -7607,7 +7607,7 @@ export const cancelStableDiffusionCppSourceBuild = <ThrowOnError extends boolean
 		},
 	});
 
-export const getStableDiffusionCppSourceBuildPrerequisites = <ThrowOnError extends boolean = false>(
+export const getStableDiffusionCppSourceBuildPrerequisites = <ThrowOnError extends boolean = true>(
 	options: Options<GetStableDiffusionCppSourceBuildPrerequisitesData, ThrowOnError>,
 ): RequestResult<
 	GetStableDiffusionCppSourceBuildPrerequisitesResponses,
@@ -7637,7 +7637,7 @@ export const getStableDiffusionCppSourceBuildPrerequisites = <ThrowOnError exten
 		...options,
 	});
 
-export const removeStableDiffusionCppSourceBuild = <ThrowOnError extends boolean = false>(
+export const removeStableDiffusionCppSourceBuild = <ThrowOnError extends boolean = true>(
 	options: Options<RemoveStableDiffusionCppSourceBuildData, ThrowOnError>,
 ): RequestResult<RemoveStableDiffusionCppSourceBuildResponses, RemoveStableDiffusionCppSourceBuildErrors, ThrowOnError> =>
 	(options.client ?? client).post<
@@ -7667,7 +7667,7 @@ export const removeStableDiffusionCppSourceBuild = <ThrowOnError extends boolean
 		},
 	});
 
-export const getStableDiffusionCppSourceBuildStatus = <ThrowOnError extends boolean = false>(
+export const getStableDiffusionCppSourceBuildStatus = <ThrowOnError extends boolean = true>(
 	options?: Options<GetStableDiffusionCppSourceBuildStatusData, ThrowOnError>,
 ): RequestResult<GetStableDiffusionCppSourceBuildStatusResponses, GetStableDiffusionCppSourceBuildStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<
@@ -7693,7 +7693,7 @@ export const getStableDiffusionCppSourceBuildStatus = <ThrowOnError extends bool
 		...options,
 	});
 
-export const listUploadedImages = <ThrowOnError extends boolean = false>(
+export const listUploadedImages = <ThrowOnError extends boolean = true>(
 	options?: Options<ListUploadedImagesData, ThrowOnError>,
 ): RequestResult<ListUploadedImagesResponses, ListUploadedImagesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListUploadedImagesResponses, ListUploadedImagesErrors, ThrowOnError>({
@@ -7715,7 +7715,7 @@ export const listUploadedImages = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const uploadImage = <ThrowOnError extends boolean = false>(
+export const uploadImage = <ThrowOnError extends boolean = true>(
 	options: Options<UploadImageData, ThrowOnError>,
 ): RequestResult<UploadImageResponses, UploadImageErrors, ThrowOnError> =>
 	(options.client ?? client).post<UploadImageResponses, UploadImageErrors, ThrowOnError>({
@@ -7742,7 +7742,7 @@ export const uploadImage = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const deleteUploadedImage = <ThrowOnError extends boolean = false>(
+export const deleteUploadedImage = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteUploadedImageData, ThrowOnError>,
 ): RequestResult<DeleteUploadedImageResponses, DeleteUploadedImageErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteUploadedImageResponses, DeleteUploadedImageErrors, ThrowOnError>({
@@ -7763,10 +7763,11 @@ export const deleteUploadedImage = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const retrieveImage = <ThrowOnError extends boolean = false>(
+export const retrieveImage = <ThrowOnError extends boolean = true>(
 	options: Options<RetrieveImageData, ThrowOnError>,
 ): RequestResult<RetrieveImageResponses, RetrieveImageErrors, ThrowOnError> =>
 	(options.client ?? client).get<RetrieveImageResponses, RetrieveImageErrors, ThrowOnError>({
+		responseType: "blob",
 		responseValidator: async (data) => await zRetrieveImageResponse.parseAsync(data),
 		security: [
 			{
@@ -7784,7 +7785,7 @@ export const retrieveImage = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listIntegrationExecutions = <ThrowOnError extends boolean = false>(
+export const listIntegrationExecutions = <ThrowOnError extends boolean = true>(
 	options?: Options<ListIntegrationExecutionsData, ThrowOnError>,
 ): RequestResult<ListIntegrationExecutionsResponses, ListIntegrationExecutionsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListIntegrationExecutionsResponses, ListIntegrationExecutionsErrors, ThrowOnError>({
@@ -7806,7 +7807,7 @@ export const listIntegrationExecutions = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getIntegrationExecution = <ThrowOnError extends boolean = false>(
+export const getIntegrationExecution = <ThrowOnError extends boolean = true>(
 	options: Options<GetIntegrationExecutionData, ThrowOnError>,
 ): RequestResult<GetIntegrationExecutionResponses, GetIntegrationExecutionErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetIntegrationExecutionResponses, GetIntegrationExecutionErrors, ThrowOnError>({
@@ -7828,7 +7829,7 @@ export const getIntegrationExecution = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const cancelIntegrationExecution = <ThrowOnError extends boolean = false>(
+export const cancelIntegrationExecution = <ThrowOnError extends boolean = true>(
 	options: Options<CancelIntegrationExecutionData, ThrowOnError>,
 ): RequestResult<CancelIntegrationExecutionResponses, CancelIntegrationExecutionErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelIntegrationExecutionResponses, CancelIntegrationExecutionErrors, ThrowOnError>({
@@ -7848,7 +7849,7 @@ export const cancelIntegrationExecution = <ThrowOnError extends boolean = false>
 		...options,
 	});
 
-export const getIntegrationExecutionEvents = <ThrowOnError extends boolean = false>(
+export const getIntegrationExecutionEvents = <ThrowOnError extends boolean = true>(
 	options: Options<GetIntegrationExecutionEventsData, ThrowOnError>,
 ): RequestResult<GetIntegrationExecutionEventsResponses, GetIntegrationExecutionEventsErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetIntegrationExecutionEventsResponses, GetIntegrationExecutionEventsErrors, ThrowOnError>({
@@ -7870,7 +7871,7 @@ export const getIntegrationExecutionEvents = <ThrowOnError extends boolean = fal
 		...options,
 	});
 
-export const listIntegrationApiKeys = <ThrowOnError extends boolean = false>(
+export const listIntegrationApiKeys = <ThrowOnError extends boolean = true>(
 	options?: Options<ListIntegrationApiKeysData, ThrowOnError>,
 ): RequestResult<ListIntegrationApiKeysResponses, ListIntegrationApiKeysErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListIntegrationApiKeysResponses, ListIntegrationApiKeysErrors, ThrowOnError>({
@@ -7892,7 +7893,7 @@ export const listIntegrationApiKeys = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const generateIntegrationApiKey = <ThrowOnError extends boolean = false>(
+export const generateIntegrationApiKey = <ThrowOnError extends boolean = true>(
 	options: Options<GenerateIntegrationApiKeyData, ThrowOnError>,
 ): RequestResult<GenerateIntegrationApiKeyResponses, GenerateIntegrationApiKeyErrors, ThrowOnError> =>
 	(options.client ?? client).post<GenerateIntegrationApiKeyResponses, GenerateIntegrationApiKeyErrors, ThrowOnError>({
@@ -7918,7 +7919,7 @@ export const generateIntegrationApiKey = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const revokeIntegrationApiKey = <ThrowOnError extends boolean = false>(
+export const revokeIntegrationApiKey = <ThrowOnError extends boolean = true>(
 	options: Options<RevokeIntegrationApiKeyData, ThrowOnError>,
 ): RequestResult<RevokeIntegrationApiKeyResponses, RevokeIntegrationApiKeyErrors, ThrowOnError> =>
 	(options.client ?? client).delete<RevokeIntegrationApiKeyResponses, RevokeIntegrationApiKeyErrors, ThrowOnError>({
@@ -7939,7 +7940,7 @@ export const revokeIntegrationApiKey = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listIntegrationSessions = <ThrowOnError extends boolean = false>(
+export const listIntegrationSessions = <ThrowOnError extends boolean = true>(
 	options?: Options<ListIntegrationSessionsData, ThrowOnError>,
 ): RequestResult<ListIntegrationSessionsResponses, ListIntegrationSessionsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListIntegrationSessionsResponses, ListIntegrationSessionsErrors, ThrowOnError>({
@@ -7961,7 +7962,7 @@ export const listIntegrationSessions = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const deleteIntegrationSession = <ThrowOnError extends boolean = false>(
+export const deleteIntegrationSession = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteIntegrationSessionData, ThrowOnError>,
 ): RequestResult<DeleteIntegrationSessionResponses, DeleteIntegrationSessionErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteIntegrationSessionResponses, DeleteIntegrationSessionErrors, ThrowOnError>({
@@ -7982,7 +7983,7 @@ export const deleteIntegrationSession = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getIntegrationSession = <ThrowOnError extends boolean = false>(
+export const getIntegrationSession = <ThrowOnError extends boolean = true>(
 	options: Options<GetIntegrationSessionData, ThrowOnError>,
 ): RequestResult<GetIntegrationSessionResponses, GetIntegrationSessionErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetIntegrationSessionResponses, GetIntegrationSessionErrors, ThrowOnError>({
@@ -8004,7 +8005,7 @@ export const getIntegrationSession = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listIntegrationTriggers = <ThrowOnError extends boolean = false>(
+export const listIntegrationTriggers = <ThrowOnError extends boolean = true>(
 	options?: Options<ListIntegrationTriggersData, ThrowOnError>,
 ): RequestResult<ListIntegrationTriggersResponses, ListIntegrationTriggersErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListIntegrationTriggersResponses, ListIntegrationTriggersErrors, ThrowOnError>({
@@ -8026,7 +8027,7 @@ export const listIntegrationTriggers = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createIntegrationTrigger = <ThrowOnError extends boolean = false>(
+export const createIntegrationTrigger = <ThrowOnError extends boolean = true>(
 	options: Options<CreateIntegrationTriggerData, ThrowOnError>,
 ): RequestResult<CreateIntegrationTriggerResponses, CreateIntegrationTriggerErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateIntegrationTriggerResponses, CreateIntegrationTriggerErrors, ThrowOnError>({
@@ -8052,7 +8053,7 @@ export const createIntegrationTrigger = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const deleteIntegrationTrigger = <ThrowOnError extends boolean = false>(
+export const deleteIntegrationTrigger = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteIntegrationTriggerData, ThrowOnError>,
 ): RequestResult<DeleteIntegrationTriggerResponses, DeleteIntegrationTriggerErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteIntegrationTriggerResponses, DeleteIntegrationTriggerErrors, ThrowOnError>({
@@ -8073,7 +8074,7 @@ export const deleteIntegrationTrigger = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getIntegrationTrigger = <ThrowOnError extends boolean = false>(
+export const getIntegrationTrigger = <ThrowOnError extends boolean = true>(
 	options: Options<GetIntegrationTriggerData, ThrowOnError>,
 ): RequestResult<GetIntegrationTriggerResponses, GetIntegrationTriggerErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetIntegrationTriggerResponses, GetIntegrationTriggerErrors, ThrowOnError>({
@@ -8095,7 +8096,7 @@ export const getIntegrationTrigger = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const updateIntegrationTrigger = <ThrowOnError extends boolean = false>(
+export const updateIntegrationTrigger = <ThrowOnError extends boolean = true>(
 	options: Options<UpdateIntegrationTriggerData, ThrowOnError>,
 ): RequestResult<UpdateIntegrationTriggerResponses, UpdateIntegrationTriggerErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateIntegrationTriggerResponses, UpdateIntegrationTriggerErrors, ThrowOnError>({
@@ -8121,7 +8122,7 @@ export const updateIntegrationTrigger = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getInvocationMonitor = <ThrowOnError extends boolean = false>(
+export const getInvocationMonitor = <ThrowOnError extends boolean = true>(
 	options?: Options<GetInvocationMonitorData, ThrowOnError>,
 ): RequestResult<GetInvocationMonitorResponses, GetInvocationMonitorErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetInvocationMonitorResponses, GetInvocationMonitorErrors, ThrowOnError>({
@@ -8143,7 +8144,7 @@ export const getInvocationMonitor = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listKnowledgeDocuments = <ThrowOnError extends boolean = false>(
+export const listKnowledgeDocuments = <ThrowOnError extends boolean = true>(
 	options?: Options<ListKnowledgeDocumentsData, ThrowOnError>,
 ): RequestResult<ListKnowledgeDocumentsResponses, ListKnowledgeDocumentsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListKnowledgeDocumentsResponses, ListKnowledgeDocumentsErrors, ThrowOnError>({
@@ -8165,7 +8166,7 @@ export const listKnowledgeDocuments = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const uploadKnowledgeDocument = <ThrowOnError extends boolean = false>(
+export const uploadKnowledgeDocument = <ThrowOnError extends boolean = true>(
 	options: Options<UploadKnowledgeDocumentData, ThrowOnError>,
 ): RequestResult<UploadKnowledgeDocumentResponses, UploadKnowledgeDocumentErrors, ThrowOnError> =>
 	(options.client ?? client).post<UploadKnowledgeDocumentResponses, UploadKnowledgeDocumentErrors, ThrowOnError>({
@@ -8192,7 +8193,7 @@ export const uploadKnowledgeDocument = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const deleteKnowledgeDocument = <ThrowOnError extends boolean = false>(
+export const deleteKnowledgeDocument = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteKnowledgeDocumentData, ThrowOnError>,
 ): RequestResult<DeleteKnowledgeDocumentResponses, DeleteKnowledgeDocumentErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteKnowledgeDocumentResponses, DeleteKnowledgeDocumentErrors, ThrowOnError>({
@@ -8213,7 +8214,7 @@ export const deleteKnowledgeDocument = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getKnowledgeDocument = <ThrowOnError extends boolean = false>(
+export const getKnowledgeDocument = <ThrowOnError extends boolean = true>(
 	options: Options<GetKnowledgeDocumentData, ThrowOnError>,
 ): RequestResult<GetKnowledgeDocumentResponses, GetKnowledgeDocumentErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetKnowledgeDocumentResponses, GetKnowledgeDocumentErrors, ThrowOnError>({
@@ -8235,7 +8236,7 @@ export const getKnowledgeDocument = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const reindexKnowledgeDocument = <ThrowOnError extends boolean = false>(
+export const reindexKnowledgeDocument = <ThrowOnError extends boolean = true>(
 	options: Options<ReindexKnowledgeDocumentData, ThrowOnError>,
 ): RequestResult<ReindexKnowledgeDocumentResponses, ReindexKnowledgeDocumentErrors, ThrowOnError> =>
 	(options.client ?? client).post<ReindexKnowledgeDocumentResponses, ReindexKnowledgeDocumentErrors, ThrowOnError>({
@@ -8256,7 +8257,7 @@ export const reindexKnowledgeDocument = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const downloadRecommendedEmbedding = <ThrowOnError extends boolean = false>(
+export const downloadRecommendedEmbedding = <ThrowOnError extends boolean = true>(
 	options?: Options<DownloadRecommendedEmbeddingData, ThrowOnError>,
 ): RequestResult<DownloadRecommendedEmbeddingResponses, DownloadRecommendedEmbeddingErrors, ThrowOnError> =>
 	(options?.client ?? client).post<DownloadRecommendedEmbeddingResponses, DownloadRecommendedEmbeddingErrors, ThrowOnError>({
@@ -8278,7 +8279,7 @@ export const downloadRecommendedEmbedding = <ThrowOnError extends boolean = fals
 		...options,
 	});
 
-export const reindexCorpus = <ThrowOnError extends boolean = false>(
+export const reindexCorpus = <ThrowOnError extends boolean = true>(
 	options?: Options<ReindexCorpusData, ThrowOnError>,
 ): RequestResult<ReindexCorpusResponses, ReindexCorpusErrors, ThrowOnError> =>
 	(options?.client ?? client).post<ReindexCorpusResponses, ReindexCorpusErrors, ThrowOnError>({
@@ -8300,7 +8301,7 @@ export const reindexCorpus = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const importKnowledgeRepository = <ThrowOnError extends boolean = false>(
+export const importKnowledgeRepository = <ThrowOnError extends boolean = true>(
 	options: Options<ImportKnowledgeRepositoryData, ThrowOnError>,
 ): RequestResult<ImportKnowledgeRepositoryResponses, ImportKnowledgeRepositoryErrors, ThrowOnError> =>
 	(options.client ?? client).post<ImportKnowledgeRepositoryResponses, ImportKnowledgeRepositoryErrors, ThrowOnError>({
@@ -8326,7 +8327,7 @@ export const importKnowledgeRepository = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const downloadRecommendedReranker = <ThrowOnError extends boolean = false>(
+export const downloadRecommendedReranker = <ThrowOnError extends boolean = true>(
 	options?: Options<DownloadRecommendedRerankerData, ThrowOnError>,
 ): RequestResult<DownloadRecommendedRerankerResponses, DownloadRecommendedRerankerErrors, ThrowOnError> =>
 	(options?.client ?? client).post<DownloadRecommendedRerankerResponses, DownloadRecommendedRerankerErrors, ThrowOnError>({
@@ -8348,7 +8349,7 @@ export const downloadRecommendedReranker = <ThrowOnError extends boolean = false
 		...options,
 	});
 
-export const searchKnowledge = <ThrowOnError extends boolean = false>(
+export const searchKnowledge = <ThrowOnError extends boolean = true>(
 	options: Options<SearchKnowledgeData, ThrowOnError>,
 ): RequestResult<SearchKnowledgeResponses, SearchKnowledgeErrors, ThrowOnError> =>
 	(options.client ?? client).post<SearchKnowledgeResponses, SearchKnowledgeErrors, ThrowOnError>({
@@ -8374,7 +8375,7 @@ export const searchKnowledge = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const revokeMcpServerApiKey = <ThrowOnError extends boolean = false>(
+export const revokeMcpServerApiKey = <ThrowOnError extends boolean = true>(
 	options?: Options<RevokeMcpServerApiKeyData, ThrowOnError>,
 ): RequestResult<RevokeMcpServerApiKeyResponses, RevokeMcpServerApiKeyErrors, ThrowOnError> =>
 	(options?.client ?? client).delete<RevokeMcpServerApiKeyResponses, RevokeMcpServerApiKeyErrors, ThrowOnError>({
@@ -8395,7 +8396,7 @@ export const revokeMcpServerApiKey = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getMcpServerApiKey = <ThrowOnError extends boolean = false>(
+export const getMcpServerApiKey = <ThrowOnError extends boolean = true>(
 	options?: Options<GetMcpServerApiKeyData, ThrowOnError>,
 ): RequestResult<GetMcpServerApiKeyResponses, GetMcpServerApiKeyErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetMcpServerApiKeyResponses, GetMcpServerApiKeyErrors, ThrowOnError>({
@@ -8417,7 +8418,7 @@ export const getMcpServerApiKey = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const generateMcpServerApiKey = <ThrowOnError extends boolean = false>(
+export const generateMcpServerApiKey = <ThrowOnError extends boolean = true>(
 	options?: Options<GenerateMcpServerApiKeyData, ThrowOnError>,
 ): RequestResult<GenerateMcpServerApiKeyResponses, GenerateMcpServerApiKeyErrors, ThrowOnError> =>
 	(options?.client ?? client).post<GenerateMcpServerApiKeyResponses, GenerateMcpServerApiKeyErrors, ThrowOnError>({
@@ -8443,7 +8444,7 @@ export const generateMcpServerApiKey = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listMcpServers = <ThrowOnError extends boolean = false>(
+export const listMcpServers = <ThrowOnError extends boolean = true>(
 	options?: Options<ListMcpServersData, ThrowOnError>,
 ): RequestResult<ListMcpServersResponses, ListMcpServersErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListMcpServersResponses, ListMcpServersErrors, ThrowOnError>({
@@ -8465,7 +8466,7 @@ export const listMcpServers = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createMcpServer = <ThrowOnError extends boolean = false>(
+export const createMcpServer = <ThrowOnError extends boolean = true>(
 	options: Options<CreateMcpServerData, ThrowOnError>,
 ): RequestResult<CreateMcpServerResponses, CreateMcpServerErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateMcpServerResponses, CreateMcpServerErrors, ThrowOnError>({
@@ -8491,7 +8492,7 @@ export const createMcpServer = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const deleteMcpServer = <ThrowOnError extends boolean = false>(
+export const deleteMcpServer = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteMcpServerData, ThrowOnError>,
 ): RequestResult<DeleteMcpServerResponses, DeleteMcpServerErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteMcpServerResponses, DeleteMcpServerErrors, ThrowOnError>({
@@ -8512,7 +8513,7 @@ export const deleteMcpServer = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getMcpServer = <ThrowOnError extends boolean = false>(
+export const getMcpServer = <ThrowOnError extends boolean = true>(
 	options: Options<GetMcpServerData, ThrowOnError>,
 ): RequestResult<GetMcpServerResponses, GetMcpServerErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetMcpServerResponses, GetMcpServerErrors, ThrowOnError>({
@@ -8534,7 +8535,7 @@ export const getMcpServer = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const updateMcpServer = <ThrowOnError extends boolean = false>(
+export const updateMcpServer = <ThrowOnError extends boolean = true>(
 	options: Options<UpdateMcpServerData, ThrowOnError>,
 ): RequestResult<UpdateMcpServerResponses, UpdateMcpServerErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateMcpServerResponses, UpdateMcpServerErrors, ThrowOnError>({
@@ -8560,7 +8561,7 @@ export const updateMcpServer = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const setMcpServerEnabled = <ThrowOnError extends boolean = false>(
+export const setMcpServerEnabled = <ThrowOnError extends boolean = true>(
 	options: Options<SetMcpServerEnabledData, ThrowOnError>,
 ): RequestResult<SetMcpServerEnabledResponses, SetMcpServerEnabledErrors, ThrowOnError> =>
 	(options.client ?? client).patch<SetMcpServerEnabledResponses, SetMcpServerEnabledErrors, ThrowOnError>({
@@ -8586,7 +8587,7 @@ export const setMcpServerEnabled = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getMcpServerTools = <ThrowOnError extends boolean = false>(
+export const getMcpServerTools = <ThrowOnError extends boolean = true>(
 	options: Options<GetMcpServerToolsData, ThrowOnError>,
 ): RequestResult<GetMcpServerToolsResponses, GetMcpServerToolsErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetMcpServerToolsResponses, GetMcpServerToolsErrors, ThrowOnError>({
@@ -8608,7 +8609,7 @@ export const getMcpServerTools = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getModelCatalogInfo = <ThrowOnError extends boolean = false>(
+export const getModelCatalogInfo = <ThrowOnError extends boolean = true>(
 	options?: Options<GetModelCatalogInfoData, ThrowOnError>,
 ): RequestResult<GetModelCatalogInfoResponses, GetModelCatalogInfoErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetModelCatalogInfoResponses, GetModelCatalogInfoErrors, ThrowOnError>({
@@ -8630,7 +8631,7 @@ export const getModelCatalogInfo = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const refreshModelCatalog = <ThrowOnError extends boolean = false>(
+export const refreshModelCatalog = <ThrowOnError extends boolean = true>(
 	options?: Options<RefreshModelCatalogData, ThrowOnError>,
 ): RequestResult<RefreshModelCatalogResponses, RefreshModelCatalogErrors, ThrowOnError> =>
 	(options?.client ?? client).post<RefreshModelCatalogResponses, RefreshModelCatalogErrors, ThrowOnError>({
@@ -8652,7 +8653,7 @@ export const refreshModelCatalog = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const startGgufDownload = <ThrowOnError extends boolean = false>(
+export const startGgufDownload = <ThrowOnError extends boolean = true>(
 	options: Options<StartGgufDownloadData, ThrowOnError>,
 ): RequestResult<StartGgufDownloadResponses, StartGgufDownloadErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartGgufDownloadResponses, StartGgufDownloadErrors, ThrowOnError>({
@@ -8678,7 +8679,7 @@ export const startGgufDownload = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const cancelGgufDownload = <ThrowOnError extends boolean = false>(
+export const cancelGgufDownload = <ThrowOnError extends boolean = true>(
 	options: Options<CancelGgufDownloadData, ThrowOnError>,
 ): RequestResult<CancelGgufDownloadResponses, CancelGgufDownloadErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelGgufDownloadResponses, CancelGgufDownloadErrors, ThrowOnError>({
@@ -8704,7 +8705,7 @@ export const cancelGgufDownload = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const browseGgufRepositories = <ThrowOnError extends boolean = false>(
+export const browseGgufRepositories = <ThrowOnError extends boolean = true>(
 	options?: Options<BrowseGgufRepositoriesData, ThrowOnError>,
 ): RequestResult<BrowseGgufRepositoriesResponses, BrowseGgufRepositoriesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<BrowseGgufRepositoriesResponses, BrowseGgufRepositoriesErrors, ThrowOnError>({
@@ -8726,7 +8727,7 @@ export const browseGgufRepositories = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getGgufDownloads = <ThrowOnError extends boolean = false>(
+export const getGgufDownloads = <ThrowOnError extends boolean = true>(
 	options?: Options<GetGgufDownloadsData, ThrowOnError>,
 ): RequestResult<GetGgufDownloadsResponses, GetGgufDownloadsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetGgufDownloadsResponses, GetGgufDownloadsErrors, ThrowOnError>({
@@ -8748,7 +8749,7 @@ export const getGgufDownloads = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getGgufDownloadOperationStatus = <ThrowOnError extends boolean = false>(
+export const getGgufDownloadOperationStatus = <ThrowOnError extends boolean = true>(
 	options: Options<GetGgufDownloadOperationStatusData, ThrowOnError>,
 ): RequestResult<GetGgufDownloadOperationStatusResponses, GetGgufDownloadOperationStatusErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetGgufDownloadOperationStatusResponses, GetGgufDownloadOperationStatusErrors, ThrowOnError>({
@@ -8770,7 +8771,7 @@ export const getGgufDownloadOperationStatus = <ThrowOnError extends boolean = fa
 		...options,
 	});
 
-export const getGgufDownloadStatus = <ThrowOnError extends boolean = false>(
+export const getGgufDownloadStatus = <ThrowOnError extends boolean = true>(
 	options: Options<GetGgufDownloadStatusData, ThrowOnError>,
 ): RequestResult<GetGgufDownloadStatusResponses, GetGgufDownloadStatusErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetGgufDownloadStatusResponses, GetGgufDownloadStatusErrors, ThrowOnError>({
@@ -8792,7 +8793,7 @@ export const getGgufDownloadStatus = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const startGgufImport = <ThrowOnError extends boolean = false>(
+export const startGgufImport = <ThrowOnError extends boolean = true>(
 	options: Options<StartGgufImportData, ThrowOnError>,
 ): RequestResult<StartGgufImportResponses, StartGgufImportErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartGgufImportResponses, StartGgufImportErrors, ThrowOnError>({
@@ -8818,7 +8819,7 @@ export const startGgufImport = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getGgufImportCapability = <ThrowOnError extends boolean = false>(
+export const getGgufImportCapability = <ThrowOnError extends boolean = true>(
 	options?: Options<GetGgufImportCapabilityData, ThrowOnError>,
 ): RequestResult<GetGgufImportCapabilityResponses, GetGgufImportCapabilityErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetGgufImportCapabilityResponses, GetGgufImportCapabilityErrors, ThrowOnError>({
@@ -8840,7 +8841,7 @@ export const getGgufImportCapability = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const previewGgufImport = <ThrowOnError extends boolean = false>(
+export const previewGgufImport = <ThrowOnError extends boolean = true>(
 	options: Options<PreviewGgufImportData, ThrowOnError>,
 ): RequestResult<PreviewGgufImportResponses, PreviewGgufImportErrors, ThrowOnError> =>
 	(options.client ?? client).post<PreviewGgufImportResponses, PreviewGgufImportErrors, ThrowOnError>({
@@ -8866,7 +8867,7 @@ export const previewGgufImport = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getGgufImports = <ThrowOnError extends boolean = false>(
+export const getGgufImports = <ThrowOnError extends boolean = true>(
 	options?: Options<GetGgufImportsData, ThrowOnError>,
 ): RequestResult<GetGgufImportsResponses, GetGgufImportsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetGgufImportsResponses, GetGgufImportsErrors, ThrowOnError>({
@@ -8888,7 +8889,7 @@ export const getGgufImports = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getGgufImportStatus = <ThrowOnError extends boolean = false>(
+export const getGgufImportStatus = <ThrowOnError extends boolean = true>(
 	options: Options<GetGgufImportStatusData, ThrowOnError>,
 ): RequestResult<GetGgufImportStatusResponses, GetGgufImportStatusErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetGgufImportStatusResponses, GetGgufImportStatusErrors, ThrowOnError>({
@@ -8910,7 +8911,7 @@ export const getGgufImportStatus = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const cancelGgufImport = <ThrowOnError extends boolean = false>(
+export const cancelGgufImport = <ThrowOnError extends boolean = true>(
 	options: Options<CancelGgufImportData, ThrowOnError>,
 ): RequestResult<CancelGgufImportResponses, CancelGgufImportErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelGgufImportResponses, CancelGgufImportErrors, ThrowOnError>({
@@ -8932,7 +8933,7 @@ export const cancelGgufImport = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const inspectGgufRepository = <ThrowOnError extends boolean = false>(
+export const inspectGgufRepository = <ThrowOnError extends boolean = true>(
 	options?: Options<InspectGgufRepositoryData, ThrowOnError>,
 ): RequestResult<InspectGgufRepositoryResponses, InspectGgufRepositoryErrors, ThrowOnError> =>
 	(options?.client ?? client).get<InspectGgufRepositoryResponses, InspectGgufRepositoryErrors, ThrowOnError>({
@@ -8954,7 +8955,7 @@ export const inspectGgufRepository = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getHardwareProfile = <ThrowOnError extends boolean = false>(
+export const getHardwareProfile = <ThrowOnError extends boolean = true>(
 	options: Options<GetHardwareProfileData, ThrowOnError>,
 ): RequestResult<GetHardwareProfileResponses, GetHardwareProfileErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetHardwareProfileResponses, GetHardwareProfileErrors, ThrowOnError>({
@@ -8976,7 +8977,7 @@ export const getHardwareProfile = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getHfTokenStatus = <ThrowOnError extends boolean = false>(
+export const getHfTokenStatus = <ThrowOnError extends boolean = true>(
 	options?: Options<GetHfTokenStatusData, ThrowOnError>,
 ): RequestResult<GetHfTokenStatusResponses, GetHfTokenStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetHfTokenStatusResponses, GetHfTokenStatusErrors, ThrowOnError>({
@@ -8998,7 +8999,7 @@ export const getHfTokenStatus = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const setHfToken = <ThrowOnError extends boolean = false>(
+export const setHfToken = <ThrowOnError extends boolean = true>(
 	options: Options<SetHfTokenData, ThrowOnError>,
 ): RequestResult<SetHfTokenResponses, SetHfTokenErrors, ThrowOnError> =>
 	(options.client ?? client).post<SetHfTokenResponses, SetHfTokenErrors, ThrowOnError>({
@@ -9024,7 +9025,7 @@ export const setHfToken = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getRuntimeAcquisitionStatus = <ThrowOnError extends boolean = false>(
+export const getRuntimeAcquisitionStatus = <ThrowOnError extends boolean = true>(
 	options?: Options<GetRuntimeAcquisitionStatusData, ThrowOnError>,
 ): RequestResult<GetRuntimeAcquisitionStatusResponses, GetRuntimeAcquisitionStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetRuntimeAcquisitionStatusResponses, GetRuntimeAcquisitionStatusErrors, ThrowOnError>({
@@ -9046,7 +9047,7 @@ export const getRuntimeAcquisitionStatus = <ThrowOnError extends boolean = false
 		...options,
 	});
 
-export const getLlamaCppRuntime = <ThrowOnError extends boolean = false>(
+export const getLlamaCppRuntime = <ThrowOnError extends boolean = true>(
 	options?: Options<GetLlamaCppRuntimeData, ThrowOnError>,
 ): RequestResult<GetLlamaCppRuntimeResponses, GetLlamaCppRuntimeErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetLlamaCppRuntimeResponses, GetLlamaCppRuntimeErrors, ThrowOnError>({
@@ -9068,7 +9069,7 @@ export const getLlamaCppRuntime = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const startLlamaCppSourceBuild = <ThrowOnError extends boolean = false>(
+export const startLlamaCppSourceBuild = <ThrowOnError extends boolean = true>(
 	options: Options<StartLlamaCppSourceBuildData, ThrowOnError>,
 ): RequestResult<StartLlamaCppSourceBuildResponses, StartLlamaCppSourceBuildErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartLlamaCppSourceBuildResponses, StartLlamaCppSourceBuildErrors, ThrowOnError>({
@@ -9094,7 +9095,7 @@ export const startLlamaCppSourceBuild = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const cancelLlamaCppSourceBuild = <ThrowOnError extends boolean = false>(
+export const cancelLlamaCppSourceBuild = <ThrowOnError extends boolean = true>(
 	options?: Options<CancelLlamaCppSourceBuildData, ThrowOnError>,
 ): RequestResult<CancelLlamaCppSourceBuildResponses, CancelLlamaCppSourceBuildErrors, ThrowOnError> =>
 	(options?.client ?? client).post<CancelLlamaCppSourceBuildResponses, CancelLlamaCppSourceBuildErrors, ThrowOnError>({
@@ -9116,7 +9117,7 @@ export const cancelLlamaCppSourceBuild = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getLlamaCppSourceBuildPrerequisites = <ThrowOnError extends boolean = false>(
+export const getLlamaCppSourceBuildPrerequisites = <ThrowOnError extends boolean = true>(
 	options: Options<GetLlamaCppSourceBuildPrerequisitesData, ThrowOnError>,
 ): RequestResult<GetLlamaCppSourceBuildPrerequisitesResponses, GetLlamaCppSourceBuildPrerequisitesErrors, ThrowOnError> =>
 	(options.client ?? client).get<
@@ -9142,7 +9143,7 @@ export const getLlamaCppSourceBuildPrerequisites = <ThrowOnError extends boolean
 		...options,
 	});
 
-export const removeLlamaCppSourceBuild = <ThrowOnError extends boolean = false>(
+export const removeLlamaCppSourceBuild = <ThrowOnError extends boolean = true>(
 	options?: Options<RemoveLlamaCppSourceBuildData, ThrowOnError>,
 ): RequestResult<RemoveLlamaCppSourceBuildResponses, RemoveLlamaCppSourceBuildErrors, ThrowOnError> =>
 	(options?.client ?? client).post<RemoveLlamaCppSourceBuildResponses, RemoveLlamaCppSourceBuildErrors, ThrowOnError>({
@@ -9164,7 +9165,7 @@ export const removeLlamaCppSourceBuild = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getLlamaCppSourceBuildStatus = <ThrowOnError extends boolean = false>(
+export const getLlamaCppSourceBuildStatus = <ThrowOnError extends boolean = true>(
 	options?: Options<GetLlamaCppSourceBuildStatusData, ThrowOnError>,
 ): RequestResult<GetLlamaCppSourceBuildStatusResponses, GetLlamaCppSourceBuildStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetLlamaCppSourceBuildStatusResponses, GetLlamaCppSourceBuildStatusErrors, ThrowOnError>({
@@ -9186,7 +9187,7 @@ export const getLlamaCppSourceBuildStatus = <ThrowOnError extends boolean = fals
 		...options,
 	});
 
-export const updateLlamaCppRuntime = <ThrowOnError extends boolean = false>(
+export const updateLlamaCppRuntime = <ThrowOnError extends boolean = true>(
 	options: Options<UpdateLlamaCppRuntimeData, ThrowOnError>,
 ): RequestResult<UpdateLlamaCppRuntimeResponses, UpdateLlamaCppRuntimeErrors, ThrowOnError> =>
 	(options.client ?? client).post<UpdateLlamaCppRuntimeResponses, UpdateLlamaCppRuntimeErrors, ThrowOnError>({
@@ -9212,7 +9213,7 @@ export const updateLlamaCppRuntime = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const ensureLlamaCppBinary = <ThrowOnError extends boolean = false>(
+export const ensureLlamaCppBinary = <ThrowOnError extends boolean = true>(
 	options: Options<EnsureLlamaCppBinaryData, ThrowOnError>,
 ): RequestResult<EnsureLlamaCppBinaryResponses, EnsureLlamaCppBinaryErrors, ThrowOnError> =>
 	(options.client ?? client).post<EnsureLlamaCppBinaryResponses, EnsureLlamaCppBinaryErrors, ThrowOnError>({
@@ -9238,7 +9239,7 @@ export const ensureLlamaCppBinary = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listInferenceProfiles = <ThrowOnError extends boolean = false>(
+export const listInferenceProfiles = <ThrowOnError extends boolean = true>(
 	options?: Options<ListInferenceProfilesData, ThrowOnError>,
 ): RequestResult<ListInferenceProfilesResponses, ListInferenceProfilesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListInferenceProfilesResponses, ListInferenceProfilesErrors, ThrowOnError>({
@@ -9260,7 +9261,7 @@ export const listInferenceProfiles = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const benchmarkInferenceProfile = <ThrowOnError extends boolean = false>(
+export const benchmarkInferenceProfile = <ThrowOnError extends boolean = true>(
 	options: Options<BenchmarkInferenceProfileData, ThrowOnError>,
 ): RequestResult<BenchmarkInferenceProfileResponses, BenchmarkInferenceProfileErrors, ThrowOnError> =>
 	(options.client ?? client).post<BenchmarkInferenceProfileResponses, BenchmarkInferenceProfileErrors, ThrowOnError>({
@@ -9286,7 +9287,7 @@ export const benchmarkInferenceProfile = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const exploreInferenceProfile = <ThrowOnError extends boolean = false>(
+export const exploreInferenceProfile = <ThrowOnError extends boolean = true>(
 	options: Options<ExploreInferenceProfileData, ThrowOnError>,
 ): RequestResult<ExploreInferenceProfileResponses, ExploreInferenceProfileErrors, ThrowOnError> =>
 	(options.client ?? client).post<ExploreInferenceProfileResponses, ExploreInferenceProfileErrors, ThrowOnError>({
@@ -9312,7 +9313,7 @@ export const exploreInferenceProfile = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const freezeInferenceProfile = <ThrowOnError extends boolean = false>(
+export const freezeInferenceProfile = <ThrowOnError extends boolean = true>(
 	options: Options<FreezeInferenceProfileData, ThrowOnError>,
 ): RequestResult<FreezeInferenceProfileResponses, FreezeInferenceProfileErrors, ThrowOnError> =>
 	(options.client ?? client).post<FreezeInferenceProfileResponses, FreezeInferenceProfileErrors, ThrowOnError>({
@@ -9338,7 +9339,7 @@ export const freezeInferenceProfile = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const invalidateInferenceProfile = <ThrowOnError extends boolean = false>(
+export const invalidateInferenceProfile = <ThrowOnError extends boolean = true>(
 	options: Options<InvalidateInferenceProfileData, ThrowOnError>,
 ): RequestResult<InvalidateInferenceProfileResponses, InvalidateInferenceProfileErrors, ThrowOnError> =>
 	(options.client ?? client).post<InvalidateInferenceProfileResponses, InvalidateInferenceProfileErrors, ThrowOnError>({
@@ -9364,7 +9365,7 @@ export const invalidateInferenceProfile = <ThrowOnError extends boolean = false>
 		},
 	});
 
-export const getLatestRecommendations = <ThrowOnError extends boolean = false>(
+export const getLatestRecommendations = <ThrowOnError extends boolean = true>(
 	options?: Options<GetLatestRecommendationsData, ThrowOnError>,
 ): RequestResult<GetLatestRecommendationsResponses, GetLatestRecommendationsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetLatestRecommendationsResponses, GetLatestRecommendationsErrors, ThrowOnError>({
@@ -9386,7 +9387,7 @@ export const getLatestRecommendations = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const refreshRecommendations = <ThrowOnError extends boolean = false>(
+export const refreshRecommendations = <ThrowOnError extends boolean = true>(
 	options: Options<RefreshRecommendationsData, ThrowOnError>,
 ): RequestResult<RefreshRecommendationsResponses, RefreshRecommendationsErrors, ThrowOnError> =>
 	(options.client ?? client).post<RefreshRecommendationsResponses, RefreshRecommendationsErrors, ThrowOnError>({
@@ -9412,7 +9413,7 @@ export const refreshRecommendations = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getRuntimeResources = <ThrowOnError extends boolean = false>(
+export const getRuntimeResources = <ThrowOnError extends boolean = true>(
 	options?: Options<GetRuntimeResourcesData, ThrowOnError>,
 ): RequestResult<GetRuntimeResourcesResponses, GetRuntimeResourcesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetRuntimeResourcesResponses, GetRuntimeResourcesErrors, ThrowOnError>({
@@ -9434,7 +9435,7 @@ export const getRuntimeResources = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listRunningModels = <ThrowOnError extends boolean = false>(
+export const listRunningModels = <ThrowOnError extends boolean = true>(
 	options?: Options<ListRunningModelsData, ThrowOnError>,
 ): RequestResult<ListRunningModelsResponses, ListRunningModelsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListRunningModelsResponses, ListRunningModelsErrors, ThrowOnError>({
@@ -9456,7 +9457,7 @@ export const listRunningModels = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const ejectRunningModel = <ThrowOnError extends boolean = false>(
+export const ejectRunningModel = <ThrowOnError extends boolean = true>(
 	options: Options<EjectRunningModelData, ThrowOnError>,
 ): RequestResult<EjectRunningModelResponses, EjectRunningModelErrors, ThrowOnError> =>
 	(options.client ?? client).post<EjectRunningModelResponses, EjectRunningModelErrors, ThrowOnError>({
@@ -9482,7 +9483,7 @@ export const ejectRunningModel = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getRuntimeResidents = <ThrowOnError extends boolean = false>(
+export const getRuntimeResidents = <ThrowOnError extends boolean = true>(
 	options?: Options<GetRuntimeResidentsData, ThrowOnError>,
 ): RequestResult<GetRuntimeResidentsResponses, GetRuntimeResidentsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetRuntimeResidentsResponses, GetRuntimeResidentsErrors, ThrowOnError>({
@@ -9504,7 +9505,7 @@ export const getRuntimeResidents = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listLocalModels = <ThrowOnError extends boolean = false>(
+export const listLocalModels = <ThrowOnError extends boolean = true>(
 	options?: Options<ListLocalModelsData, ThrowOnError>,
 ): RequestResult<ListLocalModelsResponses, ListLocalModelsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListLocalModelsResponses, ListLocalModelsErrors, ThrowOnError>({
@@ -9526,7 +9527,7 @@ export const listLocalModels = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getRunningLocalModels = <ThrowOnError extends boolean = false>(
+export const getRunningLocalModels = <ThrowOnError extends boolean = true>(
 	options?: Options<GetRunningLocalModelsData, ThrowOnError>,
 ): RequestResult<GetRunningLocalModelsResponses, GetRunningLocalModelsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetRunningLocalModelsResponses, GetRunningLocalModelsErrors, ThrowOnError>({
@@ -9548,7 +9549,7 @@ export const getRunningLocalModels = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const selectLocalModel = <ThrowOnError extends boolean = false>(
+export const selectLocalModel = <ThrowOnError extends boolean = true>(
 	options: Options<SelectLocalModelData, ThrowOnError>,
 ): RequestResult<SelectLocalModelResponses, SelectLocalModelErrors, ThrowOnError> =>
 	(options.client ?? client).post<SelectLocalModelResponses, SelectLocalModelErrors, ThrowOnError>({
@@ -9574,7 +9575,7 @@ export const selectLocalModel = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const deleteLocalModel = <ThrowOnError extends boolean = false>(
+export const deleteLocalModel = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteLocalModelData, ThrowOnError>,
 ): RequestResult<DeleteLocalModelResponses, DeleteLocalModelErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteLocalModelResponses, DeleteLocalModelErrors, ThrowOnError>({
@@ -9596,7 +9597,7 @@ export const deleteLocalModel = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getLocalModelDetails = <ThrowOnError extends boolean = false>(
+export const getLocalModelDetails = <ThrowOnError extends boolean = true>(
 	options: Options<GetLocalModelDetailsData, ThrowOnError>,
 ): RequestResult<GetLocalModelDetailsResponses, GetLocalModelDetailsErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetLocalModelDetailsResponses, GetLocalModelDetailsErrors, ThrowOnError>({
@@ -9618,7 +9619,7 @@ export const getLocalModelDetails = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const deleteModelKind = <ThrowOnError extends boolean = false>(
+export const deleteModelKind = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteModelKindData, ThrowOnError>,
 ): RequestResult<DeleteModelKindResponses, DeleteModelKindErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteModelKindResponses, DeleteModelKindErrors, ThrowOnError>({
@@ -9640,7 +9641,7 @@ export const deleteModelKind = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const putModelKind = <ThrowOnError extends boolean = false>(
+export const putModelKind = <ThrowOnError extends boolean = true>(
 	options: Options<PutModelKindData, ThrowOnError>,
 ): RequestResult<PutModelKindResponses, PutModelKindErrors, ThrowOnError> =>
 	(options.client ?? client).put<PutModelKindResponses, PutModelKindErrors, ThrowOnError>({
@@ -9666,7 +9667,7 @@ export const putModelKind = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const deleteModelLaunchArguments = <ThrowOnError extends boolean = false>(
+export const deleteModelLaunchArguments = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteModelLaunchArgumentsData, ThrowOnError>,
 ): RequestResult<DeleteModelLaunchArgumentsResponses, DeleteModelLaunchArgumentsErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteModelLaunchArgumentsResponses, DeleteModelLaunchArgumentsErrors, ThrowOnError>({
@@ -9688,7 +9689,7 @@ export const deleteModelLaunchArguments = <ThrowOnError extends boolean = false>
 		...options,
 	});
 
-export const getModelLaunchArguments = <ThrowOnError extends boolean = false>(
+export const getModelLaunchArguments = <ThrowOnError extends boolean = true>(
 	options: Options<GetModelLaunchArgumentsData, ThrowOnError>,
 ): RequestResult<GetModelLaunchArgumentsResponses, GetModelLaunchArgumentsErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetModelLaunchArgumentsResponses, GetModelLaunchArgumentsErrors, ThrowOnError>({
@@ -9710,7 +9711,7 @@ export const getModelLaunchArguments = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const putModelLaunchArguments = <ThrowOnError extends boolean = false>(
+export const putModelLaunchArguments = <ThrowOnError extends boolean = true>(
 	options: Options<PutModelLaunchArgumentsData, ThrowOnError>,
 ): RequestResult<PutModelLaunchArgumentsResponses, PutModelLaunchArgumentsErrors, ThrowOnError> =>
 	(options.client ?? client).put<PutModelLaunchArgumentsResponses, PutModelLaunchArgumentsErrors, ThrowOnError>({
@@ -9736,7 +9737,7 @@ export const putModelLaunchArguments = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const unloadLocalModel = <ThrowOnError extends boolean = false>(
+export const unloadLocalModel = <ThrowOnError extends boolean = true>(
 	options: Options<UnloadLocalModelData, ThrowOnError>,
 ): RequestResult<UnloadLocalModelResponses, UnloadLocalModelErrors, ThrowOnError> =>
 	(options.client ?? client).post<UnloadLocalModelResponses, UnloadLocalModelErrors, ThrowOnError>({
@@ -9758,7 +9759,7 @@ export const unloadLocalModel = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getNodeSettings = <ThrowOnError extends boolean = false>(
+export const getNodeSettings = <ThrowOnError extends boolean = true>(
 	options?: Options<GetNodeSettingsData, ThrowOnError>,
 ): RequestResult<GetNodeSettingsResponses, GetNodeSettingsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetNodeSettingsResponses, GetNodeSettingsErrors, ThrowOnError>({
@@ -9780,7 +9781,7 @@ export const getNodeSettings = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const saveNodeSettings = <ThrowOnError extends boolean = false>(
+export const saveNodeSettings = <ThrowOnError extends boolean = true>(
 	options: Options<SaveNodeSettingsData, ThrowOnError>,
 ): RequestResult<SaveNodeSettingsResponses, SaveNodeSettingsErrors, ThrowOnError> =>
 	(options.client ?? client).put<SaveNodeSettingsResponses, SaveNodeSettingsErrors, ThrowOnError>({
@@ -9806,7 +9807,7 @@ export const saveNodeSettings = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listNodeBackups = <ThrowOnError extends boolean = false>(
+export const listNodeBackups = <ThrowOnError extends boolean = true>(
 	options?: Options<ListNodeBackupsData, ThrowOnError>,
 ): RequestResult<ListNodeBackupsResponses, ListNodeBackupsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListNodeBackupsResponses, ListNodeBackupsErrors, ThrowOnError>({
@@ -9828,7 +9829,7 @@ export const listNodeBackups = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createNodeBackup = <ThrowOnError extends boolean = false>(
+export const createNodeBackup = <ThrowOnError extends boolean = true>(
 	options?: Options<CreateNodeBackupData, ThrowOnError>,
 ): RequestResult<CreateNodeBackupResponses, CreateNodeBackupErrors, ThrowOnError> =>
 	(options?.client ?? client).post<CreateNodeBackupResponses, CreateNodeBackupErrors, ThrowOnError>({
@@ -9850,7 +9851,7 @@ export const createNodeBackup = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const restoreNodeBackup = <ThrowOnError extends boolean = false>(
+export const restoreNodeBackup = <ThrowOnError extends boolean = true>(
 	options: Options<RestoreNodeBackupData, ThrowOnError>,
 ): RequestResult<RestoreNodeBackupResponses, RestoreNodeBackupErrors, ThrowOnError> =>
 	(options.client ?? client).post<RestoreNodeBackupResponses, RestoreNodeBackupErrors, ThrowOnError>({
@@ -9872,7 +9873,7 @@ export const restoreNodeBackup = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const revokeLocalModelProxyApiKey = <ThrowOnError extends boolean = false>(
+export const revokeLocalModelProxyApiKey = <ThrowOnError extends boolean = true>(
 	options?: Options<RevokeLocalModelProxyApiKeyData, ThrowOnError>,
 ): RequestResult<RevokeLocalModelProxyApiKeyResponses, RevokeLocalModelProxyApiKeyErrors, ThrowOnError> =>
 	(options?.client ?? client).delete<RevokeLocalModelProxyApiKeyResponses, RevokeLocalModelProxyApiKeyErrors, ThrowOnError>({
@@ -9893,7 +9894,7 @@ export const revokeLocalModelProxyApiKey = <ThrowOnError extends boolean = false
 		...options,
 	});
 
-export const getLocalModelProxyApiKey = <ThrowOnError extends boolean = false>(
+export const getLocalModelProxyApiKey = <ThrowOnError extends boolean = true>(
 	options?: Options<GetLocalModelProxyApiKeyData, ThrowOnError>,
 ): RequestResult<GetLocalModelProxyApiKeyResponses, GetLocalModelProxyApiKeyErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetLocalModelProxyApiKeyResponses, GetLocalModelProxyApiKeyErrors, ThrowOnError>({
@@ -9915,7 +9916,7 @@ export const getLocalModelProxyApiKey = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const generateLocalModelProxyApiKey = <ThrowOnError extends boolean = false>(
+export const generateLocalModelProxyApiKey = <ThrowOnError extends boolean = true>(
 	options?: Options<GenerateLocalModelProxyApiKeyData, ThrowOnError>,
 ): RequestResult<GenerateLocalModelProxyApiKeyResponses, GenerateLocalModelProxyApiKeyErrors, ThrowOnError> =>
 	(options?.client ?? client).post<GenerateLocalModelProxyApiKeyResponses, GenerateLocalModelProxyApiKeyErrors, ThrowOnError>({
@@ -9937,7 +9938,7 @@ export const generateLocalModelProxyApiKey = <ThrowOnError extends boolean = fal
 		...options,
 	});
 
-export const removeComputePythonEnvironment = <ThrowOnError extends boolean = false>(
+export const removeComputePythonEnvironment = <ThrowOnError extends boolean = true>(
 	options?: Options<RemoveComputePythonEnvironmentData, ThrowOnError>,
 ): RequestResult<RemoveComputePythonEnvironmentResponses, RemoveComputePythonEnvironmentErrors, ThrowOnError> =>
 	(options?.client ?? client).post<RemoveComputePythonEnvironmentResponses, RemoveComputePythonEnvironmentErrors, ThrowOnError>({
@@ -9959,7 +9960,7 @@ export const removeComputePythonEnvironment = <ThrowOnError extends boolean = fa
 		...options,
 	});
 
-export const repairComputePythonEnvironment = <ThrowOnError extends boolean = false>(
+export const repairComputePythonEnvironment = <ThrowOnError extends boolean = true>(
 	options?: Options<RepairComputePythonEnvironmentData, ThrowOnError>,
 ): RequestResult<RepairComputePythonEnvironmentResponses, RepairComputePythonEnvironmentErrors, ThrowOnError> =>
 	(options?.client ?? client).post<RepairComputePythonEnvironmentResponses, RepairComputePythonEnvironmentErrors, ThrowOnError>({
@@ -9981,7 +9982,7 @@ export const repairComputePythonEnvironment = <ThrowOnError extends boolean = fa
 		...options,
 	});
 
-export const getManagedPythonStatus = <ThrowOnError extends boolean = false>(
+export const getManagedPythonStatus = <ThrowOnError extends boolean = true>(
 	options?: Options<GetManagedPythonStatusData, ThrowOnError>,
 ): RequestResult<GetManagedPythonStatusResponses, GetManagedPythonStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetManagedPythonStatusResponses, GetManagedPythonStatusErrors, ThrowOnError>({
@@ -10003,7 +10004,7 @@ export const getManagedPythonStatus = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listScheduledJobs = <ThrowOnError extends boolean = false>(
+export const listScheduledJobs = <ThrowOnError extends boolean = true>(
 	options: Options<ListScheduledJobsData, ThrowOnError>,
 ): RequestResult<ListScheduledJobsResponses, ListScheduledJobsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListScheduledJobsResponses, ListScheduledJobsErrors, ThrowOnError>({
@@ -10025,7 +10026,7 @@ export const listScheduledJobs = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createScheduledJob = <ThrowOnError extends boolean = false>(
+export const createScheduledJob = <ThrowOnError extends boolean = true>(
 	options: Options<CreateScheduledJobData, ThrowOnError>,
 ): RequestResult<CreateScheduledJobResponses, CreateScheduledJobErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateScheduledJobResponses, CreateScheduledJobErrors, ThrowOnError>({
@@ -10051,7 +10052,7 @@ export const createScheduledJob = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const deleteScheduledJob = <ThrowOnError extends boolean = false>(
+export const deleteScheduledJob = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteScheduledJobData, ThrowOnError>,
 ): RequestResult<DeleteScheduledJobResponses, DeleteScheduledJobErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteScheduledJobResponses, DeleteScheduledJobErrors, ThrowOnError>({
@@ -10072,7 +10073,7 @@ export const deleteScheduledJob = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getScheduledJob = <ThrowOnError extends boolean = false>(
+export const getScheduledJob = <ThrowOnError extends boolean = true>(
 	options: Options<GetScheduledJobData, ThrowOnError>,
 ): RequestResult<GetScheduledJobResponses, GetScheduledJobErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetScheduledJobResponses, GetScheduledJobErrors, ThrowOnError>({
@@ -10094,7 +10095,7 @@ export const getScheduledJob = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const updateScheduledJob = <ThrowOnError extends boolean = false>(
+export const updateScheduledJob = <ThrowOnError extends boolean = true>(
 	options: Options<UpdateScheduledJobData, ThrowOnError>,
 ): RequestResult<UpdateScheduledJobResponses, UpdateScheduledJobErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateScheduledJobResponses, UpdateScheduledJobErrors, ThrowOnError>({
@@ -10120,7 +10121,7 @@ export const updateScheduledJob = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const disableScheduledJob = <ThrowOnError extends boolean = false>(
+export const disableScheduledJob = <ThrowOnError extends boolean = true>(
 	options: Options<DisableScheduledJobData, ThrowOnError>,
 ): RequestResult<DisableScheduledJobResponses, DisableScheduledJobErrors, ThrowOnError> =>
 	(options.client ?? client).post<DisableScheduledJobResponses, DisableScheduledJobErrors, ThrowOnError>({
@@ -10142,7 +10143,7 @@ export const disableScheduledJob = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const enableScheduledJob = <ThrowOnError extends boolean = false>(
+export const enableScheduledJob = <ThrowOnError extends boolean = true>(
 	options: Options<EnableScheduledJobData, ThrowOnError>,
 ): RequestResult<EnableScheduledJobResponses, EnableScheduledJobErrors, ThrowOnError> =>
 	(options.client ?? client).post<EnableScheduledJobResponses, EnableScheduledJobErrors, ThrowOnError>({
@@ -10164,7 +10165,7 @@ export const enableScheduledJob = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const triggerScheduledJob = <ThrowOnError extends boolean = false>(
+export const triggerScheduledJob = <ThrowOnError extends boolean = true>(
 	options: Options<TriggerScheduledJobData, ThrowOnError>,
 ): RequestResult<TriggerScheduledJobResponses, TriggerScheduledJobErrors, ThrowOnError> =>
 	(options.client ?? client).post<TriggerScheduledJobResponses, TriggerScheduledJobErrors, ThrowOnError>({
@@ -10185,7 +10186,7 @@ export const triggerScheduledJob = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listScheduledJobRuns = <ThrowOnError extends boolean = false>(
+export const listScheduledJobRuns = <ThrowOnError extends boolean = true>(
 	options?: Options<ListScheduledJobRunsData, ThrowOnError>,
 ): RequestResult<ListScheduledJobRunsResponses, ListScheduledJobRunsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListScheduledJobRunsResponses, ListScheduledJobRunsErrors, ThrowOnError>({
@@ -10207,7 +10208,7 @@ export const listScheduledJobRuns = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getScheduledJobRun = <ThrowOnError extends boolean = false>(
+export const getScheduledJobRun = <ThrowOnError extends boolean = true>(
 	options: Options<GetScheduledJobRunData, ThrowOnError>,
 ): RequestResult<GetScheduledJobRunResponses, GetScheduledJobRunErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetScheduledJobRunResponses, GetScheduledJobRunErrors, ThrowOnError>({
@@ -10229,7 +10230,7 @@ export const getScheduledJobRun = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const cancelScheduledJobRun = <ThrowOnError extends boolean = false>(
+export const cancelScheduledJobRun = <ThrowOnError extends boolean = true>(
 	options: Options<CancelScheduledJobRunData, ThrowOnError>,
 ): RequestResult<CancelScheduledJobRunResponses, CancelScheduledJobRunErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelScheduledJobRunResponses, CancelScheduledJobRunErrors, ThrowOnError>({
@@ -10251,7 +10252,7 @@ export const cancelScheduledJobRun = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listScheduledJobTemplates = <ThrowOnError extends boolean = false>(
+export const listScheduledJobTemplates = <ThrowOnError extends boolean = true>(
 	options?: Options<ListScheduledJobTemplatesData, ThrowOnError>,
 ): RequestResult<ListScheduledJobTemplatesResponses, ListScheduledJobTemplatesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListScheduledJobTemplatesResponses, ListScheduledJobTemplatesErrors, ThrowOnError>({
@@ -10273,7 +10274,7 @@ export const listScheduledJobTemplates = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listSkills = <ThrowOnError extends boolean = false>(
+export const listSkills = <ThrowOnError extends boolean = true>(
 	options?: Options<ListSkillsData, ThrowOnError>,
 ): RequestResult<ListSkillsResponses, ListSkillsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListSkillsResponses, ListSkillsErrors, ThrowOnError>({
@@ -10295,7 +10296,7 @@ export const listSkills = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createSkill = <ThrowOnError extends boolean = false>(
+export const createSkill = <ThrowOnError extends boolean = true>(
 	options: Options<CreateSkillData, ThrowOnError>,
 ): RequestResult<CreateSkillResponses, CreateSkillErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateSkillResponses, CreateSkillErrors, ThrowOnError>({
@@ -10321,7 +10322,7 @@ export const createSkill = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const draftSkill = <ThrowOnError extends boolean = false>(
+export const draftSkill = <ThrowOnError extends boolean = true>(
 	options: Options<DraftSkillData, ThrowOnError>,
 ): RequestResult<DraftSkillResponses, DraftSkillErrors, ThrowOnError> =>
 	(options.client ?? client).post<DraftSkillResponses, DraftSkillErrors, ThrowOnError>({
@@ -10347,7 +10348,7 @@ export const draftSkill = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const commitSkillImport = <ThrowOnError extends boolean = false>(
+export const commitSkillImport = <ThrowOnError extends boolean = true>(
 	options: Options<CommitSkillImportData, ThrowOnError>,
 ): RequestResult<CommitSkillImportResponses, CommitSkillImportErrors, ThrowOnError> =>
 	(options.client ?? client).post<CommitSkillImportResponses, CommitSkillImportErrors, ThrowOnError>({
@@ -10373,7 +10374,7 @@ export const commitSkillImport = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const previewSkillImport = <ThrowOnError extends boolean = false>(
+export const previewSkillImport = <ThrowOnError extends boolean = true>(
 	options: Options<PreviewSkillImportData, ThrowOnError>,
 ): RequestResult<PreviewSkillImportResponses, PreviewSkillImportErrors, ThrowOnError> =>
 	(options.client ?? client).post<PreviewSkillImportResponses, PreviewSkillImportErrors, ThrowOnError>({
@@ -10400,7 +10401,7 @@ export const previewSkillImport = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getSkillImportPreviewResource = <ThrowOnError extends boolean = false>(
+export const getSkillImportPreviewResource = <ThrowOnError extends boolean = true>(
 	options: Options<GetSkillImportPreviewResourceData, ThrowOnError>,
 ): RequestResult<GetSkillImportPreviewResourceResponses, GetSkillImportPreviewResourceErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetSkillImportPreviewResourceResponses, GetSkillImportPreviewResourceErrors, ThrowOnError>({
@@ -10422,7 +10423,7 @@ export const getSkillImportPreviewResource = <ThrowOnError extends boolean = fal
 		...options,
 	});
 
-export const deleteSkill = <ThrowOnError extends boolean = false>(
+export const deleteSkill = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteSkillData, ThrowOnError>,
 ): RequestResult<DeleteSkillResponses, DeleteSkillErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteSkillResponses, DeleteSkillErrors, ThrowOnError>({
@@ -10443,7 +10444,7 @@ export const deleteSkill = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getSkill = <ThrowOnError extends boolean = false>(
+export const getSkill = <ThrowOnError extends boolean = true>(
 	options: Options<GetSkillData, ThrowOnError>,
 ): RequestResult<GetSkillResponses, GetSkillErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetSkillResponses, GetSkillErrors, ThrowOnError>({
@@ -10465,7 +10466,7 @@ export const getSkill = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const updateSkill = <ThrowOnError extends boolean = false>(
+export const updateSkill = <ThrowOnError extends boolean = true>(
 	options: Options<UpdateSkillData, ThrowOnError>,
 ): RequestResult<UpdateSkillResponses, UpdateSkillErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateSkillResponses, UpdateSkillErrors, ThrowOnError>({
@@ -10491,7 +10492,7 @@ export const updateSkill = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listSkillResources = <ThrowOnError extends boolean = false>(
+export const listSkillResources = <ThrowOnError extends boolean = true>(
 	options: Options<ListSkillResourcesData, ThrowOnError>,
 ): RequestResult<ListSkillResourcesResponses, ListSkillResourcesErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListSkillResourcesResponses, ListSkillResourcesErrors, ThrowOnError>({
@@ -10513,7 +10514,7 @@ export const listSkillResources = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getSkillResource = <ThrowOnError extends boolean = false>(
+export const getSkillResource = <ThrowOnError extends boolean = true>(
 	options: Options<GetSkillResourceData, ThrowOnError>,
 ): RequestResult<GetSkillResourceResponses, GetSkillResourceErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetSkillResourceResponses, GetSkillResourceErrors, ThrowOnError>({
@@ -10535,7 +10536,7 @@ export const getSkillResource = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getToolCatalog = <ThrowOnError extends boolean = false>(
+export const getToolCatalog = <ThrowOnError extends boolean = true>(
 	options?: Options<GetToolCatalogData, ThrowOnError>,
 ): RequestResult<GetToolCatalogResponses, GetToolCatalogErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetToolCatalogResponses, GetToolCatalogErrors, ThrowOnError>({
@@ -10557,7 +10558,7 @@ export const getToolCatalog = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const deleteTrainingArtifact = <ThrowOnError extends boolean = false>(
+export const deleteTrainingArtifact = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteTrainingArtifactData, ThrowOnError>,
 ): RequestResult<DeleteTrainingArtifactResponses, DeleteTrainingArtifactErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteTrainingArtifactResponses, DeleteTrainingArtifactErrors, ThrowOnError>({
@@ -10582,7 +10583,7 @@ export const deleteTrainingArtifact = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const promoteTrainingArtifact = <ThrowOnError extends boolean = false>(
+export const promoteTrainingArtifact = <ThrowOnError extends boolean = true>(
 	options: Options<PromoteTrainingArtifactData, ThrowOnError>,
 ): RequestResult<PromoteTrainingArtifactResponses, PromoteTrainingArtifactErrors, ThrowOnError> =>
 	(options.client ?? client).post<PromoteTrainingArtifactResponses, PromoteTrainingArtifactErrors, ThrowOnError>({
@@ -10608,7 +10609,7 @@ export const promoteTrainingArtifact = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const decideTrainingArtifactQuality = <ThrowOnError extends boolean = false>(
+export const decideTrainingArtifactQuality = <ThrowOnError extends boolean = true>(
 	options: Options<DecideTrainingArtifactQualityData, ThrowOnError>,
 ): RequestResult<DecideTrainingArtifactQualityResponses, DecideTrainingArtifactQualityErrors, ThrowOnError> =>
 	(options.client ?? client).put<DecideTrainingArtifactQualityResponses, DecideTrainingArtifactQualityErrors, ThrowOnError>({
@@ -10634,7 +10635,7 @@ export const decideTrainingArtifactQuality = <ThrowOnError extends boolean = fal
 		},
 	});
 
-export const discardTrainingArtifactQuality = <ThrowOnError extends boolean = false>(
+export const discardTrainingArtifactQuality = <ThrowOnError extends boolean = true>(
 	options: Options<DiscardTrainingArtifactQualityData, ThrowOnError>,
 ): RequestResult<DiscardTrainingArtifactQualityResponses, DiscardTrainingArtifactQualityErrors, ThrowOnError> =>
 	(options.client ?? client).post<DiscardTrainingArtifactQualityResponses, DiscardTrainingArtifactQualityErrors, ThrowOnError>({
@@ -10660,7 +10661,7 @@ export const discardTrainingArtifactQuality = <ThrowOnError extends boolean = fa
 		},
 	});
 
-export const overrideTrainingArtifactQuality = <ThrowOnError extends boolean = false>(
+export const overrideTrainingArtifactQuality = <ThrowOnError extends boolean = true>(
 	options: Options<OverrideTrainingArtifactQualityData, ThrowOnError>,
 ): RequestResult<OverrideTrainingArtifactQualityResponses, OverrideTrainingArtifactQualityErrors, ThrowOnError> =>
 	(options.client ?? client).post<OverrideTrainingArtifactQualityResponses, OverrideTrainingArtifactQualityErrors, ThrowOnError>({
@@ -10686,7 +10687,7 @@ export const overrideTrainingArtifactQuality = <ThrowOnError extends boolean = f
 		},
 	});
 
-export const beginTrainingArtifactQualityRevalidation = <ThrowOnError extends boolean = false>(
+export const beginTrainingArtifactQualityRevalidation = <ThrowOnError extends boolean = true>(
 	options: Options<BeginTrainingArtifactQualityRevalidationData, ThrowOnError>,
 ): RequestResult<
 	BeginTrainingArtifactQualityRevalidationResponses,
@@ -10720,7 +10721,7 @@ export const beginTrainingArtifactQualityRevalidation = <ThrowOnError extends bo
 		},
 	});
 
-export const runTrainingArtifactSmoke = <ThrowOnError extends boolean = false>(
+export const runTrainingArtifactSmoke = <ThrowOnError extends boolean = true>(
 	options: Options<RunTrainingArtifactSmokeData, ThrowOnError>,
 ): RequestResult<RunTrainingArtifactSmokeResponses, RunTrainingArtifactSmokeErrors, ThrowOnError> =>
 	(options.client ?? client).post<RunTrainingArtifactSmokeResponses, RunTrainingArtifactSmokeErrors, ThrowOnError>({
@@ -10742,7 +10743,7 @@ export const runTrainingArtifactSmoke = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listBaseArtifacts = <ThrowOnError extends boolean = false>(
+export const listBaseArtifacts = <ThrowOnError extends boolean = true>(
 	options?: Options<ListBaseArtifactsData, ThrowOnError>,
 ): RequestResult<ListBaseArtifactsResponses, ListBaseArtifactsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListBaseArtifactsResponses, ListBaseArtifactsErrors, ThrowOnError>({
@@ -10764,7 +10765,7 @@ export const listBaseArtifacts = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createBaseArtifact = <ThrowOnError extends boolean = false>(
+export const createBaseArtifact = <ThrowOnError extends boolean = true>(
 	options: Options<CreateBaseArtifactData, ThrowOnError>,
 ): RequestResult<CreateBaseArtifactResponses, CreateBaseArtifactErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateBaseArtifactResponses, CreateBaseArtifactErrors, ThrowOnError>({
@@ -10790,7 +10791,7 @@ export const createBaseArtifact = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const deleteBaseArtifact = <ThrowOnError extends boolean = false>(
+export const deleteBaseArtifact = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteBaseArtifactData, ThrowOnError>,
 ): RequestResult<DeleteBaseArtifactResponses, DeleteBaseArtifactErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteBaseArtifactResponses, DeleteBaseArtifactErrors, ThrowOnError>({
@@ -10811,7 +10812,7 @@ export const deleteBaseArtifact = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getBaseArtifact = <ThrowOnError extends boolean = false>(
+export const getBaseArtifact = <ThrowOnError extends boolean = true>(
 	options: Options<GetBaseArtifactData, ThrowOnError>,
 ): RequestResult<GetBaseArtifactResponses, GetBaseArtifactErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetBaseArtifactResponses, GetBaseArtifactErrors, ThrowOnError>({
@@ -10833,7 +10834,7 @@ export const getBaseArtifact = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const cancelBaseArtifact = <ThrowOnError extends boolean = false>(
+export const cancelBaseArtifact = <ThrowOnError extends boolean = true>(
 	options: Options<CancelBaseArtifactData, ThrowOnError>,
 ): RequestResult<CancelBaseArtifactResponses, CancelBaseArtifactErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelBaseArtifactResponses, CancelBaseArtifactErrors, ThrowOnError>({
@@ -10855,7 +10856,7 @@ export const cancelBaseArtifact = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getBaseArtifactLicense = <ThrowOnError extends boolean = false>(
+export const getBaseArtifactLicense = <ThrowOnError extends boolean = true>(
 	options: Options<GetBaseArtifactLicenseData, ThrowOnError>,
 ): RequestResult<GetBaseArtifactLicenseResponses, GetBaseArtifactLicenseErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetBaseArtifactLicenseResponses, GetBaseArtifactLicenseErrors, ThrowOnError>({
@@ -10877,7 +10878,7 @@ export const getBaseArtifactLicense = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listComparisons = <ThrowOnError extends boolean = false>(
+export const listComparisons = <ThrowOnError extends boolean = true>(
 	options?: Options<ListComparisonsData, ThrowOnError>,
 ): RequestResult<ListComparisonsResponses, ListComparisonsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListComparisonsResponses, ListComparisonsErrors, ThrowOnError>({
@@ -10899,7 +10900,7 @@ export const listComparisons = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createComparison = <ThrowOnError extends boolean = false>(
+export const createComparison = <ThrowOnError extends boolean = true>(
 	options: Options<CreateComparisonData, ThrowOnError>,
 ): RequestResult<CreateComparisonResponses, CreateComparisonErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateComparisonResponses, CreateComparisonErrors, ThrowOnError>({
@@ -10925,7 +10926,7 @@ export const createComparison = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const suggestComparison = <ThrowOnError extends boolean = false>(
+export const suggestComparison = <ThrowOnError extends boolean = true>(
 	options: Options<SuggestComparisonData, ThrowOnError>,
 ): RequestResult<SuggestComparisonResponses, SuggestComparisonErrors, ThrowOnError> =>
 	(options.client ?? client).get<SuggestComparisonResponses, SuggestComparisonErrors, ThrowOnError>({
@@ -10947,7 +10948,7 @@ export const suggestComparison = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const deleteComparison = <ThrowOnError extends boolean = false>(
+export const deleteComparison = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteComparisonData, ThrowOnError>,
 ): RequestResult<DeleteComparisonResponses, DeleteComparisonErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteComparisonResponses, DeleteComparisonErrors, ThrowOnError>({
@@ -10972,7 +10973,7 @@ export const deleteComparison = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getComparison = <ThrowOnError extends boolean = false>(
+export const getComparison = <ThrowOnError extends boolean = true>(
 	options: Options<GetComparisonData, ThrowOnError>,
 ): RequestResult<GetComparisonResponses, GetComparisonErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetComparisonResponses, GetComparisonErrors, ThrowOnError>({
@@ -10994,7 +10995,7 @@ export const getComparison = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listTrainingDatasets = <ThrowOnError extends boolean = false>(
+export const listTrainingDatasets = <ThrowOnError extends boolean = true>(
 	options?: Options<ListTrainingDatasetsData, ThrowOnError>,
 ): RequestResult<ListTrainingDatasetsResponses, ListTrainingDatasetsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListTrainingDatasetsResponses, ListTrainingDatasetsErrors, ThrowOnError>({
@@ -11016,7 +11017,7 @@ export const listTrainingDatasets = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const deleteTrainingDataset = <ThrowOnError extends boolean = false>(
+export const deleteTrainingDataset = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteTrainingDatasetData, ThrowOnError>,
 ): RequestResult<DeleteTrainingDatasetResponses, DeleteTrainingDatasetErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteTrainingDatasetResponses, DeleteTrainingDatasetErrors, ThrowOnError>({
@@ -11041,7 +11042,7 @@ export const deleteTrainingDataset = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getTrainingDataset = <ThrowOnError extends boolean = false>(
+export const getTrainingDataset = <ThrowOnError extends boolean = true>(
 	options: Options<GetTrainingDatasetData, ThrowOnError>,
 ): RequestResult<GetTrainingDatasetResponses, GetTrainingDatasetErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetTrainingDatasetResponses, GetTrainingDatasetErrors, ThrowOnError>({
@@ -11063,7 +11064,7 @@ export const getTrainingDataset = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const cancelTrainingDataset = <ThrowOnError extends boolean = false>(
+export const cancelTrainingDataset = <ThrowOnError extends boolean = true>(
 	options: Options<CancelTrainingDatasetData, ThrowOnError>,
 ): RequestResult<CancelTrainingDatasetResponses, CancelTrainingDatasetErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelTrainingDatasetResponses, CancelTrainingDatasetErrors, ThrowOnError>({
@@ -11084,7 +11085,7 @@ export const cancelTrainingDataset = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const exportTrainingDataset = <ThrowOnError extends boolean = false>(
+export const exportTrainingDataset = <ThrowOnError extends boolean = true>(
 	options: Options<ExportTrainingDatasetData, ThrowOnError>,
 ): RequestResult<ExportTrainingDatasetResponses, ExportTrainingDatasetErrors, ThrowOnError> =>
 	(options.client ?? client).get<ExportTrainingDatasetResponses, ExportTrainingDatasetErrors, ThrowOnError>({
@@ -11106,7 +11107,7 @@ export const exportTrainingDataset = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listTrainingSamples = <ThrowOnError extends boolean = false>(
+export const listTrainingSamples = <ThrowOnError extends boolean = true>(
 	options: Options<ListTrainingSamplesData, ThrowOnError>,
 ): RequestResult<ListTrainingSamplesResponses, ListTrainingSamplesErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListTrainingSamplesResponses, ListTrainingSamplesErrors, ThrowOnError>({
@@ -11128,7 +11129,7 @@ export const listTrainingSamples = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const reviewTrainingSample = <ThrowOnError extends boolean = false>(
+export const reviewTrainingSample = <ThrowOnError extends boolean = true>(
 	options: Options<ReviewTrainingSampleData, ThrowOnError>,
 ): RequestResult<ReviewTrainingSampleResponses, ReviewTrainingSampleErrors, ThrowOnError> =>
 	(options.client ?? client).patch<ReviewTrainingSampleResponses, ReviewTrainingSampleErrors, ThrowOnError>({
@@ -11154,7 +11155,7 @@ export const reviewTrainingSample = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listTrainingDefinitions = <ThrowOnError extends boolean = false>(
+export const listTrainingDefinitions = <ThrowOnError extends boolean = true>(
 	options?: Options<ListTrainingDefinitionsData, ThrowOnError>,
 ): RequestResult<ListTrainingDefinitionsResponses, ListTrainingDefinitionsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListTrainingDefinitionsResponses, ListTrainingDefinitionsErrors, ThrowOnError>({
@@ -11176,7 +11177,7 @@ export const listTrainingDefinitions = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createTrainingDefinition = <ThrowOnError extends boolean = false>(
+export const createTrainingDefinition = <ThrowOnError extends boolean = true>(
 	options: Options<CreateTrainingDefinitionData, ThrowOnError>,
 ): RequestResult<CreateTrainingDefinitionResponses, CreateTrainingDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateTrainingDefinitionResponses, CreateTrainingDefinitionErrors, ThrowOnError>({
@@ -11202,7 +11203,7 @@ export const createTrainingDefinition = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const deleteTrainingDefinition = <ThrowOnError extends boolean = false>(
+export const deleteTrainingDefinition = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteTrainingDefinitionData, ThrowOnError>,
 ): RequestResult<DeleteTrainingDefinitionResponses, DeleteTrainingDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteTrainingDefinitionResponses, DeleteTrainingDefinitionErrors, ThrowOnError>({
@@ -11227,7 +11228,7 @@ export const deleteTrainingDefinition = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getTrainingDefinition = <ThrowOnError extends boolean = false>(
+export const getTrainingDefinition = <ThrowOnError extends boolean = true>(
 	options: Options<GetTrainingDefinitionData, ThrowOnError>,
 ): RequestResult<GetTrainingDefinitionResponses, GetTrainingDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetTrainingDefinitionResponses, GetTrainingDefinitionErrors, ThrowOnError>({
@@ -11249,7 +11250,7 @@ export const getTrainingDefinition = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const updateTrainingDefinition = <ThrowOnError extends boolean = false>(
+export const updateTrainingDefinition = <ThrowOnError extends boolean = true>(
 	options: Options<UpdateTrainingDefinitionData, ThrowOnError>,
 ): RequestResult<UpdateTrainingDefinitionResponses, UpdateTrainingDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateTrainingDefinitionResponses, UpdateTrainingDefinitionErrors, ThrowOnError>({
@@ -11275,7 +11276,7 @@ export const updateTrainingDefinition = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const generateTrainingDataset = <ThrowOnError extends boolean = false>(
+export const generateTrainingDataset = <ThrowOnError extends boolean = true>(
 	options: Options<GenerateTrainingDatasetData, ThrowOnError>,
 ): RequestResult<GenerateTrainingDatasetResponses, GenerateTrainingDatasetErrors, ThrowOnError> =>
 	(options.client ?? client).post<GenerateTrainingDatasetResponses, GenerateTrainingDatasetErrors, ThrowOnError>({
@@ -11301,7 +11302,7 @@ export const generateTrainingDataset = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listEvaluations = <ThrowOnError extends boolean = false>(
+export const listEvaluations = <ThrowOnError extends boolean = true>(
 	options?: Options<ListEvaluationsData, ThrowOnError>,
 ): RequestResult<ListEvaluationsResponses, ListEvaluationsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListEvaluationsResponses, ListEvaluationsErrors, ThrowOnError>({
@@ -11323,7 +11324,7 @@ export const listEvaluations = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createEvaluation = <ThrowOnError extends boolean = false>(
+export const createEvaluation = <ThrowOnError extends boolean = true>(
 	options: Options<CreateEvaluationData, ThrowOnError>,
 ): RequestResult<CreateEvaluationResponses, CreateEvaluationErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateEvaluationResponses, CreateEvaluationErrors, ThrowOnError>({
@@ -11349,7 +11350,7 @@ export const createEvaluation = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const deleteEvaluation = <ThrowOnError extends boolean = false>(
+export const deleteEvaluation = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteEvaluationData, ThrowOnError>,
 ): RequestResult<DeleteEvaluationResponses, DeleteEvaluationErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteEvaluationResponses, DeleteEvaluationErrors, ThrowOnError>({
@@ -11374,7 +11375,7 @@ export const deleteEvaluation = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getEvaluation = <ThrowOnError extends boolean = false>(
+export const getEvaluation = <ThrowOnError extends boolean = true>(
 	options: Options<GetEvaluationData, ThrowOnError>,
 ): RequestResult<GetEvaluationResponses, GetEvaluationErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetEvaluationResponses, GetEvaluationErrors, ThrowOnError>({
@@ -11396,7 +11397,7 @@ export const getEvaluation = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const cancelEvaluation = <ThrowOnError extends boolean = false>(
+export const cancelEvaluation = <ThrowOnError extends boolean = true>(
 	options: Options<CancelEvaluationData, ThrowOnError>,
 ): RequestResult<CancelEvaluationResponses, CancelEvaluationErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelEvaluationResponses, CancelEvaluationErrors, ThrowOnError>({
@@ -11417,7 +11418,7 @@ export const cancelEvaluation = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const resumeEvaluation = <ThrowOnError extends boolean = false>(
+export const resumeEvaluation = <ThrowOnError extends boolean = true>(
 	options: Options<ResumeEvaluationData, ThrowOnError>,
 ): RequestResult<ResumeEvaluationResponses, ResumeEvaluationErrors, ThrowOnError> =>
 	(options.client ?? client).post<ResumeEvaluationResponses, ResumeEvaluationErrors, ThrowOnError>({
@@ -11439,7 +11440,7 @@ export const resumeEvaluation = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listToolMocks = <ThrowOnError extends boolean = false>(
+export const listToolMocks = <ThrowOnError extends boolean = true>(
 	options?: Options<ListToolMocksData, ThrowOnError>,
 ): RequestResult<ListToolMocksResponses, ListToolMocksErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListToolMocksResponses, ListToolMocksErrors, ThrowOnError>({
@@ -11461,7 +11462,7 @@ export const listToolMocks = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getToolMock = <ThrowOnError extends boolean = false>(
+export const getToolMock = <ThrowOnError extends boolean = true>(
 	options: Options<GetToolMockData, ThrowOnError>,
 ): RequestResult<GetToolMockResponses, GetToolMockErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetToolMockResponses, GetToolMockErrors, ThrowOnError>({
@@ -11483,7 +11484,7 @@ export const getToolMock = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const verifyToolMock = <ThrowOnError extends boolean = false>(
+export const verifyToolMock = <ThrowOnError extends boolean = true>(
 	options: Options<VerifyToolMockData, ThrowOnError>,
 ): RequestResult<VerifyToolMockResponses, VerifyToolMockErrors, ThrowOnError> =>
 	(options.client ?? client).post<VerifyToolMockResponses, VerifyToolMockErrors, ThrowOnError>({
@@ -11509,7 +11510,7 @@ export const verifyToolMock = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listTrainingRuns = <ThrowOnError extends boolean = false>(
+export const listTrainingRuns = <ThrowOnError extends boolean = true>(
 	options: Options<ListTrainingRunsData, ThrowOnError>,
 ): RequestResult<ListTrainingRunsResponses, ListTrainingRunsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListTrainingRunsResponses, ListTrainingRunsErrors, ThrowOnError>({
@@ -11531,7 +11532,7 @@ export const listTrainingRuns = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createTrainingRun = <ThrowOnError extends boolean = false>(
+export const createTrainingRun = <ThrowOnError extends boolean = true>(
 	options: Options<CreateTrainingRunData, ThrowOnError>,
 ): RequestResult<CreateTrainingRunResponses, CreateTrainingRunErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateTrainingRunResponses, CreateTrainingRunErrors, ThrowOnError>({
@@ -11557,7 +11558,7 @@ export const createTrainingRun = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getTrainingRunDefaults = <ThrowOnError extends boolean = false>(
+export const getTrainingRunDefaults = <ThrowOnError extends boolean = true>(
 	options: Options<GetTrainingRunDefaultsData, ThrowOnError>,
 ): RequestResult<GetTrainingRunDefaultsResponses, GetTrainingRunDefaultsErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetTrainingRunDefaultsResponses, GetTrainingRunDefaultsErrors, ThrowOnError>({
@@ -11579,7 +11580,7 @@ export const getTrainingRunDefaults = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getTrainingRun = <ThrowOnError extends boolean = false>(
+export const getTrainingRun = <ThrowOnError extends boolean = true>(
 	options: Options<GetTrainingRunData, ThrowOnError>,
 ): RequestResult<GetTrainingRunResponses, GetTrainingRunErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetTrainingRunResponses, GetTrainingRunErrors, ThrowOnError>({
@@ -11601,7 +11602,7 @@ export const getTrainingRun = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listTrainingArtifacts = <ThrowOnError extends boolean = false>(
+export const listTrainingArtifacts = <ThrowOnError extends boolean = true>(
 	options: Options<ListTrainingArtifactsData, ThrowOnError>,
 ): RequestResult<ListTrainingArtifactsResponses, ListTrainingArtifactsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListTrainingArtifactsResponses, ListTrainingArtifactsErrors, ThrowOnError>({
@@ -11623,7 +11624,7 @@ export const listTrainingArtifacts = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const cancelTrainingRun = <ThrowOnError extends boolean = false>(
+export const cancelTrainingRun = <ThrowOnError extends boolean = true>(
 	options: Options<CancelTrainingRunData, ThrowOnError>,
 ): RequestResult<CancelTrainingRunResponses, CancelTrainingRunErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelTrainingRunResponses, CancelTrainingRunErrors, ThrowOnError>({
@@ -11644,7 +11645,7 @@ export const cancelTrainingRun = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const startTrainingExport = <ThrowOnError extends boolean = false>(
+export const startTrainingExport = <ThrowOnError extends boolean = true>(
 	options: Options<StartTrainingExportData, ThrowOnError>,
 ): RequestResult<StartTrainingExportResponses, StartTrainingExportErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartTrainingExportResponses, StartTrainingExportErrors, ThrowOnError>({
@@ -11670,7 +11671,7 @@ export const startTrainingExport = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const startTrainingRuntimeInstall = <ThrowOnError extends boolean = false>(
+export const startTrainingRuntimeInstall = <ThrowOnError extends boolean = true>(
 	options?: Options<StartTrainingRuntimeInstallData, ThrowOnError>,
 ): RequestResult<StartTrainingRuntimeInstallResponses, StartTrainingRuntimeInstallErrors, ThrowOnError> =>
 	(options?.client ?? client).post<StartTrainingRuntimeInstallResponses, StartTrainingRuntimeInstallErrors, ThrowOnError>({
@@ -11692,7 +11693,7 @@ export const startTrainingRuntimeInstall = <ThrowOnError extends boolean = false
 		...options,
 	});
 
-export const getTrainingRuntimePrerequisites = <ThrowOnError extends boolean = false>(
+export const getTrainingRuntimePrerequisites = <ThrowOnError extends boolean = true>(
 	options?: Options<GetTrainingRuntimePrerequisitesData, ThrowOnError>,
 ): RequestResult<GetTrainingRuntimePrerequisitesResponses, GetTrainingRuntimePrerequisitesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetTrainingRuntimePrerequisitesResponses, GetTrainingRuntimePrerequisitesErrors, ThrowOnError>({
@@ -11714,7 +11715,7 @@ export const getTrainingRuntimePrerequisites = <ThrowOnError extends boolean = f
 		...options,
 	});
 
-export const removeTrainingRuntime = <ThrowOnError extends boolean = false>(
+export const removeTrainingRuntime = <ThrowOnError extends boolean = true>(
 	options?: Options<RemoveTrainingRuntimeData, ThrowOnError>,
 ): RequestResult<RemoveTrainingRuntimeResponses, RemoveTrainingRuntimeErrors, ThrowOnError> =>
 	(options?.client ?? client).post<RemoveTrainingRuntimeResponses, RemoveTrainingRuntimeErrors, ThrowOnError>({
@@ -11736,7 +11737,7 @@ export const removeTrainingRuntime = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getTrainingRuntimeStatus = <ThrowOnError extends boolean = false>(
+export const getTrainingRuntimeStatus = <ThrowOnError extends boolean = true>(
 	options?: Options<GetTrainingRuntimeStatusData, ThrowOnError>,
 ): RequestResult<GetTrainingRuntimeStatusResponses, GetTrainingRuntimeStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetTrainingRuntimeStatusResponses, GetTrainingRuntimeStatusErrors, ThrowOnError>({
@@ -11758,7 +11759,7 @@ export const getTrainingRuntimeStatus = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listCaptureProcesses = <ThrowOnError extends boolean = false>(
+export const listCaptureProcesses = <ThrowOnError extends boolean = true>(
 	options?: Options<ListCaptureProcessesData, ThrowOnError>,
 ): RequestResult<ListCaptureProcessesResponses, ListCaptureProcessesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListCaptureProcessesResponses, ListCaptureProcessesErrors, ThrowOnError>({
@@ -11780,7 +11781,7 @@ export const listCaptureProcesses = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const startDictationSession = <ThrowOnError extends boolean = false>(
+export const startDictationSession = <ThrowOnError extends boolean = true>(
 	options: Options<StartDictationSessionData, ThrowOnError>,
 ): RequestResult<StartDictationSessionResponses, StartDictationSessionErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartDictationSessionResponses, StartDictationSessionErrors, ThrowOnError>({
@@ -11806,7 +11807,7 @@ export const startDictationSession = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listTranscriptionModels = <ThrowOnError extends boolean = false>(
+export const listTranscriptionModels = <ThrowOnError extends boolean = true>(
 	options?: Options<ListTranscriptionModelsData, ThrowOnError>,
 ): RequestResult<ListTranscriptionModelsResponses, ListTranscriptionModelsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListTranscriptionModelsResponses, ListTranscriptionModelsErrors, ThrowOnError>({
@@ -11828,7 +11829,7 @@ export const listTranscriptionModels = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const startTranscriptionModelDownload = <ThrowOnError extends boolean = false>(
+export const startTranscriptionModelDownload = <ThrowOnError extends boolean = true>(
 	options: Options<StartTranscriptionModelDownloadData, ThrowOnError>,
 ): RequestResult<StartTranscriptionModelDownloadResponses, StartTranscriptionModelDownloadErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartTranscriptionModelDownloadResponses, StartTranscriptionModelDownloadErrors, ThrowOnError>({
@@ -11854,7 +11855,7 @@ export const startTranscriptionModelDownload = <ThrowOnError extends boolean = f
 		},
 	});
 
-export const cancelTranscriptionModelDownload = <ThrowOnError extends boolean = false>(
+export const cancelTranscriptionModelDownload = <ThrowOnError extends boolean = true>(
 	options: Options<CancelTranscriptionModelDownloadData, ThrowOnError>,
 ): RequestResult<CancelTranscriptionModelDownloadResponses, CancelTranscriptionModelDownloadErrors, ThrowOnError> =>
 	(options.client ?? client).post<
@@ -11884,7 +11885,7 @@ export const cancelTranscriptionModelDownload = <ThrowOnError extends boolean = 
 		},
 	});
 
-export const selectTranscriptionModel = <ThrowOnError extends boolean = false>(
+export const selectTranscriptionModel = <ThrowOnError extends boolean = true>(
 	options: Options<SelectTranscriptionModelData, ThrowOnError>,
 ): RequestResult<SelectTranscriptionModelResponses, SelectTranscriptionModelErrors, ThrowOnError> =>
 	(options.client ?? client).post<SelectTranscriptionModelResponses, SelectTranscriptionModelErrors, ThrowOnError>({
@@ -11910,7 +11911,7 @@ export const selectTranscriptionModel = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getTranscriptionRuntimeStatus = <ThrowOnError extends boolean = false>(
+export const getTranscriptionRuntimeStatus = <ThrowOnError extends boolean = true>(
 	options?: Options<GetTranscriptionRuntimeStatusData, ThrowOnError>,
 ): RequestResult<GetTranscriptionRuntimeStatusResponses, GetTranscriptionRuntimeStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetTranscriptionRuntimeStatusResponses, GetTranscriptionRuntimeStatusErrors, ThrowOnError>({
@@ -11932,7 +11933,7 @@ export const getTranscriptionRuntimeStatus = <ThrowOnError extends boolean = fal
 		...options,
 	});
 
-export const ejectTranscriptionRuntime = <ThrowOnError extends boolean = false>(
+export const ejectTranscriptionRuntime = <ThrowOnError extends boolean = true>(
 	options: Options<EjectTranscriptionRuntimeData, ThrowOnError>,
 ): RequestResult<EjectTranscriptionRuntimeResponses, EjectTranscriptionRuntimeErrors, ThrowOnError> =>
 	(options.client ?? client).post<EjectTranscriptionRuntimeResponses, EjectTranscriptionRuntimeErrors, ThrowOnError>({
@@ -11958,7 +11959,7 @@ export const ejectTranscriptionRuntime = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getTranscriptionRecommendation = <ThrowOnError extends boolean = false>(
+export const getTranscriptionRecommendation = <ThrowOnError extends boolean = true>(
 	options?: Options<GetTranscriptionRecommendationData, ThrowOnError>,
 ): RequestResult<GetTranscriptionRecommendationResponses, GetTranscriptionRecommendationErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetTranscriptionRecommendationResponses, GetTranscriptionRecommendationErrors, ThrowOnError>({
@@ -11980,7 +11981,7 @@ export const getTranscriptionRecommendation = <ThrowOnError extends boolean = fa
 		...options,
 	});
 
-export const startWhisperCppSourceBuild = <ThrowOnError extends boolean = false>(
+export const startWhisperCppSourceBuild = <ThrowOnError extends boolean = true>(
 	options: Options<StartWhisperCppSourceBuildData, ThrowOnError>,
 ): RequestResult<StartWhisperCppSourceBuildResponses, StartWhisperCppSourceBuildErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartWhisperCppSourceBuildResponses, StartWhisperCppSourceBuildErrors, ThrowOnError>({
@@ -12006,7 +12007,7 @@ export const startWhisperCppSourceBuild = <ThrowOnError extends boolean = false>
 		},
 	});
 
-export const cancelWhisperCppSourceBuild = <ThrowOnError extends boolean = false>(
+export const cancelWhisperCppSourceBuild = <ThrowOnError extends boolean = true>(
 	options: Options<CancelWhisperCppSourceBuildData, ThrowOnError>,
 ): RequestResult<CancelWhisperCppSourceBuildResponses, CancelWhisperCppSourceBuildErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelWhisperCppSourceBuildResponses, CancelWhisperCppSourceBuildErrors, ThrowOnError>({
@@ -12032,7 +12033,7 @@ export const cancelWhisperCppSourceBuild = <ThrowOnError extends boolean = false
 		},
 	});
 
-export const getWhisperCppSourceBuildPrerequisites = <ThrowOnError extends boolean = false>(
+export const getWhisperCppSourceBuildPrerequisites = <ThrowOnError extends boolean = true>(
 	options: Options<GetWhisperCppSourceBuildPrerequisitesData, ThrowOnError>,
 ): RequestResult<GetWhisperCppSourceBuildPrerequisitesResponses, GetWhisperCppSourceBuildPrerequisitesErrors, ThrowOnError> =>
 	(options.client ?? client).get<
@@ -12058,7 +12059,7 @@ export const getWhisperCppSourceBuildPrerequisites = <ThrowOnError extends boole
 		...options,
 	});
 
-export const removeWhisperCppSourceBuild = <ThrowOnError extends boolean = false>(
+export const removeWhisperCppSourceBuild = <ThrowOnError extends boolean = true>(
 	options: Options<RemoveWhisperCppSourceBuildData, ThrowOnError>,
 ): RequestResult<RemoveWhisperCppSourceBuildResponses, RemoveWhisperCppSourceBuildErrors, ThrowOnError> =>
 	(options.client ?? client).post<RemoveWhisperCppSourceBuildResponses, RemoveWhisperCppSourceBuildErrors, ThrowOnError>({
@@ -12084,7 +12085,7 @@ export const removeWhisperCppSourceBuild = <ThrowOnError extends boolean = false
 		},
 	});
 
-export const getWhisperCppSourceBuildStatus = <ThrowOnError extends boolean = false>(
+export const getWhisperCppSourceBuildStatus = <ThrowOnError extends boolean = true>(
 	options?: Options<GetWhisperCppSourceBuildStatusData, ThrowOnError>,
 ): RequestResult<GetWhisperCppSourceBuildStatusResponses, GetWhisperCppSourceBuildStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetWhisperCppSourceBuildStatusResponses, GetWhisperCppSourceBuildStatusErrors, ThrowOnError>({
@@ -12106,7 +12107,7 @@ export const getWhisperCppSourceBuildStatus = <ThrowOnError extends boolean = fa
 		...options,
 	});
 
-export const listTranscriptionSessions = <ThrowOnError extends boolean = false>(
+export const listTranscriptionSessions = <ThrowOnError extends boolean = true>(
 	options?: Options<ListTranscriptionSessionsData, ThrowOnError>,
 ): RequestResult<ListTranscriptionSessionsResponses, ListTranscriptionSessionsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListTranscriptionSessionsResponses, ListTranscriptionSessionsErrors, ThrowOnError>({
@@ -12128,7 +12129,7 @@ export const listTranscriptionSessions = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createTranscriptionSession = <ThrowOnError extends boolean = false>(
+export const createTranscriptionSession = <ThrowOnError extends boolean = true>(
 	options: Options<CreateTranscriptionSessionData, ThrowOnError>,
 ): RequestResult<CreateTranscriptionSessionResponses, CreateTranscriptionSessionErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateTranscriptionSessionResponses, CreateTranscriptionSessionErrors, ThrowOnError>({
@@ -12154,7 +12155,7 @@ export const createTranscriptionSession = <ThrowOnError extends boolean = false>
 		},
 	});
 
-export const deleteTranscriptionSession = <ThrowOnError extends boolean = false>(
+export const deleteTranscriptionSession = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteTranscriptionSessionData, ThrowOnError>,
 ): RequestResult<DeleteTranscriptionSessionResponses, DeleteTranscriptionSessionErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteTranscriptionSessionResponses, DeleteTranscriptionSessionErrors, ThrowOnError>({
@@ -12175,7 +12176,7 @@ export const deleteTranscriptionSession = <ThrowOnError extends boolean = false>
 		...options,
 	});
 
-export const getTranscriptionSession = <ThrowOnError extends boolean = false>(
+export const getTranscriptionSession = <ThrowOnError extends boolean = true>(
 	options: Options<GetTranscriptionSessionData, ThrowOnError>,
 ): RequestResult<GetTranscriptionSessionResponses, GetTranscriptionSessionErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetTranscriptionSessionResponses, GetTranscriptionSessionErrors, ThrowOnError>({
@@ -12197,7 +12198,7 @@ export const getTranscriptionSession = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const cancelTranscriptionSession = <ThrowOnError extends boolean = false>(
+export const cancelTranscriptionSession = <ThrowOnError extends boolean = true>(
 	options: Options<CancelTranscriptionSessionData, ThrowOnError>,
 ): RequestResult<CancelTranscriptionSessionResponses, CancelTranscriptionSessionErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelTranscriptionSessionResponses, CancelTranscriptionSessionErrors, ThrowOnError>({
@@ -12218,7 +12219,7 @@ export const cancelTranscriptionSession = <ThrowOnError extends boolean = false>
 		...options,
 	});
 
-export const stopProcessCapture = <ThrowOnError extends boolean = false>(
+export const stopProcessCapture = <ThrowOnError extends boolean = true>(
 	options: Options<StopProcessCaptureData, ThrowOnError>,
 ): RequestResult<StopProcessCaptureResponses, StopProcessCaptureErrors, ThrowOnError> =>
 	(options.client ?? client).delete<StopProcessCaptureResponses, StopProcessCaptureErrors, ThrowOnError>({
@@ -12239,7 +12240,7 @@ export const stopProcessCapture = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const startProcessCapture = <ThrowOnError extends boolean = false>(
+export const startProcessCapture = <ThrowOnError extends boolean = true>(
 	options: Options<StartProcessCaptureData, ThrowOnError>,
 ): RequestResult<StartProcessCaptureResponses, StartProcessCaptureErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartProcessCaptureResponses, StartProcessCaptureErrors, ThrowOnError>({
@@ -12265,7 +12266,7 @@ export const startProcessCapture = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const uploadTranscriptionAudio = <ThrowOnError extends boolean = false>(
+export const uploadTranscriptionAudio = <ThrowOnError extends boolean = true>(
 	options: Options<UploadTranscriptionAudioData, ThrowOnError>,
 ): RequestResult<UploadTranscriptionAudioResponses, UploadTranscriptionAudioErrors, ThrowOnError> =>
 	(options.client ?? client).post<UploadTranscriptionAudioResponses, UploadTranscriptionAudioErrors, ThrowOnError>({
@@ -12292,7 +12293,7 @@ export const uploadTranscriptionAudio = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const startLiveTranscriptionSession = <ThrowOnError extends boolean = false>(
+export const startLiveTranscriptionSession = <ThrowOnError extends boolean = true>(
 	options: Options<StartLiveTranscriptionSessionData, ThrowOnError>,
 ): RequestResult<StartLiveTranscriptionSessionResponses, StartLiveTranscriptionSessionErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartLiveTranscriptionSessionResponses, StartLiveTranscriptionSessionErrors, ThrowOnError>({
@@ -12314,7 +12315,7 @@ export const startLiveTranscriptionSession = <ThrowOnError extends boolean = fal
 		...options,
 	});
 
-export const updateTranscriptSegment = <ThrowOnError extends boolean = false>(
+export const updateTranscriptSegment = <ThrowOnError extends boolean = true>(
 	options: Options<UpdateTranscriptSegmentData, ThrowOnError>,
 ): RequestResult<UpdateTranscriptSegmentResponses, UpdateTranscriptSegmentErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateTranscriptSegmentResponses, UpdateTranscriptSegmentErrors, ThrowOnError>({
@@ -12340,7 +12341,7 @@ export const updateTranscriptSegment = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getTutorialState = <ThrowOnError extends boolean = false>(
+export const getTutorialState = <ThrowOnError extends boolean = true>(
 	options?: Options<GetTutorialStateData, ThrowOnError>,
 ): RequestResult<GetTutorialStateResponses, GetTutorialStateErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetTutorialStateResponses, GetTutorialStateErrors, ThrowOnError>({
@@ -12362,7 +12363,7 @@ export const getTutorialState = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const saveTutorialState = <ThrowOnError extends boolean = false>(
+export const saveTutorialState = <ThrowOnError extends boolean = true>(
 	options: Options<SaveTutorialStateData, ThrowOnError>,
 ): RequestResult<SaveTutorialStateResponses, SaveTutorialStateErrors, ThrowOnError> =>
 	(options.client ?? client).put<SaveTutorialStateResponses, SaveTutorialStateErrors, ThrowOnError>({
@@ -12387,7 +12388,7 @@ export const saveTutorialState = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listWorkSessions = <ThrowOnError extends boolean = false>(
+export const listWorkSessions = <ThrowOnError extends boolean = true>(
 	options?: Options<ListWorkSessionsData, ThrowOnError>,
 ): RequestResult<ListWorkSessionsResponses, ListWorkSessionsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListWorkSessionsResponses, ListWorkSessionsErrors, ThrowOnError>({
@@ -12409,7 +12410,7 @@ export const listWorkSessions = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createWorkSession = <ThrowOnError extends boolean = false>(
+export const createWorkSession = <ThrowOnError extends boolean = true>(
 	options: Options<CreateWorkSessionData, ThrowOnError>,
 ): RequestResult<CreateWorkSessionResponses, CreateWorkSessionErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateWorkSessionResponses, CreateWorkSessionErrors, ThrowOnError>({
@@ -12435,7 +12436,7 @@ export const createWorkSession = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getWorkSessionCapability = <ThrowOnError extends boolean = false>(
+export const getWorkSessionCapability = <ThrowOnError extends boolean = true>(
 	options?: Options<GetWorkSessionCapabilityData, ThrowOnError>,
 ): RequestResult<GetWorkSessionCapabilityResponses, GetWorkSessionCapabilityErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetWorkSessionCapabilityResponses, GetWorkSessionCapabilityErrors, ThrowOnError>({
@@ -12457,7 +12458,7 @@ export const getWorkSessionCapability = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const deleteWorkSession = <ThrowOnError extends boolean = false>(
+export const deleteWorkSession = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteWorkSessionData, ThrowOnError>,
 ): RequestResult<DeleteWorkSessionResponses, DeleteWorkSessionErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteWorkSessionResponses, DeleteWorkSessionErrors, ThrowOnError>({
@@ -12478,7 +12479,7 @@ export const deleteWorkSession = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getWorkSession = <ThrowOnError extends boolean = false>(
+export const getWorkSession = <ThrowOnError extends boolean = true>(
 	options: Options<GetWorkSessionData, ThrowOnError>,
 ): RequestResult<GetWorkSessionResponses, GetWorkSessionErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetWorkSessionResponses, GetWorkSessionErrors, ThrowOnError>({
@@ -12500,7 +12501,7 @@ export const getWorkSession = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const updateWorkSession = <ThrowOnError extends boolean = false>(
+export const updateWorkSession = <ThrowOnError extends boolean = true>(
 	options: Options<UpdateWorkSessionData, ThrowOnError>,
 ): RequestResult<UpdateWorkSessionResponses, UpdateWorkSessionErrors, ThrowOnError> =>
 	(options.client ?? client).patch<UpdateWorkSessionResponses, UpdateWorkSessionErrors, ThrowOnError>({
@@ -12526,7 +12527,7 @@ export const updateWorkSession = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listWorkSessionArtifacts = <ThrowOnError extends boolean = false>(
+export const listWorkSessionArtifacts = <ThrowOnError extends boolean = true>(
 	options: Options<ListWorkSessionArtifactsData, ThrowOnError>,
 ): RequestResult<ListWorkSessionArtifactsResponses, ListWorkSessionArtifactsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListWorkSessionArtifactsResponses, ListWorkSessionArtifactsErrors, ThrowOnError>({
@@ -12548,7 +12549,7 @@ export const listWorkSessionArtifacts = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getWorkSessionArtifactContent = <ThrowOnError extends boolean = false>(
+export const getWorkSessionArtifactContent = <ThrowOnError extends boolean = true>(
 	options: Options<GetWorkSessionArtifactContentData, ThrowOnError>,
 ): RequestResult<GetWorkSessionArtifactContentResponses, GetWorkSessionArtifactContentErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetWorkSessionArtifactContentResponses, GetWorkSessionArtifactContentErrors, ThrowOnError>({
@@ -12570,7 +12571,7 @@ export const getWorkSessionArtifactContent = <ThrowOnError extends boolean = fal
 		...options,
 	});
 
-export const cancelWorkSession = <ThrowOnError extends boolean = false>(
+export const cancelWorkSession = <ThrowOnError extends boolean = true>(
 	options: Options<CancelWorkSessionData, ThrowOnError>,
 ): RequestResult<CancelWorkSessionResponses, CancelWorkSessionErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelWorkSessionResponses, CancelWorkSessionErrors, ThrowOnError>({
@@ -12592,7 +12593,7 @@ export const cancelWorkSession = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listWorkSessionCheckpoints = <ThrowOnError extends boolean = false>(
+export const listWorkSessionCheckpoints = <ThrowOnError extends boolean = true>(
 	options: Options<ListWorkSessionCheckpointsData, ThrowOnError>,
 ): RequestResult<ListWorkSessionCheckpointsResponses, ListWorkSessionCheckpointsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListWorkSessionCheckpointsResponses, ListWorkSessionCheckpointsErrors, ThrowOnError>({
@@ -12614,7 +12615,7 @@ export const listWorkSessionCheckpoints = <ThrowOnError extends boolean = false>
 		...options,
 	});
 
-export const listWorkSessionEvents = <ThrowOnError extends boolean = false>(
+export const listWorkSessionEvents = <ThrowOnError extends boolean = true>(
 	options: Options<ListWorkSessionEventsData, ThrowOnError>,
 ): RequestResult<ListWorkSessionEventsResponses, ListWorkSessionEventsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListWorkSessionEventsResponses, ListWorkSessionEventsErrors, ThrowOnError>({
@@ -12636,7 +12637,7 @@ export const listWorkSessionEvents = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listWorkSessionFindings = <ThrowOnError extends boolean = false>(
+export const listWorkSessionFindings = <ThrowOnError extends boolean = true>(
 	options: Options<ListWorkSessionFindingsData, ThrowOnError>,
 ): RequestResult<ListWorkSessionFindingsResponses, ListWorkSessionFindingsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListWorkSessionFindingsResponses, ListWorkSessionFindingsErrors, ThrowOnError>({
@@ -12658,7 +12659,7 @@ export const listWorkSessionFindings = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const postWorkSessionMessage = <ThrowOnError extends boolean = false>(
+export const postWorkSessionMessage = <ThrowOnError extends boolean = true>(
 	options: Options<PostWorkSessionMessageData, ThrowOnError>,
 ): RequestResult<PostWorkSessionMessageResponses, PostWorkSessionMessageErrors, ThrowOnError> =>
 	(options.client ?? client).post<PostWorkSessionMessageResponses, PostWorkSessionMessageErrors, ThrowOnError>({
@@ -12684,7 +12685,7 @@ export const postWorkSessionMessage = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const pauseWorkSession = <ThrowOnError extends boolean = false>(
+export const pauseWorkSession = <ThrowOnError extends boolean = true>(
 	options: Options<PauseWorkSessionData, ThrowOnError>,
 ): RequestResult<PauseWorkSessionResponses, PauseWorkSessionErrors, ThrowOnError> =>
 	(options.client ?? client).post<PauseWorkSessionResponses, PauseWorkSessionErrors, ThrowOnError>({
@@ -12706,7 +12707,7 @@ export const pauseWorkSession = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const resumeWorkSession = <ThrowOnError extends boolean = false>(
+export const resumeWorkSession = <ThrowOnError extends boolean = true>(
 	options: Options<ResumeWorkSessionData, ThrowOnError>,
 ): RequestResult<ResumeWorkSessionResponses, ResumeWorkSessionErrors, ThrowOnError> =>
 	(options.client ?? client).post<ResumeWorkSessionResponses, ResumeWorkSessionErrors, ThrowOnError>({
@@ -12728,7 +12729,7 @@ export const resumeWorkSession = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const startWorkSession = <ThrowOnError extends boolean = false>(
+export const startWorkSession = <ThrowOnError extends boolean = true>(
 	options: Options<StartWorkSessionData, ThrowOnError>,
 ): RequestResult<StartWorkSessionResponses, StartWorkSessionErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartWorkSessionResponses, StartWorkSessionErrors, ThrowOnError>({
@@ -12750,7 +12751,7 @@ export const startWorkSession = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listWorkSessionTasks = <ThrowOnError extends boolean = false>(
+export const listWorkSessionTasks = <ThrowOnError extends boolean = true>(
 	options: Options<ListWorkSessionTasksData, ThrowOnError>,
 ): RequestResult<ListWorkSessionTasksResponses, ListWorkSessionTasksErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListWorkSessionTasksResponses, ListWorkSessionTasksErrors, ThrowOnError>({
@@ -12772,7 +12773,7 @@ export const listWorkSessionTasks = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listWorkspaces = <ThrowOnError extends boolean = false>(
+export const listWorkspaces = <ThrowOnError extends boolean = true>(
 	options?: Options<ListWorkspacesData, ThrowOnError>,
 ): RequestResult<ListWorkspacesResponses, ListWorkspacesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListWorkspacesResponses, ListWorkspacesErrors, ThrowOnError>({
@@ -12794,7 +12795,7 @@ export const listWorkspaces = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createWorkspace = <ThrowOnError extends boolean = false>(
+export const createWorkspace = <ThrowOnError extends boolean = true>(
 	options: Options<CreateWorkspaceData, ThrowOnError>,
 ): RequestResult<CreateWorkspaceResponses, CreateWorkspaceErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateWorkspaceResponses, CreateWorkspaceErrors, ThrowOnError>({
@@ -12820,7 +12821,7 @@ export const createWorkspace = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const deleteWorkspace = <ThrowOnError extends boolean = false>(
+export const deleteWorkspace = <ThrowOnError extends boolean = true>(
 	options: Options<DeleteWorkspaceData, ThrowOnError>,
 ): RequestResult<DeleteWorkspaceResponses, DeleteWorkspaceErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteWorkspaceResponses, DeleteWorkspaceErrors, ThrowOnError>({

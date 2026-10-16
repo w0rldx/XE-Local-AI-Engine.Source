@@ -13,8 +13,7 @@ import type {
 
 // Maps the generated (OpenAPI) playbook-monitor response to the stricter domain view-model the panel depends on.
 // Generated fields are all optional (`x?: T`), so each mapper coalesces to a required value with a safe default.
-// Boundary validation + ApiError convergence are owned by the generated zod validator + withResponseValidation
-// bridge (this replaces the feature's former hand-zod safeParse). The monitoring signal is coarse + agent-level
+// Boundary validation is owned by the generated zod validator (this replaces the feature's former hand-zod safeParse). The monitoring signal is coarse + agent-level
 // (flag-only, never auto-disable); the mapper surfaces only what the response carries.
 
 const DEFAULT_MONITOR_STATUS: PlaybookMonitorStatus = "InsufficientData";

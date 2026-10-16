@@ -52,6 +52,10 @@ containment check (jail paths, symlink guards, path containment, patch apply).
 
 **Rule:** treat an MXC `Probe` warning naming `wxc-host-prep` as "unavailable", never as a warning: the one-time `prepare-system-drive` and the per-boot `prepare-null-device` are admin steps the product never runs, and without them children fail to start. `ContainerRequest.Command` is one command LINE, so quote argv with `WindowsCommandLine.Join` (CommandLineToArgvW rules), never `string.Join(" ")`. A non-null `Environment` is used verbatim: pass `SystemRoot`, `windir`, `ComSpec`, `PATHEXT`, `PATH`, a jail `TEMP` and a jail `LOCALAPPDATA` (the SDK refuses an environment without it, 2026-10-08). **Prevents:** a host advertising a boundary whose every launch dies, argv split differently inside the container, and a child that cannot find `cmd.exe`. **Authority:** ADR 0019; `HostSandboxContainmentProbe.MeasureWindows`, `WindowsCommandLine`, `SandboxLauncher.BuildAppContainerEnvironment`.
 
+### Windows rewrites TEMP, TMP and LOCALAPPDATA for every contained child
+
+**Rule:** under the MXC AppContainer boundary the OS replaces `TEMP`, `TMP` and `LOCALAPPDATA` with an OS-minted `...\Packages\<identity>\AC[\Temp]` path whatever the launch environment says, and those folders do not exist. A workload that needs a usable temp directory creates them itself before it runs (the `run_python` launch bootstrap), and a test of "TEMP is inside the jail" must also assert the folder exists. **Prevents:** tools that chdir or write to the temp directory failing or warning on every call. **Authority:** ADR 0019 "Evidence (2026-10-14)"; `ComputeToolGateway.WindowsTempBootstrap`.
+
 ## Compute and AgentHome
 
 ### `ExecuteDetailedAsync` is the single compute execution boundary

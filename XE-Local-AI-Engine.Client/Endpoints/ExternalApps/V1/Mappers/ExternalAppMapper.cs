@@ -75,7 +75,10 @@ internal static class ExternalAppMapper
     /// </summary>
     public static ExternalAppCatalogResponse ToCatalogResponse(ExternalAppCatalogSnapshot snapshot,
         string? refreshFailureMessage,
-        IReadOnlyDictionary<string, ExternalAppInstanceSummary> installedByApplicationId)
+        IReadOnlyDictionary<string, ExternalAppInstanceSummary> installedByApplicationId,
+        bool restartRequired,
+        bool bridgeOpen,
+        bool refreshUrlConfigured)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(installedByApplicationId);
@@ -94,6 +97,9 @@ internal static class ExternalAppMapper
             FromBundledSeed = snapshot.Source == ExternalAppCatalogSource.Bundled,
             RefreshFailureMessage = refreshFailureMessage,
             LastRefreshFailure = snapshot.LastRefreshFailure,
+            RestartRequired = restartRequired,
+            BridgeOpenUntilRestart = bridgeOpen && applications.Count == 0,
+            RefreshUrlConfigured = refreshUrlConfigured,
             Applications = applications
         };
     }

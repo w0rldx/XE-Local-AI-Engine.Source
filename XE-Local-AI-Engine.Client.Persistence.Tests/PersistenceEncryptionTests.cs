@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
-using System.Diagnostics;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
@@ -452,61 +451,39 @@ public sealed class PersistenceEncryptionTests : IDisposable
         AssertEx.Empty(discoveredNames, "Persistence assembly should not contain ratchet identifiers or forbidden epoch fields.");
     }
 
+    /// <summary>
+    ///     Every entity the chat model maps is invisible outside the persistence assembly, so no consumer can bind one.
+    /// </summary>
+    /// <remarks>
+    ///     Pairs with <c>LayerDependencyTests.Persistence_GrantsItsInternalsToNoProductionAssembly</c>: internal types plus
+    ///     no production friend assembly is what keeps a caller off the entities. Reflection over the compiled model, so
+    ///     it needs no build inside the test run.
+    /// </remarks>
     [Test]
-    public async Task NegativeFenceProbe_WhenBuilt_FailsBecausePersistenceEntitiesAreInternal()
+    public void ChatModelEntityTypes_WhenScanned_AreAllInvisibleOutsideThePersistenceAssembly()
     {
-        var projectDirectory = GetProjectDirectory();
-        var projectPath = Path.Combine(projectDirectory, "NegativeFence", "XE-Local-AI-Engine.Client.Persistence.NegativeFence.csproj");
-        var isolatedNugetConfigPath = GetDatabasePath("negative-fence.nuget.config");
-        File.Copy(Path.GetFullPath(Path.Combine(projectDirectory, "..", "nuget.config")), isolatedNugetConfigPath);
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var context = CreateContext(GetDatabasePath("entity-visibility.sqlite"), keyHolder);
+        var persistenceAssembly = typeof(NodeChatDbContext).Assembly;
 
-        var startInfo = new ProcessStartInfo("dotnet")
-        {
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
-            UseShellExecute = false
-        };
-        startInfo.ArgumentList.Add("build");
-        startInfo.ArgumentList.Add(projectPath);
-        startInfo.ArgumentList.Add("--disable-build-servers");
-        startInfo.ArgumentList.Add($"-p:RestoreConfigFile={isolatedNugetConfigPath}");
+        var mapped = context.Model.GetEntityTypes()
+                            .Select(static entityType => entityType.ClrType)
+                            .Distinct()
+                            .ToArray();
 
-        using var process = AssertEx.NotNull(Process.Start(startInfo), "Expected negative fence build process to start.");
-
-        var standardOutputTask = process.StandardOutput.ReadToEndAsync();
-        var standardErrorTask = process.StandardError.ReadToEndAsync();
-        // Hang guard, not a perf budget: this is a cold build that restores NuGet and compiles two
-        // dependency projects with build-server reuse disabled, so a loaded CI runner needs real headroom.
-        // 180 s was not enough: CI run 32609813981 timed out here purely from co-tenancy, while the
-        // rest of the suite was green (docs/agent-knowledge.md §1 — a duration next to a failure is
-        // a load signature, not a behaviour signal). This budget only has to be shorter than a hang.
-        using var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(600));
-        var timedOut = false;
-        try
-        {
-            await process.WaitForExitAsync(timeoutSource.Token);
-        }
-        catch (OperationCanceledException) when (timeoutSource.IsCancellationRequested)
-        {
-            timedOut = true;
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-
-            await process.WaitForExitAsync();
-        }
-
-        var standardOutput = await standardOutputTask;
-        var standardError = await standardErrorTask;
-
-        var combinedOutput = standardOutput + Environment.NewLine + standardError;
-
-        AssertEx.False(timedOut, $"Negative fence probe exceeded its 600-second build timeout.{Environment.NewLine}{combinedOutput}");
-        AssertEx.False(process.ExitCode == 0, "Negative fence probe must fail to compile.");
-        AssertEx.True(combinedOutput.Contains("CS0122", StringComparison.Ordinal)
-                      || combinedOutput.Contains("inaccessible due to its protection level", StringComparison.OrdinalIgnoreCase),
-            "Negative fence build output should show an accessibility failure.");
+        AssertEx.True(mapped.Contains(typeof(NodeMessage)),
+            "The scan must see NodeMessage, or it lost its subject and would pass vacuously.");
+        var foreign = mapped.Where(clrType => clrType.Assembly != persistenceAssembly)
+                            .Select(static clrType => clrType.FullName)
+                            .Order(StringComparer.Ordinal)
+                            .ToArray();
+        AssertEx.Empty(foreign,
+            "Every chat model entity must be declared in the persistence assembly, where its visibility is enforced; a shared "
+            + "or framework type mapped on purpose needs a named exemption here. Mapped from elsewhere: " + string.Join(", ", foreign));
+        var visible = mapped.Where(static clrType => clrType.IsVisible).Select(static clrType => clrType.FullName).Order(StringComparer.Ordinal).ToArray();
+        AssertEx.Empty(visible,
+            "Chat model entities must stay internal: a public entity lets any consumer bind it and bypass the stores. Public entities: "
+            + string.Join(", ", visible));
     }
 
     private static NodeChatDbContext CreateContext(string databasePath, INodeSqliteKeyHolder keyHolder)
@@ -529,24 +506,6 @@ public sealed class PersistenceEncryptionTests : IDisposable
     {
         Directory.CreateDirectory(_rootPath);
         return Path.Combine(_rootPath, fileName);
-    }
-
-    private static string GetProjectDirectory()
-    {
-        var current = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (current is not null)
-        {
-            var candidate = Path.Combine(current.FullName, "XE-Local-AI-Engine.Client.Persistence.Tests.csproj");
-            if (File.Exists(candidate))
-            {
-                return current.FullName;
-            }
-
-            current = current.Parent;
-        }
-
-        throw new InvalidOperationException("Could not locate the persistence test project directory.");
     }
 
     private static byte[] CreateKeyMaterial()

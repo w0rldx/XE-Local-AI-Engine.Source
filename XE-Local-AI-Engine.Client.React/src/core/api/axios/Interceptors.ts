@@ -11,7 +11,9 @@ import { refreshNodeAuthToken } from "@/core/auth/api/NodeAuthApi";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { resetVaultSettled } from "@/core/auth/utils/SessionRestore";
 
-const retriedRequests = new WeakSet<InternalAxiosRequestConfig>();
+// A config field, not a WeakSet entry: axios merges a replayed config into a NEW object, so identity is lost on replay
+// and a persistent 401 would refresh again per round. mergeConfig copies unknown own keys, so this flag survives.
+type AuthRetryConfig = InternalAxiosRequestConfig & { authRetried?: boolean };
 let isRedirectingToLogin = false;
 
 function redirectToLoginOnce(): void {
@@ -63,11 +65,15 @@ export const addFormDataContentTypeInterceptor = (axiosInstance: AxiosInstance) 
 	});
 };
 
-export const addAuthRequestInterceptor = (axiosInstance: AxiosInstance) => {
+// The generated client resolves its `auth` callback before axios runs, so a refresh landing in between would send
+// the old bearer. Re-read the store at dispatch; only a request that already carries a bearer (a secured operation).
+export const addBearerReconciliationInterceptor = (axiosInstance: AxiosInstance) => {
 	axiosInstance.interceptors.request.use((request) => {
-		const accessToken = useNodeAuthStore.getState().accessToken;
-		if (accessToken) {
-			request.headers.Authorization = `Bearer ${accessToken}`;
+		const currentToken = useNodeAuthStore.getState().accessToken;
+		// get/set, not `.Authorization`: AxiosHeaders keeps the caller's casing and only get/set match case-insensitively.
+		const sentAuthorization = request.headers.get("Authorization");
+		if (currentToken && typeof sentAuthorization === "string" && sentAuthorization.startsWith("Bearer ")) {
+			request.headers.set("Authorization", `Bearer ${currentToken}`);
 		}
 
 		return request;
@@ -82,8 +88,8 @@ export const addUnauthorizedErrorInterceptor = (axiosInstance: AxiosInstance) =>
 				return Promise.reject(error);
 			}
 
-			const requestConfig = error.config;
-			if (!requestConfig || retriedRequests.has(requestConfig)) {
+			const requestConfig = error.config as AuthRetryConfig | undefined;
+			if (!requestConfig || requestConfig.authRetried) {
 				useNodeAuthStore.getState().actions.clear();
 				redirectToLoginOnce();
 				return Promise.reject(error);
@@ -94,7 +100,7 @@ export const addUnauthorizedErrorInterceptor = (axiosInstance: AxiosInstance) =>
 			const sentAuthorization = requestConfig.headers.Authorization;
 			const currentToken = useNodeAuthStore.getState().accessToken;
 			if (typeof sentAuthorization === "string" && currentToken && sentAuthorization !== `Bearer ${currentToken}`) {
-				retriedRequests.add(requestConfig);
+				requestConfig.authRetried = true;
 				requestConfig.headers.Authorization = `Bearer ${currentToken}`;
 				return axiosInstance(requestConfig);
 			}
@@ -102,7 +108,7 @@ export const addUnauthorizedErrorInterceptor = (axiosInstance: AxiosInstance) =>
 			try {
 				const token = await refreshNodeAuthToken();
 				useNodeAuthStore.getState().actions.setToken(token);
-				retriedRequests.add(requestConfig);
+				requestConfig.authRetried = true;
 				requestConfig.headers.Authorization = `Bearer ${token.accessToken}`;
 				return axiosInstance(requestConfig);
 			} catch (refreshError) {

@@ -233,7 +233,8 @@ run_lab() {
   while [[ $# -gt 0 && "$1" != "--" ]]; do extra+=("$1"); shift; done
   shift
   rm -f -- "${MANIFEST}" "${CTL}/calls.log"
-  "${TEST_ENV[@]}" ${extra[@]+"${extra[@]}"} "${REPO}/scripts/lab-up.sh" --profile test "$@" >/dev/null 2>"${CTL}/stderr"
+  # --cpu: TEST_ENV unsets the bring-your-own runtime, which section 17 covers on its own.
+  "${TEST_ENV[@]}" ${extra[@]+"${extra[@]}"} "${REPO}/scripts/lab-up.sh" --profile test --cpu "$@" >/dev/null 2>"${CTL}/stderr"
   STATUS=$?
   ERR="$(cat "${CTL}/stderr")"
 }
@@ -540,7 +541,7 @@ check "--fresh with a foreign AppHost deleted nothing" "db-v1" "$(cat "${DATA}/n
 check "no manifest for a refused AppHost" "absent" "$([[ -e "${MANIFEST}" ]] && echo present || echo absent)"
 rm -f -- "${MANIFEST}"
 (cd "${REPO}" && "${TEST_ENV[@]}" XE_ASPIRE_APPHOST=XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj \
-  "${REPO}/scripts/lab-up.sh" --profile test --until host >/dev/null 2>"${CTL}/stderr")
+  "${REPO}/scripts/lab-up.sh" --profile test --cpu --until host >/dev/null 2>"${CTL}/stderr")
 check "a relative override naming this checkout's AppHost is accepted" "0" "$?"
 check "the accepted override reaches dev-status as the absolute path" "dev-status ${OWN_APPHOST} ${OWN_KEY}" \
   "$(sort -u "${CTL}/apphost.log")"
@@ -553,7 +554,7 @@ check "no dev script ran for a foreign secret file" "0" "$(count_lines "${CTL}/a
 check "--fresh with a foreign secret file deleted nothing" "db-v1" "$(cat "${DATA}/node.db" 2>/dev/null)"
 check "--fresh with a foreign secret file kept dp-keys" "present" "$([[ -d "${CLIENT}/dp-keys" ]] && echo present || echo absent)"
 (cd "${REPO}" && "${TEST_ENV[@]}" XE_NODE_OPERATOR_SECRET_FILE=XE-Local-AI-Engine.AppHost/.data/node.key \
-  "${REPO}/scripts/lab-up.sh" --profile test --until host >/dev/null 2>"${CTL}/stderr")
+  "${REPO}/scripts/lab-up.sh" --profile test --cpu --until host >/dev/null 2>"${CTL}/stderr")
 check "a relative secret path naming this checkout's node.key is accepted" "0" "$?"
 check "the accepted secret path reaches dev-status as the absolute path" "dev-status ${OWN_APPHOST} ${OWN_KEY}" \
   "$(sort -u "${CTL}/apphost.log")"
@@ -568,7 +569,7 @@ run_owner() {
   local extra=()
   while [[ $# -gt 0 && "$1" != "--" ]]; do extra+=("$1"); shift; done
   shift
-  "${TEST_ENV[@]}" ${extra[@]+"${extra[@]}"} "${REPO}/scripts/lab-up.sh" --profile owner --until data "$@" \
+  "${TEST_ENV[@]}" ${extra[@]+"${extra[@]}"} "${REPO}/scripts/lab-up.sh" --profile owner --cpu --until data "$@" \
     >/dev/null 2>"${CTL}/stderr"
   STATUS=$?
   ERR="$(cat "${CTL}/stderr")"
@@ -616,6 +617,24 @@ check_contains "adoption is logged" "adopted by plan 'plan-c'" "${ERR}"
 run_owner -- --plan 'bad plan'
 check "an invalid plan name => exit 2" "2" "${STATUS}"
 check "an invalid plan name leaves OWNER alone" "plan-c" "$(owner_key plan)"
+
+echo "== 17. runtime: bring-your-own CUDA server or an explicit --cpu =="
+: >"${CTL}/apphost.log"
+before_owner="$(cat "${OWNER}")"
+"${TEST_ENV[@]}" "${REPO}/scripts/lab-up.sh" --profile owner --until data --plan plan-c >/dev/null 2>"${CTL}/stderr"
+STATUS=$?
+ERR="$(cat "${CTL}/stderr")"
+check "no XE_LLAMACPP_SERVER_PATH and no --cpu => exit 2" "2" "${STATUS}"
+check "the refusal is one line" "1" "$(grep -c . <<<"${ERR}")"
+check_contains "the refusal names the variable and the flag" "REFUSED: XE_LLAMACPP_SERVER_PATH is not set" "${ERR}"
+check_contains "the refusal offers --cpu" "pass --cpu" "${ERR}"
+check "a refused run calls no dev script" "0" "$(count_lines "${CTL}/apphost.log")"
+check "a refused run leaves OWNER alone" "${before_owner}" "$(cat "${OWNER}")"
+"${TEST_ENV[@]}" XE_LLAMACPP_SERVER_PATH=/opt/byo/llama-server "${REPO}/scripts/lab-up.sh" --profile owner --until data \
+  --plan plan-c >/dev/null 2>"${CTL}/stderr"
+check "a bring-your-own server is accepted without --cpu" "0" "$?"
+run_owner -- --plan plan-c
+check "--cpu is accepted without a bring-your-own server" "0" "${STATUS}"
 
 echo "== 11. redaction =="
 LOG="$(cat "${LAB}/evidence/lab-up.log")"

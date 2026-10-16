@@ -14482,8 +14482,22 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": "No Content"
+          "200": {
+            "description": "Success",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
           },
           "401": {
             "description": "Unauthorized"
@@ -34078,6 +34092,9 @@
           "fromBundledSeed",
           "refreshFailureMessage",
           "lastRefreshFailure",
+          "restartRequired",
+          "bridgeOpenUntilRestart",
+          "refreshUrlConfigured",
           "applications"
         ],
         "properties": {
@@ -34101,6 +34118,15 @@
           "lastRefreshFailure": {
             "type": "string",
             "nullable": true
+          },
+          "restartRequired": {
+            "type": "boolean"
+          },
+          "bridgeOpenUntilRestart": {
+            "type": "boolean"
+          },
+          "refreshUrlConfigured": {
+            "type": "boolean"
           },
           "applications": {
             "type": "array",

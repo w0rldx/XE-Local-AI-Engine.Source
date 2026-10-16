@@ -2,6 +2,7 @@ import { t } from "i18next";
 
 import { ApiError } from "@/core/api/errors/ApiError";
 import { NetworkError } from "@/core/api/errors/NetworkError";
+import { isResponseValidationError } from "@/core/api/ResponseValidation";
 
 // Reads a message off a raw axios-shaped rejection (`error.response.data`). Almost every HTTP failure is converted to
 // an ApiError by the shared ProblemDetails interceptor before it reaches a caller, but 401 and 429 are deliberately
@@ -48,6 +49,11 @@ export function apiErrorMessage(error: unknown, fallback: string): string {
 	// per-feature fallback, and it is resolved here so it is in the operator's current language.
 	if (error instanceof NetworkError) {
 		return t("errorMessages.nodeUnreachable", "Can't reach the node. Check that it's running and try again.");
+	}
+
+	// Ahead of the generic Error branch: a ZodError's message lists the response's issue paths.
+	if (isResponseValidationError(error)) {
+		return t("errorMessages.unexpectedResponseShape", "The server returned a response in an unexpected shape.");
 	}
 
 	if (error instanceof ApiError && error.message.trim().length > 0) {

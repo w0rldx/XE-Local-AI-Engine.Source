@@ -22,6 +22,7 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
@@ -209,7 +210,8 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
     public static async Task<ExternalAppServiceHarness> CreateAsync(ApplicationManifest manifest,
         Func<ExternalAppsOptions, ExternalAppsOptions>? configure = null,
         long availableRamBytes = 32L * 1024 * 1024 * 1024,
-        bool withBridge = true)
+        bool withBridge = true,
+        NodeStartupSettings? startupSettings = null)
     {
         var rootPath = Path.Combine(Path.GetTempPath(), "xe-ext-apps-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(rootPath);
@@ -239,6 +241,10 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
         services.AddScoped<IExternalAppInstanceStore, ExternalAppInstanceStore>();
         services.AddSingleton(catalog);
         services.AddSingleton<IContainerRuntimeResolver>(resolver);
+        if (startupSettings is not null)
+        {
+            services.AddSingleton(startupSettings);
+        }
 
         var provider = services.BuildServiceProvider(validateScopes: true);
         await using (var scope = provider.CreateAsyncScope())

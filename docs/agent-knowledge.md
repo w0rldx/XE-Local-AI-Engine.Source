@@ -35,7 +35,8 @@ resolving the conflict, re-read every `<remarks>` and comment run in each confli
 | You are changing | Read |
 |---|---|
 | `.editorconfig`, `Directory.Build.*`, `Directory.Packages.props`, analyzer suppressions, `Architecture/` tests, DI modules; Release red where Debug was green | [build-and-analyzers](agent-knowledge/build-and-analyzers.md) |
-| Writing, scoping or debugging a backend test; `TestServerWebAppFactory`, `scripts/run-tests-memory-safe.sh`, the build lock, browser E2E host | [backend-tests](agent-knowledge/backend-tests.md) |
+| Running, scoping or debugging a backend test run; `scripts/run-tests-memory-safe.sh`, the build lock, test width, flakes | [backend-tests-runner](agent-knowledge/backend-tests-runner.md) |
+| Writing a backend test; `TestServerWebAppFactory`, a `Testing.*` project, fixtures, temp state, SQLite test databases, browser E2E host | [backend-tests-conventions](agent-knowledge/backend-tests-conventions.md) |
 | `.github/workflows/**`, `HEAVY`/sharding, coverage merge, `publish/**`, `scripts/release/**`, `cliff.toml`, Velopack bootstrap; committing in a shared worktree | [ci-and-release](agent-knowledge/ci-and-release.md) |
 | Running or scripting a dev host or live round; `Program.cs`/Kestrel/auth, HTTP clients, sandbox host side, Windows-only branches | [dev-runtime](agent-knowledge/dev-runtime.md) |
 | `Providers.LlamaServer`, the llama.cpp pin or binaries, launch fallback, tool offering or a tool schema, chat-template capability detection | [inference-runtime](agent-knowledge/inference-runtime.md) |
@@ -49,7 +50,9 @@ resolving the conflict, re-read every `<remarks>` and comment run in each confli
 
 `AGENTS.md` ("Validation") names the gates; flags and exit codes are in each script's header, CI shape in wiki 13.
 The traps behind them are in
-[build-and-analyzers](agent-knowledge/build-and-analyzers.md), [backend-tests](agent-knowledge/backend-tests.md) and
+[build-and-analyzers](agent-knowledge/build-and-analyzers.md),
+[backend-tests-runner](agent-knowledge/backend-tests-runner.md),
+[backend-tests-conventions](agent-knowledge/backend-tests-conventions.md) and
 [ci-and-release](agent-knowledge/ci-and-release.md).
 
 ## 2. Dev environment & local runtime

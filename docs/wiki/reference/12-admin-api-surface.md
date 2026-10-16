@@ -30,8 +30,8 @@ if (IsLocalApiRequest(context.Request.Path)
 
 ## 3.1a The inbound MCP endpoint sits inside the gate — deliberately
 
-`MapMcp` mounts this node's own MCP server at `/api/local/v1/mcp/server` (`Program.cs`, beside the
-`MapHub` calls). The path is not cosmetic: `IsLocalApiRequest` matches on the `/api/local/v1` prefix
+`MapMcp` mounts this node's own MCP server at `/api/local/v1/mcp/server` (`InboundApiEndpointExtensions.MapNodeInboundApis`,
+mapped right after the `MapHub` calls). The path is not cosmetic: `IsLocalApiRequest` matches on the `/api/local/v1` prefix
 **alone**, so an MCP endpoint mounted at a bare `/mcp` would be reachable without any of §3.1's peer,
 Host or Origin checks, leaving the bearer key as the only control. Keep it inside the prefix.
 

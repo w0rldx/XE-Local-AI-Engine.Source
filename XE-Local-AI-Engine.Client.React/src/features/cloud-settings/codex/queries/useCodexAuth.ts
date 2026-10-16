@@ -10,7 +10,6 @@ import {
 	codexStatusOptions,
 	codexStatusQueryKey,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toast } from "@/core/ui/notifications/Toast";
 
 const POLL_INTERVAL_MS = 2_000;
@@ -30,7 +29,7 @@ export function useCodexStatus(options: UseCodexStatusOptions) {
 	const timedOut = polling && pollStartedAt !== undefined && Date.now() - pollStartedAt > MAX_POLL_MS;
 
 	return useQuery({
-		...withResponseValidation(codexStatusOptions()),
+		...codexStatusOptions(),
 		// Poll while pending and not yet timed out; stop once we know the final state.
 		refetchInterval: (query) => (polling && !timedOut && query.state.data?.signedIn !== true ? POLL_INTERVAL_MS : false),
 		// Status endpoint is always fresh — never serve a stale cached value during polling.
@@ -40,7 +39,7 @@ export function useCodexStatus(options: UseCodexStatusOptions) {
 
 export function useCodexLogin(onAuthorizeUrl: (url: string) => void) {
 	return useMutation({
-		...withResponseValidation(codexLoginMutation()),
+		...codexLoginMutation(),
 		onSuccess: (data) => {
 			// authorizeUrl is typed optional in the generated schema; guard with fallback.
 			onAuthorizeUrl(data.authorizeUrl ?? "");
@@ -52,7 +51,7 @@ export function useCodexLogout(onSuccess?: () => void) {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(codexLogoutMutation()),
+		...codexLogoutMutation(),
 		onSuccess: async (data) => {
 			// The logout endpoint returns the post-logout status body (signedIn:false).
 			// Write it directly into the cache so the UI reflects sign-out immediately

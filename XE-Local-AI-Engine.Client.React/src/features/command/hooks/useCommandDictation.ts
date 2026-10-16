@@ -139,7 +139,6 @@ export function useCommandDictation(onCommitted: (text: string, saidAt: Date) =>
 			try {
 				const { data } = await startDictationSession({
 					body: language === "auto" ? {} : { language },
-					throwOnError: true,
 				});
 				sessionId = data.sessionId;
 				startedAtUtc = data.startedAtUtc;

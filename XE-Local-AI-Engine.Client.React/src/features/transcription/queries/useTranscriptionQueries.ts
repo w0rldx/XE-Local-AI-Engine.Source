@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import type { XeLocalAiEngineClientEndpointsTranscriptionV1CreateTranscriptionSessionRequest as CreateTranscriptionSessionRequest } from "@/core/api/generated";
 import {
 	cancelTranscriptionModelDownloadMutation,
 	cancelTranscriptionSessionMutation,
@@ -18,8 +19,6 @@ import {
 	startTranscriptionModelDownloadMutation,
 	updateTranscriptSegmentMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import type { XeLocalAiEngineClientEndpointsTranscriptionV1CreateTranscriptionSessionRequest as CreateTranscriptionSessionRequest } from "@/core/api/generated";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import {
 	toTranscriptionModelView,
 	toTranscriptionRuntimeView,
@@ -29,7 +28,7 @@ import {
 
 // Server-state for the transcription feature. Reads use the generated hey-api `*Options()` (shared axios + TanStack
 // AbortSignal wired automatically) with a `select` mapping the optional-field generated response into the strict
-// domain view-model, each wrapped in withResponseValidation so a zod response-shape failure surfaces as an ApiError.
+// domain view-model.
 // The multipart audio upload is the one call that does NOT go through the generated SDK — see useTranscriptionUpload.
 
 // Generated keys are object arrays; TanStack partial matching on `_id` invalidates every endpoint variant.
@@ -54,7 +53,7 @@ export function invalidate(queryClient: ReturnType<typeof useQueryClient>, opera
 // page and the defaults match the endpoint's own (50 / 0).
 export function useTranscriptionSessions(limit = 50, offset = 0) {
 	return useQuery({
-		...withResponseValidation(listTranscriptionSessionsOptions({ query: { limit, offset } })),
+		...listTranscriptionSessionsOptions({ query: { limit, offset } }),
 		select: (data) => ({
 			items: (data.items ?? []).map(toTranscriptionSessionView),
 			totalCount: data.totalCount,
@@ -69,7 +68,7 @@ export function useTranscriptionSessions(limit = 50, offset = 0) {
 // transcribing is only observable by re-reading it; that one case keeps the two-second poll.
 export function useTranscriptionSession(sessionId: string) {
 	return useQuery({
-		...withResponseValidation(getTranscriptionSessionOptions({ path: { sessionId } })),
+		...getTranscriptionSessionOptions({ path: { sessionId } }),
 		select: toTranscriptionSessionDetailView,
 		enabled: sessionId.length > 0,
 		staleTime: 0,
@@ -90,7 +89,7 @@ export function useStartLiveTranscriptionSession() {
 
 	return useMutation({
 		mutationFn: async (sessionId: string) => {
-			const options = withResponseValidation(startLiveTranscriptionSessionMutation());
+			const options = startLiveTranscriptionSessionMutation();
 			return await options.mutationFn?.({ path: { sessionId } }, undefined as never);
 		},
 		onSuccess: async () => {
@@ -106,7 +105,7 @@ export function useCreateTranscriptionSession() {
 
 	return useMutation({
 		mutationFn: async (body: CreateTranscriptionSessionRequest) => {
-			const options = withResponseValidation(createTranscriptionSessionMutation());
+			const options = createTranscriptionSessionMutation();
 			return await options.mutationFn?.({ body }, undefined as never);
 		},
 		onSuccess: () => invalidate(queryClient, transcriptionQueryIds.sessions),
@@ -119,7 +118,7 @@ export function useDeleteTranscriptionSession() {
 
 	return useMutation({
 		mutationFn: async (sessionId: string) => {
-			const options = withResponseValidation(deleteTranscriptionSessionMutation());
+			const options = deleteTranscriptionSessionMutation();
 			return await options.mutationFn?.({ path: { sessionId } }, undefined as never);
 		},
 		onSuccess: () => invalidate(queryClient, transcriptionQueryIds.sessions),
@@ -132,7 +131,7 @@ export function useCancelTranscriptionSession() {
 
 	return useMutation({
 		mutationFn: async (sessionId: string) => {
-			const options = withResponseValidation(cancelTranscriptionSessionMutation());
+			const options = cancelTranscriptionSessionMutation();
 			return await options.mutationFn?.({ path: { sessionId } }, undefined as never);
 		},
 		onSuccess: async () => {
@@ -149,7 +148,7 @@ export function useUpdateTranscriptSegment(sessionId: string) {
 
 	return useMutation({
 		mutationFn: async ({ seq, text }: { seq: number; text: string }) => {
-			const options = withResponseValidation(updateTranscriptSegmentMutation());
+			const options = updateTranscriptSegmentMutation();
 			return await options.mutationFn?.({ path: { sessionId, seq }, body: { text } }, undefined as never);
 		},
 		onSuccess: async (updated) => {
@@ -173,7 +172,7 @@ export function useUpdateTranscriptSegment(sessionId: string) {
 // `poll` is for a caller waiting on the runtime (a live start): enabled only then, re-read every 2 s.
 export function useTranscriptionRuntimeStatus(poll?: boolean) {
 	return useQuery({
-		...withResponseValidation(getTranscriptionRuntimeStatusOptions()),
+		...getTranscriptionRuntimeStatusOptions(),
 		select: toTranscriptionRuntimeView,
 		staleTime: 10_000,
 		enabled: poll ?? true,
@@ -187,7 +186,7 @@ export function useTranscriptionRuntimeStatus(poll?: boolean) {
 // is closed or on a source that captures in the browser.
 export function useCaptureProcesses(enabled: boolean) {
 	return useQuery({
-		...withResponseValidation(listCaptureProcessesOptions()),
+		...listCaptureProcessesOptions(),
 		select: (data) => data.processes,
 		enabled,
 		staleTime: 0,
@@ -200,7 +199,7 @@ export function useCaptureProcesses(enabled: boolean) {
 export function useStartProcessCapture() {
 	return useMutation({
 		mutationFn: async ({ sessionId, processId }: { sessionId: string; processId: number }) => {
-			const options = withResponseValidation(startProcessCaptureMutation());
+			const options = startProcessCaptureMutation();
 			return await options.mutationFn?.({ path: { sessionId }, body: { processId } }, undefined as never);
 		},
 	});
@@ -211,7 +210,7 @@ export function useStartProcessCapture() {
 // consumer mirror the same derivation.
 export function useTranscriptionModels() {
 	return useQuery({
-		...withResponseValidation(listTranscriptionModelsOptions()),
+		...listTranscriptionModelsOptions(),
 		select: (data) => ({
 			models: (data.models ?? []).map(toTranscriptionModelView),
 			selectedModelId: data.selectedModelId ?? null,
@@ -230,7 +229,7 @@ export function useTranscriptionModels() {
 // answer follows the hardware, not a session, so it is cached for the page's lifetime.
 export function useTranscriptionRecommendation() {
 	return useQuery({
-		...withResponseValidation(getTranscriptionRecommendationOptions()),
+		...getTranscriptionRecommendationOptions(),
 		staleTime: 60_000,
 	});
 }
@@ -249,7 +248,7 @@ export function useStartTranscriptionModelDownload() {
 
 	return useMutation({
 		mutationFn: async (modelId: string) => {
-			const options = withResponseValidation(startTranscriptionModelDownloadMutation());
+			const options = startTranscriptionModelDownloadMutation();
 			return await options.mutationFn?.({ body: { modelId } }, undefined as never);
 		},
 		onSuccess: async () => {
@@ -267,7 +266,7 @@ export function useCancelTranscriptionModelDownload() {
 
 	return useMutation({
 		mutationFn: async (modelId: string) => {
-			const options = withResponseValidation(cancelTranscriptionModelDownloadMutation());
+			const options = cancelTranscriptionModelDownloadMutation();
 			return await options.mutationFn?.({ body: { modelId } }, undefined as never);
 		},
 		onSuccess: async () => {
@@ -286,7 +285,7 @@ export function useSelectTranscriptionModel() {
 
 	return useMutation({
 		mutationFn: async (modelId: string | null) => {
-			const options = withResponseValidation(selectTranscriptionModelMutation());
+			const options = selectTranscriptionModelMutation();
 			return await options.mutationFn?.({ body: { modelId } }, undefined as never);
 		},
 		onSuccess: async () => {
@@ -302,7 +301,7 @@ export function useEjectTranscriptionRuntime() {
 
 	return useMutation({
 		mutationFn: async () => {
-			const options = withResponseValidation(ejectTranscriptionRuntimeMutation());
+			const options = ejectTranscriptionRuntimeMutation();
 			// `accepted` is the contract's transport placeholder for an otherwise body-less POST; the server neither
 			// requires nor interprets it.
 			return await options.mutationFn?.({ body: { accepted: true } }, undefined as never);

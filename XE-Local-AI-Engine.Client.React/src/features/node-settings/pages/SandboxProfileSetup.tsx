@@ -10,12 +10,11 @@ import {
 	getNodeSettingsQueryKey,
 	saveNodeSettingsMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { StandaloneScreenControls } from "@/core/ui/components/StandaloneScreenControls/StandaloneScreenControls";
 import {
-	type SandboxSecurityProfile,
 	SandboxProfileRadioCards,
+	type SandboxSecurityProfile,
 } from "@/features/node-settings/components/SandboxProfileRadioCards";
 
 // The first-run sandbox security profile choice, between the external-access step and the interface mode. Like those
@@ -30,11 +29,11 @@ export function SandboxProfileSetup() {
 	const queryClient = useQueryClient();
 	const [choice, setChoice] = useState<SandboxSecurityProfile | null>(null);
 
-	const capabilityQuery = useQuery(withResponseValidation(getDevelopmentCapabilityOptions()));
+	const capabilityQuery = useQuery(getDevelopmentCapabilityOptions());
 	const refusals = capabilityQuery.data?.highProfileRefusals;
 	const recommended: SandboxSecurityProfile | null = refusals === undefined ? null : refusals.length === 0 ? "high" : "low";
 
-	const saveMutation = useMutation(withResponseValidation(saveNodeSettingsMutation()));
+	const saveMutation = useMutation(saveNodeSettingsMutation());
 
 	const submit = (): void => {
 		if (choice === null) {

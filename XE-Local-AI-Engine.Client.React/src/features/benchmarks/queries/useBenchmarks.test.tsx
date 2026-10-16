@@ -1,10 +1,19 @@
 // @vitest-environment jsdom
 
+import { QueryClient } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/core/api/errors/ApiError";
+import {
+	getBenchmarkProjectQueryKey,
+	getBenchmarkRunQueryKey,
+	listBenchmarkCellsQueryKey,
+	listBenchmarkComparisonsQueryKey,
+	listBenchmarkProjectsQueryKey,
+	listEligibleBenchmarkModelsQueryKey,
+} from "@/core/api/generated/@tanstack/react-query.gen";
 import type { BenchmarkProjectDraft } from "@/features/benchmarks/models/BenchmarkModels";
 import {
 	useBenchmarkComparisons,
@@ -12,7 +21,9 @@ import {
 	useBenchmarkProjects,
 	useBenchmarkRun,
 	useBenchmarkRuns,
+	useClearBenchmarkFidelityCache,
 	useClearBenchmarkRunScore,
+	useDeleteBenchmarkProject,
 	useEligibleBenchmarkModels,
 	useRejudgeBenchmarkProject,
 	useStartBenchmarkRun,
@@ -772,5 +783,77 @@ describe("benchmark queries over the real client", () => {
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 		expect(observedBody).toEqual({ expectedVersion: 2 });
 		expect(result.current.data?.enqueuedRunCount).toBe(2);
+	});
+
+	// A mutation re-reads the project list and every project-addressed query of EVERY project (the scope the old
+	// `["benchmarks","projects"]` prefix had), plus only the run details it names: eligible models and an unnamed run's
+	// detail stay valid.
+	it("invalidates every project's queries and the list, but not unnamed run details or eligible models", async () => {
+		const otherProjectId = "dddddddd-0000-4000-8000-000000000004";
+		server.use(
+			http.delete(localApiPath(`benchmarks/projects/${projectId}/fidelity/cache`), () => new HttpResponse(null, { status: 204 })),
+		);
+		const queryClient = new QueryClient({
+			defaultOptions: { queries: { retry: false, gcTime: Number.POSITIVE_INFINITY } },
+		});
+		const { wrapper } = createProvidersWrapper({ queryClient });
+		const invalidated = {
+			list: listBenchmarkProjectsQueryKey(),
+			ownCells: listBenchmarkCellsQueryKey({ path: { projectId } }),
+			otherProject: getBenchmarkProjectQueryKey({ path: { projectId: otherProjectId } }),
+		};
+		const kept = {
+			run: getBenchmarkRunQueryKey({ path: { runId } }),
+			models: listEligibleBenchmarkModelsQueryKey(),
+		};
+		for (const key of [...Object.values(invalidated), ...Object.values(kept)]) {
+			queryClient.setQueryData(key, {});
+		}
+
+		const { result } = renderHook(() => useClearBenchmarkFidelityCache(), { wrapper });
+		result.current.mutate(projectId);
+		await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+		for (const key of Object.values(invalidated)) {
+			expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+		}
+		for (const key of Object.values(kept)) {
+			expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
+		}
+	});
+
+	// The cache keys are the generated ones, so "everything of this project" is matched on `path.projectId` rather than
+	// a key prefix. Pins that a delete drops every endpoint's entry for the deleted project and nothing of another one.
+	it("drops every cached query of a deleted project and leaves other projects and run details alone", async () => {
+		const otherProjectId = "dddddddd-0000-4000-8000-000000000004";
+		server.use(
+			http.delete(localApiPath(`benchmarks/projects/${projectId}`), () => new HttpResponse(null, { status: 204 })),
+			jsonRoute("get", "benchmarks/projects", { items: [] }),
+		);
+		// Seeded entries have no observer, so they must outlive the test client's zero `gcTime` to be observable at all.
+		const queryClient = new QueryClient({
+			defaultOptions: { queries: { retry: false, gcTime: Number.POSITIVE_INFINITY } },
+		});
+		const { wrapper } = createProvidersWrapper({ queryClient });
+		const seeded = {
+			project: getBenchmarkProjectQueryKey({ path: { projectId } }),
+			cells: listBenchmarkCellsQueryKey({ path: { projectId } }),
+			comparisons: listBenchmarkComparisonsQueryKey({ path: { projectId } }),
+			otherProject: getBenchmarkProjectQueryKey({ path: { projectId: otherProjectId } }),
+			run: getBenchmarkRunQueryKey({ path: { runId } }),
+		};
+		for (const key of Object.values(seeded)) {
+			queryClient.setQueryData(key, {});
+		}
+
+		const { result } = renderHook(() => useDeleteBenchmarkProject(), { wrapper });
+		result.current.mutate({ projectId, expectedVersion: 2 });
+		await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+		expect(queryClient.getQueryData(seeded.project)).toBeUndefined();
+		expect(queryClient.getQueryData(seeded.cells)).toBeUndefined();
+		expect(queryClient.getQueryData(seeded.comparisons)).toBeUndefined();
+		expect(queryClient.getQueryData(seeded.otherProject)).toEqual({});
+		expect(queryClient.getQueryData(seeded.run)).toEqual({});
 	});
 });

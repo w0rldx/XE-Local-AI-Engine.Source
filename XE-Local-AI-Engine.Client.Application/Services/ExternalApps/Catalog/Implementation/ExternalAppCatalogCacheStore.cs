@@ -34,6 +34,26 @@ internal sealed class ExternalAppCatalogCacheStore : IExternalAppCatalogCacheSto
         _lock.Dispose();
     }
 
+    /// <summary>Reads the persisted copy under <paramref name="dataDirectory" /> before the container exists, or <see langword="null" /> when there is none or it cannot be read.</summary>
+    /// <remarks>
+    ///     Synchronous and lock-free because the only caller runs during host construction, before any instance of
+    ///     this store exists to write the file. Unreadable reads as absent, exactly as <see cref="LoadAsync" /> does.
+    /// </remarks>
+    internal static StoredExternalAppCatalogCache? LoadAtStartup(string dataDirectory)
+    {
+        var path = Path.Combine(dataDirectory, CacheDirectoryName, CacheFileName);
+        try
+        {
+#pragma warning disable MA0045 // forced sync: read once during host construction, which cannot await
+            return File.Exists(path) ? JsonSerializer.Deserialize<StoredExternalAppCatalogCache>(File.ReadAllText(path), SerializerOptions) : null;
+#pragma warning restore MA0045
+        }
+        catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
     public async Task<StoredExternalAppCatalogCache?> LoadAsync(CancellationToken cancellationToken = default)
     {
         await _lock.WaitAsync(cancellationToken);

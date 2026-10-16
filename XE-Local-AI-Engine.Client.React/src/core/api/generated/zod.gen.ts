@@ -2835,6 +2835,9 @@ export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppCatalogResp
 	fromBundledSeed: z.boolean(),
 	refreshFailureMessage: z.string().nullable(),
 	lastRefreshFailure: z.string().nullable(),
+	restartRequired: z.boolean(),
+	bridgeOpenUntilRestart: z.boolean(),
+	refreshUrlConfigured: z.boolean(),
 	applications: z.array(zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppSummaryView),
 });
 
@@ -11918,9 +11921,9 @@ export const zRetrieveImagePath = z.object({
 });
 
 /**
- * No Content
+ * Success
  */
-export const zRetrieveImageResponse = z.void();
+export const zRetrieveImageResponse = z.string();
 
 export const zListIntegrationExecutionsQuery = z.object({
 	triggerId: z.guid().nullish(),

@@ -20,8 +20,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 // Stub the draft SDK fn the dialog drives, plus the two SAVE fns it must never reach — drafting persists nothing, so
-// the create/update spies staying untouched is the assertion, not an incidental detail. Everything else stays real,
-// including the callWithResponseValidation bridge the hook wraps the call in.
+// the create/update spies staying untouched is the assertion, not an incidental detail. Everything else stays real.
 const { draftSkillSpy, createSkillSpy, updateSkillSpy } = vi.hoisted(() => ({
 	draftSkillSpy: vi.fn(),
 	createSkillSpy: vi.fn(),

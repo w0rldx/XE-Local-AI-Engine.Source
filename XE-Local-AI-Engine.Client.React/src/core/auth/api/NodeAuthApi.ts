@@ -1,5 +1,15 @@
 import axios, { type AxiosRequestConfig } from "axios";
 
+import { createClient, createConfig } from "@/core/api/generated/client";
+import {
+	nodeAuthStatus,
+	nodeChangePassword,
+	nodeLogin,
+	nodeLogout,
+	nodeRefresh,
+	nodeSetup,
+	nodeVaultConfirm,
+} from "@/core/api/generated/sdk.gen";
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import type {
 	NodeAccessTokenResponse,
@@ -15,8 +25,11 @@ import type {
 } from "@/core/auth/models/NodeAuthModels";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 
-const authClient = axios.create({
-	baseURL: "/",
+// A plain instance with NO interceptors, kept apart from the shared one: a failed login or refresh must not enter
+// the 401 refresh/replay path, and a 429 must not toast on top of the page's own message.
+// `baseURL` MUST stay "" (not "/"): see AxiosInstance.ts for the protocol-relative URL it would produce.
+const authAxios = axios.create({
+	baseURL: "",
 	withCredentials: true,
 	headers: {
 		"Content-Type": "application/json",
@@ -24,32 +37,31 @@ const authClient = axios.create({
 	},
 });
 
+export const nodeAuthClient = createClient(
+	createConfig({
+		axios: authAxios,
+		baseURL: "",
+		throwOnError: true,
+		auth: () => useNodeAuthStore.getState().accessToken ?? undefined,
+	}),
+);
+
 let refreshTokenPromise: Promise<NodeAccessTokenResponse> | undefined;
 
-function withBearer(config?: AxiosRequestConfig): AxiosRequestConfig {
-	const accessToken = useNodeAuthStore.getState().accessToken;
-
-	return {
-		...config,
-		headers: {
-			...config?.headers,
-			...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-		},
-	};
+export async function getNodeAuthStatus(
+	config?: Pick<AxiosRequestConfig, "timeout" | "signal">,
+): Promise<NodeAuthStatusResponse> {
+	const { data } = await nodeAuthStatus({ ...config, client: nodeAuthClient });
+	return data as NodeAuthStatusResponse;
 }
 
-export async function getNodeAuthStatus(config?: AxiosRequestConfig): Promise<NodeAuthStatusResponse> {
-	const { data } = await authClient.get<NodeAuthStatusResponse>(buildLocalApiUrl("auth/status"), config);
+export async function setupNodeAuth(request: NodeSetupRequest): Promise<NodeSetupResponse> {
+	const { data } = await nodeSetup({ body: request, client: nodeAuthClient });
 	return data;
 }
 
-export async function setupNodeAuth(request: NodeSetupRequest, config?: AxiosRequestConfig): Promise<NodeSetupResponse> {
-	const { data } = await authClient.post<NodeSetupResponse>(buildLocalApiUrl("auth/setup"), request, config);
-	return data;
-}
-
-export async function loginNodeAuth(request: NodeLoginRequest, config?: AxiosRequestConfig): Promise<NodeAccessTokenResponse> {
-	const { data } = await authClient.post<NodeAccessTokenResponse>(buildLocalApiUrl("auth/login"), request, config);
+export async function loginNodeAuth(request: NodeLoginRequest): Promise<NodeAccessTokenResponse> {
+	const { data } = await nodeLogin({ body: request, client: nodeAuthClient });
 	return data;
 }
 
@@ -58,8 +70,7 @@ export async function refreshNodeAuthToken(): Promise<NodeAccessTokenResponse> {
 		return refreshTokenPromise;
 	}
 
-	refreshTokenPromise = authClient
-		.post<NodeAccessTokenResponse>(buildLocalApiUrl("auth/refresh"), {})
+	refreshTokenPromise = nodeRefresh({ client: nodeAuthClient })
 		.then(({ data }) => data)
 		.finally(() => {
 			refreshTokenPromise = undefined;
@@ -68,33 +79,27 @@ export async function refreshNodeAuthToken(): Promise<NodeAccessTokenResponse> {
 	return refreshTokenPromise;
 }
 
-export async function logoutNodeAuth(config?: AxiosRequestConfig): Promise<void> {
-	await authClient.post(buildLocalApiUrl("auth/logout"), {}, withBearer(config));
+export async function logoutNodeAuth(): Promise<void> {
+	await nodeLogout({ client: nodeAuthClient });
 }
 
 // Returns 204 and NO new token pair: the node rotates the security stamp and revokes every refresh token, so the
 // caller's own access token is dead on its next request and the refresh cookie is cleared. A caller must treat a
 // resolved promise as a sign-out, not as a session that continues.
-export async function changeNodePassword(request: NodeChangePasswordRequest, config?: AxiosRequestConfig): Promise<void> {
-	await authClient.post(buildLocalApiUrl("auth/change-password"), request, withBearer(config));
+export async function changeNodePassword(request: NodeChangePasswordRequest): Promise<void> {
+	await nodeChangePassword({ body: request, client: nodeAuthClient });
 }
 
 // Legacy data dir: wraps the existing node key with the operator's (re-entered) login password. 409 once not pending.
-export async function confirmNodeVault(
-	request: NodeVaultPasswordRequest,
-	config?: AxiosRequestConfig,
-): Promise<NodeVaultConfirmResponse> {
-	const { data } = await authClient.post<NodeVaultConfirmResponse>(
-		buildLocalApiUrl("auth/vault/confirm"),
-		request,
-		withBearer(config),
-	);
+export async function confirmNodeVault(request: NodeVaultPasswordRequest): Promise<NodeVaultConfirmResponse> {
+	const { data } = await nodeVaultConfirm({ body: request, client: nodeAuthClient });
 	return data;
 }
 
-// Answered by the locked pre-host. 204 starts the hand-over to the real host on the same origin; it issues no token.
+// Answered by the locked pre-host, so not in the spec. 204 starts the hand-over to the real host on the same origin;
+// it issues no token.
 export async function unlockNodeVault(request: NodeVaultPasswordRequest, config?: AxiosRequestConfig): Promise<void> {
-	await authClient.post(buildLocalApiUrl("auth/vault/unlock"), request, config);
+	await authAxios.post(buildLocalApiUrl("auth/vault/unlock"), request, config);
 }
 
 // 200 carries the rotated recovery code and, like the password unlock, starts the hand-over.
@@ -102,7 +107,7 @@ export async function unlockNodeVaultWithRecovery(
 	request: NodeVaultRecoveryUnlockRequest,
 	config?: AxiosRequestConfig,
 ): Promise<NodeVaultRecoveryUnlockResponse> {
-	const { data } = await authClient.post<NodeVaultRecoveryUnlockResponse>(
+	const { data } = await authAxios.post<NodeVaultRecoveryUnlockResponse>(
 		buildLocalApiUrl("auth/vault/unlock-recovery"),
 		request,
 		config,

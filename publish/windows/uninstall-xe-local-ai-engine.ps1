@@ -20,11 +20,13 @@
          and compute-runtime\ (the package venvs, multi-gigabyte for training), and
          training\ (downloaded base checkpoints, datasets and run artifacts).
 
-    It NEVER deletes anything outside that exact directory. Portable-zip users: after
+    It NEVER deletes anything outside that exact directory. When the directory holds
+    node.key, a second, typed confirmation is required. Portable-zip users: after
     running this, also delete the folder you unzipped the app into.
 
 .PARAMETER Yes
-    Non-interactive: skip the delete confirmation prompt.
+    Skip the first delete confirmation. A data directory that holds node.key still asks
+    for the typed second confirmation, so it is never deleted without one.
 
 .PARAMETER DryRun
     Show what would happen; stop and delete nothing.
@@ -152,6 +154,14 @@ if ($targets.Count -gt 0) {
         foreach ($p in @(Get-XEUninstallTarget -DataDirectory $dataDir -InstallDirectory $installDirs)) {
             try { Stop-Process -Id $p.Id -Force -ErrorAction Stop } catch { $null = $_ }
         }
+        # Deleting under a live process aborts half-way, so a survivor stops the run before step 3.
+        $survivors = @(Get-XEUninstallTarget -DataDirectory $dataDir -InstallDirectory $installDirs)
+        if ($survivors.Count -gt 0) {
+            Write-Host ">> Could not stop: pid $(@($survivors | ForEach-Object { $_.Id }) -join ', ')."
+            Write-Host "   Quit the app (Quit XE in the tray menu) or end these processes, then run this again."
+            Write-Host "   Nothing was deleted."
+            exit 1
+        }
         Write-Host ">> Processes stopped."
     }
 } else {
@@ -171,35 +181,12 @@ foreach ($candidate in @((Join-Path $localAppData $DataDirName), (Join-Path $loc
     }
 }
 if ($velopackRoot) {
-    # A Velopack-managed install owns its own tree, and on the default Windows layout
-    # that tree ($env:LOCALAPPDATA\XE-Local-AI-Engine) is ALSO where the app writes its
-    # data. We must NOT brute-force Remove-Item a live managed install. Delegate to
-    # Velopack's own uninstall and stop here. The portable/manual zip these scripts ship
-    # for is NOT managed, so it never reaches this branch.
+    # Releases ship no Setup.exe, so a managed tree here is an old install, or a portable copy extracted into the
+    # data folder. Its uninstaller can take the data folder with it, past every confirmation below, so this script
+    # never runs it and deletes nothing; the user removes that layout by hand.
     Write-Host ">> A Velopack-managed install was detected at: $velopackRoot"
-    $updateExe = Join-Path $velopackRoot 'Update.exe'
-    if ((Test-Path -LiteralPath $updateExe) -and -not $DryRun) {
-        $doUninstall = $Yes
-        if (-not $Yes) {
-            $reply = Read-Host 'Run Velopack uninstall now (removes the app + registration)? Type "y" to run'
-            $doUninstall = ($reply -eq 'y' -or $reply -eq 'Y')
-        }
-        if ($doUninstall) {
-            try {
-                Write-Host ">> Running Velopack uninstall: $updateExe --uninstall"
-                & $updateExe --uninstall
-                Write-Host ">> Velopack uninstall invoked."
-            } catch {
-                Write-Host ">> Velopack uninstall could not be run automatically."
-                Write-Host "   Uninstall the app from Windows 'Apps & features' instead."
-            }
-        }
-    } else {
-        Write-Host "   Uninstall the app from Windows 'Apps & features' (or run its"
-        Write-Host "   Update.exe --uninstall)."
-    }
-    Write-Host ">> This script will not delete a managed install tree. Processes were"
-    Write-Host "   already stopped above."
+    Write-Host "   This script does not remove a managed install and deleted nothing. Remove it from"
+    Write-Host "   Windows 'Apps & features', or delete the folders by hand (see the user guide)."
     exit 0
 }
 
@@ -213,28 +200,96 @@ if (-not (Test-Path -LiteralPath $dataDir)) {
     Write-Host ">> No data directory at $dataDir - nothing left to remove. Done."
     exit 0
 }
+# Follows every symlink or junction along the path, so two paths can be compared by where they really are.
+function Resolve-XEPhysicalPath {
+    param([Parameter(Mandatory)][string] $Path, [int] $Depth = 0)
+    if ($Depth -gt 32) { throw "Too many links while resolving '$Path'." }
+    $full = [IO.Path]::GetFullPath($Path)
+    $current = [IO.Path]::GetPathRoot($full)
+    $parts = $full.Substring($current.Length).Split([char[]]@('\', '/'), [StringSplitOptions]::RemoveEmptyEntries)
+    foreach ($part in $parts) {
+        $current = Join-Path $current $part
+        $item = Get-Item -LiteralPath $current -Force -ErrorAction SilentlyContinue
+        if ($null -ne $item -and $item.LinkType -and $item.Target) {
+            $target = @($item.Target)[0]
+            if (-not [IO.Path]::IsPathRooted($target)) { $target = Join-Path (Split-Path -Parent $current) $target }
+            $current = Resolve-XEPhysicalPath -Path $target -Depth ($Depth + 1)
+        }
+    }
+    return $current
+}
+
+# Why deleting $DataDirectory recursively is unsafe, or $null: a malformed or drive-root path, a link at the root
+# (the delete would land on its target), or an app folder inside it (the delete would take the app and this script).
+function Get-XERemovalBlocker {
+    param([string] $DataDirectory, [string] $InstallDirectory)
+    if ([string]::IsNullOrWhiteSpace($DataDirectory) -or $DataDirectory -notmatch '^([A-Za-z]:[\\/]|[\\/])') {
+        return "the data directory path '$DataDirectory' is empty or not absolute"
+    }
+    $full = [IO.Path]::GetFullPath($DataDirectory)
+    if ($full.TrimEnd('\', '/') -eq [IO.Path]::GetPathRoot($full).TrimEnd('\', '/')) {
+        return "the data directory path '$DataDirectory' is a drive root"
+    }
+    $item = Get-Item -LiteralPath $full -Force -ErrorAction SilentlyContinue
+    if ($null -eq $item -or -not $item.PSIsContainer) {
+        return "'$DataDirectory' is not a folder"
+    }
+    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        return "'$DataDirectory' is a link (junction or symbolic link), not the real data folder"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($InstallDirectory)) {
+        $physicalData = Resolve-XEPhysicalPath -Path $full
+        $physicalInstall = Resolve-XEPhysicalPath -Path $InstallDirectory
+        if ($physicalInstall.TrimEnd('\', '/') -eq $physicalData.TrimEnd('\', '/') -or
+            (Test-UnderDirectory -Path $physicalInstall -Root $physicalData)) {
+            return "the app folder '$InstallDirectory' lies inside the data folder"
+        }
+    }
+    return $null
+}
+
+$blocker = Get-XERemovalBlocker -DataDirectory $dataDir -InstallDirectory $PSScriptRoot
+if ($blocker) {
+    Write-Host ">> Refusing to delete the data folder: $blocker."
+    Write-Host "   Nothing was deleted. Remove the folders by hand (see the user guide)."
+    exit 1
+}
 if ($DryRun) {
     Write-Host ">> Dry-run: would delete $dataDir (and everything under it)."
     exit 0
 }
 
-if (-not $Yes) {
-    Write-Host "This will permanently delete your $AppName data:"
-    Write-Host "  $dataDir"
-    Write-Host "  (database, keys, settings, downloaded runtimes, and all models)."
-    $reply = Read-Host 'Type "y" to delete, anything else to cancel'
-    if ($reply -ne 'y' -and $reply -ne 'Y') {
-        Write-Host ">> Cancelled. Nothing was deleted."
-        exit 0
+# Asks before the data directory goes: once unless -Yes, then once more, typed, when it holds node.key, because
+# without that key the database and every encrypted credential stay unreadable, even restored from a backup.
+function Confirm-XEDataRemoval {
+    param([Parameter(Mandatory)][string] $DataDirectory, [string] $Name = 'XE Local AI Engine', [switch] $Yes)
+    if (-not $Yes) {
+        Write-Host "This will permanently delete your $Name data:"
+        Write-Host "  $DataDirectory"
+        Write-Host "  (database, keys, settings, downloaded runtimes, and all models)."
+        $reply = Read-Host 'Type "y" to delete, anything else to cancel'
+        if ($reply -ne 'y') { return $false }
     }
+    if (Test-Path -LiteralPath (Join-Path $DataDirectory 'node.key')) {
+        Write-Host "The folder holds node.key, the key to your database and saved credentials."
+        Write-Host "Without it no backup of this data can be opened again."
+        $reply = Read-Host 'Type "delete key" to delete it too, anything else to cancel'
+        if ($reply -ne 'delete key') { return $false }
+    }
+    return $true
 }
 
-# Guard: refuse to operate on an empty/blank path.
-if ([string]::IsNullOrWhiteSpace($dataDir)) {
-    Write-Error "Data directory path is unexpectedly empty; refusing to delete."
-    exit 1
+if (-not (Confirm-XEDataRemoval -DataDirectory $dataDir -Name $AppName -Yes:$Yes)) {
+    Write-Host ">> Cancelled. Nothing was deleted."
+    exit 0
 }
+
 Remove-Item -LiteralPath $dataDir -Recurse -Force
 Write-Host ">> Removed $dataDir."
 Write-Host ">> $AppName data removed. If you used the portable zip, also delete the folder"
 Write-Host "   you unzipped the app into."
+# The Velopack portable zip ships this script in its "current" folder; the extracted folder is the parent.
+if ((Split-Path -Leaf $PSScriptRoot) -eq 'current') {
+    Write-Host "   That is: $(Split-Path -Parent $PSScriptRoot)"
+}
+exit 0

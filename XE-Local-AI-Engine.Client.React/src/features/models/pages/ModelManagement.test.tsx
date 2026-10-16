@@ -34,8 +34,8 @@ vi.mock("@microsoft/signalr", () => ({
 
 // Mock the generated hey-api TanStack layer. The read factories return `{ queryKey, queryFn }` (the queryFn is the
 // data source the page renders from); the mutation factories return `{ mutationFn }` the page spreads into
-// useMutation. The page wraps every factory result in the real withResponseValidation (not mocked), then layers its
-// own onSuccess invalidation. The factory mocks let a test assert the variable shape the page forwarded to the wire.
+// useMutation. The page spreads every factory result, then layers its own onSuccess
+// invalidation. The factory mocks let a test assert the variable shape the page forwarded to the wire.
 // Each *QueryKey factory returns a stable single-element key keyed by the operationId so the page's invalidation
 // (which calls the same factories) refetches the live query — proving the post-override list refetch. The model-fit
 // `getLatestRecommendations` factory is mocked too because the details dialog's Fit tab joins the installed model

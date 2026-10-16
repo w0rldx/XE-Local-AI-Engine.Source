@@ -6,6 +6,10 @@ fallback and tool-call gates: [inference-runtime](inference-runtime.md).
 
 ## Host pipeline and auth
 
+### `Referrer-Policy: no-referrer` makes the loopback gate refuse same-origin writes
+
+**Rule:** keep the node's `Referrer-Policy` at `same-origin`. Under `no-referrer` browsers send `Origin: null` on a same-origin POST, which `LocalApiSecurityMiddleware.IsAllowedOrigin` refuses with 403. **Prevents:** a header-hardening change that breaks every SPA write while requests from non-browser clients keep working. **Authority:** `NodeResponseHeaders` (Referrer-Policy comment); `LocalApiSecurityMiddleware.IsAllowedOrigin`.
+
 ### An explicit Kestrel endpoint discards the addresses `UseUrls` was given
 
 **Rule:** `builder.WebHost.ConfigureKestrel(o => o.Listen(...))` replaces, not adds: with non-empty `ListenOptions`,
@@ -37,6 +41,10 @@ change and reset revoke all. **Prevents:** reviving a logged-out cookie, or a lo
 **Rule:** when a dev host or opt-in runner dies at startup, read the node log for "encrypted key-ring element could not be decrypted with the current node operator secret" before suspecting the change. A checkout's `XE-Local-AI-Engine.Client/dp-keys` ring can be encrypted under an older operator secret than the current `XE-Local-AI-Engine.AppHost/.data/node.key`, and then every start stops in `NodeKeyCheckStartupService`. Run node-based lanes from a fresh worktree, or park the stale ring with `XE-Local-AI-Engine.AppHost/.data/node-sqlite` and `XE-Local-AI-Engine.Client/node-settings.json` (move them, never delete without the operator); `node.key` stays. **Prevents:** chasing a runner's bare "app resource failed to start" (exit 5) as a product regression. **Authority:** `NodeKeyCheckStartupService`, `NodeDataProtectionKeyRingDecryptor`; `scripts/run-gpu-smoke-local.sh` exit codes.
 
 ## Dev host lifecycle
+
+### `lab-up.sh` refuses to start without the GPU runtime unless `--cpu` is explicit
+
+**Rule:** a GPU lab round exports `XE_LLAMACPP_SERVER_PATH` (the BYO llama-server) and `XE_LLAMACPP_VARIANT` before `scripts/lab-up.sh`; the script reads both from its environment (`HOST_ENV_KEYS`), reuses a running host only when it started with the same values, and exits 2 with a one-line reason when the path is unset and `--cpu` was not passed. `--cpu` is the only way to run a lab on the managed runtime, and it is for functional checks, never for timing. **Prevents:** a live round whose latency figures come from a large model running on the CPU for minutes. **Authority:** `scripts/lab-up.sh` (`HOST_ENV_KEYS`, `--cpu`); `scripts/tests/lab-up.test.sh`; `AGENTS.md` ("Local runtime").
 
 ### Probe the GPU; never assume one
 

@@ -102,7 +102,7 @@ Distinct from the platform link, the React SPA talks to the host over a **loopba
 
 - REST endpoints (FastEndpoints) under the prefix `LocalApiRoutes.Prefix` (`/api/local/v1`), with a
   global operationId name generator feeding the OpenAPI doc that generates the hey-api React SDK
-  (`Program.cs`, `config.Endpoints.NameGenerator`).
+  (`Hosting/Pipeline/FastEndpointsPipelineExtensions.cs`, `config.Endpoints.NameGenerator`).
 - Local SignalR hubs, each `RequireAuthorization(NodeAuthorizationPolicies.Operator)`. **The `MapHub`
   block in `Client/Program.cs` is the inventory**, and [API & Hubs §2](09-api-and-hubs.md) is the one page that
   enumerates it — this page does not repeat the list. All of them are mapped unconditionally except
@@ -427,7 +427,7 @@ A maintainer must preserve these. Each is enforced or anchored in code today:
 
 ## Startup sequence (host boot order)
 
-From `Client/Program.cs` (`CreateAppCoreAsync`) and its partials — `Program.Vault.cs` (vault unlock),
+From `Client/Program.Host.cs` (`CreateAppCoreAsync`), `Client/Program.cs` (`ConfigureRequestPipeline`) and the other partials — `Program.Vault.cs` (vault unlock),
 `Program.Startup.cs` (migrations and startup recovery), `Program.Commands.cs` (one-shot operator commands such as
 `--status` and the admin-password reset) and `Program.Logging.cs` (request logging) — the host performs a
 deterministic startup before serving traffic:

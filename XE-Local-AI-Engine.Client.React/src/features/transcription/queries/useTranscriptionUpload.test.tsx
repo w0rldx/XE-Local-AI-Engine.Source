@@ -27,7 +27,7 @@ function completedDetail() {
 			createdAtUtc: 1,
 			updatedAtUtc: 2,
 		},
-		segments: [{ id: "segment-1", seq: 1, startMs: 0, endMs: 900, text: "hello", channel: "Mono" }],
+		segments: [{ id: "22222222-0000-4000-8000-000000000001", seq: 1, startMs: 0, endMs: 900, text: "hello", channel: "Mono" }],
 		config: { languageMode: "auto", translate: false, maxWindowSeconds: 5, channelAttribution: false },
 	};
 }

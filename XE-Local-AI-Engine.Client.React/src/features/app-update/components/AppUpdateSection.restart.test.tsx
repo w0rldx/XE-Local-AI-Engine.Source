@@ -35,14 +35,11 @@ vi.mock("@/features/app-update/components/AppUpdateChannelSelector", () => ({
 }));
 
 vi.mock("@/core/api/generated/sdk.gen", () => ({ getAppUpdateStatus: vi.fn() }));
-vi.mock("@/core/api/ResponseValidation", () => ({
-	withResponseValidation: (options: unknown) => options,
-	callWithResponseValidation: <T,>(call: Promise<T>) => call,
-}));
 
 import { getAppUpdateStatus } from "@/core/api/generated/sdk.gen";
-import { AppUpdateSection } from "./AppUpdateSection";
 import { testMantineTheme } from "@/test/MantineTestRender";
+
+import { AppUpdateSection } from "./AppUpdateSection";
 
 describe("AppUpdateSection restart polling", () => {
 	beforeEach(() => {

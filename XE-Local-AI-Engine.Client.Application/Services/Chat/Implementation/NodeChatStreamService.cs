@@ -147,48 +147,17 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     {
         var harnessStartedTimestamp = Stopwatch.GetTimestamp();
 
-        var turn = await LoadTurnAsync(request, cancellationToken);
-        var conversation = turn.Conversation;
-        var selectedPath = turn.SelectedPath;
-
-        var trimmedContent = request.Content.Trim();
-        var userMessageId = request.UserMessageId.GetValueOrDefault(Guid.NewGuid());
-        var assistantMessageId = request.MessageId.GetValueOrDefault(Guid.NewGuid());
-        var requestId = request.RequestId.GetValueOrDefault(Guid.NewGuid());
-        var correlation = new NodeChatMessageCorrelation
-        {
-            ConversationId = request.ConversationId,
-            MessageId = assistantMessageId,
-            RequestId = requestId
-        };
+        var turn = await BeginTurnAsync(request, cancellationToken);
+        var assistantMessageId = turn.AssistantMessageId;
+        var requestId = turn.RequestId;
+        var correlation = turn.Correlation;
         var sequence = new NodeChatStreamSequence();
-        var startedAtUtc = NowUnixMilliseconds();
-
-        var userMessage = await _persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
-            {
-                ConversationId = request.ConversationId,
-                MessageId = userMessageId,
-                Content = trimmedContent,
-                CreatedAtUtc = startedAtUtc
-            },
-            cancellationToken);
-        yield return ToMessageEvent(ChatStreamEventTypes.UserMessagePersisted, correlation, userMessage, sequence.Next());
+        yield return ToMessageEvent(ChatStreamEventTypes.UserMessagePersisted, correlation, turn.UserMessage, sequence.Next());
 
         // Resolved BEFORE the assistant placeholder is minted, because the placeholder is stamped with the resolved
         // agent's id and display name. It reads only conversation, content and path, so the emitted order is unchanged.
-        var resolution = await ResolveTurnAsync(request, conversation, activeModelOverride: null, trimmedContent, cancellationToken);
-
-        // GRAPH-C4-2 is asked of the OFFER this turn really hands the model, resolved once here and reused verbatim
-        // below; only an armed turn resolves early, so a refusal leaves no stranded assistant row.
-        ChatToolOffer? declaredWriteOffer = null;
-        if (request.RefuseUndeclaredWrites)
-        {
-            declaredWriteOffer = await ResolveToolOfferAsync(request, resolution, cancellationToken);
-            if (WorkSessionWriteDeclarationGuard.Refuse(declaredWriteOffer.AllowedTools, resolution.Resolved is not null) is { } undeclaredWrite)
-            {
-                throw new WorkSessionUndeclaredWriteException(undeclaredWrite);
-            }
-        }
+        var resolution = await ResolveTurnAsync(request, turn.Conversation, activeModelOverride: null, turn.TrimmedContent, cancellationToken);
+        var declaredWriteOffer = await ResolveDeclaredWriteOfferAsync(request, resolution, cancellationToken);
 
         var assistantPlaceholder = await PersistAssistantPlaceholderAsync(request, resolution, assistantMessageId, requestId, cancellationToken);
 
@@ -243,28 +212,9 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         // covers every pre-ownership exit, so a staging or package-construction failure cannot leak handlers.
         using var eventSubscription = new ChatStreamEventForwarder(_eventDispatcher, correlation, requestId, stateChannel.Writer, eventSink, sequence, parts, _timeProvider);
 
-        // The armed turn's offer, already settled above and reused verbatim so the rule judged the same list the package
-        // carries; every other turn resolves it right here, exactly where it always did.
-        var toolOffer = declaredWriteOffer ?? await ResolveToolOfferAsync(request, resolution, cancellationToken);
-        var offerTools = toolOffer.OfferTools;
-        // The operator-tool withdrawal applies to the single FINAL list, so it holds whichever resolver produced this offer.
-        // Orchestration participants' own lists ride the compiled spec instead and are filtered where it is built.
-        var allowedTools = request.SuppressOperatorTools ? AskUserToolOffer.WithdrawOperatorTools(toolOffer.AllowedTools) : toolOffer.AllowedTools;
-
-        var attachmentsAllowed = await AreAttachmentsAllowedAsync(resolution, cancellationToken);
-        await ReportPreRunNoticesAsync(request, resolution, toolOffer, attachmentsAllowed, requestId, cancellationToken);
-        if (!attachmentsAllowed &&
-            conversation.Messages.Any(static message => message.Parts?.Any(static part => string.Equals(part.Kind, NodeChatMessagePartKinds.Tool, StringComparison.Ordinal)) == true))
-        {
-            await ReportToolHistoryWithheldAsync(resolution.EffectiveModel, requestId, cancellationToken);
-        }
-
-        // Agent mode: when the offer includes the sandbox file tools, re-stage the sandbox with THIS conversation's
-        // attachments BEFORE building the turn context, so the file tools see them under attachments/.
-        var isAgentHomeTurn = offerTools && OffersAgentHomeTools(allowedTools);
-        var staging = isAgentHomeTurn && attachmentsAllowed
-            ? await StageConversationAttachmentsAsync(request.ConversationId, runCancellation.Token)
-            : null;
+        // Staging is the offer's LAST step, so the lease is owned by the await using below the moment it exists.
+        var offer = await PrepareTurnOfferAsync(request, turn.Conversation, resolution, declaredWriteOffer, requestId, runCancellation, cancellationToken);
+        var staging = offer.Staging;
 
         await using var sandboxPreparationLease = staging?.Preparation;
         if (staging?.Error is { } sandboxPreparationError)
@@ -275,37 +225,14 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             yield break;
         }
 
-        var stagedAttachmentPaths = staging?.Preparation?.StagedPaths ?? [];
-
-        var turnContext = await BuildTurnContextAsync(request,
+        var prepared = await PrepareTurnAsync(request,
+            turn,
             resolution,
-            offerTools,
-            attachmentsAllowed,
-            stagedAttachmentPaths,
-            userMessage.Content,
+            offer,
+            runtimeNodeSettings.MaxMessageRequestTimeoutSeconds,
+            harnessStartedTimestamp,
             runCancellation,
             cancellationToken);
-
-        // Earlier turns' tool calls are replayed (each result capped at the historical excerpt) so a follow-up can build on
-        // what the tools returned; they are node-local data, so a cloud model gets them only under the attachment gate.
-        var package = await BuildRuntimePackageAsync(request,
-            resolution,
-            ConversationContextBuilder.Build(conversation,
-                userMessage,
-                selectedPath,
-                turnContext.Attachment,
-                turnContext.Image,
-                turnContext.Knowledge,
-                includeToolHistory: attachmentsAllowed),
-            allowedTools,
-            runtimeNodeSettings.MaxMessageRequestTimeoutSeconds,
-            requestId);
-        var preRunDurationMs = Stopwatch.GetElapsedTime(harnessStartedTimestamp).TotalMilliseconds;
-
-        // A work-session step is bounded by ConversationStepContextBound before it sends, so only a chat turn auto-compacts.
-        var onTerminal = ChatCompactionTriggerHook.Compose(_logger,
-            BuildMemoryExtractionHook(resolution, conversation, userMessage, selectedPath, package),
-            request.IsWorkSessionTurn ? null : ChatCompactionTriggerHook.Build(_conversationMaintenanceDispatcher, conversation.ConversationId));
 
         Task pumpTask;
         Task runTask;
@@ -318,14 +245,14 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             resolution.EffectiveModel,
             sequence,
             parts,
-            onTerminal,
+            prepared.OnTerminal,
             runCancellation.Token,
             // KB sources that grounded this turn land on the terminal row's metadata_json; null when
             // the turn used no knowledge base.
-            turnContext.KnowledgeSources);
+            prepared.KnowledgeSources);
         // The sandbox is touched only by the run's tool calls, so the workspace goes back when the run ends rather than
         // when this stream unwinds; the lease never queues, so holding it longer fails the next turn as "busy".
-        runTask = ReleaseSandboxAfterAsync(RunInvocationAsync(package,
+        runTask = ReleaseSandboxAfterAsync(RunInvocationAsync(prepared.Package,
                 assistantMessageId,
                 stateChannel.Writer,
                 eventSink,
@@ -334,7 +261,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
                 sequence,
                 resolution.RequiresInstalledChatModel,
                 harnessStartedTimestamp,
-                preRunDurationMs,
+                prepared.PreRunDurationMs,
                 runCancellation.Token),
             staging?.Preparation);
 
@@ -361,6 +288,158 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             // holds the collision slot until it ends. Freeing the slot here resurrects the interrupted-terminal bug.
             await DrainRunAsync(pumpTask, runTask, runCancellation, eventSubscription, requestId);
         }
+    }
+
+    // Loads the turn, mints its ids and persists the user message, which the caller streams before resolving the turn.
+    private async Task<ChatTurnStart> BeginTurnAsync(NodeChatStreamRequest request, CancellationToken cancellationToken)
+    {
+        var turn = await LoadTurnAsync(request, cancellationToken);
+
+        var trimmedContent = request.Content.Trim();
+        var userMessageId = request.UserMessageId.GetValueOrDefault(Guid.NewGuid());
+        var assistantMessageId = request.MessageId.GetValueOrDefault(Guid.NewGuid());
+        var requestId = request.RequestId.GetValueOrDefault(Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = request.ConversationId,
+            MessageId = assistantMessageId,
+            RequestId = requestId
+        };
+        var startedAtUtc = NowUnixMilliseconds();
+
+        var userMessage = await _persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+            {
+                ConversationId = request.ConversationId,
+                MessageId = userMessageId,
+                Content = trimmedContent,
+                CreatedAtUtc = startedAtUtc
+            },
+            cancellationToken);
+
+        return new ChatTurnStart
+        {
+            Conversation = turn.Conversation,
+            SelectedPath = turn.SelectedPath,
+            TrimmedContent = trimmedContent,
+            AssistantMessageId = assistantMessageId,
+            RequestId = requestId,
+            Correlation = correlation,
+            UserMessage = userMessage
+        };
+    }
+
+    // GRAPH-C4-2 is asked of the OFFER this turn really hands the model, resolved once here and reused verbatim by
+    // PrepareTurnOfferAsync; only an armed turn resolves early, so a refusal leaves no stranded assistant row.
+    private async Task<ChatToolOffer?> ResolveDeclaredWriteOfferAsync(NodeChatStreamRequest request,
+        ChatTurnResolution resolution,
+        CancellationToken cancellationToken)
+    {
+        ChatToolOffer? declaredWriteOffer = null;
+        if (request.RefuseUndeclaredWrites)
+        {
+            declaredWriteOffer = await ResolveToolOfferAsync(request, resolution, cancellationToken);
+            if (WorkSessionWriteDeclarationGuard.Refuse(declaredWriteOffer.AllowedTools, resolution.Resolved is not null) is { } undeclaredWrite)
+            {
+                throw new WorkSessionUndeclaredWriteException(undeclaredWrite);
+            }
+        }
+
+        return declaredWriteOffer;
+    }
+
+    // Settles the offer and the attachment gate, emits the pre-run notices, then stages the sandbox as its last step.
+    private async Task<PreparedTurnOffer> PrepareTurnOfferAsync(NodeChatStreamRequest request,
+        NodeChatConversationDto conversation,
+        ChatTurnResolution resolution,
+        ChatToolOffer? declaredWriteOffer,
+        Guid requestId,
+        CancellationTokenSource runCancellation,
+        CancellationToken cancellationToken)
+    {
+        // The armed turn's offer, already settled above and reused verbatim so the rule judged the same list the package
+        // carries; every other turn resolves it right here, exactly where it always did.
+        var toolOffer = declaredWriteOffer ?? await ResolveToolOfferAsync(request, resolution, cancellationToken);
+        var offerTools = toolOffer.OfferTools;
+        // The operator-tool withdrawal applies to the single FINAL list, so it holds whichever resolver produced this offer.
+        // Orchestration participants' own lists ride the compiled spec instead and are filtered where it is built.
+        var allowedTools = request.SuppressOperatorTools ? AskUserToolOffer.WithdrawOperatorTools(toolOffer.AllowedTools) : toolOffer.AllowedTools;
+
+        var attachmentsAllowed = await AreAttachmentsAllowedAsync(resolution, cancellationToken);
+        await ReportPreRunNoticesAsync(request, resolution, toolOffer, attachmentsAllowed, requestId, cancellationToken);
+        if (!attachmentsAllowed &&
+            conversation.Messages.Any(static message => message.Parts?.Any(static part => string.Equals(part.Kind, NodeChatMessagePartKinds.Tool, StringComparison.Ordinal)) == true))
+        {
+            await ReportToolHistoryWithheldAsync(resolution.EffectiveModel, requestId, cancellationToken);
+        }
+
+        // Agent mode: when the offer includes the sandbox file tools, re-stage the sandbox with THIS conversation's
+        // attachments BEFORE building the turn context, so the file tools see them under attachments/.
+        var isAgentHomeTurn = offerTools && OffersAgentHomeTools(allowedTools);
+        var staging = isAgentHomeTurn && attachmentsAllowed
+            ? await StageConversationAttachmentsAsync(request.ConversationId, runCancellation.Token)
+            : null;
+
+        return new PreparedTurnOffer
+        {
+            OfferTools = offerTools,
+            AllowedTools = allowedTools,
+            AttachmentsAllowed = attachmentsAllowed,
+            Staging = staging
+        };
+    }
+
+    // Builds the turn context, the runtime package and the terminal hook: everything the run needs, and nothing it owns.
+    private async Task<PreparedTurn> PrepareTurnAsync(NodeChatStreamRequest request,
+        ChatTurnStart turn,
+        ChatTurnResolution resolution,
+        PreparedTurnOffer offer,
+        int invocationTimeoutSeconds,
+        long harnessStartedTimestamp,
+        CancellationTokenSource runCancellation,
+        CancellationToken cancellationToken)
+    {
+        var conversation = turn.Conversation;
+        var userMessage = turn.UserMessage;
+        var selectedPath = turn.SelectedPath;
+        var stagedAttachmentPaths = offer.Staging?.Preparation?.StagedPaths ?? [];
+
+        var turnContext = await BuildTurnContextAsync(request,
+            resolution,
+            offer.OfferTools,
+            offer.AttachmentsAllowed,
+            stagedAttachmentPaths,
+            userMessage.Content,
+            runCancellation,
+            cancellationToken);
+
+        // Earlier turns' tool calls are replayed (each result capped at the historical excerpt) so a follow-up can build on
+        // what the tools returned; they are node-local data, so a cloud model gets them only under the attachment gate.
+        var package = await BuildRuntimePackageAsync(request,
+            resolution,
+            ConversationContextBuilder.Build(conversation,
+                userMessage,
+                selectedPath,
+                turnContext.Attachment,
+                turnContext.Image,
+                turnContext.Knowledge,
+                includeToolHistory: offer.AttachmentsAllowed),
+            offer.AllowedTools,
+            invocationTimeoutSeconds,
+            turn.RequestId);
+        var preRunDurationMs = Stopwatch.GetElapsedTime(harnessStartedTimestamp).TotalMilliseconds;
+
+        // A work-session step is bounded by ConversationStepContextBound before it sends, so only a chat turn auto-compacts.
+        var onTerminal = ChatCompactionTriggerHook.Compose(_logger,
+            BuildMemoryExtractionHook(resolution, conversation, userMessage, selectedPath, package),
+            request.IsWorkSessionTurn ? null : ChatCompactionTriggerHook.Build(_conversationMaintenanceDispatcher, conversation.ConversationId));
+
+        return new PreparedTurn
+        {
+            Package = package,
+            KnowledgeSources = turnContext.KnowledgeSources,
+            PreRunDurationMs = preRunDurationMs,
+            OnTerminal = onTerminal
+        };
     }
 
     private async Task RunInvocationAsync(RuntimePackage package,
@@ -1057,6 +1136,48 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         public required NodeChatConversationDto Conversation { get; init; }
 
         public required IReadOnlyDictionary<Guid, Guid>? SelectedPath { get; init; }
+    }
+
+    // A send turn once its user message is persisted: the loaded conversation, the minted ids and the persisted row.
+    private sealed class ChatTurnStart
+    {
+        public required NodeChatConversationDto Conversation { get; init; }
+
+        public required IReadOnlyDictionary<Guid, Guid>? SelectedPath { get; init; }
+
+        public required string TrimmedContent { get; init; }
+
+        public required Guid AssistantMessageId { get; init; }
+
+        public required Guid RequestId { get; init; }
+
+        public required NodeChatMessageCorrelation Correlation { get; init; }
+
+        public required NodeChatPersistedMessageDto UserMessage { get; init; }
+    }
+
+    // The settled offer and attachment gate. Staging is null when the turn stages nothing; its lease is the caller's.
+    private sealed class PreparedTurnOffer
+    {
+        public required bool OfferTools { get; init; }
+
+        public required IReadOnlyList<AllowedToolDto>? AllowedTools { get; init; }
+
+        public required bool AttachmentsAllowed { get; init; }
+
+        public required SandboxStagingOutcome? Staging { get; init; }
+    }
+
+    // Everything the run starts from, built before the pump and runner take ownership of the turn.
+    private sealed class PreparedTurn
+    {
+        public required RuntimePackage Package { get; init; }
+
+        public required IReadOnlyList<NodeChatMessageSource>? KnowledgeSources { get; init; }
+
+        public required double PreRunDurationMs { get; init; }
+
+        public required Action<InvocationState, NodeChatPumpTerminalResult> OnTerminal { get; init; }
     }
 
     // The outcome of staging a conversation's attachments into the AgentHome sandbox. A busy workspace yields BOTH a

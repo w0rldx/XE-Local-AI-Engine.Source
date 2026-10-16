@@ -7,7 +7,6 @@ import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { resolveToolApprovalMutation } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { AgentHomePatchApplyDialog } from "@/core/ui/components/AgentHomePatchApplyDialog/AgentHomePatchApplyDialog";
 import { CodeBlock } from "@/core/ui/components/CodeBlock/CodeBlock";
 import { AskUserQuestionCard } from "@/features/chat/components/AskUserQuestionCard";
@@ -108,7 +107,7 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 	// with a NEW request id — which it will whenever session scope is withheld (imported skills) or the node policy
 	// disables session scope. A boolean here would leave a live prompt permanently unanswerable.
 	const [decidedRequestId, setDecidedRequestId] = useState<string | null>(null);
-	const resolveApproval = useMutation({ ...withResponseValidation(resolveToolApprovalMutation()) });
+	const resolveApproval = useMutation({ ...resolveToolApprovalMutation() });
 	const pendingApprovalRequestId = part.pendingApprovalRequestId;
 	const awaitingApproval =
 		approvalControlsEnabled &&

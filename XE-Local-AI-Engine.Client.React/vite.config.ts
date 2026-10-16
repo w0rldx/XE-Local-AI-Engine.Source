@@ -214,13 +214,15 @@ export default defineConfig(({ command, mode }) => {
 			// react-i18next's uninitialised fallback echoes the in-code `defaultValue` verbatim and never
 			// interpolates, so 76 files with a hand-rolled wrapper asserted strings the operator never sees: a
 			// green test over a stale default, a raw key, or a literal `{{count}}`. One init for the suite closes
-			// that whole class. It costs no network: `detection.order` is `["localStorage"]` only.
+			// that whole class. It costs no network: `detection.order` is `["localStorage"]` only. The `en` bundle is a
+			// lazy chunk, so src/test/AwaitI18n.ts (second) waits for it before any test file runs.
 			// Side effect worth knowing: the language detector's `cacheUserLanguage` writes `i18nextLng` into
 			// localStorage during `init()`. Production DEPENDS on that cache (UserLanguageStore seeds itself from
 			// `i18nextLng`), so it is not disabled here; the one test that asserts an empty localStorage clears it
 			// in its own `beforeEach` — see src/core/ui/stores/PendingComposerTextStore.test.ts.
 			setupFiles: [
 				"src/i18n.ts",
+				"src/test/AwaitI18n.ts",
 				"src/test/PinLocale.ts",
 				"src/test/Cleanup.ts",
 				"src/test/NoNetwork.ts",

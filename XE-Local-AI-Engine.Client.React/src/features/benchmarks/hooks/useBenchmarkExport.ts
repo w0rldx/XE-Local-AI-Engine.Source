@@ -1,24 +1,21 @@
 import { useMutation } from "@tanstack/react-query";
 
-import { axiosInstance } from "@/core/api/axios/AxiosInstance";
+import { exportBenchmarkProject, exportBenchmarkProjectCsv } from "@/core/api/generated";
 import { fileNameFromContentDisposition, saveBlob } from "@/core/api/utils/DownloadBlob";
-import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 
-// The export routes are Operator-gated and answer with a file body, which the generated hey-api op models as void (the
-// OpenAPI response is a download, not a JSON payload the SPA consumes). So the bytes are fetched as a blob through the
-// shared axios instance — whose request interceptor attaches the bearer token — exactly as useImageObjectUrl does for
-// the operator-gated image route, and the server-chosen file name is read back off Content-Disposition.
+// The export routes are Operator-gated and answer with a file body. The generated ops read it as JSON / text; the
+// `responseType: "blob"` override keeps the bytes as a download (and skips the response validator, which only runs on
+// JSON), and the server-chosen file name is read back off Content-Disposition.
 
 export type BenchmarkExportFormat = "json" | "csv";
 
-/** `export` for the full JSON record, `export.csv` for the flat one-row-per-run sheet. */
-const exportPath = (projectId: string, format: BenchmarkExportFormat): string =>
-	buildLocalApiUrl(`benchmarks/projects/${projectId}/export${format === "csv" ? ".csv" : ""}`);
-
 async function downloadBenchmarkExport(projectId: string, format: BenchmarkExportFormat): Promise<void> {
-	const response = await axiosInstance.get<Blob>(exportPath(projectId, format), { responseType: "blob" });
+	// `export` for the full JSON record, `export.csv` for the flat one-row-per-run sheet.
+	const options = { path: { projectId }, responseType: "blob" } as const;
+	const response = format === "csv" ? await exportBenchmarkProjectCsv(options) : await exportBenchmarkProject(options);
 	saveBlob(
-		response.data,
+		// The blob override changes the body axios returns, not the generated response type.
+		response.data as unknown as Blob,
 		fileNameFromContentDisposition(response.headers["content-disposition"]) ?? `benchmark-export.${format}`,
 	);
 }

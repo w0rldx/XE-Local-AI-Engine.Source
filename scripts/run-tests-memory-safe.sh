@@ -347,13 +347,12 @@ fi
 
 # Longest-first (LPT) so the parallel schedule doesn't end on a 90s batch started last. Every
 # namespace that took >= 10s is listed, descending; the trailing comment is that measurement.
-# Weights come from ONE green CI run on develop (2026-09-25; coverage ON, JOBS=4,
-# in-process width 1, the TEST_GROUPS=16 pack split across four shards), the first green run after the
-# change that gives each test host one internal EF service provider. That change moved namespace costs
-# unevenly (DevWorkflows.Materialization 828s -> 156s, GraphWorkflows 925s -> 187s, Auth
-# 143s -> 289s), so neither the older CI mean nor the local stopgap that briefly replaced it ranked the
-# module correctly. One run, not a mean: it is the only post-change CI run; fold the next green run in
-# with `--runs 2` and score it on a run that did not build it.
+# Weights are the mean of THREE green CI runs on develop (2026-10-13/14, runs 38394862353, 38468328160,
+# 38643238144; coverage ON, JOBS=4, in-process width 1, the TEST_GROUPS=16 pack split across four shards):
+# `scripts/test-durations.py --heavy --runs 3` over their tests-0..3 TRX artifacts. The 2026-09-25 single-run
+# table had drifted past the 2x bar (NodeSettings 158s -> 325s, Hosting 73s -> 197s, both in one bin), so that
+# bin ran 635-749s against <= 405s for every bin of shard 2. Scored on held-out run 38323666969 by replaying
+# this pack on its measured seconds: slowest bin per shard 521/674/394/607s before, 474/465/451/460s after.
 # Weight from a mean of runs, not one, because the mean is the lowest-variance estimate of a
 # namespace's expected seconds — NOT because it balances the legs better. A single run's weights
 # overfit its own noise (one run's table alone scored a 1.05 shard max/min on the run it
@@ -384,61 +383,64 @@ fi
 # ~114s of real work, ~47s more than the 67s their weight-1 stubs give the packer — the cut-off
 # does not.
 HEAVY=(
-  XE_Local_AI_Engine.Tests.Endpoints.DevelopmentWorkflows.V1 # 416s
-  XE_Local_AI_Engine.Tests.DevWorkflows                # 312s
-  XE_Local_AI_Engine.Tests.Endpoints.Development.V1    # 311s
-  XE_Local_AI_Engine.Tests.Endpoints.ExternalApps.V1   # 296s
-  XE_Local_AI_Engine.Tests.Auth                        # 289s
-  XE_Local_AI_Engine.Tests.DevWorkflows.Dispatch       # 259s
-  XE_Local_AI_Engine.Tests.Endpoints.Transcription     # 236s
-  XE_Local_AI_Engine.Tests.Endpoints.AgentHome.V1      # 224s
-  XE_Local_AI_Engine.Tests.Endpoints.Benchmarks.V1     # 222s
-  XE_Local_AI_Engine.Tests.Endpoints.WorkSessions.V1   # 219s
-  XE_Local_AI_Engine.Tests.Endpoints.GraphWorkflows.V1 # 212s
-  XE_Local_AI_Engine.Tests.GraphWorkflows              # 187s
-  XE_Local_AI_Engine.Tests.Endpoints.Training.V1       # 180s
-  XE_Local_AI_Engine.Tests.NodeSettings                # 158s
-  XE_Local_AI_Engine.Tests.DevWorkflows.Materialization # 156s
-  XE_Local_AI_Engine.Tests.Chat                        # 135s
-  XE_Local_AI_Engine.Tests.Endpoints.LocalModels       # 123s
-  XE_Local_AI_Engine.Tests.Endpoints.Development       # 117s
-  XE_Local_AI_Engine.Tests.WorkSessions                # 112s
-  XE_Local_AI_Engine.Tests.Endpoints.Images            # 103s
-  XE_Local_AI_Engine.Tests.ApiFoundation               # 100s
-  XE_Local_AI_Engine.Tests.Development                 # 99s
-  XE_Local_AI_Engine.Tests.Endpoints.Knowledge         # 97s
-  XE_Local_AI_Engine.Tests.CloudSettings               # 94s
-  XE_Local_AI_Engine.Tests.DevWorkflows.Execution      # 93s
-  XE_Local_AI_Engine.Tests.Endpoints.ModelFit.V1       # 81s
-  XE_Local_AI_Engine.Tests.Endpoints.Drafting          # 78s
-  XE_Local_AI_Engine.Tests.Mcp                         # 78s
-  XE_Local_AI_Engine.Tests.Hosting                     # 73s
-  XE_Local_AI_Engine.Tests.Endpoints.LocalChat         # 69s
-  XE_Local_AI_Engine.Tests.Endpoints.Common            # 64s
-  XE_Local_AI_Engine.Tests.Providers.StableDiffusionCpp # 50s
-  XE_Local_AI_Engine.Tests.Automation                  # 48s
-  XE_Local_AI_Engine.Tests.Endpoints.Agents            # 44s
-  XE_Local_AI_Engine.Tests.Transcription               # 44s
-  XE_Local_AI_Engine.Tests.Agents                      # 39s
-  XE_Local_AI_Engine.Tests.Integrations                # 39s
-  XE_Local_AI_Engine.Tests.Architecture                # 39s
-  XE_Local_AI_Engine.Tests.ExternalApps                # 36s
-  XE_Local_AI_Engine.Tests.Sandbox                     # 30s
-  XE_Local_AI_Engine.Tests.Providers.LlamaServer       # 29s
-  XE_Local_AI_Engine.Tests.Endpoints.Proxy.V1          # 29s
-  XE_Local_AI_Engine.Tests.Endpoints.ExternalProviders # 20s
-  XE_Local_AI_Engine.Tests.Endpoints.Workspaces        # 20s
-  XE_Local_AI_Engine.Tests.BackgroundServices          # 20s
-  XE_Local_AI_Engine.Tests.Endpoints.Integrations.V1   # 18s
+  XE_Local_AI_Engine.Tests.Endpoints.DevelopmentWorkflows.V1 # 432s
+  XE_Local_AI_Engine.Tests.Endpoints.ExternalApps.V1   # 357s
+  XE_Local_AI_Engine.Tests.NodeSettings                # 325s
+  XE_Local_AI_Engine.Tests.GraphWorkflows              # 314s
+  XE_Local_AI_Engine.Tests.DevWorkflows.Dispatch       # 313s
+  XE_Local_AI_Engine.Tests.DevWorkflows                # 291s
+  XE_Local_AI_Engine.Tests.Endpoints.Benchmarks.V1     # 290s
+  XE_Local_AI_Engine.Tests.Auth                        # 262s
+  XE_Local_AI_Engine.Tests.Endpoints.WorkSessions.V1   # 206s
+  XE_Local_AI_Engine.Tests.Hosting                     # 197s
+  XE_Local_AI_Engine.Tests.Endpoints.ModelFit.V1       # 176s
+  XE_Local_AI_Engine.Tests.Endpoints.Transcription     # 172s
+  XE_Local_AI_Engine.Tests.ApiFoundation               # 166s
+  XE_Local_AI_Engine.Tests.Endpoints.Development.V1    # 163s
+  XE_Local_AI_Engine.Tests.DevWorkflows.Materialization # 163s
+  XE_Local_AI_Engine.Tests.Chat                        # 162s
+  XE_Local_AI_Engine.Tests.Endpoints.Images            # 153s
+  XE_Local_AI_Engine.Tests.Endpoints.LocalModels       # 152s
+  XE_Local_AI_Engine.Tests.Endpoints.Training.V1       # 150s
+  XE_Local_AI_Engine.Tests.DevWorkflows.Execution      # 145s
+  XE_Local_AI_Engine.Tests.Endpoints.AgentHome.V1      # 140s
+  XE_Local_AI_Engine.Tests.Endpoints.Knowledge         # 133s
+  XE_Local_AI_Engine.Tests.Development                 # 122s
+  XE_Local_AI_Engine.Tests.Endpoints.GraphWorkflows.V1 # 121s
+  XE_Local_AI_Engine.Tests.Endpoints.Agents            # 112s
+  XE_Local_AI_Engine.Tests.Endpoints.Common            # 98s
+  XE_Local_AI_Engine.Tests.Transcription               # 98s
+  XE_Local_AI_Engine.Tests.Endpoints.Development       # 95s
+  XE_Local_AI_Engine.Tests.Endpoints.ExternalProviders # 95s
+  XE_Local_AI_Engine.Tests.WorkSessions                # 89s
+  XE_Local_AI_Engine.Tests.CloudSettings               # 88s
+  XE_Local_AI_Engine.Tests.Architecture                # 78s
+  XE_Local_AI_Engine.Tests.Mcp                         # 72s
+  XE_Local_AI_Engine.Tests.Endpoints.Drafting          # 68s
+  XE_Local_AI_Engine.Tests.Integrations                # 60s
+  XE_Local_AI_Engine.Tests.Agents                      # 59s
+  XE_Local_AI_Engine.Tests.Providers.LlamaServer       # 52s
+  XE_Local_AI_Engine.Tests.Endpoints.LocalChat         # 52s
+  XE_Local_AI_Engine.Tests.Automation                  # 52s
+  XE_Local_AI_Engine.Tests.Auth.Integration            # 41s
+  XE_Local_AI_Engine.Tests.Providers.StableDiffusionCpp # 38s
+  XE_Local_AI_Engine.Tests.ExternalApps                # 25s
+  XE_Local_AI_Engine.Tests.Sandbox                     # 24s
+  XE_Local_AI_Engine.Tests.Benchmarks                  # 22s
+  XE_Local_AI_Engine.Tests.Endpoints.Workspaces        # 21s
+  XE_Local_AI_Engine.Tests.Endpoints.CustomTools.V1    # 21s
+  XE_Local_AI_Engine.Tests.Endpoints.Proxy.V1          # 20s
+  XE_Local_AI_Engine.Tests.Endpoints.Invocations       # 18s
+  XE_Local_AI_Engine.Tests.Endpoints.Diagnostics.V1    # 18s
+  XE_Local_AI_Engine.Tests.Coder                       # 17s
+  XE_Local_AI_Engine.Tests.Endpoints.TutorialState     # 17s
   XE_Local_AI_Engine.Tests.Invocation                  # 16s
-  XE_Local_AI_Engine.Tests.Auth.Integration            # 15s
-  XE_Local_AI_Engine.Tests.AgentHome                   # 14s
-  XE_Local_AI_Engine.Tests.Proxy                       # 14s
-  XE_Local_AI_Engine.Tests.Endpoints.TutorialState     # 14s
-  XE_Local_AI_Engine.Tests.AppUpdate                   # 13s
-  XE_Local_AI_Engine.Tests.Coder                       # 12s
-  XE_Local_AI_Engine.Tests.Hubs                        # 11s
-  XE_Local_AI_Engine.Tests.Benchmarks                  # 10s
+  XE_Local_AI_Engine.Tests.Endpoints.NodeBackups.V1    # 15s
+  XE_Local_AI_Engine.Tests.AgentHome                   # 13s
+  XE_Local_AI_Engine.Tests.Hubs                        # 13s
+  XE_Local_AI_Engine.Tests.BackgroundServices          # 13s
+  XE_Local_AI_Engine.Tests.RateLimiting                # 12s
+  XE_Local_AI_Engine.Tests.ExternalProviders           # 11s
 )
 declare -A IS_HEAVY=()
 ORDERED=()

@@ -10,10 +10,6 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	setAppUpdateChannelMutation: vi.fn(),
 }));
 
-vi.mock("@/core/api/ResponseValidation", () => ({
-	withResponseValidation: (opts: unknown) => opts,
-	callWithResponseValidation: <T,>(call: Promise<T>) => call,
-}));
 vi.mock("@/core/api/generated/sdk.gen", () => ({ getAppUpdateStatus: vi.fn() }));
 
 import {
@@ -24,6 +20,7 @@ import {
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { getAppUpdateStatus } from "@/core/api/generated/sdk.gen";
 import { createProvidersWrapper, createTestQueryClient } from "@/test/RenderWithProviders";
+
 import {
 	useApplyAppUpdate,
 	useAppUpdateStatus,

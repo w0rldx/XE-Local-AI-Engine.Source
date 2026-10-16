@@ -1,16 +1,14 @@
 // The one-zip support export: the node's scrubbed server bundle with the browser snapshot added as `snapshot.json`.
 //
-// The bundle route answers a file body, which the generated hey-api op models as void, so the bytes come through the
-// shared axios instance as useBenchmarkExport does; its interceptor attaches the bearer token. They are read as an
-// ArrayBuffer rather than a Blob because fflate unzips bytes. Whatever goes wrong with the server half (offline node,
-// 401, a body that is not a zip), the operator still gets the browser-only zip.
+// The generated `getSupportBundle` is called with a `responseType: "arraybuffer"` override (its default is Blob)
+// because fflate unzips bytes. Whatever goes wrong with the server half (offline node, 401, a body that is not a zip), the operator still gets the
+// browser-only zip.
 
 import { unzipSync, zipSync } from "fflate";
 import { t } from "i18next";
 
-import { axiosInstance } from "@/core/api/axios/AxiosInstance";
+import { getSupportBundle } from "@/core/api/generated";
 import { saveBlob } from "@/core/api/utils/DownloadBlob";
-import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import type { Snapshot } from "@/core/diagnostics/Diagnostics";
 import { toast } from "@/core/ui/notifications/Toast";
 import { exportSnapshot, snapshotArchiveEntries } from "@/features/diagnostics/ExportSnapshot";
@@ -25,16 +23,14 @@ export async function buildSupportBundleZip(snapshot: Snapshot): Promise<Uint8Ar
 	// An abort on the page's own timer rather than axios' `timeout`, so the deadline follows the (fakeable) global clock.
 	const deadline = new AbortController();
 	const timer = setTimeout(() => deadline.abort(), SUPPORT_BUNDLE_TIMEOUT_MS);
-	let response: { data: ArrayBuffer };
+	let response: { data: unknown };
 	try {
-		response = await axiosInstance.get<ArrayBuffer>(buildLocalApiUrl(SUPPORT_BUNDLE_PATH), {
-			responseType: "arraybuffer",
-			signal: deadline.signal,
-		});
+		response = await getSupportBundle({ responseType: "arraybuffer", signal: deadline.signal });
 	} finally {
 		clearTimeout(timer);
 	}
-	const serverEntries = unzipSync(new Uint8Array(response.data));
+	// The arraybuffer override changes the body axios returns, not the generated `Blob` response type.
+	const serverEntries = unzipSync(new Uint8Array(response.data as ArrayBuffer));
 	if (Object.keys(serverEntries).length === 0) {
 		throw new Error("The server support bundle is empty.");
 	}

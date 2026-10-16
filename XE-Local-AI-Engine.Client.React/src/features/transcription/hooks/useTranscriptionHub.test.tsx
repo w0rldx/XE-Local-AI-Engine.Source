@@ -89,7 +89,7 @@ vi.mock("@microsoft/signalr", () => {
 });
 
 vi.mock("@/core/auth/stores/NodeAuthStore", () => ({
-	useNodeAuthStore: { getState: () => ({ accessToken: "token" }) },
+	useNodeAuthStore: { getState: () => ({ accessToken: "token" }), subscribe: () => () => undefined },
 }));
 
 interface SnapshotRow {

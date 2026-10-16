@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 
 import type { XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunResponse as GraphWorkflowRunResponse } from "@/core/api/generated";
 import { getGraphWorkflowNodeRunOptions, getGraphWorkflowRunOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 
 const HUB_PATH = "graph-workflows/hub";
@@ -52,7 +51,7 @@ export function useCommandRunStatus(initial: GraphWorkflowRunResponse): CommandR
 	const queryClient = useQueryClient();
 	const [hubDown, setHubDown] = useState(false);
 	const query = useQuery({
-		...withResponseValidation(getGraphWorkflowRunOptions({ path: { runId } })),
+		...getGraphWorkflowRunOptions({ path: { runId } }),
 		initialData: initial,
 		refetchInterval: (current) =>
 			hubDown && !isTerminalRunStatus(current.state.data?.run.status ?? "") ? HUB_DOWN_POLL_MS : false,
@@ -101,7 +100,7 @@ export function useCommandRunStatus(initial: GraphWorkflowRunResponse): CommandR
 
 	const failed = firstFailedNodeRun(query.data);
 	const nodeRun = useQuery({
-		...withResponseValidation(getGraphWorkflowNodeRunOptions({ path: { runId, nodeKey: failed?.nodeKey ?? "" } })),
+		...getGraphWorkflowNodeRunOptions({ path: { runId, nodeKey: failed?.nodeKey ?? "" } }),
 		enabled: failed !== undefined,
 	});
 

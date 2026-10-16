@@ -14,15 +14,12 @@ import {
 	triggerScheduledJobMutation,
 	updateScheduledJobMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toScheduledJob, toScheduledJobRun, toScheduledJobTemplate } from "@/features/scheduler/models/SchedulerMappers";
 import type { ScheduledJobRun, ScheduledJobRunFilters } from "@/features/scheduler/models/SchedulerModels";
 
 // Server state for the scheduler management surface. Reads use the generated hey-api `*Options()` (which wire the
 // shared axios instance + TanStack Query AbortSignal automatically) and a TanStack `select` that maps the
-// optional-field generated response into the stricter domain view-model. Every generated options object is wrapped
-// in withResponseValidation so a zod response-shape failure surfaces as an ApiError (never a raw ZodError).
-// Mutations invalidate by the generated query key's `_id` discriminator (partial-object match), so every cached
+// optional-field generated response into the stricter domain view-model. Mutations invalidate by the generated query key's `_id` discriminator (partial-object match), so every cached
 // variant of an endpoint refetches. The SignalR hub (useSchedulerHub) layers live invalidation on top of these for
 // server-pushed changes — TanStack Query stays the authoritative source.
 
@@ -40,14 +37,14 @@ export function schedulerInvalidationKey(operationId: string): readonly [{ _id: 
 
 export function useScheduledJobTemplates() {
 	return useQuery({
-		...withResponseValidation(listScheduledJobTemplatesOptions()),
+		...listScheduledJobTemplatesOptions(),
 		select: (data) => (data.items ?? []).map(toScheduledJobTemplate),
 	});
 }
 
 export function useScheduledJobs(includeDeleted = false) {
 	return useQuery({
-		...withResponseValidation(listScheduledJobsOptions({ query: { includeDeleted } })),
+		...listScheduledJobsOptions({ query: { includeDeleted } }),
 		select: (data) => (data.items ?? []).map(toScheduledJob),
 	});
 }
@@ -61,16 +58,14 @@ interface ScheduledJobRunsQueryOptions {
 // Shared run-history query options (validated). Only the active filters ride the query string; an absent filter is
 // left undefined. Reused by the hook and by the imperative one-shot fetch so both build the key/validation identically.
 function scheduledJobRunsQueryOptions(filters: ScheduledJobRunFilters) {
-	return withResponseValidation(
-		listScheduledJobRunsOptions({
-			query: {
-				...(filters.status !== undefined ? { status: filters.status } : {}),
-				...(filters.fromUtc !== undefined ? { fromUtc: filters.fromUtc } : {}),
-				...(filters.toUtc !== undefined ? { toUtc: filters.toUtc } : {}),
-				...(filters.scheduledJobId !== undefined ? { scheduledJobId: filters.scheduledJobId } : {}),
-			},
-		}),
-	);
+	return listScheduledJobRunsOptions({
+		query: {
+			...(filters.status !== undefined ? { status: filters.status } : {}),
+			...(filters.fromUtc !== undefined ? { fromUtc: filters.fromUtc } : {}),
+			...(filters.toUtc !== undefined ? { toUtc: filters.toUtc } : {}),
+			...(filters.scheduledJobId !== undefined ? { scheduledJobId: filters.scheduledJobId } : {}),
+		},
+	});
 }
 
 export function useScheduledJobRuns(filters: ScheduledJobRunFilters = {}, options: ScheduledJobRunsQueryOptions = {}) {
@@ -96,7 +91,7 @@ export async function fetchScheduledJobRuns(
 // One run's detail. Disabled until a run id is supplied so the detail query only fires when a run is selected.
 export function useScheduledJobRun(runId: string | null) {
 	return useQuery({
-		...withResponseValidation(getScheduledJobRunOptions({ path: { runId: runId ?? "" } })),
+		...getScheduledJobRunOptions({ path: { runId: runId ?? "" } }),
 		enabled: runId !== null,
 		select: toScheduledJobRun,
 	});
@@ -117,7 +112,7 @@ export function useCreateScheduledJob() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(createScheduledJobMutation()),
+		...createScheduledJobMutation(),
 		onSuccess: (_data: CreateScheduledJobResponse) => invalidateJobs(queryClient),
 	});
 }
@@ -126,7 +121,7 @@ export function useUpdateScheduledJob() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(updateScheduledJobMutation()),
+		...updateScheduledJobMutation(),
 		onSuccess: (_data: UpdateScheduledJobResponse) => invalidateJobs(queryClient),
 	});
 }
@@ -144,7 +139,7 @@ export function useSetScheduledJobEnabled() {
 
 	return useMutation({
 		mutationFn: async ({ id, enabled }: SetScheduledJobEnabledVariables): Promise<void> => {
-			const options = withResponseValidation(enabled ? enableScheduledJobMutation() : disableScheduledJobMutation());
+			const options = enabled ? enableScheduledJobMutation() : disableScheduledJobMutation();
 			await options.mutationFn?.({ path: { scheduledJobId: id } }, undefined as never);
 		},
 		onSuccess: () => invalidateJobs(queryClient),
@@ -155,7 +150,7 @@ export function useDeleteScheduledJob() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(deleteScheduledJobMutation()),
+		...deleteScheduledJobMutation(),
 		onSuccess: () => invalidateJobs(queryClient),
 	});
 }
@@ -165,7 +160,7 @@ export function useTriggerScheduledJob() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(triggerScheduledJobMutation()),
+		...triggerScheduledJobMutation(),
 		onSuccess: () => invalidateRuns(queryClient),
 	});
 }
@@ -177,7 +172,7 @@ export function useCancelScheduledJobRun() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(cancelScheduledJobRunMutation()),
+		...cancelScheduledJobRunMutation(),
 		onSettled: (_data: CancelScheduledJobRunResponse | undefined) => invalidateRuns(queryClient),
 	});
 }

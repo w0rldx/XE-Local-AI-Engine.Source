@@ -4,6 +4,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { cleanup, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { getBenchmarkRunQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";
 import { BenchmarkLaunchCompare } from "@/features/benchmarks/components/BenchmarkLaunchCompare";
 import type { BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
 import { noBenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
@@ -41,6 +42,9 @@ function detail(id: string, overrides: Partial<BenchmarkRunDetail> = {}): Benchm
 	});
 }
 
+/** The cache entry `useBenchmarkRun` reads: the generated query key, not a hand-shaped one. */
+const runKey = (runId: string) => getBenchmarkRunQueryKey({ path: { runId } });
+
 // The runs are already in the pane's cache by the time the compare block renders, so the test seeds that cache and
 // keeps it fresh rather than re-serving the reads.
 function renderCompare(...runs: BenchmarkRunDetail[]) {
@@ -48,7 +52,7 @@ function renderCompare(...runs: BenchmarkRunDetail[]) {
 		defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: Number.POSITIVE_INFINITY } },
 	});
 	for (const run of runs) {
-		queryClient.setQueryData(["benchmarks", "runs", run.id], run);
+		queryClient.setQueryData(runKey(run.id), run);
 	}
 	return renderWithProviders(<BenchmarkLaunchCompare runIds={runs.map((run) => run.id)} />, { queryClient });
 }
@@ -172,8 +176,8 @@ describe("BenchmarkLaunchCompare across more than two runs", () => {
 		const queryClient = new QueryClient({
 			defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: Number.POSITIVE_INFINITY } },
 		});
-		queryClient.setQueryData(["benchmarks", "runs", leftId], detail(leftId));
-		queryClient.setQueryData(["benchmarks", "runs", rightId], detail(rightId));
+		queryClient.setQueryData(runKey(leftId), detail(leftId));
+		queryClient.setQueryData(runKey(rightId), detail(rightId));
 		renderWithProviders(<BenchmarkLaunchCompare runIds={[leftId, rightId, thirdId]} />, { queryClient });
 
 		expect(screen.queryByTestId("benchmark-launch-compare")).toBeNull();

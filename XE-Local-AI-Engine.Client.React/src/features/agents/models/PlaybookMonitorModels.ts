@@ -8,7 +8,7 @@
 // the action has enough after-enable samples and did not improve). `facetToolName` is the optional tool scope the
 // action declares (null when the action is not tool-scoped). `retrieval` carries the relevance-gate config
 // (threshold + topK) so the panel can render the "injection is relevance-gated" banner with live numbers.
-// Boundary validation is owned by the generated hey-api zod validator + the withResponseValidation bridge;
+// Boundary validation is owned by the generated hey-api zod validator;
 // PlaybookMonitorMappers projects the validated wire shape into these immutable domain view-models.
 
 // The four monitor verdicts. InsufficientData = too few after-enable samples (never flagged); Improved = the

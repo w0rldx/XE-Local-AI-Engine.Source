@@ -7,14 +7,13 @@ import {
 	invalidateInferenceProfileMutation,
 	listInferenceProfilesOptions,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toBenchmarkResult, toInferenceProfileViews } from "@/features/model-fit/models/InferenceProfileMappers";
 import type { InferenceBenchmarkResult } from "@/features/model-fit/models/InferenceProfileModels";
 import { modelFitInvalidationKey } from "@/features/model-fit/queries/useModelFit";
 
 // Server state for the Inference Optimizer operator surface. The list read uses the generated hey-api
-// `*Options()` (which wires the shared axios instance + TanStack Query AbortSignal automatically) wrapped in
-// withResponseValidation, with a `select` that maps the optional-field generated response to the domain
+// `*Options()` (which wires the shared axios instance + TanStack Query AbortSignal automatically), with a
+// `select` that maps the optional-field generated response to the domain
 // view-models. The four mutations dispatch the domain variables to the generated mutationFn's `{ body }` envelope
 // (mirroring useRefreshRecommendations) and each invalidates the profiles list on success via the shared
 // `modelFitInvalidationKey` partial-`_id` match. Errors are surfaced by the panel (toast), not here — matching the
@@ -28,7 +27,7 @@ export const inferenceProfileQueryIds = {
 
 export function useInferenceProfiles() {
 	return useQuery({
-		...withResponseValidation(listInferenceProfilesOptions()),
+		...listInferenceProfilesOptions(),
 		select: toInferenceProfileViews,
 	});
 }
@@ -44,7 +43,7 @@ export function useExploreInferenceProfile() {
 
 	return useMutation({
 		mutationFn: async (variables: ExploreInferenceProfileVariables): Promise<void> => {
-			const options = withResponseValidation(exploreInferenceProfileMutation());
+			const options = exploreInferenceProfileMutation();
 			await options.mutationFn?.({ body: { modelName: variables.modelName, role: variables.role } }, undefined as never);
 		},
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: modelFitInvalidationKey(inferenceProfileQueryIds.list) }),
@@ -66,7 +65,7 @@ export function useBenchmarkInferenceProfile() {
 
 	return useMutation({
 		mutationFn: async (variables: BenchmarkInferenceProfileVariables): Promise<InferenceBenchmarkResult> => {
-			const options = withResponseValidation(benchmarkInferenceProfileMutation());
+			const options = benchmarkInferenceProfileMutation();
 			const response = await options.mutationFn?.(
 				{
 					body: {
@@ -87,7 +86,7 @@ export function useFreezeInferenceProfile() {
 
 	return useMutation({
 		mutationFn: async (variables: InferenceProfileActionVariables): Promise<void> => {
-			const options = withResponseValidation(freezeInferenceProfileMutation());
+			const options = freezeInferenceProfileMutation();
 			await options.mutationFn?.({ body: { profileId: variables.profileId } }, undefined as never);
 		},
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: modelFitInvalidationKey(inferenceProfileQueryIds.list) }),
@@ -99,7 +98,7 @@ export function useInvalidateInferenceProfile() {
 
 	return useMutation({
 		mutationFn: async (variables: InferenceProfileActionVariables): Promise<void> => {
-			const options = withResponseValidation(invalidateInferenceProfileMutation());
+			const options = invalidateInferenceProfileMutation();
 			await options.mutationFn?.({ body: { profileId: variables.profileId } }, undefined as never);
 		},
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: modelFitInvalidationKey(inferenceProfileQueryIds.list) }),

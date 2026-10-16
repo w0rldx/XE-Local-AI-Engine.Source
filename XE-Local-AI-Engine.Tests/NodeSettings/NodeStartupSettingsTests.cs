@@ -1,11 +1,14 @@
 namespace XE_Local_AI_Engine.Tests.NodeSettings;
 
 using System.Runtime.Versioning;
+using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
+using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
+using XE_Local_AI_Engine.Client.Testing.ExternalApps;
 using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 
@@ -16,6 +19,10 @@ using OS = TUnit.Core.Enums.OS;
 [Category(TestCategories.Unit)]
 public sealed class NodeStartupSettingsTests : IDisposable
 {
+    private const string CatalogUrl = "https://catalog.example/applications.json";
+
+    private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
+
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-node-startup-settings-tests", Guid.NewGuid().ToString("N"));
 
     public void Dispose()
@@ -48,7 +55,58 @@ public sealed class NodeStartupSettingsTests : IDisposable
 
         AssertEx.False(sut.DevelopmentEnabled);
         AssertEx.False(sut.SchedulerEnabled);
+        // The seeded switch is on, but the shipped catalog is empty: External Apps wait for an entry and a restart.
+        AssertEx.False(sut.ExternalAppsEnabled);
+        AssertEx.True(sut.ExternalAppsAwaitingCatalog);
+    }
+
+    /// <summary>Rc.3 decision D6: the bridge flag needs the switch AND a catalog that lists an application at startup.</summary>
+    [Test]
+    public void Read_WhenTheSwitchIsOnAndTheCachedCatalogListsAnApplication_StartsExternalApps()
+    {
+        var content = Dir("content");
+        WriteCatalogCache(content, SampleCatalogManifest.RawJson, CatalogUrl);
+
+        var sut = Read(contentRoot: content, seeds: new()
+        {
+            ["ExternalApps:Enabled"] = "true",
+            ["ExternalApps:Catalog:RefreshUrl"] = CatalogUrl
+        });
+
         AssertEx.True(sut.ExternalAppsEnabled);
+        AssertEx.False(sut.ExternalAppsAwaitingCatalog);
+    }
+
+    [Test]
+    public void Read_WhenTheCachedCatalogCameFromAnotherUrl_KeepsExternalAppsWaiting()
+    {
+        var content = Dir("content");
+        WriteCatalogCache(content, SampleCatalogManifest.RawJson, "https://other.example/applications.json");
+
+        var sut = Read(contentRoot: content, seeds: new()
+        {
+            ["ExternalApps:Enabled"] = "true",
+            ["ExternalApps:Catalog:RefreshUrl"] = CatalogUrl
+        });
+
+        AssertEx.False(sut.ExternalAppsEnabled);
+        AssertEx.True(sut.ExternalAppsAwaitingCatalog);
+    }
+
+    [Test]
+    public void Read_WhenTheSwitchIsOff_NeitherStartsNorWaits()
+    {
+        var content = Dir("content");
+        WriteCatalogCache(content, SampleCatalogManifest.RawJson, CatalogUrl);
+
+        var sut = Read(contentRoot: content, seeds: new()
+        {
+            ["ExternalApps:Enabled"] = "false",
+            ["ExternalApps:Catalog:RefreshUrl"] = CatalogUrl
+        });
+
+        AssertEx.False(sut.ExternalAppsEnabled);
+        AssertEx.False(sut.ExternalAppsAwaitingCatalog);
     }
 
     [Test]
@@ -82,7 +140,7 @@ public sealed class NodeStartupSettingsTests : IDisposable
 
         AssertEx.True(sut.DevelopmentEnabled);
         AssertEx.False(sut.SchedulerEnabled);
-        AssertEx.True(sut.ExternalAppsEnabled);
+        AssertEx.True(sut.ExternalAppsAwaitingCatalog, "the seeded switch reached the read; the empty shipped catalog holds it back");
     }
 
     [Test]
@@ -218,6 +276,15 @@ public sealed class NodeStartupSettingsTests : IDisposable
 
     private static void Write(string directory, string json) =>
         File.WriteAllText(Path.Combine(directory, "node-settings.json"), json);
+
+    /// <summary>Writes the last-good remote catalog where <c>ExternalAppCatalogCacheStore</c> keeps it, in its own shape.</summary>
+    private static void WriteCatalogCache(string dataDirectory, string rawJson, string sourceUrl)
+    {
+        var directory = Directory.CreateDirectory(Path.Combine(dataDirectory, "external-apps"));
+        var cache = new StoredExternalAppCatalogCache(rawJson, DateTimeOffset.UnixEpoch, sourceUrl, ETag: null);
+        File.WriteAllText(Path.Combine(directory.FullName, "catalog-remote-cache.json"),
+            JsonSerializer.Serialize(cache, WebJson));
+    }
 
     private string Dir(string name)
     {

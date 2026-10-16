@@ -10,7 +10,6 @@ import {
 	removeTrainingRuntimeMutation,
 	startTrainingRuntimeInstallMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toBaseArtifactView, toPrerequisitesView, toRuntimeStatusView } from "@/features/training/models/TrainingModels";
 
 // Server-state for the training feature. Runtime install phase + log lines arrive live over the training SignalR hub
@@ -44,7 +43,7 @@ function invalidate(queryClient: ReturnType<typeof useQueryClient>, operationId:
  */
 export function useTrainingRuntimeStatus(pollWhileInstalling = false) {
 	return useQuery({
-		...withResponseValidation(getTrainingRuntimeStatusOptions()),
+		...getTrainingRuntimeStatusOptions(),
 		select: toRuntimeStatusView,
 		staleTime: 0,
 		refetchInterval: pollWhileInstalling ? 5_000 : false,
@@ -57,7 +56,7 @@ export function useTrainingRuntimeStatus(pollWhileInstalling = false) {
  */
 export function useTrainingRuntimePrerequisites() {
 	return useQuery({
-		...withResponseValidation(getTrainingRuntimePrerequisitesOptions()),
+		...getTrainingRuntimePrerequisitesOptions(),
 		select: toPrerequisitesView,
 		staleTime: 30_000,
 	});
@@ -86,7 +85,7 @@ export function useRemoveTrainingRuntime() {
 /** Downloaded base checkpoints. Polls while any transfer is in flight so the progress bar advances. */
 export function useBaseArtifacts(pollWhileDownloading = false) {
 	return useQuery({
-		...withResponseValidation(listBaseArtifactsOptions()),
+		...listBaseArtifactsOptions(),
 		select: (data) => (data.items ?? []).map(toBaseArtifactView),
 		staleTime: 0,
 		refetchInterval: pollWhileDownloading ? 2_000 : false,

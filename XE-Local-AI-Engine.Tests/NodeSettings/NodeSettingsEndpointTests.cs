@@ -438,6 +438,67 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.Contains(error.GetProperty("reason").GetString(), "'maxMessageRequestTimeoutSeconds' must be between");
     }
 
+    /// <summary>
+    ///     Bypass table: a refused value names its camelCase wire field, never <c>x.Value</c>. The flag marks the agentic
+    ///     whitelist rows, which McpInboundProtocolTests drives through the real update_node_settings tool.
+    /// </summary>
+    // Every later validation finding adds a row here (and an MCP row there when it is on the whitelist).
+    [Test]
+    // InclusiveBetween over int? / int.
+    [Arguments("llamaChatCacheRamMiB", "-2", "'llamaChatCacheRamMiB' must be between", false)]
+    [Arguments("maxMessageRequestTimeoutSeconds", "4", "'maxMessageRequestTimeoutSeconds' must be between", true)]
+    [Arguments("speculativeDraftGpuLayers", "1001", "'speculativeDraftGpuLayers' must be between", true)]
+    // The shared UnsetOrBetween rule, over int? and long?, and two fields sharing one bound pair.
+    [Arguments("huggingFaceDiskMarginBytes", "0", "'huggingFaceDiskMarginBytes' must be between", false)]
+    [Arguments("agentHomePrepareTimeoutSeconds", "0", "'agentHomePrepareTimeoutSeconds' must be between", false)]
+    [Arguments("agentHomeCommandTimeoutSeconds", "0", "'agentHomeCommandTimeoutSeconds' must be between", false)]
+    [Arguments("llamaMaxLoadedProcesses", "0", "'llamaMaxLoadedProcesses' must be between", true)]
+    [Arguments("llamaIdleTimeToLiveSeconds", "29", "'llamaIdleTimeToLiveSeconds' must be between", true)]
+    [Arguments("keepModelWarmIntervalSeconds", "-5", "'keepModelWarmIntervalSeconds' must be between", true)]
+    [Arguments("chatCacheReuse", "8193", "'chatCacheReuse' must be between", true)]
+    [Arguments("speculativeDraftMaxTokens", "17", "'speculativeDraftMaxTokens' must be between", true)]
+    // Custom messages: one embedding {PropertyName}, one shared by four rules, one fixed, one over a nested double.
+    [Arguments("agentHomeMaxPatchBytes", "0", "'agentHomeMaxPatchBytes' must be greater than '0'", false)]
+    [Arguments("reasoningBudgetLowTokens", "1", "A reasoning budget must be from", false)]
+    [Arguments("reasoningBudgetHighTokens", "200000", "A reasoning budget must be from", false)]
+    [Arguments("chatOutputCapMaxTokens", "1", "The chat output cap ceiling must be from", false)]
+    [Arguments("usageRates", "{\"m\":{\"inputPer1M\":-1,\"outputPer1M\":0}}", "Usage rates must have", false)]
+    // Shape checks on the agentic whitelist.
+    [Arguments("speculativeMode", "\"bogus\"", "Unknown speculative decoding mode.", true)]
+    [Arguments("kvCacheType", "\"bogus\"", "Unknown KV cache type.", true)]
+    [Arguments("huggingFaceDefaultQuant", "\"notaquant\"", "Unknown Hugging Face default quant.", true)]
+    [Arguments("defaultModelName", "\"unsloth/model\\u0001-GGUF:Q4_K_M\"", "Default model name must be at most", true)]
+    [Arguments("keepModelWarmModelName", "\"unsloth/model\\u0001-GGUF:Q4_K_M\"", "Model name must be at most", true)]
+    [Arguments("rerankerModelName", "\"unsloth/model\\u0001-GGUF:Q4_K_M\"", "Model name must be at most", true)]
+    [Arguments("autoEffortFastModelName", "\"unsloth/model\\u0001-GGUF:Q4_K_M\"", "Model name must be at most", true)]
+    [Arguments("toolCapableModels", "[]", "Tool-capable models must be", true)]
+    [Arguments("toolCapableModels", "[\" \"]", "Tool-capable models must be", true)]
+    public async Task SaveNodeSettings_BypassTable_RefusesUnderTheWireField(string wireName, string jsonValue, string reasonFragment,
+        bool onAgenticWhitelist)
+    {
+        var body = $"{{\"{wireName}\":{jsonValue}}}";
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var error = document.RootElement.GetProperty("errors")[0];
+        AssertEx.Equal(wireName, error.GetProperty("name").GetString());
+        var reason = AssertEx.NotNull(error.GetProperty("reason").GetString());
+        AssertEx.Contains(reason, reasonFragment, StringComparison.Ordinal);
+        AssertEx.False(reason.Contains(".Value", StringComparison.Ordinal), $"The reason names a nullable's .Value member: {reason}");
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+
+        var patchHasField = typeof(NodeSettingsAgenticPatch).GetProperty(wireName,
+            BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase) is not null;
+        AssertEx.Equal(onAgenticWhitelist, patchHasField);
+    }
+
     /// <summary>Shape only: a model that is not installed yet is accepted, in both the <c>repo:quant</c> and the <c>ext:</c> form.</summary>
     [Test]
     [Arguments("q4_k_m", "unsloth/granite-4.1-3b-GGUF:Q4_K_M")]

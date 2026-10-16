@@ -12,6 +12,7 @@ vi.mock("@/core/ui/notifications/Toast", () => ({
 }));
 
 import { useKnowledgeUpload } from "@/features/knowledge/queries/useKnowledgeUpload";
+import en from "@/locales/en.json";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { createProvidersWrapper } from "@/test/RenderWithProviders";
@@ -52,5 +53,15 @@ describe("useKnowledgeUpload", () => {
 		uploadOne();
 
 		await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith(message));
+	});
+
+	// A 200 whose body breaks the contract rejects with a ZodError; its issue list must never reach the toast.
+	it("toasts the generic contract-mismatch sentence for a malformed success response", async () => {
+		server.use(http.post(localApiPath("knowledge-base/documents"), () => HttpResponse.json({ documentId: 42 })));
+
+		uploadOne();
+
+		await waitFor(() => expect(toastErrorMock).toHaveBeenCalledTimes(1));
+		expect(toastErrorMock).toHaveBeenCalledWith(en.errorMessages.unexpectedResponseShape);
 	});
 });

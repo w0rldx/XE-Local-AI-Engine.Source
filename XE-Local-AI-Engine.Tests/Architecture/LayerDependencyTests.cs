@@ -388,15 +388,13 @@ public sealed class LayerDependencyTests
             ["XE-Local-AI-Engine.WindowsLauncher"] = ["Velopack"]
         };
 
-    // Test and support projects, keyed by REPOSITORY-RELATIVE CSPROJ PATH rather than by project name: the negative-fence
-    // probe below lives nested inside its parent test project's directory, so the "<name>/<name>.csproj" convention the
-    // production dictionary relies on cannot address it.
+    // Test and support projects, keyed by REPOSITORY-RELATIVE CSPROJ PATH rather than by project name, so a project
+    // nested inside another's directory can be pinned too.
     //
     // This is a second, parallel dictionary rather than more keys in ApprovedProjectReferences: that one is cross-checked
     // 1:1 against the solution's /Src folder membership, so a non-/Src key would fail that check on its first run.
     // XE-Local-AI-Engine.Client.Testing is a /Src member and is therefore pinned there, not here — pinning it twice would
     // let the two copies disagree.
-    private const string NegativeFenceProbeProject = "XE-Local-AI-Engine.Client.Persistence.NegativeFence";
 
     private static readonly IReadOnlyDictionary<string, string[]> ApprovedTestProjectReferences =
         new Dictionary<string, string[]>(StringComparer.Ordinal)
@@ -412,12 +410,6 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Client.Application",
                 "XE-Local-AI-Engine.Client.Persistence",
                 "XE-Local-AI-Engine.Providers.LlamaServer"
-            ],
-            // Built on demand by PersistenceEncryptionTests to prove that persistence entities stay internal, so it is
-            // deliberately not a solution member and nothing references it. Its single reference is the point of the probe.
-            ["XE-Local-AI-Engine.Client.Persistence.Tests/NegativeFence/XE-Local-AI-Engine.Client.Persistence.NegativeFence.csproj"] =
-            [
-                "XE-Local-AI-Engine.Client.Persistence"
             ],
             ["XE-Local-AI-Engine.Tests.E2ETests/XE-Local-AI-Engine.Tests.E2ETests.csproj"] =
             [
@@ -647,7 +639,6 @@ public sealed class LayerDependencyTests
                                            .Select(project => (string?)project.Attribute("Path"))
                                            .Where(path => path is not null)
                                            .Select(path => Path.GetFileNameWithoutExtension(path!.Replace('\\', '/')))
-                                           .Append(NegativeFenceProbeProject)
                                            .Order(StringComparer.Ordinal)
                                            .ToArray();
         var approvedProjects = ApprovedTestProjectReferences.Keys

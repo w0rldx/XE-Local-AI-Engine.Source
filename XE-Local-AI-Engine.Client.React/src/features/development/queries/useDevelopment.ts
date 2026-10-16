@@ -11,8 +11,8 @@ import {
 	getDevelopmentCapabilityOptions,
 	getDevelopmentProjectOptions,
 	getDevWorkflowRunOptions,
-	listDevelopmentRepositoriesOptions,
 	listDevelopmentProjectsOptions,
+	listDevelopmentRepositoriesOptions,
 	listDevelopmentTemplatesOptions,
 	previewDevelopmentPatchMutation,
 	reconnectDevelopmentRepositoryMutation,
@@ -21,7 +21,6 @@ import {
 	removeDevelopmentTemplateMutation,
 	startDevelopmentNextActionMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import {
 	type DevelopmentProjectDetail,
 	type DevelopmentRepository,
@@ -48,7 +47,7 @@ export function developmentInvalidationKey(operationId: string): readonly [{ _id
 
 export function useDevelopmentCapability() {
 	return useQuery({
-		...withResponseValidation(getDevelopmentCapabilityOptions()),
+		...getDevelopmentCapabilityOptions(),
 		staleTime: 30_000,
 	});
 }
@@ -63,14 +62,14 @@ export function useDevelopmentCapability() {
 export function useConfirmDevelopmentContainerRuntime() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(confirmDevelopmentContainerRuntimeMutation()),
+		...confirmDevelopmentContainerRuntimeMutation(),
 		onSettled: () => queryClient.invalidateQueries({ queryKey: developmentInvalidationKey(developmentQueryIds.capability) }),
 	});
 }
 
 export function useDevelopmentRepositories(enabled = true) {
 	return useQuery({
-		...withResponseValidation(listDevelopmentRepositoriesOptions()),
+		...listDevelopmentRepositoriesOptions(),
 		enabled,
 		select: (data): readonly DevelopmentRepository[] =>
 			(data.items ?? []).flatMap((repository) =>
@@ -89,7 +88,7 @@ export function useDevelopmentRepositories(enabled = true) {
 
 export function useDevelopmentTemplates(enabled = true) {
 	return useQuery({
-		...withResponseValidation(listDevelopmentTemplatesOptions()),
+		...listDevelopmentTemplatesOptions(),
 		enabled,
 		select: (data): readonly DevelopmentTemplate[] =>
 			(data.templates ?? []).flatMap((template) =>
@@ -112,7 +111,7 @@ export function useDevelopmentTemplates(enabled = true) {
  */
 export function useDevelopmentProfileDetection(selectedFolderId: string | null, enabled = true) {
 	return useQuery({
-		...withResponseValidation(detectDevelopmentRepositoryProfileOptions({ path: { selectedFolderId: selectedFolderId ?? "" } })),
+		...detectDevelopmentRepositoryProfileOptions({ path: { selectedFolderId: selectedFolderId ?? "" } }),
 		enabled: enabled && selectedFolderId !== null && selectedFolderId !== "",
 		staleTime: 30_000,
 	});
@@ -120,7 +119,7 @@ export function useDevelopmentProfileDetection(selectedFolderId: string | null, 
 
 export function useDevelopmentProjects(enabled = true) {
 	return useQuery({
-		...withResponseValidation(listDevelopmentProjectsOptions()),
+		...listDevelopmentProjectsOptions(),
 		enabled,
 		select: (data) => data.items ?? [],
 	});
@@ -128,7 +127,7 @@ export function useDevelopmentProjects(enabled = true) {
 
 export function useDevelopmentProject(projectId: string | null, enabled = true) {
 	return useQuery({
-		...withResponseValidation(getDevelopmentProjectOptions({ path: { projectId: projectId ?? "" } })),
+		...getDevelopmentProjectOptions({ path: { projectId: projectId ?? "" } }),
 		enabled: enabled && projectId !== null,
 		refetchInterval: developmentProjectPollInterval,
 	});
@@ -153,7 +152,7 @@ export function developmentProjectPollInterval(query: { state: { data?: Developm
  */
 export function useDevelopmentTaskWorkflowRun(workflowRunId: string | null | undefined, enabled = true) {
 	return useQuery({
-		...withResponseValidation(getDevWorkflowRunOptions({ path: { runId: workflowRunId ?? "" } })),
+		...getDevWorkflowRunOptions({ path: { runId: workflowRunId ?? "" } }),
 		enabled: enabled && hasIdentifier(workflowRunId),
 	});
 }
@@ -174,11 +173,9 @@ export function useDevelopmentArtifactContent(
 	artifactId: string | null | undefined,
 ) {
 	return useQuery({
-		...withResponseValidation(
-			getDevelopmentArtifactOptions({
-				path: { projectId: projectId ?? "", taskId: taskId ?? "", artifactId: artifactId ?? "" },
-			}),
-		),
+		...getDevelopmentArtifactOptions({
+			path: { projectId: projectId ?? "", taskId: taskId ?? "", artifactId: artifactId ?? "" },
+		}),
 		enabled: hasIdentifier(projectId) && hasIdentifier(taskId) && hasIdentifier(artifactId),
 		// An artifact is content-hash addressed and immutable for a given id: a new run writes a new artifact rather
 		// than rewriting this one, so refetching the same id is pure waste.
@@ -189,7 +186,7 @@ export function useDevelopmentArtifactContent(
 export function useRegisterDevelopmentRepository() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(registerDevelopmentRepositoryMutation()),
+		...registerDevelopmentRepositoryMutation(),
 		// Detection is keyed by selected folder, so it goes with the repository list: re-registering an existing path
 		// returns the same folder id, and a cached proposal for it can predate whatever the repository looks like now.
 		onSuccess: () =>
@@ -207,7 +204,7 @@ export function useRegisterDevelopmentRepository() {
 export function useRegisterDevelopmentTemplate() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(registerDevelopmentTemplateMutation()),
+		...registerDevelopmentTemplateMutation(),
 		onSuccess: () =>
 			queryClient.invalidateQueries({
 				queryKey: developmentInvalidationKey(developmentQueryIds.listTemplates),
@@ -218,7 +215,7 @@ export function useRegisterDevelopmentTemplate() {
 export function useRemoveDevelopmentTemplate() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(removeDevelopmentTemplateMutation()),
+		...removeDevelopmentTemplateMutation(),
 		onSuccess: () =>
 			queryClient.invalidateQueries({
 				queryKey: developmentInvalidationKey(developmentQueryIds.listTemplates),
@@ -229,7 +226,7 @@ export function useRemoveDevelopmentTemplate() {
 export function useCreateDevelopmentRepositoryFromTemplate() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(createDevelopmentRepositoryFromTemplateMutation()),
+		...createDevelopmentRepositoryFromTemplateMutation(),
 		// Seeding from a template registers a repository, so this carries the same pairing as
 		// useRegisterDevelopmentRepository: the list gains an entry, and detection is keyed by the folder id that entry
 		// carries, so a cached proposal for a reused id must not outlive the new clone.
@@ -256,7 +253,7 @@ async function invalidateDevelopment(queryClient: ReturnType<typeof useQueryClie
 export function useCreateDevelopmentProject() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(createDevelopmentProjectMutation()),
+		...createDevelopmentProjectMutation(),
 		onSuccess: () => invalidateDevelopment(queryClient),
 	});
 }
@@ -264,7 +261,7 @@ export function useCreateDevelopmentProject() {
 export function useReconnectDevelopmentRepository() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(reconnectDevelopmentRepositoryMutation()),
+		...reconnectDevelopmentRepositoryMutation(),
 		onSuccess: () => invalidateDevelopment(queryClient),
 	});
 }
@@ -272,7 +269,7 @@ export function useReconnectDevelopmentRepository() {
 export function useStartDevelopmentNextAction() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(startDevelopmentNextActionMutation()),
+		...startDevelopmentNextActionMutation(),
 		onSettled: () => invalidateDevelopment(queryClient),
 	});
 }
@@ -280,19 +277,19 @@ export function useStartDevelopmentNextAction() {
 export function useCancelDevelopmentAttempt() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(cancelDevelopmentAttemptMutation()),
+		...cancelDevelopmentAttemptMutation(),
 		onSettled: () => invalidateDevelopment(queryClient),
 	});
 }
 
 export function usePreviewDevelopmentPatch() {
-	return useMutation({ ...withResponseValidation(previewDevelopmentPatchMutation()) });
+	return useMutation({ ...previewDevelopmentPatchMutation() });
 }
 
 export function useApplyDevelopmentPatch() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(applyDevelopmentPatchMutation()),
+		...applyDevelopmentPatchMutation(),
 		onSettled: () => invalidateDevelopment(queryClient),
 	});
 }

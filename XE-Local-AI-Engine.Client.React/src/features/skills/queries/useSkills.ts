@@ -9,19 +9,17 @@ import {
 	listSkillsQueryKey,
 	updateSkillMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toSkill, toSkillSummary } from "@/features/skills/models/SkillMappers";
 
 // Server state for the node skill library. Reads use the generated hey-api `*Options()` (which wire the shared axios
 // instance + TanStack Query AbortSignal automatically) and a TanStack `select` that maps the optional-field
-// generated response into the stricter domain view-model. Every generated options/mutation object is wrapped in
-// withResponseValidation so a zod response-shape failure surfaces as an ApiError (never a raw ZodError). Mutations
+// generated response into the stricter domain view-model. Mutations
 // invalidate the skill list; an edit also invalidates the single-skill cache for that id so a re-open shows fresh body.
 
 // Lists skill summaries (no body — the list endpoint omits it for payload economy).
 export function useSkills() {
 	return useQuery({
-		...withResponseValidation(listSkillsOptions()),
+		...listSkillsOptions(),
 		select: (data) => (data.items ?? []).map(toSkillSummary),
 	});
 }
@@ -30,7 +28,7 @@ export function useSkills() {
 // skill is actually being edited.
 export function useSkill(id: string | null) {
 	return useQuery({
-		...withResponseValidation(getSkillOptions({ path: { skillId: id ?? "" } })),
+		...getSkillOptions({ path: { skillId: id ?? "" } }),
 		enabled: id !== null,
 		select: toSkill,
 	});
@@ -54,7 +52,7 @@ export function useCreateSkill() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(createSkillMutation()),
+		...createSkillMutation(),
 		onSuccess: (_data: CreateSkillResponse) => invalidateSkillsList(queryClient),
 	});
 }
@@ -63,7 +61,7 @@ export function useUpdateSkill() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(updateSkillMutation()),
+		...updateSkillMutation(),
 		// Refresh both the list (name/description/enabled/version may have changed) and any open single-skill query
 		// so a re-open shows the freshly edited body.
 		onSuccess: (_data: UpdateSkillResponse) =>
@@ -75,7 +73,7 @@ export function useDeleteSkill() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(deleteSkillMutation()),
+		...deleteSkillMutation(),
 		onSuccess: (_data: DeleteSkillResponse) => invalidateSkillsList(queryClient),
 	});
 }

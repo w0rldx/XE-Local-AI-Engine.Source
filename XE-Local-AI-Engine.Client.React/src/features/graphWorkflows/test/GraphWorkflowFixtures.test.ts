@@ -236,7 +236,7 @@ describe("graphWorkflowTools", () => {
 	});
 });
 
-// The generated RESPONSE validators are what `withResponseValidation` runs on every payload, so a fixture that does not
+// The generated RESPONSE validators run on every SDK payload, so a fixture that does not
 // satisfy them is a fixture no MSW test can serve. Cheaper than asserting field shapes by hand, and it moves with the
 // client: id members are `z.guid()`, which is why none of these carry a friendly `nr-start`.
 describe("every fixture satisfies its generated response validator", () => {

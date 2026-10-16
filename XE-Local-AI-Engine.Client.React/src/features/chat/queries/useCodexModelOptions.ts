@@ -12,7 +12,6 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import type { ModelOption } from "@/features/chat/models/ChatModels";
 
 const CODEX_PROVIDER = "CodexOAuth";
@@ -72,7 +71,7 @@ export function toAzureFoundryModelOption(deploymentName: string, capabilities?:
  */
 export function useCodexModelOptions(): ModelOption[] {
 	const modelsQuery = useQuery({
-		...withResponseValidation(listLocalModelsOptions()),
+		...listLocalModelsOptions(),
 		// Reuse the same cached value as the local model list — 30s is fine for the picker.
 		staleTime: 30_000,
 	});

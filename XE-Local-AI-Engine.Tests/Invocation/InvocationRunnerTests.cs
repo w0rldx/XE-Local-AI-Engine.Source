@@ -5789,10 +5789,12 @@ public sealed class InvocationRunnerTests
 
         var run = RunAsync(runner, package);
         await AssertEx.CompletesAsync(textYielded.Task, TestBudgets.Contended, "the provider never pulled past the second round's text");
+        var stallStartedAt = clock.GetUtcNow();
         await AdvanceIdleWindowsUntilCompleteAsync(clock, run);
         await AssertEx.CompletesAsync(run, TestBudgets.Contended, "the second round's stall never hit the idle deadline");
 
         await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(static message => IsStreamIdleMessage(message)), FailureCategory.Timeout);
+        AssertEx.Equal(TimeSpan.FromSeconds(61), clock.GetUtcNow() - stallStartedAt, "the stall took more than one idle window");
     }
 
     /// <summary>
@@ -5845,10 +5847,12 @@ public sealed class InvocationRunnerTests
 
         var run = RunAsync(runner, package);
         await AssertEx.CompletesAsync(textYielded.Task, TestBudgets.Contended, "the provider never pulled past its text");
+        var stallStartedAt = clock.GetUtcNow();
         await AdvanceIdleWindowsUntilCompleteAsync(clock, run);
         await AssertEx.CompletesAsync(run, TestBudgets.Contended, "the silent provider never hit the idle deadline");
 
         await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(static message => IsStreamIdleMessage(message)), FailureCategory.Timeout);
+        AssertEx.Equal(TimeSpan.FromSeconds(61), clock.GetUtcNow() - stallStartedAt, "the stall took more than one idle window");
     }
 
     /// <summary>
@@ -5920,10 +5924,12 @@ public sealed class InvocationRunnerTests
             Approved = true
         });
         await AssertEx.CompletesAsync(resumeTextYielded.Task, TestBudgets.Contended, "the resume segment never pulled past its text");
+        var stallStartedAt = clock.GetUtcNow();
         await AdvanceIdleWindowsUntilCompleteAsync(clock, run);
         await AssertEx.CompletesAsync(run, TestBudgets.Contended, "the resume stall never hit the idle deadline");
 
         await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(static message => IsStreamIdleMessage(message)), FailureCategory.Timeout);
+        AssertEx.Equal(TimeSpan.FromSeconds(61), clock.GetUtcNow() - stallStartedAt, "the stall took more than one idle window");
     }
 
     /// <summary>
@@ -5933,14 +5939,14 @@ public sealed class InvocationRunnerTests
     private static Task WaitForIdleAndTurnDeadlineAsync(ManualTimeProvider clock, string message) =>
         AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == IdleAndTurnDeadline, TestBudgets.Contended, message);
 
-    // Steps the clock one idle window at a time until the run completes: the idle timer is armed after the stream's signal, so one advance can miss it.
-    // Each miss still walks the turn deadline forward, so a test that wants the idle failure runs with IdleOnlyTurnSeconds, which these steps cannot reach.
+    // Steps the clock one idle window at a time until the run completes, each step only once the idle timer is armed: it arms after the stream's
+    // signal, so an ungated step could land first and walk only the turn deadline (the 2026-10-08 CI red ended on the 300 s turn deadline that way).
     private static async Task AdvanceIdleWindowsUntilCompleteAsync(ManualTimeProvider clock, Task run)
     {
         var budget = Stopwatch.StartNew();
         while (!run.IsCompleted && budget.Elapsed < TestBudgets.Contended)
         {
-            await AssertEx.SettleAsync();
+            await AssertEx.EventuallyAsync(() => run.IsCompleted || clock.ArmedTimerCount == IdleAndTurnDeadline, TestBudgets.Contended, "the idle deadline was never armed");
             if (!run.IsCompleted)
             {
                 clock.Advance(TimeSpan.FromSeconds(61));

@@ -5,7 +5,6 @@ import { type CSSProperties, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { resolveUserQuestionMutation } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import type { PendingUserQuestion, UserQuestionAnswer } from "@/features/chat/api/AskUserQuestionWire";
 import { CHAT_ACCENT, CHAT_ACCENT_SOFT } from "@/features/chat/components/ChatVisualTokens";
 import classes from "@/features/chat/components/ThoughtsSection.module.css";
@@ -67,7 +66,7 @@ export function AskUserQuestionCard({ pending }: AskUserQuestionCardProps) {
 	// Optimistic: the controls collapse into the summary the instant the user submits, and re-arm if the post fails
 	// (same contract as the tool-approval controls in ToolCallCard).
 	const [submitted, setSubmitted] = useState<UserQuestionAnswer[] | undefined>(undefined);
-	const resolveQuestion = useMutation({ ...withResponseValidation(resolveUserQuestionMutation()) });
+	const resolveQuestion = useMutation({ ...resolveUserQuestionMutation() });
 
 	const updateDraft = useCallback((index: number, patch: Partial<QuestionDraft>) => {
 		setDrafts((current) => current.map((draft, position) => (position === index ? { ...draft, ...patch } : draft)));

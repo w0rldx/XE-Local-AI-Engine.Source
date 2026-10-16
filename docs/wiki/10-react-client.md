@@ -302,7 +302,7 @@ withCredentials: true,
 
 ### Generated SDK wiring
 
-`core/api/Generated.runtime.ts` supplies `createClientConfig` to the generated client: it injects the shared `axiosInstance`, sets `baseURL: ""`, and `throwOnError: true`. Because FastEndpoints emits OpenAPI paths that **already include** `/api/local/v1`, the generated SDK calls the host root; hand-written helpers use `buildLocalApiUrl()` (`core/api/utils/LocalApiUrl.ts`) to prepend `/api/local/${VITE_API_VERSION}`.
+`core/api/Generated.runtime.ts` supplies `createClientConfig` to the generated client: it injects the shared `axiosInstance` and sets `baseURL: ""`; `throwOnError: true` is set on the `@hey-api/client-axios` plugin in `OpenapiTs.config.ts`, so the generated signatures type `data` as present. Because FastEndpoints emits OpenAPI paths that **already include** `/api/local/v1`, the generated SDK calls the host root; hand-written helpers use `buildLocalApiUrl()` (`core/api/utils/LocalApiUrl.ts`) to prepend `/api/local/${VITE_API_VERSION}`.
 
 ### Generated artifacts (do not hand-edit)
 
@@ -336,7 +336,7 @@ again" re-ensures the runtime; the server runs that ensure without the runtime-m
 longer blocks it, and any refusal it still answers (409) is shown under the reason instead of being dropped.
 
 **Custom Tools use the generated REST layer end to end.** `features/customTools/queries/useCustomTools.ts` wraps the
-generated list/get/create/update/delete and executable-probe options with `withResponseValidation`, maps generated
+generated list/get/create/update/delete and executable-probe options, maps generated
 optional DTOs to strict feature models, and invalidates both collection and detail query keys after writes. The
 Zustand `CustomToolManagementStore` holds only editor/dialog state; definitions remain TanStack Query server state.
 Secret fields returned as the mask sentinel are rendered as masked and may be round-tripped, never placed into a
@@ -344,20 +344,25 @@ second browser-side secret store.
 
 ### Interceptors & 401 handling
 
-`core/api/axios/Interceptors.ts` defines the interceptors `core/api/axios/AxiosInstance.ts` registers on the shared instance:
+`core/api/axios/Interceptors.ts` defines the interceptors `core/api/axios/AxiosInstance.ts` registers on the shared instance.
+The bearer comes from the generated client's `auth` callback (`core/api/Generated.runtime.ts`), which reads
+`useNodeAuthStore` per request and sets `Authorization: Bearer <token>` only on operations whose spec entry carries
+`security`. hey-api resolves that callback before axios dispatches, so the shared instance re-reads the store at
+dispatch and overwrites a bearer that a refresh rotated in between. The auth API (`core/auth/api/NodeAuthApi.ts`) uses a second generated client on a plain axios instance with
+no interceptors, so a failed login or refresh never enters the 401 path below.
 
 | Interceptor | Behavior |
 |---|---|
 | `addFormDataContentTypeInterceptor` | Drops the instance's JSON `Content-Type` for a `FormData` body so the browser sends `multipart/form-data` with its boundary. |
-| `addAuthRequestInterceptor` | Attaches `Authorization: Bearer <token>` from `useNodeAuthStore` on every request. |
-| `addUnauthorizedErrorInterceptor` | On `401`: refresh once via `refreshNodeAuthToken()`, set the new token, replay the original request (tracked in a `WeakSet` so it never loops). On refresh failure or a second 401: clear auth and `redirectToLoginOnce()`. |
+| `addBearerReconciliationInterceptor` | At dispatch, overwrites a request's existing `Authorization: Bearer …` with the store's current token. Never adds a bearer to a request that carries none. |
+| `addUnauthorizedErrorInterceptor` | On `401` for a request sent with an older token than the store now holds (a refresh already rotated it): replay once with the current token, without refreshing. Otherwise: refresh once via `refreshNodeAuthToken()`, set the new token, replay the original request. The replay is marked with an `authRetried` config field, not by object identity, because axios merges a replayed config into a new object, so it never loops. Auth is cleared and `redirectToLoginOnce()` runs only when the refresh answers 401 or the replay answers 401 again. A refresh failing with 429, 5xx or a network error rejects the request but keeps the token and the refresh cookie. |
 | `addVaultLockedInterceptor` | On `503` with the problem title `"Vault locked"` (a locked engine answers every protected route that way): reset the settled vault state, clear auth and `redirectToVaultOnce()` to `/vault`. Any other 503 stays an ordinary error. |
 | `addRateLimitingInterceptor` | On `429`: shows a translated toast (`errorMessages.tooManyRequests`). |
 | `addApiProblemDetailsInterceptor` | Maps non-2xx/401/429 responses to a typed `ApiError(status, ProblemDetails)`; turns `ERR_NETWORK` into a `"Network error"`. |
 
 The 401 refresh/redirect path is deliberately isolated: it calls a dedicated `refreshNodeAuthToken()` (not a generic SDK call) and guards redirects with `isRedirectingToLogin` plus a `/login`/`/setup`/`/vault`/`/vault-setup` short-circuit, so it cannot recurse through the same interceptor.
 
-**Vault pages** ([ADR 0018](../adr/0018-local-vault-passphrase-wrapped-node-key.md)). Two file routes sit beside `/login` and `/setup`. `/vault` (`routes/vault.tsx`, `core/auth/pages/VaultUnlock.tsx`) opens only while `auth/status` reports the vault `locked`, which only the pre-host does; it unlocks with the admin password or with a recovery code plus a new password. `/vault-setup` (`routes/vault-setup.tsx`, `core/auth/pages/VaultSetup.tsx`) opens only for a signed-in operator whose vault is still `pending` and wraps the legacy key after the password is confirmed. First-run setup and vault setup both show the one-time recovery code through `core/auth/components/RecoveryCodeReveal.tsx`. The routes and the backend contract are in [API & Hubs](09-api-and-hubs.md) and [Security & Privacy](12-security-and-privacy.md). Response boundary parsing uses Zod (`core/api/ResponseValidation.ts`) — never trust raw server JSON shape.
+**Vault pages** ([ADR 0018](../adr/0018-local-vault-passphrase-wrapped-node-key.md)). Two file routes sit beside `/login` and `/setup`. `/vault` (`routes/vault.tsx`, `core/auth/pages/VaultUnlock.tsx`) opens only while `auth/status` reports the vault `locked`, which only the pre-host does; it unlocks with the admin password or with a recovery code plus a new password. `/vault-setup` (`routes/vault-setup.tsx`, `core/auth/pages/VaultSetup.tsx`) opens only for a signed-in operator whose vault is still `pending` and wraps the legacy key after the password is confirmed. First-run setup and vault setup both show the one-time recovery code through `core/auth/components/RecoveryCodeReveal.tsx`. The routes and the backend contract are in [API & Hubs](09-api-and-hubs.md) and [Security & Privacy](12-security-and-privacy.md). Response boundary parsing uses the generated Zod response validators; `isResponseValidationError` (`core/api/ResponseValidation.ts`) names the `ZodError` they throw — never trust raw server JSON shape.
 
 ---
 
@@ -495,7 +500,7 @@ All modals route through `DialogShell` (`core/ui/components/DialogShell/DialogSh
 
 ## i18n
 
-`src/i18n.ts` initializes `i18next` with `react-i18next` and the browser language detector. Resources are bundled JSON: `src/locales/en.json` and `src/locales/de.json`, with `fallbackLng: "en"` and language persisted in `localStorage` (`i18nextLng`). All user-facing text uses translation keys (`t("...")`).
+`src/i18n.ts` initializes `i18next` with `react-i18next` and the browser language detector. Resources are JSON files, `src/locales/en.json` and `src/locales/de.json`, each split into its own lazy chunk (none ships in the entry chunk), with `fallbackLng: "en"` and language persisted in `localStorage` (`i18nextLng`). `i18nReady` resolves once `en` and the detected language have landed; `Main.tsx` holds the first render on it and the vitest setup (`src/test/AwaitI18n.ts`) awaits it. The files are kept key-sorted by `pnpm run locales:sort`; `lint` runs its `--check`. All user-facing text uses translation keys (`t("...")`).
 
 Dates follow the **UI language, not the browser locale**. `formatTimestamp` and its time-only sibling `formatTime` (`core/formatting/TimeFormatting.ts`) read the active i18next language and format with it, so a session switched to German no longer renders US-ordered dates next to German labels. Both accept `number | string | null | undefined`, because half the wire carries epoch millis and half an ISO string and most generated timestamp fields are optional, and both go through one private guard so the language rule cannot drift between them. **Every** date and clock rendering goes through one of the two rather than a bare `toLocaleString()`, which knows nothing about i18next — feature-local copies of the same formatter are gone, `features/devWorkflows` included. The helper answers a dash for an absent or unusable value instead of printing "Invalid Date" into a table row, and falls back to the environment's default when a hand-edited `i18nextLng` is not a well-formed tag; an absent instant is never coalesced to `?? 0`, which would date the row to 1970. Both take an optional `Intl.DateTimeFormatOptions`, which is how the four sites that render a part of an instant (the chat clock, the conversation-list day, the model-fit catalog release date and the usage dashboard's day label) moved here rather than growing a third formatter: naming any date field suppresses `toLocaleString`'s clock defaults, so those sites kept their output character for character while gaining the language rule. It is why `core` may import i18next directly, the same reason `ApiErrorMessage` and `Toast` do.
 
