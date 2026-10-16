@@ -94,7 +94,7 @@ public interface INodeRuntimeSettings
     /// <summary>The draft-model GPU layers <c>--spec-draft-ngl</c>, or <see langword="null" /> when unset (flag omitted).</summary>
     Task<int?> GetSpeculativeDraftGpuLayersAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>The knowledge-base reranker model name (stored &gt; off), or <see langword="null" /> when reranking is disabled.</summary>
+    /// <summary>The knowledge-base reranker model (stored &gt; <c>KnowledgeBase:RerankerModelName</c> &gt; off); <see langword="null" /> turns reranking off.</summary>
     Task<string?> GetRerankerModelNameAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -430,9 +430,6 @@ public interface INodeRuntimeSettings
 
     /// <inheritdoc cref="GetSpeculativeDraftGpuLayersAsync" />
     int? GetSpeculativeDraftGpuLayers();
-
-    /// <inheritdoc cref="GetRerankerModelNameAsync" />
-    string? GetRerankerModelName();
 
     // Synchronous only: each of these is read once, by the host-build factory or Configure delegate that seeds a provider
     // option object, so an edit applies on the next node restart.

@@ -22,6 +22,15 @@ public interface ILlamaCppBinaryManager
     Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct);
 
     /// <summary>
+    ///     <see cref="EnsureBinaryAsync(GpuVariant, CancellationToken)" /> for an explicit operator install: it downloads even
+    ///     where <see cref="ILlamaCppImplicitAcquisitionPolicy" /> refuses an implicit download.
+    /// </summary>
+    Task<LlamaBinary> AcquireBinaryAsync(GpuVariant variant, CancellationToken ct)
+    {
+        return EnsureBinaryAsync(variant, ct);
+    }
+
+    /// <summary>
     ///     Resolves an ALREADY-AVAILABLE <c>llama-server</c> for <paramref name="variant" /> and returns
     ///     <see langword="null" /> when none is, instead of acquiring one.
     /// </summary>

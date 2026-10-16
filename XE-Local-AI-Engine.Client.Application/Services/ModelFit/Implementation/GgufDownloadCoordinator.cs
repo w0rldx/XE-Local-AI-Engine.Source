@@ -18,7 +18,7 @@ using PreflightKind = XE_Local_AI_Engine.Client.Services.Models.GgufAcquisitionO
 /// <remarks>
 ///     <b>Singleton</b>: the registry outlives the request that started the download, and composes the singleton staged
 ///     <see cref="IGgufDownloadTransaction" />. Progress and cancellation are best-effort and process-local: a restart drops the
-///     RAM-only state but the next Start resumes the partial, while a cooperative cancel deletes it so the next Start begins
+///     RAM-only state (an interrupted download comes back as a Failed row) but the next Start resumes the partial, while a cooperative cancel deletes it so the next Start begins
 ///     at 0. No path, URL or token is reported. Partial-file lifecycle: docs/wiki/07-model-fit.md.
 /// </remarks>
 public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
@@ -39,6 +39,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
     private readonly ILogger<GgufDownloadCoordinator> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeProvider _timeProvider;
+    private readonly Lazy<bool> _interruptedRecorded;
 
     public GgufDownloadCoordinator(IGgufDownloadTransaction downloadTransaction,
         GgufAcquisitionIdentityResolver identityResolver,
@@ -55,11 +56,35 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         _eventPublisher = eventPublisher ?? throw new ArgumentNullException(nameof(eventPublisher));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _interruptedRecorded = new Lazy<bool>(RecordInterruptedDownloads, LazyThreadSafetyMode.ExecutionAndPublication);
+    }
+
+    internal const string InterruptedErrorCode = "Interrupted";
+
+    internal const string InterruptedMessage = "This download did not finish. Start it again to resume from the part already downloaded.";
+
+    // The registry is RAM-only, so a restart dropped the row of an unfinished download (interrupted, or failed and kept for resume) while its partial stayed
+    // on disk with nothing pointing at it. Runs once, before the first start or read, so it never shadows a live download.
+    private bool RecordInterruptedDownloads()
+    {
+        foreach (var download in _downloadTransaction.ListInterrupted()
+                                                     .Where(download => _operations.GetNewest(AcquisitionKind.Download, download.ModelName) is null))
+        {
+            _operations.RecordTerminal(AcquisitionKind.Download,
+                download.ModelName,
+                GgufAcquisitionPhase.Failed,
+                totalBytes: download.TotalBytes,
+                errorCode: InterruptedErrorCode,
+                sanitizedError: InterruptedMessage);
+        }
+
+        return true;
     }
 
     public async Task<GgufDownloadTicket> StartAsync(GgufModelRequest request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
+        _ = _interruptedRecorded.Value;
 
         // One timing line per start, on every exit including a 409: the request blocks on all three phases, and only
         // a per-phase split tells a cold verification hash from a slow Hugging Face lookup or a lock wait.
@@ -167,14 +192,18 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
     public GgufDownloadStatus? GetStatus(string modelName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        _ = _interruptedRecorded.Value;
         return MapStatus(_operations.GetNewest(AcquisitionKind.Download, modelName));
     }
 
     public GgufDownloadStatus? GetStatus(Guid operationId) =>
         MapStatus(_operations.GetStatus(operationId));
 
-    public IReadOnlyList<GgufDownloadStatus> ListStatuses() =>
-        _operations.List(AcquisitionKind.Download).Select(MapStatus).OfType<GgufDownloadStatus>().ToArray();
+    public IReadOnlyList<GgufDownloadStatus> ListStatuses()
+    {
+        _ = _interruptedRecorded.Value;
+        return _operations.List(AcquisitionKind.Download).Select(MapStatus).OfType<GgufDownloadStatus>().ToArray();
+    }
 
     private static GgufAcquisitionIntent ToIntent(ResolvedGgufDownload source) =>
         new()

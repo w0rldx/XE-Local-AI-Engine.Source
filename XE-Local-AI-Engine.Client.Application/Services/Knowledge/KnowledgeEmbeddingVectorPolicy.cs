@@ -19,8 +19,8 @@ public static class KnowledgeEmbeddingVectorPolicy
     private const double LayerNormEpsilon = 1e-5;
     private const string MatryoshkaAlgorithm = "layernorm-population-eps1e-5-truncate-l2:v1";
     private const string NativeAlgorithm = "native:v1";
-    private const string InvalidVectorReason = "The embedding model returned an invalid vector. Reindex with a supported embedding model.";
-    private const string ShortVectorReason = "The Nomic embedding vector is shorter than the configured 512-dimension policy. Reindex in native mode or use Nomic v1.5.";
+    internal const string InvalidVectorReason = "The embedding model returned an invalid vector. Reindex with a supported embedding model.";
+    internal const string ShortVectorReason = "The Nomic embedding vector is shorter than the configured 512-dimension policy. Reindex in native mode or use Nomic v1.5.";
 
     /// <summary>Transforms one provider-produced vector and returns its canonical identity and width.</summary>
     public static KnowledgeEmbeddingVector Transform(EmbeddingModelResolution resolution,

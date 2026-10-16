@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -23,6 +24,7 @@ public sealed class KnowledgeCompanionReserve : IKnowledgeCompanionReserve
     private readonly ILocalModelProviderResolver _providerResolver;
     private readonly IEmbeddingModelResolver _embeddingModelResolver;
     private readonly KnowledgeBaseOptions _options;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly ILogger<KnowledgeCompanionReserve> _logger;
 
     public KnowledgeCompanionReserve(IModelFootprintProvider footprintProvider,
@@ -30,6 +32,7 @@ public sealed class KnowledgeCompanionReserve : IKnowledgeCompanionReserve
         ILocalModelProviderResolver providerResolver,
         IEmbeddingModelResolver embeddingModelResolver,
         IOptions<KnowledgeBaseOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         ILogger<KnowledgeCompanionReserve> logger)
     {
         _footprintProvider = footprintProvider ?? throw new ArgumentNullException(nameof(footprintProvider));
@@ -38,6 +41,7 @@ public sealed class KnowledgeCompanionReserve : IKnowledgeCompanionReserve
         _embeddingModelResolver = embeddingModelResolver ?? throw new ArgumentNullException(nameof(embeddingModelResolver));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -46,9 +50,10 @@ public sealed class KnowledgeCompanionReserve : IKnowledgeCompanionReserve
     {
         ArgumentNullException.ThrowIfNull(profile);
         var companions = new List<Companion>(capacity: 2);
-        if (!string.IsNullOrWhiteSpace(_options.RerankerModelName))
+        var rerankerModelName = await _runtimeSettings.GetRerankerModelNameAsync(ct);
+        if (!string.IsNullOrWhiteSpace(rerankerModelName))
         {
-            companions.Add(new Companion(_options.RerankerModelName, ModelRole.Reranker));
+            companions.Add(new Companion(rerankerModelName, ModelRole.Reranker));
         }
 
         if (await TryResolveLlamaCppEmbedderAsync(ct) is { } embedder)

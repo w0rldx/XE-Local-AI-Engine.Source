@@ -111,6 +111,11 @@ public sealed class SampleValidationPipelineTests
         AssertEx.True(outcome.Accepted);
         AssertEx.Equal(TrainingSampleLabel.Bad, outcome.Label);
         AssertEx.Contains(outcome.Validation.Layers, layer => layer.Layer == "tool-name" && !layer.Passed);
+
+        // R7-07: the stored sample used to drop the call the reason names, so a reviewer saw a Bad label with no call.
+        var call = AssertEx.NotNull(outcome.Content).Parts.Single(part => part.Kind == "tool");
+        AssertEx.Equal("delete_everything", call.ToolName);
+        AssertEx.True(call.IsError == true, "An unresolvable call is stored as a failed call.");
     }
 
     [Test]

@@ -19,4 +19,7 @@ public static class InvocationFailureMessages
 
     /// <summary>The sentence for a generic <see cref="FailureCategory.Timeout" />.</summary>
     public const string TimedOut = "The operation timed out.";
+
+    /// <summary>The sentence for <see cref="FailureCategory.CallBudgetReached" />.</summary>
+    public const string CallBudgetReached = "Stopped at the provider-call budget; a work session continues on its next step.";
 }

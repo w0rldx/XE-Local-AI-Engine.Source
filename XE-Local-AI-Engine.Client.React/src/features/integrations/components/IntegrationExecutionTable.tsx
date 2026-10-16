@@ -4,7 +4,11 @@ import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
-import { formatIntegrationDuration, shortPrincipalId } from "@/features/integrations/components/IntegrationFormatters";
+import {
+	formatFailureCategory,
+	formatIntegrationDuration,
+	shortPrincipalId,
+} from "@/features/integrations/components/IntegrationFormatters";
 import { IntegrationExecutionStatusBadge } from "@/features/integrations/components/IntegrationStatusBadge";
 import {
 	type IntegrationExecution,
@@ -87,11 +91,10 @@ export function IntegrationExecutionTable({
 										data-testid={`integration-execution-status-${execution.id}`}
 									/>
 									{/* The category rides beside the status so an operator scanning the list can tell an
-									    approval-required run from a queue-timeout without opening either dialog. It is
-									    rendered verbatim: a value this client does not know must still be readable. */}
+									    approval-required run from a queue-timeout without opening either dialog. */}
 									{execution.failureCategory === null ? null : (
 										<Badge variant="light" color="gray" data-testid={`integration-execution-category-${execution.id}`}>
-											{execution.failureCategory}
+											{formatFailureCategory(t, execution.failureCategory)}
 										</Badge>
 									)}
 								</Group>

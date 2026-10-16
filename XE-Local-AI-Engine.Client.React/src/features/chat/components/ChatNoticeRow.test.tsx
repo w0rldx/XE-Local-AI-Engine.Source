@@ -6,10 +6,9 @@ import i18next from "i18next";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import de from "@/locales/de.json";
-
 import { ChatNoticeRow } from "@/features/chat/components/ChatNoticeRow";
 import type { ChatNoticePart } from "@/features/chat/models/ChatModels";
+import de from "@/locales/de.json";
 import { nonEnglishLocales } from "@/test/Locales";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
@@ -59,6 +58,19 @@ describe("ChatNoticeRow", () => {
 		expect(screen.getByText("Switched to a smaller model.")).toBeTruthy();
 	});
 
+	it("localizes the compute-withheld sentence in de", async () => {
+		const text = "run_python was not offered because Compute tools is turned off. Turn it on in Node Settings, Features.";
+		i18next.addResourceBundle("de", "translation", de, true, true);
+		await i18next.changeLanguage("de");
+		renderWithProviders(<ChatNoticeRow part={noticePart({ noticeKind: "ToolsWithheld", text, detail: "compute" })} />);
+
+		expect(
+			screen.getByText(
+				"run_python wurde nicht angeboten, weil die Rechen-Tools ausgeschaltet sind. Schalte sie in den Node-Einstellungen unter Funktionen ein.",
+			),
+		).toBeTruthy();
+	});
+
 	it("localizes the stopped-while-thinking sentence and still shows the finish reason", () => {
 		renderWithProviders(
 			<ChatNoticeRow
@@ -87,6 +99,38 @@ describe("ChatNoticeRow", () => {
 		expect(de.chat.notices["toolCallInReasoningText"]).toBe(
 			"Das Modell hat versucht, ein Tool innerhalb seiner Überlegungen aufzurufen, wo der Aufruf nicht ausgeführt werden kann, und hat ohne Antwort aufgehört.",
 		);
+	});
+
+	it("renders the agent-unavailable notice with its kind tag and localizes the sentence in en and de", async () => {
+		const text = "The agent this conversation uses no longer exists, so the default assistant answered.";
+		renderWithProviders(<ChatNoticeRow part={noticePart({ noticeKind: "AgentUnavailable", text, detail: "agent-id" })} />);
+
+		expect(screen.getByTestId("chat-notice-row").getAttribute("data-notice-kind")).toBe("AgentUnavailable");
+		expect(screen.getByText(text)).toBeTruthy();
+
+		cleanup();
+		i18next.addResourceBundle("de", "translation", de, true, true);
+		await i18next.changeLanguage("de");
+		renderWithProviders(<ChatNoticeRow part={noticePart({ noticeKind: "AgentUnavailable", text, detail: "agent-id" })} />);
+		expect(
+			screen.getByText("Der Agent dieser Unterhaltung existiert nicht mehr, deshalb hat der Standard-Assistent geantwortet."),
+		).toBeTruthy();
+	});
+
+	it("localizes the queued-behind-a-parked-turn sentence in de", async () => {
+		const text = "This message is waiting for an approval or a question in another conversation. Answer it there to continue.";
+		i18next.addResourceBundle("de", "translation", de, true, true);
+		await i18next.changeLanguage("de");
+		renderWithProviders(
+			<ChatNoticeRow part={noticePart({ noticeKind: "QueuedBehindParkedTurn", text, detail: "conversation-id" })} />,
+		);
+
+		expect(screen.getByTestId("chat-notice-row").getAttribute("data-notice-kind")).toBe("QueuedBehindParkedTurn");
+		expect(
+			screen.getByText(
+				"Diese Nachricht wartet auf eine Freigabe oder eine Frage in einer anderen Unterhaltung. Beantworte sie dort, um fortzufahren.",
+			),
+		).toBeTruthy();
 	});
 
 	it("localizes the tool-call-as-text sentence in en and de", () => {
@@ -120,6 +164,15 @@ describe("ChatNoticeRow", () => {
 			</MantineProvider>,
 		);
 		expect(screen.getByTestId("chat-notice-row").getAttribute("data-notice-kind")).toBe("HistoryTruncated");
+	});
+
+	it("labels a CPU-fallback notice and shows its reason and remediation verbatim", () => {
+		const text =
+			"The Vulkan llama.cpp runtime is selected but enumerated no GPU devices. To run on the GPU: build the CUDA runtime from source.";
+		renderWithProviders(<ChatNoticeRow part={noticePart({ noticeKind: "CpuFallback", text })} />);
+
+		expect(screen.getByLabelText("Running on the CPU")).toBeTruthy();
+		expect(screen.getByText(text)).toBeTruthy();
 	});
 
 	it("renders the orchestration-degraded notice with its own kind tag and server text", () => {
@@ -267,6 +320,44 @@ describe("ChatNoticeRow", () => {
 		).toBeTruthy();
 	});
 
+	it("names a work session as the slot holder of a queued turn, in en and de", async () => {
+		const part = noticePart({
+			noticeKind: "QueuedBehindWorkSession",
+			text: "This message was queued behind a running work session step.",
+		});
+		const { unmount } = renderWithProviders(<ChatNoticeRow part={part} />);
+
+		expect(screen.getByText(part.text)).toBeTruthy();
+		expect(screen.getByLabelText("Waiting for a work session")).toBeTruthy();
+		unmount();
+
+		i18next.addResourceBundle("de", "translation", de, true, true);
+		await i18next.changeLanguage("de");
+		renderWithProviders(<ChatNoticeRow part={part} />);
+
+		expect(
+			screen.getByText("Diese Nachricht wurde hinter einem laufenden Schritt einer Arbeitssitzung eingereiht."),
+		).toBeTruthy();
+		expect(screen.getByLabelText("Wartet auf eine Arbeitssitzung")).toBeTruthy();
+	});
+
+	it("names the GPU holder a local turn waited for, localized in de, with its own glyph label", async () => {
+		i18next.addResourceBundle("de", "translation", de, true, true);
+		await i18next.changeLanguage("de");
+		renderWithProviders(
+			<ChatNoticeRow
+				part={noticePart({
+					noticeKind: "QueuedBehindGpuWork",
+					text: "This message was queued behind a running benchmark.",
+				})}
+			/>,
+		);
+
+		expect(screen.getByText("Diese Nachricht wartete auf einen laufenden Benchmark.")).toBeTruthy();
+		expect(screen.getByLabelText("Wartet auf GPU-Arbeit")).toBeTruthy();
+		expect(screen.queryByTestId("chat-notice-detail")).toBeNull();
+	});
+
 	it("renders the notice detail beside the sentence when the server sent one", () => {
 		// The dispatch reason code is the only record of WHICH rule decided the turn. It was computed and then dropped
 		// on the wire, so nothing showed it; it now rides beside the sentence as the stable code it is.
@@ -281,6 +372,22 @@ describe("ChatNoticeRow", () => {
 		);
 
 		expect(screen.getByTestId("chat-notice-detail").textContent).toBe("fast-model-unset");
+	});
+
+	it("never prints a bare id as the detail line", () => {
+		// V-03: queued-behind and agent-fallback notices carried a conversation or agent id that rendered verbatim.
+		renderWithProviders(
+			<ChatNoticeRow
+				part={noticePart({
+					noticeKind: "QueuedBehindParkedTurn",
+					text: "This message was queued behind a turn waiting for an answer.",
+					detail: "3c5336a8-c558-4d3c-9d29-7cda639c077a",
+				})}
+			/>,
+		);
+
+		expect(screen.queryByTestId("chat-notice-detail")).toBeNull();
+		expect(screen.queryByText(/3c5336a8/)).toBeNull();
 	});
 
 	it("renders nothing extra for a notice that carries no detail", () => {

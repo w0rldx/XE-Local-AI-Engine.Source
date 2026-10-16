@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
@@ -54,6 +55,21 @@ public sealed class AgentDefinitionResolverTests
         var resolved = await resolver.ResolveAsync(missingId, "qwen3:8b");
 
         AssertEx.True(resolved is null, "A binding to a deleted definition must resolve to null (default persona).");
+    }
+
+    [Test]
+    [Arguments(false, true)]
+    [Arguments(true, false)]
+    public async Task ResolveAsync_WhenTheAgentListsRunPython_FlagsItWithheldOnlyWhileComputeIsOff(bool computeEnabled, bool expectedWithheld)
+    {
+        // R4-05 review: the offer drops run_python while compute is off, and the flag is what turns that into a notice.
+        var resolver = BuildResolver(out var store, out _, onGetOffered: null, [OfferTool("GetCurrentTime")], computeEnabled: computeEnabled);
+        var definition = CreateDefinition(allowedTools: [ComputeToolDefinition.ToolName, "GetCurrentTime"]);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var resolved = AssertEx.NotNull(await resolver.ResolveAsync(definition.Id, "qwen3:8b"));
+
+        AssertEx.Equal(expectedWithheld, resolved.ComputeWithheld);
     }
 
     [Test]
@@ -1833,7 +1849,8 @@ public sealed class AgentDefinitionResolverTests
         IToolApprovalPolicy? toolApprovalPolicy = null,
         IModelCapabilityResolver? capabilityResolver = null,
         bool allowCloudModelAccess = false,
-        IReadOnlyList<CloudWithheldTool>? cloudWithheldTools = null)
+        IReadOnlyList<CloudWithheldTool>? cloudWithheldTools = null,
+        bool computeEnabled = true)
     {
         store = Substitute.For<IAgentDefinitionStore>();
         playbookStore = Substitute.For<IPlaybookActionStore>();
@@ -1872,7 +1889,7 @@ public sealed class AgentDefinitionResolverTests
             instructionProvider ?? new FakeAgentInstructionProvider(),
             capabilityResolver ?? Substitute.For<IModelCapabilityResolver>(),
             toolApprovalPolicy ?? new PermissiveToolApprovalPolicy(),
-            StubNodeRuntimeSettings.Create().WithAllowCloudModelAccess(allowCloudModelAccess).Build(),
+            StubNodeRuntimeSettings.Create().WithAllowCloudModelAccess(allowCloudModelAccess).WithComputeEnabled(computeEnabled).Build(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 

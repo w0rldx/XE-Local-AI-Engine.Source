@@ -79,6 +79,12 @@ public sealed class ArtifactPromotionService : IArtifactPromotionService
         }
 
         var decision = ArtifactQualityService.ReadDecision(artifact);
+        if (decision is null
+            && string.IsNullOrWhiteSpace((await _runStore.GetAsync(artifact.RunId, cancellationToken))?.LinkedInstalledModelName))
+        {
+            throw new TrainingExportRejectedException(ArtifactQualityService.UnlinkedRunMessage);
+        }
+
         if (decision?.PolicyVersion != ArtifactQualityDecisionV1.CurrentPolicyVersion
             || decision.Outcome is not (ArtifactQualityOutcome.Passed or ArtifactQualityOutcome.Overridden)
             || decision.ArtifactId != artifact.Id
@@ -203,7 +209,7 @@ public sealed class ArtifactPromotionService : IArtifactPromotionService
         var run = await _runStore.GetAsync(artifact.RunId, cancellationToken)
                   ?? throw new TrainingExportRejectedException("The run behind this artifact was not found.");
         var baseName = run.LinkedInstalledModelName
-                       ?? throw new TrainingExportRejectedException("This run has no installed base counterpart, so the artifact cannot be promoted.");
+                       ?? throw new TrainingExportRejectedException(ArtifactQualityService.UnlinkedRunMessage);
         var installed = await _models.ListInstalledModelsAsync(cancellationToken);
         if (!installed.Any(model => model.IsAvailable
                                     && string.Equals(model.ModelName, baseName, StringComparison.Ordinal)

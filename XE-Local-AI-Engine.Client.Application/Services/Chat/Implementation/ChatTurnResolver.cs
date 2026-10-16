@@ -50,7 +50,8 @@ public sealed class ChatTurnResolver
         Guid? effectiveAgentId,
         string? retrievalQuery,
         bool userPickedConcreteModel,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Guid? conversationAgentId = null)
     {
         // Capabilities resolve ONCE, with unknown meaning NOT-capable so a plain chat works instead of tripping a
         // provider 400, and the same pass classifies the provider LOCALITY the egress gates reuse.
@@ -150,7 +151,9 @@ public sealed class ChatTurnResolver
             EffectiveModelIsCloud = effectiveModelIsCloud,
             EffectiveModelCloudGrants = effectiveCapabilities.CloudGrants,
             ReasoningBudgetEnforceable = reasoningBudgetEnforceable,
-            AllowAutoModelSwap = allowAutoModelSwap
+            AllowAutoModelSwap = allowAutoModelSwap,
+            // Null for a non-null id means the definition is gone; only the conversation's own agent earns the notice's wording.
+            MissingAgentDefinitionId = resolved is null && conversationAgentId is not null && effectiveAgentId == conversationAgentId ? effectiveAgentId : null
         };
     }
 

@@ -3,6 +3,9 @@ namespace XE_Local_AI_Engine.Tests.Invocation;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
+using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
+using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
@@ -67,6 +70,41 @@ public sealed class LocalRuntimeWarmerTests
         var warmer = CreateWarmer(resolver);
 
         AssertEx.Null(await warmer.ResolveWarmableProviderAsync("model.gguf", Guid.NewGuid(), CancellationToken.None));
+    }
+
+    /// <summary>R7-03: a local turn loading its model during a training run sat in "loading model" with no reason.</summary>
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task PrepareLocalRuntimeAsync_LoadingWhileATrainingRunHoldsTheNode_SaysSoAndOnlyThen(bool trainingHoldsTheNode)
+    {
+        var gate = new GpuWorkGate();
+        using var training = trainingHoldsTheNode ? gate.TryBeginExclusive(GpuWorkKind.TrainingRun) : null;
+        using var benchmarkPoll = trainingHoldsTheNode ? null : gate.TryBeginShared(GpuWorkKind.Benchmark);
+        var resolver = Substitute.For<ILocalModelProviderResolver>();
+        var provider = CreateLlamaCppProvider(effectiveContextTokens: 8192);
+        resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(provider));
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var invocationId = Guid.NewGuid();
+
+        _ = await CreateWarmer(resolver, gate: gate).PrepareLocalRuntimeAsync("model.gguf", dispatcher, invocationId,
+            new InvocationRunner.StreamState(), turnStartedTimestamp: 0, CancellationToken.None);
+
+        var notices = dispatcher.ReceivedCalls()
+                                .Where(static call => call.GetMethodInfo().Name == nameof(IWorkerEventDispatcher.ReportTurnNoticeAsync))
+                                .Select(static call => (TurnNoticePayload)call.GetArguments()[0]!)
+                                .ToArray();
+        if (trainingHoldsTheNode)
+        {
+            var notice = notices.Single();
+            AssertEx.Equal(TurnNoticeKind.QueuedBehindGpuWork, notice.Kind);
+            AssertEx.Equal(invocationId, notice.InvocationId);
+            AssertEx.Equal("This message was queued behind a running training run.", notice.Message);
+        }
+        else
+        {
+            AssertEx.Empty(notices, "A benchmark poll's shared hold does not make a model load wait.");
+        }
     }
 
     [Test]
@@ -141,12 +179,12 @@ public sealed class LocalRuntimeWarmerTests
             LocalRuntimeWarmer.BuildGenerationAdmissionRejectionMessage(InvocationGenerationAdmissionReasonCodes.EffectiveContextInsufficient, context));
     }
 
-    private static LocalRuntimeWarmer CreateWarmer(ILocalModelProviderResolver resolver, bool cloudSelected = false)
+    private static LocalRuntimeWarmer CreateWarmer(ILocalModelProviderResolver resolver, bool cloudSelected = false, GpuWorkGate? gate = null)
     {
         var cloudFactory = Substitute.For<IActiveCloudChatClientFactory>();
         cloudFactory.IsCloudProviderSelected(Arg.Any<string?>()).Returns(cloudSelected);
 
-        return new LocalRuntimeWarmer(resolver, cloudFactory, new FakeModelTrustResolver(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System);
+        return new LocalRuntimeWarmer(resolver, cloudFactory, new FakeModelTrustResolver(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System, gate ?? new GpuWorkGate());
     }
 
     private static ILocalModelProvider CreateLlamaCppProvider(int? effectiveContextTokens)

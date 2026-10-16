@@ -203,7 +203,7 @@ describe("IntegrationExecutionTimeline", () => {
 		expect(de.pages.integrations.executions.detail.loading).toBe("Verlauf wird geladen…");
 	});
 
-	it("renders a failure category and summary verbatim", () => {
+	it("renders a failure category and its summary", () => {
 		renderWithMantine(
 			<IntegrationExecutionTimeline
 				events={[

@@ -114,11 +114,11 @@ public static class AgentServiceCollectionExtensions
     /// <summary>
     ///     Decorates the registered <see cref="IChatClient" /> with the agent pipeline, outermost first: tool
     ///     observability, the empty-tool-offer branch, function invocation, tool relevance, provider-call budgeting,
-    ///     OpenTelemetry.
+    ///     the system fold, OpenTelemetry.
     /// </summary>
     /// <remarks>
-    ///     Two stages: a provider client (tool relevance, budget, OpenTelemetry), then a function-invoking client over
-    ///     it. <see cref="EmptyToolOfferChatClient" /> routes a request with no <see cref="ChatOptions.Tools" /> straight
+    ///     Two stages: a provider client (tool relevance, budget, system fold, OpenTelemetry), then a function-invoking
+    ///     client over it. <see cref="EmptyToolOfferChatClient" /> routes a request with no <see cref="ChatOptions.Tools" /> straight
     ///     to the provider client, so a tool-free turn costs no synthetic tool round. Public so test harnesses can reapply
     ///     the decoration after replacing the base client. The order is load-bearing; see docs/wiki/04-agent-mode.md.
     /// </remarks>
@@ -158,6 +158,7 @@ public static class AgentServiceCollectionExtensions
                                           serviceProvider.GetRequiredService<ILogger<ProviderCallBudgetChatClient>>(),
                                           serviceProvider.GetRequiredService<ITokenEstimatorCalibrationStore>(),
                                           pipelineOptions.MaxToolCallsPerResponse))
+                                      .Use(chatClient => new SingleSystemMessageChatClient(chatClient))
                                       .UseOpenTelemetry(serviceProvider.GetRequiredService<ILoggerFactory>(),
                                           sourceName: "Microsoft.Extensions.AI",
                                           configure: openTelemetryChatClient => openTelemetryChatClient.EnableSensitiveData = telemetryOptions.CaptureSensitiveContent)

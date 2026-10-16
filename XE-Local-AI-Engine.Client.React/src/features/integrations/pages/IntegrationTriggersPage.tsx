@@ -234,7 +234,7 @@ export function IntegrationTriggersPage() {
 				icon={<IconPlug size={24} />}
 				subtitle={t(
 					"pages.integrations.triggers.subtitle",
-					"A trigger is a named external entry point that runs a saved agent unattended over the loopback integration API.",
+					"A trigger is a named external entry point that runs a saved agent or graph workflow unattended over the loopback integration API.",
 				)}
 				actions={
 					<Button leftSection={<IconPlus size={16} />} onClick={openCreate} data-testid="integration-trigger-create-button">

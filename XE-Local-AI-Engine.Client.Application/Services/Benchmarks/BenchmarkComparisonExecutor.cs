@@ -137,18 +137,18 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
                 throw new BenchmarkExecutionException("The project no longer judges pairwise.");
             }
 
-            // The legacy single-case invariant, re-asserted before a model is leased. A comparison carrying task-case
-            // identity was enqueued against a different shape of the world than this execution path supports.
-            if (comparison.TaskCaseId is not null || comparison.TaskInputHash.Length != 0)
-            {
-                throw new BenchmarkExecutionException(CrossCaseMessage);
-            }
-
             var runtime = comparison.JudgeRuntimeJson is { } runtimeJson
                 ? BenchmarkJudgeSerialization.DeserializeRuntime(runtimeJson.Span)
                 : throw new BenchmarkExecutionException("The frozen judge runtime is unavailable.");
             var runA = await RequireAnsweredRunAsync(comparison.RunAId, work, token);
             var runB = await RequireAnsweredRunAsync(comparison.RunBId, work, token);
+
+            // Re-asserted before a model is leased: both answers are to the comparison's one question. A comparison
+            // enqueued before pairing stamped the case carries none and is held only to its two runs agreeing.
+            if (!AnswerTheSameCase(comparison, runA, runB))
+            {
+                throw new BenchmarkExecutionException(CrossCaseMessage);
+            }
             var snapshot = _snapshots.Deserialize(runA.RuntimeSnapshotJson.Span);
 
             // HALF the judge window each, because both answers plus the task, the reference answer and the verdict have to fit one context.
@@ -273,6 +273,19 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
                     ? exception.Message
                     : InvocationFailedMessage);
         }
+    }
+
+    private static bool AnswerTheSameCase(BenchmarkComparisonRecord comparison, BenchmarkRunRecord runA, BenchmarkRunRecord runB)
+    {
+        if (runA.TaskItemId != runB.TaskItemId || !string.Equals(runA.TaskInputHash ?? string.Empty, runB.TaskInputHash ?? string.Empty, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var stamped = comparison.TaskCaseId is not null || comparison.TaskInputHash.Length != 0;
+        return !stamped
+               || (comparison.TaskCaseId == runA.TaskItemId
+                   && string.Equals(comparison.TaskInputHash, runA.TaskInputHash ?? string.Empty, StringComparison.Ordinal));
     }
 
     private async Task<BenchmarkRunRecord> RequireAnsweredRunAsync(Guid runId, BenchmarkClaimedWork work, CancellationToken token)

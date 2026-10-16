@@ -65,15 +65,23 @@ describe("restoreNodeAuthSession", () => {
 	});
 
 	// F-02: a rate-limited refresh signed the operator out although the refresh cookie was still valid.
-	it("keeps the session and rethrows when refresh is rate limited", async () => {
+	// R1-02: a refresh still rate limited after its Retry-After wait sent the boot to the crash screen; it goes to login now.
+	it("keeps the session and answers rate-limited when refresh stays rate limited", async () => {
 		useNodeAuthStore.getState().actions.setToken({ accessToken: "old", expiresAtUtc: "2026-05-25T12:00:00Z" });
 		authApiMock.getNodeAuthStatus.mockResolvedValue({ setupRequired: false, authenticated: false });
-		const rejection = refreshRejection(429);
+		authApiMock.refreshNodeAuthToken.mockRejectedValue(refreshRejection(429));
+
+		await expect(restoreNodeAuthSession()).resolves.toBe("rate-limited");
+
+		expect(useNodeAuthStore.getState().accessToken).toBe("old");
+	});
+
+	it("still rethrows a server error so the route can retry it", async () => {
+		authApiMock.getNodeAuthStatus.mockResolvedValue({ setupRequired: false, authenticated: false });
+		const rejection = refreshRejection(503);
 		authApiMock.refreshNodeAuthToken.mockRejectedValue(rejection);
 
 		await expect(restoreNodeAuthSession()).rejects.toBe(rejection);
-
-		expect(useNodeAuthStore.getState().accessToken).toBe("old");
 	});
 
 	// The layout's failed restore is followed straight away by /login's guard; a second refresh there doubled the calls.

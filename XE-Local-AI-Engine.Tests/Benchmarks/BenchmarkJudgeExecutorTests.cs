@@ -1116,7 +1116,7 @@ public sealed class BenchmarkJudgeExecutorTests
             CreatedAtUtc = 1
         };
 
-    private static BenchmarkJudgePolicyV1 Policy(int? promptVersion = null, BenchmarkJudgeRubricV1? rubric = null) =>
+    internal static BenchmarkJudgePolicyV1 Policy(int? promptVersion = null, BenchmarkJudgeRubricV1? rubric = null) =>
         new(new BenchmarkJudgePolicyModelV1("judge.gguf", V1('c'), [new string('b', 64)]),
             4096,
             promptVersion ?? BenchmarkJudgePolicyVersions.PromptVersion,
@@ -1128,13 +1128,13 @@ public sealed class BenchmarkJudgeExecutorTests
             ]),
             ReferenceAnswer: null);
 
-    private sealed class StubEnvironmentFacts : IRuntimeEnvironmentFactsProvider
+    internal sealed class StubEnvironmentFacts : IRuntimeEnvironmentFactsProvider
     {
         public Task<RuntimeEnvironmentFactsV1> CaptureAsync(GpuVariant variant, CancellationToken ct) =>
             Task.FromResult(new RuntimeEnvironmentFactsV1(1, null, null, null, 42, ["hardware"]));
     }
 
-    private static InvocationState State(Guid invocationId, string content) =>
+    internal static InvocationState State(Guid invocationId, string content) =>
         new()
         {
             InvocationId = invocationId,
@@ -1162,7 +1162,7 @@ public sealed class BenchmarkJudgeExecutorTests
             RankExclusionReason = null
         };
 
-    private static BenchmarkRunRecord Run(BenchmarkRuntimeSnapshotV1 snapshot, string judgeState, long version, string? primaryStopReason = null) =>
+    internal static BenchmarkRunRecord Run(BenchmarkRuntimeSnapshotV1 snapshot, string judgeState, long version, string? primaryStopReason = null) =>
         new()
         {
             Id = Guid.NewGuid(),
@@ -1217,7 +1217,7 @@ public sealed class BenchmarkJudgeExecutorTests
             }
         };
 
-    private static InstalledModelSnapshot Installed()
+    internal static InstalledModelSnapshot Installed()
     {
         var revision = V1('a');
         return new InstalledModelSnapshot("judge.gguf",
@@ -1245,7 +1245,7 @@ public sealed class BenchmarkJudgeExecutorTests
             V1('c'));
     }
 
-    private static BenchmarkRuntimeSnapshotV1 Snapshot(InstalledModelSnapshot installed)
+    internal static BenchmarkRuntimeSnapshotV1 Snapshot(InstalledModelSnapshot installed)
     {
         var model = new BenchmarkInstalledModelSnapshotV1(installed.ModelName,
             installed.RegistryRevision,
@@ -1286,21 +1286,21 @@ public sealed class BenchmarkJudgeExecutorTests
             "hash");
     }
 
-    private static string V1(char value) =>
+    internal static string V1(char value) =>
         $"v1:{new string(value, 64)}";
 
-    private static BenchmarkLlamaRuntimeSnapshotV1 Runtime(int contextTokens, string? kvCacheType = null) =>
+    internal static BenchmarkLlamaRuntimeSnapshotV1 Runtime(int contextTokens, string? kvCacheType = null) =>
         new(GpuVariant.Cpu, contextTokens, null, null, null, kvCacheType, kvCacheType, kvCacheType is not null,
             LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
 
-    private static IGpuVariantSelector FixedVariantSelector()
+    internal static IGpuVariantSelector FixedVariantSelector()
     {
         var selector = Substitute.For<IGpuVariantSelector>();
         selector.SelectVariantAsync(Arg.Any<CancellationToken>()).Returns(GpuVariant.Cpu);
         return selector;
     }
 
-    private static ILlamaServerProcessSupervisor PassthroughSupervisor()
+    internal static ILlamaServerProcessSupervisor PassthroughSupervisor()
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         supervisor.RunExclusiveBenchmarkAsync(Arg.Any<string>(),
@@ -1323,14 +1323,14 @@ public sealed class BenchmarkJudgeExecutorTests
         return supervisor;
     }
 
-    private static ILlamaServerEndpointBinding EndpointBinding()
+    internal static ILlamaServerEndpointBinding EndpointBinding()
     {
         var binding = Substitute.For<ILlamaServerEndpointBinding>();
         binding.Bind(Arg.Any<LlamaServerEndpoint>()).Returns(Substitute.For<IDisposable>());
         return binding;
     }
 
-    private sealed class FixedSnapshotFactory : IBenchmarkRuntimeSnapshotFactory
+    internal sealed class FixedSnapshotFactory : IBenchmarkRuntimeSnapshotFactory
     {
         private readonly BenchmarkRuntimeSnapshotV1 _snapshot;
 
@@ -1349,7 +1349,7 @@ public sealed class BenchmarkJudgeExecutorTests
             _snapshot;
     }
 
-    private sealed class FixedLeaseProvider : IBenchmarkInstalledModelLeaseProvider
+    internal sealed class FixedLeaseProvider : IBenchmarkInstalledModelLeaseProvider
     {
         private readonly FakeLease _lease;
 
@@ -1362,7 +1362,7 @@ public sealed class BenchmarkJudgeExecutorTests
             Task.FromResult<IBenchmarkInstalledModelLease>(_lease);
     }
 
-    private sealed class FakeLease : IBenchmarkInstalledModelLease
+    internal sealed class FakeLease : IBenchmarkInstalledModelLease
     {
         public FakeLease(InstalledModelSnapshot snapshot)
         {
@@ -1384,7 +1384,7 @@ public sealed class BenchmarkJudgeExecutorTests
     ///     Answers each decision with the next verdict, then repeats the last one forever — so a single verdict is a
     ///     constant answer and a sequence models capacity that frees up (or never does) while the phase waits.
     /// </summary>
-    private sealed class JudgeCapacityService : ICapacityService
+    internal sealed class JudgeCapacityService : ICapacityService
     {
         private readonly Queue<CapacityVerdict> _verdicts;
 
@@ -1426,7 +1426,7 @@ public sealed class BenchmarkJudgeExecutorTests
         }
     }
 
-    private sealed class TrackingDisposable : IDisposable
+    internal sealed class TrackingDisposable : IDisposable
     {
         public bool Disposed { get; private set; }
 
@@ -1434,7 +1434,7 @@ public sealed class BenchmarkJudgeExecutorTests
             Disposed = true;
     }
 
-    private sealed class TrackingAsyncDisposable : IAsyncDisposable
+    internal sealed class TrackingAsyncDisposable : IAsyncDisposable
     {
         public bool Disposed { get; private set; }
 

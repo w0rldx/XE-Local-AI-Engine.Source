@@ -70,6 +70,7 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     private readonly int _spawnMaxCloudSeed;
     private readonly int _spawnQueueWaitSecondsSeed;
     private readonly bool _knowledgeAdaptiveRerankingEnabledSeed;
+    private readonly string? _rerankerModelNameSeed;
     private readonly int _knowledgeRetrievalLatencyBudgetMsSeed;
     private readonly bool _knowledgeScheduledReindexEnabledSeed;
     private readonly int _knowledgeScheduledReindexIntervalMinutesSeed;
@@ -179,6 +180,7 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
         // Knowledge, privacy and usage seeds come from configuration too: KnowledgeBaseOptions is Configure-d FROM this accessor, and the
         // retention, backup, benchmark and scheduler options are registered by modules not every context runs.
+        _rerankerModelNameSeed = NonBlank(configuration.GetValue<string>("KnowledgeBase:RerankerModelName"));
         _knowledgeAdaptiveRerankingEnabledSeed = BoolSeed(configuration, "KnowledgeBase:AdaptiveRerankingEnabled",
             StoredNodeSettings.DefaultKnowledgeAdaptiveRerankingEnabled);
         _knowledgeRetrievalLatencyBudgetMsSeed = IntSeed(configuration, "KnowledgeBase:RetrievalLatencyBudgetMilliseconds", 1,
@@ -765,9 +767,6 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     public int? GetSpeculativeDraftGpuLayers() =>
         ResolveSpeculativeDraftGpuLayers(LoadStored());
 
-    public string? GetRerankerModelName() =>
-        ResolveRerankerModelName(LoadStored());
-
     public TimeSpan GetLlamaReadinessTimeoutCap() =>
         TimeSpan.FromSeconds(LoadStored().LlamaReadinessTimeoutCapSeconds ?? StoredNodeSettings.DefaultLlamaReadinessTimeoutCapSeconds);
 
@@ -985,9 +984,9 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     private static int? ResolveSpeculativeDraftGpuLayers(StoredNodeSettings stored) =>
         stored.SpeculativeDraftGpuLayers;
 
-    // Reranking has no appsettings section: the stored name is the only source, blank → null (off).
-    private static string? ResolveRerankerModelName(StoredNodeSettings stored) =>
-        string.IsNullOrWhiteSpace(stored.RerankerModelName) ? null : stored.RerankerModelName;
+    // Stored name > KnowledgeBase:RerankerModelName > off; blank on either side counts as unset.
+    private string? ResolveRerankerModelName(StoredNodeSettings stored) =>
+        string.IsNullOrWhiteSpace(stored.RerankerModelName) ? _rerankerModelNameSeed : stored.RerankerModelName;
 
     private static string? ResolveAutoEffortFastModelName(StoredNodeSettings stored) =>
         string.IsNullOrWhiteSpace(stored.AutoEffortFastModelName) ? null : stored.AutoEffortFastModelName;

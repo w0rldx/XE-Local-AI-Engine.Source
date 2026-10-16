@@ -8,8 +8,8 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 /// <remarks>
 ///     <see cref="TaskCaseId" /> and <see cref="TaskInputHash" /> are the identity of WHAT WAS ASKED: pairs form only
 ///     inside one of them, because "which answer is better" is meaningless when the two answers are to different
-///     questions. In the current schema a project is one case, so both use the constant below and the grouping is a
-///     no-op; the columns retain the identity a schema with multiple cases per project needs.
+///     questions. They are the run's leaf task item and its input hash at freeze; a run frozen before task items
+///     existed carries null and the legacy hash, so a legacy project stays one case.
 /// </remarks>
 public sealed class BenchmarkPairwiseCandidate
 {
@@ -18,6 +18,9 @@ public sealed class BenchmarkPairwiseCandidate
     public required Guid? TaskCaseId { get; init; }
 
     public required string TaskInputHash { get; init; }
+
+    /// <summary>The run's model: pairwise compares different models on one item, never a model with its own repeats.</summary>
+    public required string ModelName { get; init; }
 }
 
 /// <summary>One unordered pair to compare, canonical (<see cref="RunAId" /> &lt; <see cref="RunBId" />).</summary>

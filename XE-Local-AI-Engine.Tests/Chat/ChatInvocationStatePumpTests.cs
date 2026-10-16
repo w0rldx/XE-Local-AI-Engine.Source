@@ -557,7 +557,8 @@ public sealed class ChatInvocationStatePumpTests
 
         public Task<NodeChatPumpTerminalResult> TerminalizeInterruptedAsync(NodeChatMessageCorrelation correlation,
             NodeChatPumpCursor cursor,
-            bool wasCancelled)
+            bool wasCancelled,
+            string? requestedModel = null)
         {
             var status = wasCancelled ? NodeChatMessageStatusValues.Cancelled : NodeChatMessageStatusValues.Interrupted;
             return Task.FromResult(new NodeChatPumpTerminalResult

@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Knowledge.V1;
 using System.Globalization;
 using System.Security.Cryptography;
 using FastEndpoints;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
@@ -25,8 +24,6 @@ using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 public sealed class UploadKnowledgeDocumentEndpoint : Endpoint<UploadKnowledgeDocumentRequest, UploadKnowledgeDocumentResponse>
 {
     private const string DefaultMimeType = "application/octet-stream";
-    private const long MultipartEnvelopeBytes = 64 * 1024;
-
     private readonly IKnowledgeDocumentBlobStore _blobStore;
     private readonly IKnowledgeIngestionAdmissionService _ingestionAdmission;
     private readonly IDocumentTextExtractor _extractor;
@@ -53,12 +50,8 @@ public sealed class UploadKnowledgeDocumentEndpoint : Endpoint<UploadKnowledgeDo
     {
         Post(LocalApiRoutes.KnowledgeBase.Documents);
         AllowFileUploads();
-        // Without both, Kestrel's ~28.6 MiB body limit or the form reader's 128 MiB multipart limit, not the configured cap, rejects a large upload.
-        Options(builder => builder.WithMetadata(new RequestSizeLimitAttribute(_maxUploadBytes + MultipartEnvelopeBytes),
-            new RequestFormLimitsAttribute
-            {
-                MultipartBodyLengthLimit = _maxUploadBytes + MultipartEnvelopeBytes
-            }));
+        // Without both limits, Kestrel's ~28.6 MiB body limit or the form reader's 128 MiB multipart limit, not the configured cap, rejects a large upload.
+        Options(builder => MultipartUploadLimits.Apply(builder, _maxUploadBytes));
         // Declare the multipart body so FastEndpoints documents it in OpenAPI (and the request is not rejected with a 415
         // for lacking a JSON body). Mirrors the typed-IFormFile + AllowFileUploads pattern of the conversation upload.
         Description(builder => builder.Accepts<UploadKnowledgeDocumentRequest>("multipart/form-data"));
@@ -84,8 +77,7 @@ public sealed class UploadKnowledgeDocumentEndpoint : Endpoint<UploadKnowledgeDo
 
         if (file.Length > _maxUploadBytes)
         {
-            AddError($"The file exceeds the maximum upload size of {_maxUploadBytes / (1024L * 1024L)} MB.");
-            await Send.ErrorsAsync(cancellation: ct);
+            await Send.ResultAsync(MultipartUploadLimits.TooLarge(_maxUploadBytes));
             return;
         }
 

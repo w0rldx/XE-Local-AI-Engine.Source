@@ -199,10 +199,11 @@ public sealed class CapacityService : ICapacityService
             return Reject(ReasonRejectFootprintUnknown, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
         }
 
-        // Process-count headroom mirrors the supervisor's loaded-cap (distinct (model,role) + this new one ≤ cap). A pooled role and the supervisor's
-        // own chat admission skip it: at the cap the supervisor's idle reaper evicts the least recently used pooled process, or refuses the launch itself.
+        // Process-count headroom mirrors the supervisor's chat-model cap: companions (embedder, reranker) hold their own slots, so only chat-class keys count.
+        // A pooled role and the supervisor's own chat admission skip it: at the cap the supervisor evicts within the class or refuses the launch itself.
         var activeProcessKeys = running.Select(static key => new ProcessLaunchAdmissionKey(key.ModelName, key.Role))
                                        .Concat(launchSnapshot.AdmittedKeys)
+                                       .Where(static key => key.Role is not (ModelRole.Embedding or ModelRole.Reranker))
                                        .ToHashSet();
         if (!isPooledRole && !request.SupervisorEnforcesProcessCap && activeProcessKeys.Count + 1 > _localProviderResolver.MaxLoadedProcesses)
         {
@@ -318,7 +319,9 @@ public sealed class CapacityService : ICapacityService
         // A refusal never names the requested (model, role) itself: asking to eject the model being loaded is no advice.
         var requested = new RunningKey(modelName, role);
         var resident = runningSnapshot.Keys.Where(key => !key.Equals(requested)).ToArray();
+        // A direct launch (a benchmark's exclusive spawn) carries no admission, but it is what a launch-blocker refusal waits on.
         var loading = launchSnapshot.AdmittedKeys
+                                    .Concat(launchSnapshot.BlockingKeys)
                                     .Select(static key => new RunningKey(key.ModelName, key.Role))
                                     .Where(key => !key.Equals(requested) && !runningSnapshot.Keys.Contains(key))
                                     .Distinct()

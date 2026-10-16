@@ -110,4 +110,61 @@ describe("auth client", () => {
 		expect(second).toEqual(token);
 		expect(sent).toHaveLength(1);
 	});
+
+	describe("a rate-limited refresh", () => {
+		// Answers each refresh from the list in order and records how many were sent.
+		function scriptedRefresh(sent: SentRequest[], statuses: number[]) {
+			return async (config: InternalAxiosRequestConfig): Promise<AxiosResponse> => {
+				sent.push({ url: config.url, authorization: undefined });
+				const status = statuses[sent.length - 1] ?? 200;
+				const data = status === 200 ? token : { message: "Too many auth attempts. Please try again later." };
+				const response: AxiosResponse = { data, status, statusText: String(status), headers: { "retry-after": "60" }, config };
+				if (status >= 400) {
+					throw new AxiosError(String(status), AxiosError.ERR_BAD_REQUEST, config, undefined, response);
+				}
+				return response;
+			};
+		}
+
+		beforeEach(() => {
+			vi.useFakeTimers();
+		});
+
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
+		it("waits out Retry-After once and resolves with the retried refresh", async () => {
+			const sent: SentRequest[] = [];
+			authInstance.defaults.adapter = scriptedRefresh(sent, [429, 200]);
+
+			const refreshed = refreshNodeAuthToken();
+			const joined = refreshNodeAuthToken();
+			await vi.advanceTimersByTimeAsync(59_000);
+			expect(sent).toHaveLength(1);
+			await vi.advanceTimersByTimeAsync(1_000);
+
+			await expect(refreshed).resolves.toEqual(token);
+			await expect(joined).resolves.toEqual(token);
+			expect(sent).toHaveLength(2);
+		});
+
+		it("answers later callers from the second 429 until Retry-After has passed", async () => {
+			const sent: SentRequest[] = [];
+			authInstance.defaults.adapter = scriptedRefresh(sent, [429, 429, 200]);
+
+			const first = refreshNodeAuthToken().catch((caught: unknown) => caught);
+			await vi.advanceTimersByTimeAsync(60_000);
+			const firstError = await first;
+			const blocked = await refreshNodeAuthToken().catch((caught: unknown) => caught);
+
+			expect(isAxiosError(firstError) && firstError.response?.status).toBe(429);
+			expect(blocked).toBe(firstError);
+			expect(sent).toHaveLength(2);
+
+			await vi.advanceTimersByTimeAsync(60_000);
+			await expect(refreshNodeAuthToken()).resolves.toEqual(token);
+			expect(sent).toHaveLength(3);
+		});
+	});
 });

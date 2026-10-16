@@ -1,3 +1,4 @@
+import { Box } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
@@ -13,12 +14,16 @@ export function KnowledgeStatusBadge({ status }: KnowledgeStatusBadgeProps) {
 	const { t } = useTranslation();
 	const descriptor = knowledgeStatusDescriptor(status);
 
+	// The badge clips with an ellipsis, so a squeezed table column cut it to "INDE…"; a max-content floor keeps the
+	// longest English and German label whole.
 	return (
-		<StatusBadge
-			color={descriptor.color}
-			label={t(descriptor.labelKey)}
-			inProgress={descriptor.inProgress}
-			data-testid={`knowledge-status-${status}`}
-		/>
+		<Box style={{ minWidth: "max-content" }} data-testid={`knowledge-status-box-${status}`}>
+			<StatusBadge
+				color={descriptor.color}
+				label={t(descriptor.labelKey)}
+				inProgress={descriptor.inProgress}
+				data-testid={`knowledge-status-${status}`}
+			/>
+		</Box>
 	);
 }

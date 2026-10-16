@@ -18,6 +18,9 @@ internal static class ToolFailureText
     /// <summary>The tool ran and reported its own failure (an MCP <c>isError</c> result).</summary>
     public const string ToolReportedCode = "tool_reported";
 
+    /// <summary>The sandbox stopped the tool for exceeding its memory or disk limit.</summary>
+    public const string ResourceLimitCode = "resource_limit";
+
     private const string Prefix = "[tool error: ";
 
     public static string Format(string code, string message) =>

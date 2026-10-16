@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1;
 
+using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
@@ -765,10 +766,12 @@ public sealed record NodeSettingsResponse
 ///     Body for <c>PUT api/local/v1/node-settings</c>. EVERY field is OPTIONAL, including the chat timeout.
 /// </summary>
 /// <remarks>
-///     A <see langword="null" /> request field keeps the current stored value — the mapper merges into the loaded
-///     <see cref="StoredNodeSettings" />. Provided values are validated at the boundary by
-///     <see cref="Validators.SaveNodeSettingsRequestValidator" /> (ranges, URL format, tag format, array element constraints).
+///     A <see langword="null" /> field keeps the stored value: the mapper merges into <see cref="StoredNodeSettings" />.
+///     <see cref="Validators.SaveNodeSettingsRequestValidator" /> checks provided values. An unknown top-level property
+///     is refused with a 400, so a misspelt name never answers 200. A <c>usageRates</c> entry is a
+///     <see cref="ModelRate" />, also the persisted settings JSON, so an unknown member inside one is still ignored.
 /// </remarks>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SaveNodeSettingsRequest
 {
     public int? MaxMessageRequestTimeoutSeconds { get; init; }

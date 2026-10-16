@@ -112,7 +112,8 @@ export interface ImageJobView {
 	width: number;
 	height: number;
 	steps: number;
-	sampler: string;
+	/** `null` when sd-server chose its own default (an unclassified model, or a job from before samplers were stored). */
+	sampler: string | null;
 	cfgScale: number;
 	createdAtUtc: number;
 	startedAtUtc: number | null;
@@ -138,7 +139,7 @@ export function toImageJobView(dto: ImageJobResponse): ImageJobView {
 		width: dto.width,
 		height: dto.height,
 		steps: dto.steps,
-		sampler: dto.sampler,
+		sampler: dto.sampler ?? null,
 		cfgScale: dto.cfgScale,
 		createdAtUtc: dto.createdAtUtc,
 		startedAtUtc: dto.startedAtUtc ?? null,

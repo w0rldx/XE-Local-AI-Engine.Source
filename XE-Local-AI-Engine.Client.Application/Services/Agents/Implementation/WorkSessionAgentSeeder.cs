@@ -4,11 +4,12 @@ using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 
 /// <summary>
-///     Idempotent startup task that seeds the two work-session personas, General and Research, by slug, the way
+///     Idempotent startup task that seeds the work-session personas, General, Research and Repository Research, by slug, the way
 ///     <see cref="CoderAgentSeeder" /> seeds its one.
 /// </summary>
 /// <remarks>
@@ -53,6 +54,15 @@ public sealed class WorkSessionAgentSeeder : IHostedService
         - Say plainly when the knowledge base does not answer something, rather than filling the gap from memory.
         """;
 
+    private const string RepositoryResearchInstructions =
+        """
+
+        This session researches the repository its development workflow is bound to, read-only. Ground every claim in what you read:
+        - list_files to see what is there, search_text to find where something is used or defined, and read_file to read it.
+        - Put the file path and line in each finding's sourceRef, so the report can be checked.
+        - You cannot change anything. Say plainly when the repository does not answer something, rather than filling the gap from memory.
+        """;
+
     private readonly ILogger<WorkSessionAgentSeeder> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
 
@@ -72,6 +82,7 @@ public sealed class WorkSessionAgentSeeder : IHostedService
 
             await SeedAsync(store, seededSlugs, AgentDefaults.WorkSessionGeneralAgentSeedSlug, BuildGeneralSeedInput(), cancellationToken);
             await SeedAsync(store, seededSlugs, AgentDefaults.WorkSessionResearchAgentSeedSlug, BuildResearchSeedInput(), cancellationToken);
+            await SeedAsync(store, seededSlugs, AgentDefaults.WorkSessionRepositoryResearchAgentSeedSlug, BuildRepositoryResearchSeedInput(), cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -126,6 +137,33 @@ public sealed class WorkSessionAgentSeeder : IHostedService
             Name = AgentDefaults.WorkSessionResearchAgentName,
             Description = "Runs a work session grounded in the node's knowledge base, citing what it retrieves.",
             Instructions = SharedInstructions + ResearchInstructions,
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = allowedToolNames,
+            ToolApprovals = BuildApprovals(allowedToolNames),
+            OrchestrationTopologyJson = null
+        };
+    }
+
+    /// <summary>The repository-research persona: its own row, so widening it never widens the knowledge-base persona other features bind.</summary>
+    internal static AgentDefinitionInput BuildRepositoryResearchSeedInput()
+    {
+        IReadOnlyList<string> allowedToolNames =
+        [
+            .. WorkSessionToolDefinitions.ToolNames,
+            AskUserTool.ToolName,
+            ClockToolName,
+            CoderToolDefinition.ListFilesToolName,
+            CoderToolDefinition.ReadFileToolName,
+            CoderToolDefinition.SearchTextToolName
+        ];
+
+        return new AgentDefinitionInput
+        {
+            Name = AgentDefaults.WorkSessionRepositoryResearchAgentName,
+            Description = "Runs a work session that reads a development workflow's repository, read-only, citing the files it read.",
+            Instructions = SharedInstructions + RepositoryResearchInstructions,
             ModelProfile = null,
             ReasoningEffort = null,
             Kind = AgentDefinitionKind.Single,

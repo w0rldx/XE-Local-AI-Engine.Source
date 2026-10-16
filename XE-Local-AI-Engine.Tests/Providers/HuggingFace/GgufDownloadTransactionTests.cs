@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
+using System.Text.Json;
 using NSubstitute;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
@@ -127,7 +128,8 @@ public sealed class GgufDownloadTransactionTests
             CancellationToken.None));
 
         // No text-only success: nothing final, nothing registered — but the verified weight waits at its resumable name.
-        AssertEx.Equal(Path.GetFileName(weightPart) + " | " + Path.GetFileName(weightPart) + ".ranges.part",
+        AssertEx.Equal(Path.GetFileName(destination.RelativeGgufPath) + ".intent.part | " + Path.GetFileName(weightPart) + " | "
+                       + Path.GetFileName(weightPart) + ".ranges.part",
             string.Join(" | ", Directory.EnumerateFiles(dir.Path).Select(Path.GetFileName).Order(StringComparer.Ordinal)));
         AssertEx.Equal(Sha(WeightBytes), Sha(await File.ReadAllBytesAsync(weightPart)));
         AssertEx.Null(await registry.FindAsync(destination.CanonicalModelName, CancellationToken.None));
@@ -284,10 +286,14 @@ public sealed class GgufDownloadTransactionTests
         _ = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() =>
             transaction.PrepareAsync(source, destination, progress: null, CancellationToken.None));
 
-        // Exactly one partial under the stable single-suffix name, plus its resume cursors beside it.
-        AssertEx.Equal(Path.GetFileName(partPath) + " | " + Path.GetFileName(partPath) + ".ranges.part",
+        // Exactly one partial under the stable single-suffix name, plus its resume cursors and the intent naming the model.
+        AssertEx.Equal(Path.GetFileName(destination.RelativeGgufPath) + ".intent.part | " + Path.GetFileName(partPath) + " | "
+                       + Path.GetFileName(partPath) + ".ranges.part",
             string.Join(" | ", Directory.EnumerateFiles(dir.Path).Select(Path.GetFileName).Order(StringComparer.Ordinal)));
         AssertEx.Equal(prefix, (int)new FileInfo(partPath).Length);
+        // What a restarted node reads back to list the interrupted download.
+        AssertEx.Equal(destination.CanonicalModelName + " " + WeightBytes.Length,
+            string.Join(" | ", transaction.ListInterrupted().Select(static download => download.ModelName + " " + download.TotalBytes)));
 
         var prepared = await transaction.PrepareAsync(source, destination, progress: null, CancellationToken.None);
         var receipt = await transaction.CommitAsync(prepared, CancellationToken.None);
@@ -295,6 +301,60 @@ public sealed class GgufDownloadTransactionTests
         AssertEx.Contains(handler.Requests[1].Range, prefix.ToString(CultureInfo.InvariantCulture) + "-");
         AssertEx.Equal(Sha(WeightBytes), Sha(await File.ReadAllBytesAsync(receipt.FinalGgufPath)));
         AssertEx.Empty(Directory.EnumerateFiles(dir.Path, "*.part"));
+        AssertEx.Empty(transaction.ListInterrupted());
+    }
+
+    /// <summary>
+    ///     A crash while the projector downloads leaves the verified weights staged under their operation name and the projector partial, but no stable
+    ///     weight partial. The interrupted download must still be listed.
+    /// </summary>
+    [Test]
+    public async Task ListInterrupted_CrashDuringTheProjectorPhase_KeepsTheRow()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => throw new InvalidOperationException("no request expected"));
+        using var http = new HttpClient(handler);
+        using var registry = Infra.Registry(options);
+        var transaction = Transaction(http, Discovery(includeProjector: true), registry, options);
+        var destination = Destination(withProjector: true);
+        var weightPath = dir.FilePath(destination.RelativeGgufPath);
+        var intentPath = await WriteIntentAsync(weightPath, destination.CanonicalModelName);
+        await File.WriteAllBytesAsync(weightPath + $".{Guid.NewGuid():N}.part", WeightBytes);
+        await File.WriteAllBytesAsync(dir.FilePath(destination.ProjectorRelativePath!) + ".part", ProjectorBytes[..4]);
+
+        var interrupted = transaction.ListInterrupted();
+
+        AssertEx.Equal(destination.CanonicalModelName, interrupted.Single().ModelName);
+        AssertEx.True(File.Exists(intentPath), "the intent is the row; it must outlive a crash in the projector phase");
+    }
+
+    [Test]
+    public async Task ListInterrupted_IntentWithNothingLeftBehind_DeletesTheIntent()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => throw new InvalidOperationException("no request expected"));
+        using var http = new HttpClient(handler);
+        using var registry = Infra.Registry(options);
+        var transaction = Transaction(http, Discovery(includeProjector: true), registry, options);
+        var destination = Destination(withProjector: true);
+        var intentPath = await WriteIntentAsync(dir.FilePath(destination.RelativeGgufPath), destination.CanonicalModelName);
+
+        AssertEx.Empty(transaction.ListInterrupted());
+        AssertEx.False(File.Exists(intentPath));
+    }
+
+    private static async Task<string> WriteIntentAsync(string weightPath, string modelName)
+    {
+        var intentPath = weightPath + ".intent.part";
+        Directory.CreateDirectory(Path.GetDirectoryName(intentPath)!);
+        await File.WriteAllTextAsync(intentPath, JsonSerializer.Serialize(new InterruptedGgufDownload
+        {
+            ModelName = modelName,
+            TotalBytes = WeightBytes.Length + ProjectorBytes.Length
+        }));
+        return intentPath;
     }
 
     [Test]

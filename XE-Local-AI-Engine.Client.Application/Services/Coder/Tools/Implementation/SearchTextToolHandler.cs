@@ -34,7 +34,8 @@ internal sealed class SearchTextToolHandler : IClientLocalToolHandler
     {
         ArgumentNullException.ThrowIfNull(jsonArguments);
 
-        if (!await _runtimeSettings.GetAgentHomeEnabledAsync(cancellationToken))
+        // A bound repository is not the AgentHome sandbox, so Agent Mode's switch does not gate reading it.
+        if (CoderRepositoryScope.Root is null && !await _runtimeSettings.GetAgentHomeEnabledAsync(cancellationToken))
         {
             return "Agent Mode is disabled on this node (AgentHome:Enabled=false).";
         }

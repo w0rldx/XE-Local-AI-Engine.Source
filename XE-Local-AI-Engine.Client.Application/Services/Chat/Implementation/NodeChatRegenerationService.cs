@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
@@ -53,6 +54,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
     private readonly TimeProvider _timeProvider;
     private readonly IToolApprovalPolicy _toolApprovalPolicy;
     private readonly ILogger<NodeChatRegenerationService> _logger;
+    private readonly IGpuWorkGate _gpuWorkGate;
 
     public NodeChatRegenerationService(INodeChatPersistenceService persistence,
         ChatInvocationStatePump invocationStatePump,
@@ -74,8 +76,11 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         IOptions<ChatStreamBudgetOptions> streamBudgetOptions,
         TimeProvider timeProvider,
         IToolApprovalPolicy toolApprovalPolicy,
-        ILogger<NodeChatRegenerationService> logger)
+        ILogger<NodeChatRegenerationService> logger,
+        IGpuWorkGate gpuWorkGate)
     {
+        ArgumentNullException.ThrowIfNull(gpuWorkGate);
+        _gpuWorkGate = gpuWorkGate;
         _persistence = persistence;
         _invocationStatePump = invocationStatePump;
         _turnResolver = turnResolver;
@@ -221,6 +226,11 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
             var offerTools = offer.OfferTools;
             var allowedTools = offer.AllowedTools;
 
+            if (resolution.AgentUnavailableNotice(requestId) is { } agentUnavailableNotice)
+            {
+                await _eventDispatcher.ReportTurnNoticeAsync(agentUnavailableNotice);
+            }
+
             // An Orchestrator whose orchestration did not compile reruns as a lone single agent, so emit ONE notice
             // naming the typed reason; a Single-kind agent (NotOrchestrated) has none, so the common path is silent.
             if (resolution.OrchestrationOutcome.DegradationNotice is { } orchestrationDegradedMessage)
@@ -249,12 +259,20 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
                 await _eventDispatcher.ReportTurnNoticeAsync(resolution.ToolsNotAllowListedNotice(requestId));
             }
 
+            if (resolution.ComputeWithheldNotice(requestId) is { } computeWithheldNotice)
+            {
+                await _eventDispatcher.ReportTurnNoticeAsync(computeWithheldNotice);
+            }
+
             // A compiled orchestration's participants carry their own tools whatever the client asked.
             if ((offerTools || resolution.Orchestration is not null)
                 && await resolution.CloudToolsWithheldNoticeAsync(requestId, _localToolOfferProvider, cancellationToken) is { } cloudToolsWithheldNotice)
             {
                 await _eventDispatcher.ReportTurnNoticeAsync(cloudToolsWithheldNotice);
             }
+
+            await WorkSessionSlotHolderNotice.ReportIfQueuedBehindAsync(_eventDispatcher, _persistence, conversationId, requestId, cancellationToken);
+            await GpuWorkHolderNotice.ReportIfQueuedBehindBenchmarkAsync(_gpuWorkGate, _eventDispatcher, _persistence, conversationId, requestId, cancellationToken);
 
             // A regenerated plain-chat turn honors the same opt-in grounding and cloud-egress gate as a send, so a
             // rerun does not lose its sources strip. Agent mode grounds through the gated tool instead, never inline.
@@ -521,7 +539,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
 
         try
         {
-            lease = await _eventDispatcher.ReportInvocationAssignedAsync(package, cancellationToken);
+            lease = await InvocationSlotAdmission.AcquireAsync(_eventDispatcher, package, requestId, _logger, cancellationToken);
 
             var streamingMessage = await _persistence.MarkAssistantStreamingAsync(correlation, NowUnixMilliseconds(), cancellationToken);
             if (!string.Equals(streamingMessage.Status, NodeChatMessageStatusValues.Streaming, StringComparison.Ordinal))
@@ -757,7 +775,8 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
 
         var retrievalQuery = ResolvePrecedingUserTurnContent(conversation, original);
 
-        return await _turnResolver.ResolveAsync(activeModel, requiresInstalledChatModel, effectiveAgentId, retrievalQuery, userPickedConcreteModel, cancellationToken);
+        return await _turnResolver.ResolveAsync(activeModel, requiresInstalledChatModel, effectiveAgentId, retrievalQuery, userPickedConcreteModel, cancellationToken,
+            conversationAgentId: original.AgentDefinitionId ?? conversation.AgentDefinitionId);
     }
 
     /// <summary>

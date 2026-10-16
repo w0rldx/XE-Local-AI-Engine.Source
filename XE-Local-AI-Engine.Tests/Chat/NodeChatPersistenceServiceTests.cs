@@ -1649,6 +1649,56 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         AssertEx.Equal(first.MessageId, loaded.Messages[1].MessageId);
     }
 
+    /// <summary>R1-09: a conversation whose only reply failed previews the user's message, while the status stays the reply's.</summary>
+    [Test]
+    public async Task ListConversationsAsync_WhenTheOnlyReplyFailed_PreviewsTheUserMessage()
+    {
+        await using var provider = await BuildProviderAsync("failed-reply-preview.sqlite");
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = null,
+            UserId = null,
+            CreatedAtUtc = 40
+        });
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = Guid.NewGuid(),
+            Content = "what is the weather",
+            CreatedAtUtc = 41
+        });
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = correlation.MessageId,
+            RequestId = correlation.RequestId,
+            CreatedAtUtc = 42
+        });
+        var failed = await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = correlation,
+            Status = NodeChatMessageStatusValues.Failed,
+            UpdatedAtUtc = 43,
+            Content = string.Empty,
+            Error = "A llama.cpp source build is in progress."
+        });
+
+        var summary = (await service.ListConversationsAsync(new NodeChatListConversationsRequest())).Single();
+        var withArchived = (await service.ListConversationsAsync(new NodeChatListConversationsRequest { IncludeArchived = true })).Single();
+
+        AssertEx.Equal(NodeChatMessageStatusValues.Failed, failed.Status);
+        AssertEx.Equal("what is the weather", summary.LastMessagePreview);
+        AssertEx.Equal(NodeChatMessageStatusValues.Failed, summary.LastMessageStatus);
+        AssertEx.Equal("what is the weather", withArchived.LastMessagePreview);
+    }
+
     [Test]
     public async Task ListConversationsAsync_WithOneUndecryptableTitle_ListsEveryConversation()
     {

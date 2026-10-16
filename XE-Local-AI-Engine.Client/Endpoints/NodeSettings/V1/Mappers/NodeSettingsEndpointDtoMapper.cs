@@ -535,9 +535,8 @@ internal static class NodeSettingsEndpointDtoMapper
     /// <remarks>
     ///     A request carrying a PRESET (<c>recommended</c> or <c>offline</c>; the validator rejected anything else)
     ///     writes that literal and that preset's triple, ignoring any switch sent with it — one bool drives all three,
-    ///     so the presets cannot drift apart. A request carrying at least one switch writes those switches, each
-    ///     falling back to the stored value, and stamps <c>custom</c> UNCONDITIONALLY, never re-derived: the stamp
-    ///     records that the operator edited switches. Any other save preserves all four, disturbing no decided node.
+    ///     so the presets cannot drift apart. A request carrying at least one switch writes those switches and stamps
+    ///     the preset the resulting triple matches, else <c>custom</c>. Any other save preserves all four.
     /// </remarks>
     private static ExternalAccessStamp ApplyExternalAccess(SaveNodeSettingsRequest request,
         StoredNodeSettings currentSettings)
@@ -558,10 +557,24 @@ internal static class NodeSettingsEndpointDtoMapper
                 currentSettings.AutoProvisionFirstRunModel);
         }
 
-        return new ExternalAccessStamp(StoredNodeSettings.ExternalAccessProfileCustom,
-            request.AutoCheckApplicationUpdates ?? currentSettings.AutoCheckApplicationUpdates,
-            request.AutoCheckRuntimeUpdates ?? currentSettings.AutoCheckRuntimeUpdates,
-            request.AutoProvisionFirstRunModel ?? currentSettings.AutoProvisionFirstRunModel);
+        var applicationUpdates = request.AutoCheckApplicationUpdates ?? currentSettings.AutoCheckApplicationUpdates;
+        var runtimeUpdates = request.AutoCheckRuntimeUpdates ?? currentSettings.AutoCheckRuntimeUpdates;
+        var firstRunModel = request.AutoProvisionFirstRunModel ?? currentSettings.AutoProvisionFirstRunModel;
+        var allOn = (applicationUpdates ?? StoredNodeSettings.DefaultAutoCheckApplicationUpdates)
+                    && (runtimeUpdates ?? StoredNodeSettings.DefaultAutoCheckRuntimeUpdates)
+                    && (firstRunModel ?? StoredNodeSettings.DefaultAutoProvisionFirstRunModel);
+        var allOff = applicationUpdates == false && runtimeUpdates == false && firstRunModel == false;
+        var profile = StoredNodeSettings.ExternalAccessProfileCustom;
+        if (allOn)
+        {
+            profile = StoredNodeSettings.ExternalAccessProfileRecommended;
+        }
+        else if (allOff)
+        {
+            profile = StoredNodeSettings.ExternalAccessProfileOffline;
+        }
+
+        return new ExternalAccessStamp(profile, applicationUpdates, runtimeUpdates, firstRunModel);
     }
 
     /// <summary>The external-access profile stamp and the three switches it describes.</summary>

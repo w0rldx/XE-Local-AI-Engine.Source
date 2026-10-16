@@ -4,15 +4,18 @@ import {
 	IconBolt,
 	IconBookOff,
 	IconCloudOff,
+	IconCpu,
 	IconCut,
 	IconFileOff,
 	IconFileText,
 	IconFilter,
 	IconHistory,
 	IconHistoryOff,
+	IconHourglass,
 	IconInfoCircle,
 	IconMessageOff,
 	IconToolsOff,
+	IconUserOff,
 	IconUsersGroup,
 } from "@tabler/icons-react";
 import { memo } from "react";
@@ -33,6 +36,8 @@ function noticeIcon(noticeKind: string) {
 			return IconToolsOff;
 		case "HistoryTruncated":
 			return IconHistory;
+		case "QueuedBehindWorkSession":
+			return IconHourglass;
 		case "OrchestrationDegraded":
 			return IconUsersGroup;
 		// Its own glyph, not ToolDisabled's: a tool that was turned OFF and a tool that was merely held back but
@@ -60,6 +65,13 @@ function noticeIcon(noticeKind: string) {
 			return IconFileText;
 		case "AttachmentsNotSent":
 			return IconFileOff;
+		case "CpuFallback":
+			return IconCpu;
+		case "AgentUnavailable":
+			return IconUserOff;
+		case "QueuedBehindParkedTurn":
+		case "QueuedBehindGpuWork":
+			return IconHourglass;
 		default:
 			return IconInfoCircle;
 	}
@@ -74,6 +86,8 @@ function noticeLabelKey(noticeKind: string): string | undefined {
 			return "chat.notices.toolDisabled";
 		case "HistoryTruncated":
 			return "chat.notices.historyTruncated";
+		case "QueuedBehindWorkSession":
+			return "chat.notices.queuedBehindWorkSession";
 		case "OrchestrationDegraded":
 			return "chat.notices.orchestrationDegraded";
 		case "ToolsFiltered":
@@ -100,6 +114,14 @@ function noticeLabelKey(noticeKind: string): string | undefined {
 			return "chat.notices.attachmentsNotSent";
 		case "AttachmentsTruncated":
 			return "chat.notices.attachmentsTruncated";
+		case "CpuFallback":
+			return "chat.notices.cpuFallback";
+		case "AgentUnavailable":
+			return "chat.notices.agentUnavailable";
+		case "QueuedBehindParkedTurn":
+			return "chat.notices.queuedBehindParkedTurn";
+		case "QueuedBehindGpuWork":
+			return "chat.notices.queuedBehindGpuWork";
 		default:
 			return undefined;
 	}
@@ -108,13 +130,22 @@ function noticeLabelKey(noticeKind: string): string | undefined {
 // Server notice sentences the SPA localizes, keyed by their exact English text (InvocationRunner's
 // StoppedWhileThinkingNoticeMessage, OutputLimitReachedNoticeMessage, ToolCallInReasoningNoticeMessage,
 // ToolCallAsTextNoticeMessage, and KnowledgeUnavailableNotice.Message and AttachmentShortenedNoticeMessage, and
-// NodeChatStreamService's AttachmentsNotSentNoticeMessage and AttachmentsTruncatedNoticeMessage — change both together). Any other text renders verbatim.
+// NodeChatStreamService's AttachmentsNotSentNoticeMessage and AttachmentsTruncatedNoticeMessage, ChatTurnResolution's
+// AgentUnavailableNoticeMessage, InvocationSlotAdmission's QueuedBehindParkedTurnMessage, WorkSessionSlotHolderNotice.Message
+// and GpuWorkHolderNotice's four messages — change both together). Any other text renders verbatim.
 const localizedNoticeKeys: Readonly<Record<string, string>> = {
+	"This message was queued behind a running work session step.": "chat.notices.queuedBehindWorkSessionText",
+	"This message was queued behind a running benchmark.": "chat.notices.queuedBehindBenchmarkText",
+	"This message was queued behind a running training run.": "chat.notices.queuedBehindTrainingRunText",
+	"This message was queued behind a running training evaluation.": "chat.notices.queuedBehindEvaluationRunText",
+	"This message was queued behind a running model export.": "chat.notices.queuedBehindExportText",
 	"The model wrote a tool call as text instead of calling the tool, so the call did not run and there is no answer.":
 		"chat.notices.toolCallAsTextText",
 	"The model stopped while thinking before it could answer; its thoughts are kept above.":
 		"chat.notices.stoppedWhileThinkingText",
 	"The answer stopped at the length limit before the model finished.": "chat.notices.outputLimitReachedText",
+	"run_python was not offered because Compute tools is turned off. Turn it on in Node Settings, Features.":
+		"chat.notices.computeWithheldText",
 	"The model tried to call a tool inside its reasoning, where the call cannot run, and stopped without an answer.":
 		"chat.notices.toolCallInReasoningText",
 	"Your knowledge base was not used for this message because no embedding model is installed, so your documents could not be indexed.":
@@ -127,7 +158,13 @@ const localizedNoticeKeys: Readonly<Record<string, string>> = {
 		"chat.notices.attachmentsNotSentWithoutFileToolsText",
 	"Some attached files were too long for the attachment limit, so the model received only their beginning.":
 		"chat.notices.attachmentsTruncatedText",
+	"The agent this conversation uses no longer exists, so the default assistant answered.": "chat.notices.agentUnavailableText",
+	"This message is waiting for an approval or a question in another conversation. Answer it there to continue.":
+		"chat.notices.queuedBehindParkedTurnText",
 };
+
+// A bare id (an agent or conversation id) is not a reason a reader can use, so it is never printed as the detail line.
+const bareIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * A small muted system-style row for a non-fatal "turn notice" (model substitution, tool disabled, history
@@ -147,6 +184,7 @@ export const ChatNoticeRow = memo(function ChatNoticeRow({ part }: ChatNoticeRow
 	const label = labelKey ? t(labelKey) : undefined;
 	const textKey = localizedNoticeKeys[part.text];
 	const text = textKey ? t(textKey, part.text) : part.text;
+	const detail = part.detail && !bareIdPattern.test(part.detail.trim()) ? part.detail : undefined;
 
 	return (
 		<Group gap="xs" wrap="nowrap" align="center" data-testid="chat-notice-row" data-notice-kind={part.noticeKind}>
@@ -156,11 +194,11 @@ export const ChatNoticeRow = memo(function ChatNoticeRow({ part }: ChatNoticeRow
 			<Text size="xs" c="dimmed" style={{ overflowWrap: "anywhere" }}>
 				{text}
 				{/* A real space, not a margin, so copied text and screen readers do not run the sentence into the detail. */}
-				{part.detail ? (
+				{detail ? (
 					<>
 						{" "}
 						<Text component="span" size="xs" c="dimmed" ff="monospace" opacity={0.7} data-testid="chat-notice-detail">
-							{part.detail}
+							{detail}
 						</Text>
 					</>
 				) : null}

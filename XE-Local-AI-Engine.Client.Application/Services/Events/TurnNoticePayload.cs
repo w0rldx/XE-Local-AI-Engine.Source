@@ -169,5 +169,38 @@ public enum TurnNoticeKind
     ///     The fixed node cap; <see cref="AttachmentShortened" /> is the further cut to the launched context window.
     ///     <see cref="TurnNoticePayload.Detail" /> lists the affected file names.
     /// </remarks>
-    AttachmentsTruncated = 17
+    AttachmentsTruncated = 17,
+
+    /// <summary>
+    ///     The node-local llama.cpp model ran on the CPU although a GPU was expected (the device audit's CPU fallback); the
+    ///     message carries the audit's reason and remediation.
+    /// </summary>
+    CpuFallback = 18,
+
+    /// <summary>
+    ///     The agent definition the turn was bound to (the conversation's binding or the send's pick) no longer exists, so
+    ///     the default assistant answered with its own persona and tools.
+    /// </summary>
+    /// <remarks><see cref="TurnNoticePayload.Detail" /> carries the missing definition id.</remarks>
+    AgentUnavailable = 19,
+
+    /// <summary>
+    ///     The turn is queued behind a turn in another conversation that waits on an approval or a question, which holds
+    ///     the node's one invocation slot until it is answered or expires.
+    /// </summary>
+    /// <remarks><see cref="TurnNoticePayload.Detail" /> carries the conversation id that holds the slot.</remarks>
+    QueuedBehindParkedTurn = 20,
+
+    /// <summary>
+    ///     The turn is queued behind a work session step, which holds the node's one invocation slot until the step ends.
+    /// </summary>
+    /// <remarks><see cref="TurnNoticePayload.Detail" /> carries the conversation id that holds the slot.</remarks>
+    QueuedBehindWorkSession = 21,
+
+    /// <summary>
+    ///     The turn needs the GPU while a benchmark, training run, evaluation or export holds it, so it waits for that
+    ///     work (a training run holds the node until it ends).
+    /// </summary>
+    /// <remarks><see cref="TurnNoticePayload.Message" /> names the holder; there is no detail line.</remarks>
+    QueuedBehindGpuWork = 22
 }

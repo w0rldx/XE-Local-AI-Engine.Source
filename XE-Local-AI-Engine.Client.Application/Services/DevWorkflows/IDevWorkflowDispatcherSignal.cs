@@ -11,4 +11,10 @@ namespace XE_Local_AI_Engine.Client.Services.DevWorkflows;
 internal interface IDevWorkflowDispatcherSignal
 {
     void Signal(Guid runId);
+
+    /// <summary>
+    ///     Advances the run by one tick now, serialized with the dispatcher's own ticks, so the caller reads what its command led to.
+    ///     False when the tick could not take its turn within <paramref name="gateWait" />; the tick itself is never cancelled once it starts.
+    /// </summary>
+    Task<bool> TryAdvanceAsync(Guid runId, TimeSpan gateWait, CancellationToken cancellationToken);
 }

@@ -10,7 +10,11 @@ import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { LabelValueRow } from "@/core/ui/components/LabelValueRow/LabelValueRow";
 import { IntegrationExecutionTimeline } from "@/features/integrations/components/IntegrationExecutionTimeline";
-import { formatIntegrationDuration, shortPrincipalId } from "@/features/integrations/components/IntegrationFormatters";
+import {
+	formatFailureCategory,
+	formatIntegrationDuration,
+	shortPrincipalId,
+} from "@/features/integrations/components/IntegrationFormatters";
 import { IntegrationExecutionStatusBadge } from "@/features/integrations/components/IntegrationStatusBadge";
 import {
 	type IntegrationExecution,
@@ -177,7 +181,7 @@ export function IntegrationExecutionDetailDialog({ executionId, listExecution, o
 							<Stack gap={2}>
 								{execution.failureCategory === null ? null : (
 									<Text size="sm">
-										{`${t("pages.integrations.executions.detail.failureCategory", "Failure category")}: ${execution.failureCategory}`}
+										{`${t("pages.integrations.executions.detail.failureCategory", "Failure category")}: ${formatFailureCategory(t, execution.failureCategory)}`}
 									</Text>
 								)}
 								{execution.failureSummary === null ? null : <Text size="sm">{execution.failureSummary}</Text>}

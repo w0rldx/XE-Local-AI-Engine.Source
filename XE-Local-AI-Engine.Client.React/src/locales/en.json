@@ -86,6 +86,7 @@
 			"errorIncorrectPassword": "Incorrect password. Please try again.",
 			"errorLockedOut": "Too many failed sign-in attempts. This account is locked. Try again in {{minutes}} min.",
 			"errorNodeUnreachable": "Can't reach the node. Check that it's running and try again.",
+			"errorRateLimited": "Too many sign-in attempts. Try again in {{seconds}} s.",
 			"passwordLabel": "Password",
 			"signInButton": "Sign in",
 			"subtitle": "Enter the local node admin password.",
@@ -156,6 +157,8 @@
 			"title": "The assistant needs your input"
 		},
 		"notices": {
+			"agentUnavailable": "Agent unavailable",
+			"agentUnavailableText": "The agent this conversation uses no longer exists, so the default assistant answered.",
 			"attachmentShortened": "Attachment shortened",
 			"attachmentShortenedText": "The attached file was shortened to fit this model's context window; the model was told it is incomplete.",
 			"attachmentsNotSent": "Attachments not sent",
@@ -164,6 +167,8 @@
 			"attachmentsTruncated": "Attachment truncated",
 			"attachmentsTruncatedText": "Some attached files were too long for the attachment limit, so the model received only their beginning.",
 			"cloudToolsWithheld": "Tools withheld from cloud model",
+			"computeWithheldText": "run_python was not offered because Compute tools is turned off. Turn it on in Node Settings, Features.",
+			"cpuFallback": "Running on the CPU",
 			"effortDispatched": "Reasoning effort resolved",
 			"emptyAnswer": "No answer",
 			"historyTruncated": "History truncated",
@@ -174,6 +179,15 @@
 			"outputLimitReached": "Answer cut off",
 			"outputLimitReachedText": "The answer stopped at the length limit before the model finished.",
 			"playbookWithheld": "Playbook withheld",
+			"queuedBehindBenchmarkText": "This message was queued behind a running benchmark.",
+			"queuedBehindEvaluationRunText": "This message was queued behind a running training evaluation.",
+			"queuedBehindExportText": "This message was queued behind a running model export.",
+			"queuedBehindGpuWork": "Waiting for GPU work",
+			"queuedBehindParkedTurn": "Waiting on another conversation",
+			"queuedBehindParkedTurnText": "This message is waiting for an approval or a question in another conversation. Answer it there to continue.",
+			"queuedBehindTrainingRunText": "This message was queued behind a running training run.",
+			"queuedBehindWorkSession": "Waiting for a work session",
+			"queuedBehindWorkSessionText": "This message was queued behind a running work session step.",
 			"stoppedWhileThinkingText": "The model stopped while thinking before it could answer; its thoughts are kept above.",
 			"toolCallAsTextText": "The model wrote a tool call as text instead of calling the tool, so the call did not run and there is no answer.",
 			"toolCallInReasoningText": "The model tried to call a tool inside its reasoning, where the call cannot run, and stopped without an answer.",
@@ -435,6 +449,7 @@
 			"restoreConfirmTitle": "Restore {{name}}?",
 			"restoreError": "Could not restore the database snapshot.",
 			"restoreLabel": "Restore {{name}}",
+			"restoreLocalModeOnly": "Restore is available only when the node runs in local mode (the desktop app). This node cannot apply a restore.",
 			"stopping": "The node is stopping to restore the snapshot. Start the app again.",
 			"take": "Take snapshot",
 			"takeError": "Could not take a database snapshot.",
@@ -1916,6 +1931,7 @@
 			"agentSelector": {
 				"hint": "Choose an agent defined on this node.",
 				"noResults": "No agents found",
+				"offOptionBoundHint": "This conversation is bound to its agent; pick another agent instead",
 				"offOptionHint": "No agent — uses the node default",
 				"orchestratorBadge": "Orchestrator",
 				"pinnedModelHint": "Uses model: {{model}}",
@@ -2197,7 +2213,7 @@
 			"nodeDefaultModel": "Node default",
 			"nodeReply": "Node reply",
 			"pendingApprovalLabel": "Pending approval",
-			"queued": "Queued — starts after the node's current benchmark, training run or chat",
+			"queued": "Queued — starts after the node's current chat, work session step, benchmark or training run",
 			"reasoning": {
 				"effort": {
 					"high": "High",
@@ -2607,6 +2623,9 @@
 			"send": "Send command"
 		},
 		"commands": {
+			"builtInDescriptions": {
+				"ping": "Test the current chat agent."
+			},
 			"capacity": "The limit of 100 custom commands has been reached. Delete one before creating another.",
 			"createButton": "New command",
 			"delete": {
@@ -3657,7 +3676,7 @@
 			"notChosen": "Not chosen",
 			"offline": {
 				"choose": "Use offline / manual",
-				"disables": "Turns off three things the engine would otherwise do by itself: application update checks, llama.cpp runtime update checks, and the first-run model and runtime download. You can still start every one of them yourself, at any time.",
+				"disables": "Turns off three things the engine would otherwise do by itself: application update checks, llama.cpp runtime update checks, and the first-run model and runtime download. A chat does not download a missing runtime either. You can still start every one of them yourself, at any time.",
 				"doesNotBlock": "This is not a network switch. It does not block the connection to the platform, MCP servers you have configured, or model-catalog lookups.",
 				"title": "Offline / Manual"
 			},
@@ -4761,6 +4780,7 @@
 				}
 			},
 			"job": {
+				"defaultSampler": "default sampler",
 				"deleteBlocked": "This job is still running. Cancel it first, then delete it.",
 				"deleteConfirm": "This job, its prompt and the image it produced are deleted — the picture is removed from disk. This cannot be undone.",
 				"deleteConfirmNoImage": "This job and its prompt are deleted. It produced no image. This cannot be undone.",
@@ -5016,6 +5036,18 @@
 					"events": "Could not load the execution timeline.",
 					"load": "Could not load integration executions."
 				},
+				"failureCategories": {
+					"approval-required": "Approval required",
+					"capacity-rejected": "Capacity refused",
+					"cloud-model-rejected": "Cloud model refused",
+					"internal-failure": "Internal failure",
+					"queue-full": "Queue full",
+					"queue-timeout": "Queue timeout",
+					"restart": "Node restarted",
+					"session-policy": "Session policy",
+					"shutdown": "Node shutting down",
+					"trigger-unavailable": "Trigger unavailable"
+				},
 				"filters": {
 					"activeStatuses": "Active",
 					"allSessions": "All sessions",
@@ -5255,7 +5287,7 @@
 					"enabledAria": "Toggle {{name}}",
 					"loading": "Loading integration triggers…"
 				},
-				"subtitle": "A trigger is a named external entry point that runs a saved agent unattended over the loopback integration API.",
+				"subtitle": "A trigger is a named external entry point that runs a saved agent or graph workflow unattended over the loopback integration API.",
 				"title": "Integration triggers",
 				"validation": {
 					"descriptionTooLong": "The description is longer than the 1024-character limit.",
@@ -5271,6 +5303,7 @@
 		"invocations": {
 			"monitor": {
 				"active": "Active",
+				"callBudgetReached": "Stopped at the provider-call budget; a work session continues on its next step.",
 				"current": {
 					"conversation": "Conversation: {{value}}",
 					"empty": "No invocation is currently assigned or running.",
@@ -5304,8 +5337,19 @@
 				"idle": "Idle",
 				"loadError": "Invocation monitor data could not be loaded.",
 				"loading": "Loading invocation monitor…",
+				"status": {
+					"assigned": "Assigned",
+					"callBudgetReached": "Stopped at call budget",
+					"cancelled": "Cancelled",
+					"completed": "Completed",
+					"failed": "Failed",
+					"pending": "Pending",
+					"running": "Running"
+				},
 				"subtitle": "Inspect the active invocation and the local in-memory history retained by the worker.",
 				"summary": {
+					"callBudget": "Stopped at the provider-call budget after {{duration}}{{withModel}}.",
+					"callBudgetNoDuration": "Stopped at the provider-call budget{{withModel}}.",
 					"cancelled": "Cancelled after {{duration}}{{withModel}}.",
 					"cancelledNoDuration": "Cancelled{{withModel}}.",
 					"completed": "Completed in {{duration}}{{withModel}} — {{chunks}} output chunks, {{thinking}} reasoning, {{tools}}.",
@@ -5375,6 +5419,23 @@
 				"openNodeSettings": "Open node settings",
 				"title": "No embedding model installed"
 			},
+			"failureReason": {
+				"content-missing": "The document content could not be found.",
+				"embedding-incomplete": "The embedding model returned an incomplete result. Ensure the configured embedding model is loaded and retry.",
+				"embedding-model-changed": "The embedding model changed while the document was being indexed. Retry the document.",
+				"embedding-rejected": "The embedding model is installed but rejected the request. Check the node logs for the server's response, then retry.",
+				"embedding-unavailable": "No embedding model is installed, so documents cannot be indexed. Use \"Download recommended embedding model\" in Node Settings, or install an embedding GGUF from Models → Browse Hugging Face, then retry.",
+				"embedding-unreachable": "The embedding model is installed but its process stopped or became unreachable. Check the node logs, then retry the document.",
+				"extraction-failed": "The document text could not be extracted.",
+				"interrupted-repeatedly": "Ingestion was interrupted repeatedly and was stopped.",
+				"invalid-vector": "The embedding model returned an invalid vector. Reindex with a supported embedding model.",
+				"no-text": "No extractable text was found in the document.",
+				"short-vector": "The Nomic embedding vector is shorter than the configured 512-dimension policy. Reindex in native mode or use Nomic v1.5.",
+				"timed-out": "The document took too long to process and was stopped.",
+				"unexpected": "Ingestion failed unexpectedly. Retry the upload.",
+				"unreadable-file": "The file could not be read. It may be damaged or not a valid file of its type.",
+				"unsupported-file-type": "This file type is not supported for the knowledge base."
+			},
 			"lastKnownGood": {
 				"label": "Last-known-good",
 				"tooltip": "This document is being re-indexed or its last re-index failed. Results are served from the previously indexed version and may be out of date."
@@ -5408,6 +5469,10 @@
 			},
 			"search": {
 				"aria": "Search the knowledge base",
+				"degradation": {
+					"lexicalOnly": "The embedding model is unavailable, so these results come from keyword matching only.",
+					"rerankerUnavailable": "The reranker is not ready yet, so results are in their unreranked order. It starts in the background; search again shortly."
+				},
 				"error": "The search could not be completed.",
 				"heading": "Search",
 				"hint": "Search runs over every indexed document in this knowledge base.",
@@ -6595,7 +6660,7 @@
 					"label": "Idle process time-to-live"
 				},
 				"llamaMaxLoadedProcesses": {
-					"label": "Max loaded llama-server processes"
+					"label": "Max loaded chat models"
 				},
 				"llamaRamReservePercent": {
 					"label": "Reserved system memory"
@@ -7127,7 +7192,7 @@
 				"pythonInstallsTitle": "Installed Python interpreters",
 				"pythonMinor": "Python {{version}}",
 				"reasons": {
-					"ComputeDisabled": "The Python compute tool is disabled on this node (Compute:Enabled=false).",
+					"ComputeDisabled": "The Python compute tool is turned off on this node. Turn on Compute tools in Node Settings, Features.",
 					"ExecutionPreviewsDisabled": "The Python compute tool needs execution previews turned on. An operator can turn them on in the Sandbox & isolation section of Node settings.",
 					"IncompleteProvision": "An interrupted provision left an incomplete compute runtime.",
 					"InterpreterMissing": "The compute runtime's Python interpreter is missing.",
@@ -8192,6 +8257,12 @@
 				"liveUnavailableHint": "Live updates are unavailable; this page is polling instead.",
 				"objectiveNotMet": "Completed, but the agent reported that the objective was not met.",
 				"pause": "Pause",
+				"pauseReasons": {
+					"nodeStopped": "The node stopped while the session was running. Resume to continue from the last checkpoint.",
+					"operator": "You paused the work session.",
+					"parkTimedOut": "Paused because a prompt went unanswered.",
+					"stepTimedOut": "Paused because the step ran past its time budget."
+				},
 				"pausedAtCheckpoint": "Paused at checkpoint {{step}}",
 				"resume": "Resume",
 				"start": "Start",

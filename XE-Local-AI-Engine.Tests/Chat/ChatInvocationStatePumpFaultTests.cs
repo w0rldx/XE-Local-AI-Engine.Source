@@ -245,9 +245,10 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
 
         public Task<NodeChatPumpTerminalResult> TerminalizeInterruptedAsync(NodeChatMessageCorrelation correlation,
             NodeChatPumpCursor cursor,
-            bool wasCancelled)
+            bool wasCancelled,
+            string? requestedModel = null)
         {
-            return _inner.TerminalizeInterruptedAsync(correlation, cursor, wasCancelled);
+            return _inner.TerminalizeInterruptedAsync(correlation, cursor, wasCancelled, requestedModel);
         }
     }
 }

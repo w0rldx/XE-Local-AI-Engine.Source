@@ -105,7 +105,8 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        var descriptor = Validate(input);
+        var descriptor = Validate(input, existing: null);
+        await ValidateReferencesAsync(input, cancellationToken);
 
         // Operator-created jobs are persisted enabled and scheduled immediately; disabling is the dedicated action.
         var storeInput = ToStoreInput(input, descriptor, enabled: true, ScheduledJobCreator.User);
@@ -137,7 +138,8 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
             return null;
         }
 
-        var descriptor = Validate(input);
+        var descriptor = Validate(input, existing);
+        await ValidateReferencesAsync(input, cancellationToken);
 
         // A PUT edit never flips the enabled state — that is the dedicated SetEnabledAsync action — so carry the current
         // enabled flag and original creator through to the store regardless of what the request body claims.
@@ -444,13 +446,24 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         }
     }
 
+    /// <summary>How far in the past a <see cref="SchedulerMisfirePolicy.SkipMissed" /> one-shot may start and still fire.</summary>
+    private static readonly TimeSpan OneShotMisfireGrace = TimeSpan.FromMinutes(1);
+
     /// <summary>The longest accepted simple interval, 366 days in seconds.</summary>
     private const long MaxIntervalSeconds = 366L * 24 * 60 * 60;
 
     private static readonly long LatestScheduleTimeUtcMs =
         new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds() - 1;
 
-    private ScheduledJobTemplateDescriptor Validate(ScheduledJobManagementInput input)
+    private async Task ValidateReferencesAsync(ScheduledJobManagementInput input, CancellationToken cancellationToken)
+    {
+        if (_templateRegistry.TryGetHandler(input.TemplateId, out var handler))
+        {
+            await handler.ValidateReferencesAsync(input.Parameters, cancellationToken);
+        }
+    }
+
+    private ScheduledJobTemplateDescriptor Validate(ScheduledJobManagementInput input, ScheduledJobDefinitionRecord? existing)
     {
         if (string.IsNullOrWhiteSpace(input.DisplayName))
         {
@@ -477,7 +490,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
 
         // The time zone first: the cron end-time check reads the schedule in it.
         var timeZone = ValidateTimeZone(input.TimeZoneId);
-        ValidateScheduleFields(input, timeZone);
+        ValidateScheduleFields(input, timeZone, input.MisfirePolicy ?? descriptor.DefaultMisfirePolicy, existing);
 
         if (!string.IsNullOrWhiteSpace(input.Parameters))
         {
@@ -504,7 +517,10 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         return descriptor;
     }
 
-    private void ValidateScheduleFields(ScheduledJobManagementInput input, TimeZoneInfo timeZone)
+    private void ValidateScheduleFields(ScheduledJobManagementInput input,
+        TimeZoneInfo timeZone,
+        SchedulerMisfirePolicy misfirePolicy,
+        ScheduledJobDefinitionRecord? existing)
     {
         // Out of range, DateTimeOffset.FromUnixTimeMilliseconds throws while scheduling, which surfaced as a 500 (F-60).
         ValidateUnixMilliseconds(input.StartAtUtc, "Start time");
@@ -552,6 +568,16 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
                     throw new ScheduledJobValidationException("A start time is required for a one-shot schedule.");
                 }
 
+                // SkipMissed drops a misfired one-shot, so a past start never fires; the grace is Quartz's default misfire threshold.
+                // An edit that keeps a fired one-shot's start and policy (a rename) is not judged again.
+                if (misfirePolicy == SchedulerMisfirePolicy.SkipMissed
+                    && (existing is null || existing.ScheduleKind != ScheduleKind.OneShot || existing.StartAtUtc != input.StartAtUtc || existing.MisfirePolicy != misfirePolicy)
+                    && DateTimeOffset.FromUnixTimeMilliseconds(input.StartAtUtc.Value) < _timeProvider.GetUtcNow() - OneShotMisfireGrace)
+                {
+                    throw new ScheduledJobValidationException(
+                        "startAtUtc: the start time is in the past, so this one-shot would never fire. Pick a future time, or a misfire policy that fires a missed run.");
+                }
+
                 break;
 
             case ScheduleKind.Manual:
@@ -568,7 +594,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
     ///     Rejects an end time Quartz would refuse only after the row is stored, which surfaced as a 500: one before the
     ///     start (or before now, which Quartz uses without a start), and one before a cron schedule's first fire.
     /// </summary>
-    /// <remarks>A one-shot start in the past stays accepted by design: its misfire policy decides whether it runs.</remarks>
+    /// <remarks>A one-shot start in the past is judged in <see cref="ValidateScheduleFields" />, off its misfire policy.</remarks>
     private void ValidateEndAt(ScheduledJobManagementInput input, TimeZoneInfo timeZone)
     {
         if (input.EndAtUtc is not { } endAtMs)

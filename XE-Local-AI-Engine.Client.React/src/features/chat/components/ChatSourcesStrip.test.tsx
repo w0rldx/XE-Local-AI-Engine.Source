@@ -8,10 +8,11 @@ import type { KnowledgeDocumentDetail } from "@/features/knowledge/models/Knowle
 
 // Control the document-detail read so a card click can be asserted without a real network fetch. The mock records the
 // (documentId, enabled) args so the test can prove the clicked source's document id is what drives the drawer query.
-const { detailMock } = vi.hoisted(() => ({ detailMock: vi.fn() }));
+const { detailMock, documentsMock } = vi.hoisted(() => ({ detailMock: vi.fn(), documentsMock: vi.fn() }));
 
 vi.mock("@/features/knowledge/queries/useKnowledgeDocuments", () => ({
 	useKnowledgeDocumentDetail: (documentId: string, enabled: boolean) => detailMock(documentId, enabled),
+	useKnowledgeDocuments: (enabled: boolean) => documentsMock(enabled),
 }));
 
 import { ChatSourcesStrip } from "@/features/chat/components/ChatSourcesStrip";
@@ -60,6 +61,8 @@ describe("ChatSourcesStrip", () => {
 	beforeEach(() => {
 		detailMock.mockReset();
 		detailMock.mockReturnValue({ data: undefined, isFetching: false });
+		documentsMock.mockReset();
+		documentsMock.mockReturnValue({ data: undefined });
 		Object.defineProperty(window, "matchMedia", {
 			writable: true,
 			value: vi.fn().mockImplementation((query: string) => ({
@@ -100,6 +103,24 @@ describe("ChatSourcesStrip", () => {
 		expect(screen.getByText("Alpha")).toBeTruthy();
 		expect(screen.getByText("Intro")).toBeTruthy();
 		expect(screen.getByText("Beta")).toBeTruthy();
+	});
+
+	it("labels a heading-less source with its document's display name instead of the storage GUID", () => {
+		documentsMock.mockReturnValue({ data: [detail({ displayName: "glimmerfen-manual.pdf" })] });
+
+		renderWithProviders(
+			<ChatSourcesStrip sources={[source({ title: "11111111-1111-1111-1111-111111111111.pdf", section: undefined })]} />,
+		);
+
+		expect(screen.getByTestId("chat-source-title").textContent).toBe("glimmerfen-manual.pdf");
+	});
+
+	it("keeps the server title for a source whose document is not in the list", () => {
+		documentsMock.mockReturnValue({ data: [detail({ documentId: "other" })] });
+
+		renderWithProviders(<ChatSourcesStrip sources={[source({ title: "Design Doc" })]} />);
+
+		expect(screen.getByTestId("chat-source-title").textContent).toBe("Design Doc");
 	});
 
 	it("starts collapsed and toggles open on click", () => {

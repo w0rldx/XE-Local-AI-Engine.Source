@@ -54,7 +54,7 @@ public sealed class WorkSessionServiceHostFixture : IAsyncInitializer, IAsyncDis
 }
 
 /// <summary>
-///     A host whose two work-session personas are already seeded, once, before any test runs.
+///     A host whose work-session personas are already seeded, once, before any test runs.
 ///     <para>
 ///         <c>seed_slug</c> carries a filtered unique index, so two tests seeding concurrently on one shared database
 ///         cannot double-insert — the loser takes a <c>DbUpdateException</c>, which the seeder's best-effort startup
@@ -79,7 +79,8 @@ public sealed class SeededWorkSessionAgentsFixture : IAsyncInitializer, IAsyncDi
         foreach (var slug in new[]
                  {
                      AgentDefaults.WorkSessionGeneralAgentSeedSlug,
-                     AgentDefaults.WorkSessionResearchAgentSeedSlug
+                     AgentDefaults.WorkSessionResearchAgentSeedSlug,
+                     AgentDefaults.WorkSessionRepositoryResearchAgentSeedSlug
                  })
         {
             _ = await store.GetBySeedSlugAsync(slug)
@@ -111,6 +112,9 @@ internal sealed class StepScript
     public Action<string>? BeforeEachEvent { get; init; }
 
     public bool Park { get; init; }
+
+    /// <summary>A reasoning-only delta yielded right after the park event, as a thinking model emits one.</summary>
+    public string? ReasoningDeltaAfterPark { get; init; }
 
     public bool ParkThenContinue { get; init; }
 
@@ -228,6 +232,15 @@ internal sealed class FakeNodeChatStreamService : INodeChatStreamService
         if (script.Park)
         {
             yield return Event(correlation, script.ParkEventType, script.ParkToolName, occurredAtUtc: script.ParkOccurredAtUtc);
+            if (script.ReasoningDeltaAfterPark is { } reasoningDelta)
+            {
+                yield return Event(correlation, ChatStreamEventTypes.AssistantDelta) with
+                {
+                    Delta = null,
+                    ReasoningDelta = reasoningDelta
+                };
+            }
+
             try
             {
                 await Task.Delay(Timeout.InfiniteTimeSpan, turn.Token);
@@ -259,6 +272,8 @@ internal sealed class FakeNodeChatStreamService : INodeChatStreamService
             Sequence = 0,
             OccurredAtUtc = occurredAtUtc,
             Error = error,
+            // A scripted delta carries visible text, as the answer that ends a park does; a reasoning-only one is opt-in.
+            Delta = type == ChatStreamEventTypes.AssistantDelta ? "answer" : null,
             ToolName = toolName,
             ApprovalRequestId = toolName is null ? null : Guid.NewGuid().ToString("N")
         };

@@ -4,10 +4,10 @@ import type { ChatCommandOption } from "@/features/chat/models/SlashCommandModel
 import { getSlashCommandQuery, matchSlashCommands, resolveSlashCommand } from "@/features/chat/models/SlashCommandResolver";
 
 const options: ChatCommandOption[] = [
-	{ id: "3", name: "review-code", description: "Inspect the patch", prompt: "review code" },
-	{ id: "2", name: "preview", description: "Show a draft", prompt: "preview" },
-	{ id: "1", name: "review", description: "Check work", prompt: "review" },
-	{ id: "4", name: "audit", description: "Review dependencies", prompt: "audit" },
+	{ id: "3", name: "review-code", description: "Inspect the patch", prompt: "review code", source: "custom" },
+	{ id: "2", name: "preview", description: "Show a draft", prompt: "preview", source: "custom" },
+	{ id: "1", name: "review", description: "Check work", prompt: "review", source: "custom" },
+	{ id: "4", name: "audit", description: "Review dependencies", prompt: "audit", source: "custom" },
 ];
 
 describe("slash command matching", () => {

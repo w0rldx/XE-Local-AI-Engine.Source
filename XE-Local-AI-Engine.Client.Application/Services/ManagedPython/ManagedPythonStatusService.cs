@@ -92,7 +92,7 @@ public sealed class ManagedPythonStatusService
 
         if (!await _runtimeSettings.GetComputeEnabledAsync(cancellationToken))
         {
-            return ComputeUnsupported(ManagedPythonReasonCode.ComputeDisabled, "The Python compute tool is disabled on this node (Compute:Enabled=false).");
+            return ComputeUnsupported(ManagedPythonReasonCode.ComputeDisabled, "The Python compute tool is turned off on this node. Turn on Compute tools in Node Settings, Features.");
         }
 
         if (_sandbox.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation))

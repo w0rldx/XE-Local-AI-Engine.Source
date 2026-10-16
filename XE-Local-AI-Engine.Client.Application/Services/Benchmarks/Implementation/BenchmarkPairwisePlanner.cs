@@ -29,11 +29,11 @@ public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
         _logger = logger;
     }
 
-    /// <summary>Every unordered pair of the eligible set, formed ONLY inside one task case.</summary>
+    /// <summary>Every unordered pair of the eligible set, formed ONLY inside one task case and only between different models.</summary>
     /// <remarks>
     ///     Two answers to different questions were never comparable, so a candidate whose case identity differs is in
-    ///     a different group and is never paired across. A single-case project naturally produces one group; a suite
-    ///     relies on the same stored identity to keep its cases separate without reinterpreting existing comparisons.
+    ///     a different group and is never paired across. Two runs of one model answering the same question, repeats
+    ///     included, rank nothing against each other, so a model is never paired with itself.
     /// </remarks>
     /// <param name="maximumRuns">The cohort cap; candidates past it are returned as capped and never paired.</param>
     public static BenchmarkPairwisePlan Plan(IReadOnlyList<BenchmarkPairwiseCandidate> candidates, int maximumRuns)
@@ -52,6 +52,11 @@ public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
             {
                 for (var second = first + 1; second < members.Length; second++)
                 {
+                    if (string.Equals(members[first].ModelName, members[second].ModelName, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
                     var firstIsLower = members[first].RunId.CompareTo(members[second].RunId) < 0;
                     var runA = firstIsLower ? members[first].RunId : members[second].RunId;
                     var runB = firstIsLower ? members[second].RunId : members[first].RunId;
@@ -91,6 +96,8 @@ public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
         var plan = Plan(cohort.Candidates, BenchmarkPairwisePolicy.MaximumRuns);
         if (plan.Slots.Count == 0)
         {
+            // Nothing to judge (one model only): the fitter publishes its refusal now, not at the next restart's reconcile.
+            _ = await _fitter.TryPublishAsync(projectId, cancellationToken);
             return 0;
         }
 
@@ -150,7 +157,7 @@ public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
         var cohort = await _store.GetPairwiseCohortAsync(projectId, cancellationToken);
         var plan = Plan(cohort.Candidates, BenchmarkPairwisePolicy.MaximumRuns);
         var paired = plan.PairedRunIds.Count;
-        var calls = paired * (paired - 1);
+        var calls = plan.Slots.Count * 2;
         var median = await _store.GetMedianJudgeDurationSecondsAsync(projectId, cancellationToken);
         return new BenchmarkPairwiseEstimate
         {

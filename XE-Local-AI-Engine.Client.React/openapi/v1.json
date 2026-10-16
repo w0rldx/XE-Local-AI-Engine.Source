@@ -2852,6 +2852,16 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized"
           },
@@ -4162,6 +4172,16 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized"
           },
@@ -4555,6 +4575,16 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized"
           },
@@ -4682,6 +4712,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -4822,6 +4862,16 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized"
           },
@@ -4901,6 +4951,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -6366,6 +6426,16 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -14404,6 +14474,16 @@
           },
           "403": {
             "description": "Forbidden"
+          },
+          "413": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -15430,6 +15510,16 @@
           },
           "403": {
             "description": "Forbidden"
+          },
+          "413": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -20304,6 +20394,16 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized"
           },
@@ -21266,6 +21366,16 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized"
           },
@@ -21408,6 +21518,16 @@
         "responses": {
           "204": {
             "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
           },
           "401": {
             "description": "Unauthorized"
@@ -21844,6 +21964,16 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized"
           },
@@ -21943,6 +22073,16 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized"
           },
@@ -21997,6 +22137,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1TrainingDatasetResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -22156,6 +22306,16 @@
         "responses": {
           "204": {
             "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
           },
           "401": {
             "description": "Unauthorized"
@@ -22426,6 +22586,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1ToolMockResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -24125,6 +24295,16 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -29669,7 +29849,9 @@
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesBenchmarksBenchmarkCancellationTarget"
           },
           "expectedVersion": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
           }
         }
       },
@@ -29678,7 +29860,9 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
           }
         }
       },
@@ -29724,7 +29908,9 @@
             "additionalProperties": false,
             "properties": {
               "expectedProjectVersion": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true
               }
             }
           }
@@ -29735,7 +29921,9 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
           }
         }
       },
@@ -29744,7 +29932,9 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
           }
         }
       },
@@ -29753,7 +29943,9 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
           }
         }
       },
@@ -30080,7 +30272,9 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
           }
         }
       },
@@ -30089,7 +30283,9 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
           },
           "force": {
             "type": "boolean"
@@ -30119,7 +30315,9 @@
             "nullable": true
           },
           "expectedVersion": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
           }
         }
       },
@@ -30141,7 +30339,9 @@
         "additionalProperties": false,
         "properties": {
           "expectedProjectVersion": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
           },
           "items": {
             "type": "array",
@@ -30195,7 +30395,9 @@
             "type": "string"
           },
           "expectedProjectVersion": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
           },
           "kvCacheType": {
             "type": "string",
@@ -30258,7 +30460,9 @@
             ]
           },
           "expectedVersion": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
           },
           "confirmRejudge": {
             "type": "boolean"
@@ -30270,7 +30474,9 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
           },
           "fidelityEnabled": {
             "type": "boolean"
@@ -30302,7 +30508,9 @@
             "additionalProperties": false,
             "properties": {
               "expectedVersion": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true
               }
             }
           }
@@ -30318,7 +30526,9 @@
             "additionalProperties": false,
             "properties": {
               "expectedVersion": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true
               }
             }
           }
@@ -37153,7 +37363,8 @@
             "format": "int32"
           },
           "sampler": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "cfgScale": {
             "type": "number",
@@ -39033,6 +39244,10 @@
             "type": "string",
             "nullable": true
           },
+          "failureReasonCode": {
+            "type": "string",
+            "nullable": true
+          },
           "chunkCount": {
             "type": "integer",
             "format": "int32"
@@ -39097,6 +39312,10 @@
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesKnowledgeKnowledgeDocumentStatus"
           },
           "failureReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "failureReasonCode": {
             "type": "string",
             "nullable": true
           },
@@ -39294,13 +39513,20 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "results"
+          "results",
+          "degradations"
         ],
         "properties": {
           "results": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse"
+            }
+          },
+          "degradations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesKnowledgeKnowledgeSearchDegradation"
             }
           }
         }
@@ -39964,6 +40190,11 @@
           },
           "memoryExcluded": {
             "type": "boolean"
+          },
+          "agentDefinitionId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
           },
           "messages": {
             "type": "array",
@@ -46970,7 +47201,9 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
           }
         }
       },
@@ -47026,7 +47259,9 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
           }
         }
       },
@@ -47263,7 +47498,9 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
           }
         }
       },
@@ -48085,7 +48322,9 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
           }
         }
       },
@@ -48094,7 +48333,9 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
           }
         }
       },
@@ -48133,7 +48374,9 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
           },
           "name": {
             "type": "string"
@@ -48534,7 +48777,9 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
           },
           "name": {
             "type": "string"
@@ -48549,7 +48794,9 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
           }
         }
       },
@@ -50332,7 +50579,8 @@
           "ModelNotInstalled",
           "ContextWindowExceeded",
           "ProviderAuthFailed",
-          "ProviderRateLimited"
+          "ProviderRateLimited",
+          "CallBudgetReached"
         ],
         "enum": [
           "Cancelled",
@@ -50348,7 +50596,8 @@
           "ModelNotInstalled",
           "ContextWindowExceeded",
           "ProviderAuthFailed",
-          "ProviderRateLimited"
+          "ProviderRateLimited",
+          "CallBudgetReached"
         ]
       },
       "XE_Local_AI_EngineClientPersistenceAgentDefinitionKind": {
@@ -51167,6 +51416,18 @@
         "enum": [
           "Fusion",
           "Rerank"
+        ]
+      },
+      "XE_Local_AI_EngineClientServicesKnowledgeKnowledgeSearchDegradation": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "LexicalOnly",
+          "RerankerUnavailable"
+        ],
+        "enum": [
+          "LexicalOnly",
+          "RerankerUnavailable"
         ]
       },
       "XE_Local_AI_EngineClientServicesMcpMcpConnectionFailureReason": {

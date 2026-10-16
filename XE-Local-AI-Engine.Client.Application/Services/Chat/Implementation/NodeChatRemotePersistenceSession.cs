@@ -63,7 +63,7 @@ public sealed class NodeChatRemotePersistenceSession
             return;
         }
 
-        await _invocationPump.TerminalizeInterruptedAsync(_correlation, _cursor, wasCancelled);
+        await _invocationPump.TerminalizeInterruptedAsync(_correlation, _cursor, wasCancelled, _requestedModel);
         _terminalPersisted = true;
     }
 }

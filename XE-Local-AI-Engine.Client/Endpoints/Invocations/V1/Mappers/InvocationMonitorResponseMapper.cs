@@ -82,6 +82,7 @@ internal static class InvocationMonitorResponseMapper
             FailureCategory.ModelUnavailable or FailureCategory.ModelNotInstalled => InvocationFailureMessages.ModelUnavailable,
             FailureCategory.ModelLoadFailed => InvocationFailureMessages.ModelLoadFailed,
             FailureCategory.Timeout => InvocationFailureMessages.TimedOut,
+            FailureCategory.CallBudgetReached => InvocationFailureMessages.CallBudgetReached,
             _ => FailedOperatorMessage
         };
     }

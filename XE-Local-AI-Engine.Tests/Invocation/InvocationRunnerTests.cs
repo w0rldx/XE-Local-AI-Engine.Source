@@ -36,6 +36,7 @@ using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
+using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -1748,6 +1749,37 @@ public sealed class InvocationRunnerTests
                                Arg.Any<string>(),
                                Arg.Any<long>(),
                                Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task RunAsync_SkillOnlyAgent_LoadSkillDecision_ResumesThroughTheRealApprovalValidator(bool approved)
+    {
+        // R4-02: a skill-only agent offers load_skill outside AllowedTools; its resume replayed the response without the
+        // request, and ApprovalResponseValidatingAgent failed the turn whichever way the card was answered.
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
+        using var model = new LoadSkillScriptedChatClient();
+        var runner = CreateRunner(RealSkillPipelineFactory(model), eventDispatcher: dispatcher);
+        var package = RuntimePackageBuilder.Valid()
+                                           .WithConversationId(Guid.NewGuid())
+                                           .WithSkills(new ResolvedSkill(SkillId, SkillName, "A skill.", LoadSkillScriptedChatClient.SkillBody, 1, false))
+                                           .Build();
+        AssertEx.Empty(package.AllowedTools, "the scenario is a skill-only agent; an offered tool would mask the defect");
+
+        var run = RunAsync(runner, package);
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(10));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals.Single().RequestId,
+            Approved = approved
+        });
+        await run.WaitAsync(TimeSpan.FromSeconds(10));
+
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<FailureCategory>());
+        AssertEx.Equal("all done", model.FinalText);
+        AssertEx.Equal(approved, AssertEx.NotNull(model.LoadSkillResult).Contains(LoadSkillScriptedChatClient.SkillBody, StringComparison.Ordinal),
+            "an approved load_skill returns the skill body to the model, a denied one does not");
     }
 
     [Test]
@@ -5389,6 +5421,43 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenJinjaTextArrivesWithoutAProvider400_IsNotRewordedAsATemplateFailure()
+    {
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new InvalidOperationException("Jinja Exception: quoted by a local component.")));
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), FailureCategory.ModelCapabilityUnsupported);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheChatTemplateRejectsTheConversation_MapsAFixedReasonInsteadOfTheRawJinjaText()
+    {
+        // R4-06: llama-server's 400 for a template that raised carries the Jinja source and exception text, which the
+        // user saw verbatim. A wrapped status-400 ClientResultException is the shape the OpenAI adapter produces.
+        const string ProviderMessage = "HTTP 400 (invalid_request_error: ) Unable to generate parser for this template. Automatic parser generation failed: "
+                                       + "While executing CallExpression at line 85 ... Error: Jinja Exception: System message must be at the beginning.";
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new InvalidOperationException("The chat client failed.",
+                   new HttpRequestException(ProviderMessage, inner: null, HttpStatusCode.BadRequest))));
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(),
+            Arg.Is<string>(message => message == "The model's chat template could not render this conversation. Select a different model, or retry without the agent's skills or tools."),
+            FailureCategory.ModelCapabilityUnsupported);
+    }
+
+    [Test]
     public async Task RunAsync_WhenToolGrammarFailureIsWrapped_MapsModelCapabilityUnsupportedFailureCategory()
     {
         // The agent framework wraps the transport exception, so the signature is only visible on an inner exception.
@@ -6506,7 +6575,7 @@ public sealed class InvocationRunnerTests
             resolvedValidator,
             resolvedCapabilityReporter,
             resolvedProviderResolver,
-            new LocalRuntimeWarmer(resolvedProviderResolver, resolvedActiveCloudFactory, new FakeModelTrustResolver(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System),
+            new LocalRuntimeWarmer(resolvedProviderResolver, resolvedActiveCloudFactory, new FakeModelTrustResolver(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System, new GpuWorkGate()),
             resolvedProviderStreamResilience,
             contextBudgeter ?? new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(resolvedContextBudgetOptions), runtimeSettings),
             Options.Create(resolvedContextBudgetOptions),
@@ -7105,6 +7174,80 @@ public sealed class InvocationRunnerTests
                });
 
         return factory;
+    }
+
+    // The production approval boundary over a real ChatClientAgent and FunctionInvokingChatClient, carrying the definition's
+    // skills through the real MAF skills provider and no other tool.
+    private static IInvocationAgentFactory RealSkillPipelineFactory(IChatClient model)
+    {
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(callInfo =>
+               {
+                   var definition = callInfo.Arg<InvocationAgentDefinition>();
+                   var chatClient = model.AsBuilder().UseFunctionInvocation(NullLoggerFactory.Instance).Build();
+                   return Task.FromResult(new InvocationAgentContext
+                   {
+                       Agent = InvocationAgentFactory.BuildApprovalValidatedAgent(chatClient,
+                           "skill-approval",
+                           "Skill approval end to end.",
+                           [],
+                           NullLoggerFactory.Instance,
+                           new ServiceCollection().BuildServiceProvider(),
+                           skillsProvider: InvocationSkillsProvider.Create(AssertEx.NotNull(definition.Skills))),
+                       Session = null,
+                       SeedMessages = definition.ConversationContext.Prepend(new ChatMessage(ChatRole.System, definition.Instructions)).ToList()
+                   });
+               });
+
+        return factory;
+    }
+
+    // The model: round one calls load_skill; once the result (or the rejection) is back it records it and answers.
+    private sealed class LoadSkillScriptedChatClient : IChatClient
+    {
+        public const string SkillBody = "The codeword is heron.";
+
+        public string? LoadSkillResult { get; private set; }
+
+        public string? FinalText { get; private set; }
+
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            if (messages.SelectMany(static message => message.Contents).OfType<FunctionResultContent>().FirstOrDefault() is { } result)
+            {
+                LoadSkillResult = result.Result?.ToString() ?? string.Empty;
+                FinalText = "all done";
+                return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, FinalText)));
+            }
+
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant,
+            [
+                new FunctionCallContent("call-load-skill", LoadSkillToolName, new Dictionary<string, object?>(StringComparer.Ordinal)
+                {
+                    ["skillName"] = SkillName
+                })
+            ])));
+        }
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
+        {
+            var response = await GetResponseAsync(messages, options, cancellationToken);
+            foreach (var message in response.Messages)
+            {
+                yield return new ChatResponseUpdate(message.Role, message.Contents);
+            }
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null) =>
+            serviceType == typeof(IChatClient) ? this : null;
+
+        public void Dispose()
+        {
+        }
     }
 
     // The model: round one calls web_fetch, web_search and ask_user in parallel; once all three have results it records them and answers.

@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -72,6 +73,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     private readonly IToolApprovalPolicy _toolApprovalPolicy;
     private readonly IGraphWorkflowStore _graphWorkflows;
     private readonly ILogger<NodeChatStreamService> _logger;
+    private readonly IGpuWorkGate _gpuWorkGate;
 
     public NodeChatStreamService(INodeChatPersistenceService persistence,
         ChatInvocationStatePump invocationStatePump,
@@ -95,8 +97,11 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         TimeProvider timeProvider,
         IToolApprovalPolicy toolApprovalPolicy,
         IGraphWorkflowStore graphWorkflows,
-        ILogger<NodeChatStreamService> logger)
+        ILogger<NodeChatStreamService> logger,
+        IGpuWorkGate gpuWorkGate)
     {
+        ArgumentNullException.ThrowIfNull(gpuWorkGate);
+        _gpuWorkGate = gpuWorkGate;
         _persistence = persistence;
         _invocationStatePump = invocationStatePump;
         _turnResolver = turnResolver;
@@ -366,6 +371,9 @@ public sealed class NodeChatStreamService : INodeChatStreamService
 
         var attachmentsAllowed = await AreAttachmentsAllowedAsync(resolution, cancellationToken);
         await ReportPreRunNoticesAsync(request, resolution, toolOffer, attachmentsAllowed, requestId, cancellationToken);
+        await WorkSessionSlotHolderNotice.ReportIfQueuedBehindAsync(_eventDispatcher, _persistence, request.ConversationId, requestId, cancellationToken);
+        await GpuWorkHolderNotice.ReportIfQueuedBehindBenchmarkAsync(_gpuWorkGate, _eventDispatcher, _persistence, request.ConversationId, requestId, cancellationToken);
+
         if (!attachmentsAllowed &&
             conversation.Messages.Any(static message => message.Parts?.Any(static part => string.Equals(part.Kind, NodeChatMessagePartKinds.Tool, StringComparison.Ordinal)) == true))
         {
@@ -461,7 +469,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         try
         {
             var queueStartedTimestamp = Stopwatch.GetTimestamp();
-            lease = await _eventDispatcher.ReportInvocationAssignedAsync(package, cancellationToken);
+            lease = await InvocationSlotAdmission.AcquireAsync(_eventDispatcher, package, requestId, _logger, cancellationToken);
             var queueDurationMs = Stopwatch.GetElapsedTime(queueStartedTimestamp).TotalMilliseconds;
 
             // The lease is held => the invocation is actually starting. Transition Queued -> Streaming and emit
@@ -632,6 +640,14 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             throw new NodeChatWorkflowRunLiveException(request.ConversationId);
         }
 
+        // A file of another conversation was dropped silently and the model answered as if nothing was attached. The ownership
+        // check stays (no cross-conversation read); the send is refused by name before anything is persisted.
+        if (await _turnContextBuilder.ListForeignAttachmentIdsAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken) is { Count: > 0 } foreign)
+        {
+            throw new NodeChatInvalidRequestException(
+                $"These attachments are not files of this conversation: {string.Join(", ", foreign)}. Upload them to this conversation and send again.");
+        }
+
         var persistedSelectedPath = request.SelectedPath is not null
             ? await _persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest
             {
@@ -709,7 +725,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         return !turnReachesCloud || await _runtimeSettings.GetAllowCloudModelAccessAsync(cancellationToken);
     }
 
-    // The pre-run notices, in wire order: orchestration-degraded, playbook, tools and cloud-tools withheld, then either the
+    // The pre-run notices, in wire order: agent-unavailable, orchestration-degraded, playbook, tools and cloud-tools withheld, then either the
     // cloud-egress withhold notices or knowledge-unavailable and attachments-not-sent. All ride the runner's turn-notice fan-out.
     private async Task ReportPreRunNoticesAsync(NodeChatStreamRequest request,
         ChatTurnResolution resolution,
@@ -718,6 +734,12 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         Guid requestId,
         CancellationToken cancellationToken)
     {
+        // A bound agent that no longer exists falls back to the default assistant; say so instead of answering silently.
+        if (resolution.AgentUnavailableNotice(requestId) is { } agentUnavailableNotice)
+        {
+            await _eventDispatcher.ReportTurnNoticeAsync(agentUnavailableNotice);
+        }
+
         // An Orchestrator agent whose orchestration did not compile runs as a lone single agent, so emit ONE notice
         // naming the typed reason. NotOrchestrated (a Single-kind or unbound agent) has none, so the common path is silent.
         if (resolution.OrchestrationOutcome.DegradationNotice is { } orchestrationDegradedMessage)
@@ -744,6 +766,11 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         if (toolOffer.TrimmedByAllowList)
         {
             await _eventDispatcher.ReportTurnNoticeAsync(resolution.ToolsNotAllowListedNotice(requestId));
+        }
+
+        if (resolution.ComputeWithheldNotice(requestId) is { } computeWithheldNotice)
+        {
+            await _eventDispatcher.ReportTurnNoticeAsync(computeWithheldNotice);
         }
 
         // A compiled orchestration's participants carry their own tools whatever the client asked.
@@ -1108,7 +1135,8 @@ public sealed class NodeChatStreamService : INodeChatStreamService
 
         // The just-sent user turn is the relevance-retrieval query, inert below the threshold or unbound. The shared
         // resolver gates thinking and tools by capability and returns the effective model both stamps come from.
-        return await _turnResolver.ResolveAsync(activeModel, requiresInstalledChatModel, effectiveAgentId, trimmedContent, userPickedConcreteModel, cancellationToken);
+        return await _turnResolver.ResolveAsync(activeModel, requiresInstalledChatModel, effectiveAgentId, trimmedContent, userPickedConcreteModel, cancellationToken,
+            conversationAgentId: request.AgentDefinitionId is null ? conversation.AgentDefinitionId : null);
     }
 
     private ChatStreamEvent ToMessageEvent(string type,

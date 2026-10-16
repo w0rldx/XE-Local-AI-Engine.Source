@@ -73,6 +73,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // A turn whose answer ended on the output cap or the window rather than where the model chose to stop.
     private const string OutputLimitReachedNoticeMessage = "The answer stopped at the length limit before the model finished.";
 
+    private const string CpuFallbackNoticeMessage = "This answer ran on the CPU although a GPU was expected, so it is slower.";
+
     /// <summary>The authored effort that opens the dispatch path, and the value persisted as <c>authored_effort</c>.</summary>
     private const string AutoReasoningEffort = "auto";
 
@@ -295,8 +297,22 @@ public sealed partial class InvocationRunner : IInvocationRunner
         }
         catch (Exception exception)
         {
-            invocationOutcome = exception is LlamaServerModelEjectedException ? "cancelled" : "failed";
-            _logger.LogError(exception, "Invocation {InvocationId} failed.", package.InvocationId);
+            invocationOutcome = exception switch
+            {
+                LlamaServerModelEjectedException => "cancelled",
+                ProviderCallBudgetExceededException => "stopped",
+                _ => "failed"
+            };
+            if (exception is ProviderCallBudgetExceededException)
+            {
+                // A designed bound: the budget already logged its own warning with the round count, so no stack trace here.
+                _logger.LogInformation("Invocation {InvocationId} stopped at its provider-call budget.", package.InvocationId);
+            }
+            else
+            {
+                _logger.LogError(exception, "Invocation {InvocationId} failed.", package.InvocationId);
+            }
+
             var (failureCategory, message) = InvocationFailureClassifier.MapFailure(exception);
             // An operator force-eject surfaces as a Cancelled-category LlamaServerModelEjectedException here (not the OCE
             // path). Count it as a cancellation cause rather than a failure, mirroring the OCE branch above.
@@ -468,6 +484,24 @@ public sealed partial class InvocationRunner : IInvocationRunner
         await RunSelectedModelTurnAsync(turn, selection, turnPolicy, invocationToken);
     }
 
+    // A llama.cpp turn that runs on the CPU although a GPU was expected says so in the answer, with the audit's remediation. Peek only: the
+    // memoized audit never probes, so a turn never waits on it, and an undetermined audit stays silent.
+    private async Task EmitCpuFallbackNoticeAsync(StreamTransport transport, LocalRuntimePreparationResult localRuntime)
+    {
+        if (localRuntime.WarmFailure is not null
+            || !string.Equals(localRuntime.ProviderName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        using var scope = _scopeFactory.CreateScope();
+        if (scope.ServiceProvider.GetService<IRuntimeDeviceAudit>()?.PeekCached() is { CpuFallback: true } audit)
+        {
+            var reason = audit.Reason ?? CpuFallbackNoticeMessage;
+            await transport.EmitNoticeAsync(TurnNoticeKind.CpuFallback, audit.Remediation is { Length: > 0 } remediation ? $"{reason} {remediation}" : reason);
+        }
+    }
+
     // RunAsync's try body, part two: the stream, the notices, the ambient tool-loop scopes, the warm and the admission check. Every
     // scope opened here stays open until RunAndCompleteTurnAsync returns.
     private async Task RunSelectedModelTurnAsync(TurnExecution turn, TurnModelSelection selection, TurnPolicy turnPolicy, CancellationToken invocationToken)
@@ -535,6 +569,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         var requestedContextTokens = turnPolicy.RequestedContextTokens ?? turnPolicy.ContextCapacityTokens;
         var localRuntime = await _localRuntimeWarmer.PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, stream, turn.TurnStartedTimestamp, invocationToken);
         var effectiveContextTokens = localRuntime.EffectiveContextTokens;
+        await EmitCpuFallbackNoticeAsync(transport, localRuntime);
 
         // Once per turn, AFTER the chat model is ready so the companions never race its launch for admission or VRAM.
         // Fire-and-forget: the first knowledge search may still find them cold and fall back to fusion order.
@@ -905,8 +940,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
             IsFirstSegment = true,
 
             // The per-segment update list is retained ONLY to replay a folded segment, on approval or on the one tool-call-in-reasoning re-prompt below, so a
-            // turn offering no tool never keeps it.
-            RetainSegmentUpdates = package.AllowedTools.Count > 0,
+            // turn offering no tool never keeps it. Skills count: their approval-gated tools come through the skills context provider, not AllowedTools.
+            RetainSegmentUpdates = package.AllowedTools.Count > 0 || package.Skills is { Count: > 0 },
 
             // Model-matrix F4: a thinking model can write its tool call inside the reasoning block, where llama-server keeps it as reasoning. Re-prompted once, never more.
             ReasoningToolCallReprompted = false,

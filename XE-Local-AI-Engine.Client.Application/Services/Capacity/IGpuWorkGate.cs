@@ -15,6 +15,9 @@ public interface IGpuWorkGate
     /// <summary>The exclusive holder's kind, or <see langword="null" />. For UX refusals only — never gate work on it.</summary>
     GpuWorkKind? ExclusiveKind { get; }
 
+    /// <summary>Every current holder's kind, the exclusive one first. For UX notices only — never gate work on it.</summary>
+    IReadOnlyList<GpuWorkKind> Holders { get; }
+
     /// <summary>
     ///     Takes the whole node, or returns <see langword="null" /> when any holder — exclusive or shared — exists.
     ///     Disposing the handle releases it; disposing twice is a no-op.

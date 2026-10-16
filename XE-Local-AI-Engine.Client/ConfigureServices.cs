@@ -303,6 +303,9 @@ public static class ConfigureServices
                {
                    options.Password.RequiredLength = 12;
                    options.User.RequireUniqueEmail = true;
+                   // The user name IS the e-mail address, already validated as one; the default letters-and-digits set refused a
+                   // non-ASCII address (jürgen-ß@…) the setup form and the e-mail validator accept. Empty switches the check off.
+                   options.User.AllowedUserNameCharacters = string.Empty;
                    options.SignIn.RequireConfirmedAccount = false;
                    options.Lockout.AllowedForNewUsers = true;
                    options.Lockout.MaxFailedAccessAttempts = 5;

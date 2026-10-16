@@ -849,7 +849,6 @@ public sealed class StubNodeRuntimeSettings
         settings.GetSpeculativeDraftModelName().Returns(_speculativeDraftModelName);
         settings.GetSpeculativeDraftMaxTokens().Returns(_speculativeDraftMaxTokens);
         settings.GetSpeculativeDraftGpuLayers().Returns(_speculativeDraftGpuLayers);
-        settings.GetRerankerModelName().Returns(_rerankerModelName);
         settings.GetLlamaReadinessTimeoutCap().Returns(TimeSpan.FromSeconds(StoredNodeSettings.DefaultLlamaReadinessTimeoutCapSeconds));
         settings.GetLlamaChatHttpTimeout().Returns(TimeSpan.FromSeconds(StoredNodeSettings.DefaultLlamaChatHttpTimeoutSeconds));
         settings.GetLlamaEmbeddingHttpTimeout().Returns(TimeSpan.FromSeconds(StoredNodeSettings.DefaultLlamaEmbeddingHttpTimeoutSeconds));

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Chat;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
@@ -320,7 +321,7 @@ public sealed class ConversationStateDistillationServiceTests
             var providerResolver = Substitute.For<ILocalModelProviderResolver>();
             providerResolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(provider);
             return new LocalRuntimeWarmer(providerResolver, Substitute.For<IActiveCloudChatClientFactory>(), new FakeModelTrustResolver(), NullLogger<LocalRuntimeWarmer>.Instance,
-                TimeProvider.System);
+                TimeProvider.System, new GpuWorkGate());
         }
     }
 }

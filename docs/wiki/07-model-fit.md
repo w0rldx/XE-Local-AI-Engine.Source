@@ -217,7 +217,7 @@ partial name does not change between attempts, the downloader's `Range` resume w
 
 | Event | Partial + cursors | Next start |
 |---|---|---|
-| Transient failure after retries, a cancellation the operator did not request (idle timeout), or node restart mid-download | kept | resumes from the recorded cursors (the in-memory status is lost; the bytes are not) |
+| Transient failure after retries, a cancellation the operator did not request (idle timeout), or node restart mid-download | kept | resumes from the recorded cursors; after a restart the download list shows the model as `Failed` with error code `Interrupted` until it is started again |
 | Failure after a file finished and verified (projector download, sidecar write) | the verified file moves back to its partial, recorded as complete | commits it without a request |
 | Operator cancel | both deleted | byte 0 |
 | Completed download | the partial becomes the staged file; the cursors are deleted | n/a |
@@ -227,6 +227,11 @@ Partials from the older per-operation layout (`<file>.gguf.<operation>.part.part
 over on the next start of the same model: the newest one is renamed to the stable name and resumed, the rest are deleted.
 The startup `GgufAcquisitionArtifactStartupReaper` deletes any `<file>.gguf.…part` leftover whose `<file>.gguf` already
 exists, and any other `*.part` untouched for 24 hours. So a resumable partial survives a restart for a day.
+
+Beside the partial, `PrepareAsync` writes `<file>.gguf.intent.part`, which names the model and its size, because the
+partial's file name does not. It is deleted when the download is prepared or cancelled. On the first download start or
+read after a restart, `GgufDownloadCoordinator` lists each intent whose partial still exists as a `Failed` row with error
+code `Interrupted` and the neutral reason "This download did not finish", so the operator can see the download and start it again. The startup reaper ages an intent by its partial, so a download that ran longer than a day before the restart keeps its row.
 
 ### Weights-only installs (`includeProjector`)
 
@@ -306,6 +311,7 @@ All endpoints are loopback/local-only, authenticated, and secret-redacted — se
 4. **Sanitization everywhere.** Snapshot errors, download statuses, and hardware profiles are sanitized of paths/URLs/tokens and machine identifiers before they leave the node.
 5. **The HF token is write-only over the wire** — GET reports presence only.
 6. **The recommendation advisor is estimator-only** and the approved-image concept is removed — don't reintroduce a container path or make a refresh spawn a process; advisor ranking is pure `MemoryFitEstimator` + quant ladder. This is unaffected by [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md), whose Docker permission is scoped to Development Mode execution. The one place a model *is* spawned for measurement is the **Inference Optimizer** benchmark (launch-arg tuning of an already-chosen model), which is a separate operator-triggered surface — keep the two paths distinct.
+7. **The loaded-process cap counts chat models only.** `MaxLoadedProcesses` (Node Settings "Max loaded chat models") bounds chat-role `llama-server` processes; the knowledge embedder and reranker hold two separate companion slots, so a recommendation that leaves room for the companions' memory (the companion reserve above) is never undone by a slot fight. Up to three chat models (the default cap) can then be resident beside the two companions; the capacity admission still guards memory for every load, so the counts bound processes, not memory. Rule and history: [reference/03](reference/03-llama-server-supervisor.md#eviction--reaper).
 
 ## Related pages
 

@@ -45,6 +45,11 @@
          arrive transitively and lock-step to the same version, so they need no entry of their own. -->
     <PackageVersion Include="Docker.DotNet.Enhanced" Version="4.3.3" />
     <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Sqlite" Version="13.5.0" />
+    <!-- Transitive only (CommunityToolkit.Aspire.Hosting.Sqlite 13.5.0 and StreamJsonRpc 2.25.29 both resolve 2.5.302):
+         pinned upward under CentralPackageTransitivePinningEnabled past GHSA-qhrr-8q5h-9q3h (moderate; patched in
+         2.5.303), which NuGetAudit otherwise reports as NU1902 and TreatWarningsAsErrors turns into a restore failure.
+         Drop this pin once either parent floors at 2.5.303 or newer. -->
+    <PackageVersion Include="MessagePack" Version="2.5.303" />
     <PackageVersion Include="FastEndpoints" Version="8.3.0" />
     <PackageVersion Include="FastEndpoints.Swagger" Version="8.3.0" />
     <PackageVersion Include="Meziantou.Analyzer" Version="3.0.299" />

@@ -59,10 +59,13 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     private LlamaCppSourceBuildDescriptor? _currentBuild;
     private bool _isRunning;
     private volatile bool _scratchCleanupFailed;
+    internal const string InterruptedBuildMessage = "The node restarted during the build. Start it again to finish it.";
+
     private long _logStartSequence;
     private List<string> _logLines = [];
     private long _nextLogSequence;
     private LlamaCppSourceBuildPhase _phase = LlamaCppSourceBuildPhase.Idle;
+    private volatile bool _shuttingDown;
     private Task _publishTail = Task.CompletedTask;
     private string? _sanitizedError;
     private DateTimeOffset? _startedAtUtc;
@@ -113,8 +116,12 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
 
     private string MarkerPath => Path.Combine(WorkDirectory, ".build-in-progress");
 
+    // Outside the work tree, which recovery and the build's own cleanup both delete.
+    private string InterruptedRecordPath => Path.Combine(SourceBuildRoot, ".build-interrupted");
+
     public void Dispose()
     {
+        _shuttingDown = true;
         CancellationTokenSource? buildCts;
         lock (_stateLock)
         {
@@ -278,6 +285,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     /// <inheritdoc />
     public async Task ShutdownAsync(CancellationToken ct)
     {
+        _shuttingDown = true;
         await _startGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
@@ -364,6 +372,8 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     /// <inheritdoc />
     public async Task RecoverAsync(CancellationToken ct)
     {
+        RecordInterruptedBuild();
+
         // Scratch trees hold no state, so an undeletable one must not block host start; it only refuses new builds until a
         // later recovery removes it. Both are attempted so one failure does not leave the other behind.
         var workDeleted = TryDeleteScratchDirectory(WorkDirectory);
@@ -372,6 +382,52 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
 
         SweepStalePrebuiltStaging();
         await ReconcileActiveAndBackupAsync(ct).ConfigureAwait(false);
+    }
+
+    // The marker outlives only a build the process never finished: every terminal path deletes the work tree. Without this
+    // the next host answered a plain Idle and the operator was never told the build had died.
+    private void RecordInterruptedBuild()
+    {
+        var shutdownRecord = File.Exists(InterruptedRecordPath);
+        if (!shutdownRecord && !File.Exists(MarkerPath))
+        {
+            return;
+        }
+
+        if (shutdownRecord)
+        {
+            try
+            {
+                File.Delete(InterruptedRecordPath);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogWarning(exception, "The interrupted source-build record could not be removed; the next start reports the build again.");
+            }
+        }
+
+        lock (_stateLock)
+        {
+            _phase = LlamaCppSourceBuildPhase.Failed;
+            _sanitizedError = InterruptedBuildMessage;
+            _completedAtUtc = _timeProvider.GetUtcNow();
+        }
+
+        _logger.LogWarning("A llama.cpp source build was interrupted by a node restart; it is reported as failed.");
+    }
+
+    private async Task RecordShutdownInterruptionAsync()
+    {
+        try
+        {
+            Directory.CreateDirectory(SourceBuildRoot);
+            // Not the build's token: it is the one the shutdown just cancelled.
+            await File.WriteAllTextAsync(InterruptedRecordPath, _timeProvider.GetUtcNow().ToString("O"), CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(exception, "The source build stopped by the node shutdown could not be recorded; the next start shows it as idle.");
+        }
     }
 
     // Prebuilt acquisitions killed mid-extract or mid-publish leave {variant}.{guid}.tmp trees nothing else removes. No
@@ -593,6 +649,13 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         }
         catch (OperationCanceledException)
         {
+            // A host shutdown cancels the build too, and its cleanup removes the work tree and the marker with it; the record beside
+            // the tree is what tells the next start the build died with the node, not by the operator's cancel.
+            if (_shuttingDown)
+            {
+                await RecordShutdownInterruptionAsync().ConfigureAwait(false);
+            }
+
             // The swap step already rolled finalTagDir back on failure; only the partial work + staging trees are dropped.
             TryDeleteDirectory(workDir);
             TryDeleteDirectory(stagingTagDir);
@@ -1186,6 +1249,19 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
 
     private async Task SetTerminalAsync(LlamaCppSourceBuildPhase phase, string? sanitizedError)
     {
+        // Deleted on its own: the work-tree delete swallows IO errors, and a marker left behind would report this finished build as interrupted.
+        try
+        {
+            if (File.Exists(MarkerPath))
+            {
+                File.Delete(MarkerPath);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(exception, "The source-build progress marker could not be removed; the next start reports this build as interrupted.");
+        }
+
         Task publish;
         lock (_stateLock)
         {

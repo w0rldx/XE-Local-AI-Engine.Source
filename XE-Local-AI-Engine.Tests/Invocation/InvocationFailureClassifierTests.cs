@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Invocation;
 
 using System.ClientModel;
 using System.ClientModel.Primitives;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
@@ -59,6 +60,20 @@ public sealed class InvocationFailureClassifierTests
 
         AssertEx.Equal(FailureCategory.ProviderRateLimited, classification.Category);
         AssertEx.Equal("The provider rate-limited this request, retry after 12.", classification.Message);
+    }
+
+    // R5-05: a work session step that reaches its cap is a designed stop, not a context-window overflow.
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public void MapFailure_ProviderCallBudget_IsTheCallBudgetCategoryWithItsOwnMessage(bool stepCap)
+    {
+        var message = stepCap ? ProviderCallBudget.StepCallCapReachedMessage : ProviderCallBudget.CeilingExceededMessage;
+
+        var classification = InvocationFailureClassifier.MapFailure(new ProviderCallBudgetExceededException(message));
+
+        AssertEx.Equal(FailureCategory.CallBudgetReached, classification.Category);
+        AssertEx.Equal(message, classification.Message);
     }
 
     [Test]
@@ -218,5 +233,20 @@ public sealed class InvocationFailureClassifierTests
         {
             return _headers.GetEnumerator();
         }
+    }
+
+    /// <summary>R2-05: a model server that died mid-stream is named, with the resend that reloads it, never the raw framework text.</summary>
+    [Test]
+    public void MapFailure_ResponseEndedMidStream_NamesTheExitedServerAndTheResend()
+    {
+        var wrapped = new InvalidOperationException("stream failed",
+            new HttpIOException(HttpRequestError.ResponseEnded, "The response ended prematurely. (ResponseEnded)"));
+
+        var classification = InvocationFailureClassifier.MapFailure(wrapped);
+
+        AssertEx.Equal(FailureCategory.ProviderUnreachable, classification.Category);
+        AssertEx.Contains(classification.Message, "may have exited");
+        AssertEx.Contains(classification.Message, "Send the message again");
+        AssertEx.False(classification.Message.Contains("ResponseEnded", StringComparison.Ordinal), classification.Message);
     }
 }

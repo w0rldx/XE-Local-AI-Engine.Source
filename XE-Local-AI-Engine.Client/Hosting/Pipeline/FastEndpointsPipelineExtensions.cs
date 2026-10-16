@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Hosting.Pipeline;
 using System.Text.Json;
 using FastEndpoints;
 using FluentValidation;
+using FluentValidation.Results;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.Services.Auth;
@@ -46,8 +47,42 @@ internal static class FastEndpointsPipelineExtensions
             // W3C trace id in validator 400s too (FE's default builder uses the connection id no log line carries).
             config.Errors.UseProblemDetails(static problemDetails => problemDetails.ResponseBuilder = FastEndpointsProblemWriter.Build);
             ConfigureServices.ConfigureJsonSerializerOptions(config.Serializer.Options);
+            config.Binding.JsonExceptionTransformer = ToBindingFailure;
         });
 
         return app;
+    }
+
+    // The serializer's messages name a CLR type (unknown property, failed conversion, missing required members); all three
+    // name the wire field instead. Any other message (malformed JSON) carries no type and passes through.
+    internal static ValidationFailure ToBindingFailure(JsonException exception)
+    {
+        const string unmappedPrefix = "The JSON property '";
+        const string unmapped = "' could not be mapped to any .NET member";
+        var unmappedEnd = exception.Message.IndexOf(unmapped, StringComparison.Ordinal);
+        if (exception.Message.StartsWith(unmappedPrefix, StringComparison.Ordinal) && unmappedEnd > unmappedPrefix.Length)
+        {
+            var property = exception.Message[unmappedPrefix.Length..unmappedEnd];
+            return new ValidationFailure(property, $"The request body has an unknown property: '{property}'.");
+        }
+
+        const string missingRequired = "was missing required properties including: ";
+        var field = exception.Path is { Length: > 2 } path ? path[2..] : "SerializerErrors";
+        var missingAt = exception.Message.IndexOf(missingRequired, StringComparison.Ordinal);
+        string message;
+        if (missingAt >= 0)
+        {
+            message = $"The request body is missing required properties: {exception.Message[(missingAt + missingRequired.Length)..].TrimEnd('.')}.";
+        }
+        else if (exception.Message.Contains("could not be converted to", StringComparison.Ordinal))
+        {
+            message = $"The value of '{field}' has the wrong JSON type or shape.";
+        }
+        else
+        {
+            message = exception.Message;
+        }
+
+        return new ValidationFailure(field, message);
     }
 }

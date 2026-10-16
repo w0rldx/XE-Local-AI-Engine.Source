@@ -304,6 +304,7 @@ export function mapConversation(dto: NodeChatConversationResponseDto): ChatConve
 		isPinned: dto.isPinned ?? false,
 		isArchived: dto.archived ?? false,
 		memoryExcluded: dto.memoryExcluded ?? false,
+		agentDefinitionId: dto.agentDefinitionId ?? undefined,
 		origin: toOrigin(dto.origin),
 		branchOfConversationId: dto.branchOfConversationId ?? undefined,
 		selectedPath: dto.selectedPath ?? undefined,

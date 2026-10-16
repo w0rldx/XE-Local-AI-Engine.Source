@@ -18,7 +18,9 @@ vi.mock("@/core/layout/components/DesktopNavigationBar/DesktopNavigationBar", ()
 vi.mock("@/features/chat/components/ChatConnectionStatusChip", () => ({ ChatConnectionStatusChip: () => null }));
 vi.mock("@/features/model-fit/components/CpuFallbackBanner", () => ({ CpuFallbackBanner: () => null }));
 vi.mock("@/features/node-settings/components/LlamaCppUpdateBanner", () => ({ LlamaCppUpdateBanner: () => null }));
-vi.mock("@/features/node-settings/components/RuntimeAcquisitionBanner", () => ({ RuntimeAcquisitionBanner: () => null }));
+vi.mock("@/features/node-settings/components/RuntimeAcquisitionBanner", () => ({
+	RuntimeAcquisitionBanner: () => <div data-testid="runtime-acquisition-banner-mount" />,
+}));
 // The page-crash fallback reads stored snapshots and node info; neither matters for where it renders.
 vi.mock("@/features/diagnostics/UseSnapshots", () => ({ useSnapshots: () => ({ data: [] }) }));
 vi.mock("@/features/diagnostics/queries/useNodeInfo", () => ({ useNodeInfo: () => ({ data: undefined }) }));
@@ -59,6 +61,16 @@ describe("Layout", () => {
 		// The scroll container moved onto <main>; losing these would silently break page scrolling.
 		expect(main.className).toContain("overflow-y-auto");
 		expect(main.className).toContain("min-h-0");
+	});
+
+	// R1-01: a chat send can start the runtime download, so the banner lives in the shell above every page, Chat included.
+	it("mounts the runtime acquisition banner above the routed page on the chat route", async () => {
+		renderWithProviders(<Layout />, { route: "/chat" });
+
+		const main = await screen.findByRole("main");
+		const banner = screen.getByTestId("runtime-acquisition-banner-mount");
+		expect(main.contains(banner)).toBe(false);
+		expect(banner.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 	});
 
 	// Without a boundary inside the shell, the root route's error component replaced the navigation too, and on the

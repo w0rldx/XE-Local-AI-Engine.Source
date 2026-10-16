@@ -1436,7 +1436,7 @@ XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorBenchmarkReceiptTests.c
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorBenchmarkReceiptTests.cs|summary|2
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorCrashAndSurfaceTests.cs|run|2
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorCrashAndSurfaceTests.cs|summary|1
-XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorEvictionTests.cs|run|3
+XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorEvictionTests.cs|run|2
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorEvictionTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorGateScopeTests.cs|block|1
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorGateScopeTests.cs|remarks|1

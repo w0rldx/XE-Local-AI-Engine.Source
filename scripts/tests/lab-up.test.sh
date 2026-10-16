@@ -647,7 +647,7 @@ echo "== 10. lab-api.sh =="
 API_ENV=("${TEST_ENV[@]}")
 echo "tok-old-opaque" >"${LAB}/token"
 rm -f "${CTL}/calls.log" "${CTL}/curl.log"
-ctl curl-queue "401\t{\"error\":\"expired\"}\n200\t{\"ok\":true,\"accessToken\":\"leak-me\"}\n"
+ctl curl-queue "401\t{\"error\":\"expired\"}\n200\t{\"ok\":true,\"accessToken\":\"leak-me\",\"key\":\"xemcp_key-leak\",\"privateKey\":\"pk-leak\",\"pem\":\"-----BEGIN PRIVATE KEY-----pem-leak\",\"mcp\":{\"apiKey\":{\"prefix\":\"p\"},\"key\":\"mcp-shape-leak\"},\"setting\":{\"key\":\"keep-generic-key\"},\"integration\":{\"secret_value\":\"xeint_int-leak\"},\"proxy\":[\"xeprx_prx-leak\"]}\n"
 out="$("${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test POST chat/conversations \
   "{\"password\":\"${PASSWORD}\",\"title\":\"t\"}" 2>&1)"; status=$?
 check "401 then 200 exits 0" "0" "${status}"
@@ -665,6 +665,14 @@ check_contains "http.log logs a non-empty response body" '"ok": true' "${HTTP_LO
 check_contains "http.log has the redacted password field" '"password": "(redacted)"' "${HTTP_LOG}"
 check_absent "http.log never holds the password" "${PASSWORD}" "${HTTP_LOG}"
 check_absent "http.log never holds a response token" "leak-me" "${HTTP_LOG}"
+# An inbound MCP key create answers the plaintext key once, under "key".
+check_absent "http.log never holds a created key" "xemcp_key-leak" "${HTTP_LOG}"
+check_absent "http.log never holds a private key" "pk-leak" "${HTTP_LOG}"
+check_absent "http.log never holds a PEM block" "pem-leak" "${HTTP_LOG}"
+check_absent "http.log never holds the key of an MCP key response" "mcp-shape-leak" "${HTTP_LOG}"
+check_contains "http.log keeps a generic key field" "keep-generic-key" "${HTTP_LOG}"
+check_absent "http.log never holds an integration key" "int-leak" "${HTTP_LOG}"
+check_absent "http.log never holds a proxy key" "prx-leak" "${HTTP_LOG}"
 check_absent "http.log never holds the bearer token" "tok-1-opaque" "${HTTP_LOG}"
 check "every curl call is bounded (connect 10, max 120)" "2" "$(grep -c ' ct=10 mt=120$' "${CTL}/curl.log")"
 check "the 401 retry keeps the first call's max-time" "1" "$(grep -c 'tok-1-opaque ct=10 mt=120$' "${CTL}/curl.log")"

@@ -860,6 +860,8 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
             var judged = verdicts.ToDictionary(static verdict => verdict.NodeRunId);
             var reconciled = new List<GraphWorkflowReconciledNodeRun>(stranded.Count);
             var repairs = new List<NodeRunRepair>();
+            var startedBefore = new Dictionary<Guid, long?>();
+            var invocationBefore = new Dictionary<Guid, Guid?>();
             foreach (var nodeRun in stranded)
             {
                 if (!runs.TryGetValue(nodeRun.RunId, out var run))
@@ -891,6 +893,8 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
 
                 // Re-dispatchable means clean: a row sitting at Pending must not carry a terminal reason, or a reader
                 // takes "the engine restarted" for this attempt's outcome. The reason is on the node.interrupted event.
+                startedBefore[nodeRun.Id] = nodeRun.StartedAtUtc;
+                invocationBefore[nodeRun.Id] = nodeRun.InvocationId;
                 ResetToPending(nodeRun);
                 _ = AddEvent(run, GraphWorkflowEventTypes.NodeInterrupted, nodeRun.NodeKey, ReasonDetail(sanitizedReason));
                 run.Version++;
@@ -911,6 +915,13 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
                 }
 
                 run.Version++;
+            }
+
+            // The reset clears the start and invocation for a re-dispatch; a row its repair settled instead keeps those of the attempt the restart cut short.
+            foreach (var nodeRun in stranded.Where(row => IsTerminal(row.Status) && startedBefore.ContainsKey(row.Id)))
+            {
+                nodeRun.StartedAtUtc = startedBefore[nodeRun.Id];
+                nodeRun.InvocationId ??= invocationBefore[nodeRun.Id];
             }
 
             _ = await _dbContext.SaveChangesAsync(cancellationToken);

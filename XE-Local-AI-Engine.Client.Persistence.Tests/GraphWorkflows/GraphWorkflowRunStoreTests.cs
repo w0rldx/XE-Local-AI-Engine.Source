@@ -293,7 +293,15 @@ public sealed class GraphWorkflowRunStoreTests
         var store = GraphWorkflowTestFixture.StoreFor(context);
         var run = await StartAsync(store, GraphWorkflowTestFixture.FourNodeGraph, ["queued", "running", "waiting", "pending"]);
         await MoveAsync(store, run.Id, "queued", GraphWorkflowNodeRunStatus.Queued);
-        await MoveAsync(store, run.Id, "running", GraphWorkflowNodeRunStatus.Running);
+        var invocationId = Guid.NewGuid();
+        _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = (await store.GetNodeRunAsync(run.Id, "running")).Id,
+            ExpectedVersion = GraphWorkflowVersions.Any,
+            TargetStatus = GraphWorkflowNodeRunStatus.Running,
+            InvocationId = invocationId
+        });
         await MoveAsync(store, run.Id, "waiting", GraphWorkflowNodeRunStatus.Running);
         await MoveAsync(store, run.Id, "waiting", GraphWorkflowNodeRunStatus.WaitingForApproval);
 
@@ -340,6 +348,10 @@ public sealed class GraphWorkflowRunStoreTests
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, failed.Status, "the verdict is applied in the same commit as the collapse it repairs.");
         AssertEx.Equal(GraphWorkflowFailureClass.Interrupted, failed.FailureClass);
         AssertEx.Equal(expected: 1, failed.Attempt, "an interruption costs no attempt: the retry stage decides that later.");
+        AssertEx.True(running.StartedAtUtc.HasValue, "the Running move stamps the start this test expects to survive.");
+        AssertEx.Equal(running.StartedAtUtc, failed.StartedAtUtc, "a row the restart cut short keeps the start of that attempt, or the run view has no start and no duration.");
+        AssertEx.Null((await store.GetNodeRunAsync(run.Id, "queued")).StartedAtUtc, "a row collapsed for re-dispatch starts clean.");
+        AssertEx.Equal(invocationId, failed.InvocationId, "and the invocation that was in flight, so the settled row still points at it.");
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.WaitingForApproval,
             (await store.GetNodeRunAsync(run.Id, "waiting")).Status,
@@ -372,6 +384,7 @@ public sealed class GraphWorkflowRunStoreTests
 
         var settled = await store.GetNodeRunAsync(run.Id, "start");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, settled.Status);
+        AssertEx.True(settled.StartedAtUtc.HasValue, "a settled row keeps the start of the attempt the restart cut short.");
         AssertEx.Equal(GraphWorkflowFailureClass.Interrupted, settled.FailureClass);
         AssertEx.Equal(expected: 1, settled.Attempt, "costing no attempt, which is the only honest price for a row nobody could judge.");
     }

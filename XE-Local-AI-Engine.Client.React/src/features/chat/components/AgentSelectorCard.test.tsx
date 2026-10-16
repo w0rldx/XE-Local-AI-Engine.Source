@@ -138,6 +138,29 @@ describe("AgentSelectorCard", () => {
 		expect(onSelectAgent).toHaveBeenCalledWith("");
 	});
 
+	it("disables the Default Assistant row on a conversation bound to an agent", async () => {
+		const onSelectAgent = vi.fn();
+		const options = [makeOption({ id: "agent-1", name: "Alpha Agent" })];
+
+		renderWithProviders(
+			<AgentSelectorCard
+				agentOptions={options}
+				agentModeEnabled={true}
+				selectedAgentId="agent-1"
+				defaultOptionDisabled={true}
+				onSelectAgent={onSelectAgent}
+			/>,
+		);
+
+		fireEvent.click(screen.getByTestId("chat-agent-selector-trigger"));
+		const offRow = await screen.findByTestId("chat-agent-selector-option-off");
+		fireEvent.click(offRow);
+
+		expect(onSelectAgent).not.toHaveBeenCalled();
+		expect(offRow.getAttribute("aria-disabled")).toBe("true");
+		expect(screen.getByText("This conversation is bound to its agent; pick another agent instead")).toBeTruthy();
+	});
+
 	it("shows the Orchestrator badge for orchestrator-kind agents", async () => {
 		const options = [makeOption({ id: "orch-1", name: "Orch Agent", kind: "Orchestrator" })];
 

@@ -6,8 +6,11 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.Common;
+using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
+using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 
 /// <summary>The agent lane: one work session per agent node-run attempt, driven by the run that owns it.</summary>
@@ -59,6 +62,10 @@ internal sealed class DevWorkflowAgentExecutor
     /// <summary>How many blocked plan tasks a terminal reason names before it counts the rest.</summary>
     private const int MaxNamedTasks = 3;
 
+    /// <summary>The read-only coder tools, which a node bound to a Development project serves from that project's repository.</summary>
+    internal static readonly string[] RepositoryToolNames =
+        [CoderToolDefinition.ListFilesToolName, CoderToolDefinition.ReadFileToolName, CoderToolDefinition.SearchTextToolName];
+
     private readonly IAgentDefinitionStore _agents;
     private readonly IDevWorkflowArtifactBlobStore _blobs;
     private readonly ILogger<DevWorkflowAgentExecutor> _logger;
@@ -68,6 +75,7 @@ internal sealed class DevWorkflowAgentExecutor
     private readonly IAgentWorkSessionStore _sessionStore;
     private readonly IWorkflowOwnedWorkSessionLifecycle _sessions;
     private readonly WorkSessionWriteDeclarationGuard _writes;
+    private readonly IServiceProvider _services;
 
     public DevWorkflowAgentExecutor(IWorkflowOwnedWorkSessionLifecycle sessions,
         IAgentWorkSessionStore sessionStore,
@@ -77,9 +85,11 @@ internal sealed class DevWorkflowAgentExecutor
         IDevWorkflowArtifactBlobStore blobs,
         DevWorkflowRetryPolicy retries,
         IOptions<DevWorkflowOptions> options,
+        IServiceProvider services,
         ILogger<DevWorkflowAgentExecutor> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
+        _services = services ?? throw new ArgumentNullException(nameof(services));
         _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
         _sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
         _agents = agents ?? throw new ArgumentNullException(nameof(agents));
@@ -151,9 +161,14 @@ internal sealed class DevWorkflowAgentExecutor
         }
 
         WorkSessionDetail session;
+        WorkSessionRuntimeOverride? runtime;
         try
         {
-            session = await ResolveSessionAsync(store, graph, run, node, nodeRun, cancellationToken);
+            // The repository is resolved ONCE per admission, before a new session exists, so a node that cannot serve its reads blocks without one to release.
+            var attached = await TryReadAttachedAsync(nodeRun, cancellationToken);
+            var agentDefinitionId = attached?.AgentDefinitionId ?? await ResolveAgentAsync(node, cancellationToken);
+            runtime = RuntimeOf(graph, node, await RepositoryRootAsync(nodeRun, agentDefinitionId, cancellationToken));
+            session = attached ?? await CreateSessionAsync(store, graph, run, node, nodeRun, agentDefinitionId, cancellationToken);
         }
         catch (WorkSessionValidationException exception)
         {
@@ -172,7 +187,7 @@ internal sealed class DevWorkflowAgentExecutor
             return written + await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.Policy, exception.Message, cancellationToken);
         }
 
-        if (!await TryDriveAsync(session, graph, node, cancellationToken))
+        if (!await TryDriveAsync(session, runtime, cancellationToken))
         {
             // Lost the admission race between the capacity read and the start. The row stays Queued with its reason and keeps the session it owns, so the next tick starts that one.
             return written;
@@ -307,7 +322,7 @@ internal sealed class DevWorkflowAgentExecutor
     }
 
     /// <summary>
-    ///     The session this attempt owns: the one already attached if it can still be driven, otherwise a fresh one.
+    ///     A fresh session for this attempt, attached to its node run; the caller reuses one already attached if it can still be driven.
     /// </summary>
     /// <remarks>
     ///     A retry always gets a NEW session — resuming the one that just failed resumes its poisoned context — but a
@@ -315,19 +330,14 @@ internal sealed class DevWorkflowAgentExecutor
     ///     attach and the start, or a pause, and reusing it keeps a restart from stranding a conversation nobody will
     ///     ever drive.
     /// </remarks>
-    private async Task<WorkSessionDetail> ResolveSessionAsync(IDevWorkflowStore store,
+    private async Task<WorkSessionDetail> CreateSessionAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
         DevWorkflowGraphNode node,
         DevWorkflowNodeRunSnapshot nodeRun,
+        Guid agentDefinitionId,
         CancellationToken cancellationToken)
     {
-        if (await TryReadAttachedAsync(nodeRun, cancellationToken) is { } existing)
-        {
-            return existing;
-        }
-
-        var agentDefinitionId = await ResolveAgentAsync(node, cancellationToken);
         await EnsureDeclaredWhatItCanWriteAsync(graph, node, agentDefinitionId, cancellationToken);
         var objective = await ComposeObjectiveAsync(store, graph, run, node, nodeRun, cancellationToken);
         var created = await _sessions.CreateAsync(node.Label, objective, agentDefinitionId, RuntimeOf(graph, node), cancellationToken);
@@ -391,11 +401,10 @@ internal sealed class DevWorkflowAgentExecutor
     ///     back. The run's pinned graph is the durable copy, which is also why a definition edited mid-run cannot
     ///     change what a running node dispatches on.
     /// </remarks>
-    private async Task<bool> TryDriveAsync(WorkSessionDetail session, DevWorkflowGraph graph, DevWorkflowGraphNode? node, CancellationToken cancellationToken)
+    private async Task<bool> TryDriveAsync(WorkSessionDetail session, WorkSessionRuntimeOverride? runtime, CancellationToken cancellationToken)
     {
         try
         {
-            var runtime = RuntimeOf(graph, node);
             _ = session.Status switch
             {
                 AgentWorkSessionStatus.Draft => await _sessions.StartAsync(session.Id, runtime, cancellationToken),
@@ -423,13 +432,14 @@ internal sealed class DevWorkflowAgentExecutor
     ///     resume, which makes the refusal flag the right place for <c>GRAPH-C4-2</c>'s per-turn half: it is read off
     ///     the run's PINNED graph each time, so nothing edited mid-run can widen what a running session is offered.
     /// </remarks>
-    private static WorkSessionRuntimeOverride? RuntimeOf(DevWorkflowGraph graph, DevWorkflowGraphNode? node)
+    private static WorkSessionRuntimeOverride? RuntimeOf(DevWorkflowGraph graph, DevWorkflowGraphNode? node, string? repositoryRoot = null)
     {
         var runtime = new WorkSessionRuntimeOverride
         {
             ModelProfile = node?.ModelProfile,
             ReasoningEffort = node?.ReasoningEffort,
-            RefuseUndeclaredWrites = DeclarationRequired(graph, node)
+            RefuseUndeclaredWrites = DeclarationRequired(graph, node),
+            RepositoryRoot = repositoryRoot
         };
         return runtime.IsEmpty ? null : runtime;
     }
@@ -470,6 +480,47 @@ internal sealed class DevWorkflowAgentExecutor
         node is { NodeType: DevWorkflowNodeType.Agent }
         && !graph.AllowUngatedWrites
         && !DevWorkflowGraph.Effects(node).Contains(DevWorkflowNodeEffect.WriteExecute);
+
+    /// <summary>
+    ///     The repository root this node's coder reads serve, when its agent is offered them; null when it is not.
+    /// </summary>
+    /// <remarks>
+    ///     Refused rather than left to the session when the reads would have nothing to serve: the agent would search an empty workspace,
+    ///     declare its objective unmet, and a Retry would end the same way. The refusal names the tools and what each answer does.
+    /// </remarks>
+    private async Task<string?> RepositoryRootAsync(DevWorkflowNodeRunSnapshot nodeRun, Guid agentDefinitionId, CancellationToken cancellationToken)
+    {
+        if (await _agents.GetByIdAsync(agentDefinitionId, cancellationToken) is not { } agent
+            || !agent.AllowedToolNames.Any(name => RepositoryToolNames.Contains(name, StringComparer.Ordinal)))
+        {
+            return null;
+        }
+
+        if (nodeRun.DevelopmentProjectId is not { } projectId)
+        {
+            throw new DevWorkflowValidationException(MissingRepository(nodeRun.NodeKey, "this run's work item names no Development project"));
+        }
+
+        if (_services.GetService<IDevelopmentRepositoryBindingService>() is not { } bindings)
+        {
+            throw new DevWorkflowValidationException(MissingRepository(nodeRun.NodeKey, "Development Mode is off on this node"));
+        }
+
+        try
+        {
+            return (await bindings.ResolveProjectAsync(projectId, cancellationToken)).RepositoryRoot;
+        }
+        catch (Exception exception) when (exception is DevelopmentWorkspaceSecurityException or DevelopmentNotFoundException or SelectedFolderValidationException
+                                              or IOException or UnauthorizedAccessException)
+        {
+            // Never the exception's own text: a binding failure can name the host path, and this sentence is shown to whoever reads the run.
+            throw new DevWorkflowValidationException(MissingRepository(nodeRun.NodeKey, "its Development project's repository cannot be resolved (reconnect it on the Development page)"), exception);
+        }
+    }
+
+    private static string MissingRepository(string nodeKey, string why) =>
+        $"Agent node '{nodeKey}' runs an agent that reads the repository with {string.Join(", ", RepositoryToolNames)}, and {why}. "
+        + "Retry ends the same way until that is fixed; Skip ends this node without its output, which skips every node that depends on it.";
 
     private async Task<Guid> ResolveAgentAsync(DevWorkflowGraphNode node, CancellationToken cancellationToken)
     {
@@ -845,7 +896,24 @@ internal sealed class DevWorkflowAgentExecutor
                 cancellationToken);
         }
 
-        if (!_sessions.HasCapacity || !await TryDriveAsync(session, graph, node, cancellationToken))
+        if (!_sessions.HasCapacity)
+        {
+            // The slot is held by another session; asked before the repository, so a row waiting its turn does not re-resolve it every tick.
+            return 0;
+        }
+
+        WorkSessionRuntimeOverride? runtime;
+        try
+        {
+            runtime = RuntimeOf(graph, node, await RepositoryRootAsync(nodeRun, session.AgentDefinitionId, cancellationToken));
+        }
+        catch (DevWorkflowValidationException exception)
+        {
+            // The repository went away mid-run: a resume would read nothing, and a retry answers the same until a person reconnects it.
+            return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.Configuration, exception.Message, cancellationToken);
+        }
+
+        if (!await TryDriveAsync(session, runtime, cancellationToken))
         {
             // The slot is held by another session. The row stays Running — it has not stopped working, it waits for its own continuation — and the next tick asks again.
             return 0;

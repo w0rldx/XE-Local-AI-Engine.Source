@@ -78,6 +78,19 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<Guid>> ListForeignAttachmentIdsAsync(Guid conversationId, IReadOnlyList<Guid>? requestedFileIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (requestedFileIds is not { Count: > 0 })
+        {
+            return [];
+        }
+
+        var owned = (await _uploadedFileStore.ListAsync(conversationId, cancellationToken)).Select(static file => file.FileId).ToHashSet();
+        return [.. requestedFileIds.Distinct().Where(fileId => !owned.Contains(fileId))];
+    }
+
+    /// <inheritdoc />
     public async Task<ConversationMessageDto?> BuildAttachmentContextAsync(Guid conversationId,
         IReadOnlyList<Guid>? attachmentFileIds,
         CancellationToken cancellationToken = default)

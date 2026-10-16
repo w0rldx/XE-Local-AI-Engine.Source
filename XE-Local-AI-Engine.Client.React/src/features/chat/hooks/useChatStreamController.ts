@@ -666,7 +666,9 @@ export function useChatStreamController({
 				// Nothing attached ⇒ nothing was resumed, so there is no turn to fail: opening an idle conversation must
 				// never raise a banner. A failure AFTER attaching interrupted a turn the operator can see, so surface it.
 				if (attachedMessageId && !abortController.signal.aborted && !deletedConversationIds.current.has(conversationId)) {
-					setStreamError(errorMessage(error));
+					// The browser's own watchdog says so in words, as on the send path, never as its raw category message.
+					const watchdogNotice = error instanceof StreamWatchdogError ? streamWatchdogNotice(error.category) : undefined;
+					setStreamError(watchdogNotice ? t(watchdogNotice.key, watchdogNotice.fallback) : errorMessage(error));
 				}
 			} finally {
 				// Only the attached path owns state to release; the idle path must leave everything untouched.
@@ -681,7 +683,7 @@ export function useChatStreamController({
 				}
 			}
 		},
-		[onVoiceAnswerProgress, queryClient, refreshConversation, setStreamError, streamScheduler],
+		[onVoiceAnswerProgress, queryClient, refreshConversation, setStreamError, streamScheduler, t],
 	);
 
 	// Read through a ref so the effect below can key on the conversation alone (mirrors useStreamCommitScheduler's

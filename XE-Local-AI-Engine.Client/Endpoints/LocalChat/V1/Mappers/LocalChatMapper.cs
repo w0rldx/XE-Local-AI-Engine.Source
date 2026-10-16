@@ -21,6 +21,7 @@ internal static class LocalChatMapper
             Archived = conversation.Archived,
             BranchOfConversationId = conversation.BranchOfConversationId,
             SelectedPath = conversation.SelectedPath,
+            AgentDefinitionId = conversation.AgentDefinitionId,
             MemoryExcluded = conversation.MemoryExcluded,
             Messages = conversation.Messages.Select(static message => message.ToResponse()).ToArray()
         };

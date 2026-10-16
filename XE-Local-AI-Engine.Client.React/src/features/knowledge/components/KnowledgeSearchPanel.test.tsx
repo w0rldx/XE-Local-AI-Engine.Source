@@ -54,9 +54,13 @@ function hit(overrides: Partial<KnowledgeSearchHit> = {}): KnowledgeSearchHit {
 	};
 }
 
-function searchBag(results: readonly KnowledgeSearchHit[]): UseKnowledgeSearchResult {
+function searchBag(
+	results: readonly KnowledgeSearchHit[],
+	degradations: UseKnowledgeSearchResult["degradations"] = [],
+): UseKnowledgeSearchResult {
 	return {
 		results,
+		degradations,
 		isSearching: false,
 		error: undefined,
 		hasSearched: true,
@@ -196,5 +200,38 @@ describe("KnowledgeSearchPanel hit title", () => {
 		const titles = screen.getAllByTestId("knowledge-search-hit-title");
 		expect(titles).toHaveLength(2);
 		expect(titles.map((title) => title.textContent)).toEqual(["12-security-and-privacy.md", "12-security-and-privacy.md"]);
+	});
+});
+
+describe("KnowledgeSearchPanel degradation notice", () => {
+	beforeEach(() => {
+		stubMatchMedia();
+	});
+
+	afterEach(() => {
+		cleanup();
+	});
+
+	it("names a cold reranker instead of serving fusion order silently", () => {
+		renderWithProviders(<KnowledgeSearchPanel documents={[]} search={searchBag([hit()], ["RerankerUnavailable"])} />);
+
+		expect(screen.getByTestId("knowledge-search-degradation-RerankerUnavailable").textContent).toContain(
+			"The reranker is not ready yet",
+		);
+		expect(screen.queryByTestId("knowledge-search-degradation-LexicalOnly")).toBeNull();
+	});
+
+	it("skips a degradation value it has no notice for instead of throwing", () => {
+		const unknown = "SomethingNewer" as UseKnowledgeSearchResult["degradations"][number];
+		renderWithProviders(<KnowledgeSearchPanel documents={[]} search={searchBag([hit()], [unknown, "LexicalOnly"])} />);
+
+		expect(screen.queryByTestId("knowledge-search-degradation-SomethingNewer")).toBeNull();
+		expect(screen.getByTestId("knowledge-search-degradation-LexicalOnly")).toBeTruthy();
+	});
+
+	it("shows no notice when the full pipeline ran", () => {
+		renderWithProviders(<KnowledgeSearchPanel documents={[]} search={searchBag([hit()])} />);
+
+		expect(screen.queryByTestId(/knowledge-search-degradation-/)).toBeNull();
 	});
 });

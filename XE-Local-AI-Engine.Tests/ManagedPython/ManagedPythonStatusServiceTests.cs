@@ -215,7 +215,7 @@ public sealed class ManagedPythonStatusServiceTests : IDisposable
         var remove = await service.RemoveComputeAsync(CancellationToken.None);
 
         AssertEx.Equal(ManagedPythonEnvironmentState.Unsupported, row.State);
-        AssertEx.Contains(row.Reason, "Compute:Enabled=false");
+        AssertEx.Contains(row.Reason, "Turn on Compute tools in Node Settings");
         AssertEx.Equal(ManagedPythonReasonCode.ComputeDisabled, row.ReasonCode);
         AssertEx.Equal(ManagedPythonActionOutcome.Unsupported, repair.Outcome);
         AssertEx.Equal(ManagedPythonActionOutcome.Unsupported, remove.Outcome);

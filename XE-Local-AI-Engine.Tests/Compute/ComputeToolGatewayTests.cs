@@ -502,6 +502,57 @@ public sealed class ComputeToolGatewayTests
         AssertEx.Equal(ToolFailureText.TimeoutCode, ToolFailureText.TryGetCode(rendered), "a timed-out run must be logged as a timeout");
     }
 
+    /// <summary>R7-06: a 2 GiB write came back as a bare exit 137 or 143 with no reason.</summary>
+    [Test]
+    [Arguments(137)]
+    [Arguments(143)]
+    public async Task ExecuteAsync_WhenTheSandboxKillsTheScript_NamesTheDiskOrMemoryLimit(int exitCode)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Skip.Test("Exit 137 is the POSIX SIGKILL convention; the Windows boundary reports kills differently.");
+        }
+
+        var provider = new RecordingSandboxProvider(Contained)
+        {
+            Result = Completed(exitCode, standardOutput: string.Empty, standardError: string.Empty)
+        };
+        var gateway = CreateGateway(provider);
+
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "open('big.bin','wb').write(b'0' * (1 << 31))"
+        });
+
+        AssertEx.Equal("resource_limit", ToolFailureText.TryGetCode(rendered));
+        AssertEx.Contains(rendered, "most likely at its disk or memory limit");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenTheDiskCeilingStopsTheScript_SaysDiskLimitNotTimeout()
+    {
+        var provider = new RecordingSandboxProvider(Contained)
+        {
+            Result = new SandboxCommandResult
+            {
+                ExecutionId = "x",
+                ExitCode = -1,
+                Completed = false,
+                StandardError = "Command exceeded the sandbox jail disk ceiling of 10 bytes and was terminated."
+            }
+        };
+        var gateway = CreateGateway(provider);
+
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "x"
+        });
+
+        AssertEx.Equal("resource_limit", ToolFailureText.TryGetCode(rendered));
+        AssertEx.Contains(rendered, "exceeded the sandbox disk limit");
+        AssertEx.False(rendered.Contains("did not finish within", StringComparison.Ordinal), "A disk-ceiling stop is not a timeout.");
+    }
+
     [Test]
     public async Task ExecuteAsync_WhenTheScriptExitsNonZero_IsStillAResultRatherThanAToolFailure()
     {
@@ -954,7 +1005,7 @@ public sealed class ComputeToolGatewayTests
 
         AssertEx.False(outcome.Ran, "a disabled node must not execute anything");
         AssertEx.Equal(ComputeRefusalCodes.ComputeDisabled, outcome.RefusalCode);
-        AssertEx.Contains(AssertEx.NotNull(outcome.RefusalMessage), "Compute:Enabled=false");
+        AssertEx.Contains(AssertEx.NotNull(outcome.RefusalMessage), "Turn on Compute tools in Node Settings");
         AssertEx.False(environment.Requested, "a disabled node must not provision an interpreter");
         AssertEx.Null(provider.CreateRequest, "and must not create a jail");
     }
@@ -1095,7 +1146,7 @@ public sealed class ComputeToolGatewayTests
         // path and then drifting — which is the whole finding this boundary answers. Asserted against the source
         // rather than against behaviour: a duplicate read is invisible at runtime until the two disagree.
         //
-        // The allow-list is exactly two entries and both are stated. Anything else appearing here is a decision, not a
+        // The allow-list is short and every entry states why it is not an execution gate. Anything else appearing here is a decision, not a
         // tidy-up: it means some other code decided for itself whether this node may execute Python.
         var allowed = new HashSet<string>(StringComparer.Ordinal)
         {
@@ -1110,7 +1161,12 @@ public sealed class ComputeToolGatewayTests
             Path.Combine("Services", "AgentHome", "Implementation", "AgentHomeService.cs"),
             // Not an execution gate: the Managed Python status reports a disabled node as Unsupported and refuses to
             // repair or remove its venv. Nothing it does runs a script; the gateway still decides that.
-            Path.Combine("Services", "ManagedPython", "ManagedPythonStatusService.cs")
+            Path.Combine("Services", "ManagedPython", "ManagedPythonStatusService.cs"),
+            // Not an execution gate: it withholds run_python from the model's offer while the switch is off, as the web
+            // and custom-tool switches withhold theirs (R4-05). A call that still arrives is refused by the gateway.
+            Path.Combine("Services", "Chat", "Implementation", "LocalToolOfferProvider.cs"),
+            // Not an execution gate: it flags a listed run_python withheld by the switch, for the turn notice.
+            Path.Combine("Services", "Agents", "Implementation", "AgentDefinitionResolver.cs")
         };
         var application = Path.Combine(RepositoryPaths.Root, "XE-Local-AI-Engine.Client.Application");
         var readers = new List<string>();

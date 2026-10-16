@@ -37,8 +37,11 @@ internal sealed class GraphWorkflowRunConfiguration : IEntityTypeConfiguration<G
         builder.Property(entity => entity.TriggerMessageId).HasColumnName("trigger_message_id");
 
         // Plaintext origin, an int like every [Flags] enum here; a run saved before the column reads as Manual. The
-        // principal and key prefix are audit metadata, bounded like the integration execution's prefix.
-        builder.Property(entity => entity.TriggerSource).HasColumnName("trigger_source").HasDefaultValue(GraphWorkflowTriggerSource.Manual);
+        // principal and key prefix are audit metadata, bounded like the integration execution's prefix. Sentinel = default, so 0 is never read as Manual.
+        builder.Property(entity => entity.TriggerSource)
+               .HasColumnName("trigger_source")
+               .HasDefaultValue(GraphWorkflowTriggerSource.Manual)
+               .HasSentinel(GraphWorkflowTriggerSource.Manual);
         builder.Property(entity => entity.PrincipalId).HasColumnName("principal_id");
         builder.Property(entity => entity.KeyPrefix).HasColumnName("key_prefix").HasMaxLength(32);
 

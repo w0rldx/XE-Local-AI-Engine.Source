@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorkSessionPlanPanel, type WorkSessionPlanPanelProps } from "@/features/workSessions/components/WorkSessionPlanPanel";
 import {
 	isObjectiveNotMet,
+	latestPauseReason,
 	type WorkSessionEventResponse,
 	type WorkSessionStatus,
 	type WorkSessionTaskResponse,
@@ -72,6 +73,31 @@ describe("WorkSessionPlanPanel", () => {
 		expect(rendered.indexOf("first child")).toBeLessThan(rendered.indexOf("second child"));
 		expect(screen.getByTestId("work-session-task-child-a").getAttribute("data-current")).toBe("true");
 		expect(screen.getByTestId("work-session-task-child-b").getAttribute("data-current")).toBeNull();
+	});
+
+	it("says a host stop paused the session, not the operator (R5-04)", () => {
+		const paused = (sequence: number, reason: string): WorkSessionEventResponse => ({
+			id: `e${sequence}`,
+			sequence,
+			step: 0,
+			eventType: "SessionStatusChanged",
+			// Byte for byte what GET work-sessions/{id}/events returns: the store serializes with default (PascalCase) options.
+			detailJson: `{"Reason":"${reason}"}`,
+			outcome: "Paused",
+			occurredAtUtc: 0,
+			operationId: null,
+		});
+		const reason = latestPauseReason([
+			paused(9, "The node stopped while the session was running."),
+			paused(4, "The operator paused the work session."),
+		]);
+		expect(reason).toBe("The node stopped while the session was running.");
+
+		render({ status: "Paused", pauseReason: reason });
+		expect(screen.getByTestId("work-session-pause-reason").textContent).toBe(en.pages.workSessions.plan.pauseReasons.nodeStopped);
+		cleanup();
+		render({ status: "Running", pauseReason: reason });
+		expect(screen.queryByTestId("work-session-pause-reason")).toBeNull();
 	});
 
 	it("says when a completed session did not meet its objective (F-29)", () => {

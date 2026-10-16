@@ -56,7 +56,8 @@ internal static class ImageMapper
             Width = view.Width,
             Height = view.Height,
             Steps = view.Steps,
-            Sampler = view.Sampler,
+            // No stored sampler (an unclassified model, or a job from before the effective sampler was stored) means sd-server chose.
+            Sampler = string.IsNullOrEmpty(view.Sampler) ? null : view.Sampler,
             CfgScale = view.CfgScale,
             Status = view.Status.ToString(),
             CreatedAtUtc = view.CreatedAtUtc,

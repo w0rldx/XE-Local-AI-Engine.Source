@@ -22,5 +22,6 @@ public interface INodeChatInvocationPump
 
     Task<NodeChatPumpTerminalResult> TerminalizeInterruptedAsync(NodeChatMessageCorrelation correlation,
         NodeChatPumpCursor cursor,
-        bool wasCancelled);
+        bool wasCancelled,
+        string? requestedModel = null);
 }

@@ -106,6 +106,54 @@ export function getInvocationStatusColor(status: InvocationStatusDto | undefined
 	}
 }
 
+// A turn stopped at its provider-call budget ends Failed on the wire, but the bound is designed, so it is not shown as a failure.
+function isCallBudgetStop(run: { status: InvocationStatusDto; failureCategory?: InvocationFailureCategoryDto }): boolean {
+	return run.status === "Failed" && run.failureCategory === "CallBudgetReached";
+}
+
+export function getInvocationStatusBadge(
+	run: { status: InvocationStatusDto; failureCategory?: InvocationFailureCategoryDto },
+	t: TFunction,
+): { label: string; color: ReturnType<typeof getInvocationStatusColor> } {
+	if (isCallBudgetStop(run)) {
+		return { label: t("pages.invocations.monitor.status.callBudgetReached", "Stopped at call budget"), color: "yellow" };
+	}
+	return { label: invocationStatusLabel(run.status, t), color: getInvocationStatusColor(run.status) };
+}
+
+function invocationStatusLabel(status: InvocationStatusDto, t: TFunction): string {
+	switch (status) {
+		case "Pending":
+			return t("pages.invocations.monitor.status.pending", "Pending");
+		case "Assigned":
+			return t("pages.invocations.monitor.status.assigned", "Assigned");
+		case "Running":
+			return t("pages.invocations.monitor.status.running", "Running");
+		case "Completed":
+			return t("pages.invocations.monitor.status.completed", "Completed");
+		case "Failed":
+			return t("pages.invocations.monitor.status.failed", "Failed");
+		case "Cancelled":
+			return t("pages.invocations.monitor.status.cancelled", "Cancelled");
+		default:
+			return status;
+	}
+}
+
+// The run's error text, translated from the category for a call-budget stop: the server's fixed sentence is English only.
+export function getInvocationErrorText(
+	run: { status: InvocationStatusDto; error?: string | null; failureCategory?: InvocationFailureCategoryDto },
+	t: TFunction,
+): string | null {
+	if (isCallBudgetStop(run)) {
+		return t(
+			"pages.invocations.monitor.callBudgetReached",
+			"Stopped at the provider-call budget; a work session continues on its next step.",
+		);
+	}
+	return run.error ?? run.failureCategory ?? null;
+}
+
 export function isInvocationActive(status: InvocationStatusDto | undefined): boolean {
 	return status === "Assigned" || status === "Running";
 }
@@ -208,6 +256,17 @@ export function buildInvocationSummary(run: InvocationSummaryInput, t: TFunction
 						{ duration, withModel, chunks, thinking, tools: toolActivityNote(run, t) },
 					);
 		case "Failed": {
+			if (isCallBudgetStop(run)) {
+				return durationMs === null
+					? t("pages.invocations.monitor.summary.callBudgetNoDuration", "Stopped at the provider-call budget{{withModel}}.", {
+							withModel,
+						})
+					: t(
+							"pages.invocations.monitor.summary.callBudget",
+							"Stopped at the provider-call budget after {{duration}}{{withModel}}.",
+							{ duration, withModel },
+						);
+			}
 			// The template ends the sentence itself; a reason that already does would read "details..".
 			const reason = formatInvocationText(run.error ?? run.failureCategory).replace(/\.$/, "");
 			return durationMs === null

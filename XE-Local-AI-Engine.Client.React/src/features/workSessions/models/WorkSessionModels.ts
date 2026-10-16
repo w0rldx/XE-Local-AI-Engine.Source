@@ -144,6 +144,25 @@ export interface StepConsumption {
  * (`complete_work_session {objectiveMet:false}`). The server serializes the detail with default (PascalCase) options;
  * camelCase is accepted too. A missing flag (events recorded before the argument existed) or bad JSON reads as met.
  */
+/** The reason the newest `Paused` status change recorded, or undefined when that row carries none. */
+export function latestPauseReason(events: readonly WorkSessionEventResponse[]): string | undefined {
+	const paused = events
+		.filter((event) => event.eventType === "SessionStatusChanged" && event.outcome === "Paused")
+		.reduce<WorkSessionEventResponse | undefined>(
+			(newest, event) => (newest && newest.sequence > event.sequence ? newest : event),
+			undefined,
+		);
+	if (!paused?.detailJson) {
+		return undefined;
+	}
+	try {
+		const reason = (JSON.parse(paused.detailJson) as Record<string, unknown>)["Reason"];
+		return typeof reason === "string" && reason.length > 0 ? reason : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 export function isObjectiveNotMet(events: readonly WorkSessionEventResponse[]): boolean {
 	// Deliberately reads only the loaded events page; a session past the page size shows no hint until more are loaded.
 	const completion = events

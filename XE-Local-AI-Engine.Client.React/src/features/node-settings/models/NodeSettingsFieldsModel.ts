@@ -1073,7 +1073,6 @@ export function toNodeSettingsFieldBounds(response: NodeSettingsResponse | undef
 //   speculativeMode                 — same seed method
 //   speculativeDraftModelName       — same seed method
 //   speculativeDraftMaxTokens       — same seed method
-//   rerankerModelName               — AddNodeKnowledgeBaseExtensions PostConfigure<KnowledgeBaseOptions>
 //   maxResponseSizeMb               — InvocationRunner ctor (GetMaxResponseSizeMb)
 //   orchestrationIdleTimeoutSeconds — AddNodeModelRuntimeExtensions Configure<OrchestrationAgentOptions>
 //   maxPendingToolCallAgeMinutes    — InvocationRunner ctor. PARTIAL: ToolCallCleanupService sweeps with a live read,
@@ -1108,7 +1107,7 @@ export function toNodeSettingsFieldBounds(response: NodeSettingsResponse | undef
 // (read per sweep) and containerRuntimeSelection (read per call); and the other chat knobs — defaultContextTokens,
 // providerBudget*, contextBudgetRecentTurnKeepCount, compaction*, maxInlinedAttachmentChars, knowledgeChatTopK,
 // providerRetryEnabled / providerMaxRetries and spawn* — each read per turn, job, send or root run; and the knowledge,
-// privacy and usage knobs — knowledgeAdaptiveRerankingEnabled, knowledgeRetrievalLatencyBudgetMs, knowledgeAgentToolsEnabled,
+// privacy and usage knobs — rerankerModelName, knowledgeAdaptiveRerankingEnabled, knowledgeRetrievalLatencyBudgetMs, knowledgeAgentToolsEnabled,
 // allowCloudModelAccess and the four other cloud-model permissions, the three background models, the two retention switches, every retention window,
 // nodeDbBackupRetainCount and benchmarkKldCacheMaxBytes — each read per search, offer, turn, run, sweep or backup; and the
 // other seven feature switches — FeatureSwitchMiddleware and every per-service check read them per request. Three carry
@@ -1129,7 +1128,6 @@ export const restartGatedNodeSettingsFields: ReadonlySet<keyof NodeSettingsField
 	"speculativeMode",
 	"speculativeDraftModelName",
 	"speculativeDraftMaxTokens",
-	"rerankerModelName",
 	"maxResponseSizeMb",
 	"orchestrationIdleTimeoutSeconds",
 	"maxPendingToolCallAgeMinutes",

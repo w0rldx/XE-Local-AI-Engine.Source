@@ -115,7 +115,8 @@ export interface NodeChatStreamEventDto {
 	// Notice fields: present on the `assistant-notice` event only. `noticeKind` is one of "ModelSubstituted" |
 	// "ToolDisabled" | "HistoryTruncated" | "AttachmentsWithheld" | "AttachmentsNotSent" | "PlaybookWithheld" | "ToolsWithheld"
 	// (the client asked for tools on a model that does not declare tool support) | "CloudToolsWithheld" (switch codes in
-	// `noticeDetail`); unknown kinds render via the generic fallback.
+	// `noticeDetail`) | "CpuFallback" (the local model ran on the CPU; the message carries the remediation); unknown kinds
+	// render via the generic fallback.
 	// `noticeMessage` is the sanitized, user-facing sentence to display verbatim. `noticeDetail` is the notice's
 	// optional structured detail beside that prose — a stable machine code or short identifier naming WHY it fired
 	// (the kebab-case dispatch reason for "EffortDispatched", the effective model for the withheld kinds, the file

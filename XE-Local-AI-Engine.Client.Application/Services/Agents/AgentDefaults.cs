@@ -62,4 +62,13 @@ public static class AgentDefaults
 
     /// <summary>The data-row display name of the seeded research work-session definition (not localized).</summary>
     public const string WorkSessionResearchAgentName = "Work Session — Research";
+
+    /// <summary>
+    ///     The forge-proof seed slug of the repository-research work-session persona: the general set plus the three read-only
+    ///     coder tools, which a development-workflow node serves from its work item's Development repository.
+    /// </summary>
+    public const string WorkSessionRepositoryResearchAgentSeedSlug = "work-session-repository-research";
+
+    /// <summary>The data-row display name of the seeded repository-research work-session definition (not localized).</summary>
+    public const string WorkSessionRepositoryResearchAgentName = "Work Session — Repository Research";
 }

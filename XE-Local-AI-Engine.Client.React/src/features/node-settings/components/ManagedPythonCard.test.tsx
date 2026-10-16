@@ -245,7 +245,7 @@ describe("ManagedPythonCard", () => {
 						}),
 						environment("compute", {
 							state: "Unsupported",
-							reason: "The Python compute tool is disabled on this node (Compute:Enabled=false).",
+							reason: "The Python compute tool is turned off on this node. Turn on Compute tools in Node Settings, Features.",
 							reasonCode: "ComputeDisabled",
 							installed: false,
 						}),

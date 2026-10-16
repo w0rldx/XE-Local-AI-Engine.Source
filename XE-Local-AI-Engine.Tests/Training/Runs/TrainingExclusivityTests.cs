@@ -514,6 +514,8 @@ public sealed class TrainingExclusivityTests
 
         public GpuWorkKind? ExclusiveKind => _inner.ExclusiveKind;
 
+        public IReadOnlyList<GpuWorkKind> Holders => _inner.Holders;
+
         public IDisposable? TryBeginExclusive(GpuWorkKind kind) =>
             Record(kind, _inner.TryBeginExclusive(kind));
 

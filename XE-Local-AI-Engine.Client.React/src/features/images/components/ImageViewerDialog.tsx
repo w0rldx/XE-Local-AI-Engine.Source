@@ -170,7 +170,7 @@ export function ImageViewerDialog({ job, opened, onClose, onEdit }: ImageViewerD
 									width: job.width,
 									height: job.height,
 									steps: job.steps,
-									sampler: job.sampler,
+									sampler: job.sampler ?? t("pages.images.job.defaultSampler", "default sampler"),
 									cfgScale: job.cfgScale,
 								},
 							)}

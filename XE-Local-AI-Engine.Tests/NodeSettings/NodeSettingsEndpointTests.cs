@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -187,6 +188,25 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>A misspelt setting name is refused naming it, and nothing is saved, instead of a 200 that saved nothing.</summary>
+    [Test]
+    public async Task SaveNodeSettings_WithAnUnknownProperty_IsRejectedNamingIt()
+    {
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = new StringContent("""{"maxMessageRequestTimeoutSeconds":1700,"notARealSetting":1}""", Encoding.UTF8, "application/json");
+        using var response = await client.SendAsync(request);
+
+        var body = await response.Content.ReadAsStringAsync();
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, body);
+        AssertEx.Contains(body, "The request body has an unknown property: 'notARealSetting'.");
+        AssertEx.False(body.Contains("XE_Local_AI_Engine", StringComparison.Ordinal), $"The 400 must not name the CLR request type: {body}");
         await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
@@ -463,6 +483,8 @@ public sealed class NodeSettingsEndpointTests
     [Arguments("reasoningBudgetHighTokens", "200000", "A reasoning budget must be from", false)]
     [Arguments("chatOutputCapMaxTokens", "1", "The chat output cap ceiling must be from", false)]
     [Arguments("usageRates", "{\"m\":{\"inputPer1M\":-1,\"outputPer1M\":0}}", "Usage rates must have", false)]
+    // A body the serializer cannot convert names the wire path, never the CLR type (R1-05).
+    [Arguments("usageRates.x", "1", "The value of 'usageRates.x' has the wrong JSON type or shape.", false)]
     // Shape checks on the agentic whitelist.
     [Arguments("speculativeMode", "\"bogus\"", "Unknown speculative decoding mode.", true)]
     [Arguments("kvCacheType", "\"bogus\"", "Unknown KV cache type.", true)]
@@ -476,7 +498,9 @@ public sealed class NodeSettingsEndpointTests
     public async Task SaveNodeSettings_BypassTable_RefusesUnderTheWireField(string wireName, string jsonValue, string reasonFragment,
         bool onAgenticWhitelist)
     {
-        var body = $"{{\"{wireName}\":{jsonValue}}}";
+        var body = wireName.Split('.') is [var parent, var child]
+            ? $"{{\"{parent}\":{{\"{child}\":{jsonValue}}}}}"
+            : $"{{\"{wireName}\":{jsonValue}}}";
         var nodeSettingsStore = NewSettingsStore();
         await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
@@ -492,9 +516,10 @@ public sealed class NodeSettingsEndpointTests
         var reason = AssertEx.NotNull(error.GetProperty("reason").GetString());
         AssertEx.Contains(reason, reasonFragment, StringComparison.Ordinal);
         AssertEx.False(reason.Contains(".Value", StringComparison.Ordinal), $"The reason names a nullable's .Value member: {reason}");
+        AssertEx.False(reason.Contains("XE_Local_AI_Engine", StringComparison.Ordinal), $"The reason names a CLR type: {reason}");
         await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
 
-        var patchHasField = typeof(NodeSettingsAgenticPatch).GetProperty(wireName,
+        var patchHasField = typeof(NodeSettingsAgenticPatch).GetProperty(wireName.Split('.')[0],
             BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase) is not null;
         AssertEx.Equal(onAgenticWhitelist, patchHasField);
     }
@@ -2351,24 +2376,25 @@ public sealed class NodeSettingsEndpointTests
     }
 
     [Test]
-    public async Task SaveNodeSettings_WhenTheLastSwitchIsFlippedBackOn_StaysCustom()
+    [Arguments(true, StoredNodeSettings.ExternalAccessProfileRecommended)]
+    [Arguments(false, StoredNodeSettings.ExternalAccessProfileOffline)]
+    public async Task SaveNodeSettings_WhenTheEditedSwitchIsFlippedBack_RestoresThePresetTheTripleMatches(bool presetValue, string preset)
     {
-        // The stamp is UNCONDITIONAL, never re-derived from the resulting triple: a node at "custom" whose owner flips
-        // the third switch back on stays "custom". Re-deriving would silently relabel it "recommended".
+        // R1-05: the triple is exactly a preset again, so the label is that preset, not "custom".
         var settings = await SaveAsync(new StoredNodeSettings
             {
                 ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfileCustom,
-                AutoCheckApplicationUpdates = true,
-                AutoCheckRuntimeUpdates = true,
-                AutoProvisionFirstRunModel = false
+                AutoCheckApplicationUpdates = !presetValue,
+                AutoCheckRuntimeUpdates = presetValue,
+                AutoProvisionFirstRunModel = presetValue
             },
             new SaveNodeSettingsRequest
             {
-                AutoProvisionFirstRunModel = true
+                AutoCheckApplicationUpdates = presetValue
             });
 
-        AssertEx.Equal(StoredNodeSettings.ExternalAccessProfileCustom, settings.ExternalAccessProfile);
-        AssertEx.Equal(expected: true, settings.AutoProvisionFirstRunModel);
+        AssertEx.Equal(preset, settings.ExternalAccessProfile);
+        AssertEx.Equal(presetValue, settings.AutoCheckApplicationUpdates);
     }
 
     [Test]

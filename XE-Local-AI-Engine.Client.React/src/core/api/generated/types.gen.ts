@@ -3191,7 +3191,7 @@ export type XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse = {
 	width: number;
 	height: number;
 	steps: number;
-	sampler: string;
+	sampler: string | null;
 	cfgScale: number;
 	status: string;
 	createdAtUtc: number;
@@ -3697,6 +3697,7 @@ export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentDetailResp
 	displayName: string;
 	status: XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus;
 	failureReason?: string | null;
+	failureReasonCode?: string | null;
 	chunkCount: number;
 	embeddingModel: string;
 	staleModel: boolean;
@@ -3714,6 +3715,7 @@ export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse =
 	displayName: string;
 	status: XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus;
 	failureReason?: string | null;
+	failureReasonCode?: string | null;
 	chunkCount: number;
 	embeddingModel: string;
 	staleModel: boolean;
@@ -3774,6 +3776,7 @@ export type XeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeRequest = {
 
 export type XeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeResponse = {
 	results: Array<XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse>;
+	degradations: Array<XeLocalAiEngineClientServicesKnowledgeKnowledgeSearchDegradation>;
 };
 
 export type XeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentRequest = {
@@ -3974,6 +3977,7 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationRespons
 		[key: string]: string;
 	} | null;
 	memoryExcluded: boolean;
+	agentDefinitionId?: string | null;
 	messages: Array<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse>;
 };
 
@@ -6832,7 +6836,8 @@ export type XeLocalAiEngineClientModelsEnumsFailureCategory =
 	| "ModelNotInstalled"
 	| "ContextWindowExceeded"
 	| "ProviderAuthFailed"
-	| "ProviderRateLimited";
+	| "ProviderRateLimited"
+	| "CallBudgetReached";
 
 export type XeLocalAiEngineClientPersistenceAgentDefinitionKind = "Single" | "Orchestrator";
 
@@ -7028,6 +7033,8 @@ export type XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus =
 	| "Failed";
 
 export type XeLocalAiEngineClientServicesKnowledgeKnowledgeScoreKind = "Fusion" | "Rerank";
+
+export type XeLocalAiEngineClientServicesKnowledgeKnowledgeSearchDegradation = "LexicalOnly" | "RerankerUnavailable";
 
 export type XeLocalAiEngineClientServicesMcpMcpConnectionFailureReason =
 	| "Unknown"
@@ -8868,6 +8875,10 @@ export type DeleteBenchmarkProjectData = {
 
 export type DeleteBenchmarkProjectErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -9552,6 +9563,10 @@ export type RejudgeBenchmarkProjectData = {
 
 export type RejudgeBenchmarkProjectErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -9740,6 +9755,10 @@ export type DeleteBenchmarkRunData = {
 
 export type DeleteBenchmarkRunErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -9810,6 +9829,10 @@ export type CancelBenchmarkRunData = {
 };
 
 export type CancelBenchmarkRunErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -9883,6 +9906,10 @@ export type RejudgeBenchmarkRunData = {
 
 export type RejudgeBenchmarkRunErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -9918,6 +9945,10 @@ export type ClearBenchmarkRunScoreData = {
 };
 
 export type ClearBenchmarkRunScoreErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -10663,6 +10694,7 @@ export type UploadConversationFileErrors = {
 	 */
 	403: unknown;
 	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+	413: MicrosoftAspNetCoreMvcProblemDetails;
 };
 
 export type UploadConversationFileError = UploadConversationFileErrors[keyof UploadConversationFileErrors];
@@ -15488,6 +15520,7 @@ export type UploadImageErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	413: MicrosoftAspNetCoreMvcProblemDetails;
 };
 
 export type UploadImageError = UploadImageErrors[keyof UploadImageErrors];
@@ -16118,7 +16151,10 @@ export type UploadKnowledgeDocumentErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	413: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type UploadKnowledgeDocumentError = UploadKnowledgeDocumentErrors[keyof UploadKnowledgeDocumentErrors];
 
 export type UploadKnowledgeDocumentResponses = {
 	/**
@@ -19194,6 +19230,10 @@ export type DeleteTrainingArtifactData = {
 
 export type DeleteTrainingArtifactErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -19203,6 +19243,8 @@ export type DeleteTrainingArtifactErrors = {
 	403: unknown;
 	409: unknown;
 };
+
+export type DeleteTrainingArtifactError = DeleteTrainingArtifactErrors[keyof DeleteTrainingArtifactErrors];
 
 export type DeleteTrainingArtifactResponses = {
 	/**
@@ -19756,6 +19798,10 @@ export type DeleteComparisonData = {
 
 export type DeleteComparisonErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -19844,6 +19890,10 @@ export type DeleteTrainingDatasetData = {
 
 export type DeleteTrainingDatasetErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -19852,6 +19902,8 @@ export type DeleteTrainingDatasetErrors = {
 	 */
 	403: unknown;
 };
+
+export type DeleteTrainingDatasetError = DeleteTrainingDatasetErrors[keyof DeleteTrainingDatasetErrors];
 
 export type DeleteTrainingDatasetResponses = {
 	/**
@@ -20081,6 +20133,10 @@ export type DeleteTrainingDefinitionData = {
 
 export type DeleteTrainingDefinitionErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -20089,6 +20145,8 @@ export type DeleteTrainingDefinitionErrors = {
 	 */
 	403: unknown;
 };
+
+export type DeleteTrainingDefinitionError = DeleteTrainingDefinitionErrors[keyof DeleteTrainingDefinitionErrors];
 
 export type DeleteTrainingDefinitionResponses = {
 	/**
@@ -20139,6 +20197,10 @@ export type UpdateTrainingDefinitionData = {
 
 export type UpdateTrainingDefinitionErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -20147,6 +20209,8 @@ export type UpdateTrainingDefinitionErrors = {
 	 */
 	403: unknown;
 };
+
+export type UpdateTrainingDefinitionError = UpdateTrainingDefinitionErrors[keyof UpdateTrainingDefinitionErrors];
 
 export type UpdateTrainingDefinitionResponses = {
 	/**
@@ -20168,6 +20232,10 @@ export type GenerateTrainingDatasetData = {
 
 export type GenerateTrainingDatasetErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -20176,6 +20244,8 @@ export type GenerateTrainingDatasetErrors = {
 	 */
 	403: unknown;
 };
+
+export type GenerateTrainingDatasetError = GenerateTrainingDatasetErrors[keyof GenerateTrainingDatasetErrors];
 
 export type GenerateTrainingDatasetResponses = {
 	/**
@@ -20258,6 +20328,10 @@ export type DeleteEvaluationData = {
 };
 
 export type DeleteEvaluationErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -20434,6 +20508,10 @@ export type VerifyToolMockData = {
 
 export type VerifyToolMockErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -20442,6 +20520,8 @@ export type VerifyToolMockErrors = {
 	 */
 	403: unknown;
 };
+
+export type VerifyToolMockError = VerifyToolMockErrors[keyof VerifyToolMockErrors];
 
 export type VerifyToolMockResponses = {
 	/**
@@ -21493,6 +21573,7 @@ export type UploadTranscriptionAudioErrors = {
 	 */
 	404: unknown;
 	409: FastEndpointsProblemDetails;
+	413: MicrosoftAspNetCoreMvcProblemDetails;
 	415: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionUnsupportedContainerResponse;
 };
 

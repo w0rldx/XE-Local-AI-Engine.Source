@@ -568,6 +568,7 @@ public sealed partial class DevWorkflowStore
             var now = Now();
             var reconciled = new List<DevWorkflowReconciledNodeRun>(stranded.Count);
             var repairs = new List<NodeRunRepair>();
+            var startedBefore = new Dictionary<Guid, long?>();
             foreach (var nodeRun in stranded)
             {
                 if (!runs.TryGetValue(nodeRun.RunId, out var run))
@@ -602,6 +603,7 @@ public sealed partial class DevWorkflowStore
 
                 // Re-dispatchable means clean: a row sitting at Pending must not carry a terminal reason, or the UI
                 // reads "the engine restarted" as this attempt's outcome. The reason is on the node.interrupted event.
+                startedBefore[nodeRun.Id] = nodeRun.StartedAtUtc;
                 nodeRun.Status = DevWorkflowNodeRunStatus.Pending;
                 nodeRun.QueueReason = null;
                 nodeRun.QueuedAtUtc = null;
@@ -634,6 +636,12 @@ public sealed partial class DevWorkflowStore
                 _ = AddEvent(run, outcome.EventType, outcome.NodeRunId, outcome.Outcome, command.OperationId, outcome.DetailJson);
                 run.Version++;
                 run.UpdatedAtUtc = now;
+            }
+
+            // The collapse clears the start for a re-dispatch; a row its repair settled or blocked instead keeps the start of the attempt the restart cut short.
+            foreach (var nodeRun in stranded.Where(static row => row.Status == DevWorkflowNodeRunStatus.Blocked || IsTerminal(row.Status)))
+            {
+                nodeRun.StartedAtUtc = startedBefore.GetValueOrDefault(nodeRun.Id, nodeRun.StartedAtUtc);
             }
 
             await _dbContext.SaveChangesAsync(cancellationToken);

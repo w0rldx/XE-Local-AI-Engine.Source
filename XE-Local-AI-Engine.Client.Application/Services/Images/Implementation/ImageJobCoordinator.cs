@@ -24,6 +24,8 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 /// </remarks>
 public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAsyncDisposable
 {
+    private const int MaxEchoedModelNameLength = 120;
+
     // Minimum gap between two pushed step updates for one job, protecting the socket from a fast GPU sampling several steps per second. Milestones — the initial
     // push, every terminal push and every generation-phase transition — bypass it and are never delayed or dropped; only the step counter within a phase is limited.
     private static readonly TimeSpan ProgressPushInterval = TimeSpan.FromSeconds(1);
@@ -108,7 +110,22 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     {
         ArgumentNullException.ThrowIfNull(input);
         ValidateInput(input);
-        await ValidateEditAsync(input, cancellationToken);
+
+        // Refused at create when already absent; a model deleted after this check still fails the job when it runs. The
+        // request validator does not bound the name's length, so the echo is capped.
+        var model = await _modelRegistry.FindAsync(input.ModelName, cancellationToken)
+                    ?? throw new ImageJobInputRejectedException($"The image model '{EchoModelName(input.ModelName)}' is not installed.");
+        await ValidateEditAsync(input, model, cancellationToken);
+
+        // A known family's default is what sd-server runs for an omitted sampler, so the stored job says what ran. An
+        // unclassified model is left to sd-server's own choice and stores no sampler rather than a guessed SD1.5 one.
+        if (string.IsNullOrWhiteSpace(input.Sampler) && model.Family != ImageModelFamily.Unknown)
+        {
+            input = input with
+            {
+                Sampler = ImageFamilyDefaults.For(model.Family).Sampler
+            };
+        }
 
         var jobId = Guid.NewGuid();
         var createdAt = NowUnixMs();
@@ -724,6 +741,8 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         };
     }
 
+    private static string EchoModelName(string modelName) => modelName.Length <= MaxEchoedModelNameLength ? modelName : modelName[..MaxEchoedModelNameLength] + "…";
+
     private static void ValidateInput(CreateImageJobInput input)
     {
         if (string.IsNullOrWhiteSpace(input.ModelName))
@@ -766,19 +785,15 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     ///     Refuses an edit the installed model does not offer, or one whose source image does not exist right now. The
     ///     source is checked again when the job runs, because it can be deleted while the job waits.
     /// </summary>
-    private async Task ValidateEditAsync(CreateImageJobInput input, CancellationToken cancellationToken)
+    private async Task ValidateEditAsync(CreateImageJobInput input, ImageModelRegistryEntry model, CancellationToken cancellationToken)
     {
         if (input is not { EditMode: { } mode, SourceImageId: { } sourceImageId })
         {
             return;
         }
 
-        // A model missing from the registry resolves as Unknown with no parts, which offers img2img only. The parts
-        // matter: a Qwen-Image install offers reference only when it carries the vision tower.
-        var entry = await _modelRegistry.FindAsync(input.ModelName, cancellationToken);
-        var family = entry?.Family ?? ImageModelFamily.Unknown;
-        var roles = entry?.Parts.Select(static p => p.Role) ?? [];
-        if (!ImageFamilyDefaults.EditModesFor(family, roles).Contains(mode))
+        // The parts matter: a Qwen-Image install offers reference only when it carries the vision tower.
+        if (!ImageFamilyDefaults.EditModesFor(model.Family, model.Parts.Select(static p => p.Role)).Contains(mode))
         {
             throw new ImageJobInputRejectedException("The selected model does not support this edit mode.");
         }

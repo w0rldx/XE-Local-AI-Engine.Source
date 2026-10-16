@@ -86,6 +86,7 @@
 			"errorIncorrectPassword": "Falsches Passwort. Bitte erneut versuchen.",
 			"errorLockedOut": "Zu viele fehlgeschlagene Anmeldeversuche. Dieses Konto ist gesperrt. Versuchen Sie es in {{minutes}} Min. erneut.",
 			"errorNodeUnreachable": "Node nicht erreichbar. Prüfen Sie, ob er läuft, und versuchen Sie es erneut.",
+			"errorRateLimited": "Zu viele Anmeldeversuche. Versuchen Sie es in {{seconds}} s erneut.",
 			"passwordLabel": "Passwort",
 			"signInButton": "Anmelden",
 			"subtitle": "Geben Sie das lokale Node-Admin-Passwort ein.",
@@ -156,6 +157,8 @@
 			"title": "Der Assistent braucht Ihre Eingabe"
 		},
 		"notices": {
+			"agentUnavailable": "Agent nicht verfügbar",
+			"agentUnavailableText": "Der Agent dieser Unterhaltung existiert nicht mehr, deshalb hat der Standard-Assistent geantwortet.",
 			"attachmentShortened": "Anhang gekürzt",
 			"attachmentShortenedText": "Die angehängte Datei wurde gekürzt, damit sie in das Kontextfenster dieses Modells passt; das Modell wurde darauf hingewiesen, dass sie unvollständig ist.",
 			"attachmentsNotSent": "Anhänge nicht gesendet",
@@ -164,6 +167,8 @@
 			"attachmentsTruncated": "Anhang abgeschnitten",
 			"attachmentsTruncatedText": "Einige angehängte Dateien waren zu lang für das Anhangslimit, deshalb hat das Modell nur ihren Anfang erhalten.",
 			"cloudToolsWithheld": "Tools für Cloud-Modell zurückgehalten",
+			"computeWithheldText": "run_python wurde nicht angeboten, weil die Rechen-Tools ausgeschaltet sind. Schalte sie in den Node-Einstellungen unter Funktionen ein.",
+			"cpuFallback": "Läuft auf der CPU",
 			"effortDispatched": "Reasoning-Aufwand festgelegt",
 			"emptyAnswer": "Keine Antwort",
 			"historyTruncated": "Verlauf gekürzt",
@@ -174,6 +179,15 @@
 			"outputLimitReached": "Antwort abgeschnitten",
 			"outputLimitReachedText": "Die Antwort wurde an der Längengrenze beendet, bevor das Modell fertig war.",
 			"playbookWithheld": "Playbook zurückgehalten",
+			"queuedBehindBenchmarkText": "Diese Nachricht wartete auf einen laufenden Benchmark.",
+			"queuedBehindEvaluationRunText": "Diese Nachricht wartete auf eine laufende Trainings-Auswertung.",
+			"queuedBehindExportText": "Diese Nachricht wartete auf einen laufenden Modell-Export.",
+			"queuedBehindGpuWork": "Wartet auf GPU-Arbeit",
+			"queuedBehindParkedTurn": "Wartet auf eine andere Unterhaltung",
+			"queuedBehindParkedTurnText": "Diese Nachricht wartet auf eine Freigabe oder eine Frage in einer anderen Unterhaltung. Beantworte sie dort, um fortzufahren.",
+			"queuedBehindTrainingRunText": "Diese Nachricht wartete auf einen laufenden Trainingslauf.",
+			"queuedBehindWorkSession": "Wartet auf eine Arbeitssitzung",
+			"queuedBehindWorkSessionText": "Diese Nachricht wurde hinter einem laufenden Schritt einer Arbeitssitzung eingereiht.",
 			"stoppedWhileThinkingText": "Das Modell hat beim Nachdenken aufgehört, bevor es antworten konnte; seine Gedanken bleiben oben erhalten.",
 			"toolCallAsTextText": "Das Modell hat einen Tool-Aufruf als Text geschrieben, statt das Tool aufzurufen. Der Aufruf wurde daher nicht ausgeführt, und es gibt keine Antwort.",
 			"toolCallInReasoningText": "Das Modell hat versucht, ein Tool innerhalb seiner Überlegungen aufzurufen, wo der Aufruf nicht ausgeführt werden kann, und hat ohne Antwort aufgehört.",
@@ -435,6 +449,7 @@
 			"restoreConfirmTitle": "{{name}} wiederherstellen?",
 			"restoreError": "Der Datenbank-Snapshot konnte nicht wiederhergestellt werden.",
 			"restoreLabel": "{{name}} wiederherstellen",
+			"restoreLocalModeOnly": "Wiederherstellen ist nur verfügbar, wenn der Node im lokalen Modus läuft (Desktop-App). Dieser Node kann keine Wiederherstellung anwenden.",
 			"stopping": "Der Node wird beendet, um den Snapshot wiederherzustellen. Starten Sie die App erneut.",
 			"take": "Snapshot erstellen",
 			"takeError": "Der Datenbank-Snapshot konnte nicht erstellt werden.",
@@ -1916,6 +1931,7 @@
 			"agentSelector": {
 				"hint": "Einen auf diesem Node definierten Agenten auswählen.",
 				"noResults": "Keine Agenten gefunden",
+				"offOptionBoundHint": "Diese Unterhaltung ist an ihren Agenten gebunden; wähle stattdessen einen anderen Agenten",
 				"offOptionHint": "Kein Agent — verwendet die Node-Standardeinstellung",
 				"orchestratorBadge": "Orchestrator",
 				"pinnedModelHint": "Verwendet Modell: {{model}}",
@@ -2197,7 +2213,7 @@
 			"nodeDefaultModel": "Node-Standard",
 			"nodeReply": "Node-Antwort",
 			"pendingApprovalLabel": "Ausstehende Freigabe",
-			"queued": "In Warteschlange — startet nach dem laufenden Benchmark, Training oder Chat",
+			"queued": "In Warteschlange — startet nach dem laufenden Chat, Arbeitssitzungsschritt, Benchmark oder Training",
 			"reasoning": {
 				"effort": {
 					"high": "Hoch",
@@ -2607,6 +2623,9 @@
 			"send": "Befehl senden"
 		},
 		"commands": {
+			"builtInDescriptions": {
+				"ping": "Den aktuellen Chat-Agenten testen."
+			},
 			"capacity": "Das Limit von 100 benutzerdefinierten Befehlen ist erreicht. Löschen Sie einen, bevor Sie einen neuen erstellen.",
 			"createButton": "Neuer Befehl",
 			"delete": {
@@ -3657,7 +3676,7 @@
 			"notChosen": "Nicht gewählt",
 			"offline": {
 				"choose": "Offline / Manuell verwenden",
-				"disables": "Schaltet drei Dinge ab, die die Engine sonst von selbst tut: die Suche nach Anwendungs-Updates, die Suche nach Updates der llama.cpp-Laufzeit und den Download von Modell und Laufzeit beim ersten Start. Sie können jedes davon jederzeit selbst starten.",
+				"disables": "Schaltet drei Dinge ab, die die Engine sonst von selbst tut: die Suche nach Anwendungs-Updates, die Suche nach Updates der llama.cpp-Laufzeit und den Download von Modell und Laufzeit beim ersten Start. Auch ein Chat lädt eine fehlende Laufzeit nicht herunter. Sie können jedes davon jederzeit selbst starten.",
 				"doesNotBlock": "Dies schaltet nicht den gesamten Netzwerkzugriff ab. Es blockiert weder die Verbindung zur Plattform noch von Ihnen eingerichtete MCP-Server noch Abfragen des Modellkatalogs.",
 				"title": "Offline / Manuell"
 			},
@@ -4761,6 +4780,7 @@
 				}
 			},
 			"job": {
+				"defaultSampler": "Standard-Sampler",
 				"deleteBlocked": "Dieser Auftrag läuft noch. Brechen Sie ihn zuerst ab, dann können Sie ihn löschen.",
 				"deleteConfirm": "Dieser Auftrag, sein Prompt und das erzeugte Bild werden gelöscht — das Bild wird von der Festplatte entfernt. Das lässt sich nicht rückgängig machen.",
 				"deleteConfirmNoImage": "Dieser Auftrag und sein Prompt werden gelöscht. Es wurde kein Bild erzeugt. Das lässt sich nicht rückgängig machen.",
@@ -5016,6 +5036,18 @@
 					"events": "Der Ausführungsverlauf konnte nicht geladen werden.",
 					"load": "Integrations-Ausführungen konnten nicht geladen werden."
 				},
+				"failureCategories": {
+					"approval-required": "Freigabe erforderlich",
+					"capacity-rejected": "Kapazität abgelehnt",
+					"cloud-model-rejected": "Cloud-Modell abgelehnt",
+					"internal-failure": "Interner Fehler",
+					"queue-full": "Warteschlange voll",
+					"queue-timeout": "Zeitüberschreitung in der Warteschlange",
+					"restart": "Node neu gestartet",
+					"session-policy": "Sitzungsrichtlinie",
+					"shutdown": "Node wird beendet",
+					"trigger-unavailable": "Trigger nicht verfügbar"
+				},
 				"filters": {
 					"activeStatuses": "Aktiv",
 					"allSessions": "Alle Sitzungen",
@@ -5255,7 +5287,7 @@
 					"enabledAria": "{{name}} umschalten",
 					"loading": "Integrations-Trigger werden geladen…"
 				},
-				"subtitle": "Ein Trigger ist ein benannter externer Einstiegspunkt, der einen gespeicherten Agenten unbeaufsichtigt über die Loopback-Integrations-API ausführt.",
+				"subtitle": "Ein Trigger ist ein benannter externer Einstiegspunkt, der einen gespeicherten Agenten oder Graph-Workflow unbeaufsichtigt über die Loopback-Integrations-API ausführt.",
 				"title": "Integrations-Trigger",
 				"validation": {
 					"descriptionTooLong": "Die Beschreibung überschreitet die Grenze von 1024 Zeichen.",
@@ -5271,6 +5303,7 @@
 		"invocations": {
 			"monitor": {
 				"active": "Aktiv",
+				"callBudgetReached": "Am Budget für Anbieteraufrufe gestoppt; eine Arbeitssitzung setzt mit ihrem nächsten Schritt fort.",
 				"current": {
 					"conversation": "Unterhaltung: {{value}}",
 					"empty": "Aktuell ist kein Aufruf zugewiesen oder aktiv.",
@@ -5304,8 +5337,19 @@
 				"idle": "Inaktiv",
 				"loadError": "Die Daten der Aufrufüberwachung konnten nicht geladen werden.",
 				"loading": "Aufrufüberwachung wird geladen…",
+				"status": {
+					"assigned": "Zugewiesen",
+					"callBudgetReached": "Am Aufrufbudget gestoppt",
+					"cancelled": "Abgebrochen",
+					"completed": "Abgeschlossen",
+					"failed": "Fehlgeschlagen",
+					"pending": "Ausstehend",
+					"running": "Läuft"
+				},
 				"subtitle": "Den aktiven Aufruf und den lokalen In-Memory-Verlauf des Workers einsehen.",
 				"summary": {
+					"callBudget": "Nach {{duration}}{{withModel}} am Budget für Anbieteraufrufe gestoppt.",
+					"callBudgetNoDuration": "Am Budget für Anbieteraufrufe gestoppt{{withModel}}.",
 					"cancelled": "Abgebrochen nach {{duration}}{{withModel}}.",
 					"cancelledNoDuration": "Abgebrochen{{withModel}}.",
 					"completed": "Abgeschlossen in {{duration}}{{withModel}} — {{chunks}} Ausgabe-Chunks, {{thinking}} Reasoning, {{tools}}.",
@@ -5375,6 +5419,23 @@
 				"openNodeSettings": "Node-Einstellungen öffnen",
 				"title": "Kein Embedding-Modell installiert"
 			},
+			"failureReason": {
+				"content-missing": "Der Dokumentinhalt wurde nicht gefunden.",
+				"embedding-incomplete": "Das Embedding-Modell hat ein unvollständiges Ergebnis geliefert. Stellen Sie sicher, dass das konfigurierte Embedding-Modell geladen ist, und versuchen Sie es erneut.",
+				"embedding-model-changed": "Das Embedding-Modell hat sich während der Indizierung geändert. Wiederholen Sie das Dokument.",
+				"embedding-rejected": "Das Embedding-Modell ist installiert, hat die Anfrage aber abgelehnt. Prüfen Sie die Knotenprotokolle auf die Antwort des Servers und versuchen Sie es dann erneut.",
+				"embedding-unavailable": "Es ist kein Embedding-Modell installiert, daher können keine Dokumente indiziert werden. Verwenden Sie in den Node-Einstellungen „Empfohlenes Embedding-Modell herunterladen“ oder installieren Sie ein Embedding-GGUF unter Modelle → Hugging Face durchsuchen und versuchen Sie es dann erneut.",
+				"embedding-unreachable": "Das Embedding-Modell ist installiert, aber sein Prozess wurde beendet oder ist nicht erreichbar. Prüfen Sie die Knotenprotokolle und wiederholen Sie dann das Dokument.",
+				"extraction-failed": "Der Text des Dokuments konnte nicht extrahiert werden.",
+				"interrupted-repeatedly": "Die Aufnahme wurde wiederholt unterbrochen und abgebrochen.",
+				"invalid-vector": "Das Embedding-Modell hat einen ungültigen Vektor geliefert. Indizieren Sie mit einem unterstützten Embedding-Modell neu.",
+				"no-text": "Im Dokument wurde kein extrahierbarer Text gefunden.",
+				"short-vector": "Der Nomic-Embedding-Vektor ist kürzer als die konfigurierte 512-Dimensionen-Richtlinie. Indizieren Sie im nativen Modus neu oder verwenden Sie Nomic v1.5.",
+				"timed-out": "Die Verarbeitung des Dokuments hat zu lange gedauert und wurde abgebrochen.",
+				"unexpected": "Die Aufnahme ist unerwartet fehlgeschlagen. Laden Sie die Datei erneut hoch.",
+				"unreadable-file": "Die Datei konnte nicht gelesen werden. Sie ist möglicherweise beschädigt oder keine gültige Datei ihres Typs.",
+				"unsupported-file-type": "Dieser Dateityp wird für die Wissensdatenbank nicht unterstützt."
+			},
 			"lastKnownGood": {
 				"label": "Letzter gültiger Stand",
 				"tooltip": "Dieses Dokument wird neu indexiert oder die letzte Neuindexierung ist fehlgeschlagen. Die Ergebnisse stammen aus der zuvor indexierten Version und können veraltet sein."
@@ -5408,6 +5469,10 @@
 			},
 			"search": {
 				"aria": "Wissensdatenbank durchsuchen",
+				"degradation": {
+					"lexicalOnly": "Das Embedding-Modell ist nicht verfügbar, daher stammen diese Ergebnisse nur aus dem Schlüsselwortabgleich.",
+					"rerankerUnavailable": "Der Reranker ist noch nicht bereit, daher sind die Ergebnisse nicht neu sortiert. Er startet im Hintergrund; suchen Sie gleich noch einmal."
+				},
 				"error": "Die Suche konnte nicht abgeschlossen werden.",
 				"heading": "Suche",
 				"hint": "Die Suche umfasst alle indexierten Dokumente dieser Wissensdatenbank.",
@@ -6595,7 +6660,7 @@
 					"label": "Leerlauf-Prozess-Lebensdauer"
 				},
 				"llamaMaxLoadedProcesses": {
-					"label": "Max. geladene llama-server-Prozesse"
+					"label": "Max. geladene Chat-Modelle"
 				},
 				"llamaRamReservePercent": {
 					"label": "Reservierter Arbeitsspeicher"
@@ -7127,7 +7192,7 @@
 				"pythonInstallsTitle": "Installierte Python-Interpreter",
 				"pythonMinor": "Python {{version}}",
 				"reasons": {
-					"ComputeDisabled": "Das Python-Rechen-Tool ist auf diesem Node deaktiviert (Compute:Enabled=false).",
+					"ComputeDisabled": "Das Python-Rechen-Tool ist auf diesem Node ausgeschaltet. Schalte die Rechen-Tools in den Node-Einstellungen unter Funktionen ein.",
 					"ExecutionPreviewsDisabled": "Das Python-Rechen-Tool benötigt eingeschaltete Ausführungs-Vorschauen. Ein Operator kann sie im Abschnitt „Sandbox & Isolation“ der Node-Einstellungen einschalten.",
 					"IncompleteProvision": "Eine unterbrochene Einrichtung hat eine unvollständige Compute-Laufzeit hinterlassen.",
 					"InterpreterMissing": "Der Python-Interpreter der Compute-Laufzeit fehlt.",
@@ -8192,6 +8257,12 @@
 				"liveUnavailableHint": "Live-Aktualisierungen sind nicht verfügbar; diese Seite fragt stattdessen regelmäßig ab.",
 				"objectiveNotMet": "Abgeschlossen, aber der Agent hat gemeldet, dass das Ziel nicht erreicht wurde.",
 				"pause": "Pausieren",
+				"pauseReasons": {
+					"nodeStopped": "Der Node wurde beendet, während die Sitzung lief. Setzen Sie sie fort, um am letzten Checkpoint weiterzumachen.",
+					"operator": "Sie haben die Arbeitssitzung pausiert.",
+					"parkTimedOut": "Pausiert, weil eine Rückfrage unbeantwortet blieb.",
+					"stepTimedOut": "Pausiert, weil der Schritt sein Zeitbudget überschritten hat."
+				},
 				"pausedAtCheckpoint": "Pausiert bei Checkpoint {{step}}",
 				"resume": "Fortsetzen",
 				"start": "Starten",

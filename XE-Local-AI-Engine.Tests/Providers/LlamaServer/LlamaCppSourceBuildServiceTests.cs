@@ -115,6 +115,86 @@ public sealed class LlamaCppSourceBuildServiceTests
         AssertEx.False(Directory.Exists($"/proc/{pid}"));
     }
 
+    /// <summary>
+    ///     R1-03: a graceful host stop cancels the build, and its cleanup removed the work tree with the progress marker, so
+    ///     the next start showed plain Idle. The stop now leaves a record the next start reports as interrupted.
+    /// </summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task GracefulStop_DuringABuild_IsReportedAsInterruptedOnTheNextStart()
+    {
+        using var temp = new TempDirectory();
+        var stubs = Path.Combine(temp.Path, "stubs");
+        Directory.CreateDirectory(stubs);
+        var pidFile = Path.Combine(temp.Path, "git.pid");
+        WriteScript(Path.Combine(stubs, "git"), $"#!/bin/sh\necho $$ > '{pidFile}'\nwhile true; do sleep 1; done\n");
+        using var path = new PathScope(stubs);
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var signal = new CudaManagedBuildSignal();
+        using (var service = new LlamaCppSourceBuildService(new AlwaysReadyProbe(), new CapturingBinaryManager(store, signal), store, signal,
+                   new LeaseOnlySupervisor(), new LlamaCppSourceBuildActivity(), new NullLlamaCppSourceBuildEventPublisher(),
+                   NullLogger<LlamaCppSourceBuildService>.Instance, TimeProvider.System, temp.Path))
+        {
+            await service.StartAsync(new LlamaCppSourceBuildRequest
+            {
+                Backend = LlamaCppSourceBackend.Cpu,
+                Source = LlamaCppSourceSelection.Official
+            }, CancellationToken.None);
+            await AssertEx.EventuallyAsync(() => File.Exists(pidFile), TimeSpan.FromSeconds(5));
+
+            await new CudaBuildStartupService(service, store, signal, NullLogger<CudaBuildStartupService>.Instance).StopAsync(CancellationToken.None);
+        }
+
+        AssertEx.False(Directory.Exists(Path.Combine(temp.Path, "llama.cpp", "source-build", ".work")), "the graceful stop cleaned the work tree up");
+        using var restarted = new LlamaCppSourceBuildService(new AlwaysReadyProbe(), new CapturingBinaryManager(store, signal), store, signal,
+            new LeaseOnlySupervisor(), new LlamaCppSourceBuildActivity(), new NullLlamaCppSourceBuildEventPublisher(),
+            NullLogger<LlamaCppSourceBuildService>.Instance, TimeProvider.System, temp.Path);
+
+        await restarted.RecoverAsync(CancellationToken.None);
+
+        AssertEx.Equal(LlamaCppSourceBuildPhase.Failed, restarted.GetStatus().Phase);
+        AssertEx.Equal(LlamaCppSourceBuildService.InterruptedBuildMessage, restarted.GetStatus().SanitizedError);
+    }
+
+    /// <summary>The operator's own cancel stays a cancel: the next start is Idle, not interrupted.</summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task OperatorCancel_DuringABuild_IsNotReportedAsInterrupted()
+    {
+        using var temp = new TempDirectory();
+        var stubs = Path.Combine(temp.Path, "stubs");
+        Directory.CreateDirectory(stubs);
+        var pidFile = Path.Combine(temp.Path, "git.pid");
+        WriteScript(Path.Combine(stubs, "git"), $"#!/bin/sh\necho $$ > '{pidFile}'\nwhile true; do sleep 1; done\n");
+        using var path = new PathScope(stubs);
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var signal = new CudaManagedBuildSignal();
+        using (var service = new LlamaCppSourceBuildService(new AlwaysReadyProbe(), new CapturingBinaryManager(store, signal), store, signal,
+                   new LeaseOnlySupervisor(), new LlamaCppSourceBuildActivity(), new NullLlamaCppSourceBuildEventPublisher(),
+                   NullLogger<LlamaCppSourceBuildService>.Instance, TimeProvider.System, temp.Path))
+        {
+            await service.StartAsync(new LlamaCppSourceBuildRequest
+            {
+                Backend = LlamaCppSourceBackend.Cpu,
+                Source = LlamaCppSourceSelection.Official
+            }, CancellationToken.None);
+            await AssertEx.EventuallyAsync(() => File.Exists(pidFile), TimeSpan.FromSeconds(5));
+
+            AssertEx.True(service.Cancel());
+            await AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(10));
+        }
+
+        using var restarted = new LlamaCppSourceBuildService(new AlwaysReadyProbe(), new CapturingBinaryManager(store, signal), store, signal,
+            new LeaseOnlySupervisor(), new LlamaCppSourceBuildActivity(), new NullLlamaCppSourceBuildEventPublisher(),
+            NullLogger<LlamaCppSourceBuildService>.Instance, TimeProvider.System, temp.Path);
+
+        await restarted.RecoverAsync(CancellationToken.None);
+
+        AssertEx.Equal(LlamaCppSourceBuildPhase.Idle, restarted.GetStatus().Phase);
+    }
+
     [Test]
     public async Task AppendLog_ConcurrentCallbacks_PersistAndPublishInIdenticalOrder()
     {

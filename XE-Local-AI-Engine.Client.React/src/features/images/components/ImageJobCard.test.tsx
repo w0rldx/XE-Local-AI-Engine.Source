@@ -118,6 +118,12 @@ describe("ImageJobCard generation timeline", () => {
 		cleanup();
 	});
 
+	it("names the default sampler when the node stored none, never an empty slot", () => {
+		renderCard(job({ sampler: null }));
+
+		expect(screen.getByText(/· default sampler$/)).toBeTruthy();
+	});
+
 	it("shows the step count and the remaining time while sampling", () => {
 		currentProgress = progress({
 			generationPhase: "Sampling",

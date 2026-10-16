@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -15,6 +16,7 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Coder;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
@@ -112,6 +114,103 @@ public sealed class WorkSessionStepLoopTests
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Completed);
 
         AssertEx.True(observed, "the step's send must see the work-session turn scope, or a custom agent is never offered the state tools.");
+    }
+
+    /// <summary>
+    ///     A session driven with a repository root sends every step inside the coder repository scope, which is what makes the
+    ///     read-only coder tools of a development-workflow research node read that repository rather than the AgentHome workspace.
+    /// </summary>
+    [Test]
+    public async Task Loop_SendsEveryStepInsideTheRepositoryScopeItWasDrivenWith()
+    {
+        var sessionId = Guid.NewGuid();
+        var publisher = new RecordingWorkSessionEventPublisher();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                publisher)
+        };
+
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var fake = ResolveStream(factory, ref stream);
+        string? observed = null;
+        fake.Enqueue(new StepScript
+        {
+            EventTypes = [ChatStreamEventTypes.AssistantCompleted],
+            DuringTurn = (services, id) =>
+            {
+                observed = CoderRepositoryScope.Root;
+                return DeclareCompleteAsync(services, id);
+            }
+        });
+
+        var runtime = new WorkSessionRuntimeOverride
+        {
+            ModelProfile = null,
+            ReasoningEffort = null,
+            RepositoryRoot = "/repositories/calc"
+        };
+        AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId, runtime));
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Completed);
+
+        AssertEx.Equal("/repositories/calc", observed, "the step's send must carry the root, or the coder tools read the AgentHome workspace.");
+        AssertEx.Null(CoderRepositoryScope.Root, "and the scope never leaks into the flow that started the session.");
+    }
+
+    /// <summary>
+    ///     The root is scoped to the steps of the drive that carried it: the next session driven on the same node with no project
+    ///     reads the AgentHome workspace again, not the previous session's repository.
+    /// </summary>
+    [Test]
+    public async Task Loop_ASessionDrivenAfterOneWithARepository_SeesNoRoot()
+    {
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        var publisher = new RecordingWorkSessionEventPublisher();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, first),
+                publisher)
+        };
+
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, first);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, second);
+        var fake = ResolveStream(factory, ref stream);
+        string? firstObserved = null;
+        var secondObserved = "not observed";
+        fake.Enqueue(new StepScript
+        {
+            EventTypes = [ChatStreamEventTypes.AssistantCompleted],
+            DuringTurn = (services, _) =>
+            {
+                firstObserved = CoderRepositoryScope.Root;
+                return DeclareCompleteAsync(services, first);
+            }
+        });
+        fake.Enqueue(new StepScript
+        {
+            EventTypes = [ChatStreamEventTypes.AssistantCompleted],
+            DuringTurn = (services, _) =>
+            {
+                secondObserved = CoderRepositoryScope.Root;
+                return DeclareCompleteAsync(services, second);
+            }
+        });
+
+        var supervisor = factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>();
+        AssertEx.True(supervisor.TryStart(first, new WorkSessionRuntimeOverride { ModelProfile = null, ReasoningEffort = null, RepositoryRoot = "/repositories/calc" }));
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, first, AgentWorkSessionStatus.Completed);
+        AssertEx.True(supervisor.TryStart(second));
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, second, AgentWorkSessionStatus.Completed);
+
+        AssertEx.Equal("/repositories/calc", firstObserved);
+        AssertEx.Null(secondObserved, "a drive without a project must not inherit the previous drive's repository.");
     }
 
     [Test]
@@ -373,6 +472,41 @@ public sealed class WorkSessionStepLoopTests
     }
 
     [Test]
+    public async Task Loop_WhenAReasoningOnlyDeltaFollowsTheApprovalRequest_TheParkStillFiresAtMaxParkedSeconds()
+    {
+        var sessionId = Guid.NewGuid();
+        var publisher = new RecordingWorkSessionEventPublisher();
+        FakeNodeChatStreamService? stream = null;
+        var configuration = WorkSessionTestSupport.Configuration();
+        configuration["WorkSessions:MaxParkedSeconds"] = "1";
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = configuration,
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                publisher)
+        };
+
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var fake = ResolveStream(factory, ref stream);
+        // V-04: the 27B emits a trailing reasoning "\n" right after approval-requested; it must not read as the answer.
+        fake.Enqueue(new StepScript
+        {
+            EventTypes = [],
+            Park = true,
+            ReasoningDeltaAfterPark = "\n"
+        });
+
+        AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
+
+        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId);
+        AssertEx.Contains(events, entry => entry.EventType == WorkSessionEventTypes.ParkTimedOut, "The park outlived MaxParkedSeconds and was stopped.");
+        AssertEx.False(events.Any(entry => entry.EventType == "SessionStatusChanged" && entry.Outcome == nameof(AgentWorkSessionStatus.Running) && entry.Sequence > events.First(parked => parked.Outcome == nameof(AgentWorkSessionStatus.WaitingForApproval)).Sequence),
+            "A reasoning-only delta must not move the session back to Running.");
+    }
+
+    [Test]
     public async Task Loop_WhenAParkedTurnIsAnswered_MovesWaitingForApprovalBackToRunning()
     {
         // The other half of the park: the prompt is answered, the turn carries on, and the session must leave
@@ -620,6 +754,42 @@ public sealed class WorkSessionStepLoopTests
 
         AssertEx.Empty(await WorkSessionTestSupport.ReadCheckpointsAsync(factory.Services, sessionId),
             "A cancelled session is not going to be resumed, so it is not checkpointed.");
+    }
+
+    [Test]
+    public async Task Loop_WhenTheHostStopsMidStep_PausesWithTheNodeStoppedReasonNotTheOperators()
+    {
+        var sessionId = Guid.NewGuid();
+        var publisher = new RecordingWorkSessionEventPublisher();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                publisher)
+        };
+
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var fake = ResolveStream(factory, ref stream);
+        fake.Enqueue(new StepScript
+        {
+            EventTypes = [],
+            Park = true
+        });
+
+        var supervisor = factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>();
+        AssertEx.True(supervisor.TryStart(sessionId));
+        await AssertEx.EventuallyAsync(() => fake.Requests.Count == 1, TimeSpan.FromSeconds(15), "The step has to be in flight when the host stops.");
+
+        // What a graceful host stop does: the hosted service's StopAsync, with no operator stop requested.
+        await ((IHostedService)supervisor).StopAsync(CancellationToken.None);
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
+
+        var paused = (await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId))
+            .Last(entry => entry.EventType == "SessionStatusChanged" && entry.Outcome == nameof(AgentWorkSessionStatus.Paused));
+        // The exact wire shape the SPA's latestPauseReason parses (WorkSessionPlanPanel.test pins the other side).
+        AssertEx.Equal($"{{\"Reason\":\"{WorkSessionExecutionSupervisor.NodeStoppedReason}\"}}", paused.DetailJson);
     }
 
     [Test]

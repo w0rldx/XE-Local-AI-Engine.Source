@@ -64,6 +64,28 @@ public sealed class RunSavedAgentHandlerTests
     }
 
     [Test]
+    public async Task ValidateReferencesAsync_RefusesAnAgentThatDoesNotExist()
+    {
+        using var harness = new Harness();
+        harness.Store.GetByIdAsync(AgentId, Arg.Any<CancellationToken>()).Returns((AgentDefinitionRecord?)null);
+
+        var thrown = await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => harness.Handler.ValidateReferencesAsync(ValidParams(), CancellationToken.None));
+
+        AssertEx.Contains(thrown.Message, "agentDefinitionId:");
+    }
+
+    [Test]
+    public async Task ValidateReferencesAsync_AcceptsAnAgentThatExistsButHasNoModelYet()
+    {
+        using var harness = new Harness();
+
+        // The harness agent pins no model: which model a fire runs on is the fire's question, not create's.
+        await harness.Handler.ValidateReferencesAsync(ValidParams(), CancellationToken.None);
+
+        _ = await harness.Store.Received(1).GetByIdAsync(AgentId, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     [Arguments("")]
     [Arguments("not json")]
     [Arguments("""{ "prompt": "hi" }""")]

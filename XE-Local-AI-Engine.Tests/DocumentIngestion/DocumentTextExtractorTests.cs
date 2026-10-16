@@ -153,6 +153,18 @@ public sealed class DocumentTextExtractorTests
     }
 
     [Test]
+    public async Task ExtractStructured_WhenReaderThrows_ReportsTheFixedReasonWithoutTheExceptionType()
+    {
+        // The live recipe: a two-byte .docx makes the reader throw; the user text must not carry a CLR type name.
+        using var stream = new MemoryStream([0x50, 0x4B]);
+
+        var result = await CreateExtractor().ExtractStructuredAsync(stream, "x.docx", ".docx", CancellationToken.None);
+
+        AssertEx.Equal(DocumentExtractionStatus.Failed, result.Status);
+        AssertEx.Equal(DocumentTextExtractor.UnreadableReason, result.Error);
+    }
+
+    [Test]
     public async Task Extractor_WhenStructuredOutputExceedsCap_ReturnsFailedWithoutContent()
     {
         // A 1001-char body against a 1000-char cap must fail cleanly, and the reason names the cap (invariant
@@ -224,7 +236,7 @@ public sealed class DocumentTextExtractorTests
     {
         // A real, well-formed zip whose single entry declares ~3 MiB uncompressed (highly compressible zero bytes, so the
         // stored bytes are tiny). It is a valid zip but NOT a valid .docx, so if the preflight let it through the DOCX
-        // reader would fail with a generic "Extraction failed (...)". Asserting the declared-size preflight reason instead
+        // reader would fail with the generic unreadable-file reason. Asserting the declared-size preflight reason instead
         // proves rejection happened up front, from the central directory, before the reader ever parsed the container.
         var extractor = new DocumentTextExtractor(NullLogger<DocumentTextExtractor>.Instance,
             maxOutputChars: 5_000_000,
@@ -320,7 +332,7 @@ public sealed class DocumentTextExtractorTests
         // entries. The declared count is read straight from the EOCD/Zip64 records with ZERO ZipArchiveEntry
         // allocations, so this rejects up front at the shipped 10,000-entry ceiling. The crafted bytes are NOT an
         // openable ZipArchive, so had the count NOT been read from the EOCD the code would have fallen through to the
-        // DOCX reader and failed with a generic "Extraction failed (...)". Asserting the "entries" reason proves the
+        // DOCX reader and failed with the generic unreadable-file reason. Asserting the "entries" reason proves the
         // rejection happened at the EOCD count check, before any entry object was materialized.
         using var stream = new MemoryStream(BuildZip64EntryCountBomb(declaredTotalEntries: 5_000_000));
 
@@ -369,7 +381,7 @@ public sealed class DocumentTextExtractorTests
     {
         // Bytes declared as a PDF but not a PDF: the preflight's own PdfDocument.Open throws a PdfPig format exception,
         // so the document is failed up front with the content-free "could not be parsed" reason and is NOT handed to the
-        // reader for a wasted second parse. Asserting that reason — not the reader's generic "Extraction failed (...)" —
+        // reader for a wasted second parse. Asserting that reason — not the reader's generic unreadable-file reason —
         // proves the no-reparse preflight path handled it.
         using var stream = new MemoryStream(Encoding.ASCII.GetBytes("this is not a pdf at all"));
 

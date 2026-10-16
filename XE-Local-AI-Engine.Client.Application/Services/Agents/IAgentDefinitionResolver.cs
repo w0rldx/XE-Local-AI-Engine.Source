@@ -91,4 +91,7 @@ public sealed record ResolvedAgentRuntime(
     // The definition names its own non-empty AllowedToolNames and is not the Default Assistant, so its offer is
     // configuration the composer's local-tools toggle does not gate. False, the default, keeps the toggle gate.
     [property: JsonIgnore]
-    bool DeclaresToolList = false);
+    bool DeclaresToolList = false,
+    // The definition lists run_python but the node's compute switch is off; drives the compute ToolsWithheld notice.
+    [property: JsonIgnore]
+    bool ComputeWithheld = false);

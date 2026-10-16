@@ -52,7 +52,7 @@ public sealed class CreateImageJobEndpoint : Endpoint<CreateImageJobRequest, Ima
         }
         catch (ImageJobInputRejectedException exception)
         {
-            // Fixed, display-safe messages: an edit mode the model's family does not offer, or a source image that does not exist.
+            // Display-safe messages: a model that is not installed, an edit mode its family does not offer, or a source image that does not exist.
             AddError(exception.Message);
             await Send.ErrorsAsync(cancellation: ct);
             return;

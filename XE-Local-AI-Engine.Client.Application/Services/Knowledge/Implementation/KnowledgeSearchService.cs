@@ -23,9 +23,9 @@ using static Chat.Implementation.NodeChatPersistenceSql;
 /// <remarks>
 ///     Embedding applies the query-intent prefix; the lexical FTS arm and the model-scoped semantic vector arm are fused
 ///     with Reciprocal Rank Fusion, and the fused pool is optionally rescored by a local cross-encoder
-///     (<see cref="KnowledgeBaseOptions.RerankerModelName" />) before the top-<c>limit</c> cut. An unavailable embedding
-///     model or reranker degrades gracefully — lexical-only, or fusion order — rather than failing. No query or chunk
-///     text is ever logged. Scoped: it drives the scoped collaborators through the request-scoped db context.
+///     (<see cref="INodeRuntimeSettings.GetRerankerModelNameAsync" />) before the top-<c>limit</c> cut. An unavailable
+///     embedding model or reranker degrades to lexical-only or fusion order, named in the result, rather than failing. No
+///     query or chunk text is ever logged. Scoped: it drives the scoped collaborators through the request-scoped db context.
 /// </remarks>
 public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
 {
@@ -167,18 +167,21 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
         var deduped = DeduplicateByContent(pool);
 
         // Optional rerank: a configured reranker reorders the deduped pool BEFORE the top-`limit` cut; off or failed, the order
-        // stays RRF. Both knobs are read once per search, so the gate and the deadline it arms agree.
+        // stays RRF. Every knob is read once per search, so a Node Settings edit applies on the next search without a restart.
+        var rerankerModelName = await _runtimeSettings.GetRerankerModelNameAsync(cancellationToken);
         var latencyBudget = TimeSpan.FromMilliseconds(Math.Max(1, await _runtimeSettings.GetKnowledgeRetrievalLatencyBudgetMsAsync(cancellationToken)));
         var rerankDecision = AdaptiveRetrievalPolicy.DecideRerank(await _runtimeSettings.GetKnowledgeAdaptiveRerankingEnabledAsync(cancellationToken),
-            !string.IsNullOrWhiteSpace(_options.RerankerModelName),
+            !string.IsNullOrWhiteSpace(rerankerModelName),
             ftsRanked,
             vectorRanked,
             deduped.Count,
             Stopwatch.GetElapsedTime(searchStart),
             latencyBudget);
         var selections = rerankDecision.ShouldRerank
-            ? await RerankWithinBudgetAsync(request.Query, deduped, limit, searchStart, latencyBudget, cancellationToken)
+            ? await RerankWithinBudgetAsync(rerankerModelName!, request.Query, deduped, limit, searchStart, latencyBudget, cancellationToken)
             : deduped.Take(limit).ToList();
+
+        var degradations = ClassifyDegradations(queryVector.IsEmpty, rerankDecision.ShouldRerank, selections);
 
         // Neighbor expansion (when requested) is resolved for the whole final top-k in one batched call rather than one
         // round trip per hit; the content ordering and fallback are identical to expanding each hit individually.
@@ -222,7 +225,8 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
 
         return new KnowledgeSearchResult
         {
-            Results = hits
+            Results = hits,
+            Degradations = degradations
         };
     }
 
@@ -287,6 +291,23 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
         return contents;
     }
 
+    // A rerank that was due but came back in fusion order is a degradation; an adaptive-gate skip is a decision, not one.
+    private static List<KnowledgeSearchDegradation> ClassifyDegradations(bool lexicalOnly, bool rerankWasDue, IReadOnlyList<ChunkSelection> selections)
+    {
+        var degradations = new List<KnowledgeSearchDegradation>(capacity: 2);
+        if (lexicalOnly)
+        {
+            degradations.Add(KnowledgeSearchDegradation.LexicalOnly);
+        }
+
+        if (rerankWasDue && selections.Count > 0 && selections[0].ScoreKind != KnowledgeScoreKind.Rerank)
+        {
+            degradations.Add(KnowledgeSearchDegradation.RerankerUnavailable);
+        }
+
+        return degradations;
+    }
+
     private static void RecordStage(string stage, long startTimestamp)
     {
         NodeMetrics.KnowledgeSearchStageDurationMs.Record(Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds,
@@ -345,7 +366,8 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
 
     // Enabled-rerank path: sends the hydrated, deduped pool's base contents to the local reranker and reorders by descending
     // relevance before taking `limit`; a failure (null or count mismatch) keeps the original RRF order and score.
-    private async Task<IReadOnlyList<ChunkSelection>> RerankAsync(string query,
+    private async Task<IReadOnlyList<ChunkSelection>> RerankAsync(string rerankerModelName,
+        string query,
         IReadOnlyList<ChunkSelection> pool,
         int limit,
         CancellationToken cancellationToken)
@@ -357,7 +379,7 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
 
         var documents = pool.Select(static candidate => candidate.Row.Content).ToList();
         var rerankStart = Stopwatch.GetTimestamp();
-        var scores = await _reranker.RerankAsync(_options.RerankerModelName, query, documents, cancellationToken);
+        var scores = await _reranker.RerankAsync(rerankerModelName, query, documents, cancellationToken);
         RecordStage("rerank", rerankStart);
         if (scores is null || scores.Count != pool.Count)
         {
@@ -380,7 +402,8 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
                .ToList();
     }
 
-    private async Task<IReadOnlyList<ChunkSelection>> RerankWithinBudgetAsync(string query,
+    private async Task<IReadOnlyList<ChunkSelection>> RerankWithinBudgetAsync(string rerankerModelName,
+        string query,
         IReadOnlyList<ChunkSelection> pool,
         int limit,
         long searchStart,
@@ -399,7 +422,7 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
         {
             // The deadline covers scoring only (the client never spawns) and beats the provider's larger timeout; WaitAsync
             // bounds the caller even if a provider ignores cancellation. The client abandons, so expiry returns at once.
-            return await RerankAsync(query, pool, limit, budgetCts.Token)
+            return await RerankAsync(rerankerModelName, query, pool, limit, budgetCts.Token)
                 .WaitAsync(remaining, cancellationToken);
         }
         catch (TimeoutException)

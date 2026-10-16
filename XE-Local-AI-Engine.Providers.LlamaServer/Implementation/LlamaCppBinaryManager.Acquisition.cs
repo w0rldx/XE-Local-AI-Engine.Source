@@ -132,6 +132,16 @@ public sealed partial class LlamaCppBinaryManager
         }
 
         /// <summary>
+        ///     Records a Failed for a step the acquisition policy refused before any request, which <see cref="Fail" /> would keep silent: nothing was reported.
+        ///     <paramref name="reason" /> must be user-safe.
+        /// </summary>
+        public void Refuse(string reason)
+        {
+            _reported = true;
+            Fail(new LlamaRuntimeException(reason));
+        }
+
+        /// <summary>
         ///     Closes a reported acquisition as failed, with a sanitized reason. Silent when nothing was acquired, so a
         ///     failure in a step this manager never announced (e.g. a rejected request) never surfaces as a runtime
         ///     acquisition failure.

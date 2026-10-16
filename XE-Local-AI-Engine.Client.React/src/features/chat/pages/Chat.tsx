@@ -118,7 +118,30 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 	);
 	const { readiness: connectionReadiness, error: connectionError, retry: retryConnection } = useNodeChatConnectionReadiness();
 	const {
+		conversationsIsLoading,
+		conversationsIsError,
+		conversationsError,
+		maxMessageSizeKb,
+		maxUploadFileSizeMb,
+		showArchivedConversations,
+		setShowArchivedConversations,
+		selectedConversationId,
+		selectedConversationData,
+		selectedConversationIsLoading,
+		selectedConversationIsPlaceholderData,
+		selectedConversationError,
+		selectedConversationLoadFailed,
+		isLoadingSelectedConversation,
+		handleRetryLoadMessages,
+		displayConversations,
+		isRemoteConversation,
+		feedbackByMessageId,
+		usedContextTokens,
+		contextWindow,
+	} = useChatConversationSelection({ scope, requestedConversationId });
+	const {
 		agentModeEnabled,
+		conversationAgentBound,
 		selectedAgentId,
 		agentOptions,
 		agentControlsAvailable,
@@ -126,7 +149,11 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 		pinnedAgentModelProfile,
 		scopedModelPending,
 		handleSelectAgent,
-	} = useChatAgentSelection(scope, chatUiCapabilities.showAgentControls);
+	} = useChatAgentSelection(
+		scope,
+		chatUiCapabilities.showAgentControls,
+		selectedConversationData?.id === selectedConversationId ? selectedConversationData?.agentDefinitionId : undefined,
+	);
 	const {
 		modelOptions,
 		cloudModelOptions,
@@ -152,28 +179,6 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 	const [conversationSearchQuery, setConversationSearchQuery] = useState("");
 	const [mutatingConversationId, setMutatingConversationId] = useState<string | undefined>();
 	const [pendingFeedbackMessageId, setPendingFeedbackMessageId] = useState<string | undefined>();
-	const {
-		conversationsIsLoading,
-		conversationsIsError,
-		conversationsError,
-		maxMessageSizeKb,
-		maxUploadFileSizeMb,
-		showArchivedConversations,
-		setShowArchivedConversations,
-		selectedConversationId,
-		selectedConversationData,
-		selectedConversationIsLoading,
-		selectedConversationIsPlaceholderData,
-		selectedConversationError,
-		selectedConversationLoadFailed,
-		isLoadingSelectedConversation,
-		handleRetryLoadMessages,
-		displayConversations,
-		isRemoteConversation,
-		feedbackByMessageId,
-		usedContextTokens,
-		contextWindow,
-	} = useChatConversationSelection({ scope, requestedConversationId });
 
 	const createConversationMutation = useMutation({
 		mutationFn: () => nodeChatAdapter.createConversation({ title: "New conversation" }),
@@ -749,6 +754,7 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 				onToggleKnowledgeBase={toggleKnowledgeBase}
 				agentControlsAvailable={agentControlsAvailable}
 				agentModeEnabled={agentModeEnabled}
+				conversationAgentBound={conversationAgentBound}
 				selectedAgentId={selectedAgentId}
 				agentOptions={agentOptions}
 				commandOptions={commandOptions}

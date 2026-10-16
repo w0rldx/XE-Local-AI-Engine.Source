@@ -114,6 +114,25 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     public void Signal(Guid runId) =>
         _ = _signals.Writer.TryWrite(runId);
 
+    async Task<bool> IDevWorkflowDispatcherSignal.TryAdvanceAsync(Guid runId, TimeSpan gateWait, CancellationToken cancellationToken)
+    {
+        if (!await _advanceGate.WaitAsync(gateWait, cancellationToken))
+        {
+            return false;
+        }
+
+        try
+        {
+            // Never the caller's token: a request that goes away must not cut a tick in half.
+            _ = await AdvanceHeldAsync(runId, CancellationToken.None);
+            return true;
+        }
+        finally
+        {
+            _ = _advanceGate.Release();
+        }
+    }
+
     /// <summary>What the signal pump is about to read. The only way to assert that a productive tick re-signals.</summary>
     internal ChannelReader<Guid> PendingSignals => _signals.Reader;
 
@@ -168,20 +187,26 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         await _advanceGate.WaitAsync(cancellationToken);
         try
         {
-            await using var scope = _scopeFactory.CreateAsyncScope();
-            return await AdvanceCoreAsync(scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>(),
-                new DevWorkflowLanes
-                {
-                    Agent = scope.ServiceProvider.GetRequiredService<DevWorkflowAgentExecutor>(),
-                    DevTasks = scope.ServiceProvider.GetRequiredService<DevWorkflowDevTaskExecutor>()
-                },
-                runId,
-                cancellationToken);
+            return await AdvanceHeldAsync(runId, cancellationToken);
         }
         finally
         {
             _ = _advanceGate.Release();
         }
+    }
+
+    /// <summary>One tick, for a caller already holding the advance gate.</summary>
+    private async Task<int> AdvanceHeldAsync(Guid runId, CancellationToken cancellationToken)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        return await AdvanceCoreAsync(scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>(),
+            new DevWorkflowLanes
+            {
+                Agent = scope.ServiceProvider.GetRequiredService<DevWorkflowAgentExecutor>(),
+                DevTasks = scope.ServiceProvider.GetRequiredService<DevWorkflowDevTaskExecutor>()
+            },
+            runId,
+            cancellationToken);
     }
 
     private async Task<int> AdvanceCoreAsync(IDevWorkflowStore store, DevWorkflowLanes lanes, Guid runId, CancellationToken cancellationToken)

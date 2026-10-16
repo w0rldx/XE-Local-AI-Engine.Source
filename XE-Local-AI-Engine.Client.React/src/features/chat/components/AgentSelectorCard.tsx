@@ -122,6 +122,9 @@ interface AgentSelectorCardProps {
 	// mode (onSelectAgent(id)); picking the "Default Assistant" row disables it (onSelectAgent("")).
 	agentModeEnabled: boolean;
 	selectedAgentId: string;
+	// The conversation is bound to an agent the server runs whenever no agent is picked, so the Default Assistant row
+	// cannot take effect: it is shown disabled with the reason instead of snapping back after a click.
+	defaultOptionDisabled?: boolean;
 	disabled?: boolean;
 	// "" => Off (Default Assistant, agent mode disabled). Any other id => enable mode + stamp that agent.
 	onSelectAgent: (agentId: string) => void;
@@ -131,6 +134,7 @@ export function AgentSelectorCard({
 	agentOptions,
 	agentModeEnabled,
 	selectedAgentId,
+	defaultOptionDisabled = false,
 	disabled = false,
 	onSelectAgent,
 }: AgentSelectorCardProps) {
@@ -243,6 +247,8 @@ export function AgentSelectorCard({
 							data-testid="chat-agent-selector-option-off"
 							role="menuitemradio"
 							aria-checked={isOff}
+							aria-disabled={defaultOptionDisabled}
+							disabled={defaultOptionDisabled}
 							data-mantine-stop-propagation="true"
 							onClick={() => select("")}
 							style={{
@@ -251,7 +257,8 @@ export function AgentSelectorCard({
 								padding: "6px 10px",
 								borderRadius: "var(--mantine-radius-sm)",
 								background: isOff ? "var(--mantine-primary-color-light)" : undefined,
-								cursor: "pointer",
+								cursor: defaultOptionDisabled ? "not-allowed" : "pointer",
+								opacity: defaultOptionDisabled ? 0.6 : undefined,
 							}}
 						>
 							<Group gap={6} wrap="nowrap" align="flex-start">
@@ -260,7 +267,12 @@ export function AgentSelectorCard({
 										{t("pages.chat.defaultAgentName", "Default Assistant")}
 									</Text>
 									<Text size="xs" c="dimmed" lineClamp={1}>
-										{t("pages.chat.agentSelector.offOptionHint", "No agent — uses the node default")}
+										{defaultOptionDisabled
+											? t(
+													"pages.chat.agentSelector.offOptionBoundHint",
+													"This conversation is bound to its agent; pick another agent instead",
+												)
+											: t("pages.chat.agentSelector.offOptionHint", "No agent — uses the node default")}
 									</Text>
 								</Stack>
 								<IconCheck

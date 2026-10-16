@@ -11,9 +11,12 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
@@ -110,7 +113,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
 
         var events = new List<ChatStreamEvent>();
         await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId))
@@ -197,6 +201,62 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             "The approval must be sequenced before the terminal.");
 
         AssertEx.False(dispatcher.HasApprovalSubscribers, "The approval handler must be detached once the stream ends.");
+    }
+
+    /// <summary>R7-03: a turn queued behind a benchmark measurement on the invocation slot carried no reason.</summary>
+    [Test]
+    public async Task RegenerateAsync_QueuedBehindABenchmarkMeasurement_SaysSo()
+    {
+        await using var provider = await BuildProviderAsync("regeneration-gpu-holder.sqlite");
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence);
+        var gate = new GpuWorkGate();
+        using var benchmark = AssertEx.NotNull(gate.TryBeginShared(GpuWorkKind.Benchmark));
+        var dispatcher = new RegenRecordingDispatcher();
+
+        // A benchmark measurement runs under a conversation id no conversation has.
+        await using var measurement = await dispatcher.ReportInvocationAssignedAsync(RuntimePackageBuilder.Valid().WithConversationId(Guid.NewGuid()).Build());
+        var service = CreateService(persistence, dispatcher, new RegenCompletingRunner(dispatcher), gpuWorkGate: gate);
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.RegenerateAsync(conversationId, originalId))
+        {
+            events.Add(streamEvent);
+        }
+
+        var notice = AssertEx.NotNull(events.SingleOrDefault(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice
+                                                                            && streamEvent.NoticeKind == nameof(TurnNoticeKind.QueuedBehindGpuWork)));
+        AssertEx.Equal("This message was queued behind a running benchmark.", notice.NoticeMessage);
+    }
+
+    [Test]
+    public async Task RegenerateAsync_WhenAWorkSessionStepHoldsTheSlot_SaysSo()
+    {
+        // The regenerate path queues on the same node slot as a send, so it names a work-session holder the same way.
+        await using var provider = await BuildProviderAsync("regeneration-work-session-holder.sqlite");
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence);
+        var holder = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Session transcript",
+            UserId = "node",
+            CreatedAtUtc = 10,
+            Kind = NodeConversationKind.WorkSession
+        });
+
+        var dispatcher = new RegenRecordingDispatcher();
+        await using var holderLease = await dispatcher.ReportInvocationAssignedAsync(RuntimePackageBuilder.Valid().WithConversationId(holder.ConversationId).Build());
+        var service = CreateService(persistence, dispatcher, new RegenCompletingRunner(dispatcher));
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.RegenerateAsync(conversationId, originalId))
+        {
+            events.Add(streamEvent);
+        }
+
+        var notice = AssertEx.NotNull(events.SingleOrDefault(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice
+                                                                            && streamEvent.NoticeKind == nameof(TurnNoticeKind.QueuedBehindWorkSession)));
+        AssertEx.Equal(holder.ConversationId.ToString(), notice.NoticeDetail);
     }
 
     [Test]
@@ -316,7 +376,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     private static NodeChatRegenerationService CreateService(NodeChatPersistenceService persistence,
         RegenRecordingDispatcher dispatcher,
         IInvocationRunner runner,
-        INodeRuntimeSettings? runtimeSettings = null)
+        INodeRuntimeSettings? runtimeSettings = null,
+        IGpuWorkGate? gpuWorkGate = null)
     {
         return new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -340,7 +401,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            gpuWorkGate ?? new GpuWorkGate());
     }
 
     [Test]
@@ -578,7 +640,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId))
@@ -672,7 +735,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId, useLocalTools: true))
@@ -775,7 +839,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
 
         var newVariantId = Guid.Empty;
         await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId))
@@ -877,7 +942,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
 
         var newVariantId = Guid.Empty;
         await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId))
@@ -991,7 +1057,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId))
@@ -1107,7 +1174,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
 
         var events = new List<ChatStreamEvent>();
         await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId, useLocalTools: false))
@@ -1203,7 +1271,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
 
         var events = new List<ChatStreamEvent>();
         await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId))
@@ -1297,7 +1366,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
 
         var events = new List<ChatStreamEvent>();
         await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId))
@@ -1309,6 +1379,96 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice && streamEvent.NoticeKind == nameof(TurnNoticeKind.PlaybookWithheld),
             "a rerun raises at most one playbook-withheld notice");
         AssertEx.Equal("qwen3:8b", events.First(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.PlaybookWithheld)).NoticeDetail);
+    }
+
+    [Test]
+    public async Task RegenerateAsync_WhenTheBoundAgentDefinitionIsGone_EmitsOneAgentUnavailableNotice()
+    {
+        // R4-01 send/regenerate parity: a rerun of a conversation whose bound agent was deleted says so.
+        await using var provider = await BuildProviderAsync("regeneration-agent-unavailable.sqlite");
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var agentDefinitionId = Guid.NewGuid();
+
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Deleted agent regen",
+            UserId = "node",
+            CreatedAtUtc = 10,
+            AgentDefinitionId = agentDefinitionId
+        });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = Guid.NewGuid(),
+            Content = "what is 2+2?",
+            CreatedAtUtc = 11
+        });
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = Guid.NewGuid()
+        };
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = originalCorrelation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = 13,
+            Content = "four",
+            Model = "model-x"
+        });
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var runner = new RegenContextCapturingRunner(dispatcher);
+
+        var store = Substitute.For<IAgentDefinitionStore>();
+        var agentDefinitionResolver = Substitute.For<IAgentDefinitionResolver>();
+        agentDefinitionResolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                               .Returns((ResolvedAgentRuntime?)null);
+        var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
+
+        var service = new NodeChatRegenerationService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(agentDefinitionResolver, store, orchestrationResolver, CreateModelCapabilityResolver(), NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
+            CreateTurnContextBuilder(),
+            Options.Create(new ChatStreamBudgetOptions()),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId))
+        {
+            events.Add(streamEvent);
+        }
+
+        AssertEx.ContainsSingle(events,
+            streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice && streamEvent.NoticeKind == nameof(TurnNoticeKind.AgentUnavailable),
+            "a rerun raises one agent-unavailable notice");
+        AssertEx.Equal(agentDefinitionId.ToString(), events.First(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.AgentUnavailable)).NoticeDetail);
     }
 
     [Test]
@@ -1383,7 +1543,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId))
@@ -1474,7 +1635,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
 
         var events = new List<ChatStreamEvent>();
         await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId, useLocalTools: useLocalTools))
@@ -1585,7 +1747,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
 
         var events = new List<ChatStreamEvent>();
         await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId, useLocalTools: true))
@@ -1668,7 +1831,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
 
         var events = new List<ChatStreamEvent>();
         await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId, useLocalTools: true))
@@ -1767,7 +1931,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
 
         var streamed = new List<ChatStreamEvent>();
         await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId))
@@ -1861,7 +2026,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId, useLocalTools: true))
@@ -1952,7 +2118,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId, useLocalTools: false))
@@ -2033,7 +2200,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
 
         ChatStreamEvent? firstCompleted = null;
         await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId))
@@ -2152,7 +2320,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
 
         await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, laterAssistantId))
         {
@@ -2869,7 +3038,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId, "high"))
@@ -2948,7 +3118,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId))
@@ -3000,7 +3171,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
 
         await AssertEx.ThrowsAsync<NodeChatReadOnlyConversationException>(async () =>
         {
@@ -3080,7 +3252,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
     }
 
 
@@ -3162,7 +3335,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId, useLocalTools: true))
@@ -3381,7 +3555,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
     }
 
     private async Task<ServiceProvider> BuildProviderAsync(string fileName)
@@ -3506,7 +3681,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
-            NullLogger<NodeChatRegenerationService>.Instance);
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
     }
 
     // The default node-settings store: no operator-selected node default, so model resolution falls through to the

@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Coder;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
@@ -44,6 +45,9 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     ///     cost nothing rather than one that never happened.
     /// </remarks>
     private const string ToolGateOutcome = "ToolGate";
+
+    /// <summary>The pause reason a graceful host stop records for the step it stopped; the SPA localizes it by this text.</summary>
+    internal const string NodeStoppedReason = "The node stopped while the session was running.";
 
     /// <summary>
     ///     Web defaults, so the consumption record reaches the browser in the same camelCase convention as the rest of
@@ -180,9 +184,9 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         Task.CompletedTask;
 
     /// <summary>
-    ///     Cancels every in-flight step so the pump writes its terminal before the host goes. The session rows are left
-    ///     as they stand: <c>Interrupted</c> is the startup reconciler's to write, and it collapses them on the next
-    ///     start.
+    ///     Cancels every in-flight step so the pump writes its terminal before the host goes. A step that lands settles
+    ///     <c>Paused</c> with <see cref="NodeStoppedReason" />; a row the stop does not reach is the startup reconciler's
+    ///     to collapse to <c>Interrupted</c>.
     /// </summary>
     public async Task StopAsync(CancellationToken cancellationToken)
     {
@@ -424,6 +428,9 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         // Seeded the same way: the resolver offers the state tools to whatever agent drives this step, off this flag.
         using var workSessionTurn = WorkSessionTurnScope.Begin();
 
+        // And the repository a bound development-workflow node reads, so its coder tools serve that checkout rather than the AgentHome workspace.
+        using var repository = CoderRepositoryScope.Begin(run.Runtime?.RepositoryRoot);
+
         ChatStreamEvent terminal;
         try
         {
@@ -494,6 +501,11 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                         streamEvent.Type == ChatStreamEventTypes.ApprovalRequested
                             ? AgentWorkSessionStatus.WaitingForApproval
                             : AgentWorkSessionStatus.WaitingForInput);
+                    break;
+
+                // A reasoning-only or whitespace delta is no sign of an answer: a thinking model emits a trailing "\n" of
+                // reasoning right after the approval request, and disarming on it left the park unbounded (V-04).
+                case ChatStreamEventTypes.AssistantDelta when string.IsNullOrWhiteSpace(streamEvent.Delta):
                     break;
 
                 case ChatStreamEventTypes.AssistantDelta:
@@ -751,6 +763,11 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         else if (guard.DeadlineExpired)
         {
             reason = "The work session step ran past its time budget.";
+        }
+        else if (run.StopReason is null && _shutdown.IsCancellationRequested)
+        {
+            // StopAsync cancelled the step through the registry, so the turn lands Cancelled rather than Interrupted.
+            reason = NodeStoppedReason;
         }
 
         await SettleAsync(sessionId, AgentWorkSessionStatus.Paused, reason);

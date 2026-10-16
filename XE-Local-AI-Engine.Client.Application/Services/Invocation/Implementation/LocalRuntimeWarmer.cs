@@ -3,6 +3,8 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
+using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
@@ -21,6 +23,7 @@ using XE_Local_AI_Engine.Providers.OpenAICompat;
 /// </remarks>
 public sealed class LocalRuntimeWarmer
 {
+    private readonly IGpuWorkGate _gpuWorkGate;
     private readonly IActiveCloudChatClientFactory _activeCloudFactory;
     private readonly ILogger<LocalRuntimeWarmer> _logger;
     private readonly IModelTrustResolver _modelTrustResolver;
@@ -31,8 +34,11 @@ public sealed class LocalRuntimeWarmer
         IActiveCloudChatClientFactory activeCloudFactory,
         IModelTrustResolver modelTrustResolver,
         ILogger<LocalRuntimeWarmer> logger,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IGpuWorkGate gpuWorkGate)
     {
+        ArgumentNullException.ThrowIfNull(gpuWorkGate);
+        _gpuWorkGate = gpuWorkGate;
         ArgumentNullException.ThrowIfNull(activeCloudFactory);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(modelTrustResolver);
@@ -95,6 +101,11 @@ public sealed class LocalRuntimeWarmer
         // Phase: preparing runtime → loading model. Both fire BEFORE the stream-idle watchdog is armed.
         await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.PreparingRuntime);
         await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.LoadingModel);
+        if (GpuWorkHolderNotice.ForModelLoad(_gpuWorkGate, invocationId) is { } gpuWorkNotice)
+        {
+            // The load waits for the exclusive job (R7-03); without this the loading state carries no reason.
+            await dispatcher.ReportTurnNoticeAsync(gpuWorkNotice);
+        }
         _logger.LogInformation("Warming local model for invocation {InvocationId} before streaming (readiness decoupled from the stream-idle watchdog).", invocationId);
 
         using var readinessActivity = NodeActivitySource.Source.StartActivity("chat.invocation.model_readiness");

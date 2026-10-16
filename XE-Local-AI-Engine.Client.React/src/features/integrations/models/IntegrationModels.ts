@@ -247,8 +247,8 @@ export interface IntegrationExecution {
 	readonly startedAtUtc: number | null;
 	readonly endedAtUtc: number | null;
 	/**
-	 * One of the backend's closed set of ten categories, rendered VERBATIM. No locale map and no icon per value: a
-	 * category the client does not recognise must still reach the operator rather than blanking the cell.
+	 * One of the backend's closed set of categories, shown through `formatFailureCategory`. A category the client does
+	 * not recognise falls back to the raw value rather than blanking the cell.
 	 */
 	readonly failureCategory: string | null;
 	readonly failureSummary: string | null;

@@ -276,7 +276,7 @@ public sealed class BenchmarkPythonTestsLiveTests : IDisposable
             verifier.VerifyAsync(Criterion(DoublingTests, ["solve"], timeoutSeconds: 20), "def solve(n):\n    return n * 2\n"));
 
         AssertEx.Contains(exception.Message, "verifier-unavailable");
-        AssertEx.Contains(exception.Message, "Compute:Enabled=false");
+        AssertEx.Contains(exception.Message, "Turn on Compute tools in Node Settings");
     }
 
     private async Task<BenchmarkJudgeVerifierResultV1> VerifyAsync(string candidate,

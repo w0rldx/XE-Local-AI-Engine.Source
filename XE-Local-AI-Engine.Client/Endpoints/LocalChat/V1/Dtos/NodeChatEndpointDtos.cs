@@ -411,6 +411,9 @@ public sealed class NodeChatConversationResponse
     /// </remarks>
     public required bool MemoryExcluded { get; init; }
 
+    /// <summary>The agent definition the conversation is bound to; a send without its own agent pick runs as this agent.</summary>
+    public Guid? AgentDefinitionId { get; init; }
+
     public required IReadOnlyList<NodeChatMessageResponse> Messages { get; init; }
 }
 

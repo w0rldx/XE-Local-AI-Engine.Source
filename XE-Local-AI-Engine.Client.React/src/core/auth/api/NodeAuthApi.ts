@@ -65,13 +65,65 @@ export async function loginNodeAuth(request: NodeLoginRequest): Promise<NodeAcce
 	return data;
 }
 
+// The node's limiter answers 429 with `Retry-After: 60`; a longer value is clamped so a boot never hangs for minutes.
+const MAX_REFRESH_RETRY_AFTER_MS = 60_000;
+
+// A refresh that stayed rate limited answers every caller until its Retry-After has passed, without a request: the
+// boot guard and the 401 interceptor (a provider outside the router polling before a token exists) each refreshed
+// again, and every extra attempt spent the shared auth budget the operator was waiting on.
+let refreshBlocked: { until: number; error: unknown } | undefined;
+
+function retryAfterMs(error: unknown): number | undefined {
+	if (!axios.isAxiosError(error) || error.response?.status !== 429) {
+		return undefined;
+	}
+
+	const seconds = Number(error.response.headers["retry-after"]);
+	return Number.isFinite(seconds) && seconds >= 0
+		? Math.min(seconds * 1000, MAX_REFRESH_RETRY_AFTER_MS)
+		: MAX_REFRESH_RETRY_AFTER_MS;
+}
+
+/** Seconds until a rate-limited refresh may be sent again, rounded up; 0 when it is not rate limited. */
+export function refreshRateLimitedForSeconds(): number {
+	const remainingMs = refreshBlocked ? refreshBlocked.until - Date.now() : 0;
+	return remainingMs > 0 ? Math.ceil(remainingMs / 1000) : 0;
+}
+
+async function refreshOnce(): Promise<NodeAccessTokenResponse> {
+	const { data } = await nodeRefresh({ client: nodeAuthClient });
+	return data;
+}
+
+// A 429 leaves the refresh cookie valid, so it is waited out once (Retry-After) and retried instead of failing the
+// boot; concurrent callers share the one promise, wait included.
 export async function refreshNodeAuthToken(): Promise<NodeAccessTokenResponse> {
 	if (refreshTokenPromise) {
 		return refreshTokenPromise;
 	}
 
-	refreshTokenPromise = nodeRefresh({ client: nodeAuthClient })
-		.then(({ data }) => data)
+	if (refreshBlocked && Date.now() < refreshBlocked.until) {
+		throw refreshBlocked.error;
+	}
+
+	refreshTokenPromise = refreshOnce()
+		.catch(async (error: unknown) => {
+			const waitMs = retryAfterMs(error);
+			if (waitMs === undefined) {
+				throw error;
+			}
+
+			await new Promise((resolve) => setTimeout(resolve, waitMs));
+			return refreshOnce();
+		})
+		.catch((error: unknown) => {
+			const waitMs = retryAfterMs(error);
+			if (waitMs !== undefined) {
+				refreshBlocked = { until: Date.now() + waitMs, error };
+			}
+
+			throw error;
+		})
 		.finally(() => {
 			refreshTokenPromise = undefined;
 		});

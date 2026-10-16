@@ -43,6 +43,29 @@ internal sealed class ChatTurnResolution
     /// </remarks>
     public bool AllowAutoModelSwap { get; init; }
 
+    /// <summary>The bound agent definition id that resolved to nothing (a deleted definition), or <see langword="null" />.</summary>
+    public Guid? MissingAgentDefinitionId { get; init; }
+
+    /// <summary>Sanitized text of the <see cref="TurnNoticeKind.AgentUnavailable" /> notice; the SPA localizes it by this exact text.</summary>
+    internal const string AgentUnavailableNoticeMessage = "The agent this conversation uses no longer exists, so the default assistant answered.";
+
+    /// <summary>
+    ///     The one AgentUnavailable notice for this turn, or <see langword="null" /> when the bound agent resolved. Shared by
+    ///     the send and regenerate paths so the two cannot drift.
+    /// </summary>
+    public TurnNoticePayload? AgentUnavailableNotice(Guid invocationId)
+    {
+        return MissingAgentDefinitionId is { } missingId
+            ? new TurnNoticePayload
+            {
+                InvocationId = invocationId,
+                Kind = TurnNoticeKind.AgentUnavailable,
+                Message = AgentUnavailableNoticeMessage,
+                Detail = missingId.ToString()
+            }
+            : null;
+    }
+
     /// <summary>
     ///     The compiled orchestration spec, or <see langword="null" /> when the turn runs single-agent (the definition is
     ///     not an orchestrator, or its orchestration degraded — see
@@ -99,6 +122,27 @@ internal sealed class ChatTurnResolution
             Message = "Tools were not offered because this model does not declare tool support. Pick a tool-capable model to use tools.",
             Detail = EffectiveModel
         };
+    }
+
+    /// <summary>Sanitized text of the compute <see cref="TurnNoticeKind.ToolsWithheld" /> notice; the SPA localizes it by this exact text.</summary>
+    internal const string ComputeWithheldNoticeMessage =
+        "run_python was not offered because Compute tools is turned off. Turn it on in Node Settings, Features.";
+
+    /// <summary>
+    ///     The ToolsWithheld notice for an agent that lists run_python while the node's compute switch is off, or
+    ///     <see langword="null" />. Shared by the send and regenerate paths so the two cannot drift.
+    /// </summary>
+    public TurnNoticePayload? ComputeWithheldNotice(Guid invocationId)
+    {
+        return Resolved?.ComputeWithheld == true
+            ? new TurnNoticePayload
+            {
+                InvocationId = invocationId,
+                Kind = TurnNoticeKind.ToolsWithheld,
+                Message = ComputeWithheldNoticeMessage,
+                Detail = "compute"
+            }
+            : null;
     }
 
     /// <summary>

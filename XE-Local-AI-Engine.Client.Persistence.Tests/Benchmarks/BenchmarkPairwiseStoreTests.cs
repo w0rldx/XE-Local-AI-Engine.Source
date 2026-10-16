@@ -322,6 +322,32 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
         AssertEx.False(reason?.StartsWith("pairwise-", StringComparison.Ordinal) == true, "A pointwise project must never read a pairwise reason.");
     }
 
+    /// <summary>
+    ///     One model with repeats: the planner forms no pair, so no comparison is enqueued and the version stays 0, yet the
+    ///     fitter publishes a refusal. The read must report that refusal, not fall back to a pointwise ranking.
+    /// </summary>
+    [Test]
+    public async Task Ranking_ComparisonFreeRefusalAtVersionZero_ReadsPairwiseInsufficient()
+    {
+        await using var context = await CreateSchemaAsync("ranking-comparison-free-refusal.sqlite");
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
+        var (project, revision, runs) = await SeedCohortAsync(store, runCount: 2);
+        AssertEx.Equal(expected: 0, (await store.GetPairwiseCohortAsync(project.Id)).ComparisonSetVersion);
+        var refusal = JsonSerializer.Serialize(runs.Select(static run => new BenchmarkPairwiseScoreEntry(run, null, null, null, 0, 0,
+                BenchmarkRunJudgeStates.ReasonPairwiseInsufficient)),
+            ScoreOptions);
+        AssertEx.True(await store.PublishPairwiseFitAsync(Fit(project, revision, "v1:no-pairs", setVersion: 0, runs, scoresJson: refusal)));
+
+        var ranked = await store.ListAllRunsAsync(project.Id);
+
+        foreach (var run in runs)
+        {
+            var item = ranked.Items.Single(candidate => candidate.Id == run);
+            AssertEx.Null(item.QualityScore);
+            AssertEx.Equal(BenchmarkRunJudgeStates.ReasonPairwiseInsufficient, item.Judge?.RankExclusionReason);
+        }
+    }
+
     [Test]
     public async Task DeleteRunAsync_WhileAComparisonNamingItIsQueued_IsRefusedFromEitherSideOfThePair()
     {
@@ -384,6 +410,35 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
 
         // Re-plannable: the surviving pair is already covered both ways round, so a planner pass adds nothing new.
         AssertEx.Equal(expected: 0, await store.EnsureComparisonsAsync(project.Id, Slots([runs[0], runs[1]]), Runtime(), null));
+    }
+
+    [Test]
+    public async Task GetPairwiseCohortAsync_CarriesEachRunsTaskItemAndCell()
+    {
+        // R7-02: every candidate used to carry a null case and an empty hash, so a suite's runs formed one group and
+        // were paired across items. The cohort must carry what each run was asked and which model answered.
+        await using var context = await CreateSchemaAsync("cohort-task-identity.sqlite");
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
+        var (project, _, runs) = await SeedCohortAsync(store, runCount: 2);
+        var item = Guid.NewGuid();
+        string[] cells = ["cell-27b", "cell-9b"];
+        for (var index = 0; index < runs.Length; index++)
+        {
+            var runId = runs[index];
+            var entity = await context.BenchmarkRuns.SingleAsync(run => run.Id == runId);
+            entity.TaskItemId = item;
+            entity.TaskInputHash = "v1:item-hash";
+            entity.PrimaryModelName = cells[index];
+        }
+
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var candidates = (await store.GetPairwiseCohortAsync(project.Id)).Candidates;
+
+        AssertEx.True(candidates.All(candidate => candidate.TaskCaseId == item && candidate.TaskInputHash == "v1:item-hash"),
+            "Each candidate names the task item it answered.");
+        AssertEx.Equal("cell-27b, cell-9b", string.Join(", ", candidates.Select(static candidate => candidate.ModelName)));
     }
 
     [Test]

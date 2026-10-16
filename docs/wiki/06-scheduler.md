@@ -89,7 +89,9 @@ A **template** is a server-defined job type. Each is an `IScheduledJobHandler` e
 `RunSavedAgentHandler` (`Handlers/RunSavedAgentHandler.cs`), template id `run-agent`, executes a
 saved agent headlessly with a fixed prompt. It supports Cron, one-shot, simple-interval, and manual
 schedules; defaults to Cron; and permits manual triggering and agent-created definitions. Its parameters
-are `agentDefinitionId`, `prompt`, and an optional `reasoningEffort` override.
+are `agentDefinitionId`, `prompt`, and an optional `reasoningEffort` override. Create and update refuse an
+`agentDefinitionId` no agent has (`ValidateReferencesAsync`); an agent that exists but has no model yet is left to
+the fire.
 
 Unlike the model-fit template it carries **no** per-template runtime default — its descriptor sets
 `DefaultMaxRuntimeSeconds: null` — because a fixed value here becomes the form's pre-filled ceiling and would
@@ -158,8 +160,9 @@ document, capped at `GraphWorkflows:MaxRunInputBytes`) and an optional `timeoutS
 Runtime invariants:
 
 - **A new run per fire, started as `Schedule`.** Each fire mints its own request id (recorded in the summary) and
-  starts with origin `Schedule` and no principal. A definition that does not accept `Schedule` fails the fire with
-  the definition's name and the hint to add the source in its settings. With graph workflows turned off the fire
+  starts with origin `Schedule` and no principal. Create and update refuse a `definitionId` that names no workflow
+  or one whose trigger sources leave out `Schedule`; one that drops the source later fails the fire with the
+  definition's name and the hint to add the source in its settings. With graph workflows turned off the fire
   fails without starting anything.
 - **It polls, on the injected `TimeProvider`.** The run hub has no service-side subscription, so the handler reads
   `GetRunAsync` once a second until the run is terminal, reporting each status change as progress. At

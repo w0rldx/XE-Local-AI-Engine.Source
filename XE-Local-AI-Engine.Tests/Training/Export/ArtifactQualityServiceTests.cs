@@ -254,6 +254,22 @@ public sealed class ArtifactQualityServiceTests
             harness.Service.OverrideAsync(harness.Artifact.Id, harness.Artifact.Version, "not applicable"));
     }
 
+    /// <summary>R7-08: an unlinked run is a dead end, and every step must say how to get out of it.</summary>
+    [Test]
+    public async Task Decide_And_Override_OnAnUnlinkedRun_NameTheMissingLinkAndTheFix()
+    {
+        var harness = Harness.Create(aggregateDelta: 0, kindDelta: 0, unlinked: true);
+
+        var decide = await AssertEx.ThrowsAsync<TrainingExportRejectedException>(() =>
+            harness.Service.DecideAsync(harness.Artifact.Id, harness.Comparison.Id, harness.Artifact.Version));
+        var overriding = await AssertEx.ThrowsAsync<TrainingExportRejectedException>(() =>
+            harness.Service.OverrideAsync(harness.Artifact.Id, harness.Artifact.Version, "operator"));
+
+        AssertEx.Equal(ArtifactQualityService.UnlinkedRunMessage, decide.Message);
+        AssertEx.Equal(ArtifactQualityService.UnlinkedRunMessage, overriding.Message);
+        AssertEx.Contains(decide.Message, "Create a new training run with linkedModelName", StringComparison.Ordinal);
+    }
+
     [Test]
     public async Task Override_PassedDecision_IsRejected()
     {
@@ -399,7 +415,8 @@ public sealed class ArtifactQualityServiceTests
             bool currentEvaluationRegressed = false,
             bool storedDeltasTampered = false,
             bool comparisonRunMismatch = false,
-            bool evaluationRunMismatch = false)
+            bool evaluationRunMismatch = false,
+            bool unlinked = false)
         {
             var runId = Guid.NewGuid();
             var artifactId = Guid.NewGuid();
@@ -427,8 +444,8 @@ public sealed class ArtifactQualityServiceTests
                 DatasetRevision = 1,
                 FreezeJson = ReadOnlyMemory<byte>.Empty,
                 BaseArtifactId = Guid.NewGuid(),
-                LinkedInstalledModelName = "base:Q4_K_M",
-                LinkedModelContentFingerprint = "v1:base",
+                LinkedInstalledModelName = unlinked ? null : "base:Q4_K_M",
+                LinkedModelContentFingerprint = unlinked ? null : "v1:base",
                 OptionsJson = ReadOnlyMemory<byte>.Empty,
                 LicenseConfirmationJson = null,
                 Status = TrainingRunStatus.Succeeded,

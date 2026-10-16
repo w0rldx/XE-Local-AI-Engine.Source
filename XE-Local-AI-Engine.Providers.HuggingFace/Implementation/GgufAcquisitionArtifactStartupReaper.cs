@@ -66,7 +66,11 @@ internal sealed class GgufAcquisitionArtifactStartupReaper : IHostedService
                 continue;
             }
 
-            TryDeleteIfStale(path, now, "stale operation-owned .part file");
+            // A download intent is written once at the start, so its age is its partial's: a download running longer than the stale age keeps its row.
+            var ageSource = path.EndsWith(HuggingFaceGgufDownloadTransaction.IntentSuffix, StringComparison.OrdinalIgnoreCase)
+                ? HuggingFaceGgufDownloadTransaction.PartPathFor(path[..^HuggingFaceGgufDownloadTransaction.IntentSuffix.Length])
+                : path;
+            TryDeleteIfStale(path, now, "stale operation-owned .part file", File.Exists(ageSource) ? ageSource : path);
         }
 
         foreach (var path in Directory.EnumerateFiles(_options.ModelsDirectory, "*" + GgufAcquisitionSidecar.Suffix, SearchOption.TopDirectoryOnly))
@@ -81,12 +85,12 @@ internal sealed class GgufAcquisitionArtifactStartupReaper : IHostedService
         }
     }
 
-    private void TryDeleteIfStale(string path, DateTime nowUtc, string reason)
+    private void TryDeleteIfStale(string path, DateTime nowUtc, string reason, string? ageSource = null)
     {
         FileInfo info;
         try
         {
-            info = new FileInfo(path);
+            info = new FileInfo(ageSource ?? path);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
         {

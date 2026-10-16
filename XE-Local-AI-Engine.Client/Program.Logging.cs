@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client;
 
+using Microsoft.Net.Http.Headers;
 using Serilog.AspNetCore;
 using Serilog.Events;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
@@ -38,6 +39,15 @@ public sealed partial class Program
 
     private static LogEventLevel GetRequestCompletionLogLevel(HttpContext httpContext, Exception? exception)
     {
+        // A 503 with Retry-After is backpressure (full queue, stream cap, shutdown, model busy): Information, never Error. Safe only because
+        // each real fault behind one logs its own Warning first (LocalModelProxyForwarder before WriteBusyAsync); keep that when adding one.
+        if (exception is null
+            && httpContext.Response.StatusCode == StatusCodes.Status503ServiceUnavailable
+            && httpContext.Response.Headers.ContainsKey(HeaderNames.RetryAfter))
+        {
+            return LogEventLevel.Information;
+        }
+
         if (exception is not null || httpContext.Response.StatusCode >= StatusCodes.Status500InternalServerError)
         {
             return LogEventLevel.Error;

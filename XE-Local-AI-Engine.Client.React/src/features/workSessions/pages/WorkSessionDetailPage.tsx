@@ -21,6 +21,7 @@ import { useWorkSessionHub } from "@/features/workSessions/hooks/useWorkSessionH
 import {
 	isObjectiveNotMet,
 	isTerminalWorkSessionStatus,
+	latestPauseReason,
 	toWorkSessionKind,
 	toWorkSessionStatus,
 } from "@/features/workSessions/models/WorkSessionModels";
@@ -233,6 +234,7 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 			isLoadingTasks={tasksQuery.isPending}
 			latestCheckpointStep={latestCheckpointStep}
 			lastFailureOutcome={lastFailureOutcome ?? undefined}
+			pauseReason={latestPauseReason(events)}
 			objectiveNotMet={isObjectiveNotMet(events)}
 			liveUpdatesUnavailable={live.connectionState === "unavailable"}
 			isCommandPending={

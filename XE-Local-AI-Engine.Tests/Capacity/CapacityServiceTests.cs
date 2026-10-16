@@ -271,6 +271,38 @@ public sealed class CapacityServiceTests
     }
 
     [Test]
+    public async Task Capacity_ResidentCompanions_DoNotCountTowardTheChatProcessCap()
+    {
+        // One chat model plus the embedder and reranker, cap = 2: the companions hold their own slots, so a second chat model still fits.
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            Footprint = GpuFootprint(1 * Gb),
+            MaxLoadedProcesses = 2,
+            RunningLlama =
+            [
+                Responsive("running/chat:Q4_K_M", ModelRole.Chat),
+                Responsive("running/embed:F16", ModelRole.Embedding),
+                Responsive("running/rerank:Q4_K_M", ModelRole.Reranker)
+            ]
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
+        decision.Reservation!.Dispose();
+    }
+
+    private static LlamaServerProcessHealth Responsive(string modelName, ModelRole role) => new()
+    {
+        ModelName = modelName,
+        Role = role,
+        IsResponsive = true,
+        Detail = "ok"
+    };
+
+    [Test]
     public async Task Capacity_PendingAdmissionCountsTowardProcessCap()
     {
         var harness = new Harness
@@ -402,8 +434,9 @@ public sealed class CapacityServiceTests
         AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
         AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
         AssertEx.Equal($"Insufficient capacity for '{Model}' (Chat): another model is still loading; try again when it finishes. "
-                       + "Loaded now: 'running/a:Q4_K_M' (Chat).",
-            decision.Reason);
+                       + "Loaded now: 'running/a:Q4_K_M' (Chat). Loading now: 'direct/x:Q4_K_M' (Chat).",
+            decision.Reason,
+            "R7-03: the refusal names the direct launch it waits on, not only the resident models.");
         AssertRejectionLogged(harness, "still loading", "'running/a:Q4_K_M' (Chat)");
         ticket!.Dispose();
     }

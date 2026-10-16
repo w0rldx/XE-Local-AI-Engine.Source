@@ -270,7 +270,8 @@ public sealed class PureRequestCheckRefusalContractTests
             new
             {
                 modelName = " ",
-                kvCacheType = "q3_banana"
+                kvCacheType = "q3_banana",
+                expectedProjectVersion = 1
             });
         using var response = await client.SendAsync(request);
 
@@ -353,6 +354,53 @@ public sealed class PureRequestCheckRefusalContractTests
                 confidence = 0.5
             }
         };
+    }
+
+    /// <summary>
+    ///     R7-01: a missing version field binds to 0, which no row has, and used to answer 409 VersionConflict
+    ///     although nothing changed. It is a 400 naming the field, ahead of the unknown-id 404.
+    /// </summary>
+    [Test]
+    [Arguments("PUT", "/benchmarks/projects/{0}", "expectedVersion")]
+    [Arguments("DELETE", "/benchmarks/projects/{0}", "expectedVersion")]
+    [Arguments("PATCH", "/benchmarks/projects/{0}/fidelity", "expectedVersion")]
+    [Arguments("PUT", "/benchmarks/projects/{0}/judge", "expectedVersion")]
+    [Arguments("POST", "/benchmarks/projects/{0}/rejudge", "expectedVersion")]
+    [Arguments("POST", "/benchmarks/projects/{0}/runs", "expectedProjectVersion")]
+    [Arguments("POST", "/benchmarks/projects/{0}/runs/batch", "expectedProjectVersion")]
+    [Arguments("POST", "/benchmarks/projects/{0}/items", "expectedProjectVersion")]
+    [Arguments("PUT", "/benchmarks/projects/{0}/items/{0}", "expectedVersion")]
+    [Arguments("DELETE", "/benchmarks/projects/{0}/items/{0}", "expectedVersion")]
+    [Arguments("DELETE", "/benchmarks/runs/{0}", "expectedVersion")]
+    [Arguments("POST", "/benchmarks/runs/{0}/cancel", "expectedVersion")]
+    [Arguments("PUT", "/benchmarks/runs/{0}/score", "expectedVersion")]
+    [Arguments("DELETE", "/benchmarks/runs/{0}/score", "expectedVersion")]
+    [Arguments("POST", "/benchmarks/runs/{0}/rejudge", "expectedVersion")]
+    [Arguments("PUT", "/training/definitions/{0}", "expectedVersion")]
+    [Arguments("DELETE", "/training/definitions/{0}", "expectedVersion")]
+    [Arguments("POST", "/training/definitions/{0}/generate", "expectedVersion")]
+    [Arguments("DELETE", "/training/datasets/{0}", "expectedVersion")]
+    [Arguments("POST", "/training/mocks/{0}/verify", "expectedVersion")]
+    [Arguments("DELETE", "/training/artifacts/{0}", "expectedVersion")]
+    [Arguments("DELETE", "/training/evaluations/{0}", "expectedVersion")]
+    [Arguments("DELETE", "/training/comparisons/{0}", "expectedVersion")]
+    public async Task VersionedWrite_WithoutTheVersionField_AnswersA400NamingIt(string method, string route, string field)
+    {
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+
+        using var request = Authorized(factory,
+            new HttpMethod(method),
+            ApiPrefix + string.Format(System.Globalization.CultureInfo.InvariantCulture, route, Guid.NewGuid()),
+            new { });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var errors = document.RootElement.GetProperty("errors");
+        AssertEx.True(errors.EnumerateArray().Any(error => string.Equals(error.GetProperty("name").GetString(), field, StringComparison.Ordinal)
+                                                          && error.GetProperty("reason").GetString()!.StartsWith(field + " is required", StringComparison.Ordinal)),
+            $"The refusal names {field}: {errors}");
     }
 
     private static async Task AssertSingleGeneralErrorAsync(HttpResponseMessage response, string reason)

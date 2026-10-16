@@ -327,7 +327,7 @@ describe("IntegrationExecutionsPage", () => {
 		}
 	});
 
-	it("renders every failure category verbatim, including one it does not recognise", () => {
+	it("renders every failure category, including one it does not recognise", () => {
 		renderPage();
 
 		expect(screen.getByTestId("integration-execution-category-exec-approval").textContent).toBe("approval-required");

@@ -150,6 +150,41 @@ public sealed class SourceBuildRecoveryTests
         AssertEx.False(logger.HasEntry(LogLevel.Warning, "reported no usable device"));
     }
 
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Recover_InProgressMarkerLeftByARestart_ReportsTheBuildAsFailedWithAReason()
+    {
+        using var temp = new TempDirectory();
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var work = Path.Combine(temp.Path, "llama.cpp", "source-build", ".work");
+        Directory.CreateDirectory(work);
+        await File.WriteAllTextAsync(Path.Combine(work, ".build-in-progress"), DateTimeOffset.UtcNow.ToString("O"));
+        using var service = CreateService(temp.Path, store, new CudaManagedBuildSignal());
+
+        await service.RecoverAsync(CancellationToken.None);
+
+        var status = service.GetStatus();
+        AssertEx.Equal(LlamaCppSourceBuildPhase.Failed, status.Phase);
+        AssertEx.True(status.Terminal);
+        AssertEx.False(status.IsRunning);
+        AssertEx.Equal(LlamaCppSourceBuildService.InterruptedBuildMessage, status.SanitizedError);
+        AssertEx.False(Directory.Exists(work));
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Recover_WithoutInProgressMarker_StaysIdle()
+    {
+        using var temp = new TempDirectory();
+        using var store = new InstalledRuntimeStore(temp.Path);
+        using var service = CreateService(temp.Path, store, new CudaManagedBuildSignal());
+
+        await service.RecoverAsync(CancellationToken.None);
+
+        AssertEx.Equal(LlamaCppSourceBuildPhase.Idle, service.GetStatus().Phase);
+        AssertEx.Null(service.GetStatus().SanitizedError);
+    }
+
     /// <summary>
     ///     Booting while CUDA is briefly unusable (driver/library mismatch until reboot, lost WSL passthrough) makes
     ///     <c>--list-devices</c> print no device. That used to read as "the tree is not what the record promises" and

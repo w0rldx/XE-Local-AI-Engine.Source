@@ -484,6 +484,26 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
             Arg.Any<CancellationToken>());
     }
 
+    // R5-07: a work session step the supervisor stopped ends here, and its envelope was booked under provider "unknown".
+    [Test]
+    public async Task TerminalizeInterruptedAsync_AttributesTheEnvelopeToTheProviderOfTheRequestedModel()
+    {
+        var persistence = CreatePersistence();
+        var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
+
+        _ = await pump.TerminalizeInterruptedAsync(correlation, new NodeChatPumpCursor("partial", string.Empty), wasCancelled: true, "qwen3.8-27b");
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(
+            Arg.Is<NodeChatTerminalizeMessageRequest>(request => request.Envelope != null && request.Envelope.Provider == AgentUsageProviders.Local),
+            Arg.Any<CancellationToken>());
+    }
+
     [Test]
     public async Task TerminalizeInterruptedAsync_WhenCancelled_PassesCancelledStatus()
     {

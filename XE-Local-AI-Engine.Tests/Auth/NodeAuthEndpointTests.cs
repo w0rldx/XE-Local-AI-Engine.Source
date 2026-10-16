@@ -252,6 +252,32 @@ public sealed class NodeAuthEndpointTests
     // Pins the deliberate shape behind the OpenAPI spec listing only `password` as required on the login request:
     // `NodeLoginRequest.Email` is nullable on purpose, and `NodeAuthService.ResolveLoginUserAsync` resolves the single
     // SetupCompleted user when no email is supplied.
+    /// <summary>R1-08: a non-ASCII address the setup form accepts must set the node up and sign in, not fail Identity's user-name rule.</summary>
+    [Test]
+    public async Task SetupAndLogin_WithANonAsciiEmail_Succeed()
+    {
+        const string email = "jürgen-ß@localhost.test";
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+
+        using var setupResponse = await SetupAsync(client, email);
+        AssertEx.Equal(HttpStatusCode.OK, setupResponse.StatusCode, await setupResponse.Content.ReadAsStringAsync());
+
+        using var loginResponse = await client.PostAsJsonAsync("/api/local/v1/auth/login",
+            new
+            {
+                email,
+                password = Password
+            });
+        AssertEx.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
+        var token = await ReadTokenAsync(loginResponse);
+
+        using var probeRequest = new HttpRequestMessage(HttpMethod.Get, OperatorProbeUrl);
+        probeRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
+        using var probeResponse = await client.SendAsync(probeRequest);
+        AssertEx.Equal(HttpStatusCode.OK, probeResponse.StatusCode);
+    }
+
     [Test]
     public async Task Login_WhenEmailIsOmitted_ResolvesTheSingleCompletedAdmin()
     {

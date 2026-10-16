@@ -301,20 +301,24 @@ public sealed partial class BenchmarkStore
     ///     The project's pairwise ranking input, or <see langword="null" /> when it does not judge pairwise.
     /// </summary>
     /// <remarks>
-    ///     Whether a project judges pairwise is read off the revision's <c>ComparisonSetVersion</c>: the first comparison
-    ///     a revision enqueues bumps it, it never returns to zero, and a mode switch changes the policy hash, minting a
-    ///     revision that starts at zero — so the mode question stays on a row the ranking already loads instead of
-    ///     decrypting a policy blob per fetch. Staleness is the fit's stored version against the revision's current one
-    ///     plus the promoted execution key; no comparison row is read, as the fit key's other inputs mint a revision.
+    ///     Pairwise is read off the revision's <c>ComparisonSetVersion</c> (bumped by its first comparison, never back to zero; a mode
+    ///     switch mints a revision at zero) or its active fit, which a no-pair cohort's refusal publishes at zero; no policy blob is
+    ///     decrypted per fetch. Staleness is the fit's stored version against the revision's plus the promoted execution key.
     /// </remarks>
     private async Task<PairwiseRanking?> LoadPairwiseRankingAsync(BenchmarkJudgePolicyRevisionRecord? current, CancellationToken cancellationToken)
     {
-        if (current is null || current.ComparisonSetVersion == 0)
+        if (current is null)
         {
             return null;
         }
 
+        // Version 0 with an active fit is the comparison-free refusal (one model with repeats): the planner formed no pair, yet the project judges pairwise.
         var fit = await ActiveFitAsync(current.Id, current.CohortGeneration, cancellationToken);
+        if (fit is null && current.ComparisonSetVersion == 0)
+        {
+            return null;
+        }
+
         if (fit is null)
         {
             return new PairwiseRanking

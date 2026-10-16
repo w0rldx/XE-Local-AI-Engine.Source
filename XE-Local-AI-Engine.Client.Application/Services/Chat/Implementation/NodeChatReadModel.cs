@@ -123,6 +123,8 @@ internal sealed class NodeChatReadModel
             cancellationToken);
     }
 
+    // The status is the last message's; the preview skips a failed assistant reply, whose content is empty, so a
+    // conversation whose only answer failed previews the user's message instead of "No messages".
     private async Task<IReadOnlyList<NodeChatConversationSummaryDto>> ListActiveConversationsAsync(NodeChatListConversationsRequest request, CancellationToken cancellationToken)
     {
         return await _writer.ExecuteConversationSharedAsync(Guid.Empty,
@@ -131,11 +133,16 @@ internal sealed class NodeChatReadModel
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
                                       SELECT c.conversation_id, c.title, c.created_at_utc, c.last_seen_utc, c.purged,
-                                             m.content, m.status, c.origin, c.is_pinned, c.archived, m.message_id
+                                             p.content, m.status, c.origin, c.is_pinned, c.archived, p.message_id
                                       FROM conversations c
                                       LEFT JOIN messages m ON m.message_id = (
                                           SELECT mi.message_id FROM messages mi
                                           WHERE mi.conversation_id = c.conversation_id
+                                          ORDER BY mi.sequence DESC LIMIT 1)
+                                      LEFT JOIN messages p ON p.message_id = (
+                                          SELECT mi.message_id FROM messages mi
+                                          WHERE mi.conversation_id = c.conversation_id
+                                            AND NOT (mi.role = 'assistant' AND mi.status = 'failed')
                                           ORDER BY mi.sequence DESC LIMIT 1)
                                       WHERE c.purged = 0 AND c.archived = 0 AND c.kind = 'chat'
                                       ORDER BY c.is_pinned DESC, c.last_seen_utc DESC
@@ -154,11 +161,16 @@ internal sealed class NodeChatReadModel
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
                                       SELECT c.conversation_id, c.title, c.created_at_utc, c.last_seen_utc, c.purged,
-                                             m.content, m.status, c.origin, c.is_pinned, c.archived, m.message_id
+                                             p.content, m.status, c.origin, c.is_pinned, c.archived, p.message_id
                                       FROM conversations c
                                       LEFT JOIN messages m ON m.message_id = (
                                           SELECT mi.message_id FROM messages mi
                                           WHERE mi.conversation_id = c.conversation_id
+                                          ORDER BY mi.sequence DESC LIMIT 1)
+                                      LEFT JOIN messages p ON p.message_id = (
+                                          SELECT mi.message_id FROM messages mi
+                                          WHERE mi.conversation_id = c.conversation_id
+                                            AND NOT (mi.role = 'assistant' AND mi.status = 'failed')
                                           ORDER BY mi.sequence DESC LIMIT 1)
                                       WHERE c.purged = 0 AND c.kind = 'chat'
                                       ORDER BY c.is_pinned DESC, c.last_seen_utc DESC

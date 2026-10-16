@@ -41,9 +41,9 @@ public sealed partial class LlamaServerProcessSupervisor
             {
                 return await SpawnOnceAsync(key, admission, intent, ct).ConfigureAwait(false);
             }
-            catch (LlamaRuntimeException ex) when (ex.Data.Contains(NonRetryableMarker))
+            catch (LlamaRuntimeException ex) when (ex is LlamaRuntimeNotInstalledException || ex.Data.Contains(NonRetryableMarker))
             {
-                // Deterministic failures (cap reached, model not installed, no free port, crash-on-load) are policy
+                // Deterministic failures (cap reached, model or runtime not installed, no free port, crash-on-load) are policy
                 // outcomes, not transient crashes — surface them as-is instead of burning retries on a guaranteed re-failure.
                 _logger.LogError(ex, "llama-server start failed for model {ModelName} role {Role}: {Reason}",
                     key.ModelName, key.Role, ex.Message);
@@ -267,7 +267,7 @@ public sealed partial class LlamaServerProcessSupervisor
         {
             var candidate = planCandidates[attempt];
             var isSafeRetry = candidate.AttemptKind == LlamaServerLoadAttemptKind.SafeRetry;
-            var port = await _reaper.AdmitAndAllocatePortAsync(intent, ct).ConfigureAwait(false);
+            var port = await _reaper.AdmitAndAllocatePortAsync(key.Role, intent, ct).ConfigureAwait(false);
 
             IProcessTreeHandle? handle = null;
             long? readinessStartedTimestamp = null;

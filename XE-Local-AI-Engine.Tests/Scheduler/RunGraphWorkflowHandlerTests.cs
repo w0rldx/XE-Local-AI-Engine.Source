@@ -45,6 +45,40 @@ public sealed class RunGraphWorkflowHandlerTests
     }
 
     [Test]
+    public async Task ValidateReferencesAsync_RefusesADefinitionThatDoesNotAcceptTheScheduleSource()
+    {
+        var harness = new Harness();
+        StubDefinition(harness, GraphWorkflowTriggerSource.Manual | GraphWorkflowTriggerSource.Chat);
+
+        var thrown = await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => harness.Handler.ValidateReferencesAsync(ValidParams(), CancellationToken.None));
+
+        AssertEx.Contains(thrown.Message, "definitionId:");
+        AssertEx.Contains(thrown.Message, "does not accept runs started by Schedule");
+    }
+
+    [Test]
+    public async Task ValidateReferencesAsync_AcceptsADefinitionThatListsTheScheduleSource()
+    {
+        var harness = new Harness();
+        StubDefinition(harness, GraphWorkflowTriggerSource.Manual | GraphWorkflowTriggerSource.Schedule);
+
+        await harness.Handler.ValidateReferencesAsync(ValidParams(), CancellationToken.None);
+
+        _ = await harness.Store.Received(1).GetDefinitionAsync(DefinitionId, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ValidateReferencesAsync_RefusesADefinitionThatDoesNotExist()
+    {
+        var harness = new Harness();
+        harness.Store.GetDefinitionAsync(DefinitionId, Arg.Any<CancellationToken>()).ThrowsAsync(new GraphWorkflowNotFoundException("missing"));
+
+        var thrown = await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => harness.Handler.ValidateReferencesAsync(ValidParams(), CancellationToken.None));
+
+        AssertEx.Contains(thrown.Message, "definitionId:");
+    }
+
+    [Test]
     [Arguments("")]
     [Arguments("not json")]
     [Arguments("""{ }""")]
@@ -216,6 +250,23 @@ public sealed class RunGraphWorkflowHandlerTests
 
     private static bool IsStart(NSubstitute.Core.ICall call) =>
         string.Equals(call.GetMethodInfo().Name, nameof(IGraphWorkflowRunService.StartAsync), StringComparison.Ordinal);
+
+    private static void StubDefinition(Harness harness, GraphWorkflowTriggerSource sources) =>
+        harness.Store.GetDefinitionAsync(DefinitionId, Arg.Any<CancellationToken>()).Returns(new GraphWorkflowDefinitionSnapshot
+        {
+            Id = DefinitionId,
+            Name = "Nightly digest",
+            Description = null,
+            GraphJson = "{}",
+            GraphHash = "graph-hash",
+            NodeCount = 2,
+            SchemaVersion = 1,
+            Kind = GraphWorkflowDefinitionKind.Standard,
+            Version = 1,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0,
+            TriggerSources = sources
+        });
 
     private static string ValidParams() => $$"""{ "definitionId": "{{DefinitionIdString}}" }""";
 

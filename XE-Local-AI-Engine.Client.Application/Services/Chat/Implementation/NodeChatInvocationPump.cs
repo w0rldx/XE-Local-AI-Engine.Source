@@ -237,7 +237,8 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
     /// </summary>
     public async Task<NodeChatPumpTerminalResult> TerminalizeInterruptedAsync(NodeChatMessageCorrelation correlation,
         NodeChatPumpCursor cursor,
-        bool wasCancelled)
+        bool wasCancelled,
+        string? requestedModel = null)
     {
         var terminalStatus = wasCancelled
             ? NodeChatMessageStatusValues.Cancelled
@@ -246,13 +247,14 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
             ? ChatStreamEventTypes.AssistantCancelled
             : ChatStreamEventTypes.AssistantInterrupted;
 
-        // Durable run ledger: a stream that ended without a terminal state still gets one envelope row, written
-        // atomically with the terminal message row. It is thin — no InvocationState exists here — but carries the status.
+        // Durable run ledger: a stream that ended without a terminal state still gets one thin envelope row, atomically with
+        // the terminal row, carrying the status and the requested model's provider (a stopped step was booked "unknown").
         var envelope = new AgentRunEnvelopeMetadata
         {
             InvocationId = null,
             DurationMs = 0L,
-            TraceId = CurrentTraceId()
+            TraceId = CurrentTraceId(),
+            Provider = await _usageProviderResolver.ResolveAsync(requestedModel, CancellationToken.None)
         };
 
         // A user cancel persists NO error text; an interrupted stream (process/stream

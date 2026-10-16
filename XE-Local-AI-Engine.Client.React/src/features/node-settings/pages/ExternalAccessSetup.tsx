@@ -91,7 +91,7 @@ export function ExternalAccessSetup() {
 							<Text>
 								{t(
 									"pages.externalAccess.offline.disables",
-									"Turns off three things the engine would otherwise do by itself: application update checks, llama.cpp runtime update checks, and the first-run model and runtime download. You can still start every one of them yourself, at any time.",
+									"Turns off three things the engine would otherwise do by itself: application update checks, llama.cpp runtime update checks, and the first-run model and runtime download. A chat does not download a missing runtime either. You can still start every one of them yourself, at any time.",
 								)}
 							</Text>
 							{/* The honesty clause. It names what the profile does NOT block, and it stays in this card: the profile

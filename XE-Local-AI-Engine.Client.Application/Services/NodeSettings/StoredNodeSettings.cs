@@ -1044,13 +1044,11 @@ public sealed partial record StoredNodeSettings
     public int? SpeculativeDraftGpuLayers { get; init; }
 
     /// <summary>
-    ///     Installed cross-encoder reranker model NAME for the knowledge-base search rerank stage
-    ///     (<c>KnowledgeBaseOptions.RerankerModelName</c>).
+    ///     Installed cross-encoder reranker model NAME for the knowledge-base search rerank stage.
     /// </summary>
     /// <remarks>
-    ///     <see langword="null" />/blank (default) leaves reranking OFF; a value enables it, resolved server-side to a
-    ///     rerank-role llama-server on the search path. Applies on the next node restart (seeded into the
-    ///     knowledge-base options at host build).
+    ///     <see langword="null" />/blank (default) falls back to <c>KnowledgeBase:RerankerModelName</c>, else reranking is
+    ///     OFF; a value enables it on a rerank-role llama-server. Read live per search, so a save applies on the next search.
     /// </remarks>
     public string? RerankerModelName { get; init; }
 

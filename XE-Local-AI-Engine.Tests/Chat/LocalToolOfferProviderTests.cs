@@ -258,6 +258,42 @@ public sealed class LocalToolOfferProviderTests
         AssertEx.Equal(ToolCategory.WriteExecute, compute.Category);
     }
 
+    [Test]
+    public void GetOfferedToolsForProfile_WhenComputeIsTurnedOff_WithholdsRunPython()
+    {
+        // R4-05: with the node switch off run_python was still offered, called and only then refused.
+        RequireComputePlatform();
+
+        AssertEx.False(ComputeOffProvider().GetOfferedToolsForProfile("qwen3:8b").Any(static tool => tool.Name == ComputeToolDefinition.ToolName),
+            "the synchronous profile pool must not offer run_python while compute is off");
+    }
+
+    [Test]
+    public async Task GetOfferedToolsForProfileAsync_WhenComputeIsTurnedOff_WithholdsRunPython()
+    {
+        RequireComputePlatform();
+
+        AssertEx.False((await ComputeOffProvider().GetOfferedToolsForProfileAsync("qwen3:8b", isCloudModel: false)).Any(static tool => tool.Name == ComputeToolDefinition.ToolName),
+            "the async profile pool must not offer run_python while compute is off");
+    }
+
+    private static void RequireComputePlatform()
+    {
+        if (!ManagedPythonPins.IsCurrentPlatformSupported)
+        {
+            Skip.Test("run_python is offered only on Linux x64 and Windows x64, so the switch has nothing to withhold here.");
+        }
+    }
+
+    private static LocalToolOfferProvider ComputeOffProvider()
+    {
+        return new LocalToolOfferProvider(new FakeAgentToolRegistry([]),
+            new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
+            StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").WithComputeEnabled(false).Build(),
+            NullCustomToolScopeFactory.Instance,
+            new FakeModelTrustResolver());
+    }
+
     /// <summary>The managed Python runtime exists only on Linux x64 and Windows x64, so elsewhere the tool would fail every call (4.7).</summary>
     [Test]
     public void GetOfferedToolsForProfile_OffThePinnedPlatforms_NeverOffersRunPython()

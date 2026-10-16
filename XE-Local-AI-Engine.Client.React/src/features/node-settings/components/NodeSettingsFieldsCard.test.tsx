@@ -436,10 +436,6 @@ describe("NodeSettingsFieldsCard — restart-required badge", () => {
 
 		renderCard({ section: "chat" });
 		expect(screen.getByTestId("node-settings-restart-badge-defaultModelName")).toBeTruthy();
-		cleanup();
-
-		renderCard({ section: "knowledge" });
-		expect(screen.getByTestId("node-settings-restart-badge-rerankerModelName")).toBeTruthy();
 	});
 
 	it("does not mark a field that is read live on every call", () => {
@@ -452,6 +448,12 @@ describe("NodeSettingsFieldsCard — restart-required badge", () => {
 
 		renderCard({ section: "runtime" });
 		expect(screen.queryByTestId("node-settings-restart-badge-keepModelWarmIntervalSeconds")).toBeNull();
+		cleanup();
+
+		// Knowledge search reads the reranker model per search, so a save applies on the next search.
+		renderCard({ section: "knowledge" });
+		expect(screen.getByTestId("node-settings-reranker-model")).toBeTruthy();
+		expect(screen.queryByTestId("node-settings-restart-badge-rerankerModelName")).toBeNull();
 	});
 
 	it("badges the draft-model fields only once the mode that uses them is selected", () => {

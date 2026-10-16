@@ -59,19 +59,30 @@ def append_jsonl(path: Path, record: dict) -> None:
 
 
 SECRET_KEYS = frozenset({"accesstoken", "refreshtoken", "token", "bearer", "password", "secret", "apikey", "api_key"})
+# Values that are credentials whatever field holds them: PEM blocks and inbound MCP, integration and proxy keys.
+SECRET_VALUE_PREFIXES = ("-----BEGIN", "xemcp_", "xeint_", "xeprx_")
 
 
 def is_secret_key(key: str) -> bool:
     lowered = key.lower()
-    return lowered in SECRET_KEYS or lowered.endswith(("password", "secret", "apikey"))
+    return lowered in SECRET_KEYS or lowered.endswith(
+        ("password", "secret", "apikey", "api_key", "privatekey", "private_key")
+    )
 
 
 def scrub(value: object) -> object:
     """Replace credential-like fields (passwords, access/refresh tokens, secrets, API keys) at any depth."""
     if isinstance(value, dict):
-        return {k: "(redacted)" if is_secret_key(str(k)) else scrub(v) for k, v in value.items()}
+        # The inbound MCP key create answers its one-time plaintext under a bare "key" beside "apiKey"; a generic
+        # "key" anywhere else (a setting name, a map entry) stays readable.
+        mcp_key = "key" in value and "apiKey" in value
+        return {
+            k: "(redacted)" if is_secret_key(str(k)) or (mcp_key and k == "key") else scrub(v) for k, v in value.items()
+        }
     if isinstance(value, list):
         return [scrub(v) for v in value]
+    if isinstance(value, str) and value.lstrip().startswith(SECRET_VALUE_PREFIXES):
+        return "(redacted)"
     # Tool-call arguments and results arrive as strings holding JSON, so a nested credential would pass through.
     if isinstance(value, str) and value.strip()[:1] in ("{", "["):
         try:

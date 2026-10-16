@@ -38,6 +38,7 @@ const { authApiMock, navigateMock, searchState } = vi.hoisted(() => ({
 	authApiMock: {
 		loginNodeAuth: vi.fn(),
 		setupNodeAuth: vi.fn(),
+		refreshRateLimitedForSeconds: vi.fn(() => 0),
 	},
 	navigateMock: vi.fn(),
 	searchState: {
@@ -72,6 +73,7 @@ describe("node auth pages", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
+		authApiMock.refreshRateLimitedForSeconds.mockReturnValue(0);
 		Object.defineProperty(window, "matchMedia", {
 			writable: true,
 			value: vi.fn().mockImplementation((query: string) => ({
@@ -101,6 +103,15 @@ describe("node auth pages", () => {
 
 	// The lockout 401 is the only login failure that carries a body. Without the `code` branch the operator reads
 	// "Incorrect password" while holding the right one, with nothing saying that waiting is the fix.
+	// R1-02: a boot whose session restore stayed rate limited lands here, and the page says when to try again.
+	it("says when to try again after a rate-limited session restore", () => {
+		authApiMock.refreshRateLimitedForSeconds.mockReturnValue(42);
+
+		renderWithProviders(<Login />);
+
+		expect(screen.getByText(resolveKey("auth.login.errorRateLimited", { seconds: 42 }))).toBeTruthy();
+	});
+
 	it("tells the operator to wait when the account is locked out", async () => {
 		authApiMock.loginNodeAuth.mockRejectedValue({
 			isAxiosError: true,
@@ -155,6 +166,21 @@ describe("node auth pages", () => {
 		// secret, no vault) skips the reveal step.
 		expect(navigateMock).toHaveBeenCalledWith({ to: "/external-access" });
 		expect(screen.queryByText(resolveKey("auth.vault.recoveryRevealTitle"))).toBeNull();
+	});
+
+	it("accepts a non-ASCII address the node accepts, with no browser-only rule marking it invalid", async () => {
+		renderWithProviders(<Setup />);
+
+		const password = "Long-Enough-Password1";
+		const email = screen.getByLabelText(/^Email/) as HTMLInputElement;
+		fireEvent.change(email, { target: { value: "jürgen-ß@localhost.test" } });
+		fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: password } });
+		fireEvent.change(screen.getByLabelText(/^Confirm password/), { target: { value: password } });
+
+		expect(email.validity.valid).toBe(true);
+		expect(screen.queryByText(resolveKey("auth.setup.validationEmail"))).toBeNull();
+		fireEvent.click(screen.getByRole("button", { name: "Create admin" }));
+		await waitFor(() => expect(authApiMock.setupNodeAuth).toHaveBeenCalledWith({ email: "jürgen-ß@localhost.test", password }));
 	});
 
 	it("reveals the recovery code after setup and continues to external access only once it is saved", async () => {

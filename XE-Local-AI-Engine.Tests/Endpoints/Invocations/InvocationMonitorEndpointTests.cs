@@ -94,6 +94,7 @@ public sealed class InvocationMonitorEndpointTests
     [Arguments(FailureCategory.ModelNotInstalled, "The selected model is not installed or not reachable. Install it or choose another model.")]
     [Arguments(FailureCategory.ModelLoadFailed, "The model could not be loaded or run on the provider.")]
     [Arguments(FailureCategory.Timeout, "The operation timed out.")]
+    [Arguments(FailureCategory.CallBudgetReached, "Stopped at the provider-call budget; a work session continues on its next step.")]
     [Arguments(FailureCategory.ProviderUnreachable, "Invocation ended with a failure. See local logs for details.")]
     public async Task GetInvocations_WhenAnEntryFailed_ShowsTheFixedSentenceForItsCategory(FailureCategory category, string expectedError)
     {

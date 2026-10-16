@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Maps a terminal invocation exception to the pair the client is allowed to see: the category the UI branches on,
@@ -32,6 +33,9 @@ internal static class InvocationFailureClassifier
     private const string ModelUnavailableMessage = "Selected model is not installed on this node.";
     private const string ProviderUnavailableMessage = "Provider unreachable.";
 
+    private const string ResponseEndedMessage =
+        "The model server stopped before the answer was finished; it may have exited. Send the message again: a local model is reloaded automatically.";
+
     // Surfaced when an endpoint's circuit breaker is open (recent consecutive transient failures): a fixed, path-free
     // message that tells the operator to retry shortly rather than reporting a hard provider outage.
     private const string ProviderTemporarilyUnavailableMessage = "Provider temporarily unavailable. Please retry shortly.";
@@ -43,6 +47,11 @@ internal static class InvocationFailureClassifier
     // — the schema set is what could not be prepared — so this must never claim otherwise. Fixed and path-free: the provider body is never forwarded.
     private const string ToolCallingPreparationFailedMessage =
         "The model could not be prepared for tool calling with the current tool set. Retry with tools turned off, or select a different model.";
+
+    // llama-server could not render the request through the model's own Jinja chat template (an HTTP 400 carrying "Jinja Exception" or "Unable to
+    // generate parser for this template"). The raw template text is long and meaningless to an operator, so a fixed, path-free reason replaces it.
+    private const string ChatTemplateRejectedMessage =
+        "The model's chat template could not render this conversation. Select a different model, or retry without the agent's skills or tools.";
 
     // A provider HTTP 500 means the model was reached but failed to load OR run (an Ollama build too old for the architecture, an out-of-memory at load).
     // Phrased to cover both, so it never falsely asserts a permanent model defect while staying far more actionable than the generic "Provider unreachable.".
@@ -85,6 +94,9 @@ internal static class InvocationFailureClassifier
             // A capacity refusal of the model's launch reaches the chat path unwrapped. Its sanitized reason names only models and says what to do
             // ("Eject one of them or pick a loaded model"), so it is surfaced verbatim rather than as the generic model-load text.
             LlamaCapacityRefusedException capacityRefused => new FailureClassification(FailureCategory.ModelLoadFailed, capacityRefused.Message),
+            // No runtime installed and the Offline profile refused to fetch one: its sanitized reason says so and names Node Settings.
+            _ when FindInChain<LlamaRuntimeNotInstalledException>(exception) is { } runtimeNotInstalled =>
+                new FailureClassification(FailureCategory.ModelLoadFailed, runtimeNotInstalled.Message),
             // Matches BEFORE the generic InvalidOperationException arms below (both derive from InvalidOperationException):
             // a local-default send with no installed GGUF chat model surfaces ModelNotInstalled, not ProviderUnreachable.
             NoChatModelInstalledException => new FailureClassification(FailureCategory.ModelNotInstalled, NoChatModelInstalledMessage),
@@ -94,9 +106,9 @@ internal static class InvocationFailureClassifier
             // The budgeter's hard-stop — history still over budget after truncation — is a clean, classified pre-inference failure whose own
             // message IS the fixed, path-free ContextBudgetExceededMessage, so it is surfaced verbatim.
             ContextBudgetExceededException contextBudgetExceeded => new FailureClassification(FailureCategory.ContextWindowExceeded, contextBudgetExceeded.Message),
-            // The provider-boundary cumulative-ceiling backstop for a runaway tool or hand-off loop. Reuses ContextWindowExceeded with its own
-            // fixed, path-free runaway-loop message, and matches before the generic InvalidOperationException arms it derives from.
-            ProviderCallBudgetExceededException providerCallBudgetExceeded => new FailureClassification(FailureCategory.ContextWindowExceeded, providerCallBudgetExceeded.Message),
+            // The call budget: a work session step's cap or the cumulative ceiling on a runaway loop. A bound, not a context overflow; its fixed,
+            // path-free message is kept, and it matches before the generic InvalidOperationException arms it derives from.
+            ProviderCallBudgetExceededException providerCallBudgetExceeded => new FailureClassification(FailureCategory.CallBudgetReached, providerCallBudgetExceeded.Message),
             // A single irreducible provider round — its pinned set alone exceeds the context window — failed by the per-round boundary before the provider is
             // called. Reuses ContextWindowExceeded with its own message; the bounded token/window diagnostics it holds are logged server-side, never surfaced.
             ProviderContextWindowExceededException providerContextWindowExceeded => new FailureClassification(FailureCategory.ContextWindowExceeded, providerContextWindowExceeded.Message),
@@ -140,6 +152,9 @@ internal static class InvocationFailureClassifier
             // HttpRequestException arms that would swallow it. Reuses ModelCapabilityUnsupported; MCP servers supply schemas the node does not control, so it stays reachable.
             _ when ReportsToolGrammarPreparationFailure(exception) =>
                 new FailureClassification(FailureCategory.ModelCapabilityUnsupported, ToolCallingPreparationFailedMessage),
+            // A chat-template render failure is also an HTTP 400, so it too matches ahead of the generic HttpRequestException arm.
+            _ when ReportsChatTemplateFailure(exception) =>
+                new FailureClassification(FailureCategory.ModelCapabilityUnsupported, ChatTemplateRejectedMessage),
             // Unmask the Ollama capability and load errors that would otherwise collapse to the generic ProviderUnreachable. The capability check matches
             // BEFORE the HTTP-500 load check, so a 400 "does not support ..." is always a capability problem rather than a load failure, whatever status it carries.
             _ when ResolveUnsupportedCapabilityMessage(exception) is { } capabilityMessage =>
@@ -150,6 +165,10 @@ internal static class InvocationFailureClassifier
             _ when FindProviderClientResult(exception) is { Status: >= 500 and <= 599 } serverError =>
                 new FailureClassification(FailureCategory.ProviderUnreachable, BuildServerErrorMessage(serverError)),
             HttpRequestException => new FailureClassification(FailureCategory.ProviderUnreachable, ProviderUnavailableMessage),
+            // The model server closed the stream mid-answer: a local llama-server that exited (crash, kill, out of memory). Its framework
+            // text "The response ended prematurely. (ResponseEnded)" said nothing the operator could act on; a resend reloads the model.
+            _ when FindInChain<HttpIOException>(exception) is { HttpRequestError: HttpRequestError.ResponseEnded } =>
+                new FailureClassification(FailureCategory.ProviderUnreachable, ResponseEndedMessage),
             _ when IsAgentRuntimeException(exception) => new FailureClassification(FailureCategory.AgentRuntime, RedactAgentRuntimeMessage(exception.Message)),
             _ => new FailureClassification(FailureCategory.Unexpected, TruncateUnexpectedMessage(exception.Message))
         };
@@ -205,6 +224,26 @@ internal static class InvocationFailureClassifier
         }
 
         return false;
+    }
+
+    /// <summary>Whether the exception chain reports llama-server failing to render the model's Jinja chat template.</summary>
+    /// <remarks>
+    ///     Walked for the same reason as <see cref="ReportsToolGrammarPreparationFailure" />, and only for a provider HTTP
+    ///     400, so a local exception that merely quotes the text is not reworded. The raw template text is never forwarded.
+    /// </remarks>
+    private static bool ReportsChatTemplateFailure(Exception exception)
+    {
+        var templateText = false;
+        var badRequest = false;
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            var message = current.Message;
+            templateText |= message.Contains("Jinja Exception", StringComparison.OrdinalIgnoreCase)
+                            || message.Contains("Unable to generate parser for this template", StringComparison.OrdinalIgnoreCase);
+            badRequest |= current is HttpRequestException { StatusCode: HttpStatusCode.BadRequest } or ClientResultException { Status: 400 };
+        }
+
+        return templateText && badRequest;
     }
 
     /// <summary>Whether the exception chain reports an Ollama model-load failure.</summary>

@@ -157,6 +157,28 @@ public sealed class RunGraphWorkflowHandler : IScheduledJobHandler
     public void ValidateParameters(string? parametersJson) =>
         _ = ParseAndValidate(parametersJson);
 
+    /// <summary>Refuses a definition that does not exist or does not list Schedule among its trigger sources.</summary>
+    public async Task ValidateReferencesAsync(string? parametersJson, CancellationToken cancellationToken)
+    {
+        var parameters = ParseAndValidate(parametersJson);
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        GraphWorkflowDefinitionSnapshot definition;
+        try
+        {
+            definition = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().GetDefinitionAsync(parameters.DefinitionId, cancellationToken);
+        }
+        catch (GraphWorkflowNotFoundException exception)
+        {
+            throw new ScheduledJobValidationException("definitionId: no graph workflow with this id exists. Select an existing workflow for the scheduled run.", exception);
+        }
+
+        if (!definition.TriggerSources.HasFlag(GraphWorkflowTriggerSource.Schedule))
+        {
+            throw new ScheduledJobValidationException(
+                $"definitionId: graph workflow '{definition.Name}' does not accept runs started by Schedule. Add Schedule to the workflow's trigger sources in its settings, then save this job.");
+        }
+    }
+
     private static async Task<GraphWorkflowRunDetail> StartAsync(IGraphWorkflowRunService runService,
         RunGraphWorkflowParameters parameters,
         Guid requestId,

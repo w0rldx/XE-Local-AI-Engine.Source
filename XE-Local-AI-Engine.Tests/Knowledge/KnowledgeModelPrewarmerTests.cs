@@ -8,10 +8,12 @@ using NSubstitute.ExceptionExtensions;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 [Category(TestCategories.Unit)]
 public sealed class KnowledgeModelPrewarmerTests
@@ -121,7 +123,25 @@ public sealed class KnowledgeModelPrewarmerTests
         await _supervisor.Received(2).EnsureRunningAsync(Reranker, ModelRole.Reranker, Arg.Any<CancellationToken>());
     }
 
-    private KnowledgeModelPrewarmer CreatePrewarmer(string rerankerModelName, string embeddingProviderName = LlamaServerProviderConstants.ProviderName, bool embedderResolved = true)
+    [Test]
+    public async Task StartWarm_WhenTheRerankerSettingCannotBeRead_StillWarmsTheEmbedderAndCoolsDown()
+    {
+        var runtimeSettings = Substitute.For<INodeRuntimeSettings>();
+        runtimeSettings.GetRerankerModelNameAsync(Arg.Any<CancellationToken>()).ThrowsAsync(new IOException("settings file locked"));
+        var prewarmer = CreatePrewarmer(Reranker, runtimeSettings: runtimeSettings);
+
+        await prewarmer.StartWarm();
+        _time.Advance(KnowledgeModelPrewarmer.RetryCooldown - TimeSpan.FromSeconds(1));
+        await prewarmer.StartWarm();
+
+        await _supervisor.Received(1).EnsureRunningAsync(Embedder, ModelRole.Embedding, Arg.Any<CancellationToken>());
+        await _supervisor.DidNotReceive().EnsureRunningAsync(Arg.Any<string>(), ModelRole.Reranker, Arg.Any<CancellationToken>());
+    }
+
+    private KnowledgeModelPrewarmer CreatePrewarmer(string rerankerModelName,
+        string embeddingProviderName = LlamaServerProviderConstants.ProviderName,
+        bool embedderResolved = true,
+        INodeRuntimeSettings? runtimeSettings = null)
     {
         var provider = Substitute.For<ILocalModelProvider>();
         var providerResolver = Substitute.For<ILocalModelProviderResolver>();
@@ -143,9 +163,10 @@ public sealed class KnowledgeModelPrewarmerTests
             embeddingModelResolver,
             Options.Create(new KnowledgeBaseOptions
             {
-                RerankerModelName = rerankerModelName,
                 EmbeddingProviderName = embeddingProviderName
             }),
+            // The reranker comes from the live node setting only, so a Node Settings edit reaches the next warm.
+            runtimeSettings ?? new StubNodeRuntimeSettings().WithRerankerModelName(rerankerModelName).Build(),
             lifetime,
             _time,
             NullLogger<KnowledgeModelPrewarmer>.Instance);

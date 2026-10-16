@@ -523,7 +523,10 @@ describe("buildNodeSettingsRequest", () => {
 		// The dispatcher reads it per send, so a save applies to the very next turn — telling the operator to restart
 		// would be wrong, and would train them to ignore the hint on the fields that do need one.
 		expect(restartGatedNodeSettingsFields.has("autoEffortFastModelName")).toBe(false);
-		expect(restartGatedNodeSettingsFields.has("rerankerModelName")).toBe(true);
+	});
+
+	it("does not restart-gate the reranker model, which knowledge search reads per search", () => {
+		expect(restartGatedNodeSettingsFields.has("rerankerModelName")).toBe(false);
 	});
 
 	it("sends the usage-rate map when a rate row is added (no developer gate)", () => {

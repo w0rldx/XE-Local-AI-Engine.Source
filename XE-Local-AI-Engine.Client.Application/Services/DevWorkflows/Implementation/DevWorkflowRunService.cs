@@ -11,6 +11,9 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions;
 /// </summary>
 internal sealed class DevWorkflowRunService : IDevWorkflowRunService
 {
+    /// <summary>How long a decision waits for its inline tick to take its turn before answering with the recorded status.</summary>
+    private static readonly TimeSpan DecisionTickWait = TimeSpan.FromSeconds(2);
+
     private readonly IDevWorkflowArtifactBlobStore _blobs;
     private readonly ILogger<DevWorkflowRunService> _logger;
     private readonly DevWorkflowOptions _options;
@@ -248,6 +251,20 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
                 ExpectedStatus = nodeRun.Status
             },
             cancellationToken);
+
+        // One tick inline settles the answer onto its node run, so the response reports the post-decision status as the graph route does. The wait for
+        // the tick's turn is bounded; past it, or on any failure, the decision is durable and this response falls back to the status it was recorded against.
+        try
+        {
+            if (!await _signal.TryAdvanceAsync(runId, DecisionTickWait, cancellationToken))
+            {
+                _logger.LogDebug("Run {RunId} was mid-tick when a decision arrived; the response reports the recorded status.", runId);
+            }
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Run {RunId} could not be advanced after a decision; the dispatcher settles it on its next tick.", runId);
+        }
 
         var detail = await SignalAndComposeAsync(runId, cancellationToken);
         var settled = await _store.FindDecisionByOperationAsync(runId, operationId, cancellationToken)

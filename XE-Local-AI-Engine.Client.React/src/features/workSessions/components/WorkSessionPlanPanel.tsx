@@ -23,6 +23,8 @@ export interface WorkSessionPlanPanelProps {
 	readonly latestCheckpointStep?: number;
 	/** `outcome` of the newest event, shown beside a `Failed` badge. */
 	readonly lastFailureOutcome?: string;
+	/** Why the session last paused, as the server recorded it; shown while it is `Paused`. */
+	readonly pauseReason?: string;
 	/** The agent completed the session but declared its objective not met (`objectiveMet:false`). */
 	readonly objectiveNotMet?: boolean;
 	/** True while the live hub is down and the page is polling instead. Informational, never blocking. */
@@ -33,6 +35,15 @@ export interface WorkSessionPlanPanelProps {
 	readonly onResume: () => void;
 	readonly onCancel: () => void;
 }
+
+// Pause reasons the supervisor and the service record, keyed by their exact English text (WorkSessionExecutionSupervisor
+// and WorkSessionService; change both together). Any other reason renders verbatim.
+const localizedPauseReasonKeys: Readonly<Record<string, string>> = {
+	"The operator paused the work session.": "pages.workSessions.plan.pauseReasons.operator",
+	"The work session was paused because a prompt went unanswered.": "pages.workSessions.plan.pauseReasons.parkTimedOut",
+	"The work session step ran past its time budget.": "pages.workSessions.plan.pauseReasons.stepTimedOut",
+	"The node stopped while the session was running.": "pages.workSessions.plan.pauseReasons.nodeStopped",
+};
 
 /** Nests by `parentTaskId` and orders each level by `sequence`. An orphaned child renders at the root, never dropped. */
 function buildTaskTree(tasks: readonly WorkSessionTaskResponse[]): readonly TaskNode[] {
@@ -93,6 +104,7 @@ export function WorkSessionPlanPanel({
 	isLoadingTasks,
 	latestCheckpointStep,
 	lastFailureOutcome,
+	pauseReason,
 	objectiveNotMet = false,
 	liveUpdatesUnavailable,
 	isCommandPending,
@@ -172,6 +184,11 @@ export function WorkSessionPlanPanel({
 							"pages.workSessions.plan.waitingForInput",
 							"The agent asked you a question in the conversation — the session is holding this node's model while it waits.",
 						)}
+					</Text>
+				) : null}
+				{status === "Paused" && pauseReason ? (
+					<Text size="xs" c="dimmed" data-testid="work-session-pause-reason">
+						{localizedPauseReasonKeys[pauseReason] ? t(localizedPauseReasonKeys[pauseReason], pauseReason) : pauseReason}
 					</Text>
 				) : null}
 				{canResume && latestCheckpointStep !== undefined ? (

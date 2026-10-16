@@ -251,6 +251,15 @@ alone, and the comparison is of the **graph** only.
 Agent nodes in a template bind by **seed slug** rather than by id, because the personas they name are themselves
 seeded and their ids differ per node.
 
+`feature-development-v1`'s research node binds the **Repository Research** persona (`work-session-repository-research`):
+the work-session state tools plus the read-only `list_files`, `read_file` and `search_text`. The knowledge-base persona it
+bound before could not read the repository, so every run blocked on its first node. When an Agent node's agent is offered
+those three tools, the agent lane resolves the work item's Development repository through
+`IDevelopmentRepositoryBindingService`. It passes the root on the session's runtime override, so the reads serve that
+checkout and not the AgentHome workspace. A node with no project, with Development Mode off, or whose repository cannot be
+resolved is blocked `Configuration` before a session exists. Its reason names the three tools and says that Retry ends
+the same way and that Skip skips every node that depends on it.
+
 Two templates ship. `research-plan-approval` is strictly linear, needs no repository, and ends on the approval that
 is the point of it. `feature-development-v1` is research and a plan a human approves, a decomposition that expands
 into one implementation-and-validation subtree per task, and an integration stage that applies nothing until a

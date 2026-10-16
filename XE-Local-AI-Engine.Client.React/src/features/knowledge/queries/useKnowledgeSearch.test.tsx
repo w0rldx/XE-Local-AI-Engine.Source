@@ -53,12 +53,12 @@ function deferred<T>() {
 }
 
 describe("useKnowledgeSearch over the real client", () => {
-	it("posts the trimmed query with the active collection and surfaces the served hits", async () => {
+	it("posts the trimmed query with the active collection and surfaces the served hits and degradations", async () => {
 		let observedBody: unknown;
 		server.use(
 			http.post(localApiPath(searchPath), async ({ request }) => {
 				observedBody = await request.json();
-				return HttpResponse.json({ results: [hit()] });
+				return HttpResponse.json({ results: [hit()], degradations: ["RerankerUnavailable"] });
 			}),
 		);
 		const { wrapper } = createProvidersWrapper();
@@ -69,6 +69,7 @@ describe("useKnowledgeSearch over the real client", () => {
 		await waitFor(() => expect(result.current.hasSearched).toBe(true));
 		expect(observedBody).toEqual({ query: "restart", limit: 10, collectionId: "PROJECT-A" });
 		expect(result.current.results).toHaveLength(1);
+		expect(result.current.degradations).toEqual(["RerankerUnavailable"]);
 		expect(result.current.lastQuery).toBe("restart");
 	});
 
@@ -79,7 +80,7 @@ describe("useKnowledgeSearch over the real client", () => {
 			http.post(localApiPath(searchPath), async ({ request }) => {
 				observedBody = await request.json();
 				await gate.promise;
-				return HttpResponse.json({ results: [hit()] });
+				return HttpResponse.json({ results: [hit()], degradations: [] });
 			}),
 		);
 		const { wrapper } = createProvidersWrapper();

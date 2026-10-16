@@ -378,6 +378,12 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             // once it returns. The linked token unblocks the wait on a cancel/timeout.
             var exitCode = await process.WaitForExitAsync(linkedSource.Token);
 
+            // The ceiling fired while the child was already dying: the stop is still the ceiling's, not a plain exit code.
+            if (diskCapSource.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                return DiskCeilingResult(request.ExecutionId, jailDiskCeiling, startedAt);
+            }
+
             if (process.TimedOut)
             {
                 // MXC enforced the same timeout inside its own wait and reaped the tree: the same shape as the engine's timeout below.
@@ -410,15 +416,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             // a timeout, with an explanatory StandardError so the AgentHome run flow can tell the user WHY it stopped.
             process.Kill();
             await TerminateLaunchAsync(launch, process);
-            return new SandboxCommandResult
-            {
-                ExecutionId = request.ExecutionId,
-                ExitCode = -1,
-                StandardError = string.Create(CultureInfo.InvariantCulture,
-                    $"Command exceeded the sandbox jail disk ceiling of {jailDiskCeiling} bytes and was terminated."),
-                Completed = false,
-                Duration = _timeProvider.GetUtcNow() - startedAt
-            };
+            return DiskCeilingResult(request.ExecutionId, jailDiskCeiling, startedAt);
         }
         catch (OperationCanceledException) when (commandCancelSource.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
@@ -1069,6 +1067,17 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         var jailRoot = state.JailRoot;
         return state.GetOrCaptureOccupancyBaseline(() => MeasureDirectoryBytes(jailRoot, long.MaxValue));
     }
+
+    private SandboxCommandResult DiskCeilingResult(string executionId, long jailDiskCeiling, DateTimeOffset startedAt) =>
+        new()
+        {
+            ExecutionId = executionId,
+            ExitCode = -1,
+            StandardError = string.Create(CultureInfo.InvariantCulture,
+                $"{SandboxCommandResult.JailDiskCeilingExceededPrefix} of {jailDiskCeiling} bytes and was terminated."),
+            Completed = false,
+            Duration = _timeProvider.GetUtcNow() - startedAt
+        };
 
     /// <summary>
     ///     Starts the jail disk watchdog for one command, or returns a no-op when it does not apply; cancelling

@@ -39,6 +39,12 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     /// </remarks>
     private const int SandboxGeneration = 1;
 
+    /// <summary>128 + SIGKILL: how a POSIX shell reports a process the kernel killed.</summary>
+    private const int SigKillExitCode = 137;
+
+    /// <summary>128 + SIGTERM: how the scope's stop of a child at a ceiling comes back on both sandbox profiles.</summary>
+    private const int SigTermExitCode = 143;
+
     /// <summary>The marker every capped stream in this product ends with, so a model reads one convention.</summary>
     private const string Marker = "…[output truncated]";
 
@@ -133,8 +139,29 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
             return ToolFailureText.Format(ToolFailureText.ToolReportedCode, outcome.RefusalMessage ?? "run_python rejected.");
         }
 
+        if (ResourceLimitReason(result) is not null)
+        {
+            return ToolFailureText.Format(ToolFailureText.ResourceLimitCode, FormatResult(result));
+        }
+
         return result.Completed ? FormatResult(result) : ToolFailureText.Format(ToolFailureText.TimeoutCode, FormatResult(result));
     }
+
+    /// <summary>Why the sandbox stopped the script for a limit, or <see langword="null" /> when it did not.</summary>
+    /// <remarks>
+    ///     A disk-ceiling stop is incomplete like a timeout but must not read as one. A completed run ending on SIGKILL
+    ///     (137) or SIGTERM (143) that nothing in the node sent is most likely a ceiling stop: the 2 GiB write comes back
+    ///     as 143 on both profiles. The wording stays "most likely" because the script can signal itself.
+    /// </remarks>
+    private static string? ResourceLimitReason(SandboxCommandResult result) =>
+        result switch
+        {
+            { Completed: false } when result.StandardError.StartsWith(SandboxCommandResult.JailDiskCeilingExceededPrefix, StringComparison.Ordinal) =>
+                "The script exceeded the sandbox disk limit and its process tree was terminated.\n",
+            { Completed: true, ExitCode: SigKillExitCode or SigTermExitCode } when !OperatingSystem.IsWindows() =>
+                "The sandbox stopped the script (it was killed by a signal), most likely at its disk or memory limit. Data written to files counts against the memory limit while it is cached, so use less memory or write less data.\n",
+            _ => null
+        };
 
     public async Task<ComputeExecutionOutcome?> PreflightAsync(CancellationToken cancellationToken = default)
     {
@@ -257,7 +284,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         return await _runtimeSettings.GetComputeEnabledAsync(cancellationToken)
             ? null
             : ComputeExecutionOutcome.Refused(ComputeRefusalCodes.ComputeDisabled,
-                "The Python compute tool is disabled on this node (Compute:Enabled=false).");
+                "The Python compute tool is turned off on this node. Turn on Compute tools in Node Settings, Features.");
     }
 
     /// <summary>
@@ -463,7 +490,11 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     private string FormatResult(SandboxCommandResult result)
     {
         var builder = new StringBuilder();
-        if (!result.Completed)
+        if (ResourceLimitReason(result) is { } limitReason)
+        {
+            builder.Append(limitReason);
+        }
+        else if (!result.Completed)
         {
             builder.Append(CultureInfo.InvariantCulture,
                 $"The script did not finish within {_options.TimeoutSeconds}s and its process tree was terminated.\n");

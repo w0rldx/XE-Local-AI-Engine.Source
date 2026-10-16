@@ -107,7 +107,9 @@ turn now also seeds a result budget sized to its model's window (`InvocationRunn
 seed, so a step's own bound is never loosened.
 
 **A spent call cap ends the STEP, not the session.** `ProviderCallBudgetExceededException` classifies as
-a failure, so the supervisor recognises the budget's own fixed terminal message
+`FailureCategory.CallBudgetReached`: the runner logs it at Information, not as an error, and the invocation monitor
+shows "Stopped at call budget" rather than a failure. The turn still ends failed on the wire, so the supervisor
+recognises the budget's own fixed terminal message
 (`ProviderCallBudget.CeilingExceededMessage`, forwarded verbatim onto the failed row), writes a
 `StepEnded` event with outcome `ProviderCallBudget`, and settles the step as if it had completed. The
 tools that ran are already persisted and the state block carries the plan, so the next step resumes the

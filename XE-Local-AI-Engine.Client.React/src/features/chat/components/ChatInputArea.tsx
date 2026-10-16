@@ -82,6 +82,7 @@ interface ChatInputAreaProps {
 	knowledgeBaseHasDocuments?: boolean;
 	agentControlsAvailable?: boolean;
 	agentModeEnabled?: boolean;
+	conversationAgentBound?: boolean;
 	selectedAgentId?: string;
 	agentOptions?: readonly AgentOption[];
 	commandOptions?: readonly ChatCommandOption[];
@@ -132,6 +133,7 @@ export function ChatInputArea({
 	knowledgeBaseHasDocuments = true,
 	agentControlsAvailable = false,
 	agentModeEnabled = false,
+	conversationAgentBound = false,
 	selectedAgentId = "",
 	agentOptions = EMPTY_AGENT_OPTIONS,
 	commandOptions = EMPTY_COMMAND_OPTIONS,
@@ -335,6 +337,7 @@ export function ChatInputArea({
 			agentControlsAvailable={agentControlsAvailable}
 			agentOptions={agentOptions}
 			agentModeEnabled={agentModeEnabled}
+			conversationAgentBound={conversationAgentBound}
 			selectedAgentId={selectedAgentId}
 			agentSelectorDisabled={agentSelectorDisabled}
 			onSelectAgent={onSelectAgent}

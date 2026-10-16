@@ -36,7 +36,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         supervisor.CountRunningProcesses().Returns(0);
         var completion = new TaskCompletionSource<LlamaBinary>(TaskCreationOptions.RunContinuationsAsynchronously);
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
-        binaryManager.EnsureBinaryAsync(GpuVariant.Cpu, lease, Arg.Any<CancellationToken>())
+        binaryManager.AcquireBinaryAsync(GpuVariant.Cpu, Arg.Any<CancellationToken>())
                      .Returns(_ =>
                      {
                          calls.Add("ensure");
@@ -75,7 +75,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         AssertEx.False(result.Accepted);
         AssertEx.Equal(1, result.RunningProcessCount);
         await binaryManager.DidNotReceiveWithAnyArgs()
-                           .EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<ILlamaServerRuntimeMutationLease>(), Arg.Any<CancellationToken>());
+                           .AcquireBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -100,7 +100,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         AssertEx.Contains(result.DisplayMessage!, "source-built", StringComparison.Ordinal);
         await lease.Disposed;
         await binaryManager.DidNotReceiveWithAnyArgs()
-                           .EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<ILlamaServerRuntimeMutationLease>(), Arg.Any<CancellationToken>());
+                           .AcquireBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -124,7 +124,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         AssertEx.Contains(result.DisplayMessage!, "active", StringComparison.Ordinal);
         await lease.Disposed;
         await binaryManager.DidNotReceiveWithAnyArgs()
-                           .EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<ILlamaServerRuntimeMutationLease>(), Arg.Any<CancellationToken>());
+                           .AcquireBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -235,7 +235,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         installedStore.ReadAsync(Arg.Any<CancellationToken>())
                       .Returns(new InstalledRuntimeState("b10201", "(source-build:cuda)", new string('a', 64), GpuVariant.Cuda, DateTimeOffset.UtcNow, "/cache/llama.cpp/source-cuda/bin"));
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
-        binaryManager.EnsureBinaryAsync(GpuVariant.Cuda, Arg.Any<CancellationToken>())
+        binaryManager.AcquireBinaryAsync(GpuVariant.Cuda, Arg.Any<CancellationToken>())
                      .Returns(new LlamaBinary
                      {
                          ServerExecutablePath = "/cache/llama.cpp/source-cuda/bin/llama-server",
@@ -267,7 +267,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
 
         AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.Busy, result.Failure);
         AssertEx.Equal("Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime.", result.DisplayMessage);
-        await binaryManager.DidNotReceiveWithAnyArgs().EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
+        await binaryManager.DidNotReceiveWithAnyArgs().AcquireBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -279,7 +279,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
                   .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(null));
         supervisor.CountRunningProcesses().Returns(1);
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
-        binaryManager.EnsureBinaryAsync(GpuVariant.Cuda, Arg.Any<CancellationToken>())
+        binaryManager.AcquireBinaryAsync(GpuVariant.Cuda, Arg.Any<CancellationToken>())
                      .Returns(new LlamaBinary
                      {
                          ServerExecutablePath = "/cache/llama.cpp/cuda/llama-server",
@@ -292,7 +292,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         var result = await service.EnsureAsync(GpuVariant.Cuda);
 
         AssertEx.True(result.Succeeded, result.DisplayMessage);
-        await binaryManager.Received(1).EnsureBinaryAsync(GpuVariant.Cuda, Arg.Any<CancellationToken>());
+        await binaryManager.Received(1).AcquireBinaryAsync(GpuVariant.Cuda, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -307,7 +307,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         supervisor.EnterRuntimeMutationSharedAsync(Arg.Any<CancellationToken>()).Returns(granted.Task);
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
-        binaryManager.EnsureBinaryAsync(GpuVariant.Cpu, Arg.Any<CancellationToken>())
+        binaryManager.AcquireBinaryAsync(GpuVariant.Cpu, Arg.Any<CancellationToken>())
                      .Returns(_ =>
                      {
                          steps.Add("ensure");
@@ -342,7 +342,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         runtimeSettings.GetKeepModelWarmEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
         runtimeSettings.GetRecommendedLlamaCppTagAsync(Arg.Any<CancellationToken>()).Returns("b1");
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
-        binaryManager.EnsureBinaryAsync(GpuVariant.Cuda, Arg.Any<CancellationToken>())
+        binaryManager.AcquireBinaryAsync(GpuVariant.Cuda, Arg.Any<CancellationToken>())
                      .Returns(new LlamaBinary
                      {
                          ServerExecutablePath = "/cache/llama.cpp/cuda/llama-server",
@@ -356,7 +356,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         var installed = await service.InstallAsync("b1");
 
         AssertEx.True(ensured.Succeeded, ensured.DisplayMessage);
-        await binaryManager.Received(1).EnsureBinaryAsync(GpuVariant.Cuda, Arg.Any<CancellationToken>());
+        await binaryManager.Received(1).AcquireBinaryAsync(GpuVariant.Cuda, Arg.Any<CancellationToken>());
         AssertEx.False(installed.Succeeded, "Install still waits for Keep Model Warm to be off.");
         AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.Busy, installed.Failure);
     }

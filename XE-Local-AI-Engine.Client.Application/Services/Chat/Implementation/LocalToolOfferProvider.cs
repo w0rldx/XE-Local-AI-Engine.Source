@@ -592,7 +592,10 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     /// </remarks>
     private IReadOnlyList<AllowedToolDto> ComputeOffer(string? activeModelId, bool isCloudModel)
     {
-        return !ManagedPythonPins.IsCurrentPlatformSupported || LeavesNode(activeModelId, isCloudModel) ? [] : [_computeOfferDto];
+        // The node kill switch withholds it too, as WebAccessEnabled does the web tools: offered while off, every call is refused.
+#pragma warning disable MA0045 // The compute offer is part of the synchronous profile pool, which has no async boundary; the sync twin is the designated per-offer read.
+        return !ManagedPythonPins.IsCurrentPlatformSupported || LeavesNode(activeModelId, isCloudModel) || !_runtimeSettings.GetComputeEnabled() ? [] : [_computeOfferDto];
+#pragma warning restore MA0045
     }
 
     /// <summary>

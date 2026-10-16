@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
@@ -131,8 +132,16 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
 
         var weightVerified = false;
         var projectorVerified = false;
+        var intentPath = IntentPathFor(finalWeightPath);
         try
         {
+            await File.WriteAllTextAsync(intentPath,
+                JsonSerializer.Serialize(new InterruptedGgufDownload
+                {
+                    ModelName = destination.CanonicalModelName,
+                    TotalBytes = checked(source.SourceSizeBytes + (source.Projector?.SourceSizeBytes ?? 0))
+                }),
+                cancellationToken).ConfigureAwait(false);
             var weightResult = await _downloadClient.DownloadAsync(source.RepoId,
                 source.SourceDisplayName,
                 source.ResolvedRevision,
@@ -256,6 +265,7 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
                 ModelContentFingerprint = modelFingerprint
             };
             await GgufAcquisitionSidecar.WriteAsync(temporarySidecarPath, sidecar, cancellationToken).ConfigureAwait(false);
+            File.Delete(intentPath);
             return new PreparedGgufDownload
             {
                 OperationId = operationId,
@@ -292,6 +302,11 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
                 {
                     Path = temporarySidecarPath,
                     Owned = true
+                },
+                new()
+                {
+                    Path = intentPath,
+                    Owned = abandoned
                 },
                 new()
                 {
@@ -515,6 +530,65 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
     /// <summary>The stable in-progress name for <paramref name="finalPath" />: <c>&lt;final&gt;.part</c>, cursors beside it.</summary>
     internal static string PartPathFor(string finalPath) =>
         finalPath + HfDownloadClient.PartSuffix;
+
+    // What a resumable partial was downloading for, beside it: the partial's file name does not carry the model name. The
+    // ".part" ending keeps it under the startup reaper's rules for partials (stale after a day, gone once installed).
+    internal static string IntentPathFor(string finalPath) =>
+        finalPath + IntentSuffix;
+
+    internal const string IntentSuffix = ".intent" + HfDownloadClient.PartSuffix;
+
+    /// <inheritdoc />
+    public IReadOnlyList<InterruptedGgufDownload> ListInterrupted()
+    {
+        var interrupted = new List<InterruptedGgufDownload>();
+        if (!Directory.Exists(_options.ModelsDirectory))
+        {
+            return interrupted;
+        }
+
+        foreach (var intentPath in Directory.EnumerateFiles(_options.ModelsDirectory, "*.gguf" + IntentSuffix, SearchOption.TopDirectoryOnly))
+        {
+            try
+            {
+                var finalPath = intentPath[..^IntentSuffix.Length];
+                if (!HasInterruptedArtifact(finalPath))
+                {
+                    // Nothing left to resume: the intent outlived its partial.
+                    File.Delete(intentPath);
+                    continue;
+                }
+
+                if (JsonSerializer.Deserialize<InterruptedGgufDownload>(File.ReadAllText(intentPath)) is { ModelName.Length: > 0 } download)
+                {
+                    interrupted.Add(download);
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+            {
+                // Best-effort: an unreadable intent only loses the row; a retried download still resumes the partial.
+            }
+        }
+
+        return interrupted;
+    }
+
+    /// <summary>
+    ///     Whether a download of <paramref name="finalPath" /> left its stable partial or its verified weights staged as
+    ///     <c>&lt;final&gt;.&lt;operation&gt;.part</c>, all a crash in the projector phase leaves.
+    /// </summary>
+    private static bool HasInterruptedArtifact(string finalPath)
+    {
+        if (File.Exists(PartPathFor(finalPath)))
+        {
+            return true;
+        }
+
+        var prefix = Path.GetFileName(finalPath) + ".";
+        return Directory.EnumerateFiles(Path.GetDirectoryName(finalPath)!, prefix + "*" + HfDownloadClient.PartSuffix, SearchOption.TopDirectoryOnly)
+                        .Select(static path => Path.GetFileName(path))
+                        .Any(name => Guid.TryParseExact(name[prefix.Length..^HfDownloadClient.PartSuffix.Length], "N", out _));
+    }
 
     /// <summary>
     ///     Carries partials from the per-operation layout (<c>&lt;final&gt;.&lt;operation&gt;.part.part</c> plus its

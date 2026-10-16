@@ -32,7 +32,8 @@ import {
 	formatInvocationDuration,
 	formatInvocationText,
 	formatInvocationTimestamp,
-	getInvocationStatusColor,
+	getInvocationErrorText,
+	getInvocationStatusBadge,
 	isInvocationActive,
 	sortInvocationHistory,
 } from "@/features/invocations/models/InvocationMonitorModel";
@@ -111,7 +112,7 @@ function CurrentInvocation({ current }: { readonly current: InvocationCurrentDto
 					</Text>
 					<TraceIdLine traceId={current.traceId} />
 				</Stack>
-				<Badge color={getInvocationStatusColor(current.status)}>{current.status}</Badge>
+				<InvocationStatusBadge run={current} />
 			</Group>
 			<Text fw={500} data-testid="invocation-summary">
 				{buildInvocationSummary(current, t)}
@@ -163,7 +164,7 @@ function CurrentInvocation({ current }: { readonly current: InvocationCurrentDto
 					})}
 				</Text>
 			</SimpleGrid>
-			{current.error ? <InlineErrorAlert message={current.error} /> : null}
+			{current.error ? <InlineErrorAlert message={getInvocationErrorText(current, t) ?? current.error} /> : null}
 		</SectionCard>
 	);
 }
@@ -189,16 +190,22 @@ function HistoryRows({ history }: { readonly history: InvocationHistoryDto[] }) 
 				<TraceIdLine traceId={entry.traceId} />
 			</Table.Td>
 			<Table.Td>
-				<Badge color={getInvocationStatusColor(entry.status)}>{entry.status}</Badge>
+				<InvocationStatusBadge run={entry} />
 			</Table.Td>
 			<Table.Td>{formatInvocationText(entry.modelUsed)}</Table.Td>
 			<Table.Td>{formatInvocationTimestamp(entry.completedAt)}</Table.Td>
 			<Table.Td>{formatInvocationDuration(entry.durationMs)}</Table.Td>
 			<Table.Td>{entry.streamedChunkCount}</Table.Td>
 			<Table.Td>{entry.streamedThinkingChunkCount}</Table.Td>
-			<Table.Td>{formatInvocationText(entry.error ?? entry.failureCategory)}</Table.Td>
+			<Table.Td>{formatInvocationText(getInvocationErrorText(entry, t))}</Table.Td>
 		</Table.Tr>
 	));
+}
+
+function InvocationStatusBadge({ run }: { run: InvocationCurrentDto | InvocationHistoryDto }) {
+	const { t } = useTranslation();
+	const badge = getInvocationStatusBadge(run, t);
+	return <Badge color={badge.color}>{badge.label}</Badge>;
 }
 
 export function Invocations() {

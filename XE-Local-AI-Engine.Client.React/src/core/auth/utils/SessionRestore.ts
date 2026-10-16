@@ -5,7 +5,7 @@ import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 
 type NodeVaultStep = "vault-locked" | "vault-setup-required";
 
-export type NodeAuthRestoreResult = "authenticated" | "setup-required" | "unauthenticated" | NodeVaultStep;
+export type NodeAuthRestoreResult = "authenticated" | "setup-required" | "unauthenticated" | "rate-limited" | NodeVaultStep;
 
 let restoreSessionPromise: Promise<NodeAuthRestoreResult> | undefined;
 
@@ -69,9 +69,15 @@ export async function restoreNodeAuthSession(): Promise<NodeAuthRestoreResult> {
 			useNodeAuthStore.getState().actions.setToken(token);
 			return step ?? "authenticated";
 		} catch (error) {
-			// Only a 401 means the refresh cookie is gone. A 429, 5xx or network failure leaves a valid session behind,
-			// so it propagates to the route's error boundary (whose retry re-runs this) instead of signing the operator out.
-			if (getErrorStatus(error) !== 401) {
+			// Only a 401 means the refresh cookie is gone. A 429 that outlived the refresh's own Retry-After wait sends the
+			// operator to the login page, which says when to try again; the token is kept. A 5xx or network failure leaves a
+			// valid session behind, so it propagates to the route's error boundary (whose retry re-runs this).
+			const status = getErrorStatus(error);
+			if (status === 429) {
+				return "rate-limited";
+			}
+
+			if (status !== 401) {
 				throw error;
 			}
 

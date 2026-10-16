@@ -71,15 +71,39 @@ const invocationTimeoutGraceMs = 30_000;
 // inter-chunk deadline the moment a `generating` phase or the first content/reasoning delta arrives.
 const coldLoadInterEventTimeoutMs = 660_000;
 
+// Deadline while a turn is parked on an approval or a question and the node's own ceiling is unknown (a resume
+// re-attach): the node's default pending-approval age (10 min) plus a minute for the terminal event to arrive.
+const parkedTurnTimeoutMs = 660_000;
+
 // Wire-string literals mirroring nodeChatStreamEventTypes / the runtimePhase union
 // (NodeChatStreamState.ts / NodeChatStreamTypes.ts). Duplicated here rather than imported to keep the
 // guard free of the stream-state module's heavy import graph; keep in sync with those sources.
 const assistantPhaseEventType = "assistant-phase";
 const assistantQueuedEventType = "assistant-queued";
 const assistantStreamingEventType = "assistant-streaming";
+const assistantSnapshotEventType = "assistant-snapshot";
+const assistantDeltaEventType = "assistant-delta";
+const approvalRequestedEventType = "approval-requested";
+const questionRequestedEventType = "question-requested";
 const runtimePhasePreparingRuntime = "preparing_runtime";
 const runtimePhaseLoadingModel = "loading_model";
 const runtimePhaseGenerating = "generating";
+
+// Events that are no sign the park ended. A resume replays the prompt BEFORE its snapshot and current phase, and a
+// thinking model emits a trailing reasoning-only delta ("\n") right after the request (V-04). A cold load disarms the
+// park, so a stalled load after the answer is still watched on its own deadline.
+function keepsParkArmed(event: NodeChatStreamEventDto): boolean {
+	switch (event.type) {
+		case assistantSnapshotEventType:
+			return true;
+		case assistantPhaseEventType:
+			return !isColdLoadPhase(event.runtimePhase ?? undefined);
+		case assistantDeltaEventType:
+			return !event.delta?.trim();
+		default:
+			return false;
+	}
+}
 
 // A cold-load phase is in effect while the latest reported phase is a pre-first-token load stage.
 function isColdLoadPhase(phase: string | undefined): boolean {
@@ -173,6 +197,10 @@ export function guardNodeChatStream(
 			let generationStarted = false;
 			// The node's own ceiling for this turn, once an event has carried it. Zero until then (no floor).
 			let floorMs = 0;
+			// The turn is parked on an approval or a question: the wire stays silent until a human answers or the NODE
+			// ends the park, so the deadline is the node's floor, or the park ceiling when a resume re-attach never
+			// learned it. Without this a work-session park outlasting the inter-chunk deadline read as a dead transport.
+			let parked = false;
 
 			try {
 				while (true) {
@@ -185,11 +213,12 @@ export function guardNodeChatStream(
 					} else {
 						deadlineMs = interChunkTimeoutMs;
 					}
-					const watchdog = watchdogTimer(Math.max(deadlineMs, floorMs));
 					// Keep a reference so the losing branch of the race never surfaces as an unhandled rejection if
 					// it settles after the watchdog has already won.
 					const nextEvent = iterator.next();
 					nextEvent.catch(() => undefined);
+					const parkedDeadlineMs = floorMs > 0 ? floorMs : parkedTurnTimeoutMs;
+					const watchdog = watchdogTimer(parked ? parkedDeadlineMs : Math.max(deadlineMs, floorMs));
 					let raced: IteratorResult<NodeChatStreamEventDto> | typeof watchdogTripped;
 					try {
 						// biome-ignore lint/performance/noAwaitInLoops: each event must be awaited (and watchdog-raced) before the next.
@@ -209,6 +238,11 @@ export function guardNodeChatStream(
 
 					received = true;
 					const event = result.value;
+					if (event.type === approvalRequestedEventType || event.type === questionRequestedEventType) {
+						parked = true;
+					} else if (!keepsParkArmed(event)) {
+						parked = false;
+					}
 					// Track the cold-load phase off the wire (not the ordered stream): the watchdog reacts to
 					// physical arrival, so update from every event before the sequence gate below may skip it.
 					if (event.type === assistantPhaseEventType && typeof event.runtimePhase === "string") {

@@ -228,7 +228,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         AssertEx.Equal(start.ToUnixTimeMilliseconds(), record.EndAtUtc);
     }
 
-    /// <summary>By design: a one-shot in the past is inert under SkipMissed and fires once under the other policies.</summary>
+    /// <summary>A one-shot in the past fires once under the policies that fire a missed run.</summary>
     [Test]
     public async Task CreateJobAsync_WithOneShotInThePast_IsAccepted()
     {
@@ -242,6 +242,103 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         var record = await service.CreateJobAsync(input);
 
         AssertEx.Equal(ScheduleKind.OneShot, record.ScheduleKind);
+    }
+
+    /// <summary>A well-formed id of an agent that does not exist used to be stored and then fail every fire.</summary>
+    [Test]
+    public async Task CreateJobAsync_ForRunAgentWithAnUnknownAgent_ThrowsValidationAndStoresNothing()
+    {
+        var dbPath = GetDatabasePath("val-runagent-unknown.sqlite");
+        await MigrateAsync(dbPath);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+
+        var thrown = await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(ValidCronInput(
+            templateId: RunSavedAgentHandler.TemplateIdValue,
+            parameters: """{ "agentDefinitionId": "11111111-1111-1111-1111-111111111111", "prompt": "hi" }""")));
+
+        AssertEx.True(thrown.Message.StartsWith("agentDefinitionId:", StringComparison.Ordinal), "The refusal names the field.");
+        AssertEx.Empty(await service.ListJobsAsync());
+    }
+
+    /// <summary>SkipMissed drops a misfired one-shot, so a past start would stay enabled and never fire.</summary>
+    [Test]
+    public async Task CreateJobAsync_WithOneShotInThePastUnderSkipMissed_ThrowsValidationAndStoresNothing()
+    {
+        var dbPath = GetDatabasePath("val-oneshot-past-skip.sqlite");
+        await MigrateAsync(dbPath);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var input = ScheduleInput(ScheduleKind.OneShot, new DateTimeOffset(2001, 9, 9, 0, 0, 0, TimeSpan.Zero), endAt: null,
+            misfirePolicy: SchedulerMisfirePolicy.SkipMissed);
+
+        var thrown = await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input));
+
+        AssertEx.True(thrown.Message.StartsWith("startAtUtc:", StringComparison.Ordinal), "The refusal names the field.");
+        AssertEx.Empty(await service.ListJobsAsync());
+    }
+
+    /// <summary>A fired SkipMissed one-shot can still be renamed; moving its start to another past time is refused.</summary>
+    [Test]
+    public async Task UpdateJobAsync_OnAFiredSkipMissedOneShot_JudgesThePastStartOnlyWhenItChanges()
+    {
+        var dbPath = GetDatabasePath("val-oneshot-past-update.sqlite");
+        await MigrateAsync(dbPath);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var firedStart = new DateTimeOffset(2001, 9, 9, 0, 0, 0, TimeSpan.Zero);
+        ScheduledJobDefinitionRecord fired;
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            // Stored directly: create refuses a past SkipMissed start, but every one-shot that already fired looks like this.
+            fired = await scope.ServiceProvider.GetRequiredService<IScheduledJobDefinitionStore>().AddAsync(new ScheduledJobDefinitionInput
+            {
+                TemplateId = TestEchoScheduledJobHandler.Id,
+                DisplayName = "Fired once",
+                Description = null,
+                Enabled = true,
+                ScheduleKind = ScheduleKind.OneShot,
+                CronExpression = null,
+                IntervalSeconds = null,
+                RepeatCount = null,
+                StartAtUtc = firedStart.ToUnixTimeMilliseconds(),
+                EndAtUtc = null,
+                TimeZoneId = "UTC",
+                MisfirePolicy = SchedulerMisfirePolicy.SkipMissed,
+                PreventOverlap = false,
+                MaxRuntimeSeconds = null,
+                ParameterJson = null,
+                CreatedBy = ScheduledJobCreator.User
+            });
+        }
+
+        var renamed = await service.UpdateJobAsync(fired.Id,
+            ScheduleInput(ScheduleKind.OneShot, firedStart, endAt: null, misfirePolicy: SchedulerMisfirePolicy.SkipMissed));
+        AssertEx.Equal("Schedule bounds", AssertEx.NotNull(renamed, "The rename is stored.").DisplayName);
+
+        var thrown = await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.UpdateJobAsync(fired.Id,
+            ScheduleInput(ScheduleKind.OneShot, firedStart.AddDays(1), endAt: null, misfirePolicy: SchedulerMisfirePolicy.SkipMissed)));
+        AssertEx.True(thrown.Message.StartsWith("startAtUtc:", StringComparison.Ordinal), "A moved past start is refused like a new one.");
+    }
+
+    [Test]
+    public async Task UpdateJobAsync_ForRunAgentToAnUnknownAgent_ThrowsValidation()
+    {
+        var dbPath = GetDatabasePath("val-runagent-unknown-update.sqlite");
+        await MigrateAsync(dbPath);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var created = await service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue, parameters: ValidRunAgentParameters));
+
+        var thrown = await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.UpdateJobAsync(created.Id, ValidCronInput(
+            templateId: RunSavedAgentHandler.TemplateIdValue,
+            parameters: """{ "agentDefinitionId": "11111111-1111-1111-1111-111111111111", "prompt": "hi" }""")));
+
+        AssertEx.True(thrown.Message.StartsWith("agentDefinitionId:", StringComparison.Ordinal), "The refusal names the field.");
     }
 
     /// <summary>TimeSpan.FromSeconds overflowed while scheduling, which surfaced as a 500.</summary>
@@ -1356,6 +1453,26 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         nodeSettingsStore.Load(Arg.Any<CancellationToken>()).Returns(storedNodeSettings);
         services.AddSingleton(nodeSettingsStore);
 
+        // run-agent refuses an agent that does not exist at create, so the one agent the run-agent tests name exists.
+        var agentDefinitionStore = Substitute.For<IAgentDefinitionStore>();
+        agentDefinitionStore.GetByIdAsync(ExistingAgentId, Arg.Any<CancellationToken>()).Returns(new AgentDefinitionRecord
+        {
+            Id = ExistingAgentId,
+            Name = "Scheduled agent",
+            Description = null,
+            Instructions = "Answer briefly.",
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
+            OrchestrationTopologyJson = null,
+            Version = 1,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        });
+        services.AddSingleton(agentDefinitionStore);
+
         var config = BuildConfig($"Data Source={dbPath}");
         services.AddSingleton(config);
         new MinimalHostApplicationBuilder(services).AddNodeScheduler(config, new NodeStartupSettings
@@ -1387,6 +1504,8 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     }
 
     private const string ValidRunAgentParameters = """{ "agentDefinitionId": "6f1c2a7e-3b4d-4c5e-8f90-123456789abc", "prompt": "hi" }""";
+
+    private static readonly Guid ExistingAgentId = Guid.Parse("6f1c2a7e-3b4d-4c5e-8f90-123456789abc");
 
     // Valid cron input using the test.echo template (supports OneShot + Cron).
     private static ScheduledJobManagementInput ValidCronInput(string cronExpression = "0 0 * * * ?",
@@ -1425,7 +1544,8 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         DateTimeOffset? startAt,
         DateTimeOffset? endAt,
         string cronExpression = "0 0 * * * ?",
-        long intervalSeconds = 3600)
+        long intervalSeconds = 3600,
+        SchedulerMisfirePolicy misfirePolicy = SchedulerMisfirePolicy.Smart)
     {
         return new ScheduledJobManagementInput
         {
@@ -1439,7 +1559,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             StartAtUtc = startAt?.ToUnixTimeMilliseconds(),
             EndAtUtc = endAt?.ToUnixTimeMilliseconds(),
             TimeZoneId = "UTC",
-            MisfirePolicy = SchedulerMisfirePolicy.Smart,
+            MisfirePolicy = misfirePolicy,
             PreventOverlap = false,
             MaxRuntimeSeconds = null,
             Parameters = null

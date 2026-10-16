@@ -18,6 +18,8 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
+using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
@@ -82,7 +84,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
         var events = new List<ChatStreamEvent>();
 
         await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -140,7 +143,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var events = new List<ChatStreamEvent>();
         await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -190,7 +194,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
         var events = new List<ChatStreamEvent>();
 
         await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -211,6 +216,67 @@ public sealed class NodeChatStreamServiceTests
 
         // Sequence numbers stay monotonic across the queued (front-door) and streaming (post-lease) producers.
         AssertEx.True(events[queuedIndex].Sequence < events[streamingIndex].Sequence, "Sequence must be monotonic.");
+    }
+
+    [Test]
+    [Arguments("work-session", false, 1)]
+    [Arguments("chat", false, 0)]
+    [Arguments("work-session", true, 0)]
+    public async Task SendMessageAsync_WhenAnotherConversationHoldsTheSlot_NamesAWorkSessionHolderOnly(string holderKind, bool holderParked, int expectedNotices)
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var holderConversationId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        persistence.GetConversationKindAsync(holderConversationId, Arg.Any<CancellationToken>()).Returns(holderKind);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        // The holder's turn is live when this send arrives: the fake hands the slot over at once, so only the notice can tell.
+        await using var holderLease = await dispatcher.ReportInvocationAssignedAsync(RuntimePackageBuilder.Valid().WithConversationId(holderConversationId).Build());
+        // A parked holder is QueuedBehindParkedTurn's to name, so only one queued notice reaches the turn.
+        AssertEx.NotNull(dispatcher.CurrentInvocation).PendingApproval = holderParked ? ParkedApproval() : null;
+        var runner = new CompletingInvocationRunner(dispatcher);
+        var service = new NodeChatStreamService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
+            CreateTurnContextBuilder(),
+            Substitute.For<IConversationSandboxStager>(),
+            Options.Create(new ChatStreamBudgetOptions()),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
+        var events = new List<ChatStreamEvent>();
+
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId)))
+        {
+            events.Add(streamEvent);
+        }
+
+        var notices = events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice
+                                                  && streamEvent.NoticeKind == nameof(TurnNoticeKind.QueuedBehindWorkSession))
+                            .ToList();
+        AssertEx.Equal(expectedNotices, notices.Count);
+        AssertEx.True(notices.TrueForAll(notice => notice.NoticeDetail == holderConversationId.ToString()), "The notice names the conversation that holds the slot.");
     }
 
     [Test]
@@ -246,7 +312,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
         var events = new List<ChatStreamEvent>();
 
         await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -310,7 +377,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -365,7 +433,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -415,7 +484,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -464,7 +534,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var sampling = new SamplingOptions
         {
@@ -523,7 +594,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         _ = await service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                              "hello",
@@ -568,7 +640,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -622,7 +695,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -688,7 +762,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -754,7 +829,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -819,7 +895,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             nodePolicy,
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -985,7 +1062,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
     }
 
     [Test]
@@ -1033,7 +1111,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "hello",
@@ -1169,7 +1248,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "hello",
@@ -1227,7 +1307,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "summarize the attachment",
@@ -1556,6 +1637,78 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.Equal(expected: 1, lease.AmbientScopeDisposeCount);
     }
 
+    /// <summary>R2-04: a file of another conversation is refused by name before the user turn is persisted, never dropped silently.</summary>
+    [Test]
+    public async Task SendMessageAsync_WhenAnAttachmentBelongsToAnotherConversation_RefusesNamingIt()
+    {
+        var conversationId = Guid.NewGuid();
+        var ownFileId = Guid.NewGuid();
+        var foreignFileId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, Guid.NewGuid(), Guid.NewGuid(), _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ContextCapturingInvocationRunner(dispatcher);
+        var uploadedFileStore = Substitute.For<IConversationUploadedFileStore>();
+        uploadedFileStore.ListAsync(conversationId, Arg.Any<CancellationToken>())
+                         .Returns([UploadedFile(conversationId, ownFileId)]);
+        var service = new NodeChatStreamService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
+            CreateTurnContextBuilder(uploadedFileStore),
+            Substitute.For<IConversationSandboxStager>(),
+            Options.Create(new ChatStreamBudgetOptions()),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
+
+        var streamed = 0;
+        var exception = await AssertEx.ThrowsAsync<NodeChatInvalidRequestException>(async () =>
+        {
+            await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                               "summarize the attachment",
+                               AttachmentFileIds: [ownFileId, foreignFileId])))
+            {
+                streamed++;
+            }
+        });
+
+        AssertEx.Contains(exception.Message, foreignFileId.ToString());
+        AssertEx.False(exception.Message.Contains(ownFileId.ToString(), StringComparison.Ordinal), exception.Message);
+        AssertEx.Equal(expected: 0, streamed);
+        AssertEx.False(runner.CaptureObserved, "A refused send must never reach the runner.");
+        await persistence.DidNotReceiveWithAnyArgs().PersistUserMessageAsync(default!, default);
+    }
+
+    private static ConversationUploadedFileInfo UploadedFile(Guid conversationId, Guid fileId) =>
+        new()
+        {
+            FileId = fileId,
+            ConversationId = conversationId,
+            OriginalFileName = "spec.txt",
+            MimeType = "text/plain",
+            Extension = ".txt",
+            SizeBytes = 128,
+            ExtractionStatus = DocumentExtractionStatus.Extracted,
+            ExtractedChars = 24,
+            CreatedAtUtc = 0
+        };
+
     [Test]
     public async Task SendMessageAsync_WhenPlainChatWithAttachment_InjectsExtractedTextIntoContext()
     {
@@ -1610,7 +1763,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -1768,7 +1922,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -1899,6 +2054,52 @@ public sealed class NodeChatStreamServiceTests
 
         AssertEx.Equal(expectNotice ? 1 : 0, events.Count(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice
                                                                          && streamEvent.NoticeKind == nameof(TurnNoticeKind.KnowledgeUnavailable)));
+    }
+
+    /// <summary>
+    ///     R7-03: a send queued behind a benchmark measurement says so; a benchmark poll's hold with the slot free does
+    ///     not, because the benchmark queue takes that hold on every poll, even with nothing to claim.
+    /// </summary>
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task SendMessageAsync_DuringABenchmark_NamesItOnlyWhenAMeasurementHoldsTheSlot(bool measurementHoldsTheSlot)
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ContextCapturingInvocationRunner(dispatcher);
+        var gate = new GpuWorkGate();
+        using var benchmark = AssertEx.NotNull(gate.TryBeginShared(GpuWorkKind.Benchmark));
+        if (measurementHoldsTheSlot)
+        {
+            // A benchmark measurement runs under a conversation id no conversation has.
+            var measurementConversationId = Guid.NewGuid();
+            _ = persistence.GetConversationKindAsync(measurementConversationId, Arg.Any<CancellationToken>()).Returns((string?)null);
+            _ = await dispatcher.ReportInvocationAssignedAsync(RuntimePackageBuilder.Valid().WithConversationId(measurementConversationId).Build());
+        }
+
+        var service = CreateServiceWithScopeFactory(persistence, runner, dispatcher, CreateKnowledgeScopeFactory(), gpuWorkGate: gate);
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId)))
+        {
+            events.Add(streamEvent);
+        }
+
+        var notices = events.Where(static streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice
+                                                         && streamEvent.NoticeKind == nameof(TurnNoticeKind.QueuedBehindGpuWork))
+                            .ToArray();
+        AssertEx.Equal(measurementHoldsTheSlot ? 1 : 0, notices.Length);
+        if (measurementHoldsTheSlot)
+        {
+            AssertEx.Equal("This message was queued behind a running benchmark.", notices[0].NoticeMessage);
+        }
     }
 
     [Test]
@@ -2132,7 +2333,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var events = new List<ChatStreamEvent>();
         await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -2162,6 +2364,8 @@ public sealed class NodeChatStreamServiceTests
         var runner = new ContextCapturingInvocationRunner(dispatcher);
         var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"));
         var uploadedFileStore = Substitute.For<IConversationUploadedFileStore>();
+        uploadedFileStore.ListAsync(conversationId, Arg.Any<CancellationToken>())
+                         .Returns([UploadedFile(conversationId, fileId)]);
 
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -2190,7 +2394,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -2249,7 +2454,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -2342,7 +2548,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -2416,7 +2623,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var events = new List<ChatStreamEvent>();
         await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -2480,7 +2688,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var events = new List<ChatStreamEvent>();
         await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -2567,7 +2776,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var events = new List<ChatStreamEvent>();
         await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -2627,7 +2837,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         // The stop button is a SEPARATE request that routes through the cancellation registry (the real cancel
         // path), NOT the client connection token. Trigger it mid-stream and assert the runner-driven Cancelled
@@ -2694,7 +2905,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var events = new List<ChatStreamEvent>();
         await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId, "hello", MessageId: assistantMessageId, RequestId: requestId)))
@@ -2746,7 +2958,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
         using var clientCancellation = new CancellationTokenSource();
         var events = new List<ChatStreamEvent>();
         var clientDisconnected = false;
@@ -2827,7 +3040,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
         using var clientCancellation = new CancellationTokenSource();
         // The blocked GetEnableToolsAsync is released as a cancellation when the client disconnects.
         await using var gateRegistration = clientCancellation.Token.Register(() => enableToolsGate.TrySetCanceled());
@@ -2906,7 +3120,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -2972,7 +3187,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -3029,7 +3245,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -3106,7 +3323,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -3179,7 +3397,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -3234,6 +3453,45 @@ public sealed class NodeChatStreamServiceTests
     [Test]
     [Arguments(true)]
     [Arguments(false)]
+    public async Task SendMessageAsync_EmitsTheComputeWithheldNotice_OnlyWhenTheResolverWithheldRunPython(bool computeWithheld)
+    {
+        // R4-05 review: an agent listing run_python on a node with compute off used to lose the tool silently.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var agentDefinitionId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { }, agentDefinitionId);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var agentDefinitionResolver = Substitute.For<IAgentDefinitionResolver>();
+        agentDefinitionResolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                               .Returns(new ResolvedAgentRuntime("Agent persona.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 1, agentDefinitionId, "Agent",
+                                   ComputeWithheld: computeWithheld));
+        var service = CreateServiceWithScopeFactory(persistence,
+            new ContextCapturingInvocationRunner(dispatcher),
+            dispatcher,
+            CreateScopeFactory(),
+            allowCloudModelAccess: false,
+            agentDefinitionResolver,
+            Substitute.For<IAgentDefinitionStore>(),
+            Substitute.For<IOrchestrationResolver>());
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId, "hello", MessageId: assistantMessageId, RequestId: requestId)))
+        {
+            events.Add(streamEvent);
+        }
+
+        var notices = events.Where(static streamEvent => streamEvent.NoticeMessage == ChatTurnResolution.ComputeWithheldNoticeMessage).ToList();
+        AssertEx.Equal(computeWithheld ? 1 : 0, notices.Count);
+        if (computeWithheld)
+        {
+            AssertEx.Equal(nameof(TurnNoticeKind.ToolsWithheld), notices[0].NoticeKind);
+        }
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
     public async Task SendMessageAsync_EmitsOnePlaybookWithheldNotice_OnlyWhenTheResolverWithheldMemory(bool playbookWithheld)
     {
         // The resolver owns the gate (cloud model, flag off, enabled memory present); the send only surfaces its verdict,
@@ -3249,6 +3507,84 @@ public sealed class NodeChatStreamServiceTests
             AssertEx.Equal("qwen3:8b", notices[0].NoticeDetail);
             AssertEx.Contains(notices[0].NoticeMessage, "learned playbook was not applied");
             AssertEx.Contains(notices[0].NoticeMessage, "grant local data on the model's external connection");
+        }
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenAPerSendPickIsGone_DoesNotSayTheConversationsAgentIsGone()
+    {
+        // The notice says "the agent this conversation uses": a deleted per-send pick is not that agent.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { }, Guid.NewGuid());
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var agentDefinitionResolver = Substitute.For<IAgentDefinitionResolver>();
+        agentDefinitionResolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                               .Returns((ResolvedAgentRuntime?)null);
+        var service = CreateServiceWithScopeFactory(persistence,
+            new ContextCapturingInvocationRunner(dispatcher),
+            dispatcher,
+            CreateScopeFactory(),
+            allowCloudModelAccess: false,
+            agentDefinitionResolver,
+            Substitute.For<IAgentDefinitionStore>(),
+            Substitute.For<IOrchestrationResolver>());
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId, "hello", MessageId: assistantMessageId, RequestId: requestId,
+                           AgentDefinitionId: Guid.NewGuid())))
+        {
+            events.Add(streamEvent);
+        }
+
+        AssertEx.False(events.Any(static streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.AgentUnavailable)),
+            "only the conversation's own binding earns the agent-unavailable wording");
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task SendMessageAsync_WhenTheBoundAgentDefinitionIsGone_EmitsOneAgentUnavailableNotice(bool definitionDeleted)
+    {
+        // R4-01: a conversation bound to a deleted definition used to fall back to the default assistant silently.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var agentDefinitionId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { }, agentDefinitionId);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ContextCapturingInvocationRunner(dispatcher);
+
+        var store = Substitute.For<IAgentDefinitionStore>();
+        var agentDefinitionResolver = Substitute.For<IAgentDefinitionResolver>();
+        agentDefinitionResolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                               .Returns(definitionDeleted
+                                   ? null
+                                   : new ResolvedAgentRuntime("Agent persona.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 1, agentDefinitionId, "Agent"));
+        var service = CreateServiceWithScopeFactory(persistence,
+            runner,
+            dispatcher,
+            CreateScopeFactory(),
+            allowCloudModelAccess: false,
+            agentDefinitionResolver,
+            store,
+            Substitute.For<IOrchestrationResolver>());
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId, "hello", MessageId: assistantMessageId, RequestId: requestId)))
+        {
+            events.Add(streamEvent);
+        }
+
+        var notices = events.Where(static streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice
+                                                         && streamEvent.NoticeKind == nameof(TurnNoticeKind.AgentUnavailable))
+                            .ToList();
+        AssertEx.Equal(definitionDeleted ? 1 : 0, notices.Count);
+        if (definitionDeleted)
+        {
+            AssertEx.Equal(agentDefinitionId.ToString(), notices[0].NoticeDetail);
+            AssertEx.Equal("The agent this conversation uses no longer exists, so the default assistant answered.", notices[0].NoticeMessage);
         }
     }
 
@@ -3475,7 +3811,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var events = new List<ChatStreamEvent>();
         await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -3529,7 +3866,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var streamed = new List<ChatStreamEvent>();
         await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -3596,7 +3934,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -3652,7 +3991,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -3707,7 +4047,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -3761,7 +4102,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -3818,7 +4160,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var events = new List<ChatStreamEvent>();
         await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -3890,7 +4233,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -3968,7 +4312,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -4072,7 +4417,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -4191,7 +4537,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -4298,7 +4645,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -4353,7 +4701,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -4429,7 +4778,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -4488,7 +4838,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -4549,7 +4900,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -4662,7 +5014,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             approvalPolicy,
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         var detailsResolver = Substitute.For<ILocalModelDetailsResolver>();
         detailsResolver.ResolveAsync(model, Arg.Any<CancellationToken>())
@@ -4834,7 +5187,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             graphWorkflows ?? Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
     }
 
     // Builds a NodeChatStreamService wired with the given scope factory (for the knowledge-base retrieval path), mirroring
@@ -4848,7 +5202,8 @@ public sealed class NodeChatStreamServiceTests
         IAgentDefinitionResolver? agentDefinitionResolver = null,
         IAgentDefinitionStore? agentDefinitionStore = null,
         IOrchestrationResolver? orchestrationResolver = null,
-        IChatTurnContextBuilder? turnContextBuilder = null)
+        IChatTurnContextBuilder? turnContextBuilder = null,
+        IGpuWorkGate? gpuWorkGate = null)
     {
         return new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -4876,7 +5231,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            gpuWorkGate ?? new GpuWorkGate());
     }
 
     /// <summary>An extra uploaded file for the attachment-egress harness: its name, extraction status and extracted size.</summary>
@@ -5530,7 +5886,8 @@ public sealed class NodeChatStreamServiceTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
 
         await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "follow up",
@@ -5687,6 +6044,17 @@ public sealed class NodeChatStreamServiceTests
 
         return persistence;
     }
+
+    private static InvocationApprovalState ParkedApproval() => new()
+    {
+        RequestId = "approval-1",
+        Description = "Run a command",
+        RequestedAt = DateTimeOffset.UtcNow,
+        CallId = "call-1",
+        ToolName = "run_command",
+        Arguments = "{}",
+        SessionScopeEligible = false
+    };
 
     private static INodeChatPersistenceService CreatePersistence(Guid conversationId,
         Guid assistantMessageId,

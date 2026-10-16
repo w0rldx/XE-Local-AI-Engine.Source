@@ -108,6 +108,12 @@ describe("ScheduledJobList", () => {
 		expect(screen.getByTestId("scheduler-job-has-parameters-job-1")).toBeTruthy();
 	});
 
+	it("floors the kind badge at its full label width so a squeezed column cannot clip it (R5-08)", () => {
+		renderList();
+
+		expect(screen.getByTestId("scheduler-job-kind-job-1").style.minWidth).toBe("max-content");
+	});
+
 	it("shows the empty state when there are no jobs", () => {
 		renderList({ jobs: [] });
 

@@ -10,6 +10,7 @@ import {
 	formatKnowledgeBytes,
 	formatKnowledgeTimestamp,
 	type KnowledgeDocumentDetail,
+	knowledgeFailureReasonKey,
 } from "@/features/knowledge/models/KnowledgeModels";
 
 interface KnowledgeDocumentDrawerProps {
@@ -100,7 +101,15 @@ export function KnowledgeDocumentDrawer({ opened, detail, isLoading, highlightSe
 							</LabelValueRow>
 						</Stack>
 
-						{detail.status === "Failed" && detail.failureReason ? <InlineErrorAlert message={detail.failureReason} /> : null}
+						{detail.status === "Failed" && detail.failureReason ? (
+							<InlineErrorAlert
+								message={
+									detail.failureReasonCode
+										? t(knowledgeFailureReasonKey(detail.failureReasonCode), { defaultValue: detail.failureReason })
+										: detail.failureReason
+								}
+							/>
+						) : null}
 
 						<Divider label={t("pages.knowledgeBase.detail.chunks", "Chunks")} labelPosition="left" />
 

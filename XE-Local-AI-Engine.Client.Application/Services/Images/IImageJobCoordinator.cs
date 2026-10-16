@@ -18,8 +18,8 @@ public interface IImageJobCoordinator
     ///     worker, and returns the job id. The generation runs detached after this call returns.
     /// </summary>
     /// <exception cref="ImageJobInputRejectedException">
-    ///     The edit parameters are inconsistent, the model's family does not offer the edit mode, or the source image
-    ///     does not exist.
+    ///     The model is not installed, the edit parameters are inconsistent, the model's family does not offer the edit
+    ///     mode, or the source image does not exist.
     /// </exception>
     Task<Guid> EnqueueAsync(CreateImageJobInput input, CancellationToken cancellationToken);
 

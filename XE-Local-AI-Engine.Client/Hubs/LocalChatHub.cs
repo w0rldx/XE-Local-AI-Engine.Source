@@ -288,7 +288,8 @@ public sealed class LocalChatHub : Hub
                 }
                 catch (Exception exception) when (exception is NodeChatConversationNotFoundException
                                                       or NodeChatMessageNotFoundException
-                                                      or NodeChatStreamAlreadyActiveException)
+                                                      or NodeChatStreamAlreadyActiveException
+                                                      or NodeChatInvalidRequestException)
                 {
                     throw new HubException(exception.Message, exception);
                 }

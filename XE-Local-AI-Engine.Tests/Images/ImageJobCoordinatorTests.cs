@@ -408,7 +408,7 @@ public sealed class ImageJobCoordinatorTests
             new FakeImageRuntimeActivityGate(),
             new GpuWorkGate(),
             NoLlamaServerResidents(),
-            Substitute.For<IImageModelRegistry>());
+            InstalledModels());
         AssertEx.NotNull(timeProvider.EvictionCallback, "The coordinator must arm a periodic eviction timer at construction.");
 
         var jobId = await coordinator.EnqueueAsync(NewInput("idle-eviction"), CancellationToken.None);
@@ -554,6 +554,25 @@ public sealed class ImageJobCoordinatorTests
         };
     }
 
+    /// <summary>A registry that reports every requested model as an installed SD1.5 set, so enqueue admits it.</summary>
+    private static IImageModelRegistry InstalledModels()
+    {
+        var registry = Substitute.For<IImageModelRegistry>();
+        registry.FindAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(call => new ImageModelRegistryEntry
+                {
+                    ModelName = call.Arg<string>(),
+                    RepoId = "leejet/stable-diffusion-1.5-gguf",
+                    Family = ImageModelFamily.Sd15,
+                    Kind = ImageModelKind.Txt2Img,
+                    Parts = [],
+                    SizeBytes = 0,
+                    SourceRevision = "main",
+                    DownloadedAtUtc = DateTimeOffset.UnixEpoch
+                });
+        return registry;
+    }
+
     private static CreateImageJobInput NewInput(string prompt)
     {
         return new CreateImageJobInput
@@ -620,7 +639,7 @@ public sealed class ImageJobCoordinatorTests
                 activityGate,
                 gpuWorkGate ?? new GpuWorkGate(),
                 llamaSupervisor ?? NoLlamaServerResidents(),
-                Substitute.For<IImageModelRegistry>());
+                InstalledModels());
 #pragma warning restore CA2000
 
             return new Harness

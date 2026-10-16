@@ -760,10 +760,13 @@ import type {
 	DeleteSlashCommandData,
 	DeleteSlashCommandResponse,
 	DeleteTrainingArtifactData,
+	DeleteTrainingArtifactError,
 	DeleteTrainingArtifactResponse,
 	DeleteTrainingDatasetData,
+	DeleteTrainingDatasetError,
 	DeleteTrainingDatasetResponse,
 	DeleteTrainingDefinitionData,
+	DeleteTrainingDefinitionError,
 	DeleteTrainingDefinitionResponse,
 	DeleteTranscriptionSessionData,
 	DeleteTranscriptionSessionResponse,
@@ -842,6 +845,7 @@ import type {
 	GenerateMcpServerApiKeyData,
 	GenerateMcpServerApiKeyResponse,
 	GenerateTrainingDatasetData,
+	GenerateTrainingDatasetError,
 	GenerateTrainingDatasetResponse,
 	GetAgentDefinitionData,
 	GetAgentDefinitionResponse,
@@ -1615,6 +1619,7 @@ import type {
 	UpdateSuggestedPlaybookActionData,
 	UpdateSuggestedPlaybookActionResponse,
 	UpdateTrainingDefinitionData,
+	UpdateTrainingDefinitionError,
 	UpdateTrainingDefinitionResponse,
 	UpdateTranscriptSegmentData,
 	UpdateTranscriptSegmentError,
@@ -1629,6 +1634,7 @@ import type {
 	UploadImageError,
 	UploadImageResponse,
 	UploadKnowledgeDocumentData,
+	UploadKnowledgeDocumentError,
 	UploadKnowledgeDocumentResponse,
 	UploadTranscriptionAudioData,
 	UploadTranscriptionAudioError,
@@ -1642,6 +1648,7 @@ import type {
 	ValidationProblemProbeError,
 	ValidationProblemProbeResponse,
 	VerifyToolMockData,
+	VerifyToolMockError,
 	VerifyToolMockResponse,
 } from "../types.gen";
 
@@ -8035,10 +8042,14 @@ export const listKnowledgeDocumentsOptions = (options?: Options<ListKnowledgeDoc
 
 export const uploadKnowledgeDocumentMutation = (
 	options?: Partial<Options<UploadKnowledgeDocumentData>>,
-): UseMutationOptions<UploadKnowledgeDocumentResponse, AxiosError<DefaultError>, Options<UploadKnowledgeDocumentData>> => {
+): UseMutationOptions<
+	UploadKnowledgeDocumentResponse,
+	AxiosError<UploadKnowledgeDocumentError>,
+	Options<UploadKnowledgeDocumentData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		UploadKnowledgeDocumentResponse,
-		AxiosError<DefaultError>,
+		AxiosError<UploadKnowledgeDocumentError>,
 		Options<UploadKnowledgeDocumentData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -10170,10 +10181,14 @@ export const getToolCatalogOptions = (options?: Options<GetToolCatalogData>) =>
 
 export const deleteTrainingArtifactMutation = (
 	options?: Partial<Options<DeleteTrainingArtifactData>>,
-): UseMutationOptions<DeleteTrainingArtifactResponse, AxiosError<DefaultError>, Options<DeleteTrainingArtifactData>> => {
+): UseMutationOptions<
+	DeleteTrainingArtifactResponse,
+	AxiosError<DeleteTrainingArtifactError>,
+	Options<DeleteTrainingArtifactData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		DeleteTrainingArtifactResponse,
-		AxiosError<DefaultError>,
+		AxiosError<DeleteTrainingArtifactError>,
 		Options<DeleteTrainingArtifactData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -10583,10 +10598,14 @@ export const listTrainingDatasetsOptions = (options?: Options<ListTrainingDatase
 
 export const deleteTrainingDatasetMutation = (
 	options?: Partial<Options<DeleteTrainingDatasetData>>,
-): UseMutationOptions<DeleteTrainingDatasetResponse, AxiosError<DefaultError>, Options<DeleteTrainingDatasetData>> => {
+): UseMutationOptions<
+	DeleteTrainingDatasetResponse,
+	AxiosError<DeleteTrainingDatasetError>,
+	Options<DeleteTrainingDatasetData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		DeleteTrainingDatasetResponse,
-		AxiosError<DefaultError>,
+		AxiosError<DeleteTrainingDatasetError>,
 		Options<DeleteTrainingDatasetData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -10790,10 +10809,14 @@ export const createTrainingDefinitionMutation = (
 
 export const deleteTrainingDefinitionMutation = (
 	options?: Partial<Options<DeleteTrainingDefinitionData>>,
-): UseMutationOptions<DeleteTrainingDefinitionResponse, AxiosError<DefaultError>, Options<DeleteTrainingDefinitionData>> => {
+): UseMutationOptions<
+	DeleteTrainingDefinitionResponse,
+	AxiosError<DeleteTrainingDefinitionError>,
+	Options<DeleteTrainingDefinitionData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		DeleteTrainingDefinitionResponse,
-		AxiosError<DefaultError>,
+		AxiosError<DeleteTrainingDefinitionError>,
 		Options<DeleteTrainingDefinitionData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -10832,10 +10855,14 @@ export const getTrainingDefinitionOptions = (options: Options<GetTrainingDefinit
 
 export const updateTrainingDefinitionMutation = (
 	options?: Partial<Options<UpdateTrainingDefinitionData>>,
-): UseMutationOptions<UpdateTrainingDefinitionResponse, AxiosError<DefaultError>, Options<UpdateTrainingDefinitionData>> => {
+): UseMutationOptions<
+	UpdateTrainingDefinitionResponse,
+	AxiosError<UpdateTrainingDefinitionError>,
+	Options<UpdateTrainingDefinitionData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		UpdateTrainingDefinitionResponse,
-		AxiosError<DefaultError>,
+		AxiosError<UpdateTrainingDefinitionError>,
 		Options<UpdateTrainingDefinitionData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -10852,10 +10879,14 @@ export const updateTrainingDefinitionMutation = (
 
 export const generateTrainingDatasetMutation = (
 	options?: Partial<Options<GenerateTrainingDatasetData>>,
-): UseMutationOptions<GenerateTrainingDatasetResponse, AxiosError<DefaultError>, Options<GenerateTrainingDatasetData>> => {
+): UseMutationOptions<
+	GenerateTrainingDatasetResponse,
+	AxiosError<GenerateTrainingDatasetError>,
+	Options<GenerateTrainingDatasetData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		GenerateTrainingDatasetResponse,
-		AxiosError<DefaultError>,
+		AxiosError<GenerateTrainingDatasetError>,
 		Options<GenerateTrainingDatasetData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -11017,8 +11048,12 @@ export const getToolMockOptions = (options: Options<GetToolMockData>) =>
 
 export const verifyToolMockMutation = (
 	options?: Partial<Options<VerifyToolMockData>>,
-): UseMutationOptions<VerifyToolMockResponse, AxiosError<DefaultError>, Options<VerifyToolMockData>> => {
-	const mutationOptions: UseMutationOptions<VerifyToolMockResponse, AxiosError<DefaultError>, Options<VerifyToolMockData>> = {
+): UseMutationOptions<VerifyToolMockResponse, AxiosError<VerifyToolMockError>, Options<VerifyToolMockData>> => {
+	const mutationOptions: UseMutationOptions<
+		VerifyToolMockResponse,
+		AxiosError<VerifyToolMockError>,
+		Options<VerifyToolMockData>
+	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await verifyToolMock({
 				...options,

@@ -63,8 +63,8 @@ export function useKnowledgeUpload(collectionId = KNOWLEDGE_DEFAULT_COLLECTION_I
 					toast.success(t("pages.knowledgeBase.upload.queued", "{{name}} is being indexed.", { name: file.name }));
 				}
 			} catch (error) {
-				// The endpoint names the size limit in its own validation message. A body over the host's request limit is
-				// refused before the endpoint runs, as a bare 413, so that one gets its own message rather than "failed".
+				// An oversize file answers 413 with a problem body whose detail names the cap, and that detail is shown. The host's own
+				// refusal (a body the server read past the limit) carries a generic detail, so a 413 falls back to "larger than this node accepts".
 				const fallback =
 					error instanceof ApiError && error.statusCode === 413
 						? t("pages.knowledgeBase.upload.tooLargeForNode", "{{name}} is larger than this node accepts.", {

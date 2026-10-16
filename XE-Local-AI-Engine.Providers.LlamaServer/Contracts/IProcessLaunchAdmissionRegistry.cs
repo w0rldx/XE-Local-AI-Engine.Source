@@ -43,6 +43,9 @@ public sealed class ProcessLaunchAdmissionSnapshot
     public required bool HasRequestedKey { get; init; }
 
     public required bool HasGlobalBlocker { get; init; }
+
+    /// <summary>The keys behind <see cref="HasGlobalBlocker" />: direct launches in flight, which carry no admission.</summary>
+    public IReadOnlySet<ProcessLaunchAdmissionKey> BlockingKeys { get; init; } = new HashSet<ProcessLaunchAdmissionKey>();
 }
 
 /// <summary>Idempotent capacity-owner lease for a published launch admission.</summary>

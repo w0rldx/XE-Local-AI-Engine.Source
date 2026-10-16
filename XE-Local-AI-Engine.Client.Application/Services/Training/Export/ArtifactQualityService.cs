@@ -21,6 +21,11 @@ public interface IArtifactQualityService
 
 public sealed class ArtifactQualityService : IArtifactQualityService
 {
+    /// <summary>The refusal every quality and promotion step gives for a run created without a base link.</summary>
+    public const string UnlinkedRunMessage =
+        "This run has no installed base counterpart: it was created without linkedModelName, and a link cannot be added to an existing run. "
+        + "Create a new training run with linkedModelName set to the installed GGUF of its base model to quality-check and promote its artifacts.";
+
     public const string RevalidationEvidenceReusedCode = "RevalidationEvidenceReused";
     private const int MaxDecisionHistoryEntries = 64;
     private readonly ITrainingEvaluationStore _evaluations;
@@ -62,7 +67,7 @@ public sealed class ArtifactQualityService : IArtifactQualityService
                   ?? throw new TrainingExportRejectedException("The run behind this artifact was not found.");
         if (string.IsNullOrWhiteSpace(run.LinkedInstalledModelName) || string.IsNullOrWhiteSpace(run.LinkedModelContentFingerprint))
         {
-            throw new TrainingExportRejectedException("This run has no installed base counterpart, so promotion quality cannot be compared.");
+            throw new TrainingExportRejectedException(UnlinkedRunMessage);
         }
 
         var comparison = await _evaluations.GetComparisonAsync(comparisonId, cancellationToken)
@@ -179,8 +184,15 @@ public sealed class ArtifactQualityService : IArtifactQualityService
             throw new TrainingConflictException("VersionConflict");
         }
 
-        var current = ReadDecision(artifact)
-                      ?? throw new TrainingExportRejectedException("A complete failed quality comparison is required before an override.");
+        var current = ReadDecision(artifact);
+        if (current is null)
+        {
+            var run = await _runs.GetAsync(artifact.RunId, cancellationToken);
+            throw new TrainingExportRejectedException(string.IsNullOrWhiteSpace(run?.LinkedInstalledModelName)
+                ? UnlinkedRunMessage
+                : "A complete failed quality comparison is required before an override.");
+        }
+
         if (current.Outcome != ArtifactQualityOutcome.Failed || artifact.QualityComparisonId is not { } comparisonId)
         {
             throw new TrainingExportRejectedException("Only a complete failed quality comparison can be overridden.");

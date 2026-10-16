@@ -150,7 +150,7 @@ Module-owned workers worth knowing about, registered alongside their feature rat
 | `DevelopmentWorkspaceRetentionService` | `AddNodeDevelopmentExtensions` | retention sweep for finished Development Mode task workspaces (see [Architecture Overview](01-architecture-overview.md#development-mode-registered-source-managed-worktree)) |
 | `DevWorkflowDefinitionSeeder`, `DevWorkflowStartupReconciler` | `AddNodeDevWorkflowsExtensions` | seed the shipped definition templates by slug; make node runs a crashed host left mid-flight dispatchable again (see [Dev Workflows](25-dev-workflows.md)) |
 | `GraphWorkflowStartupReconciler` | `AddNodeGraphWorkflowsExtensions` | make node runs a crashed host left in flight judgeable again (see [Graph Workflows](21-graph-workflows.md)) |
-| `WorkSessionStartupReconciler`, `WorkSessionAgentSeeder` | `AddNodeWorkSessionsExtensions` | collapse sessions a crashed host left mid-flight to `Interrupted`; seed the General and Research work-session personas |
+| `WorkSessionStartupReconciler`, `WorkSessionAgentSeeder` | `AddNodeWorkSessionsExtensions` | collapse sessions a crashed host left mid-flight to `Interrupted`; seed the General, Research and Repository Research work-session personas |
 | `DockerSandboxOrphanSweeper` | `AddNodeContainerSandboxExtensions` | remove Development Mode containers orphaned by a previous run of this installation |
 | `ExternalAppStateObserver` | `AddNodeExternalAppsExtensions` | notice that a container the engine believes is running has stopped (see [External Apps](23-external-apps.md)) |
 | `ExternalProviderStartupReconciler` | `AddNodeExternalProvidersExtensions` | one external-provider reconciliation pass at startup, priming the registry snapshot |
