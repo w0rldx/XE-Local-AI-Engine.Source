@@ -9,6 +9,7 @@ import { IconDatabase, IconHistory, IconPlayerStop } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ApiError } from "@/core/api/errors/ApiError";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { humanizeBytes } from "@/core/formatting/BytesFormatting";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
@@ -17,8 +18,12 @@ import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { useCreateNodeBackup, useNodeBackups, useRestoreNodeBackup } from "@/features/diagnostics/queries/useNodeBackups";
+import { useNodeInfo } from "@/features/diagnostics/queries/useNodeInfo";
 
 const nowrapCell = { whiteSpace: "nowrap" as const };
+
+// The node's title for its local-mode 409 (RestoreNodeBackupEndpoint); its other 409s keep the node's own text.
+const localModeRefusalTitle = "A restore is applied only when the node runs in local mode.";
 
 export function NodeBackupsCard() {
 	const { t } = useTranslation();
@@ -27,6 +32,14 @@ export function NodeBackupsCard() {
 	const createBackup = useCreateNodeBackup();
 	const restoreBackup = useRestoreNodeBackup();
 	const { confirm } = useConfirm();
+	// Only a local-mode start applies a staged restore and the node refuses one elsewhere, so Restore is not offered there.
+	// An unknown mode (node-info failed) keeps it enabled; the node's refusal then shows the same localized note.
+	const { data: nodeInfo } = useNodeInfo();
+	const refusedForMode =
+		restoreBackup.error instanceof ApiError &&
+		restoreBackup.error.statusCode === 409 &&
+		restoreBackup.error.apiProblemDetails.title === localModeRefusalTitle;
+	const restoreUnavailable = nodeInfo?.isLocalMode === false || refusedForMode;
 
 	const handleRestore = async (name: string): Promise<void> => {
 		const confirmed = await confirm({
@@ -75,7 +88,7 @@ export function NodeBackupsCard() {
 				<InlineErrorAlert variant="light" message={apiErrorMessage(createBackup.error, t("diagnostics.backups.takeError"))} />
 			)}
 
-			{restoreBackup.isError && (
+			{restoreBackup.isError && !refusedForMode && (
 				<InlineErrorAlert variant="light" message={apiErrorMessage(restoreBackup.error, t("diagnostics.backups.restoreError"))} />
 			)}
 
@@ -85,6 +98,12 @@ export function NodeBackupsCard() {
 						time: formatTimestamp(automatic.atUtc),
 						error: automatic.error ?? "—",
 					})}
+				</Text>
+			)}
+
+			{restoreUnavailable && data && data.backups.length > 0 && (
+				<Text c="dimmed" size="sm" data-testid="node-backups-restore-local-only">
+					{t("diagnostics.backups.restoreLocalModeOnly")}
 				</Text>
 			)}
 
@@ -116,7 +135,7 @@ export function NodeBackupsCard() {
 											size="xs"
 											variant="subtle"
 											color="red"
-											disabled={busy}
+											disabled={busy || restoreUnavailable}
 											loading={restoreBackup.isPending && restoreBackup.variables?.path.name === backup.name}
 											onClick={() => handleRestore(backup.name)}
 											aria-label={t("diagnostics.backups.restoreLabel", { name: backup.name })}

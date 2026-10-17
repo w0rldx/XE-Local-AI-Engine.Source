@@ -8,7 +8,6 @@ import {
 	getIntegrationExecutionOptions,
 	listIntegrationExecutionsOptions,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import {
 	toIntegrationExecution,
 	toIntegrationExecutionDetail,
@@ -42,18 +41,16 @@ interface IntegrationListOptions extends IntegrationQueryOptions {
  */
 export function useIntegrationExecutions(filters: IntegrationExecutionFilters = {}, options: IntegrationListOptions = {}) {
 	return useQuery({
-		...withResponseValidation(
-			listIntegrationExecutionsOptions({
-				query: {
-					...(filters.triggerId === undefined ? {} : { triggerId: filters.triggerId }),
-					...(filters.sessionId === undefined ? {} : { sessionId: filters.sessionId }),
-					// A repeated parameter: one chip can stand for the three active states.
-					...(filters.status === undefined ? {} : { status: [...filters.status] }),
-					limit: options.limit ?? integrationPageSize,
-					offset: options.offset ?? 0,
-				},
-			}),
-		),
+		...listIntegrationExecutionsOptions({
+			query: {
+				...(filters.triggerId === undefined ? {} : { triggerId: filters.triggerId }),
+				...(filters.sessionId === undefined ? {} : { sessionId: filters.sessionId }),
+				// A repeated parameter: one chip can stand for the three active states.
+				...(filters.status === undefined ? {} : { status: [...filters.status] }),
+				limit: options.limit ?? integrationPageSize,
+				offset: options.offset ?? 0,
+			},
+		}),
 		enabled: options.enabled ?? true,
 		refetchInterval: options.refetchInterval,
 		// `limit`/`offset` are part of the query key, so page 2 is a cache entry with no data of its own. Without the
@@ -67,7 +64,7 @@ export function useIntegrationExecutions(filters: IntegrationExecutionFilters = 
 /** The per-execution audit record (principal, request id, key prefix) the list projection does not carry. */
 export function useIntegrationExecution(executionId: string | null, options: IntegrationQueryOptions = {}) {
 	return useQuery({
-		...withResponseValidation(getIntegrationExecutionOptions({ path: { executionId: executionId ?? "" } })),
+		...getIntegrationExecutionOptions({ path: { executionId: executionId ?? "" } }),
 		enabled: executionId !== null && (options.enabled ?? true),
 		refetchInterval: options.refetchInterval,
 		select: toIntegrationExecutionDetail,
@@ -104,12 +101,10 @@ export function useIntegrationExecutionEvents(executionId: string | null, option
 				// query's AbortSignal, threaded by the runtime rather than by hand. The adapter's own `queryFn` reads
 				// its request off `queryKey[0]`, so the page's key travels with it; the outer context supplies the
 				// signal. `page.queryFn` is a function here because `queryOptions()` always emits one.
-				const page = withResponseValidation(
-					getIntegrationExecutionEventsOptions({
-						path: { executionId: executionId ?? "" },
-						query: { sinceSeq, limit: integrationEventLimit },
-					}),
-				);
+				const page = getIntegrationExecutionEventsOptions({
+					path: { executionId: executionId ?? "" },
+					query: { sinceSeq, limit: integrationEventLimit },
+				});
 				// biome-ignore lint/performance/noAwaitInLoops: watermark paging is sequential by definition — the next `sinceSeq` is read off the page before it, so there is nothing to run in parallel.
 				const data = await page.queryFn!({ ...context, queryKey: page.queryKey });
 				// The next watermark is the highest sequence this page carried, computed BEFORE the page is kept: a page
@@ -143,7 +138,7 @@ export function useCancelIntegrationExecution() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(cancelIntegrationExecutionMutation()),
+		...cancelIntegrationExecutionMutation(),
 		onSettled: () => queryClient.invalidateQueries({ queryKey: integrationInvalidationKey(integrationQueryIds.listExecutions) }),
 	});
 }

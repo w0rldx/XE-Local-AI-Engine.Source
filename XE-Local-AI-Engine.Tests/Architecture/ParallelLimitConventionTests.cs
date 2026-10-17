@@ -5,13 +5,13 @@ using XE_Local_AI_Engine.Tests.Architecture.Support;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Keeps the parallel cap of eight on both heavy test assemblies, and nothing overriding it: a class-level limiter
+///     Keeps the parallel cap of eight on the in-process host test assemblies, and nothing overriding it: a class-level limiter
 ///     or <c>ClearParallelLimiter</c> takes precedence and reopens TUnit's 4 × cores default.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed partial class ParallelLimitConventionTests
 {
-    private static readonly string[] CappedProjects = ["XE-Local-AI-Engine.Tests", "XE-Local-AI-Engine.Client.Persistence.Tests"];
+    private static readonly string[] CappedProjects = ["XE-Local-AI-Engine.Tests", "XE-Local-AI-Engine.Client.Persistence.Tests", "XE-Local-AI-Engine.Cli.Tests"];
 
     [GeneratedRegex(@"\[assembly:\s*ParallelLimiter<[A-Za-z_.]*AssemblyParallelLimit>\]")]
     private static partial Regex AssemblyCap();
@@ -25,11 +25,13 @@ public sealed partial class ParallelLimitConventionTests
     [Test]
     [Arguments("XE-Local-AI-Engine.Tests")]
     [Arguments("XE-Local-AI-Engine.Client.Persistence.Tests")]
+    [Arguments("XE-Local-AI-Engine.Cli.Tests")]
     public void TheAssembly_CapsParallelTestsAtEight(string project)
     {
         var source = SourceCommentStripper.StripComments(File.ReadAllText(RepositoryPaths.Combine(project, "AssemblyParallelLimit.cs")));
 
-        AssertEx.True(AssemblyCap().IsMatch(source), $"{project}/AssemblyParallelLimit.cs lost its [assembly: ParallelLimiter<AssemblyParallelLimit>]: a bare host run would start 4 × cores tests at once.");
+        AssertEx.True(AssemblyCap().IsMatch(source),
+            $"{project}/AssemblyParallelLimit.cs lost its [assembly: ParallelLimiter<AssemblyParallelLimit>]: a bare host run would start 4 × cores tests at once.");
         AssertEx.True(LimitOfEight().IsMatch(source), $"{project}/AssemblyParallelLimit.cs no longer caps at eight; raise it only with a new RSS measurement.");
     }
 
@@ -43,7 +45,8 @@ public sealed partial class ParallelLimitConventionTests
             {
                 var relative = Path.GetRelativePath(RepositoryPaths.Root, file).Replace('\\', '/');
                 if (relative.Contains("/bin/", StringComparison.Ordinal) || relative.Contains("/obj/", StringComparison.Ordinal)
-                    || relative.EndsWith("/AssemblyParallelLimit.cs", StringComparison.Ordinal) || relative.EndsWith("/ParallelLimitConventionTests.cs", StringComparison.Ordinal))
+                                                                         || relative.EndsWith("/AssemblyParallelLimit.cs", StringComparison.Ordinal) ||
+                                                                         relative.EndsWith("/ParallelLimitConventionTests.cs", StringComparison.Ordinal))
                 {
                     continue;
                 }

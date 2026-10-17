@@ -3,16 +3,15 @@ import { useEffect, useRef, useState } from "react";
 
 import {
 	cancelGgufImportMutation,
+	getGgufDownloadsOptions,
+	getGgufDownloadsQueryKey,
 	getGgufImportCapabilityOptions,
 	getGgufImportsOptions,
 	getGgufImportsQueryKey,
-	getGgufDownloadsOptions,
-	getGgufDownloadsQueryKey,
 	listLocalModelsQueryKey,
 	previewGgufImportMutation,
 	startGgufImportMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 import {
 	type GgufAcquisitionStatus,
@@ -33,13 +32,13 @@ export interface StartGgufImportVariables {
 }
 
 export function useGgufImportCapability() {
-	return useQuery(withResponseValidation(getGgufImportCapabilityOptions()));
+	return useQuery(getGgufImportCapabilityOptions());
 }
 
 export function usePreviewGgufImport() {
 	return useMutation({
 		mutationFn: async (sourcePath: string) => {
-			const options = withResponseValidation(previewGgufImportMutation());
+			const options = previewGgufImportMutation();
 			return await options.mutationFn?.({ body: { sourcePath } }, undefined as never);
 		},
 	});
@@ -49,7 +48,7 @@ export function useStartGgufImport() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async (variables: StartGgufImportVariables) => {
-			const options = withResponseValidation(startGgufImportMutation());
+			const options = startGgufImportMutation();
 			return await options.mutationFn?.({ body: variables }, undefined as never);
 		},
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: getGgufImportsQueryKey() }),
@@ -60,7 +59,7 @@ export function useCancelGgufImport() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async (operationId: string) => {
-			const options = withResponseValidation(cancelGgufImportMutation());
+			const options = cancelGgufImportMutation();
 			return await options.mutationFn?.({ path: { operationId } }, undefined as never);
 		},
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: getGgufImportsQueryKey() }),
@@ -131,6 +130,24 @@ export function pruneCompletedHandled(completed: ReadonlyMap<string, number>, no
 	);
 }
 
+// Mirrors the server's newest-row-per-model list: a newer operation for a model replaces that model's held terminal
+// row (an Interrupted download its resume continues), which would otherwise stay on an open page beside it.
+function dropSupersededTerminals(held: Map<string, GgufAcquisitionStatus>, incoming: GgufAcquisitionStatus): void {
+	const incomingStarted = Date.parse(incoming.startedAtUtc ?? "");
+	for (const [operationId, status] of held) {
+		const heldStarted = Date.parse(status.startedAtUtc ?? "");
+		if (
+			operationId !== incoming.operationId &&
+			status.operationKind === incoming.operationKind &&
+			status.modelName.toLowerCase() === incoming.modelName.toLowerCase() &&
+			isTerminalAcquisitionPhase(status.phase) &&
+			!(heldStarted > incomingStarted)
+		) {
+			held.delete(operationId);
+		}
+	}
+}
+
 export function mergeStatuses(
 	previous: ReadonlyMap<string, GgufAcquisitionStatus>,
 	rawItems: readonly object[],
@@ -145,6 +162,7 @@ export function mergeStatuses(
 			// an older/unstamped payload cannot roll the phase or byte count backward. Two unstamped legacy download
 			// payloads remain compatible, while terminal state still wins their otherwise ambiguous ordering.
 			if (shouldAcceptAcquisitionStatus(current, status)) {
+				dropSupersededTerminals(next, status);
 				next.set(status.operationId, status);
 			}
 		}
@@ -166,12 +184,12 @@ export function useActiveGgufAcquisitions({
 	const hasActiveAcquisition = [...statuses.values()].some((status) => !isTerminalAcquisitionPhase(status.phase));
 	const refetchInterval = hubClosed && hasActiveAcquisition ? ACQUISITION_CLOSED_HUB_POLL_MS : false;
 	const downloads = useQuery({
-		...withResponseValidation(getGgufDownloadsOptions()),
+		...getGgufDownloadsOptions(),
 		enabled,
 		staleTime: 30_000,
 		refetchInterval,
 	});
-	const imports = useQuery({ ...withResponseValidation(getGgufImportsOptions()), enabled, staleTime: 30_000, refetchInterval });
+	const imports = useQuery({ ...getGgufImportsOptions(), enabled, staleTime: 30_000, refetchInterval });
 
 	useEffect(() => {
 		const items = [...(downloads.data?.items ?? []), ...(imports.data?.items ?? [])];

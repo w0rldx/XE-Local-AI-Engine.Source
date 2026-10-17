@@ -5,7 +5,10 @@ import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import { GraphWorkflowRunStatusBadge } from "@/features/graphWorkflows/components/GraphWorkflowStatusBadge";
+import {
+	GraphWorkflowRunOriginBadge,
+	GraphWorkflowRunStatusBadge,
+} from "@/features/graphWorkflows/components/GraphWorkflowStatusBadge";
 import {
 	type GraphWorkflowRunSummaryResponse,
 	narrowGraphWorkflowFailureClass,
@@ -79,6 +82,7 @@ export function GraphWorkflowRunList({ runs, isLoading, error, selectedRunId, on
 						<Stack gap={4}>
 							<Group gap="xs" wrap="wrap">
 								<GraphWorkflowRunStatusBadge status={run.status} data-testid={`graph-workflow-run-status-${runId}`} />
+								<GraphWorkflowRunOriginBadge source={run.triggerSource} data-testid={`graph-workflow-run-origin-${runId}`} />
 								<Badge size="xs" variant="light" color="gray" data-testid={`graph-workflow-run-version-${runId}`}>
 									{t("pages.graphWorkflows.runs.version", "Version {{version}}", { version: run.definitionVersion ?? 0 })}
 								</Badge>

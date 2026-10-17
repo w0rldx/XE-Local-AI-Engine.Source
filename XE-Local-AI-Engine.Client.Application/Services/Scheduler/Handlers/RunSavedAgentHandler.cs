@@ -323,7 +323,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
             if (decision.Verdict == CapacityVerdict.RejectInsufficient)
             {
                 // The category the chat path gives a capacity refusal of a model launch.
-                failureCategory = FailureCategory.ModelLoadFailed;
+                failureCategory = FailureCategory.InsufficientCapacity;
                 throw new ScheduledJobExecutionException(decision.Reason);
             }
 
@@ -400,6 +400,17 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
     /// <summary>Rejects at create/update time what <see cref="ExecuteAsync" /> would reject on every fire.</summary>
     public void ValidateParameters(string? parametersJson) =>
         _ = ParseAndValidate(parametersJson);
+
+    /// <summary>Refuses an agent that does not exist; one that exists but has no model yet is the fire's to judge.</summary>
+    public async Task ValidateReferencesAsync(string? parametersJson, CancellationToken cancellationToken)
+    {
+        var parameters = ParseAndValidate(parametersJson);
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        if (await scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>().GetByIdAsync(parameters.AgentDefinitionId, cancellationToken) is null)
+        {
+            throw new ScheduledJobValidationException("agentDefinitionId: no agent with this id exists. Select an existing agent for the scheduled run.");
+        }
+    }
 
     /// <summary>
     ///     Parses and validates the decrypted parameter JSON. A blank/invalid <c>agentDefinitionId</c> or a blank

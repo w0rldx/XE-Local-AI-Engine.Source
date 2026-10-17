@@ -1,5 +1,5 @@
-import { Button, SimpleGrid, Skeleton, Stack, Text } from "@mantine/core";
-import { IconApps } from "@tabler/icons-react";
+import { Alert, Button, SimpleGrid, Skeleton, Stack, Text } from "@mantine/core";
+import { IconApps, IconInfoCircle } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -35,6 +35,28 @@ export function ExternalAppCatalogPage() {
 	const refresh = useRefreshExternalAppCatalog();
 
 	const applications = catalogQuery.data?.applications ?? [];
+	// Decision D6: the feature counts as off while a loaded catalog lists nothing, because nothing can be installed.
+	// The card replaces the runtime card: Docker's state is not the operator's next step on an empty catalog.
+	const catalogEmpty = catalogQuery.data !== undefined && applications.length === 0;
+	// The instructions follow the startup and catalog state only. An empty start waits for an entry AND a restart;
+	// a catalog emptied later clears on the next refresh that lists one, with no restart.
+	const emptyAtStartup = catalogQuery.data?.restartRequired === true;
+	const offState = !catalogEmpty ? (emptyAtStartup ? "restartRequired" : null) : emptyAtStartup ? "emptyAtStartup" : "emptyNow";
+	const offCard =
+		offState === "restartRequired"
+			? { title: t("pages.externalApps.catalog.restartTitle"), body: t("pages.externalApps.catalog.restartBody") }
+			: offState === "emptyNow"
+				? { title: t("pages.externalApps.catalog.emptyNowTitle"), body: t("pages.externalApps.catalog.emptyNowBody") }
+				: {
+						title: t("pages.externalApps.catalog.disabledTitle"),
+						body:
+							catalogQuery.data?.refreshUrlConfigured === true
+								? t("pages.externalApps.catalog.disabledBodyConfigured")
+								: t("pages.externalApps.catalog.disabledBody"),
+					};
+	// Bridge availability only decides the listener warning: open since startup, it stays bound until a restart.
+	const bridgeOpen = catalogEmpty && catalogQuery.data?.bridgeOpenUntilRestart === true;
+	const featureOff = offState !== null;
 	const runtimeReady = runtimeQuery.data?.ready === true;
 	// `lastRefreshFailure`, not `refreshFailureMessage`: the GET never attempts a refresh, so only the snapshot's
 	// most-recent-failure field says the catalog shown is stale. Without this line a refused refresh shows the
@@ -83,9 +105,31 @@ export function ExternalAppCatalogPage() {
 				</Text>
 			) : null}
 
-			<RuntimeStatusCard runtime={runtimeQuery.data} isLoading={runtimeQuery.isLoading} />
+			{featureOff ? null : <RuntimeStatusCard runtime={runtimeQuery.data} isLoading={runtimeQuery.isLoading} />}
 
-			{catalogQuery.isLoading ? (
+			{featureOff ? (
+				<Stack gap="sm">
+					<Alert
+						color="gray"
+						icon={<IconInfoCircle size={16} />}
+						title={offCard.title}
+						data-testid="external-app-catalog-disabled"
+						data-state={offState ?? undefined}
+					>
+						{offCard.body}
+					</Alert>
+					{bridgeOpen ? (
+						<Alert
+							color="yellow"
+							icon={<IconInfoCircle size={16} />}
+							title={t("pages.externalApps.catalog.bridgeOpenTitle")}
+							data-testid="external-app-catalog-bridge-open"
+						>
+							{t("pages.externalApps.catalog.bridgeOpenBody")}
+						</Alert>
+					) : null}
+				</Stack>
+			) : catalogQuery.isLoading ? (
 				<Stack gap="sm" data-testid="external-app-catalog-loading">
 					<Skeleton height={140} radius="md" />
 					<Skeleton height={140} radius="md" />

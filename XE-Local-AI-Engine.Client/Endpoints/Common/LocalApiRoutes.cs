@@ -610,6 +610,12 @@ public static class LocalApiRoutes
         public const string SessionLiveStart = "transcription/sessions/{sessionId}/live/start";
 
         /// <summary>
+        ///     Starts an ephemeral dictation session: live lanes in memory, nothing persisted. A separate verb rather
+        ///     than a flag on session create, so no caller can open a persisted-looking session that never lists.
+        /// </summary>
+        public const string DictationSessions = "transcription/dictation-sessions";
+
+        /// <summary>
         ///     Windows-only: the processes that currently hold an active render audio session, i.e. the ones
         ///     per-application capture can actually target. Empty — never 404 — on a host without process loopback.
         /// </summary>
@@ -1058,6 +1064,12 @@ public static class LocalApiRoutes
 
         /// <summary>The runs bound to one conversation, newest first — what puts the chat page back into workflow mode on a reload.</summary>
         public const string ConversationRuns = "graph-workflows/conversations/{conversationId}/runs";
+
+        /// <summary>
+        ///     Resolves a spoken or typed command to one workflow open to <c>Intent</c> starts and starts it. 200 for
+        ///     <c>Started</c> and <c>NotMatched</c>; 409 <c>GraphWorkflowIntentExpired</c> for a stale utterance.
+        /// </summary>
+        public const string IntentsInvoke = "graph-workflows/intents/invoke";
 
         /// <summary>SignalR notification hub. Full path (mapped via MapHub, not the FastEndpoints prefix).</summary>
         public const string Hub = "/api/local/v1/graph-workflows/hub";

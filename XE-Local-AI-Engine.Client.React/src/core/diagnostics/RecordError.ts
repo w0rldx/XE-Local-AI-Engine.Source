@@ -1,6 +1,8 @@
 // Shared dedup'd error-crumb path used by every error collector (window, react, reporting).
 // Routing all error sources through here guarantees the "one error → one breadcrumb" rule.
 
+import { ZodError } from "zod";
+
 import { push } from "@/core/diagnostics/BreadcrumbBuffer";
 import { buildErrorKey, shouldRecord } from "@/core/diagnostics/Dedup";
 import type { Breadcrumb, ErrorBreadcrumb, ErrorSource } from "@/core/diagnostics/Types";
@@ -59,6 +61,10 @@ export function recordError(input: RecordErrorInput): Breadcrumb | undefined {
 
 /** Normalize an unknown thrown value into a message + stack pair. */
 export function describeError(value: unknown): { message: string; stack?: string } {
+	// A response-shape mismatch: its message and stack header list the response's issue paths, so neither is kept.
+	if (value instanceof ZodError) {
+		return { message: "ZodError: the server returned a response in an unexpected shape" };
+	}
 	if (value instanceof Error) {
 		return value.stack === undefined ? { message: value.message } : { message: value.message, stack: value.stack };
 	}

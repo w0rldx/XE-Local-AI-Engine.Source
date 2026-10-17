@@ -139,9 +139,11 @@ public sealed class WhisperServerReadinessProbeTests
 
         public override long TimestampFrequency => _inner.TimestampFrequency;
 
-        public override DateTimeOffset GetUtcNow() => _inner.GetUtcNow();
+        public override DateTimeOffset GetUtcNow() =>
+            _inner.GetUtcNow();
 
-        public override long GetTimestamp() => _inner.GetTimestamp();
+        public override long GetTimestamp() =>
+            _inner.GetTimestamp();
 
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
         {
@@ -154,7 +156,8 @@ public sealed class WhisperServerReadinessProbeTests
             return timer;
         }
 
-        public void Advance(TimeSpan delta) => _inner.Advance(delta);
+        public void Advance(TimeSpan delta) =>
+            _inner.Advance(delta);
 
         public async Task AdvancePastNextPollAsync()
         {

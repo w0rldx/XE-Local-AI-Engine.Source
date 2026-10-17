@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Hosting;
 
 using System.Diagnostics;
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -117,7 +118,7 @@ public sealed class VaultUnlockHostTests : IDisposable
         AssertEx.Contains(attributes, static attribute => attribute.Equals($"path={NodeAuthCookie.RefreshCookiePath}", StringComparison.OrdinalIgnoreCase));
         var ticket = AssertEx.NotNull(outcome.UnlockTicket);
         var expires = DateTimeOffset.Parse(attributes.Single(static attribute => attribute.StartsWith("expires=", StringComparison.OrdinalIgnoreCase))["expires=".Length..],
-            System.Globalization.CultureInfo.InvariantCulture);
+            CultureInfo.InvariantCulture);
         AssertEx.Equal(ticket.ExpiresAt.ToUnixTimeSeconds(), expires.ToUnixTimeSeconds());
         AssertEx.True(ticket.ExpiresAt - TimeProvider.System.GetUtcNow() <= VaultUnlockTicket.Lifetime, "The ticket must live at most its lifetime.");
         var value = attributes[0][(NodeAuthCookie.UnlockTicketCookieName.Length + 1)..];
@@ -282,6 +283,39 @@ public sealed class VaultUnlockHostTests : IDisposable
             AssertEx.Equal(HttpStatusCode.OK, recoveryResponse.StatusCode);
             AssertEx.Equal(NewPassword, outcome.ResetPassword);
         }
+    }
+
+    [Test]
+    public async Task Shell_IsNoCache_WithAContentETag_NotTheMtimeXorLengthOne()
+    {
+        // Release-shaped web root: the ZIP's 1980 DOS-epoch mtime, which made every build's shell ETag collide (N-57).
+        var webRoot = Directory.CreateDirectory(Path.Combine(_dataDirectory, "wwwroot")).FullName;
+        var shell = Path.Combine(webRoot, "index.html");
+        await File.WriteAllTextAsync(shell, "<script src=\"/assets/index-AAAAAAAA.js\"></script>");
+        var dosEpoch = new DateTime(1980, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(shell, dosEpoch);
+        var mtimeTag = $"\"{Convert.ToString(new DateTimeOffset(dosEpoch).ToFileTime() ^ new FileInfo(shell).Length, 16)}\"";
+
+        var (_, url) = await StartAsync();
+        using var client = new HttpClient
+        {
+            BaseAddress = new Uri(url)
+        };
+
+        using var direct = await client.GetAsync(new Uri("/index.html", UriKind.Relative));
+        using var fallback = await client.GetAsync(new Uri("/", UriKind.Relative));
+        AssertEx.Equal(HttpStatusCode.OK, direct.StatusCode);
+        AssertEx.Equal("text/html", fallback.Content.Headers.ContentType?.MediaType);
+        AssertEx.True(direct.Headers.CacheControl?.NoCache == true, $"The unlock shell must carry no-cache, got '{direct.Headers.CacheControl}'.");
+        AssertEx.True(fallback.Headers.CacheControl?.NoCache == true, $"The unlock fallback must carry no-cache, got '{fallback.Headers.CacheControl}'.");
+        var tag = AssertEx.NotNull(direct.Headers.ETag, "The unlock shell carried no ETag.");
+        AssertEx.Equal(tag, fallback.Headers.ETag);
+        AssertEx.NotEqual(mtimeTag, tag.Tag, "The unlock shell's ETag is still last-modified XOR length.");
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri("/", UriKind.Relative));
+        request.Headers.IfNoneMatch.Add(tag);
+        using var conditional = await client.SendAsync(request);
+        AssertEx.Equal(HttpStatusCode.NotModified, conditional.StatusCode);
     }
 
     [Test]

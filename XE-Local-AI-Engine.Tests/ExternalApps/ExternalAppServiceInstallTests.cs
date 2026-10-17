@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Tests.ExternalApps;
 
 using System.Globalization;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -80,6 +82,111 @@ public sealed class ExternalAppServiceInstallTests
 
         AssertEx.Contains(failure.Message, nameof(ExternalAppBlockedReason.RuntimeIncompatible));
         AssertEx.Contains(failure.Message, "gpuDevices");
+    }
+
+    /// <summary>
+    ///     The empty-catalog gate (rc.3 decision D6): with no catalog entry the preview and the install refuse as not
+    ///     found and write nothing; one refreshed entry admits the install on the same service, with no restart.
+    /// </summary>
+    [Test]
+    public async Task Install_OnAnEmptyCatalog_IsRefusedUntilTheCatalogGainsAnEntry()
+    {
+        var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
+
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
+        ExternalAppServiceHarness.Seed(harness.Catalog);
+
+        _ = await AssertEx.ThrowsAsync<ExternalAppNotFoundException>(() => harness.Service.PreviewInstallAsync(AppId));
+        _ = await AssertEx.ThrowsAsync<ExternalAppNotFoundException>(() => harness.Service.InstallAsync(Command(manifest)));
+        AssertEx.Empty(await harness.Service.ListAsync(), "A refused install must not write an instance row.");
+        AssertEx.Empty(harness.Runtime.CreatedContainerIds, "A refused install must not create a container.");
+
+        ExternalAppServiceHarness.Seed(harness.Catalog, manifest);
+
+        var admitted = await harness.Service.InstallAsync(Command(manifest));
+        AssertEx.Equal(ExternalAppInstanceStatus.Installing, admitted.Status);
+        _ = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running);
+    }
+
+    /// <summary>
+    ///     A refresh that empties the catalog after a populated start. The install has already read its manifest, and
+    ///     admission still refuses with the empty catalog's 404, because the policy reads the catalog served now.
+    /// </summary>
+    [Test]
+    public async Task Install_WhenARefreshEmptiedTheCatalogAfterTheManifestWasRead_IsRefused()
+    {
+        var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
+
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
+        // The lookup still answers with the manifest it captured; the document now served is empty.
+        harness.Catalog.GetCatalogAsync(Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult(new ExternalAppCatalogSnapshot(new ExternalAppCatalogDocument(SchemaVersion: 1, "2026-10-15T00:00:00Z", Applications: []),
+                   ExternalAppCatalogSource.Remote,
+                   FetchedAtUtc: null,
+                   SourceUrl: null,
+                   LastRefreshFailure: null)));
+
+        _ = await AssertEx.ThrowsAsync<ExternalAppNotFoundException>(() => harness.Service.PreviewInstallAsync(AppId));
+        _ = await AssertEx.ThrowsAsync<ExternalAppNotFoundException>(() => harness.Service.InstallAsync(Command(manifest)));
+        AssertEx.Empty(await harness.Service.ListAsync(), "A refused install must not write an instance row.");
+    }
+
+    /// <summary>
+    ///     A node that started on an empty catalog kept the bridge closed, so an entry a later refresh added must not be
+    ///     installable before a restart: the preview says why and the install refuses with the same reason.
+    /// </summary>
+    [Test]
+    public async Task Install_AfterAStartOnAnEmptyCatalog_IsRefusedUntilTheNodeRestarts()
+    {
+        var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
+
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest,
+            startupSettings: new NodeStartupSettings
+            {
+                ExternalAppsAwaitingCatalog = true
+            });
+
+        var preview = await harness.Service.PreviewInstallAsync(AppId);
+        AssertEx.False(preview.CanInstall);
+        AssertEx.Equal(ExternalAppBlockedReason.RestartRequired, preview.BlockedReason);
+
+        var failure = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => harness.Service.InstallAsync(Command(manifest)));
+        AssertEx.Contains(failure.Message, nameof(ExternalAppBlockedReason.RestartRequired));
+        AssertEx.Contains(failure.Message, "Restart the node to enable External Apps.");
+        AssertEx.Empty(await harness.Service.ListAsync(), "A refused install must not write an instance row.");
+    }
+
+    /// <summary>After an empty start, an uninstall finishing between admission's read and the insert's read must not let an install through.</summary>
+    /// <remarks>
+    ///     Admission sees the existing row and lets AlreadyInstalled through; the restart rule is evaluated again under
+    ///     the application lock. The runtime probe sits between the two reads, so the test holds it on a gate it
+    ///     controls and deletes the row there: no sleeps.
+    /// </remarks>
+    [Test]
+    public async Task Install_AfterAnEmptyCatalogStart_StaysRefusedWhenAnUninstallFinishesBetweenTheTwoReads()
+    {
+        var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
+
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest,
+            startupSettings: new NodeStartupSettings
+            {
+                ExternalAppsAwaitingCatalog = true
+            });
+        var existing = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Stopped);
+
+        var probe = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        harness.Resolver.ProbeGate = probe;
+        var install = harness.Service.InstallAsync(Command(manifest));
+
+        // Admission has read the existing row and is now inside the runtime probe, ahead of the insert's read.
+        await harness.Resolver.ProbeEntered.WaitAsync(TestBudgets.Contended);
+        await harness.DeleteRowAsync(existing.Id, existing.Version);
+        probe.SetResult();
+
+        var refused = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => install);
+        AssertEx.Contains(refused.Message, nameof(ExternalAppBlockedReason.RestartRequired));
+        AssertEx.Empty(await harness.Service.ListAsync(), "No instance row may be written before the restart.");
+        AssertEx.Empty(harness.Runtime.CreatedContainerIds, "Nothing may start before the restart.");
     }
 
     [Test]

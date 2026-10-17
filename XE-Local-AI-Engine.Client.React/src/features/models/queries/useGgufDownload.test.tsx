@@ -393,6 +393,17 @@ describe("useActiveGgufDownloads", () => {
 		expect(status?.phase).toBe("Copying");
 	});
 
+	it("an Interrupted row is replaced by a newer Start for that model", () => {
+		const now = Date.parse("2026-08-14T10:00:03Z");
+		const interrupted = { ...acquisitionStatus("interrupted-op", "Failed", "2026-08-14T10:00:00Z"), modelName: "Repo:Q4_K_M" };
+		const resumed = { ...acquisitionStatus("resumed-op", "Downloading", "2026-08-14T10:00:02Z"), modelName: "repo:Q4_K_M" };
+		const other = { ...acquisitionStatus("other-op", "Failed", "2026-08-14T10:00:00Z"), modelName: "other:Q4_K_M" };
+
+		const merged = mergeStatuses(mergeStatuses(new Map(), [interrupted, other], now), [resumed], now);
+
+		expect([...merged.keys()].sort()).toEqual(["other-op", "resumed-op"]);
+	});
+
 	it("ignores stale live and REST statuses after a newer terminal update", () => {
 		const operationId = "monotonic-import";
 		const completed = acquisitionStatus(operationId, "Completed", "2026-08-14T10:00:02Z");

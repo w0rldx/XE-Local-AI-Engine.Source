@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { getRuntimeResidentsOptions, getRuntimeResidentsQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useRuntimeResidencyHub } from "@/core/api/signalr/useRuntimeResidencyHub";
 import { toRuntimeResidents } from "@/features/runtime-resources/models/RuntimeResourcesModels";
 
@@ -16,7 +15,7 @@ const runtimeResidentsPushFloorMs = 60_000;
 export function useRuntimeResidents(enabled = true) {
 	const { isLive } = useRuntimeResidencyHub(enabled, getRuntimeResidentsQueryKey());
 	return useQuery({
-		...withResponseValidation(getRuntimeResidentsOptions()),
+		...getRuntimeResidentsOptions(),
 		select: toRuntimeResidents,
 		enabled,
 		// Hub live: the push floor only. Otherwise (b): the fallback cadence while the hub is degraded or not started.

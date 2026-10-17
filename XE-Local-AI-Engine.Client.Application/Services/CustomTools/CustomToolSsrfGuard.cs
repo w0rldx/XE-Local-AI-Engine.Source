@@ -8,19 +8,24 @@ using System.Net.Sockets;
 ///     <see cref="ValidateRequestUrl" /> runs on the FINAL assembled URL: scheme allow-list, no userinfo, no numeric or encoded host literal,
 ///     a mandatory <c>allowedHosts</c> check when the template host is parameterized, and rejection of a literal IP in any denied range.
 ///     <see cref="CreatePinnedConnectCallback" />, on the fetch handler's <see cref="SocketsHttpHandler" />, validates EVERY resolved address
-///     and dials a validated one itself, so a DNS rebind has no re-resolve gap; the original host stays Host header and TLS SNI.
+///     and dials a validated one itself, so a DNS rebind has no re-resolve gap. A tool's <c>privateHosts</c> (ADR 0021, read from
+///     <see cref="PrivateHostsOption" />) admit a listed LAN address on both layers, never an <see cref="IsAlwaysDeniedAddress" /> one.
 /// </remarks>
 internal static class CustomToolSsrfGuard
 {
+    /// <summary>The per-request private-host exception the pinned connect callback reads; absent means no exception.</summary>
+    public static readonly HttpRequestOptionsKey<IReadOnlyList<string>> PrivateHostsOption = new("xe.customTool.privateHosts");
+
     /// <summary>Validates the final assembled request URL, throwing <see cref="CustomToolExecutionException" /> on any violation.</summary>
     /// <remarks>
     ///     DNS resolution is deliberately NOT done here — it happens in the pinned connect callback, so the validated address is the dialed
     ///     address; this method covers everything decidable from the URL alone.
     /// </remarks>
-    public static void ValidateRequestUrl(Uri url, IReadOnlyList<string> allowedHosts, bool hostIsParameterized)
+    public static void ValidateRequestUrl(Uri url, IReadOnlyList<string> allowedHosts, bool hostIsParameterized, IReadOnlyList<string> privateHosts)
     {
         ArgumentNullException.ThrowIfNull(url);
         ArgumentNullException.ThrowIfNull(allowedHosts);
+        ArgumentNullException.ThrowIfNull(privateHosts);
 
         if (!url.IsAbsoluteUri)
         {
@@ -53,7 +58,7 @@ internal static class CustomToolSsrfGuard
 
         if (IPAddress.TryParse(host, out var literal))
         {
-            if (IsDeniedAddress(literal))
+            if (!IsAllowedResolution([literal], IsListedHost(host, privateHosts)))
             {
                 throw new CustomToolExecutionException("The request URL targets a private, loopback, link-local, or otherwise reserved address.");
             }
@@ -79,6 +84,10 @@ internal static class CustomToolSsrfGuard
     ///     Builds the <see cref="SocketsHttpHandler.ConnectCallback" /> that pins the connection to a validated address.
     ///     Shared by every custom-tool fetch (registered once on the named client), so it is stateless.
     /// </summary>
+    /// <remarks>
+    ///     The per-request <see cref="PrivateHostsOption" /> comes from <see cref="SocketsHttpConnectionContext.InitialRequestMessage" />; a
+    ///     request without it (every <c>web_fetch</c> request) gets the deny-all rule unchanged.
+    /// </remarks>
     public static Func<SocketsHttpConnectionContext, CancellationToken, ValueTask<Stream>> CreatePinnedConnectCallback()
     {
         return async (context, cancellationToken) =>
@@ -101,9 +110,11 @@ internal static class CustomToolSsrfGuard
                 throw new CustomToolExecutionException($"The host '{host}' did not resolve to any address.");
             }
 
-            // Reject if ANY resolved address is denied: a rebind that mixes a public decoy with a private target must not
-            // be able to have us dial the private one, and the caller cannot know which record the stack would pick.
-            if (addresses.Any(IsDeniedAddress))
+            // Reject if ANY resolved address is denied and not admitted by the request's private-host exception: a rebind mixing a public
+            // decoy with a private target must not get us to dial the private one, and nobody knows which record the stack would pick.
+            var hostIsListed = context.InitialRequestMessage.Options.TryGetValue(PrivateHostsOption, out var privateHosts)
+                               && IsListedHost(host, privateHosts);
+            if (!IsAllowedResolution(addresses, hostIsListed))
             {
                 throw new CustomToolExecutionException("The host resolved to a private, loopback, link-local, or otherwise reserved address.");
             }
@@ -122,6 +133,72 @@ internal static class CustomToolSsrfGuard
                 socket.Dispose();
                 throw;
             }
+        };
+    }
+
+    /// <summary>True when every resolved address is reachable: not denied, or admitted by the private-host exception and not always denied.</summary>
+    /// <remarks>An empty resolution is refused; one always-denied or unlisted private address refuses the whole set.</remarks>
+    internal static bool IsAllowedResolution(IReadOnlyCollection<IPAddress> addresses, bool hostIsListed)
+    {
+        ArgumentNullException.ThrowIfNull(addresses);
+        return addresses.Count > 0
+               && addresses.All(address => !IsDeniedAddress(address) || (hostIsListed && !IsAlwaysDeniedAddress(address)));
+    }
+
+    /// <summary>True when <paramref name="host" /> names one of <paramref name="privateHosts" />: an IP literal by value, a name ignoring case.</summary>
+    internal static bool IsListedHost(string host, IReadOnlyList<string> privateHosts)
+    {
+        ArgumentNullException.ThrowIfNull(privateHosts);
+        var bare = host.Trim('[', ']');
+        var hostIsLiteral = IPAddress.TryParse(bare, out var hostAddress);
+        return privateHosts.Any(entry =>
+        {
+            var candidate = entry.Trim().Trim('[', ']');
+            return hostIsLiteral
+                ? IPAddress.TryParse(candidate, out var entryAddress) && entryAddress.Equals(hostAddress)
+                : string.Equals(candidate, bare, StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    /// <summary>True when <paramref name="address" /> is denied and no private-host exception can ever admit it.</summary>
+    /// <remarks>Everything denied except <see cref="IsPrivateLanAddress" />: loopback, link-local and metadata, multicast, unspecified, reserved.</remarks>
+    public static bool IsAlwaysDeniedAddress(IPAddress address)
+    {
+        return IsDeniedAddress(address) && !IsPrivateLanAddress(address);
+    }
+
+    /// <summary>The cloud instance-metadata endpoint that sits INSIDE a LAN range: the IPv6 one is unique-local by address.</summary>
+    /// <remarks>Its IPv4 sibling (169.254.169.254) is link-local and already outside every LAN range; both stay denied even when listed.</remarks>
+    private static readonly byte[] MetadataIPv6 = [0xFD, 0x00, 0x0E, 0xC2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02, 0x54];
+
+    /// <summary>True for the LAN ranges a listed private host may reach: RFC 1918, CGNAT (100.64.0.0/10) and IPv6 unique-local (fc00::/7).</summary>
+    /// <remarks>
+    ///     An IPv4-mapped IPv6 address is unwrapped first; the deprecated IPv4-compatible and NAT64 forms are not LAN and stay
+    ///     denied, and so does the unique-local metadata endpoint <see cref="MetadataIPv6" />.
+    /// </remarks>
+    public static bool IsPrivateLanAddress(IPAddress address)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+
+        if (address.IsIPv4MappedToIPv6)
+        {
+            address = address.MapToIPv4();
+        }
+
+        var b = address.GetAddressBytes();
+        if (b.AsSpan().SequenceEqual(MetadataIPv6))
+        {
+            return false;
+        }
+
+        return address.AddressFamily switch
+        {
+            AddressFamily.InterNetwork => b[0] == 10
+                                          || (b[0] == 172 && b[1] >= 16 && b[1] <= 31)
+                                          || (b[0] == 192 && b[1] == 168)
+                                          || (b[0] == 100 && b[1] >= 64 && b[1] <= 127),
+            AddressFamily.InterNetworkV6 => (b[0] & 0xFE) == 0xFC,
+            _ => false
         };
     }
 
@@ -220,7 +297,7 @@ internal static class CustomToolSsrfGuard
         return bytes.All(static value => value == 0);
     }
 
-    private static bool LooksLikeNumericHostLiteral(string host)
+    internal static bool LooksLikeNumericHostLiteral(string host)
     {
         // A canonical IPv6 literal contains ':' and is handled by IPAddress.TryParse; flag the IPv4-style encodings a rebind uses to smuggle a
         // private address past a dotted-quad check: an all-digit host, a hex host, or a dotted host with a leading-zero (octal) or 0x (hex) label.

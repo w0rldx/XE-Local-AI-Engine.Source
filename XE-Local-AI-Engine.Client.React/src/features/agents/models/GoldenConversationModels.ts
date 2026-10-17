@@ -5,7 +5,7 @@ import { z } from "zod";
 // forbidden phrases) and/or a judge rubric (≥1 of the two is required). The eval runner replays the case against
 // the baseline and candidate prompts and gates promotion on no-regression. Free text is encrypted at rest on the
 // node; the domain shapes here are the decrypted camelCase view. Response-shape validation is owned by the generated
-// zod validator (`validator: true`) + the withResponseValidation bridge at the hook; the mappers in
+// zod validator (`validator: true`); the mappers in
 // GoldenConversationMappers.ts project the validated wire shape into these immutable domain types. The only zod left
 // in this file is FORM validation (the create-request caps) and the 409 promote-conflict body parser.
 
@@ -87,7 +87,7 @@ const goldenAssertionSchema = z.object({
 // the assertion are capped on their serialized JSON length (what the server stores), so the FE rejects the same
 // over-long input the server would and the form can surface a precise field message instead of a generic 400. This
 // is form validation (request shape the operator authors), NOT response validation — the latter is owned by the
-// generated zod validator + the withResponseValidation bridge at the hook.
+// generated zod validator.
 const createGoldenConversationRequestSchema = z.object({
 	title: z.string().max(GOLDEN_TITLE_MAX),
 	inputTurns: z.array(goldenTurnSchema).refine((turns) => JSON.stringify(turns).length <= GOLDEN_INPUT_TURNS_MAX, {

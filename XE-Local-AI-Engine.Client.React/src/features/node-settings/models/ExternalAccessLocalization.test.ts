@@ -12,6 +12,7 @@ describe("external-access localization", () => {
 		expect(disablesEn).toContain("application update checks");
 		expect(disablesEn).toContain("llama.cpp runtime update checks");
 		expect(disablesEn).toContain("the first-run model and runtime download");
+		expect(disablesEn).toContain("A chat does not download a missing runtime either.");
 		expect(disablesEn).toContain("You can still start every one of them yourself, at any time.");
 
 		// One key, two surfaces: the first-run Offline card and the Node Settings external-access card both render it.
@@ -26,6 +27,7 @@ describe("external-access localization", () => {
 		expect(disablesDe).toContain("die Suche nach Anwendungs-Updates");
 		expect(disablesDe).toContain("die Suche nach Updates der llama.cpp-Laufzeit");
 		expect(disablesDe).toContain("den Download von Modell und Laufzeit beim ersten Start");
+		expect(disablesDe).toContain("Auch ein Chat lädt eine fehlende Laufzeit nicht herunter.");
 		expect(disablesDe).toContain("Sie können jedes davon jederzeit selbst starten.");
 
 		const doesNotBlockDe = de.pages.externalAccess.offline.doesNotBlock;

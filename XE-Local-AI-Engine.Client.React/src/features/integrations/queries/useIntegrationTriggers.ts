@@ -6,11 +6,10 @@ import {
 	listIntegrationTriggersOptions,
 	updateIntegrationTriggerMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toIntegrationTrigger } from "@/features/integrations/models/IntegrationMappers";
 
 // Server state for the integration triggers surface. Reads use the generated hey-api `*Options()` (which wire the
-// shared axios instance + TanStack Query AbortSignal automatically) wrapped in withResponseValidation, plus a
+// shared axios instance + TanStack Query AbortSignal automatically), plus a
 // `select` that maps the optional-field wire response into the stricter domain view-model. Mutations invalidate by
 // the generated query key's `_id` discriminator (partial-object match), so every cached variant refetches.
 
@@ -29,7 +28,7 @@ export function integrationInvalidationKey(operationId: string): readonly [{ _id
 
 export function useIntegrationTriggers() {
 	return useQuery({
-		...withResponseValidation(listIntegrationTriggersOptions()),
+		...listIntegrationTriggersOptions(),
 		select: (data) => data.items.map(toIntegrationTrigger),
 	});
 }
@@ -42,7 +41,7 @@ export function useCreateIntegrationTrigger() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(createIntegrationTriggerMutation()),
+		...createIntegrationTriggerMutation(),
 		onSuccess: () => invalidateTriggers(queryClient),
 	});
 }
@@ -51,7 +50,7 @@ export function useUpdateIntegrationTrigger() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(updateIntegrationTriggerMutation()),
+		...updateIntegrationTriggerMutation(),
 		onSuccess: () => invalidateTriggers(queryClient),
 	});
 }
@@ -60,7 +59,7 @@ export function useDeleteIntegrationTrigger() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(deleteIntegrationTriggerMutation()),
+		...deleteIntegrationTriggerMutation(),
 		onSuccess: () => invalidateTriggers(queryClient),
 	});
 }

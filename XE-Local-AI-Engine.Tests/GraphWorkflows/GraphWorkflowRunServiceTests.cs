@@ -168,7 +168,7 @@ public sealed class GraphWorkflowRunServiceTests
             Options.Create(new SecurityOptions()));
 
         _ = await AssertEx.ThrowsAsync<GraphWorkflowInvalidTransitionException>(() =>
-            runs.StartAsync(definitionId, requestId, inputJson: null, definitionVersion: null));
+            runs.StartAsync(definitionId, requestId, inputJson: null, definitionVersion: null, GraphWorkflowRunOrigin.Manual));
 
         _ = store.Received(requiredNumberOfCalls: 1).StartRunAsync(Arg.Any<StartGraphWorkflowRunCommand>(), Arg.Any<CancellationToken>());
         AssertEx.Equal(expected: 0,
@@ -316,6 +316,51 @@ public sealed class GraphWorkflowRunServiceTests
         _ = await AssertEx.ThrowsAsync<GraphWorkflowRunConflictException>(() => StartAsync(definitionId, Guid.NewGuid(), definitionVersion: 99));
     }
 
+    /// <summary>
+    ///     A source the definition does not accept is a conflict naming the source and the definition, and writes no run;
+    ///     once the operator adds the source, the same start runs and records its origin.
+    /// </summary>
+    [Test]
+    public async Task StartAsync_FromASourceTheDefinitionDoesNotAccept_Conflicts_UntilTheOperatorAddsIt()
+    {
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var requestId = Guid.NewGuid();
+        var principalId = Guid.NewGuid();
+        var scheduled = new GraphWorkflowRunOrigin
+        {
+            Source = GraphWorkflowTriggerSource.Schedule,
+            PrincipalId = principalId,
+            KeyPrefix = "xek_sched"
+        };
+
+        await using var scope = Host.Factory.Services.CreateAsyncScope();
+        var runs = scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>();
+        var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
+        var definition = await store.GetDefinitionAsync(definitionId);
+
+        var refusal = await AssertEx.ThrowsAsync<GraphWorkflowRunConflictException>(() =>
+            runs.StartAsync(definitionId, requestId, inputJson: null, definitionVersion: null, scheduled));
+        AssertEx.Contains(refusal.Message, "Schedule", message: "the refusal names the source it refused.");
+        AssertEx.Contains(refusal.Message, definition.Name, message: "and the definition that refused it.");
+        AssertEx.Null(await store.FindRunByRequestAsync(requestId), "a refused start leaves no run behind.");
+
+        _ = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowDefinitionService>()
+                       .UpdateAsync(definitionId,
+                           definition.Version,
+                           name: null,
+                           description: null,
+                           graphJson: null,
+                           triggerSources: GraphWorkflowTriggerSource.Manual | GraphWorkflowTriggerSource.Schedule);
+        var started = await runs.StartAsync(definitionId, requestId, inputJson: null, definitionVersion: null, scheduled);
+
+        AssertEx.Equal(GraphWorkflowTriggerSource.Schedule, started.Run.TriggerSource);
+        AssertEx.Equal(principalId, started.Run.PrincipalId);
+        AssertEx.Equal("xek_sched", started.Run.KeyPrefix);
+        _ = await AssertEx.ThrowsAsync<GraphWorkflowRunConflictException>(() =>
+                runs.StartAsync(definitionId, Guid.NewGuid(), inputJson: null, definitionVersion: null, GraphWorkflowRunOrigin.Chat),
+            "the widened set replaced the default, so Chat is no longer accepted.");
+    }
+
     [Test]
     public async Task StartAsync_WithAnEmptyRequestId_Refuses()
     {
@@ -379,7 +424,7 @@ public sealed class GraphWorkflowRunServiceTests
         var defaulted = await StartAsync(definitionId, Guid.NewGuid());
         await using var scope = Host.Factory.Services.CreateAsyncScope();
         var explicitRun = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>()
-                                     .StartAsync(definitionId, Guid.NewGuid(), """{"message":"explicit"}""", definitionVersion: null);
+                                     .StartAsync(definitionId, Guid.NewGuid(), """{"message":"explicit"}""", definitionVersion: null, GraphWorkflowRunOrigin.Manual);
 
         var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
         AssertEx.Equal("from the default", Message((await store.GetRunAsync(defaulted.Run.Id)).InputJson));
@@ -405,7 +450,7 @@ public sealed class GraphWorkflowRunServiceTests
         await using var scope = factory.Services.CreateAsyncScope();
         var runs = scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>();
         _ = await AssertEx.ThrowsAsync<GraphWorkflowValidationException>(() =>
-            runs.StartAsync(definitionId, requestId, $$"""{"blob":"{{new string('x', 2048)}}"}""", definitionVersion: null));
+            runs.StartAsync(definitionId, requestId, $$"""{"blob":"{{new string('x', 2048)}}"}""", definitionVersion: null, GraphWorkflowRunOrigin.Manual));
 
         var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
         AssertEx.Null(await store.FindRunByRequestAsync(requestId), "a refused start leaves nothing behind for the request id to find.");
@@ -436,7 +481,7 @@ public sealed class GraphWorkflowRunServiceTests
 
         var runs = scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>();
         var thrown = await AssertEx.ThrowsAsync<GraphWorkflowValidationException>(() =>
-            runs.StartAsync(definition.Id, Guid.NewGuid(), inputJson: null, definitionVersion: null));
+            runs.StartAsync(definition.Id, Guid.NewGuid(), inputJson: null, definitionVersion: null, GraphWorkflowRunOrigin.Manual));
         AssertEx.Contains(thrown.Message, "3 nodes", message: "the refusal names what the graph declares against what a run may instantiate.");
     }
 
@@ -514,7 +559,7 @@ public sealed class GraphWorkflowRunServiceTests
 
         await using var scope = factory.Services.CreateAsyncScope();
         var runs = scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>();
-        var started = await runs.StartAsync(definitionId, Guid.NewGuid(), inputJson: null, definitionVersion: null);
+        var started = await runs.StartAsync(definitionId, Guid.NewGuid(), inputJson: null, definitionVersion: null, GraphWorkflowRunOrigin.Manual);
 
         var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
         for (var index = 0; index < 3; index++)
@@ -679,6 +724,7 @@ public sealed class GraphWorkflowRunServiceTests
                               Guid.NewGuid(),
                               inputJson: null,
                               definitionVersion: null,
+                              GraphWorkflowRunOrigin.Chat,
                               new GraphWorkflowRunBinding
                               {
                                   ConversationId = conversationId,
@@ -753,7 +799,7 @@ public sealed class GraphWorkflowRunServiceTests
     {
         await using var scope = Host.Factory.Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>()
-                          .StartAsync(definitionId, requestId, inputJson: null, definitionVersion);
+                          .StartAsync(definitionId, requestId, inputJson: null, definitionVersion, GraphWorkflowRunOrigin.Manual);
     }
 
     /// <summary>What one racer came back with: a run, or the refusal it was given instead.</summary>

@@ -268,6 +268,7 @@ import {
 	inspectImageRepository,
 	installExternalApp,
 	invalidateInferenceProfile,
+	invokeGraphWorkflowIntent,
 	listAgentDefinitions,
 	listAgentExecutionLogs,
 	listAgentHomeRuns,
@@ -424,6 +425,7 @@ import {
 	startBenchmarkRunFidelity,
 	startDevelopmentNextAction,
 	startDevWorkflowRun,
+	startDictationSession,
 	startExternalApp,
 	startGgufDownload,
 	startGgufImport,
@@ -758,10 +760,13 @@ import type {
 	DeleteSlashCommandData,
 	DeleteSlashCommandResponse,
 	DeleteTrainingArtifactData,
+	DeleteTrainingArtifactError,
 	DeleteTrainingArtifactResponse,
 	DeleteTrainingDatasetData,
+	DeleteTrainingDatasetError,
 	DeleteTrainingDatasetResponse,
 	DeleteTrainingDefinitionData,
+	DeleteTrainingDefinitionError,
 	DeleteTrainingDefinitionResponse,
 	DeleteTranscriptionSessionData,
 	DeleteTranscriptionSessionResponse,
@@ -840,6 +845,7 @@ import type {
 	GenerateMcpServerApiKeyData,
 	GenerateMcpServerApiKeyResponse,
 	GenerateTrainingDatasetData,
+	GenerateTrainingDatasetError,
 	GenerateTrainingDatasetResponse,
 	GetAgentDefinitionData,
 	GetAgentDefinitionResponse,
@@ -1099,6 +1105,9 @@ import type {
 	InstallExternalAppResponse,
 	InvalidateInferenceProfileData,
 	InvalidateInferenceProfileResponse,
+	InvokeGraphWorkflowIntentData,
+	InvokeGraphWorkflowIntentError,
+	InvokeGraphWorkflowIntentResponse,
 	ListAgentDefinitionsData,
 	ListAgentDefinitionsResponse,
 	ListAgentExecutionLogsData,
@@ -1489,6 +1498,9 @@ import type {
 	StartDevWorkflowRunData,
 	StartDevWorkflowRunError,
 	StartDevWorkflowRunResponse,
+	StartDictationSessionData,
+	StartDictationSessionError,
+	StartDictationSessionResponse,
 	StartExternalAppData,
 	StartExternalAppError,
 	StartExternalAppResponse,
@@ -1607,6 +1619,7 @@ import type {
 	UpdateSuggestedPlaybookActionData,
 	UpdateSuggestedPlaybookActionResponse,
 	UpdateTrainingDefinitionData,
+	UpdateTrainingDefinitionError,
 	UpdateTrainingDefinitionResponse,
 	UpdateTranscriptSegmentData,
 	UpdateTranscriptSegmentError,
@@ -1621,6 +1634,7 @@ import type {
 	UploadImageError,
 	UploadImageResponse,
 	UploadKnowledgeDocumentData,
+	UploadKnowledgeDocumentError,
 	UploadKnowledgeDocumentResponse,
 	UploadTranscriptionAudioData,
 	UploadTranscriptionAudioError,
@@ -1634,6 +1648,7 @@ import type {
 	ValidationProblemProbeError,
 	ValidationProblemProbeResponse,
 	VerifyToolMockData,
+	VerifyToolMockError,
 	VerifyToolMockResponse,
 } from "../types.gen";
 
@@ -1677,7 +1692,7 @@ const createQueryKey = <TOptions extends Options>(
 };
 
 export const listAgentHomeRunsQueryKey = (options?: Options<ListAgentHomeRunsData>) =>
-	createQueryKey("listAgentHomeRuns", options);
+	createQueryKey("listAgentHomeRuns", options, false, ["Agent-Home"]);
 
 export const listAgentHomeRunsOptions = (options?: Options<ListAgentHomeRunsData>) =>
 	queryOptions<
@@ -1732,7 +1747,7 @@ const createInfiniteParams = <K extends Pick<QueryKey<Options>[0], "body" | "hea
 
 export const listAgentHomeRunsInfiniteQueryKey = (
 	options?: Options<ListAgentHomeRunsData>,
-): QueryKey<Options<ListAgentHomeRunsData>> => createQueryKey("listAgentHomeRuns", options, true);
+): QueryKey<Options<ListAgentHomeRunsData>> => createQueryKey("listAgentHomeRuns", options, true, ["Agent-Home"]);
 
 export const listAgentHomeRunsInfiniteOptions = (options?: Options<ListAgentHomeRunsData>) => {
 	const opts = infiniteQueryOptions<
@@ -1790,7 +1805,7 @@ export const deleteAgentHomeRunMutation = (
 };
 
 export const getAgentHomeRunLogQueryKey = (options: Options<GetAgentHomeRunLogData>) =>
-	createQueryKey("getAgentHomeRunLog", options);
+	createQueryKey("getAgentHomeRunLog", options, false, ["Agent-Home"]);
 
 export const getAgentHomeRunLogOptions = (options: Options<GetAgentHomeRunLogData>) =>
 	queryOptions<
@@ -1812,7 +1827,7 @@ export const getAgentHomeRunLogOptions = (options: Options<GetAgentHomeRunLogDat
 	});
 
 export const getAgentHomeRunPatchQueryKey = (options: Options<GetAgentHomeRunPatchData>) =>
-	createQueryKey("getAgentHomeRunPatch", options);
+	createQueryKey("getAgentHomeRunPatch", options, false, ["Agent-Home"]);
 
 export const getAgentHomeRunPatchOptions = (options: Options<GetAgentHomeRunPatchData>) =>
 	queryOptions<
@@ -1878,7 +1893,7 @@ export const previewAgentHomePatchMutation = (
 };
 
 export const listAgentDefinitionsQueryKey = (options?: Options<ListAgentDefinitionsData>) =>
-	createQueryKey("listAgentDefinitions", options);
+	createQueryKey("listAgentDefinitions", options, false, ["Agents"]);
 
 export const listAgentDefinitionsOptions = (options?: Options<ListAgentDefinitionsData>) =>
 	queryOptions<
@@ -1924,7 +1939,7 @@ export const createAgentDefinitionMutation = (
 };
 
 export const getDefaultAssistantToolOfferQueryKey = (options?: Options<GetDefaultAssistantToolOfferData>) =>
-	createQueryKey("getDefaultAssistantToolOffer", options);
+	createQueryKey("getDefaultAssistantToolOffer", options, false, ["Agents"]);
 
 export const getDefaultAssistantToolOfferOptions = (options?: Options<GetDefaultAssistantToolOfferData>) =>
 	queryOptions<
@@ -1965,7 +1980,8 @@ export const draftAgentDefinitionMutation = (
 	return mutationOptions;
 };
 
-export const listRunEnvelopesQueryKey = (options?: Options<ListRunEnvelopesData>) => createQueryKey("listRunEnvelopes", options);
+export const listRunEnvelopesQueryKey = (options?: Options<ListRunEnvelopesData>) =>
+	createQueryKey("listRunEnvelopes", options, false, ["Agents"]);
 
 export const listRunEnvelopesOptions = (options?: Options<ListRunEnvelopesData>) =>
 	queryOptions<
@@ -1988,7 +2004,7 @@ export const listRunEnvelopesOptions = (options?: Options<ListRunEnvelopesData>)
 
 export const listRunEnvelopesInfiniteQueryKey = (
 	options?: Options<ListRunEnvelopesData>,
-): QueryKey<Options<ListRunEnvelopesData>> => createQueryKey("listRunEnvelopes", options, true);
+): QueryKey<Options<ListRunEnvelopesData>> => createQueryKey("listRunEnvelopes", options, true, ["Agents"]);
 
 export const listRunEnvelopesInfiniteOptions = (options?: Options<ListRunEnvelopesData>) => {
 	const opts = infiniteQueryOptions<
@@ -2026,7 +2042,7 @@ export const listRunEnvelopesInfiniteOptions = (options?: Options<ListRunEnvelop
 };
 
 export const listAgentTemplatesQueryKey = (options?: Options<ListAgentTemplatesData>) =>
-	createQueryKey("listAgentTemplates", options);
+	createQueryKey("listAgentTemplates", options, false, ["Agents"]);
 
 export const listAgentTemplatesOptions = (options?: Options<ListAgentTemplatesData>) =>
 	queryOptions<
@@ -2068,7 +2084,7 @@ export const importAgentTemplatesMutation = (
 };
 
 export const getToolCapableModelsQueryKey = (options?: Options<GetToolCapableModelsData>) =>
-	createQueryKey("getToolCapableModels", options);
+	createQueryKey("getToolCapableModels", options, false, ["Agents"]);
 
 export const getToolCapableModelsOptions = (options?: Options<GetToolCapableModelsData>) =>
 	queryOptions<
@@ -2090,7 +2106,7 @@ export const getToolCapableModelsOptions = (options?: Options<GetToolCapableMode
 	});
 
 export const getAgentUsageSummaryQueryKey = (options?: Options<GetAgentUsageSummaryData>) =>
-	createQueryKey("getAgentUsageSummary", options);
+	createQueryKey("getAgentUsageSummary", options, false, ["Agents"]);
 
 export const getAgentUsageSummaryOptions = (options?: Options<GetAgentUsageSummaryData>) =>
 	queryOptions<
@@ -2132,7 +2148,7 @@ export const deleteAgentDefinitionMutation = (
 };
 
 export const getAgentDefinitionQueryKey = (options: Options<GetAgentDefinitionData>) =>
-	createQueryKey("getAgentDefinition", options);
+	createQueryKey("getAgentDefinition", options, false, ["Agents"]);
 
 export const getAgentDefinitionOptions = (options: Options<GetAgentDefinitionData>) =>
 	queryOptions<
@@ -2178,7 +2194,7 @@ export const updateAgentDefinitionMutation = (
 };
 
 export const listAgentExecutionLogsQueryKey = (options: Options<ListAgentExecutionLogsData>) =>
-	createQueryKey("listAgentExecutionLogs", options);
+	createQueryKey("listAgentExecutionLogs", options, false, ["Agents"]);
 
 export const listAgentExecutionLogsOptions = (options: Options<ListAgentExecutionLogsData>) =>
 	queryOptions<
@@ -2201,7 +2217,7 @@ export const listAgentExecutionLogsOptions = (options: Options<ListAgentExecutio
 
 export const listAgentExecutionLogsInfiniteQueryKey = (
 	options: Options<ListAgentExecutionLogsData>,
-): QueryKey<Options<ListAgentExecutionLogsData>> => createQueryKey("listAgentExecutionLogs", options, true);
+): QueryKey<Options<ListAgentExecutionLogsData>> => createQueryKey("listAgentExecutionLogs", options, true, ["Agents"]);
 
 export const listAgentExecutionLogsInfiniteOptions = (options: Options<ListAgentExecutionLogsData>) => {
 	const opts = infiniteQueryOptions<
@@ -2239,7 +2255,7 @@ export const listAgentExecutionLogsInfiniteOptions = (options: Options<ListAgent
 };
 
 export const getAgentFeedbackInsightsQueryKey = (options: Options<GetAgentFeedbackInsightsData>) =>
-	createQueryKey("getAgentFeedbackInsights", options);
+	createQueryKey("getAgentFeedbackInsights", options, false, ["Agents"]);
 
 export const getAgentFeedbackInsightsOptions = (options: Options<GetAgentFeedbackInsightsData>) =>
 	queryOptions<
@@ -2261,7 +2277,7 @@ export const getAgentFeedbackInsightsOptions = (options: Options<GetAgentFeedbac
 	});
 
 export const listGoldenConversationsQueryKey = (options: Options<ListGoldenConversationsData>) =>
-	createQueryKey("listGoldenConversations", options);
+	createQueryKey("listGoldenConversations", options, false, ["Agents"]);
 
 export const listGoldenConversationsOptions = (options: Options<ListGoldenConversationsData>) =>
 	queryOptions<
@@ -2363,7 +2379,7 @@ export const approveGoldenConversationMutation = (
 };
 
 export const listAgentPlaybookActionsQueryKey = (options: Options<ListAgentPlaybookActionsData>) =>
-	createQueryKey("listAgentPlaybookActions", options);
+	createQueryKey("listAgentPlaybookActions", options, false, ["Agents"]);
 
 export const listAgentPlaybookActionsOptions = (options: Options<ListAgentPlaybookActionsData>) =>
 	queryOptions<
@@ -2421,7 +2437,7 @@ export const analyzePlaybookMutation = (
 };
 
 export const getAgentPlaybookMonitorQueryKey = (options: Options<GetAgentPlaybookMonitorData>) =>
-	createQueryKey("getAgentPlaybookMonitor", options);
+	createQueryKey("getAgentPlaybookMonitor", options, false, ["Agents"]);
 
 export const getAgentPlaybookMonitorOptions = (options: Options<GetAgentPlaybookMonitorData>) =>
 	queryOptions<
@@ -2615,7 +2631,7 @@ export const setAppUpdateChannelMutation = (
 };
 
 export const getAppUpdateStatusQueryKey = (options?: Options<GetAppUpdateStatusData>) =>
-	createQueryKey("getAppUpdateStatus", options);
+	createQueryKey("getAppUpdateStatus", options, false, ["App-Update"]);
 
 export const getAppUpdateStatusOptions = (options?: Options<GetAppUpdateStatusData>) =>
 	queryOptions<
@@ -2656,6 +2672,11 @@ export const nodeChangePasswordMutation = (
 	return mutationOptions;
 };
 
+/**
+ * Signs the operator in and issues an access token.
+ *
+ * Cookie mode (default) sets the HttpOnly node_rt refresh cookie. With returnRefreshToken: true (non-browser clients) the body also carries refreshToken and refreshTokenExpiresAtUtc and no cookie is written; refresh it through auth/refresh with the X-XE-Refresh-Token header.
+ */
 export const nodeLoginMutation = (
 	options?: Partial<Options<NodeLoginData>>,
 ): UseMutationOptions<NodeLoginResponse, AxiosError<NodeLoginError>, Options<NodeLoginData>> => {
@@ -2688,6 +2709,11 @@ export const nodeLogoutMutation = (
 	return mutationOptions;
 };
 
+/**
+ * Rotates the refresh token and issues a new access token.
+ *
+ * Reads the node_rt cookie. Only when no cookie is sent, a non-browser client may send its refresh token in the X-XE-Refresh-Token header; that answer carries the rotated refreshToken and refreshTokenExpiresAtUtc in the body and never sets or clears a cookie.
+ */
 export const nodeRefreshMutation = (
 	options?: Partial<Options<NodeRefreshData>>,
 ): UseMutationOptions<NodeRefreshResponse, AxiosError<DefaultError>, Options<NodeRefreshData>> => {
@@ -2720,7 +2746,8 @@ export const nodeSetupMutation = (
 	return mutationOptions;
 };
 
-export const nodeAuthStatusQueryKey = (options?: Options<NodeAuthStatusData>) => createQueryKey("nodeAuthStatus", options);
+export const nodeAuthStatusQueryKey = (options?: Options<NodeAuthStatusData>) =>
+	createQueryKey("nodeAuthStatus", options, false, ["Auth"]);
 
 export const nodeAuthStatusOptions = (options?: Options<NodeAuthStatusData>) =>
 	queryOptions<
@@ -2762,7 +2789,7 @@ export const nodeVaultConfirmMutation = (
 };
 
 export const listSlashCommandsQueryKey = (options?: Options<ListSlashCommandsData>) =>
-	createQueryKey("listSlashCommands", options);
+	createQueryKey("listSlashCommands", options, false, ["Automation"]);
 
 export const listSlashCommandsOptions = (options?: Options<ListSlashCommandsData>) =>
 	queryOptions<
@@ -2823,7 +2850,8 @@ export const deleteSlashCommandMutation = (
 	return mutationOptions;
 };
 
-export const getSlashCommandQueryKey = (options: Options<GetSlashCommandData>) => createQueryKey("getSlashCommand", options);
+export const getSlashCommandQueryKey = (options: Options<GetSlashCommandData>) =>
+	createQueryKey("getSlashCommand", options, false, ["Automation"]);
 
 export const getSlashCommandOptions = (options: Options<GetSlashCommandData>) =>
 	queryOptions<
@@ -2865,7 +2893,7 @@ export const updateSlashCommandMutation = (
 };
 
 export const listEligibleBenchmarkAgentsQueryKey = (options: Options<ListEligibleBenchmarkAgentsData>) =>
-	createQueryKey("listEligibleBenchmarkAgents", options);
+	createQueryKey("listEligibleBenchmarkAgents", options, false, ["Benchmarks"]);
 
 export const listEligibleBenchmarkAgentsOptions = (options: Options<ListEligibleBenchmarkAgentsData>) =>
 	queryOptions<
@@ -2887,7 +2915,7 @@ export const listEligibleBenchmarkAgentsOptions = (options: Options<ListEligible
 	});
 
 export const listEligibleBenchmarkModelsQueryKey = (options?: Options<ListEligibleBenchmarkModelsData>) =>
-	createQueryKey("listEligibleBenchmarkModels", options);
+	createQueryKey("listEligibleBenchmarkModels", options, false, ["Benchmarks"]);
 
 export const listEligibleBenchmarkModelsOptions = (options?: Options<ListEligibleBenchmarkModelsData>) =>
 	queryOptions<
@@ -2909,7 +2937,7 @@ export const listEligibleBenchmarkModelsOptions = (options?: Options<ListEligibl
 	});
 
 export const listBenchmarkProjectsQueryKey = (options?: Options<ListBenchmarkProjectsData>) =>
-	createQueryKey("listBenchmarkProjects", options);
+	createQueryKey("listBenchmarkProjects", options, false, ["Benchmarks"]);
 
 export const listBenchmarkProjectsOptions = (options?: Options<ListBenchmarkProjectsData>) =>
 	queryOptions<
@@ -2979,7 +3007,7 @@ export const deleteBenchmarkProjectMutation = (
 };
 
 export const getBenchmarkProjectQueryKey = (options: Options<GetBenchmarkProjectData>) =>
-	createQueryKey("getBenchmarkProject", options);
+	createQueryKey("getBenchmarkProject", options, false, ["Benchmarks"]);
 
 export const getBenchmarkProjectOptions = (options: Options<GetBenchmarkProjectData>) =>
 	queryOptions<
@@ -3025,7 +3053,7 @@ export const updateBenchmarkProjectMutation = (
 };
 
 export const listBenchmarkCellsQueryKey = (options: Options<ListBenchmarkCellsData>) =>
-	createQueryKey("listBenchmarkCells", options);
+	createQueryKey("listBenchmarkCells", options, false, ["Benchmarks"]);
 
 export const listBenchmarkCellsOptions = (options: Options<ListBenchmarkCellsData>) =>
 	queryOptions<
@@ -3047,7 +3075,7 @@ export const listBenchmarkCellsOptions = (options: Options<ListBenchmarkCellsDat
 	});
 
 export const compareBenchmarkCellsQueryKey = (options: Options<CompareBenchmarkCellsData>) =>
-	createQueryKey("compareBenchmarkCells", options);
+	createQueryKey("compareBenchmarkCells", options, false, ["Benchmarks"]);
 
 export const compareBenchmarkCellsOptions = (options: Options<CompareBenchmarkCellsData>) =>
 	queryOptions<
@@ -3069,7 +3097,7 @@ export const compareBenchmarkCellsOptions = (options: Options<CompareBenchmarkCe
 	});
 
 export const listBenchmarkComparisonsQueryKey = (options: Options<ListBenchmarkComparisonsData>) =>
-	createQueryKey("listBenchmarkComparisons", options);
+	createQueryKey("listBenchmarkComparisons", options, false, ["Benchmarks"]);
 
 export const listBenchmarkComparisonsOptions = (options: Options<ListBenchmarkComparisonsData>) =>
 	queryOptions<
@@ -3091,7 +3119,7 @@ export const listBenchmarkComparisonsOptions = (options: Options<ListBenchmarkCo
 	});
 
 export const exportBenchmarkProjectQueryKey = (options: Options<ExportBenchmarkProjectData>) =>
-	createQueryKey("exportBenchmarkProject", options);
+	createQueryKey("exportBenchmarkProject", options, false, ["Benchmarks"]);
 
 export const exportBenchmarkProjectOptions = (options: Options<ExportBenchmarkProjectData>) =>
 	queryOptions<
@@ -3113,7 +3141,7 @@ export const exportBenchmarkProjectOptions = (options: Options<ExportBenchmarkPr
 	});
 
 export const exportBenchmarkProjectCsvQueryKey = (options: Options<ExportBenchmarkProjectCsvData>) =>
-	createQueryKey("exportBenchmarkProjectCsv", options);
+	createQueryKey("exportBenchmarkProjectCsv", options, false, ["Benchmarks"]);
 
 export const exportBenchmarkProjectCsvOptions = (options: Options<ExportBenchmarkProjectCsvData>) =>
 	queryOptions<
@@ -3183,7 +3211,7 @@ export const clearBenchmarkFidelityCacheMutation = (
 };
 
 export const getBenchmarkKldDiskEstimateQueryKey = (options: Options<GetBenchmarkKldDiskEstimateData>) =>
-	createQueryKey("getBenchmarkKldDiskEstimate", options);
+	createQueryKey("getBenchmarkKldDiskEstimate", options, false, ["Benchmarks"]);
 
 export const getBenchmarkKldDiskEstimateOptions = (options: Options<GetBenchmarkKldDiskEstimateData>) =>
 	queryOptions<
@@ -3205,7 +3233,7 @@ export const getBenchmarkKldDiskEstimateOptions = (options: Options<GetBenchmark
 	});
 
 export const listBenchmarkTaskItemsQueryKey = (options: Options<ListBenchmarkTaskItemsData>) =>
-	createQueryKey("listBenchmarkTaskItems", options);
+	createQueryKey("listBenchmarkTaskItems", options, false, ["Benchmarks"]);
 
 export const listBenchmarkTaskItemsOptions = (options: Options<ListBenchmarkTaskItemsData>) =>
 	queryOptions<
@@ -3347,7 +3375,7 @@ export const updateBenchmarkJudgePolicyMutation = (
 };
 
 export const getBenchmarkPairwiseEstimateQueryKey = (options: Options<GetBenchmarkPairwiseEstimateData>) =>
-	createQueryKey("getBenchmarkPairwiseEstimate", options);
+	createQueryKey("getBenchmarkPairwiseEstimate", options, false, ["Benchmarks"]);
 
 export const getBenchmarkPairwiseEstimateOptions = (options: Options<GetBenchmarkPairwiseEstimateData>) =>
 	queryOptions<
@@ -3393,7 +3421,7 @@ export const rejudgeBenchmarkProjectMutation = (
 };
 
 export const listBenchmarkRunsQueryKey = (options: Options<ListBenchmarkRunsData>) =>
-	createQueryKey("listBenchmarkRuns", options);
+	createQueryKey("listBenchmarkRuns", options, false, ["Benchmarks"]);
 
 export const listBenchmarkRunsOptions = (options: Options<ListBenchmarkRunsData>) =>
 	queryOptions<
@@ -3416,7 +3444,7 @@ export const listBenchmarkRunsOptions = (options: Options<ListBenchmarkRunsData>
 
 export const listBenchmarkRunsInfiniteQueryKey = (
 	options: Options<ListBenchmarkRunsData>,
-): QueryKey<Options<ListBenchmarkRunsData>> => createQueryKey("listBenchmarkRuns", options, true);
+): QueryKey<Options<ListBenchmarkRunsData>> => createQueryKey("listBenchmarkRuns", options, true, ["Benchmarks"]);
 
 export const listBenchmarkRunsInfiniteOptions = (options: Options<ListBenchmarkRunsData>) => {
 	const opts = infiniteQueryOptions<
@@ -3498,7 +3526,7 @@ export const startBenchmarkRunBatchMutation = (
 };
 
 export const getBenchmarkRubricPresetsQueryKey = (options?: Options<GetBenchmarkRubricPresetsData>) =>
-	createQueryKey("getBenchmarkRubricPresets", options);
+	createQueryKey("getBenchmarkRubricPresets", options, false, ["Benchmarks"]);
 
 export const getBenchmarkRubricPresetsOptions = (options?: Options<GetBenchmarkRubricPresetsData>) =>
 	queryOptions<
@@ -3539,7 +3567,8 @@ export const deleteBenchmarkRunMutation = (
 	return mutationOptions;
 };
 
-export const getBenchmarkRunQueryKey = (options: Options<GetBenchmarkRunData>) => createQueryKey("getBenchmarkRun", options);
+export const getBenchmarkRunQueryKey = (options: Options<GetBenchmarkRunData>) =>
+	createQueryKey("getBenchmarkRun", options, false, ["Benchmarks"]);
 
 export const getBenchmarkRunOptions = (options: Options<GetBenchmarkRunData>) =>
 	queryOptions<
@@ -3713,7 +3742,7 @@ export const cancelNodeChatMessageMutation = (
 };
 
 export const getNodeChatContextEstimateQueryKey = (options?: Options<GetNodeChatContextEstimateData>) =>
-	createQueryKey("getNodeChatContextEstimate", options);
+	createQueryKey("getNodeChatContextEstimate", options, false, ["Chat"]);
 
 export const getNodeChatContextEstimateOptions = (options?: Options<GetNodeChatContextEstimateData>) =>
 	queryOptions<
@@ -3735,7 +3764,7 @@ export const getNodeChatContextEstimateOptions = (options?: Options<GetNodeChatC
 	});
 
 export const listNodeChatConversationsQueryKey = (options: Options<ListNodeChatConversationsData>) =>
-	createQueryKey("listNodeChatConversations", options);
+	createQueryKey("listNodeChatConversations", options, false, ["Chat"]);
 
 export const listNodeChatConversationsOptions = (options: Options<ListNodeChatConversationsData>) =>
 	queryOptions<
@@ -3805,7 +3834,7 @@ export const deleteNodeChatConversationMutation = (
 };
 
 export const getNodeChatConversationQueryKey = (options: Options<GetNodeChatConversationData>) =>
-	createQueryKey("getNodeChatConversation", options);
+	createQueryKey("getNodeChatConversation", options, false, ["Chat"]);
 
 export const getNodeChatConversationOptions = (options: Options<GetNodeChatConversationData>) =>
 	queryOptions<
@@ -3899,7 +3928,7 @@ export const compactNodeChatConversationMutation = (
 };
 
 export const getNodeChatConversationContextStateQueryKey = (options: Options<GetNodeChatConversationContextStateData>) =>
-	createQueryKey("getNodeChatConversationContextState", options);
+	createQueryKey("getNodeChatConversationContextState", options, false, ["Chat"]);
 
 export const getNodeChatConversationContextStateOptions = (options: Options<GetNodeChatConversationContextStateData>) =>
 	queryOptions<
@@ -3945,7 +3974,7 @@ export const setNodeChatConversationMemoryExcludedMutation = (
 };
 
 export const getNodeChatMessageFeedbackQueryKey = (options: Options<GetNodeChatMessageFeedbackData>) =>
-	createQueryKey("getNodeChatMessageFeedback", options);
+	createQueryKey("getNodeChatMessageFeedback", options, false, ["Chat"]);
 
 export const getNodeChatMessageFeedbackOptions = (options: Options<GetNodeChatMessageFeedbackData>) =>
 	queryOptions<
@@ -3991,7 +4020,7 @@ export const setNodeChatMessageFeedbackMutation = (
 };
 
 export const listNodeChatMessageRevisionsQueryKey = (options: Options<ListNodeChatMessageRevisionsData>) =>
-	createQueryKey("listNodeChatMessageRevisions", options);
+	createQueryKey("listNodeChatMessageRevisions", options, false, ["Chat"]);
 
 export const listNodeChatMessageRevisionsOptions = (options: Options<ListNodeChatMessageRevisionsData>) =>
 	queryOptions<
@@ -4109,7 +4138,7 @@ export const setNodeChatSelectedPathMutation = (
 };
 
 export const listConversationFilesQueryKey = (options: Options<ListConversationFilesData>) =>
-	createQueryKey("listConversationFiles", options);
+	createQueryKey("listConversationFiles", options, false, ["Chat"]);
 
 export const listConversationFilesOptions = (options: Options<ListConversationFilesData>) =>
 	queryOptions<
@@ -4242,7 +4271,8 @@ export const clearCloudSettingsMutation = (
 	return mutationOptions;
 };
 
-export const getCloudSettingsQueryKey = (options?: Options<GetCloudSettingsData>) => createQueryKey("getCloudSettings", options);
+export const getCloudSettingsQueryKey = (options?: Options<GetCloudSettingsData>) =>
+	createQueryKey("getCloudSettings", options, false, ["Cloud-Settings"]);
 
 export const getCloudSettingsOptions = (options?: Options<GetCloudSettingsData>) =>
 	queryOptions<
@@ -4304,7 +4334,7 @@ export const entraAuthCodeSignInMutation = (
 };
 
 export const entraAuthCodeStatusQueryKey = (options?: Options<EntraAuthCodeStatusData>) =>
-	createQueryKey("entraAuthCodeStatus", options);
+	createQueryKey("entraAuthCodeStatus", options, false, ["Cloud-Settings"]);
 
 export const entraAuthCodeStatusOptions = (options?: Options<EntraAuthCodeStatusData>) =>
 	queryOptions<
@@ -4346,7 +4376,7 @@ export const entraDeviceCodeSignInMutation = (
 };
 
 export const entraDeviceCodeStatusQueryKey = (options?: Options<EntraDeviceCodeStatusData>) =>
-	createQueryKey("entraDeviceCodeStatus", options);
+	createQueryKey("entraDeviceCodeStatus", options, false, ["Cloud-Settings"]);
 
 export const entraDeviceCodeStatusOptions = (options?: Options<EntraDeviceCodeStatusData>) =>
 	queryOptions<
@@ -4399,7 +4429,8 @@ export const codexLogoutMutation = (
 	return mutationOptions;
 };
 
-export const codexStatusQueryKey = (options?: Options<CodexStatusData>) => createQueryKey("codexStatus", options);
+export const codexStatusQueryKey = (options?: Options<CodexStatusData>) =>
+	createQueryKey("codexStatus", options, false, ["Cloud"]);
 
 export const codexStatusOptions = (options?: Options<CodexStatusData>) =>
 	queryOptions<CodexStatusResponse, AxiosError<DefaultError>, CodexStatusResponse, ReturnType<typeof codexStatusQueryKey>>({
@@ -4415,7 +4446,8 @@ export const codexStatusOptions = (options?: Options<CodexStatusData>) =>
 		queryKey: codexStatusQueryKey(options),
 	});
 
-export const listCustomToolsQueryKey = (options?: Options<ListCustomToolsData>) => createQueryKey("listCustomTools", options);
+export const listCustomToolsQueryKey = (options?: Options<ListCustomToolsData>) =>
+	createQueryKey("listCustomTools", options, false, ["Custom-Tools"]);
 
 export const listCustomToolsOptions = (options?: Options<ListCustomToolsData>) =>
 	queryOptions<
@@ -4488,7 +4520,8 @@ export const deleteCustomToolMutation = (
 	return mutationOptions;
 };
 
-export const getCustomToolQueryKey = (options: Options<GetCustomToolData>) => createQueryKey("getCustomTool", options);
+export const getCustomToolQueryKey = (options: Options<GetCustomToolData>) =>
+	createQueryKey("getCustomTool", options, false, ["Custom-Tools"]);
 
 export const getCustomToolOptions = (options: Options<GetCustomToolData>) =>
 	queryOptions<GetCustomToolResponse, AxiosError<DefaultError>, GetCustomToolResponse, ReturnType<typeof getCustomToolQueryKey>>({
@@ -4521,7 +4554,7 @@ export const updateCustomToolMutation = (
 };
 
 export const getDevWorkflowCapabilityQueryKey = (options?: Options<GetDevWorkflowCapabilityData>) =>
-	createQueryKey("getDevWorkflowCapability", options);
+	createQueryKey("getDevWorkflowCapability", options, false, ["Development-Workflows"]);
 
 export const getDevWorkflowCapabilityOptions = (options?: Options<GetDevWorkflowCapabilityData>) =>
 	queryOptions<
@@ -4543,7 +4576,7 @@ export const getDevWorkflowCapabilityOptions = (options?: Options<GetDevWorkflow
 	});
 
 export const listDevWorkflowDefinitionsQueryKey = (options: Options<ListDevWorkflowDefinitionsData>) =>
-	createQueryKey("listDevWorkflowDefinitions", options);
+	createQueryKey("listDevWorkflowDefinitions", options, false, ["Development-Workflows"]);
 
 export const listDevWorkflowDefinitionsOptions = (options: Options<ListDevWorkflowDefinitionsData>) =>
 	queryOptions<
@@ -4613,7 +4646,7 @@ export const archiveDevWorkflowDefinitionMutation = (
 };
 
 export const getDevWorkflowDefinitionQueryKey = (options: Options<GetDevWorkflowDefinitionData>) =>
-	createQueryKey("getDevWorkflowDefinition", options);
+	createQueryKey("getDevWorkflowDefinition", options, false, ["Development-Workflows"]);
 
 export const getDevWorkflowDefinitionOptions = (options: Options<GetDevWorkflowDefinitionData>) =>
 	queryOptions<
@@ -4659,7 +4692,7 @@ export const updateDevWorkflowDefinitionMutation = (
 };
 
 export const listDevWorkflowRuleSetsQueryKey = (options?: Options<ListDevWorkflowRuleSetsData>) =>
-	createQueryKey("listDevWorkflowRuleSets", options);
+	createQueryKey("listDevWorkflowRuleSets", options, false, ["Development-Workflows"]);
 
 export const listDevWorkflowRuleSetsOptions = (options?: Options<ListDevWorkflowRuleSetsData>) =>
 	queryOptions<
@@ -4725,7 +4758,7 @@ export const deleteDevWorkflowRuleSetMutation = (
 };
 
 export const getDevWorkflowRuleSetQueryKey = (options: Options<GetDevWorkflowRuleSetData>) =>
-	createQueryKey("getDevWorkflowRuleSet", options);
+	createQueryKey("getDevWorkflowRuleSet", options, false, ["Development-Workflows"]);
 
 export const getDevWorkflowRuleSetOptions = (options: Options<GetDevWorkflowRuleSetData>) =>
 	queryOptions<
@@ -4771,7 +4804,7 @@ export const updateDevWorkflowRuleSetMutation = (
 };
 
 export const listDevWorkflowRunsQueryKey = (options: Options<ListDevWorkflowRunsData>) =>
-	createQueryKey("listDevWorkflowRuns", options);
+	createQueryKey("listDevWorkflowRuns", options, false, ["Development-Workflows"]);
 
 export const listDevWorkflowRunsOptions = (options: Options<ListDevWorkflowRunsData>) =>
 	queryOptions<
@@ -4793,7 +4826,7 @@ export const listDevWorkflowRunsOptions = (options: Options<ListDevWorkflowRunsD
 	});
 
 export const getDevWorkflowRunQueryKey = (options: Options<GetDevWorkflowRunData>) =>
-	createQueryKey("getDevWorkflowRun", options);
+	createQueryKey("getDevWorkflowRun", options, false, ["Development-Workflows"]);
 
 export const getDevWorkflowRunOptions = (options: Options<GetDevWorkflowRunData>) =>
 	queryOptions<
@@ -4815,7 +4848,7 @@ export const getDevWorkflowRunOptions = (options: Options<GetDevWorkflowRunData>
 	});
 
 export const listDevWorkflowArtifactsQueryKey = (options: Options<ListDevWorkflowArtifactsData>) =>
-	createQueryKey("listDevWorkflowArtifacts", options);
+	createQueryKey("listDevWorkflowArtifacts", options, false, ["Development-Workflows"]);
 
 export const listDevWorkflowArtifactsOptions = (options: Options<ListDevWorkflowArtifactsData>) =>
 	queryOptions<
@@ -4836,8 +4869,48 @@ export const listDevWorkflowArtifactsOptions = (options: Options<ListDevWorkflow
 		queryKey: listDevWorkflowArtifactsQueryKey(options),
 	});
 
+export const listDevWorkflowArtifactsInfiniteQueryKey = (
+	options: Options<ListDevWorkflowArtifactsData>,
+): QueryKey<Options<ListDevWorkflowArtifactsData>> =>
+	createQueryKey("listDevWorkflowArtifacts", options, true, ["Development-Workflows"]);
+
+export const listDevWorkflowArtifactsInfiniteOptions = (options: Options<ListDevWorkflowArtifactsData>) => {
+	const opts = infiniteQueryOptions<
+		ListDevWorkflowArtifactsResponse,
+		AxiosError<ListDevWorkflowArtifactsError>,
+		InfiniteData<ListDevWorkflowArtifactsResponse>,
+		QueryKey<Options<ListDevWorkflowArtifactsData>>,
+		number | Pick<QueryKey<Options<ListDevWorkflowArtifactsData>>[0], "body" | "headers" | "path" | "query">
+	>(
+		// @ts-ignore
+		{
+			queryFn: async ({ pageParam, queryKey, signal }) => {
+				// @ts-ignore
+				const page: Pick<QueryKey<Options<ListDevWorkflowArtifactsData>>[0], "body" | "headers" | "path" | "query"> =
+					typeof pageParam === "object"
+						? pageParam
+						: {
+								query: {
+									sinceSeq: pageParam,
+								},
+							};
+				const params = createInfiniteParams(queryKey, page);
+				const { data } = await listDevWorkflowArtifacts({
+					...options,
+					...params,
+					signal,
+					throwOnError: true,
+				});
+				return data;
+			},
+			queryKey: listDevWorkflowArtifactsInfiniteQueryKey(options),
+		},
+	);
+	return opts as Omit<typeof opts, "initialData">;
+};
+
 export const getDevWorkflowArtifactContentQueryKey = (options: Options<GetDevWorkflowArtifactContentData>) =>
-	createQueryKey("getDevWorkflowArtifactContent", options);
+	createQueryKey("getDevWorkflowArtifactContent", options, false, ["Development-Workflows"]);
 
 export const getDevWorkflowArtifactContentOptions = (options: Options<GetDevWorkflowArtifactContentData>) =>
 	queryOptions<
@@ -4879,7 +4952,7 @@ export const cancelDevWorkflowRunMutation = (
 };
 
 export const listDevWorkflowRunEventsQueryKey = (options: Options<ListDevWorkflowRunEventsData>) =>
-	createQueryKey("listDevWorkflowRunEvents", options);
+	createQueryKey("listDevWorkflowRunEvents", options, false, ["Development-Workflows"]);
 
 export const listDevWorkflowRunEventsOptions = (options: Options<ListDevWorkflowRunEventsData>) =>
 	queryOptions<
@@ -4900,8 +4973,48 @@ export const listDevWorkflowRunEventsOptions = (options: Options<ListDevWorkflow
 		queryKey: listDevWorkflowRunEventsQueryKey(options),
 	});
 
+export const listDevWorkflowRunEventsInfiniteQueryKey = (
+	options: Options<ListDevWorkflowRunEventsData>,
+): QueryKey<Options<ListDevWorkflowRunEventsData>> =>
+	createQueryKey("listDevWorkflowRunEvents", options, true, ["Development-Workflows"]);
+
+export const listDevWorkflowRunEventsInfiniteOptions = (options: Options<ListDevWorkflowRunEventsData>) => {
+	const opts = infiniteQueryOptions<
+		ListDevWorkflowRunEventsResponse,
+		AxiosError<ListDevWorkflowRunEventsError>,
+		InfiniteData<ListDevWorkflowRunEventsResponse>,
+		QueryKey<Options<ListDevWorkflowRunEventsData>>,
+		number | Pick<QueryKey<Options<ListDevWorkflowRunEventsData>>[0], "body" | "headers" | "path" | "query">
+	>(
+		// @ts-ignore
+		{
+			queryFn: async ({ pageParam, queryKey, signal }) => {
+				// @ts-ignore
+				const page: Pick<QueryKey<Options<ListDevWorkflowRunEventsData>>[0], "body" | "headers" | "path" | "query"> =
+					typeof pageParam === "object"
+						? pageParam
+						: {
+								query: {
+									sinceSeq: pageParam,
+								},
+							};
+				const params = createInfiniteParams(queryKey, page);
+				const { data } = await listDevWorkflowRunEvents({
+					...options,
+					...params,
+					signal,
+					throwOnError: true,
+				});
+				return data;
+			},
+			queryKey: listDevWorkflowRunEventsInfiniteQueryKey(options),
+		},
+	);
+	return opts as Omit<typeof opts, "initialData">;
+};
+
 export const getDevWorkflowNodeRunQueryKey = (options: Options<GetDevWorkflowNodeRunData>) =>
-	createQueryKey("getDevWorkflowNodeRun", options);
+	createQueryKey("getDevWorkflowNodeRun", options, false, ["Development-Workflows"]);
 
 export const getDevWorkflowNodeRunOptions = (options: Options<GetDevWorkflowNodeRunData>) =>
 	queryOptions<
@@ -4987,7 +5100,7 @@ export const resumeDevWorkflowRunMutation = (
 };
 
 export const listDevWorkflowWorkItemsQueryKey = (options?: Options<ListDevWorkflowWorkItemsData>) =>
-	createQueryKey("listDevWorkflowWorkItems", options);
+	createQueryKey("listDevWorkflowWorkItems", options, false, ["Development-Workflows"]);
 
 export const listDevWorkflowWorkItemsOptions = (options?: Options<ListDevWorkflowWorkItemsData>) =>
 	queryOptions<
@@ -5057,7 +5170,7 @@ export const deleteDevWorkflowWorkItemMutation = (
 };
 
 export const getDevWorkflowWorkItemQueryKey = (options: Options<GetDevWorkflowWorkItemData>) =>
-	createQueryKey("getDevWorkflowWorkItem", options);
+	createQueryKey("getDevWorkflowWorkItem", options, false, ["Development-Workflows"]);
 
 export const getDevWorkflowWorkItemOptions = (options: Options<GetDevWorkflowWorkItemData>) =>
 	queryOptions<
@@ -5123,7 +5236,7 @@ export const startDevWorkflowRunMutation = (
 };
 
 export const getDevelopmentCapabilityQueryKey = (options?: Options<GetDevelopmentCapabilityData>) =>
-	createQueryKey("getDevelopmentCapability", options);
+	createQueryKey("getDevelopmentCapability", options, false, ["Development"]);
 
 export const getDevelopmentCapabilityOptions = (options?: Options<GetDevelopmentCapabilityData>) =>
 	queryOptions<
@@ -5169,7 +5282,7 @@ export const confirmDevelopmentContainerRuntimeMutation = (
 };
 
 export const listDevelopmentProjectsQueryKey = (options?: Options<ListDevelopmentProjectsData>) =>
-	createQueryKey("listDevelopmentProjects", options);
+	createQueryKey("listDevelopmentProjects", options, false, ["Development"]);
 
 export const listDevelopmentProjectsOptions = (options?: Options<ListDevelopmentProjectsData>) =>
 	queryOptions<
@@ -5215,7 +5328,7 @@ export const createDevelopmentProjectMutation = (
 };
 
 export const getDevelopmentProjectQueryKey = (options: Options<GetDevelopmentProjectData>) =>
-	createQueryKey("getDevelopmentProject", options);
+	createQueryKey("getDevelopmentProject", options, false, ["Development"]);
 
 export const getDevelopmentProjectOptions = (options: Options<GetDevelopmentProjectData>) =>
 	queryOptions<
@@ -5237,7 +5350,7 @@ export const getDevelopmentProjectOptions = (options: Options<GetDevelopmentProj
 	});
 
 export const listDevelopmentEventsQueryKey = (options: Options<ListDevelopmentEventsData>) =>
-	createQueryKey("listDevelopmentEvents", options);
+	createQueryKey("listDevelopmentEvents", options, false, ["Development"]);
 
 export const listDevelopmentEventsOptions = (options: Options<ListDevelopmentEventsData>) =>
 	queryOptions<
@@ -5283,7 +5396,7 @@ export const reconnectDevelopmentRepositoryMutation = (
 };
 
 export const getDevelopmentTaskQueryKey = (options: Options<GetDevelopmentTaskData>) =>
-	createQueryKey("getDevelopmentTask", options);
+	createQueryKey("getDevelopmentTask", options, false, ["Development"]);
 
 export const getDevelopmentTaskOptions = (options: Options<GetDevelopmentTaskData>) =>
 	queryOptions<
@@ -5329,7 +5442,7 @@ export const applyDevelopmentPatchMutation = (
 };
 
 export const listDevelopmentArtifactsQueryKey = (options: Options<ListDevelopmentArtifactsData>) =>
-	createQueryKey("listDevelopmentArtifacts", options);
+	createQueryKey("listDevelopmentArtifacts", options, false, ["Development"]);
 
 export const listDevelopmentArtifactsOptions = (options: Options<ListDevelopmentArtifactsData>) =>
 	queryOptions<
@@ -5351,7 +5464,7 @@ export const listDevelopmentArtifactsOptions = (options: Options<ListDevelopment
 	});
 
 export const getDevelopmentArtifactQueryKey = (options: Options<GetDevelopmentArtifactData>) =>
-	createQueryKey("getDevelopmentArtifact", options);
+	createQueryKey("getDevelopmentArtifact", options, false, ["Development"]);
 
 export const getDevelopmentArtifactOptions = (options: Options<GetDevelopmentArtifactData>) =>
 	queryOptions<
@@ -5441,7 +5554,7 @@ export const previewDevelopmentPatchMutation = (
 };
 
 export const listDevelopmentRepositoriesQueryKey = (options?: Options<ListDevelopmentRepositoriesData>) =>
-	createQueryKey("listDevelopmentRepositories", options);
+	createQueryKey("listDevelopmentRepositories", options, false, ["Development"]);
 
 export const listDevelopmentRepositoriesOptions = (options?: Options<ListDevelopmentRepositoriesData>) =>
 	queryOptions<
@@ -5511,7 +5624,7 @@ export const createDevelopmentRepositoryFromTemplateMutation = (
 };
 
 export const detectDevelopmentRepositoryProfileQueryKey = (options: Options<DetectDevelopmentRepositoryProfileData>) =>
-	createQueryKey("detectDevelopmentRepositoryProfile", options);
+	createQueryKey("detectDevelopmentRepositoryProfile", options, false, ["Development"]);
 
 export const detectDevelopmentRepositoryProfileOptions = (options: Options<DetectDevelopmentRepositoryProfileData>) =>
 	queryOptions<
@@ -5533,7 +5646,7 @@ export const detectDevelopmentRepositoryProfileOptions = (options: Options<Detec
 	});
 
 export const listDevelopmentTemplatesQueryKey = (options?: Options<ListDevelopmentTemplatesData>) =>
-	createQueryKey("listDevelopmentTemplates", options);
+	createQueryKey("listDevelopmentTemplates", options, false, ["Development"]);
 
 export const listDevelopmentTemplatesOptions = (options?: Options<ListDevelopmentTemplatesData>) =>
 	queryOptions<
@@ -5618,7 +5731,8 @@ export const unhandledExceptionProbeMutation = (
 	return mutationOptions;
 };
 
-export const getLogLevelQueryKey = (options?: Options<GetLogLevelData>) => createQueryKey("getLogLevel", options);
+export const getLogLevelQueryKey = (options?: Options<GetLogLevelData>) =>
+	createQueryKey("getLogLevel", options, false, ["Diagnostics"]);
 
 export const getLogLevelOptions = (options?: Options<GetLogLevelData>) =>
 	queryOptions<GetLogLevelResponse, AxiosError<DefaultError>, GetLogLevelResponse, ReturnType<typeof getLogLevelQueryKey>>({
@@ -5650,7 +5764,8 @@ export const setLogLevelMutation = (
 	return mutationOptions;
 };
 
-export const getNodeInfoQueryKey = (options?: Options<GetNodeInfoData>) => createQueryKey("getNodeInfo", options);
+export const getNodeInfoQueryKey = (options?: Options<GetNodeInfoData>) =>
+	createQueryKey("getNodeInfo", options, false, ["Diagnostics"]);
 
 export const getNodeInfoOptions = (options?: Options<GetNodeInfoData>) =>
 	queryOptions<GetNodeInfoResponse, AxiosError<DefaultError>, GetNodeInfoResponse, ReturnType<typeof getNodeInfoQueryKey>>({
@@ -5666,7 +5781,8 @@ export const getNodeInfoOptions = (options?: Options<GetNodeInfoData>) =>
 		queryKey: getNodeInfoQueryKey(options),
 	});
 
-export const getSupportBundleQueryKey = (options?: Options<GetSupportBundleData>) => createQueryKey("getSupportBundle", options);
+export const getSupportBundleQueryKey = (options?: Options<GetSupportBundleData>) =>
+	createQueryKey("getSupportBundle", options, false, ["Diagnostics"]);
 
 export const getSupportBundleOptions = (options?: Options<GetSupportBundleData>) =>
 	queryOptions<
@@ -5712,7 +5828,7 @@ export const validationProblemProbeMutation = (
 };
 
 export const listExternalAppCatalogQueryKey = (options?: Options<ListExternalAppCatalogData>) =>
-	createQueryKey("listExternalAppCatalog", options);
+	createQueryKey("listExternalAppCatalog", options, false, ["External-Apps"]);
 
 export const listExternalAppCatalogOptions = (options?: Options<ListExternalAppCatalogData>) =>
 	queryOptions<
@@ -5754,7 +5870,7 @@ export const refreshExternalAppCatalogMutation = (
 };
 
 export const getExternalAppCatalogApplicationQueryKey = (options: Options<GetExternalAppCatalogApplicationData>) =>
-	createQueryKey("getExternalAppCatalogApplication", options);
+	createQueryKey("getExternalAppCatalogApplication", options, false, ["External-Apps"]);
 
 export const getExternalAppCatalogApplicationOptions = (options: Options<GetExternalAppCatalogApplicationData>) =>
 	queryOptions<
@@ -5776,7 +5892,7 @@ export const getExternalAppCatalogApplicationOptions = (options: Options<GetExte
 	});
 
 export const getExternalAppInstallPreviewQueryKey = (options: Options<GetExternalAppInstallPreviewData>) =>
-	createQueryKey("getExternalAppInstallPreview", options);
+	createQueryKey("getExternalAppInstallPreview", options, false, ["External-Apps"]);
 
 export const getExternalAppInstallPreviewOptions = (options: Options<GetExternalAppInstallPreviewData>) =>
 	queryOptions<
@@ -5798,7 +5914,7 @@ export const getExternalAppInstallPreviewOptions = (options: Options<GetExternal
 	});
 
 export const listExternalAppInstancesQueryKey = (options?: Options<ListExternalAppInstancesData>) =>
-	createQueryKey("listExternalAppInstances", options);
+	createQueryKey("listExternalAppInstances", options, false, ["External-Apps"]);
 
 export const listExternalAppInstancesOptions = (options?: Options<ListExternalAppInstancesData>) =>
 	queryOptions<
@@ -5860,7 +5976,7 @@ export const uninstallExternalAppMutation = (
 };
 
 export const getExternalAppInstanceQueryKey = (options: Options<GetExternalAppInstanceData>) =>
-	createQueryKey("getExternalAppInstance", options);
+	createQueryKey("getExternalAppInstance", options, false, ["External-Apps"]);
 
 export const getExternalAppInstanceOptions = (options: Options<GetExternalAppInstanceData>) =>
 	queryOptions<
@@ -5902,7 +6018,7 @@ export const cancelExternalAppOperationMutation = (
 };
 
 export const listExternalAppInstanceEventsQueryKey = (options: Options<ListExternalAppInstanceEventsData>) =>
-	createQueryKey("listExternalAppInstanceEvents", options);
+	createQueryKey("listExternalAppInstanceEvents", options, false, ["External-Apps"]);
 
 export const listExternalAppInstanceEventsOptions = (options: Options<ListExternalAppInstanceEventsData>) =>
 	queryOptions<
@@ -5923,8 +6039,48 @@ export const listExternalAppInstanceEventsOptions = (options: Options<ListExtern
 		queryKey: listExternalAppInstanceEventsQueryKey(options),
 	});
 
+export const listExternalAppInstanceEventsInfiniteQueryKey = (
+	options: Options<ListExternalAppInstanceEventsData>,
+): QueryKey<Options<ListExternalAppInstanceEventsData>> =>
+	createQueryKey("listExternalAppInstanceEvents", options, true, ["External-Apps"]);
+
+export const listExternalAppInstanceEventsInfiniteOptions = (options: Options<ListExternalAppInstanceEventsData>) => {
+	const opts = infiniteQueryOptions<
+		ListExternalAppInstanceEventsResponse,
+		AxiosError<ListExternalAppInstanceEventsError>,
+		InfiniteData<ListExternalAppInstanceEventsResponse>,
+		QueryKey<Options<ListExternalAppInstanceEventsData>>,
+		number | Pick<QueryKey<Options<ListExternalAppInstanceEventsData>>[0], "body" | "headers" | "path" | "query">
+	>(
+		// @ts-ignore
+		{
+			queryFn: async ({ pageParam, queryKey, signal }) => {
+				// @ts-ignore
+				const page: Pick<QueryKey<Options<ListExternalAppInstanceEventsData>>[0], "body" | "headers" | "path" | "query"> =
+					typeof pageParam === "object"
+						? pageParam
+						: {
+								query: {
+									afterSequence: pageParam,
+								},
+							};
+				const params = createInfiniteParams(queryKey, page);
+				const { data } = await listExternalAppInstanceEvents({
+					...options,
+					...params,
+					signal,
+					throwOnError: true,
+				});
+				return data;
+			},
+			queryKey: listExternalAppInstanceEventsInfiniteQueryKey(options),
+		},
+	);
+	return opts as Omit<typeof opts, "initialData">;
+};
+
 export const getExternalAppInstanceLogsQueryKey = (options: Options<GetExternalAppInstanceLogsData>) =>
-	createQueryKey("getExternalAppInstanceLogs", options);
+	createQueryKey("getExternalAppInstanceLogs", options, false, ["External-Apps"]);
 
 export const getExternalAppInstanceLogsOptions = (options: Options<GetExternalAppInstanceLogsData>) =>
 	queryOptions<
@@ -6046,7 +6202,7 @@ export const updateExternalAppMutation = (
 };
 
 export const getExternalAppUpdatePreviewQueryKey = (options: Options<GetExternalAppUpdatePreviewData>) =>
-	createQueryKey("getExternalAppUpdatePreview", options);
+	createQueryKey("getExternalAppUpdatePreview", options, false, ["External-Apps"]);
 
 export const getExternalAppUpdatePreviewOptions = (options: Options<GetExternalAppUpdatePreviewData>) =>
 	queryOptions<
@@ -6092,7 +6248,7 @@ export const updateExternalAppVariablesMutation = (
 };
 
 export const getExternalAppRuntimeQueryKey = (options?: Options<GetExternalAppRuntimeData>) =>
-	createQueryKey("getExternalAppRuntime", options);
+	createQueryKey("getExternalAppRuntime", options, false, ["External-Apps"]);
 
 export const getExternalAppRuntimeOptions = (options?: Options<GetExternalAppRuntimeData>) =>
 	queryOptions<
@@ -6138,7 +6294,7 @@ export const refreshExternalAppRuntimeMutation = (
 };
 
 export const listExternalProviderConnectionsQueryKey = (options?: Options<ListExternalProviderConnectionsData>) =>
-	createQueryKey("listExternalProviderConnections", options);
+	createQueryKey("listExternalProviderConnections", options, false, ["External-Providers"]);
 
 export const listExternalProviderConnectionsOptions = (options?: Options<ListExternalProviderConnectionsData>) =>
 	queryOptions<
@@ -6184,7 +6340,7 @@ export const deleteExternalProviderConnectionMutation = (
 };
 
 export const getExternalProviderConnectionQueryKey = (options: Options<GetExternalProviderConnectionData>) =>
-	createQueryKey("getExternalProviderConnection", options);
+	createQueryKey("getExternalProviderConnection", options, false, ["External-Providers"]);
 
 export const getExternalProviderConnectionOptions = (options: Options<GetExternalProviderConnectionData>) =>
 	queryOptions<
@@ -6254,7 +6410,7 @@ export const probeExternalProviderMutation = (
 };
 
 export const getGraphWorkflowCapabilityQueryKey = (options?: Options<GetGraphWorkflowCapabilityData>) =>
-	createQueryKey("getGraphWorkflowCapability", options);
+	createQueryKey("getGraphWorkflowCapability", options, false, ["Graph-Workflows"]);
 
 export const getGraphWorkflowCapabilityOptions = (options?: Options<GetGraphWorkflowCapabilityData>) =>
 	queryOptions<
@@ -6300,7 +6456,7 @@ export const sendGraphWorkflowChatMessageMutation = (
 };
 
 export const listGraphWorkflowConversationRunsQueryKey = (options: Options<ListGraphWorkflowConversationRunsData>) =>
-	createQueryKey("listGraphWorkflowConversationRuns", options);
+	createQueryKey("listGraphWorkflowConversationRuns", options, false, ["Graph-Workflows"]);
 
 export const listGraphWorkflowConversationRunsOptions = (options: Options<ListGraphWorkflowConversationRunsData>) =>
 	queryOptions<
@@ -6322,7 +6478,7 @@ export const listGraphWorkflowConversationRunsOptions = (options: Options<ListGr
 	});
 
 export const listGraphWorkflowDefinitionsQueryKey = (options?: Options<ListGraphWorkflowDefinitionsData>) =>
-	createQueryKey("listGraphWorkflowDefinitions", options);
+	createQueryKey("listGraphWorkflowDefinitions", options, false, ["Graph-Workflows"]);
 
 export const listGraphWorkflowDefinitionsOptions = (options?: Options<ListGraphWorkflowDefinitionsData>) =>
 	queryOptions<
@@ -6440,7 +6596,7 @@ export const deleteGraphWorkflowDefinitionMutation = (
 };
 
 export const getGraphWorkflowDefinitionQueryKey = (options: Options<GetGraphWorkflowDefinitionData>) =>
-	createQueryKey("getGraphWorkflowDefinition", options);
+	createQueryKey("getGraphWorkflowDefinition", options, false, ["Graph-Workflows"]);
 
 export const getGraphWorkflowDefinitionOptions = (options: Options<GetGraphWorkflowDefinitionData>) =>
 	queryOptions<
@@ -6486,7 +6642,7 @@ export const updateGraphWorkflowDefinitionMutation = (
 };
 
 export const exportGraphWorkflowDefinitionQueryKey = (options: Options<ExportGraphWorkflowDefinitionData>) =>
-	createQueryKey("exportGraphWorkflowDefinition", options);
+	createQueryKey("exportGraphWorkflowDefinition", options, false, ["Graph-Workflows"]);
 
 export const exportGraphWorkflowDefinitionOptions = (options: Options<ExportGraphWorkflowDefinitionData>) =>
 	queryOptions<
@@ -6531,8 +6687,32 @@ export const startGraphWorkflowRunMutation = (
 	return mutationOptions;
 };
 
+export const invokeGraphWorkflowIntentMutation = (
+	options?: Partial<Options<InvokeGraphWorkflowIntentData>>,
+): UseMutationOptions<
+	InvokeGraphWorkflowIntentResponse,
+	AxiosError<InvokeGraphWorkflowIntentError>,
+	Options<InvokeGraphWorkflowIntentData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		InvokeGraphWorkflowIntentResponse,
+		AxiosError<InvokeGraphWorkflowIntentError>,
+		Options<InvokeGraphWorkflowIntentData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await invokeGraphWorkflowIntent({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const listGraphWorkflowRunsQueryKey = (options: Options<ListGraphWorkflowRunsData>) =>
-	createQueryKey("listGraphWorkflowRuns", options);
+	createQueryKey("listGraphWorkflowRuns", options, false, ["Graph-Workflows"]);
 
 export const listGraphWorkflowRunsOptions = (options: Options<ListGraphWorkflowRunsData>) =>
 	queryOptions<
@@ -6578,7 +6758,7 @@ export const deleteGraphWorkflowRunMutation = (
 };
 
 export const getGraphWorkflowRunQueryKey = (options: Options<GetGraphWorkflowRunData>) =>
-	createQueryKey("getGraphWorkflowRun", options);
+	createQueryKey("getGraphWorkflowRun", options, false, ["Graph-Workflows"]);
 
 export const getGraphWorkflowRunOptions = (options: Options<GetGraphWorkflowRunData>) =>
 	queryOptions<
@@ -6624,7 +6804,7 @@ export const cancelGraphWorkflowRunMutation = (
 };
 
 export const listGraphWorkflowRunEventsQueryKey = (options: Options<ListGraphWorkflowRunEventsData>) =>
-	createQueryKey("listGraphWorkflowRunEvents", options);
+	createQueryKey("listGraphWorkflowRunEvents", options, false, ["Graph-Workflows"]);
 
 export const listGraphWorkflowRunEventsOptions = (options: Options<ListGraphWorkflowRunEventsData>) =>
 	queryOptions<
@@ -6645,8 +6825,48 @@ export const listGraphWorkflowRunEventsOptions = (options: Options<ListGraphWork
 		queryKey: listGraphWorkflowRunEventsQueryKey(options),
 	});
 
+export const listGraphWorkflowRunEventsInfiniteQueryKey = (
+	options: Options<ListGraphWorkflowRunEventsData>,
+): QueryKey<Options<ListGraphWorkflowRunEventsData>> =>
+	createQueryKey("listGraphWorkflowRunEvents", options, true, ["Graph-Workflows"]);
+
+export const listGraphWorkflowRunEventsInfiniteOptions = (options: Options<ListGraphWorkflowRunEventsData>) => {
+	const opts = infiniteQueryOptions<
+		ListGraphWorkflowRunEventsResponse,
+		AxiosError<ListGraphWorkflowRunEventsError>,
+		InfiniteData<ListGraphWorkflowRunEventsResponse>,
+		QueryKey<Options<ListGraphWorkflowRunEventsData>>,
+		number | Pick<QueryKey<Options<ListGraphWorkflowRunEventsData>>[0], "body" | "headers" | "path" | "query">
+	>(
+		// @ts-ignore
+		{
+			queryFn: async ({ pageParam, queryKey, signal }) => {
+				// @ts-ignore
+				const page: Pick<QueryKey<Options<ListGraphWorkflowRunEventsData>>[0], "body" | "headers" | "path" | "query"> =
+					typeof pageParam === "object"
+						? pageParam
+						: {
+								query: {
+									afterSeq: pageParam,
+								},
+							};
+				const params = createInfiniteParams(queryKey, page);
+				const { data } = await listGraphWorkflowRunEvents({
+					...options,
+					...params,
+					signal,
+					throwOnError: true,
+				});
+				return data;
+			},
+			queryKey: listGraphWorkflowRunEventsInfiniteQueryKey(options),
+		},
+	);
+	return opts as Omit<typeof opts, "initialData">;
+};
+
 export const getGraphWorkflowNodeRunQueryKey = (options: Options<GetGraphWorkflowNodeRunData>) =>
-	createQueryKey("getGraphWorkflowNodeRun", options);
+	createQueryKey("getGraphWorkflowNodeRun", options, false, ["Graph-Workflows"]);
 
 export const getGraphWorkflowNodeRunOptions = (options: Options<GetGraphWorkflowNodeRunData>) =>
 	queryOptions<
@@ -6716,7 +6936,7 @@ export const steerGraphWorkflowNodeRunMutation = (
 };
 
 export const listGraphWorkflowToolsQueryKey = (options?: Options<ListGraphWorkflowToolsData>) =>
-	createQueryKey("listGraphWorkflowTools", options);
+	createQueryKey("listGraphWorkflowTools", options, false, ["Graph-Workflows"]);
 
 export const listGraphWorkflowToolsOptions = (options?: Options<ListGraphWorkflowToolsData>) =>
 	queryOptions<
@@ -6737,7 +6957,8 @@ export const listGraphWorkflowToolsOptions = (options?: Options<ListGraphWorkflo
 		queryKey: listGraphWorkflowToolsQueryKey(options),
 	});
 
-export const listImageJobsQueryKey = (options?: Options<ListImageJobsData>) => createQueryKey("listImageJobs", options);
+export const listImageJobsQueryKey = (options?: Options<ListImageJobsData>) =>
+	createQueryKey("listImageJobs", options, false, ["Images"]);
 
 export const listImageJobsOptions = (options?: Options<ListImageJobsData>) =>
 	queryOptions<
@@ -6759,7 +6980,7 @@ export const listImageJobsOptions = (options?: Options<ListImageJobsData>) =>
 	});
 
 export const listImageJobsInfiniteQueryKey = (options?: Options<ListImageJobsData>): QueryKey<Options<ListImageJobsData>> =>
-	createQueryKey("listImageJobs", options, true);
+	createQueryKey("listImageJobs", options, true, ["Images"]);
 
 export const listImageJobsInfiniteOptions = (options?: Options<ListImageJobsData>) => {
 	const opts = infiniteQueryOptions<
@@ -6836,7 +7057,8 @@ export const deleteImageJobMutation = (
 	return mutationOptions;
 };
 
-export const getImageJobQueryKey = (options: Options<GetImageJobData>) => createQueryKey("getImageJob", options);
+export const getImageJobQueryKey = (options: Options<GetImageJobData>) =>
+	createQueryKey("getImageJob", options, false, ["Images"]);
 
 export const getImageJobOptions = (options: Options<GetImageJobData>) =>
 	queryOptions<GetImageJobResponse, AxiosError<DefaultError>, GetImageJobResponse, ReturnType<typeof getImageJobQueryKey>>({
@@ -6868,7 +7090,8 @@ export const cancelImageJobMutation = (
 	return mutationOptions;
 };
 
-export const listImageModelsQueryKey = (options?: Options<ListImageModelsData>) => createQueryKey("listImageModels", options);
+export const listImageModelsQueryKey = (options?: Options<ListImageModelsData>) =>
+	createQueryKey("listImageModels", options, false, ["Images"]);
 
 export const listImageModelsOptions = (options?: Options<ListImageModelsData>) =>
 	queryOptions<
@@ -6890,7 +7113,7 @@ export const listImageModelsOptions = (options?: Options<ListImageModelsData>) =
 	});
 
 export const browseImageRepositoriesQueryKey = (options?: Options<BrowseImageRepositoriesData>) =>
-	createQueryKey("browseImageRepositories", options);
+	createQueryKey("browseImageRepositories", options, false, ["Images"]);
 
 export const browseImageRepositoriesOptions = (options?: Options<BrowseImageRepositoriesData>) =>
 	queryOptions<
@@ -6912,7 +7135,7 @@ export const browseImageRepositoriesOptions = (options?: Options<BrowseImageRepo
 	});
 
 export const getImageModelCatalogQueryKey = (options?: Options<GetImageModelCatalogData>) =>
-	createQueryKey("getImageModelCatalog", options);
+	createQueryKey("getImageModelCatalog", options, false, ["Images"]);
 
 export const getImageModelCatalogOptions = (options?: Options<GetImageModelCatalogData>) =>
 	queryOptions<
@@ -6934,7 +7157,7 @@ export const getImageModelCatalogOptions = (options?: Options<GetImageModelCatal
 	});
 
 export const listImageModelDownloadsQueryKey = (options?: Options<ListImageModelDownloadsData>) =>
-	createQueryKey("listImageModelDownloads", options);
+	createQueryKey("listImageModelDownloads", options, false, ["Images"]);
 
 export const listImageModelDownloadsOptions = (options?: Options<ListImageModelDownloadsData>) =>
 	queryOptions<
@@ -7000,7 +7223,7 @@ export const cancelImageModelDownloadMutation = (
 };
 
 export const inspectImageRepositoryQueryKey = (options?: Options<InspectImageRepositoryData>) =>
-	createQueryKey("inspectImageRepository", options);
+	createQueryKey("inspectImageRepository", options, false, ["Images"]);
 
 export const inspectImageRepositoryOptions = (options?: Options<InspectImageRepositoryData>) =>
 	queryOptions<
@@ -7062,7 +7285,7 @@ export const draftImagePromptMutation = (
 };
 
 export const getImageRuntimeStatusQueryKey = (options?: Options<GetImageRuntimeStatusData>) =>
-	createQueryKey("getImageRuntimeStatus", options);
+	createQueryKey("getImageRuntimeStatus", options, false, ["Images"]);
 
 export const getImageRuntimeStatusOptions = (options?: Options<GetImageRuntimeStatusData>) =>
 	queryOptions<
@@ -7153,7 +7376,7 @@ export const cancelStableDiffusionCppSourceBuildMutation = (
 
 export const getStableDiffusionCppSourceBuildPrerequisitesQueryKey = (
 	options: Options<GetStableDiffusionCppSourceBuildPrerequisitesData>,
-) => createQueryKey("getStableDiffusionCppSourceBuildPrerequisites", options);
+) => createQueryKey("getStableDiffusionCppSourceBuildPrerequisites", options, false, ["Images"]);
 
 export const getStableDiffusionCppSourceBuildPrerequisitesOptions = (
 	options: Options<GetStableDiffusionCppSourceBuildPrerequisitesData>,
@@ -7201,7 +7424,7 @@ export const removeStableDiffusionCppSourceBuildMutation = (
 };
 
 export const getStableDiffusionCppSourceBuildStatusQueryKey = (options?: Options<GetStableDiffusionCppSourceBuildStatusData>) =>
-	createQueryKey("getStableDiffusionCppSourceBuildStatus", options);
+	createQueryKey("getStableDiffusionCppSourceBuildStatus", options, false, ["Images"]);
 
 export const getStableDiffusionCppSourceBuildStatusOptions = (options?: Options<GetStableDiffusionCppSourceBuildStatusData>) =>
 	queryOptions<
@@ -7223,7 +7446,7 @@ export const getStableDiffusionCppSourceBuildStatusOptions = (options?: Options<
 	});
 
 export const listUploadedImagesQueryKey = (options?: Options<ListUploadedImagesData>) =>
-	createQueryKey("listUploadedImages", options);
+	createQueryKey("listUploadedImages", options, false, ["Images"]);
 
 export const listUploadedImagesOptions = (options?: Options<ListUploadedImagesData>) =>
 	queryOptions<
@@ -7246,7 +7469,7 @@ export const listUploadedImagesOptions = (options?: Options<ListUploadedImagesDa
 
 export const listUploadedImagesInfiniteQueryKey = (
 	options?: Options<ListUploadedImagesData>,
-): QueryKey<Options<ListUploadedImagesData>> => createQueryKey("listUploadedImages", options, true);
+): QueryKey<Options<ListUploadedImagesData>> => createQueryKey("listUploadedImages", options, true, ["Images"]);
 
 export const listUploadedImagesInfiniteOptions = (options?: Options<ListUploadedImagesData>) => {
 	const opts = infiniteQueryOptions<
@@ -7319,7 +7542,8 @@ export const deleteUploadedImageMutation = (
 	return mutationOptions;
 };
 
-export const retrieveImageQueryKey = (options: Options<RetrieveImageData>) => createQueryKey("retrieveImage", options);
+export const retrieveImageQueryKey = (options: Options<RetrieveImageData>) =>
+	createQueryKey("retrieveImage", options, false, ["Images"]);
 
 export const retrieveImageOptions = (options: Options<RetrieveImageData>) =>
 	queryOptions<RetrieveImageResponse, AxiosError<DefaultError>, RetrieveImageResponse, ReturnType<typeof retrieveImageQueryKey>>({
@@ -7336,7 +7560,7 @@ export const retrieveImageOptions = (options: Options<RetrieveImageData>) =>
 	});
 
 export const listIntegrationExecutionsQueryKey = (options?: Options<ListIntegrationExecutionsData>) =>
-	createQueryKey("listIntegrationExecutions", options);
+	createQueryKey("listIntegrationExecutions", options, false, ["Integrations"]);
 
 export const listIntegrationExecutionsOptions = (options?: Options<ListIntegrationExecutionsData>) =>
 	queryOptions<
@@ -7359,7 +7583,8 @@ export const listIntegrationExecutionsOptions = (options?: Options<ListIntegrati
 
 export const listIntegrationExecutionsInfiniteQueryKey = (
 	options?: Options<ListIntegrationExecutionsData>,
-): QueryKey<Options<ListIntegrationExecutionsData>> => createQueryKey("listIntegrationExecutions", options, true);
+): QueryKey<Options<ListIntegrationExecutionsData>> =>
+	createQueryKey("listIntegrationExecutions", options, true, ["Integrations"]);
 
 export const listIntegrationExecutionsInfiniteOptions = (options?: Options<ListIntegrationExecutionsData>) => {
 	const opts = infiniteQueryOptions<
@@ -7397,7 +7622,7 @@ export const listIntegrationExecutionsInfiniteOptions = (options?: Options<ListI
 };
 
 export const getIntegrationExecutionQueryKey = (options: Options<GetIntegrationExecutionData>) =>
-	createQueryKey("getIntegrationExecution", options);
+	createQueryKey("getIntegrationExecution", options, false, ["Integrations"]);
 
 export const getIntegrationExecutionOptions = (options: Options<GetIntegrationExecutionData>) =>
 	queryOptions<
@@ -7439,7 +7664,7 @@ export const cancelIntegrationExecutionMutation = (
 };
 
 export const getIntegrationExecutionEventsQueryKey = (options: Options<GetIntegrationExecutionEventsData>) =>
-	createQueryKey("getIntegrationExecutionEvents", options);
+	createQueryKey("getIntegrationExecutionEvents", options, false, ["Integrations"]);
 
 export const getIntegrationExecutionEventsOptions = (options: Options<GetIntegrationExecutionEventsData>) =>
 	queryOptions<
@@ -7460,8 +7685,48 @@ export const getIntegrationExecutionEventsOptions = (options: Options<GetIntegra
 		queryKey: getIntegrationExecutionEventsQueryKey(options),
 	});
 
+export const getIntegrationExecutionEventsInfiniteQueryKey = (
+	options: Options<GetIntegrationExecutionEventsData>,
+): QueryKey<Options<GetIntegrationExecutionEventsData>> =>
+	createQueryKey("getIntegrationExecutionEvents", options, true, ["Integrations"]);
+
+export const getIntegrationExecutionEventsInfiniteOptions = (options: Options<GetIntegrationExecutionEventsData>) => {
+	const opts = infiniteQueryOptions<
+		GetIntegrationExecutionEventsResponse,
+		AxiosError<GetIntegrationExecutionEventsError>,
+		InfiniteData<GetIntegrationExecutionEventsResponse>,
+		QueryKey<Options<GetIntegrationExecutionEventsData>>,
+		number | null | Pick<QueryKey<Options<GetIntegrationExecutionEventsData>>[0], "body" | "headers" | "path" | "query">
+	>(
+		// @ts-ignore
+		{
+			queryFn: async ({ pageParam, queryKey, signal }) => {
+				// @ts-ignore
+				const page: Pick<QueryKey<Options<GetIntegrationExecutionEventsData>>[0], "body" | "headers" | "path" | "query"> =
+					typeof pageParam === "object"
+						? pageParam
+						: {
+								query: {
+									sinceSeq: pageParam,
+								},
+							};
+				const params = createInfiniteParams(queryKey, page);
+				const { data } = await getIntegrationExecutionEvents({
+					...options,
+					...params,
+					signal,
+					throwOnError: true,
+				});
+				return data;
+			},
+			queryKey: getIntegrationExecutionEventsInfiniteQueryKey(options),
+		},
+	);
+	return opts as Omit<typeof opts, "initialData">;
+};
+
 export const listIntegrationApiKeysQueryKey = (options?: Options<ListIntegrationApiKeysData>) =>
-	createQueryKey("listIntegrationApiKeys", options);
+	createQueryKey("listIntegrationApiKeys", options, false, ["Integrations"]);
 
 export const listIntegrationApiKeysOptions = (options?: Options<ListIntegrationApiKeysData>) =>
 	queryOptions<
@@ -7527,7 +7792,7 @@ export const revokeIntegrationApiKeyMutation = (
 };
 
 export const listIntegrationSessionsQueryKey = (options?: Options<ListIntegrationSessionsData>) =>
-	createQueryKey("listIntegrationSessions", options);
+	createQueryKey("listIntegrationSessions", options, false, ["Integrations"]);
 
 export const listIntegrationSessionsOptions = (options?: Options<ListIntegrationSessionsData>) =>
 	queryOptions<
@@ -7550,7 +7815,7 @@ export const listIntegrationSessionsOptions = (options?: Options<ListIntegration
 
 export const listIntegrationSessionsInfiniteQueryKey = (
 	options?: Options<ListIntegrationSessionsData>,
-): QueryKey<Options<ListIntegrationSessionsData>> => createQueryKey("listIntegrationSessions", options, true);
+): QueryKey<Options<ListIntegrationSessionsData>> => createQueryKey("listIntegrationSessions", options, true, ["Integrations"]);
 
 export const listIntegrationSessionsInfiniteOptions = (options?: Options<ListIntegrationSessionsData>) => {
 	const opts = infiniteQueryOptions<
@@ -7608,7 +7873,7 @@ export const deleteIntegrationSessionMutation = (
 };
 
 export const getIntegrationSessionQueryKey = (options: Options<GetIntegrationSessionData>) =>
-	createQueryKey("getIntegrationSession", options);
+	createQueryKey("getIntegrationSession", options, false, ["Integrations"]);
 
 export const getIntegrationSessionOptions = (options: Options<GetIntegrationSessionData>) =>
 	queryOptions<
@@ -7630,7 +7895,7 @@ export const getIntegrationSessionOptions = (options: Options<GetIntegrationSess
 	});
 
 export const listIntegrationTriggersQueryKey = (options?: Options<ListIntegrationTriggersData>) =>
-	createQueryKey("listIntegrationTriggers", options);
+	createQueryKey("listIntegrationTriggers", options, false, ["Integrations"]);
 
 export const listIntegrationTriggersOptions = (options?: Options<ListIntegrationTriggersData>) =>
 	queryOptions<
@@ -7696,7 +7961,7 @@ export const deleteIntegrationTriggerMutation = (
 };
 
 export const getIntegrationTriggerQueryKey = (options: Options<GetIntegrationTriggerData>) =>
-	createQueryKey("getIntegrationTrigger", options);
+	createQueryKey("getIntegrationTrigger", options, false, ["Integrations"]);
 
 export const getIntegrationTriggerOptions = (options: Options<GetIntegrationTriggerData>) =>
 	queryOptions<
@@ -7742,7 +8007,7 @@ export const updateIntegrationTriggerMutation = (
 };
 
 export const getInvocationMonitorQueryKey = (options?: Options<GetInvocationMonitorData>) =>
-	createQueryKey("getInvocationMonitor", options);
+	createQueryKey("getInvocationMonitor", options, false, ["Invocations"]);
 
 export const getInvocationMonitorOptions = (options?: Options<GetInvocationMonitorData>) =>
 	queryOptions<
@@ -7764,7 +8029,7 @@ export const getInvocationMonitorOptions = (options?: Options<GetInvocationMonit
 	});
 
 export const listKnowledgeDocumentsQueryKey = (options?: Options<ListKnowledgeDocumentsData>) =>
-	createQueryKey("listKnowledgeDocuments", options);
+	createQueryKey("listKnowledgeDocuments", options, false, ["Knowledge-Base"]);
 
 export const listKnowledgeDocumentsOptions = (options?: Options<ListKnowledgeDocumentsData>) =>
 	queryOptions<
@@ -7787,10 +8052,14 @@ export const listKnowledgeDocumentsOptions = (options?: Options<ListKnowledgeDoc
 
 export const uploadKnowledgeDocumentMutation = (
 	options?: Partial<Options<UploadKnowledgeDocumentData>>,
-): UseMutationOptions<UploadKnowledgeDocumentResponse, AxiosError<DefaultError>, Options<UploadKnowledgeDocumentData>> => {
+): UseMutationOptions<
+	UploadKnowledgeDocumentResponse,
+	AxiosError<UploadKnowledgeDocumentError>,
+	Options<UploadKnowledgeDocumentData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		UploadKnowledgeDocumentResponse,
-		AxiosError<DefaultError>,
+		AxiosError<UploadKnowledgeDocumentError>,
 		Options<UploadKnowledgeDocumentData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -7826,7 +8095,7 @@ export const deleteKnowledgeDocumentMutation = (
 };
 
 export const getKnowledgeDocumentQueryKey = (options: Options<GetKnowledgeDocumentData>) =>
-	createQueryKey("getKnowledgeDocument", options);
+	createQueryKey("getKnowledgeDocument", options, false, ["Knowledge-Base"]);
 
 export const getKnowledgeDocumentOptions = (options: Options<GetKnowledgeDocumentData>) =>
 	queryOptions<
@@ -7996,7 +8265,7 @@ export const revokeMcpServerApiKeyMutation = (
 };
 
 export const getMcpServerApiKeyQueryKey = (options?: Options<GetMcpServerApiKeyData>) =>
-	createQueryKey("getMcpServerApiKey", options);
+	createQueryKey("getMcpServerApiKey", options, false, ["Mcp"]);
 
 export const getMcpServerApiKeyOptions = (options?: Options<GetMcpServerApiKeyData>) =>
 	queryOptions<
@@ -8037,7 +8306,8 @@ export const generateMcpServerApiKeyMutation = (
 	return mutationOptions;
 };
 
-export const listMcpServersQueryKey = (options?: Options<ListMcpServersData>) => createQueryKey("listMcpServers", options);
+export const listMcpServersQueryKey = (options?: Options<ListMcpServersData>) =>
+	createQueryKey("listMcpServers", options, false, ["Mcp"]);
 
 export const listMcpServersOptions = (options?: Options<ListMcpServersData>) =>
 	queryOptions<
@@ -8090,7 +8360,8 @@ export const deleteMcpServerMutation = (
 	return mutationOptions;
 };
 
-export const getMcpServerQueryKey = (options: Options<GetMcpServerData>) => createQueryKey("getMcpServer", options);
+export const getMcpServerQueryKey = (options: Options<GetMcpServerData>) =>
+	createQueryKey("getMcpServer", options, false, ["Mcp"]);
 
 export const getMcpServerOptions = (options: Options<GetMcpServerData>) =>
 	queryOptions<GetMcpServerResponse, AxiosError<DefaultError>, GetMcpServerResponse, ReturnType<typeof getMcpServerQueryKey>>({
@@ -8143,7 +8414,7 @@ export const setMcpServerEnabledMutation = (
 };
 
 export const getMcpServerToolsQueryKey = (options: Options<GetMcpServerToolsData>) =>
-	createQueryKey("getMcpServerTools", options);
+	createQueryKey("getMcpServerTools", options, false, ["Mcp"]);
 
 export const getMcpServerToolsOptions = (options: Options<GetMcpServerToolsData>) =>
 	queryOptions<
@@ -8165,7 +8436,7 @@ export const getMcpServerToolsOptions = (options: Options<GetMcpServerToolsData>
 	});
 
 export const getModelCatalogInfoQueryKey = (options?: Options<GetModelCatalogInfoData>) =>
-	createQueryKey("getModelCatalogInfo", options);
+	createQueryKey("getModelCatalogInfo", options, false, ["Model-Fit"]);
 
 export const getModelCatalogInfoOptions = (options?: Options<GetModelCatalogInfoData>) =>
 	queryOptions<
@@ -8247,7 +8518,7 @@ export const cancelGgufDownloadMutation = (
 };
 
 export const browseGgufRepositoriesQueryKey = (options?: Options<BrowseGgufRepositoriesData>) =>
-	createQueryKey("browseGgufRepositories", options);
+	createQueryKey("browseGgufRepositories", options, false, ["Model-Fit"]);
 
 export const browseGgufRepositoriesOptions = (options?: Options<BrowseGgufRepositoriesData>) =>
 	queryOptions<
@@ -8268,7 +8539,8 @@ export const browseGgufRepositoriesOptions = (options?: Options<BrowseGgufReposi
 		queryKey: browseGgufRepositoriesQueryKey(options),
 	});
 
-export const getGgufDownloadsQueryKey = (options?: Options<GetGgufDownloadsData>) => createQueryKey("getGgufDownloads", options);
+export const getGgufDownloadsQueryKey = (options?: Options<GetGgufDownloadsData>) =>
+	createQueryKey("getGgufDownloads", options, false, ["Model-Fit"]);
 
 export const getGgufDownloadsOptions = (options?: Options<GetGgufDownloadsData>) =>
 	queryOptions<
@@ -8290,7 +8562,7 @@ export const getGgufDownloadsOptions = (options?: Options<GetGgufDownloadsData>)
 	});
 
 export const getGgufDownloadOperationStatusQueryKey = (options: Options<GetGgufDownloadOperationStatusData>) =>
-	createQueryKey("getGgufDownloadOperationStatus", options);
+	createQueryKey("getGgufDownloadOperationStatus", options, false, ["Model-Fit"]);
 
 export const getGgufDownloadOperationStatusOptions = (options: Options<GetGgufDownloadOperationStatusData>) =>
 	queryOptions<
@@ -8312,7 +8584,7 @@ export const getGgufDownloadOperationStatusOptions = (options: Options<GetGgufDo
 	});
 
 export const getGgufDownloadStatusQueryKey = (options: Options<GetGgufDownloadStatusData>) =>
-	createQueryKey("getGgufDownloadStatus", options);
+	createQueryKey("getGgufDownloadStatus", options, false, ["Model-Fit"]);
 
 export const getGgufDownloadStatusOptions = (options: Options<GetGgufDownloadStatusData>) =>
 	queryOptions<
@@ -8350,7 +8622,7 @@ export const startGgufImportMutation = (
 };
 
 export const getGgufImportCapabilityQueryKey = (options?: Options<GetGgufImportCapabilityData>) =>
-	createQueryKey("getGgufImportCapability", options);
+	createQueryKey("getGgufImportCapability", options, false, ["Model-Fit"]);
 
 export const getGgufImportCapabilityOptions = (options?: Options<GetGgufImportCapabilityData>) =>
 	queryOptions<
@@ -8391,7 +8663,8 @@ export const previewGgufImportMutation = (
 	return mutationOptions;
 };
 
-export const getGgufImportsQueryKey = (options?: Options<GetGgufImportsData>) => createQueryKey("getGgufImports", options);
+export const getGgufImportsQueryKey = (options?: Options<GetGgufImportsData>) =>
+	createQueryKey("getGgufImports", options, false, ["Model-Fit"]);
 
 export const getGgufImportsOptions = (options?: Options<GetGgufImportsData>) =>
 	queryOptions<
@@ -8413,7 +8686,7 @@ export const getGgufImportsOptions = (options?: Options<GetGgufImportsData>) =>
 	});
 
 export const getGgufImportStatusQueryKey = (options: Options<GetGgufImportStatusData>) =>
-	createQueryKey("getGgufImportStatus", options);
+	createQueryKey("getGgufImportStatus", options, false, ["Model-Fit"]);
 
 export const getGgufImportStatusOptions = (options: Options<GetGgufImportStatusData>) =>
 	queryOptions<
@@ -8451,7 +8724,7 @@ export const cancelGgufImportMutation = (
 };
 
 export const inspectGgufRepositoryQueryKey = (options?: Options<InspectGgufRepositoryData>) =>
-	createQueryKey("inspectGgufRepository", options);
+	createQueryKey("inspectGgufRepository", options, false, ["Model-Fit"]);
 
 export const inspectGgufRepositoryOptions = (options?: Options<InspectGgufRepositoryData>) =>
 	queryOptions<
@@ -8473,7 +8746,7 @@ export const inspectGgufRepositoryOptions = (options?: Options<InspectGgufReposi
 	});
 
 export const getHardwareProfileQueryKey = (options: Options<GetHardwareProfileData>) =>
-	createQueryKey("getHardwareProfile", options);
+	createQueryKey("getHardwareProfile", options, false, ["Model-Fit"]);
 
 export const getHardwareProfileOptions = (options: Options<GetHardwareProfileData>) =>
 	queryOptions<
@@ -8494,7 +8767,8 @@ export const getHardwareProfileOptions = (options: Options<GetHardwareProfileDat
 		queryKey: getHardwareProfileQueryKey(options),
 	});
 
-export const getHfTokenStatusQueryKey = (options?: Options<GetHfTokenStatusData>) => createQueryKey("getHfTokenStatus", options);
+export const getHfTokenStatusQueryKey = (options?: Options<GetHfTokenStatusData>) =>
+	createQueryKey("getHfTokenStatus", options, false, ["Model-Fit"]);
 
 export const getHfTokenStatusOptions = (options?: Options<GetHfTokenStatusData>) =>
 	queryOptions<
@@ -8532,7 +8806,7 @@ export const setHfTokenMutation = (
 };
 
 export const getRuntimeAcquisitionStatusQueryKey = (options?: Options<GetRuntimeAcquisitionStatusData>) =>
-	createQueryKey("getRuntimeAcquisitionStatus", options);
+	createQueryKey("getRuntimeAcquisitionStatus", options, false, ["Model-Fit"]);
 
 export const getRuntimeAcquisitionStatusOptions = (options?: Options<GetRuntimeAcquisitionStatusData>) =>
 	queryOptions<
@@ -8554,7 +8828,7 @@ export const getRuntimeAcquisitionStatusOptions = (options?: Options<GetRuntimeA
 	});
 
 export const getLlamaCppRuntimeQueryKey = (options?: Options<GetLlamaCppRuntimeData>) =>
-	createQueryKey("getLlamaCppRuntime", options);
+	createQueryKey("getLlamaCppRuntime", options, false, ["Model-Fit"]);
 
 export const getLlamaCppRuntimeOptions = (options?: Options<GetLlamaCppRuntimeData>) =>
 	queryOptions<
@@ -8620,7 +8894,7 @@ export const cancelLlamaCppSourceBuildMutation = (
 };
 
 export const getLlamaCppSourceBuildPrerequisitesQueryKey = (options: Options<GetLlamaCppSourceBuildPrerequisitesData>) =>
-	createQueryKey("getLlamaCppSourceBuildPrerequisites", options);
+	createQueryKey("getLlamaCppSourceBuildPrerequisites", options, false, ["Model-Fit"]);
 
 export const getLlamaCppSourceBuildPrerequisitesOptions = (options: Options<GetLlamaCppSourceBuildPrerequisitesData>) =>
 	queryOptions<
@@ -8666,7 +8940,7 @@ export const removeLlamaCppSourceBuildMutation = (
 };
 
 export const getLlamaCppSourceBuildStatusQueryKey = (options?: Options<GetLlamaCppSourceBuildStatusData>) =>
-	createQueryKey("getLlamaCppSourceBuildStatus", options);
+	createQueryKey("getLlamaCppSourceBuildStatus", options, false, ["Model-Fit"]);
 
 export const getLlamaCppSourceBuildStatusOptions = (options?: Options<GetLlamaCppSourceBuildStatusData>) =>
 	queryOptions<
@@ -8732,7 +9006,7 @@ export const ensureLlamaCppBinaryMutation = (
 };
 
 export const listInferenceProfilesQueryKey = (options?: Options<ListInferenceProfilesData>) =>
-	createQueryKey("listInferenceProfiles", options);
+	createQueryKey("listInferenceProfiles", options, false, ["Model-Fit"]);
 
 export const listInferenceProfilesOptions = (options?: Options<ListInferenceProfilesData>) =>
 	queryOptions<
@@ -8834,7 +9108,7 @@ export const invalidateInferenceProfileMutation = (
 };
 
 export const getLatestRecommendationsQueryKey = (options?: Options<GetLatestRecommendationsData>) =>
-	createQueryKey("getLatestRecommendations", options);
+	createQueryKey("getLatestRecommendations", options, false, ["Model-Fit"]);
 
 export const getLatestRecommendationsOptions = (options?: Options<GetLatestRecommendationsData>) =>
 	queryOptions<
@@ -8876,7 +9150,7 @@ export const refreshRecommendationsMutation = (
 };
 
 export const getRuntimeResourcesQueryKey = (options?: Options<GetRuntimeResourcesData>) =>
-	createQueryKey("getRuntimeResources", options);
+	createQueryKey("getRuntimeResources", options, false, ["Model-Fit"]);
 
 export const getRuntimeResourcesOptions = (options?: Options<GetRuntimeResourcesData>) =>
 	queryOptions<
@@ -8898,7 +9172,7 @@ export const getRuntimeResourcesOptions = (options?: Options<GetRuntimeResources
 	});
 
 export const listRunningModelsQueryKey = (options?: Options<ListRunningModelsData>) =>
-	createQueryKey("listRunningModels", options);
+	createQueryKey("listRunningModels", options, false, ["Model-Fit"]);
 
 export const listRunningModelsOptions = (options?: Options<ListRunningModelsData>) =>
 	queryOptions<
@@ -8940,7 +9214,7 @@ export const ejectRunningModelMutation = (
 };
 
 export const getRuntimeResidentsQueryKey = (options?: Options<GetRuntimeResidentsData>) =>
-	createQueryKey("getRuntimeResidents", options);
+	createQueryKey("getRuntimeResidents", options, false, ["Model-Fit"]);
 
 export const getRuntimeResidentsOptions = (options?: Options<GetRuntimeResidentsData>) =>
 	queryOptions<
@@ -8961,7 +9235,8 @@ export const getRuntimeResidentsOptions = (options?: Options<GetRuntimeResidents
 		queryKey: getRuntimeResidentsQueryKey(options),
 	});
 
-export const listLocalModelsQueryKey = (options?: Options<ListLocalModelsData>) => createQueryKey("listLocalModels", options);
+export const listLocalModelsQueryKey = (options?: Options<ListLocalModelsData>) =>
+	createQueryKey("listLocalModels", options, false, ["Models"]);
 
 export const listLocalModelsOptions = (options?: Options<ListLocalModelsData>) =>
 	queryOptions<
@@ -8983,7 +9258,7 @@ export const listLocalModelsOptions = (options?: Options<ListLocalModelsData>) =
 	});
 
 export const getRunningLocalModelsQueryKey = (options?: Options<GetRunningLocalModelsData>) =>
-	createQueryKey("getRunningLocalModels", options);
+	createQueryKey("getRunningLocalModels", options, false, ["Models"]);
 
 export const getRunningLocalModelsOptions = (options?: Options<GetRunningLocalModelsData>) =>
 	queryOptions<
@@ -9045,7 +9320,7 @@ export const deleteLocalModelMutation = (
 };
 
 export const getLocalModelDetailsQueryKey = (options: Options<GetLocalModelDetailsData>) =>
-	createQueryKey("getLocalModelDetails", options);
+	createQueryKey("getLocalModelDetails", options, false, ["Models"]);
 
 export const getLocalModelDetailsOptions = (options: Options<GetLocalModelDetailsData>) =>
 	queryOptions<
@@ -9127,7 +9402,7 @@ export const deleteModelLaunchArgumentsMutation = (
 };
 
 export const getModelLaunchArgumentsQueryKey = (options: Options<GetModelLaunchArgumentsData>) =>
-	createQueryKey("getModelLaunchArguments", options);
+	createQueryKey("getModelLaunchArguments", options, false, ["Models"]);
 
 export const getModelLaunchArgumentsOptions = (options: Options<GetModelLaunchArgumentsData>) =>
 	queryOptions<
@@ -9192,7 +9467,8 @@ export const unloadLocalModelMutation = (
 	return mutationOptions;
 };
 
-export const getNodeSettingsQueryKey = (options?: Options<GetNodeSettingsData>) => createQueryKey("getNodeSettings", options);
+export const getNodeSettingsQueryKey = (options?: Options<GetNodeSettingsData>) =>
+	createQueryKey("getNodeSettings", options, false, ["Node-Settings"]);
 
 export const getNodeSettingsOptions = (options?: Options<GetNodeSettingsData>) =>
 	queryOptions<
@@ -9233,7 +9509,8 @@ export const saveNodeSettingsMutation = (
 	return mutationOptions;
 };
 
-export const listNodeBackupsQueryKey = (options?: Options<ListNodeBackupsData>) => createQueryKey("listNodeBackups", options);
+export const listNodeBackupsQueryKey = (options?: Options<ListNodeBackupsData>) =>
+	createQueryKey("listNodeBackups", options, false, ["Node"]);
 
 export const listNodeBackupsOptions = (options?: Options<ListNodeBackupsData>) =>
 	queryOptions<
@@ -9319,7 +9596,7 @@ export const revokeLocalModelProxyApiKeyMutation = (
 };
 
 export const getLocalModelProxyApiKeyQueryKey = (options?: Options<GetLocalModelProxyApiKeyData>) =>
-	createQueryKey("getLocalModelProxyApiKey", options);
+	createQueryKey("getLocalModelProxyApiKey", options, false, ["Proxy"]);
 
 export const getLocalModelProxyApiKeyOptions = (options?: Options<GetLocalModelProxyApiKeyData>) =>
 	queryOptions<
@@ -9413,7 +9690,7 @@ export const repairComputePythonEnvironmentMutation = (
 };
 
 export const getManagedPythonStatusQueryKey = (options?: Options<GetManagedPythonStatusData>) =>
-	createQueryKey("getManagedPythonStatus", options);
+	createQueryKey("getManagedPythonStatus", options, false, ["Python"]);
 
 export const getManagedPythonStatusOptions = (options?: Options<GetManagedPythonStatusData>) =>
 	queryOptions<
@@ -9435,7 +9712,7 @@ export const getManagedPythonStatusOptions = (options?: Options<GetManagedPython
 	});
 
 export const listScheduledJobsQueryKey = (options: Options<ListScheduledJobsData>) =>
-	createQueryKey("listScheduledJobs", options);
+	createQueryKey("listScheduledJobs", options, false, ["Scheduler"]);
 
 export const listScheduledJobsOptions = (options: Options<ListScheduledJobsData>) =>
 	queryOptions<
@@ -9496,7 +9773,8 @@ export const deleteScheduledJobMutation = (
 	return mutationOptions;
 };
 
-export const getScheduledJobQueryKey = (options: Options<GetScheduledJobData>) => createQueryKey("getScheduledJob", options);
+export const getScheduledJobQueryKey = (options: Options<GetScheduledJobData>) =>
+	createQueryKey("getScheduledJob", options, false, ["Scheduler"]);
 
 export const getScheduledJobOptions = (options: Options<GetScheduledJobData>) =>
 	queryOptions<
@@ -9598,7 +9876,7 @@ export const triggerScheduledJobMutation = (
 };
 
 export const listScheduledJobRunsQueryKey = (options?: Options<ListScheduledJobRunsData>) =>
-	createQueryKey("listScheduledJobRuns", options);
+	createQueryKey("listScheduledJobRuns", options, false, ["Scheduler"]);
 
 export const listScheduledJobRunsOptions = (options?: Options<ListScheduledJobRunsData>) =>
 	queryOptions<
@@ -9620,7 +9898,7 @@ export const listScheduledJobRunsOptions = (options?: Options<ListScheduledJobRu
 	});
 
 export const getScheduledJobRunQueryKey = (options: Options<GetScheduledJobRunData>) =>
-	createQueryKey("getScheduledJobRun", options);
+	createQueryKey("getScheduledJobRun", options, false, ["Scheduler"]);
 
 export const getScheduledJobRunOptions = (options: Options<GetScheduledJobRunData>) =>
 	queryOptions<
@@ -9666,7 +9944,7 @@ export const cancelScheduledJobRunMutation = (
 };
 
 export const listScheduledJobTemplatesQueryKey = (options?: Options<ListScheduledJobTemplatesData>) =>
-	createQueryKey("listScheduledJobTemplates", options);
+	createQueryKey("listScheduledJobTemplates", options, false, ["Scheduler"]);
 
 export const listScheduledJobTemplatesOptions = (options?: Options<ListScheduledJobTemplatesData>) =>
 	queryOptions<
@@ -9687,7 +9965,7 @@ export const listScheduledJobTemplatesOptions = (options?: Options<ListScheduled
 		queryKey: listScheduledJobTemplatesQueryKey(options),
 	});
 
-export const listSkillsQueryKey = (options?: Options<ListSkillsData>) => createQueryKey("listSkills", options);
+export const listSkillsQueryKey = (options?: Options<ListSkillsData>) => createQueryKey("listSkills", options, false, ["Skills"]);
 
 export const listSkillsOptions = (options?: Options<ListSkillsData>) =>
 	queryOptions<ListSkillsResponse, AxiosError<DefaultError>, ListSkillsResponse, ReturnType<typeof listSkillsQueryKey>>({
@@ -9776,7 +10054,7 @@ export const previewSkillImportMutation = (
 };
 
 export const getSkillImportPreviewResourceQueryKey = (options: Options<GetSkillImportPreviewResourceData>) =>
-	createQueryKey("getSkillImportPreviewResource", options);
+	createQueryKey("getSkillImportPreviewResource", options, false, ["Skills"]);
 
 export const getSkillImportPreviewResourceOptions = (options: Options<GetSkillImportPreviewResourceData>) =>
 	queryOptions<
@@ -9813,7 +10091,7 @@ export const deleteSkillMutation = (
 	return mutationOptions;
 };
 
-export const getSkillQueryKey = (options: Options<GetSkillData>) => createQueryKey("getSkill", options);
+export const getSkillQueryKey = (options: Options<GetSkillData>) => createQueryKey("getSkill", options, false, ["Skills"]);
 
 export const getSkillOptions = (options: Options<GetSkillData>) =>
 	queryOptions<GetSkillResponse, AxiosError<DefaultError>, GetSkillResponse, ReturnType<typeof getSkillQueryKey>>({
@@ -9846,7 +10124,7 @@ export const updateSkillMutation = (
 };
 
 export const listSkillResourcesQueryKey = (options: Options<ListSkillResourcesData>) =>
-	createQueryKey("listSkillResources", options);
+	createQueryKey("listSkillResources", options, false, ["Skills"]);
 
 export const listSkillResourcesOptions = (options: Options<ListSkillResourcesData>) =>
 	queryOptions<
@@ -9867,7 +10145,8 @@ export const listSkillResourcesOptions = (options: Options<ListSkillResourcesDat
 		queryKey: listSkillResourcesQueryKey(options),
 	});
 
-export const getSkillResourceQueryKey = (options: Options<GetSkillResourceData>) => createQueryKey("getSkillResource", options);
+export const getSkillResourceQueryKey = (options: Options<GetSkillResourceData>) =>
+	createQueryKey("getSkillResource", options, false, ["Skills"]);
 
 export const getSkillResourceOptions = (options: Options<GetSkillResourceData>) =>
 	queryOptions<
@@ -9888,7 +10167,8 @@ export const getSkillResourceOptions = (options: Options<GetSkillResourceData>) 
 		queryKey: getSkillResourceQueryKey(options),
 	});
 
-export const getToolCatalogQueryKey = (options?: Options<GetToolCatalogData>) => createQueryKey("getToolCatalog", options);
+export const getToolCatalogQueryKey = (options?: Options<GetToolCatalogData>) =>
+	createQueryKey("getToolCatalog", options, false, ["Tool-Catalog"]);
 
 export const getToolCatalogOptions = (options?: Options<GetToolCatalogData>) =>
 	queryOptions<
@@ -9911,10 +10191,14 @@ export const getToolCatalogOptions = (options?: Options<GetToolCatalogData>) =>
 
 export const deleteTrainingArtifactMutation = (
 	options?: Partial<Options<DeleteTrainingArtifactData>>,
-): UseMutationOptions<DeleteTrainingArtifactResponse, AxiosError<DefaultError>, Options<DeleteTrainingArtifactData>> => {
+): UseMutationOptions<
+	DeleteTrainingArtifactResponse,
+	AxiosError<DeleteTrainingArtifactError>,
+	Options<DeleteTrainingArtifactData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		DeleteTrainingArtifactResponse,
-		AxiosError<DefaultError>,
+		AxiosError<DeleteTrainingArtifactError>,
 		Options<DeleteTrainingArtifactData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -10074,7 +10358,7 @@ export const runTrainingArtifactSmokeMutation = (
 };
 
 export const listBaseArtifactsQueryKey = (options?: Options<ListBaseArtifactsData>) =>
-	createQueryKey("listBaseArtifacts", options);
+	createQueryKey("listBaseArtifacts", options, false, ["Training"]);
 
 export const listBaseArtifactsOptions = (options?: Options<ListBaseArtifactsData>) =>
 	queryOptions<
@@ -10135,7 +10419,8 @@ export const deleteBaseArtifactMutation = (
 	return mutationOptions;
 };
 
-export const getBaseArtifactQueryKey = (options: Options<GetBaseArtifactData>) => createQueryKey("getBaseArtifact", options);
+export const getBaseArtifactQueryKey = (options: Options<GetBaseArtifactData>) =>
+	createQueryKey("getBaseArtifact", options, false, ["Training"]);
 
 export const getBaseArtifactOptions = (options: Options<GetBaseArtifactData>) =>
 	queryOptions<
@@ -10177,7 +10462,7 @@ export const cancelBaseArtifactMutation = (
 };
 
 export const getBaseArtifactLicenseQueryKey = (options: Options<GetBaseArtifactLicenseData>) =>
-	createQueryKey("getBaseArtifactLicense", options);
+	createQueryKey("getBaseArtifactLicense", options, false, ["Training"]);
 
 export const getBaseArtifactLicenseOptions = (options: Options<GetBaseArtifactLicenseData>) =>
 	queryOptions<
@@ -10198,7 +10483,8 @@ export const getBaseArtifactLicenseOptions = (options: Options<GetBaseArtifactLi
 		queryKey: getBaseArtifactLicenseQueryKey(options),
 	});
 
-export const listComparisonsQueryKey = (options?: Options<ListComparisonsData>) => createQueryKey("listComparisons", options);
+export const listComparisonsQueryKey = (options?: Options<ListComparisonsData>) =>
+	createQueryKey("listComparisons", options, false, ["Training"]);
 
 export const listComparisonsOptions = (options?: Options<ListComparisonsData>) =>
 	queryOptions<
@@ -10240,7 +10526,7 @@ export const createComparisonMutation = (
 };
 
 export const suggestComparisonQueryKey = (options: Options<SuggestComparisonData>) =>
-	createQueryKey("suggestComparison", options);
+	createQueryKey("suggestComparison", options, false, ["Training"]);
 
 export const suggestComparisonOptions = (options: Options<SuggestComparisonData>) =>
 	queryOptions<
@@ -10281,7 +10567,8 @@ export const deleteComparisonMutation = (
 	return mutationOptions;
 };
 
-export const getComparisonQueryKey = (options: Options<GetComparisonData>) => createQueryKey("getComparison", options);
+export const getComparisonQueryKey = (options: Options<GetComparisonData>) =>
+	createQueryKey("getComparison", options, false, ["Training"]);
 
 export const getComparisonOptions = (options: Options<GetComparisonData>) =>
 	queryOptions<GetComparisonResponse, AxiosError<DefaultError>, GetComparisonResponse, ReturnType<typeof getComparisonQueryKey>>({
@@ -10298,7 +10585,7 @@ export const getComparisonOptions = (options: Options<GetComparisonData>) =>
 	});
 
 export const listTrainingDatasetsQueryKey = (options?: Options<ListTrainingDatasetsData>) =>
-	createQueryKey("listTrainingDatasets", options);
+	createQueryKey("listTrainingDatasets", options, false, ["Training"]);
 
 export const listTrainingDatasetsOptions = (options?: Options<ListTrainingDatasetsData>) =>
 	queryOptions<
@@ -10321,10 +10608,14 @@ export const listTrainingDatasetsOptions = (options?: Options<ListTrainingDatase
 
 export const deleteTrainingDatasetMutation = (
 	options?: Partial<Options<DeleteTrainingDatasetData>>,
-): UseMutationOptions<DeleteTrainingDatasetResponse, AxiosError<DefaultError>, Options<DeleteTrainingDatasetData>> => {
+): UseMutationOptions<
+	DeleteTrainingDatasetResponse,
+	AxiosError<DeleteTrainingDatasetError>,
+	Options<DeleteTrainingDatasetData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		DeleteTrainingDatasetResponse,
-		AxiosError<DefaultError>,
+		AxiosError<DeleteTrainingDatasetError>,
 		Options<DeleteTrainingDatasetData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -10340,7 +10631,7 @@ export const deleteTrainingDatasetMutation = (
 };
 
 export const getTrainingDatasetQueryKey = (options: Options<GetTrainingDatasetData>) =>
-	createQueryKey("getTrainingDataset", options);
+	createQueryKey("getTrainingDataset", options, false, ["Training"]);
 
 export const getTrainingDatasetOptions = (options: Options<GetTrainingDatasetData>) =>
 	queryOptions<
@@ -10382,7 +10673,7 @@ export const cancelTrainingDatasetMutation = (
 };
 
 export const exportTrainingDatasetQueryKey = (options: Options<ExportTrainingDatasetData>) =>
-	createQueryKey("exportTrainingDataset", options);
+	createQueryKey("exportTrainingDataset", options, false, ["Training"]);
 
 export const exportTrainingDatasetOptions = (options: Options<ExportTrainingDatasetData>) =>
 	queryOptions<
@@ -10404,7 +10695,7 @@ export const exportTrainingDatasetOptions = (options: Options<ExportTrainingData
 	});
 
 export const listTrainingSamplesQueryKey = (options: Options<ListTrainingSamplesData>) =>
-	createQueryKey("listTrainingSamples", options);
+	createQueryKey("listTrainingSamples", options, false, ["Training"]);
 
 export const listTrainingSamplesOptions = (options: Options<ListTrainingSamplesData>) =>
 	queryOptions<
@@ -10427,7 +10718,7 @@ export const listTrainingSamplesOptions = (options: Options<ListTrainingSamplesD
 
 export const listTrainingSamplesInfiniteQueryKey = (
 	options: Options<ListTrainingSamplesData>,
-): QueryKey<Options<ListTrainingSamplesData>> => createQueryKey("listTrainingSamples", options, true);
+): QueryKey<Options<ListTrainingSamplesData>> => createQueryKey("listTrainingSamples", options, true, ["Training"]);
 
 export const listTrainingSamplesInfiniteOptions = (options: Options<ListTrainingSamplesData>) => {
 	const opts = infiniteQueryOptions<
@@ -10485,7 +10776,7 @@ export const reviewTrainingSampleMutation = (
 };
 
 export const listTrainingDefinitionsQueryKey = (options?: Options<ListTrainingDefinitionsData>) =>
-	createQueryKey("listTrainingDefinitions", options);
+	createQueryKey("listTrainingDefinitions", options, false, ["Training"]);
 
 export const listTrainingDefinitionsOptions = (options?: Options<ListTrainingDefinitionsData>) =>
 	queryOptions<
@@ -10528,10 +10819,14 @@ export const createTrainingDefinitionMutation = (
 
 export const deleteTrainingDefinitionMutation = (
 	options?: Partial<Options<DeleteTrainingDefinitionData>>,
-): UseMutationOptions<DeleteTrainingDefinitionResponse, AxiosError<DefaultError>, Options<DeleteTrainingDefinitionData>> => {
+): UseMutationOptions<
+	DeleteTrainingDefinitionResponse,
+	AxiosError<DeleteTrainingDefinitionError>,
+	Options<DeleteTrainingDefinitionData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		DeleteTrainingDefinitionResponse,
-		AxiosError<DefaultError>,
+		AxiosError<DeleteTrainingDefinitionError>,
 		Options<DeleteTrainingDefinitionData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -10547,7 +10842,7 @@ export const deleteTrainingDefinitionMutation = (
 };
 
 export const getTrainingDefinitionQueryKey = (options: Options<GetTrainingDefinitionData>) =>
-	createQueryKey("getTrainingDefinition", options);
+	createQueryKey("getTrainingDefinition", options, false, ["Training"]);
 
 export const getTrainingDefinitionOptions = (options: Options<GetTrainingDefinitionData>) =>
 	queryOptions<
@@ -10570,10 +10865,14 @@ export const getTrainingDefinitionOptions = (options: Options<GetTrainingDefinit
 
 export const updateTrainingDefinitionMutation = (
 	options?: Partial<Options<UpdateTrainingDefinitionData>>,
-): UseMutationOptions<UpdateTrainingDefinitionResponse, AxiosError<DefaultError>, Options<UpdateTrainingDefinitionData>> => {
+): UseMutationOptions<
+	UpdateTrainingDefinitionResponse,
+	AxiosError<UpdateTrainingDefinitionError>,
+	Options<UpdateTrainingDefinitionData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		UpdateTrainingDefinitionResponse,
-		AxiosError<DefaultError>,
+		AxiosError<UpdateTrainingDefinitionError>,
 		Options<UpdateTrainingDefinitionData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -10590,10 +10889,14 @@ export const updateTrainingDefinitionMutation = (
 
 export const generateTrainingDatasetMutation = (
 	options?: Partial<Options<GenerateTrainingDatasetData>>,
-): UseMutationOptions<GenerateTrainingDatasetResponse, AxiosError<DefaultError>, Options<GenerateTrainingDatasetData>> => {
+): UseMutationOptions<
+	GenerateTrainingDatasetResponse,
+	AxiosError<GenerateTrainingDatasetError>,
+	Options<GenerateTrainingDatasetData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		GenerateTrainingDatasetResponse,
-		AxiosError<DefaultError>,
+		AxiosError<GenerateTrainingDatasetError>,
 		Options<GenerateTrainingDatasetData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -10608,7 +10911,8 @@ export const generateTrainingDatasetMutation = (
 	return mutationOptions;
 };
 
-export const listEvaluationsQueryKey = (options?: Options<ListEvaluationsData>) => createQueryKey("listEvaluations", options);
+export const listEvaluationsQueryKey = (options?: Options<ListEvaluationsData>) =>
+	createQueryKey("listEvaluations", options, false, ["Training"]);
 
 export const listEvaluationsOptions = (options?: Options<ListEvaluationsData>) =>
 	queryOptions<
@@ -10669,7 +10973,8 @@ export const deleteEvaluationMutation = (
 	return mutationOptions;
 };
 
-export const getEvaluationQueryKey = (options: Options<GetEvaluationData>) => createQueryKey("getEvaluation", options);
+export const getEvaluationQueryKey = (options: Options<GetEvaluationData>) =>
+	createQueryKey("getEvaluation", options, false, ["Training"]);
 
 export const getEvaluationOptions = (options: Options<GetEvaluationData>) =>
 	queryOptions<GetEvaluationResponse, AxiosError<DefaultError>, GetEvaluationResponse, ReturnType<typeof getEvaluationQueryKey>>({
@@ -10717,7 +11022,8 @@ export const resumeEvaluationMutation = (
 	return mutationOptions;
 };
 
-export const listToolMocksQueryKey = (options?: Options<ListToolMocksData>) => createQueryKey("listToolMocks", options);
+export const listToolMocksQueryKey = (options?: Options<ListToolMocksData>) =>
+	createQueryKey("listToolMocks", options, false, ["Training"]);
 
 export const listToolMocksOptions = (options?: Options<ListToolMocksData>) =>
 	queryOptions<ListToolMocksResponse, AxiosError<DefaultError>, ListToolMocksResponse, ReturnType<typeof listToolMocksQueryKey>>({
@@ -10733,7 +11039,8 @@ export const listToolMocksOptions = (options?: Options<ListToolMocksData>) =>
 		queryKey: listToolMocksQueryKey(options),
 	});
 
-export const getToolMockQueryKey = (options: Options<GetToolMockData>) => createQueryKey("getToolMock", options);
+export const getToolMockQueryKey = (options: Options<GetToolMockData>) =>
+	createQueryKey("getToolMock", options, false, ["Training"]);
 
 export const getToolMockOptions = (options: Options<GetToolMockData>) =>
 	queryOptions<GetToolMockResponse, AxiosError<DefaultError>, GetToolMockResponse, ReturnType<typeof getToolMockQueryKey>>({
@@ -10751,8 +11058,12 @@ export const getToolMockOptions = (options: Options<GetToolMockData>) =>
 
 export const verifyToolMockMutation = (
 	options?: Partial<Options<VerifyToolMockData>>,
-): UseMutationOptions<VerifyToolMockResponse, AxiosError<DefaultError>, Options<VerifyToolMockData>> => {
-	const mutationOptions: UseMutationOptions<VerifyToolMockResponse, AxiosError<DefaultError>, Options<VerifyToolMockData>> = {
+): UseMutationOptions<VerifyToolMockResponse, AxiosError<VerifyToolMockError>, Options<VerifyToolMockData>> => {
+	const mutationOptions: UseMutationOptions<
+		VerifyToolMockResponse,
+		AxiosError<VerifyToolMockError>,
+		Options<VerifyToolMockData>
+	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await verifyToolMock({
 				...options,
@@ -10765,7 +11076,8 @@ export const verifyToolMockMutation = (
 	return mutationOptions;
 };
 
-export const listTrainingRunsQueryKey = (options: Options<ListTrainingRunsData>) => createQueryKey("listTrainingRuns", options);
+export const listTrainingRunsQueryKey = (options: Options<ListTrainingRunsData>) =>
+	createQueryKey("listTrainingRuns", options, false, ["Training"]);
 
 export const listTrainingRunsOptions = (options: Options<ListTrainingRunsData>) =>
 	queryOptions<
@@ -10788,7 +11100,7 @@ export const listTrainingRunsOptions = (options: Options<ListTrainingRunsData>) 
 
 export const listTrainingRunsInfiniteQueryKey = (
 	options: Options<ListTrainingRunsData>,
-): QueryKey<Options<ListTrainingRunsData>> => createQueryKey("listTrainingRuns", options, true);
+): QueryKey<Options<ListTrainingRunsData>> => createQueryKey("listTrainingRuns", options, true, ["Training"]);
 
 export const listTrainingRunsInfiniteOptions = (options: Options<ListTrainingRunsData>) => {
 	const opts = infiniteQueryOptions<
@@ -10846,7 +11158,7 @@ export const createTrainingRunMutation = (
 };
 
 export const getTrainingRunDefaultsQueryKey = (options: Options<GetTrainingRunDefaultsData>) =>
-	createQueryKey("getTrainingRunDefaults", options);
+	createQueryKey("getTrainingRunDefaults", options, false, ["Training"]);
 
 export const getTrainingRunDefaultsOptions = (options: Options<GetTrainingRunDefaultsData>) =>
 	queryOptions<
@@ -10867,7 +11179,8 @@ export const getTrainingRunDefaultsOptions = (options: Options<GetTrainingRunDef
 		queryKey: getTrainingRunDefaultsQueryKey(options),
 	});
 
-export const getTrainingRunQueryKey = (options: Options<GetTrainingRunData>) => createQueryKey("getTrainingRun", options);
+export const getTrainingRunQueryKey = (options: Options<GetTrainingRunData>) =>
+	createQueryKey("getTrainingRun", options, false, ["Training"]);
 
 export const getTrainingRunOptions = (options: Options<GetTrainingRunData>) =>
 	queryOptions<
@@ -10889,7 +11202,7 @@ export const getTrainingRunOptions = (options: Options<GetTrainingRunData>) =>
 	});
 
 export const listTrainingArtifactsQueryKey = (options: Options<ListTrainingArtifactsData>) =>
-	createQueryKey("listTrainingArtifacts", options);
+	createQueryKey("listTrainingArtifacts", options, false, ["Training"]);
 
 export const listTrainingArtifactsOptions = (options: Options<ListTrainingArtifactsData>) =>
 	queryOptions<
@@ -10975,7 +11288,7 @@ export const startTrainingRuntimeInstallMutation = (
 };
 
 export const getTrainingRuntimePrerequisitesQueryKey = (options?: Options<GetTrainingRuntimePrerequisitesData>) =>
-	createQueryKey("getTrainingRuntimePrerequisites", options);
+	createQueryKey("getTrainingRuntimePrerequisites", options, false, ["Training"]);
 
 export const getTrainingRuntimePrerequisitesOptions = (options?: Options<GetTrainingRuntimePrerequisitesData>) =>
 	queryOptions<
@@ -11021,7 +11334,7 @@ export const removeTrainingRuntimeMutation = (
 };
 
 export const getTrainingRuntimeStatusQueryKey = (options?: Options<GetTrainingRuntimeStatusData>) =>
-	createQueryKey("getTrainingRuntimeStatus", options);
+	createQueryKey("getTrainingRuntimeStatus", options, false, ["Training"]);
 
 export const getTrainingRuntimeStatusOptions = (options?: Options<GetTrainingRuntimeStatusData>) =>
 	queryOptions<
@@ -11043,7 +11356,7 @@ export const getTrainingRuntimeStatusOptions = (options?: Options<GetTrainingRun
 	});
 
 export const listCaptureProcessesQueryKey = (options?: Options<ListCaptureProcessesData>) =>
-	createQueryKey("listCaptureProcesses", options);
+	createQueryKey("listCaptureProcesses", options, false, ["Transcription"]);
 
 export const listCaptureProcessesOptions = (options?: Options<ListCaptureProcessesData>) =>
 	queryOptions<
@@ -11064,8 +11377,32 @@ export const listCaptureProcessesOptions = (options?: Options<ListCaptureProcess
 		queryKey: listCaptureProcessesQueryKey(options),
 	});
 
+export const startDictationSessionMutation = (
+	options?: Partial<Options<StartDictationSessionData>>,
+): UseMutationOptions<
+	StartDictationSessionResponse,
+	AxiosError<StartDictationSessionError>,
+	Options<StartDictationSessionData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		StartDictationSessionResponse,
+		AxiosError<StartDictationSessionError>,
+		Options<StartDictationSessionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startDictationSession({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const listTranscriptionModelsQueryKey = (options?: Options<ListTranscriptionModelsData>) =>
-	createQueryKey("listTranscriptionModels", options);
+	createQueryKey("listTranscriptionModels", options, false, ["Transcription"]);
 
 export const listTranscriptionModelsOptions = (options?: Options<ListTranscriptionModelsData>) =>
 	queryOptions<
@@ -11159,7 +11496,7 @@ export const selectTranscriptionModelMutation = (
 };
 
 export const getTranscriptionRuntimeStatusQueryKey = (options?: Options<GetTranscriptionRuntimeStatusData>) =>
-	createQueryKey("getTranscriptionRuntimeStatus", options);
+	createQueryKey("getTranscriptionRuntimeStatus", options, false, ["Transcription"]);
 
 export const getTranscriptionRuntimeStatusOptions = (options?: Options<GetTranscriptionRuntimeStatusData>) =>
 	queryOptions<
@@ -11205,7 +11542,7 @@ export const ejectTranscriptionRuntimeMutation = (
 };
 
 export const getTranscriptionRecommendationQueryKey = (options?: Options<GetTranscriptionRecommendationData>) =>
-	createQueryKey("getTranscriptionRecommendation", options);
+	createQueryKey("getTranscriptionRecommendation", options, false, ["Transcription"]);
 
 export const getTranscriptionRecommendationOptions = (options?: Options<GetTranscriptionRecommendationData>) =>
 	queryOptions<
@@ -11275,7 +11612,7 @@ export const cancelWhisperCppSourceBuildMutation = (
 };
 
 export const getWhisperCppSourceBuildPrerequisitesQueryKey = (options: Options<GetWhisperCppSourceBuildPrerequisitesData>) =>
-	createQueryKey("getWhisperCppSourceBuildPrerequisites", options);
+	createQueryKey("getWhisperCppSourceBuildPrerequisites", options, false, ["Transcription"]);
 
 export const getWhisperCppSourceBuildPrerequisitesOptions = (options: Options<GetWhisperCppSourceBuildPrerequisitesData>) =>
 	queryOptions<
@@ -11321,7 +11658,7 @@ export const removeWhisperCppSourceBuildMutation = (
 };
 
 export const getWhisperCppSourceBuildStatusQueryKey = (options?: Options<GetWhisperCppSourceBuildStatusData>) =>
-	createQueryKey("getWhisperCppSourceBuildStatus", options);
+	createQueryKey("getWhisperCppSourceBuildStatus", options, false, ["Transcription"]);
 
 export const getWhisperCppSourceBuildStatusOptions = (options?: Options<GetWhisperCppSourceBuildStatusData>) =>
 	queryOptions<
@@ -11343,7 +11680,7 @@ export const getWhisperCppSourceBuildStatusOptions = (options?: Options<GetWhisp
 	});
 
 export const listTranscriptionSessionsQueryKey = (options?: Options<ListTranscriptionSessionsData>) =>
-	createQueryKey("listTranscriptionSessions", options);
+	createQueryKey("listTranscriptionSessions", options, false, ["Transcription"]);
 
 export const listTranscriptionSessionsOptions = (options?: Options<ListTranscriptionSessionsData>) =>
 	queryOptions<
@@ -11366,7 +11703,8 @@ export const listTranscriptionSessionsOptions = (options?: Options<ListTranscrip
 
 export const listTranscriptionSessionsInfiniteQueryKey = (
 	options?: Options<ListTranscriptionSessionsData>,
-): QueryKey<Options<ListTranscriptionSessionsData>> => createQueryKey("listTranscriptionSessions", options, true);
+): QueryKey<Options<ListTranscriptionSessionsData>> =>
+	createQueryKey("listTranscriptionSessions", options, true, ["Transcription"]);
 
 export const listTranscriptionSessionsInfiniteOptions = (options?: Options<ListTranscriptionSessionsData>) => {
 	const opts = infiniteQueryOptions<
@@ -11448,7 +11786,7 @@ export const deleteTranscriptionSessionMutation = (
 };
 
 export const getTranscriptionSessionQueryKey = (options: Options<GetTranscriptionSessionData>) =>
-	createQueryKey("getTranscriptionSession", options);
+	createQueryKey("getTranscriptionSession", options, false, ["Transcription"]);
 
 export const getTranscriptionSessionOptions = (options: Options<GetTranscriptionSessionData>) =>
 	queryOptions<
@@ -11605,7 +11943,8 @@ export const updateTranscriptSegmentMutation = (
 	return mutationOptions;
 };
 
-export const getTutorialStateQueryKey = (options?: Options<GetTutorialStateData>) => createQueryKey("getTutorialState", options);
+export const getTutorialStateQueryKey = (options?: Options<GetTutorialStateData>) =>
+	createQueryKey("getTutorialState", options, false, ["Tutorial"]);
 
 export const getTutorialStateOptions = (options?: Options<GetTutorialStateData>) =>
 	queryOptions<
@@ -11646,7 +11985,8 @@ export const saveTutorialStateMutation = (
 	return mutationOptions;
 };
 
-export const listWorkSessionsQueryKey = (options?: Options<ListWorkSessionsData>) => createQueryKey("listWorkSessions", options);
+export const listWorkSessionsQueryKey = (options?: Options<ListWorkSessionsData>) =>
+	createQueryKey("listWorkSessions", options, false, ["Work-Sessions"]);
 
 export const listWorkSessionsOptions = (options?: Options<ListWorkSessionsData>) =>
 	queryOptions<
@@ -11688,7 +12028,7 @@ export const createWorkSessionMutation = (
 };
 
 export const getWorkSessionCapabilityQueryKey = (options?: Options<GetWorkSessionCapabilityData>) =>
-	createQueryKey("getWorkSessionCapability", options);
+	createQueryKey("getWorkSessionCapability", options, false, ["Work-Sessions"]);
 
 export const getWorkSessionCapabilityOptions = (options?: Options<GetWorkSessionCapabilityData>) =>
 	queryOptions<
@@ -11729,7 +12069,8 @@ export const deleteWorkSessionMutation = (
 	return mutationOptions;
 };
 
-export const getWorkSessionQueryKey = (options: Options<GetWorkSessionData>) => createQueryKey("getWorkSession", options);
+export const getWorkSessionQueryKey = (options: Options<GetWorkSessionData>) =>
+	createQueryKey("getWorkSession", options, false, ["Work-Sessions"]);
 
 export const getWorkSessionOptions = (options: Options<GetWorkSessionData>) =>
 	queryOptions<
@@ -11771,7 +12112,7 @@ export const updateWorkSessionMutation = (
 };
 
 export const listWorkSessionArtifactsQueryKey = (options: Options<ListWorkSessionArtifactsData>) =>
-	createQueryKey("listWorkSessionArtifacts", options);
+	createQueryKey("listWorkSessionArtifacts", options, false, ["Work-Sessions"]);
 
 export const listWorkSessionArtifactsOptions = (options: Options<ListWorkSessionArtifactsData>) =>
 	queryOptions<
@@ -11792,8 +12133,48 @@ export const listWorkSessionArtifactsOptions = (options: Options<ListWorkSession
 		queryKey: listWorkSessionArtifactsQueryKey(options),
 	});
 
+export const listWorkSessionArtifactsInfiniteQueryKey = (
+	options: Options<ListWorkSessionArtifactsData>,
+): QueryKey<Options<ListWorkSessionArtifactsData>> =>
+	createQueryKey("listWorkSessionArtifacts", options, true, ["Work-Sessions"]);
+
+export const listWorkSessionArtifactsInfiniteOptions = (options: Options<ListWorkSessionArtifactsData>) => {
+	const opts = infiniteQueryOptions<
+		ListWorkSessionArtifactsResponse,
+		AxiosError<ListWorkSessionArtifactsError>,
+		InfiniteData<ListWorkSessionArtifactsResponse>,
+		QueryKey<Options<ListWorkSessionArtifactsData>>,
+		number | Pick<QueryKey<Options<ListWorkSessionArtifactsData>>[0], "body" | "headers" | "path" | "query">
+	>(
+		// @ts-ignore
+		{
+			queryFn: async ({ pageParam, queryKey, signal }) => {
+				// @ts-ignore
+				const page: Pick<QueryKey<Options<ListWorkSessionArtifactsData>>[0], "body" | "headers" | "path" | "query"> =
+					typeof pageParam === "object"
+						? pageParam
+						: {
+								query: {
+									sinceSeq: pageParam,
+								},
+							};
+				const params = createInfiniteParams(queryKey, page);
+				const { data } = await listWorkSessionArtifacts({
+					...options,
+					...params,
+					signal,
+					throwOnError: true,
+				});
+				return data;
+			},
+			queryKey: listWorkSessionArtifactsInfiniteQueryKey(options),
+		},
+	);
+	return opts as Omit<typeof opts, "initialData">;
+};
+
 export const getWorkSessionArtifactContentQueryKey = (options: Options<GetWorkSessionArtifactContentData>) =>
-	createQueryKey("getWorkSessionArtifactContent", options);
+	createQueryKey("getWorkSessionArtifactContent", options, false, ["Work-Sessions"]);
 
 export const getWorkSessionArtifactContentOptions = (options: Options<GetWorkSessionArtifactContentData>) =>
 	queryOptions<
@@ -11835,7 +12216,7 @@ export const cancelWorkSessionMutation = (
 };
 
 export const listWorkSessionCheckpointsQueryKey = (options: Options<ListWorkSessionCheckpointsData>) =>
-	createQueryKey("listWorkSessionCheckpoints", options);
+	createQueryKey("listWorkSessionCheckpoints", options, false, ["Work-Sessions"]);
 
 export const listWorkSessionCheckpointsOptions = (options: Options<ListWorkSessionCheckpointsData>) =>
 	queryOptions<
@@ -11856,8 +12237,48 @@ export const listWorkSessionCheckpointsOptions = (options: Options<ListWorkSessi
 		queryKey: listWorkSessionCheckpointsQueryKey(options),
 	});
 
+export const listWorkSessionCheckpointsInfiniteQueryKey = (
+	options: Options<ListWorkSessionCheckpointsData>,
+): QueryKey<Options<ListWorkSessionCheckpointsData>> =>
+	createQueryKey("listWorkSessionCheckpoints", options, true, ["Work-Sessions"]);
+
+export const listWorkSessionCheckpointsInfiniteOptions = (options: Options<ListWorkSessionCheckpointsData>) => {
+	const opts = infiniteQueryOptions<
+		ListWorkSessionCheckpointsResponse,
+		AxiosError<ListWorkSessionCheckpointsError>,
+		InfiniteData<ListWorkSessionCheckpointsResponse>,
+		QueryKey<Options<ListWorkSessionCheckpointsData>>,
+		number | Pick<QueryKey<Options<ListWorkSessionCheckpointsData>>[0], "body" | "headers" | "path" | "query">
+	>(
+		// @ts-ignore
+		{
+			queryFn: async ({ pageParam, queryKey, signal }) => {
+				// @ts-ignore
+				const page: Pick<QueryKey<Options<ListWorkSessionCheckpointsData>>[0], "body" | "headers" | "path" | "query"> =
+					typeof pageParam === "object"
+						? pageParam
+						: {
+								query: {
+									sinceSeq: pageParam,
+								},
+							};
+				const params = createInfiniteParams(queryKey, page);
+				const { data } = await listWorkSessionCheckpoints({
+					...options,
+					...params,
+					signal,
+					throwOnError: true,
+				});
+				return data;
+			},
+			queryKey: listWorkSessionCheckpointsInfiniteQueryKey(options),
+		},
+	);
+	return opts as Omit<typeof opts, "initialData">;
+};
+
 export const listWorkSessionEventsQueryKey = (options: Options<ListWorkSessionEventsData>) =>
-	createQueryKey("listWorkSessionEvents", options);
+	createQueryKey("listWorkSessionEvents", options, false, ["Work-Sessions"]);
 
 export const listWorkSessionEventsOptions = (options: Options<ListWorkSessionEventsData>) =>
 	queryOptions<
@@ -11878,8 +12299,47 @@ export const listWorkSessionEventsOptions = (options: Options<ListWorkSessionEve
 		queryKey: listWorkSessionEventsQueryKey(options),
 	});
 
+export const listWorkSessionEventsInfiniteQueryKey = (
+	options: Options<ListWorkSessionEventsData>,
+): QueryKey<Options<ListWorkSessionEventsData>> => createQueryKey("listWorkSessionEvents", options, true, ["Work-Sessions"]);
+
+export const listWorkSessionEventsInfiniteOptions = (options: Options<ListWorkSessionEventsData>) => {
+	const opts = infiniteQueryOptions<
+		ListWorkSessionEventsResponse,
+		AxiosError<ListWorkSessionEventsError>,
+		InfiniteData<ListWorkSessionEventsResponse>,
+		QueryKey<Options<ListWorkSessionEventsData>>,
+		number | Pick<QueryKey<Options<ListWorkSessionEventsData>>[0], "body" | "headers" | "path" | "query">
+	>(
+		// @ts-ignore
+		{
+			queryFn: async ({ pageParam, queryKey, signal }) => {
+				// @ts-ignore
+				const page: Pick<QueryKey<Options<ListWorkSessionEventsData>>[0], "body" | "headers" | "path" | "query"> =
+					typeof pageParam === "object"
+						? pageParam
+						: {
+								query: {
+									sinceSeq: pageParam,
+								},
+							};
+				const params = createInfiniteParams(queryKey, page);
+				const { data } = await listWorkSessionEvents({
+					...options,
+					...params,
+					signal,
+					throwOnError: true,
+				});
+				return data;
+			},
+			queryKey: listWorkSessionEventsInfiniteQueryKey(options),
+		},
+	);
+	return opts as Omit<typeof opts, "initialData">;
+};
+
 export const listWorkSessionFindingsQueryKey = (options: Options<ListWorkSessionFindingsData>) =>
-	createQueryKey("listWorkSessionFindings", options);
+	createQueryKey("listWorkSessionFindings", options, false, ["Work-Sessions"]);
 
 export const listWorkSessionFindingsOptions = (options: Options<ListWorkSessionFindingsData>) =>
 	queryOptions<
@@ -11899,6 +12359,45 @@ export const listWorkSessionFindingsOptions = (options: Options<ListWorkSessionF
 		},
 		queryKey: listWorkSessionFindingsQueryKey(options),
 	});
+
+export const listWorkSessionFindingsInfiniteQueryKey = (
+	options: Options<ListWorkSessionFindingsData>,
+): QueryKey<Options<ListWorkSessionFindingsData>> => createQueryKey("listWorkSessionFindings", options, true, ["Work-Sessions"]);
+
+export const listWorkSessionFindingsInfiniteOptions = (options: Options<ListWorkSessionFindingsData>) => {
+	const opts = infiniteQueryOptions<
+		ListWorkSessionFindingsResponse,
+		AxiosError<ListWorkSessionFindingsError>,
+		InfiniteData<ListWorkSessionFindingsResponse>,
+		QueryKey<Options<ListWorkSessionFindingsData>>,
+		number | Pick<QueryKey<Options<ListWorkSessionFindingsData>>[0], "body" | "headers" | "path" | "query">
+	>(
+		// @ts-ignore
+		{
+			queryFn: async ({ pageParam, queryKey, signal }) => {
+				// @ts-ignore
+				const page: Pick<QueryKey<Options<ListWorkSessionFindingsData>>[0], "body" | "headers" | "path" | "query"> =
+					typeof pageParam === "object"
+						? pageParam
+						: {
+								query: {
+									sinceSeq: pageParam,
+								},
+							};
+				const params = createInfiniteParams(queryKey, page);
+				const { data } = await listWorkSessionFindings({
+					...options,
+					...params,
+					signal,
+					throwOnError: true,
+				});
+				return data;
+			},
+			queryKey: listWorkSessionFindingsInfiniteQueryKey(options),
+		},
+	);
+	return opts as Omit<typeof opts, "initialData">;
+};
 
 export const postWorkSessionMessageMutation = (
 	options?: Partial<Options<PostWorkSessionMessageData>>,
@@ -11985,7 +12484,7 @@ export const startWorkSessionMutation = (
 };
 
 export const listWorkSessionTasksQueryKey = (options: Options<ListWorkSessionTasksData>) =>
-	createQueryKey("listWorkSessionTasks", options);
+	createQueryKey("listWorkSessionTasks", options, false, ["Work-Sessions"]);
 
 export const listWorkSessionTasksOptions = (options: Options<ListWorkSessionTasksData>) =>
 	queryOptions<
@@ -12006,7 +12505,47 @@ export const listWorkSessionTasksOptions = (options: Options<ListWorkSessionTask
 		queryKey: listWorkSessionTasksQueryKey(options),
 	});
 
-export const listWorkspacesQueryKey = (options?: Options<ListWorkspacesData>) => createQueryKey("listWorkspaces", options);
+export const listWorkSessionTasksInfiniteQueryKey = (
+	options: Options<ListWorkSessionTasksData>,
+): QueryKey<Options<ListWorkSessionTasksData>> => createQueryKey("listWorkSessionTasks", options, true, ["Work-Sessions"]);
+
+export const listWorkSessionTasksInfiniteOptions = (options: Options<ListWorkSessionTasksData>) => {
+	const opts = infiniteQueryOptions<
+		ListWorkSessionTasksResponse,
+		AxiosError<ListWorkSessionTasksError>,
+		InfiniteData<ListWorkSessionTasksResponse>,
+		QueryKey<Options<ListWorkSessionTasksData>>,
+		number | Pick<QueryKey<Options<ListWorkSessionTasksData>>[0], "body" | "headers" | "path" | "query">
+	>(
+		// @ts-ignore
+		{
+			queryFn: async ({ pageParam, queryKey, signal }) => {
+				// @ts-ignore
+				const page: Pick<QueryKey<Options<ListWorkSessionTasksData>>[0], "body" | "headers" | "path" | "query"> =
+					typeof pageParam === "object"
+						? pageParam
+						: {
+								query: {
+									sinceSeq: pageParam,
+								},
+							};
+				const params = createInfiniteParams(queryKey, page);
+				const { data } = await listWorkSessionTasks({
+					...options,
+					...params,
+					signal,
+					throwOnError: true,
+				});
+				return data;
+			},
+			queryKey: listWorkSessionTasksInfiniteQueryKey(options),
+		},
+	);
+	return opts as Omit<typeof opts, "initialData">;
+};
+
+export const listWorkspacesQueryKey = (options?: Options<ListWorkspacesData>) =>
+	createQueryKey("listWorkspaces", options, false, ["Workspaces"]);
 
 export const listWorkspacesOptions = (options?: Options<ListWorkspacesData>) =>
 	queryOptions<

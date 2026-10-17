@@ -45,6 +45,7 @@ public class ConflictExceptionHandler : IExceptionHandler
         {
             NodeChatReadOnlyConversationException => NodeConflictProblemType.ReadOnlyConversation,
             NodeChatWorkflowRunLiveException => NodeConflictProblemType.GraphWorkflowRunLiveInConversation,
+            NodeChatTurnParkedException => NodeConflictProblemType.ConversationTurnParked,
             ImageModelInUseException => NodeConflictProblemType.ImageModelInUse,
             WorkspaceRevocationBusyException => NodeConflictProblemType.WorkspaceRevocationBusy,
             InstalledModelDependentAdaptersException => NodeConflictProblemType.InstalledModelHasDependentAdapters,
@@ -64,6 +65,7 @@ public class ConflictExceptionHandler : IExceptionHandler
             GraphWorkflowRerunConfirmationRequiredException => NodeConflictProblemType.GraphWorkflowRerunConfirmationRequired,
             GraphWorkflowAttachmentsNotAcceptedException => NodeConflictProblemType.GraphWorkflowAttachmentsNotAccepted,
             GraphWorkflowSteerLimitReachedException => NodeConflictProblemType.GraphWorkflowSteerLimitReached,
+            GraphWorkflowIntentExpiredException => NodeConflictProblemType.GraphWorkflowIntentExpired,
             ExternalAppOperationInFlightException => NodeConflictProblemType.ExternalAppOperationInFlight,
             ExternalAppInvalidTransitionException => NodeConflictProblemType.ExternalAppInvalidTransition,
             ExternalAppAlreadyInstalledException => NodeConflictProblemType.ExternalAppAlreadyInstalled,

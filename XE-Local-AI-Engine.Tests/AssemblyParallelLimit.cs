@@ -1,4 +1,6 @@
-[assembly: ParallelLimiter<XE_Local_AI_Engine.Tests.AssemblyParallelLimit>]
+using XE_Local_AI_Engine.Tests;
+
+[assembly: ParallelLimiter<AssemblyParallelLimit>]
 
 namespace XE_Local_AI_Engine.Tests;
 

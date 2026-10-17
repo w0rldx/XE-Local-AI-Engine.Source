@@ -60,10 +60,9 @@ vi.mock("@tanstack/react-router", async (importOriginal) => ({
 	useBlocker: () => ({ status: "idle", proceed: undefined, reset: undefined }),
 }));
 // AgentsPage repointed its model dropdown onto the generated SDK (listLocalModelsOptions). Partially mock the
-// generated TanStack module so the page's useQuery(withResponseValidation(listLocalModelsOptions())) resolves an
+// generated TanStack module so the page's useQuery(listLocalModelsOptions()) resolves an
 // empty list without a real request, while every other generated options/mutation export stays real — the editor
-// mounts the playbook/feedback/golden panels, whose hooks reach other exports from this same module. The real
-// withResponseValidation bridge still wraps the mocked queryFn.
+// mounts the playbook/feedback/golden panels, whose hooks reach other exports from this same module.
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@/core/api/generated/@tanstack/react-query.gen")>()),
 	listLocalModelsOptions: vi.fn(() => ({

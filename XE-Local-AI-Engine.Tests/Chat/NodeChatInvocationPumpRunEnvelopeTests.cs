@@ -484,6 +484,26 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
             Arg.Any<CancellationToken>());
     }
 
+    // R5-07: a work session step the supervisor stopped ends here, and its envelope was booked under provider "unknown".
+    [Test]
+    public async Task TerminalizeInterruptedAsync_AttributesTheEnvelopeToTheProviderOfTheRequestedModel()
+    {
+        var persistence = CreatePersistence();
+        var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
+
+        _ = await pump.TerminalizeInterruptedAsync(correlation, new NodeChatPumpCursor("partial", string.Empty), wasCancelled: true, "qwen3.8-27b");
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(
+            Arg.Is<NodeChatTerminalizeMessageRequest>(request => request.Envelope != null && request.Envelope.Provider == AgentUsageProviders.Local),
+            Arg.Any<CancellationToken>());
+    }
+
     [Test]
     public async Task TerminalizeInterruptedAsync_WhenCancelled_PassesCancelledStatus()
     {
@@ -709,6 +729,34 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
 
         var request = (NodeChatTerminalizeMessageRequest)persistence.ReceivedCalls().Single().GetArguments()[0]!;
         AssertEx.Null(request.ContextWindow);
+    }
+
+    [Test]
+    [Arguments(InvocationStatus.Failed, FailureCategory.InsufficientCapacity, FailureCategory.InsufficientCapacity)]
+    [Arguments(InvocationStatus.Cancelled, FailureCategory.Cancelled, null)]
+    public async Task TerminalizeAsync_PersistsTheFailureCategoryOfAFailedTurnOnly(InvocationStatus status, FailureCategory category, FailureCategory? expected)
+    {
+        var persistence = CreatePersistence();
+        var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            Status = status,
+            FailureCategory = category
+        };
+
+        _ = await pump.TerminalizeAsync(new NodeChatMessageCorrelation
+            {
+                ConversationId = state.ConversationId,
+                MessageId = Guid.NewGuid(),
+                RequestId = Guid.NewGuid()
+            },
+            state,
+            "requested-model");
+
+        var request = (NodeChatTerminalizeMessageRequest)persistence.ReceivedCalls().Single().GetArguments()[0]!;
+        AssertEx.Equal(expected, request.FailureCategory);
     }
 
     private static INodeChatPersistenceService CreatePersistence()

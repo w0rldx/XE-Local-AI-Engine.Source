@@ -1,7 +1,8 @@
 # ADR 0019: Preview sandbox mechanisms are operator-enabled, and on Windows the AppContainer boundary satisfies the filesystem floor
 
 - **Status:** Accepted (2026-10-07) — drafted with the S2b slice, completed with the MXC integration slice (S3). Windows live
-  evidence on the operator's box is still owed before the branch merges (see "Still owed").
+  evidence: tester rounds 5, 6 and 7 of 2026-10-12/13 (see "Evidence (2026-10-13)") and the `run_python` round of 2026-10-14 (see
+  "Evidence (2026-10-14)").
   Amended 2026-10-11: Win32k is allowed inside the boundary (see "Amendment (2026-10-11)").
 - **Date:** 2026-10-07
 - **Scope:** How a sandbox launch MECHANISM's maturity is recorded, who may enable a Preview mechanism, and what the
@@ -21,7 +22,8 @@
 `run_python` and Sandboxed stdio MCP servers declare a `Filesystem` isolation floor. On Linux the `process` provider
 serves it with a bubblewrap mount namespace: the host filesystem is absent, the child sees `/work`, `/work/home` and
 `/tmp`, and callers composed `HOME`/`TMPDIR` from those fixed POSIX constants. On Windows nothing served it, so both
-workloads were refused there.
+workloads were refused there. The boundary now serves both floor workloads there (see "Still owed" for the proof state
+of `run_python`).
 
 MXC can run a child in an AppContainer with a DACL-granted jail, a denied user profile, node data directory and engine
 install directory, and no network capability. That is a real boundary, but not the same one: there is no namespace, the
@@ -51,7 +53,8 @@ does not do.
 5. **Callers compose paths from the sandbox they were given, not from constants.** `SandboxIsolatedPaths` is a record
    carried on `SandboxHandle.IsolatedPaths`: `Posix` under bubblewrap, the jail's own host paths under the AppContainer
    boundary. `ComputeToolGateway` and `SandboxedMcpStdioTransport` set `HOME`, `TMPDIR`, `TMP`, `TEMP` from it (on
-   Windows also `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, pointed at the jail home). An isolated handle without paths
+   Windows also `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, inside the jail and existing: the engine creates the
+   `TEMP`/`TMP`/`LOCALAPPDATA` folders the OS rewrites them to, see "Evidence (2026-10-14)"). An isolated handle without paths
    is a provider bug and is refused, never guessed.
 6. **A Preview-served role is never reported as `Isolated`.** The capability summary reports `Level = "PreviewIsolated"`,
    `Maturity = "Preview"` and `Backend = "appcontainer"`; with previews off, a measured boundary reports the role
@@ -125,13 +128,46 @@ does not do.
 
 ## Still owed
 
-- `run_python` on Windows: the boundary serves it, but the compute runtime is still provisioned on Linux only
-  (`ComputePythonEnvironment.GetRuntimeAsync`; the uv pin and lockfile resolve for Linux x64). Until that separate gate is
-  lifted, Sandboxed MCP servers are the only Windows workload the boundary actually runs.
+Nothing for `run_python` on Windows: the live round ran on 2026-10-14 (see "Evidence (2026-10-14)"). No CPU, memory or
+process ceiling applies there (Q3); the timeout is the only bound.
 
-- The operator's Windows live round: `run_python` and a Sandboxed MCP server under the boundary with the canary absent and
-  the network denied, the residue sweep after a forced kill, and the capability page reading `PreviewIsolated`.
-- The pinned Windows UBR the round ran on, recorded with that evidence.
+## Evidence (2026-10-13)
+
+The live round this ADR owed ran as the project's Windows tester rounds 5, 6 and 7 (2026-10-12/13) on Windows 11 25H2 build
+26200.9457 (UBR recorded on every round and, since round 7, in the probe line), host preparation applied, tier
+`BaseContainer`; the operator accepted that evidence in place of a round on the operator's own machine. Proven for a Sandboxed
+MCP server under the boundary: the home canary and the profile unreadable, a profile write refused, HTTPS, loopback and LAN
+egress refused, the jail writable, the granted trees read-only including a relative write from the working directory; a
+junction or directory symlink inside a granted tree does not open a credential store; every listed store and its subfolders,
+every spelling of a store (device, volume-GUID, `GLOBALROOT`, NTFS stream, 8.3, `subst`, junction), every volume root
+including a mounted-folder volume, and network shares are refused by `SandboxedMcpStdioTransport.AddBindableTree`. The
+capability page reads `Isolated (preview)` with backend `appcontainer` and withdraws it at once when previews are turned off;
+the consent text is the one in Decision 7. A forced kill of the engine tree with a tool call in flight left no sandbox child
+and no AppContainer ACE on the system or a data drive, and the next start logged exactly one residue sweep
+(`MxcAclResidueSweepService`); a clean stop, a self-exit and a tray quit removed their jails. `Kill()` ends a native child
+blocked on stdin. Node, CPython, PowerShell 7, Windows PowerShell 5.1, .NET 10 and .NET Framework servers start and connect,
+in parallel, under the amended policy (round-5 evidence above). Reports: the plan folder's `REPORT-5.md`, `REPORT-6.md`,
+`REPORT-7.md` (git-ignored, the record of the rounds).
+
+## Evidence (2026-10-14): `run_python` under the boundary
+
+The live round that gated `run_python` on Windows ran on build `1.0.0-rc.2.dev.20261014.110` (develop at 2a75d8528), Windows 11
+25H2 build 26200.9711 (UBR 9711), host preparation applied, tier `BaseContainer`, mechanism `mxc-processcontainer`, maturity
+Preview, profile Low, previews on. Proven: the canary, the engine database and the profile listing are denied; `HOME`,
+`USERPROFILE`, `TEMP`, `APPDATA` and `LOCALAPPDATA` lie inside the jail; the venv prefix is read-only; the jail is writable;
+loopback and HTTPS are denied. No AppContainer ACE stayed on the canary and every jail was removed after its call. The first
+call provisioned uv, CPython 3.13.15 and numpy, scipy and sympy in about 47 s; the timeout is 30.0 s and covers execution only. A
+forced engine kill left no python child and no ACE, and the next start logged exactly one residue sweep. Repair, Remove, the
+busy 409, the High-profile refusal and the previews-off refusal behaved as specified. Two chats on one local model queue, and two
+tool calls in one turn run serially.
+
+One deviation: `TEMP`, `TMP` and `LOCALAPPDATA` pointed into the jail but at folders that did not exist, because Windows rewrites
+those three variables for every AppContainer or BaseContainer child to `<LOCALAPPDATA of the block>\Packages\<OS-minted
+identity>\AC[\Temp]`, and uv's venv launcher printed `warning: Failed to set cwd to temp dir` on every result. The fix: on
+Windows the engine launches the store interpreter, at the resolved target of the `pyvenv.cfg` `home=` directory (a linked alias fails CPython's realpath inside the boundary), with `__PYVENV_LAUNCHER__` (what the venv launcher did itself) and a
+Windows-only `-c` bootstrap creates those folders before running the script read from stdin. Tracebacks still say `<stdin>`;
+`sys.argv[0]` is `-c` on Windows, and `-I -` stays on Linux. On the AppContainer-plus-DACL tier (the CI runner, not the BaseContainer tier) CPython's start-up realpath of its own executable is denied whatever launched it, so `ComputeToolGateway.StripRealpathWarning` drops exactly that one stderr line, and the Windows CI class asserts the stderr is empty afterwards. Report: `REPORT-110.md` in the git-ignored plan folder
+`Plans/run-python-windows-2026-10-14/`.
 
 ## Amendment (2026-10-11): Win32k is allowed inside the boundary
 

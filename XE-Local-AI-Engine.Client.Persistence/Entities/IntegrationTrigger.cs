@@ -24,11 +24,14 @@ internal sealed record class IntegrationTrigger
     /// <summary>Whether the trigger answers invocations at all; a disabled trigger is a 404. Plaintext (structural).</summary>
     public bool Enabled { get; set; }
 
-    /// <summary>What the trigger invokes. V1 has one member. Plaintext (structural).</summary>
+    /// <summary>What the trigger invokes; it names which of the two target ids is set. Plaintext (structural).</summary>
     public IntegrationTargetKind TargetKind { get; set; }
 
-    /// <summary>The saved agent definition this trigger runs. Loose reference with no FK. Plaintext (structural).</summary>
-    public Guid TargetAgentDefinitionId { get; set; }
+    /// <summary>The saved agent an <c>Agent</c> target runs, else null. Loose reference with no FK. Plaintext (structural).</summary>
+    public Guid? TargetAgentDefinitionId { get; set; }
+
+    /// <summary>The saved graph workflow a <c>Graph</c> target starts, else null. Loose reference with no FK. Plaintext (structural).</summary>
+    public Guid? TargetGraphWorkflowDefinitionId { get; set; }
 
     /// <summary>Whether each invocation gets its own session or the caller manages one. Plaintext (structural).</summary>
     public IntegrationSessionPolicy SessionPolicy { get; set; }

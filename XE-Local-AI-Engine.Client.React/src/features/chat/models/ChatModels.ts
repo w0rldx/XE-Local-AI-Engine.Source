@@ -149,6 +149,8 @@ export interface ChatMessageModel {
 	sortOrder: number;
 	model?: string;
 	error?: string;
+	// The server `FailureCategory` name of a failed turn; drives the localized headline above `error`.
+	failureCategory?: string;
 	origin?: ChatOrigin;
 	inputTokens?: number;
 	outputTokens?: number;
@@ -235,6 +237,8 @@ export interface ChatConversationModel {
 	// When true this conversation is "temporary" — it won't teach the bound agent new adaptive memory (existing
 	// memory is still used). Toggled per-conversation in the chat header; defaults from the agent's defaultTemporaryChat.
 	memoryExcluded?: boolean;
+	// The agent the conversation is bound to; a send that picks no agent of its own runs as this one.
+	agentDefinitionId?: string;
 	origin?: ChatOrigin;
 	branchOfConversationId?: string;
 	// Persisted selected-path map {variantGroupId -> selectedMessageId} for the conversation tree. Seeds the
@@ -498,6 +502,8 @@ export interface ChatDisplayShellProps {
 	onToggleKnowledgeBase?: () => void;
 	agentControlsAvailable?: boolean;
 	agentModeEnabled?: boolean;
+	// The open conversation is bound to an agent, which a send without a pick runs as: the Default Assistant row cannot apply.
+	conversationAgentBound?: boolean;
 	selectedAgentId?: string;
 	agentOptions?: readonly AgentOption[];
 	commandOptions?: readonly ChatCommandOption[];

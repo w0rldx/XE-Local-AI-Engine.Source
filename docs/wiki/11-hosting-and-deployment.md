@@ -92,7 +92,7 @@ Only service discovery and the standard resilience/discovery HTTP defaults remai
 
 ## 3. The node host pipeline (`Program.cs`)
 
-`XE-Local-AI-Engine.Client/Program.cs` builds a `WebApplication`. Startup order matters:
+`XE-Local-AI-Engine.Client/Program.cs` builds a `WebApplication`. It holds the entry point, `CreateAppAsync` and `ConfigureRequestPipeline`, which lists every `Use*`/`Map*` step in execution order. `Program.Host.cs` holds `CreateAppCoreAsync`: launch mode, the builder, the vault, migrations and the one-shot commands. Each multi-line pipeline step is an extension method in `Hosting/Pipeline/`. The `MapHub` calls stay in `Program.cs`, because the SignalR proxy-path drift guards read that file. Startup order matters:
 
 1. **Resolve launch mode early** — `DesktopLaunch.ResolveLaunchMode(args, VelopackInstall.IsManaged())`
    yields Headless, Desktop, or McpOnly. For either local mode, startup (a) resolves the per-user data
@@ -102,7 +102,7 @@ Only service discovery and the standard resilience/discovery HTTP defaults remai
    reads configuration.
 2. `AddServiceDefaults()` then `AddServices(builder.Configuration)`.
 3. After `Build()`: apply node-chat + node-identity EF migrations, recover interrupted chat messages, reconcile stale scheduled runs, eagerly activate the invocation-resume registry, and register the **worker shutdown drain** on `ApplicationStopping`.
-4. Pipeline: Serilog request logging (with access-token query redaction), `UseExceptionHandler` (RFC7807), **HTTPS redirect + HSTS bypassed in desktop mode**, antiforgery, static files, health checks, `LocalApiSecurityMiddleware`, routing, rate limiter, auth, FastEndpoints (route prefix `LocalApiRoutes.Prefix`), 10 unconditional SignalR hubs plus conditional `DevelopmentAttemptHub` (all `RequireAuthorization(Operator)`), Scalar/Swagger (non-Production), and `MapFallbackToFile("index.html")` for the SPA.
+4. Pipeline (`ConfigureRequestPipeline`): Serilog request logging (with access-token query redaction), `UseExceptionHandler` (RFC7807), **HTTPS redirect + HSTS bypassed in desktop mode**, antiforgery, static files, health checks, `LocalApiSecurityMiddleware`, routing, rate limiter, auth, FastEndpoints (route prefix `LocalApiRoutes.Prefix`), 18 unconditional SignalR hubs plus conditional `DevelopmentAttemptHub` (all `RequireAuthorization(Operator)`), Scalar/Swagger (non-Production), and `MapFallbackToFile("index.html")` for the SPA.
 5. **Desktop only**: `ActivateDesktopLifecycle(app)` installs the console-close → graceful-stop triggers and the on-started browser launch.
 
 See [API & Hubs](09-api-and-hubs.md) for endpoint/hub detail and [Security & Privacy](12-security-and-privacy.md) for the loopback / `LocalApiSecurityMiddleware` invariants.
@@ -150,11 +150,11 @@ Module-owned workers worth knowing about, registered alongside their feature rat
 | `DevelopmentWorkspaceRetentionService` | `AddNodeDevelopmentExtensions` | retention sweep for finished Development Mode task workspaces (see [Architecture Overview](01-architecture-overview.md#development-mode-registered-source-managed-worktree)) |
 | `DevWorkflowDefinitionSeeder`, `DevWorkflowStartupReconciler` | `AddNodeDevWorkflowsExtensions` | seed the shipped definition templates by slug; make node runs a crashed host left mid-flight dispatchable again (see [Dev Workflows](25-dev-workflows.md)) |
 | `GraphWorkflowStartupReconciler` | `AddNodeGraphWorkflowsExtensions` | make node runs a crashed host left in flight judgeable again (see [Graph Workflows](21-graph-workflows.md)) |
-| `WorkSessionStartupReconciler`, `WorkSessionAgentSeeder` | `AddNodeWorkSessionsExtensions` | collapse sessions a crashed host left mid-flight to `Interrupted`; seed the General and Research work-session personas |
+| `WorkSessionStartupReconciler`, `WorkSessionAgentSeeder` | `AddNodeWorkSessionsExtensions` | collapse sessions a crashed host left mid-flight to `Interrupted`; seed the General, Research and Repository Research work-session personas |
 | `DockerSandboxOrphanSweeper` | `AddNodeContainerSandboxExtensions` | remove Development Mode containers orphaned by a previous run of this installation |
 | `ExternalAppStateObserver` | `AddNodeExternalAppsExtensions` | notice that a container the engine believes is running has stopped (see [External Apps](23-external-apps.md)) |
 | `ExternalProviderStartupReconciler` | `AddNodeExternalProvidersExtensions` | one external-provider reconciliation pass at startup, priming the registry snapshot |
-| `IntegrationExecutionCoordinator` | `AddNodeIntegrationsExtensions` | single consumer of the integration accept queue and sole producer of an execution's terminal event |
+| `IntegrationExecutionCoordinator` | `AddNodeIntegrationsExtensions` | single consumer of the integration accept queue and sole producer of an execution's terminal event; runs an agent target itself and, for a graph target, starts the graph run and follows it by polling, cancelling that run whenever the execution ends without it (a fault, a shutdown, or the startup sweep that fails interrupted executions as `restart`) |
 | `ToolCapableModelBackfillService`, `McpServerStartupConnector` | `AddNodeModelCapabilitiesAndMcpExtensions` | back-fill the tool-capable model allow-list from installed models; connect enabled MCP servers once, off the hot path |
 | `TranscriptionSessionLifecycleService` | `AddNodeTranscriptionExtensions` | fail sessions a dead process left `Transcribing`; end live sessions on graceful stop (see [Audio Transcription](24-audio-transcription.md)) |
 | `WhisperCppSourceBuildLifecycle` | `Providers.WhisperCpp` | reconcile managed source-build state before the host is ready; drain an in-flight build on shutdown |
@@ -231,7 +231,22 @@ These options are set only through configuration (`appsettings*.json`, environme
 
 The sandbox security profile is the opposite case and is not a row above: `SandboxSecurityProfile` is a stored node setting (`StoredNodeSettings`, literals `low`, `high`, `pending`; null means undecided and backfillable) with **no configuration seed**. It is written only through the Operator settings endpoint (REST), never through an agentic surface, and read on every sandbox create through `INodeRuntimeSettings`, so a change applies without a restart. The two `RequireEgressDenial` keys above stay configuration-only and tighten on top of it. Meaning and consequences: [ADR 0020](../adr/0020-sandbox-security-profile.md); backfill: [Upgrade backfills](#upgrade-backfills-and-their-discriminators).
 
-### Registration-time closures
+### Stored settings with no Node settings form field
+
+The Node settings page edits nearly every `StoredNodeSettings` property. A property counts as UI-reachable when a
+component under `features/node-settings/` binds it, which is a name match, not a behavioural proof. The five below have
+no field there. Two are edited elsewhere in the SPA, one is generated, and two are reachable only through
+`node-settings.json` (edit it with the node stopped) or the API. The KV-cache type, the speculative-decoding knobs and
+the llama.cpp timeouts all have form fields.
+
+| Setting | Edited where | Default | Meaning |
+|---|---|---|---|
+| `ToolApprovalPolicy` | `node-settings.json` only; a settings save carries it over unchanged | absent: no node-level tightening | Tighten-only approval map per tool category and per tool name, plus `DisableSkillSessionScope`. Read once at composition, so a restart applies it. |
+| `RecommendedLlamaCppTag` | `node-settings.json` or the settings save request; the SPA never sends it | the pinned llama.cpp tag (`LlamaCppReleasePins.PinnedTag`) | The release tag the UI shows as "Recommended". Must be of the form `b<number>`. |
+| `UpdateChannel` | The app-update channel selector (`PUT app-update/channel`) | absent: the channel baked into the artifact | Which release channel (`stable`, `preview`, `development`) this node follows. |
+| `TranscriptionSelectedModelId` | The transcription model manager; not in the settings wire DTO | absent: the hardware recommendation | The operator's explicit whisper model choice. A settings save carries it over. |
+| `MachineKey` | Generated on first use | absent until generated | Stable local machine identifier that keys inference profiles; never reported or logged. |
+
 
 Two registrations in `ConfigureServices` are written the way they are purely so a disposed host can be collected, and both were measured at roughly 20 MB per test host (gcroot evidence in `docs/agent-knowledge.md` §1).
 
@@ -280,6 +295,27 @@ than hiding a window without a usable restore path. Quit stops only an engine th
 started, never a separately running engine it attached to. The shell's own dialogs and tray menu
 follow the SPA's `i18nextLng` language choice, persisted as `desktop-language.txt` in the data root,
 with the OS UI culture only as the first-run fallback (`DesktopText`).
+
+The **command overlay** (`DesktopCommandWindow`) is a second, small window for typed or dictated
+commands ([ADR 0013](../adr/0013-native-desktop-shell.md), amendment 2026-10-15). It is a
+`DesktopWindow` opened on the SPA's `/command` route, so it shares the main window's origin,
+profile, document policy and navigation guard; it is topmost, borderless (an 8 px strip at the top
+drags it), absent from the taskbar, created on first use and never re-navigated, because the engine
+origin is fixed for the shell's session. Escape, losing focus or a close request hide it; a dialog
+the page itself opens, such as the Linux microphone consent, does not. Every platform opens it from
+the **Command overlay** entry in the main window's menu bar; Windows also lists it in the tray menu.
+On Windows a global hotkey toggles it: `DesktopApplication` registers the chord with `RegisterHotKey`
+on the main window's handle and receives `WM_HOTKEY` through Avalonia's WndProc hook
+(`DesktopWindowsShell.RegisterHotkey`). The native WebView keeps key events from the shell, so while
+the overlay shows Windows also claims a bare Escape the same way and releases it on hide. A chord that
+another program holds is recorded in `desktop.log` and noticed once per start; it never stops the
+shell. Linux registers no hotkey (GNOME on Wayland permits none), and Escape there works only while
+focus is outside the page, so the menu entry and focus loss are its paths. Both preferences sit in the
+data root: `desktop-hotkey.txt` holds the chord (`Ctrl`, `Alt`, `Shift`, `Win` plus `A`–`Z`, `0`–`9`,
+`F1`–`F24` or `Space`; default `Ctrl+Alt+Space`, anything unparsable falls back to it, see
+`DesktopHotkey.Parse`) and `desktop-overlay.txt` holds the last position and size, written on every
+hide (`DesktopOverlayBounds`). A saved position on no current screen falls back to centring. The
+`/command` literal is pinned against the React route tree by `NativeDesktopContractTests`.
 
 For an owned engine, `DesktopParentLifetime` connects before host construction. Parent loss
 requests graceful shutdown with a bounded exit watchdog; `DesktopEngineSession` bounds its
@@ -475,6 +511,84 @@ For deprecated manually unzipped self-contained builds, the old scripts remain u
 - `publish/windows/run-xe-local-ai-engine.cmd` — sets `XE_LAUNCH_MODE=desktop` and runs the exe **in the current console window** (no `START`/`Start-Process`); a new/detached window would break the `CTRL_CLOSE_EVENT` → graceful-shutdown chain.
 
 Both scripts carry an explicit **single-instance caveat**: only one instance per user-data dir (the auto-port avoids a listener collision but not SQLite contention — a second instance can corrupt the DB).
+
+### Terminal client (`xe`)
+
+`xe` (project `XE-Local-AI-Engine.Cli`) is a thin terminal client for a node that is **already running on the same
+machine**, including from an SSH session on that machine. It has no project references: it speaks the loopback REST
+API and `LocalChatHub` like the SPA does, and starts, stops or hosts nothing. It is published into the same payload as
+the engine: a self-contained single-file `xe` on Linux, a framework-dependent `xe.exe` with its apphost on Windows. It
+is its own executable, not routed through the Velopack stub, so its standard output and exit code reach the shell.
+Operator steps: [xe terminal client runbook](../runbooks/xe-terminal-client-runbook.md).
+
+Commands: `xe status`, `xe models`, `xe agents`, `xe ask "<prompt>"` (one turn) and `xe chat` (interactive, with
+`/new`, `/agent`, `/model`, `/conversations`, `/resume`, `/cancel`, `/quit`). Global options: `--url`, `--json`,
+`--password-stdin`, `--insecure-dev-cert`, `--no-token-file`, `--token-file`. `ask` and `chat` take `--agent <id|name>`,
+`--model <id>`, `--conversation <id>` and `--show-reasoning`; `ask` also takes `--new-conversation-title`.
+
+**Discovery order.** `--url`, then `XE_URL`, then the engine's `ready.json` in `XE_DATA_DIR` or the per-user
+`XE-Local-AI-Engine` application-data folder (`NodeLocator`). `ready.json` must pass the engine's own rules (http on a
+loopback IP literal, canonical `mcpUrl`, matching data directory) and name a live process. An explicit URL may be https
+and may name `localhost`; the development host's self-signed certificate is accepted only with `--insecure-dev-cert`,
+and only for a loopback origin.
+
+**Sign-in (body mode).** Every command first reads `auth/status`. Setup required: `xe` prints the `--setup`
+instruction and exits 4. Vault locked: it unlocks with `auth/vault/unlock` and the admin password, then waits for the
+unlocked host on the same origin. It then signs in with `auth/login` and `returnRefreshToken: true`, so both tokens come
+back in the body and no `node_rt` cookie is written. Before expiry, or after a 401, it refreshes through the
+`X-XE-Refresh-Token` header ([Security & Privacy](12-security-and-privacy.md)); when no live refresh token is left it
+signs in again. The password comes from `XE_ADMIN_PASSWORD`, else one standard-input line with `--password-stdin`,
+else a hidden prompt on standard error when standard input is a terminal; it is never read from argv. No source means
+exit 4.
+
+**Token file.** `$XDG_CONFIG_HOME/xe/tokens.json` (`~/.config/xe/tokens.json` when unset) on Linux,
+`%APPDATA%\xe\tokens.json` on Windows (`TokenFileStore`). On Unix the file is 0600 and its directory 0700; on Windows
+the profile ACL protects it. A pair issued by another origin is ignored, so a node on a new port forces a fresh
+sign-in. `--token-file <path>` moves it; `--no-token-file` keeps the tokens in memory for the one run. Several `xe`
+processes may share the file: when the node rejects this process's refresh token because another process rotated it,
+the client re-reads the file once and adopts the newer pair before it asks for a password.
+
+**Approvals and questions are never decided by the client.** On a terminal, `xe chat` and `xe ask` prompt: approve
+once, deny, and approve for the session only when the event marks the call `sessionScopeEligible`; a question offers its
+options (single or multi-select) plus a free-text "Other" row. Without a terminal, or with `--json`, an approval is
+**denied** with a client notice and a question **cancels the turn** with a notice; the command then exits 6. A parked
+turn the client never answers times out on the node after 10 minutes. The stream is still read while a prompt is
+open: a terminal that arrives first (that timeout, or a cancel from another client) dismisses the prompt and no answer
+is sent.
+
+**Ctrl-C.** During a reply it posts `chat/cancel` and waits up to 15 seconds, request included, for the cancelled
+terminal (an unanswered cancel shows a `cancelFailed` notice); `ask` then exits 5 and `chat` returns to its prompt. Outside a reply `ask`, `status`, `models` and `agents` exit 130; at the chat
+prompt it leaves with 0. `xe chat --conversation <id>` and `/resume` re-attach through `ResumeConversation`, parked
+prompts included, after a closed terminal or a dropped connection.
+
+**Output.** Tables go to standard output. `ask` streams only the answer to standard output and writes thinking, tool
+activity, notices and prompts to standard error, so `xe ask "…" > answer.txt` captures the answer alone. With `--json`,
+`status` writes one object, `models` and `agents` one array, and `ask` one JSON object per line:
+
+| `type` | When | Members |
+|---|---|---|
+| `event` | each stream event | `kind` (`status`, `delta`, `snapshot`, `toolActivity`, `approvalRequested`, `questionRequested`, `notice`, `completed`, `cancelled`, `failed`, `interrupted`), `frameType`, `conversationId`, `messageId`, `requestId`, `status`, `text`, `reasoning`, `toolCallId`, `toolName`, `arguments`, `result`, `isError`, `approvalRequestId`, `questionRequestId`, `questions`, `sessionScopeEligible`, `noticeKind`, `error`, `model`, `inputTokens`, `outputTokens` |
+| `notice` | the client acted alone | `kind` (`approvalDenied`, `questionRefused`, `questionUnreadable`, `approvalUnresolvable`, `resolveFailed`, `cancelFailed`) and the `event` members, with `text` as the message |
+| `summary` | last line | `outcome` (`completed`, `cancelled`, `failed`, `interrupted`, `none`), `exitCode`, `userCancelled`, `interactionRequired`, `conversationId`, `messageId`, `requestId`, `text`, `reasoning`, `error`, `model` |
+| `error` | the command failed before or instead of its result | `exitCode`, `message` |
+
+Every member is always written, `null` when absent. `delta` carries only the new text; `snapshot` and the terminal
+kinds carry all text so far. Without `--json` a failure is one `xe: …` line on standard error; with `--json` it is the
+`error` line on standard output.
+
+| Exit code | Meaning |
+|---:|---|
+| 0 | Success (for `ask`: the turn completed) |
+| 1 | Failure: the node refused a request, the turn failed or was interrupted, the stream went silent |
+| 2 | Usage: a parse error, an invalid `--url`, an unknown agent, conflicting options, `chat --json` (chat has no JSON mode) |
+| 3 | The node is not running or does not answer |
+| 4 | Setup required, no admin password, wrong password, vault still locked |
+| 5 | Ctrl-C cancelled the turn |
+| 6 | Interaction required: an approval or question without a terminal, or `xe chat` without one |
+| 130 | Ctrl-C outside a turn |
+
+**Out of scope.** Remote nodes (the API is loopback-only), graph-workflow chats, attachments, regenerate, a full-screen
+TUI, starting or stopping the engine, and `dotnet tool` packaging.
 
 ### RC bundle packaging
 

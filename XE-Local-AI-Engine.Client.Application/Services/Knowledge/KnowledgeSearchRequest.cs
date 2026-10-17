@@ -26,6 +26,9 @@ public sealed class KnowledgeSearchResult
 {
     /// <summary>The fused, hydrated hits ordered by descending fused score.</summary>
     public required IReadOnlyList<KnowledgeSearchHit> Results { get; init; }
+
+    /// <summary>Every degradation this search ran under; empty when the whole pipeline ran.</summary>
+    public IReadOnlyList<KnowledgeSearchDegradation> Degradations { get; init; } = [];
 }
 
 /// <summary>

@@ -189,6 +189,11 @@ Desktop parity.
 `true`, the same fail-closed asymmetry `ExternalApps` carries, and the listener opens only when both are true — the
 bridge exists for application containers and a node without that feature has none.
 
+**2026-10-15 (rc.3 decision D6):** "External Apps is on" now also requires the catalog to list an application when
+the node starts. `NodeStartupSettings.Read` reads the bundled seed and the last-good copy for the configured refresh
+URL through `ExternalAppStartupCatalog`. An empty catalog keeps the listener closed, and a later refresh that adds an
+entry asks for a node restart instead of admitting installs.
+
 **What proves it.** `ContainerBridgeRealDaemonTests` runs a BusyBox container on an engine-created network against a
 real listener on the address the production resolver chose: it fetches the model list with its token, and is refused
 both without a token and with another instance's. Nothing else establishes that a rootless container's source

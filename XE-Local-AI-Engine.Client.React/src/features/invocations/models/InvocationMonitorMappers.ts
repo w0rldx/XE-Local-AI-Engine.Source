@@ -56,6 +56,7 @@ export function toInvocationMonitor(
 ): InvocationMonitorDto {
 	return {
 		current: dto.current ? toInvocationCurrent(dto.current) : null,
+		live: (dto.live ?? []).map(toInvocationCurrent),
 		history: (dto.history ?? []).map(toInvocationHistory),
 		historyCapacity: dto.historyCapacity ?? 0,
 	};

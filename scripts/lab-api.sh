@@ -9,7 +9,7 @@
 #   .tmp/lab/<profile>/manifest.json, the token from .tmp/lab/<profile>/token. On HTTP 401 it logs in once more
 #   (LAB_EMAIL / LAB_PASSWORD, default admin@localhost.test / !Demo1234567), rewrites the token and retries once.
 #   Prints the response body, then `[HTTP <code>]`. Every call is appended to .tmp/lab/<profile>/evidence/http.log
-#   with passwords and tokens redacted.
+#   with passwords, tokens and keys redacted.
 #
 #   settle polls GET chat/conversations/<id> every 3 s until the last message's status is terminal
 #   (Completed, Failed, Cancelled, Interrupted) and prints `status | role | error | content`; default timeout 600 s.

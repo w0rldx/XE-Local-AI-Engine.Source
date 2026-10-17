@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { ZodError } from "zod";
 
 import { ApiError } from "@/core/api/errors/ApiError";
 import type { ProblemDetails } from "@/core/api/models/ProblemDetails";
-import { RESPONSE_VALIDATION_PROBLEM_TITLE } from "@/core/api/ResponseValidation";
 import type { BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
 import {
 	applyBenchmarkEvent,
@@ -53,16 +53,12 @@ const problem = (title: string, detail: string, code?: string): ProblemDetails =
 	({ type: "about:blank", title, status: 422, detail, ...(code === undefined ? {} : { code }) }) as ProblemDetails;
 
 describe("isUnsupportedKvCacheTypeError", () => {
-	// The node answers 422 for the KV refusal AND for an ineligible model/agent, and the local hey-api response
-	// validator reports a contract mismatch under 422 as well. Only the first is fixed by picking f16, so the code
-	// extension — not the status — decides.
+	// The node answers 422 for the KV refusal AND for an ineligible model/agent, and a contract mismatch (ZodError) is
+	// classified as 422 too. Only the first is fixed by picking f16, so the code extension — not the status — decides.
 	it("accepts only the KV refusal among the 422s", () => {
 		const refusal = new ApiError(422, problem("Unprocessable Entity", "q4_0 is not supported.", "UnsupportedKvCacheType"));
 		const ineligible = new ApiError(422, problem("Unprocessable Entity", "The model is not eligible.", "IneligibleModel"));
-		const validation = new ApiError(
-			422,
-			problem(RESPONSE_VALIDATION_PROBLEM_TITLE, "The server returned a response in an unexpected shape."),
-		);
+		const validation = new ZodError([]);
 
 		expect(isUnsupportedKvCacheTypeError(refusal)).toBe(true);
 		expect(isUnsupportedKvCacheTypeError(ineligible)).toBe(false);

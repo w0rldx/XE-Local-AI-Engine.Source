@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 using XE_Local_AI_Engine.Client.Services.Mcp.Server;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -244,6 +245,52 @@ public sealed class McpInboundProtocolTests
         AssertEx.False(result.Meta?.ContainsKey(McpToolResults.FreeTextMetaKey) ?? false, $"the internal free-text marker must not reach the wire: {result.Meta?.ToJsonString()}");
     }
 
+    /// <summary>
+    ///     MCP half of the node-settings bypass table: each value the REST save refuses is refused by the registered
+    ///     update_node_settings tool under its snake_case argument, and nothing reaches the store.
+    /// </summary>
+    // Every later validation finding adds a row here and to the REST table in NodeSettingsEndpointTests.
+    [Test]
+    [Arguments("max_message_request_timeout_seconds", "4", "Maximum message request timeout is outside")]
+    [Arguments("speculative_draft_gpu_layers", "1001", "Speculative draft GPU layers is outside")]
+    [Arguments("llama_max_loaded_processes", "0", "Maximum loaded llama.cpp processes is outside")]
+    [Arguments("llama_idle_time_to_live_seconds", "29", "llama.cpp idle time-to-live is outside")]
+    [Arguments("keep_model_warm_interval_seconds", "-5", "Keep-model-warm interval is outside")]
+    [Arguments("chat_cache_reuse", "8193", "Chat cache reuse is outside")]
+    [Arguments("speculative_draft_max_tokens", "17", "Speculative draft tokens is outside")]
+    [Arguments("speculative_mode", "\"bogus\"", "Unknown speculative decoding mode.")]
+    [Arguments("kv_cache_type", "\"bogus\"", "Unknown KV cache type.")]
+    [Arguments("hugging_face_default_quant", "\"notaquant\"", "Unknown Hugging Face default quant.")]
+    [Arguments("default_model_name", "\"unsloth/model\\u0001-GGUF:Q4_K_M\"", "Default model name must be at most")]
+    [Arguments("keep_model_warm_model_name", "\"unsloth/model\\u0001-GGUF:Q4_K_M\"", "Model name must be at most")]
+    [Arguments("reranker_model_name", "\"unsloth/model\\u0001-GGUF:Q4_K_M\"", "Model name must be at most")]
+    [Arguments("auto_effort_fast_model_name", "\"unsloth/model\\u0001-GGUF:Q4_K_M\"", "Model name must be at most")]
+    [Arguments("tool_capable_models", "[]", "Tool-capable models must be")]
+    [Arguments("tool_capable_models", "[\" \"]", "Tool-capable models must be")]
+    public async Task StreamableHttpSdk_UpdateNodeSettings_RefusesEachBypassRowAndPersistsNothing(string argument, string jsonValue, string reasonFragment)
+    {
+        var settings = new StoredNodeSettings();
+        var store = Substitute.For<INodeSettingsStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(settings);
+        store.UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>())
+             .Returns(call => Task.FromResult(call.Arg<Func<StoredNodeSettings, StoredNodeSettings>>()(settings)));
+        await using var factory = CreateFactory(new FakeMcpAgentRunCoordinator(), new FakeSelectedFolderResolver(), McpServerApiKeyScope.Agentic,
+            nodeSettingsStore: store);
+        await using var client = await CreateClientAsync(factory);
+        using var value = JsonDocument.Parse(jsonValue);
+
+        var result = await client.CallToolAsync("update_node_settings",
+            new Dictionary<string, object?>
+            {
+                [argument] = value.RootElement.Clone()
+            });
+
+        AssertEx.Contains(AssertTypedFailure(result, $"invalid_field:{argument}"), reasonFragment);
+        using var body = JsonDocument.Parse(GetText(result));
+        AssertEx.False(body.RootElement.GetProperty("updated").GetBoolean(), GetText(result));
+        await store.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
     // Returns the decoded display_message: the wire JSON escapes quotes (\u0027), so a raw substring check would test the encoder.
     private static string AssertTypedFailure(CallToolResult result, string failureCode)
     {
@@ -256,12 +303,19 @@ public sealed class McpInboundProtocolTests
     private static TestServerWebAppFactory CreateFactory(FakeMcpAgentRunCoordinator coordinator,
         FakeSelectedFolderResolver workspaces,
         McpServerApiKeyScope scope = McpServerApiKeyScope.Delegate,
-        IMcpAgentExecutionService? execution = null)
+        IMcpAgentExecutionService? execution = null,
+        INodeSettingsStore? nodeSettingsStore = null)
     {
         return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
+                if (nodeSettingsStore is not null)
+                {
+                    services.RemoveAll<INodeSettingsStore>();
+                    services.AddSingleton(nodeSettingsStore);
+                }
+
                 services.RemoveAll<IMcpServerApiKeyService>();
                 services.AddSingleton<IMcpServerApiKeyService>(new FakeMcpServerApiKeyService(ValidKey, scope));
                 services.RemoveAll<IMcpAgentRunCoordinator>();

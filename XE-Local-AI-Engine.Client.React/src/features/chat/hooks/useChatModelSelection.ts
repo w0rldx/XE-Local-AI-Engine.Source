@@ -3,7 +3,6 @@ import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { getLocalModelDetailsOptions, listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import type { ModelOption, ReasoningEffort } from "@/features/chat/models/ChatModels";
 import { deriveModelDisplay, deriveModelIdDisplay } from "@/features/chat/models/ModelDisplay";
 import { localDefaultModelValue, toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
@@ -82,7 +81,7 @@ export function useChatModelSelection({
 	const selectedModel = pinnedAgentId ? (pinnedAgentModelProfile ?? localDefaultModelValue) : preferredModel;
 
 	const { data: localModelsData } = useQuery({
-		...withResponseValidation(listLocalModelsOptions()),
+		...listLocalModelsOptions(),
 		// Keep the prior model list while a refetch is in flight so a transient response that momentarily omits
 		// the selected model can't trip the reconcile effect and reset selectedModel to the default (which would
 		// undercut the persisted model selection restored from localStorage).
@@ -204,7 +203,7 @@ export function useChatModelSelection({
 		!scopedModelPending &&
 		shouldFetchLocalModelDetails(selectedConcreteModelName, selectedModelOption, selectedModelIsCloud, concreteModelInstalled);
 	const { data: selectedModelDetails } = useQuery({
-		...withResponseValidation(getLocalModelDetailsOptions({ path: { modelName: selectedConcreteModelName } })),
+		...getLocalModelDetailsOptions({ path: { modelName: selectedConcreteModelName } }),
 		enabled: selectedModelDetailsEnabled,
 	});
 

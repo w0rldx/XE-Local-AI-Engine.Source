@@ -12,7 +12,6 @@ import {
 	resumeEvaluationMutation,
 	suggestComparisonOptions,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toComparisonReport, toComparisonSuggestion, toEvaluationRun } from "@/features/training/models/ComparisonModels";
 
 // Server-state for evaluations and comparison reports. Evaluation progress also arrives over the training run hub
@@ -34,7 +33,7 @@ function invalidate(queryClient: ReturnType<typeof useQueryClient>, operationId:
 
 export function useComparisonReports() {
 	return useQuery({
-		...withResponseValidation(listComparisonsOptions()),
+		...listComparisonsOptions(),
 		select: (data) => (data.items ?? []).map(toComparisonReport),
 	});
 }
@@ -42,7 +41,7 @@ export function useComparisonReports() {
 /** The evaluations of one training run. Polls only while one is in flight, as a floor under the hub. */
 export function useTrainingEvaluations(trainingRunId: string | null, pollWhileActive = false) {
 	return useQuery({
-		...withResponseValidation(listEvaluationsOptions({ query: { trainingRunId: trainingRunId ?? undefined } })),
+		...listEvaluationsOptions({ query: { trainingRunId: trainingRunId ?? undefined } }),
 		select: (data) => (data.items ?? []).map(toEvaluationRun),
 		enabled: trainingRunId != null,
 		staleTime: 0,
@@ -56,7 +55,7 @@ export function useTrainingEvaluations(trainingRunId: string | null, pollWhileAc
  */
 export function useComparisonSuggestion(trainingRunId: string | null) {
 	return useQuery({
-		...withResponseValidation(suggestComparisonOptions({ query: { trainingRunId: trainingRunId ?? "" } })),
+		...suggestComparisonOptions({ query: { trainingRunId: trainingRunId ?? "" } }),
 		select: toComparisonSuggestion,
 		enabled: trainingRunId != null,
 		retry: false,

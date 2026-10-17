@@ -37,6 +37,7 @@ public sealed class CustomToolStore : ICustomToolStore
             ConfigJson = Encoding.UTF8.GetBytes(input.ConfigJson),
             Enabled = input.Enabled,
             Acknowledged = input.Acknowledged,
+            AllowUnattended = input.AllowUnattended,
             Version = 1,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
@@ -63,7 +64,7 @@ public sealed class CustomToolStore : ICustomToolStore
         }
 
         // Name, Description, Kind, Mode, the declared parameters and the kind-specific config are the surface the model sees or the tool runs on, so they drive the config hash.
-        // Enabled only gates the offered set (already in the hash) and Acknowledged is an authoring gate; neither alone bumps Version, as for AgentDefinition and AgentSkill.
+        // Enabled only gates the offered set (already in the hash); Acknowledged and AllowUnattended are authoring gates; none alone bumps Version, as for AgentDefinition and AgentSkill.
         var configChanged = !string.Equals(entity.Name, input.Name, StringComparison.Ordinal)
                             || !string.Equals(Decode(entity.Description), input.Description, StringComparison.Ordinal)
                             || entity.Kind != (int)input.Kind
@@ -79,6 +80,7 @@ public sealed class CustomToolStore : ICustomToolStore
         entity.ConfigJson = Encoding.UTF8.GetBytes(input.ConfigJson);
         entity.Enabled = input.Enabled;
         entity.Acknowledged = input.Acknowledged;
+        entity.AllowUnattended = input.AllowUnattended;
         entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
         if (configChanged)
@@ -136,6 +138,7 @@ public sealed class CustomToolStore : ICustomToolStore
             ConfigJson = Decode(entity.ConfigJson),
             Enabled = entity.Enabled,
             Acknowledged = entity.Acknowledged,
+            AllowUnattended = entity.AllowUnattended,
             Version = entity.Version,
             CreatedAtUtc = entity.CreatedAtUtc,
             UpdatedAtUtc = entity.UpdatedAtUtc

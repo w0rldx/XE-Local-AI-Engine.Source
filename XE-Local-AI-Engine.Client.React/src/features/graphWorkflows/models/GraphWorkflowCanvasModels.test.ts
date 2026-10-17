@@ -210,6 +210,36 @@ describe("graphToCanvas / canvasToGraph round trip", () => {
 });
 
 describe("node config conversion", () => {
+	it("round-trips Start aliases trimmed, and omits the key when there are none", () => {
+		const source = graph(
+			[
+				{
+					key: "start",
+					kind: "Start",
+					config: { inputSchema: null, defaultInput: null, aliases: ["lights on", "turn on the lights"] },
+				},
+			],
+			[],
+		);
+		const canvas = graphToCanvas(source);
+		expect(canvas.nodes[0]?.data).toMatchObject({ aliases: ["lights on", "turn on the lights"] });
+		expect(canvasToGraph(canvas.nodes, canvas.edges).graph.nodes?.[0]?.config).toEqual(source.nodes?.[0]?.config);
+
+		const edited = canvasToGraph(
+			[
+				canvasNode({
+					...(defaultNodeData("Start", "start") as Extract<GraphWorkflowCanvasNodeData, { kind: "Start" }>),
+					aliases: [" open word "],
+				}),
+			],
+			[],
+		);
+		expect(edited.graph.nodes?.[0]?.config).toMatchObject({ aliases: ["open word"] });
+		expect(canvasToGraph([canvasNode(defaultNodeData("Start", "start"))], []).graph.nodes?.[0]?.config).not.toHaveProperty(
+			"aliases",
+		);
+	});
+
 	it("round-trips an LLM Call and omits every unset override", () => {
 		const freshConfig = canvasToGraph([canvasNode(defaultNodeData("LlmCall", "llm-call-1"))], []).graph.nodes?.[0]
 			?.config as Record<string, unknown>;
@@ -389,6 +419,7 @@ describe("node config conversion", () => {
 			kind: "Start",
 			inputSchema: "[1, 2]",
 			defaultInput: '"a plain string is legal here"',
+			aliases: [],
 		});
 
 		const { graph: result, issues } = canvasToGraph([start], []);

@@ -212,6 +212,65 @@ describe("vault unlock page", () => {
 		expect(screen.getByText(vault.errorInvalidRecoveryCode)).toBeTruthy();
 		expect(navigateMock).not.toHaveBeenCalled();
 	});
+
+	it("leaves the page once the vault was unlocked elsewhere, riding out a failed poll", async () => {
+		const locked = { setupRequired: false, authenticated: false, vault: "locked" };
+		authApiMock.getNodeAuthStatus
+			.mockResolvedValueOnce(locked)
+			.mockRejectedValueOnce(axiosFailure(503))
+			.mockResolvedValue({ ...locked, vault: "unlocked" });
+		renderWithMantine(<VaultUnlock />);
+
+		await advance(10_000);
+		expect(authApiMock.getNodeAuthStatus).toHaveBeenCalledTimes(2);
+		expect(navigateMock).not.toHaveBeenCalled();
+		expect(screen.getByRole("button", { name: vault.unlockButton })).toBeTruthy();
+
+		await advance(5_000);
+		expect(authApiMock.getNodeAuthStatus).toHaveBeenCalledTimes(3);
+		expect(navigateMock).toHaveBeenCalledWith({ to: "/" });
+		expect(authApiMock.unlockNodeVault).not.toHaveBeenCalled();
+	});
+
+	it("slows the idle poll to 15 s after the first minute", async () => {
+		authApiMock.getNodeAuthStatus.mockResolvedValue({ setupRequired: false, authenticated: false, vault: "locked" });
+		renderWithMantine(<VaultUnlock />);
+
+		await advance(60_000);
+		expect(authApiMock.getNodeAuthStatus).toHaveBeenCalledTimes(12);
+
+		await advance(14_999);
+		expect(authApiMock.getNodeAuthStatus).toHaveBeenCalledTimes(12);
+		await advance(1);
+		expect(authApiMock.getNodeAuthStatus).toHaveBeenCalledTimes(13);
+		expect(navigateMock).not.toHaveBeenCalled();
+	});
+
+	it("stops the idle poll on unmount", async () => {
+		authApiMock.getNodeAuthStatus.mockResolvedValue({ setupRequired: false, authenticated: false, vault: "unlocked" });
+		const { unmount } = renderWithMantine(<VaultUnlock />);
+
+		unmount();
+		await advance(30_000);
+
+		expect(vi.getTimerCount()).toBe(0);
+		expect(authApiMock.getNodeAuthStatus).not.toHaveBeenCalled();
+		expect(navigateMock).not.toHaveBeenCalled();
+	});
+
+	it("does not poll while its own unlock request is in flight", async () => {
+		authApiMock.unlockNodeVault.mockReturnValue(new Promise(() => undefined));
+		authApiMock.getNodeAuthStatus.mockResolvedValue({ setupRequired: false, authenticated: false, vault: "unlocked" });
+		renderWithMantine(<VaultUnlock />);
+
+		fireEvent.change(screen.getByLabelText(new RegExp(`^${vault.passwordLabel}`)), { target: { value: "correct horse" } });
+		fireEvent.click(submitButton(vault.unlockButton));
+		await advance(30_000);
+
+		expect(authApiMock.unlockNodeVault).toHaveBeenCalledTimes(1);
+		expect(authApiMock.getNodeAuthStatus).not.toHaveBeenCalled();
+		expect(navigateMock).not.toHaveBeenCalled();
+	});
 });
 
 describe("vault setup page", () => {

@@ -1,7 +1,6 @@
 // Server state for the Development Workflows surface. Every call goes through the generated hey-api `*Options()` /
-// `*Mutation()` wrapped in withResponseValidation, exactly as `useWorkSessions.ts` does — no hand-wired axios, no
-// hand-written request types. The one exception is the paged event feed, which calls the generated SDK fn
-// through `callWithResponseValidation` because hey-api generates no `*InfiniteOptions` for its cursor; see below.
+// `*Mutation()`, exactly as `useWorkSessions.ts` does — no hand-wired axios, no hand-written request types. The
+// paged event feed uses the generated `*InfiniteOptions` with its own cursor rules; see below.
 //
 // The generated query keys are single-element arrays `[{ _id: "<operationId>", path, query, … }]`, and TanStack
 // matches them by PARTIAL DEEP equality. So `[{ _id, path: { runId } }]` invalidates every cached variant of one
@@ -9,7 +8,7 @@
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { type ListDevWorkflowRunEventsResponse, listDevWorkflowRunEvents } from "@/core/api/generated";
+import type { ListDevWorkflowRunEventsResponse } from "@/core/api/generated";
 import {
 	archiveDevWorkflowDefinitionMutation,
 	cancelDevWorkflowRunMutation,
@@ -30,7 +29,7 @@ import {
 	listDevWorkflowArtifactsOptions,
 	listDevWorkflowDefinitionsOptions,
 	listDevWorkflowRuleSetsOptions,
-	listDevWorkflowRunEventsQueryKey,
+	listDevWorkflowRunEventsInfiniteOptions,
 	listDevWorkflowWorkItemsOptions,
 	listLocalModelsOptions,
 	pauseDevWorkflowRunMutation,
@@ -40,7 +39,6 @@ import {
 	updateDevWorkflowRuleSetMutation,
 	updateDevWorkflowWorkItemMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { callWithResponseValidation, withResponseValidation } from "@/core/api/ResponseValidation";
 import { readDevWorkflowConflict } from "@/features/devWorkflows/api/DevWorkflowConflict";
 import { isActiveDevWorkflowRunStatus, toDevWorkflowRunStatus } from "@/features/devWorkflows/models/DevWorkflowModels";
 
@@ -131,7 +129,7 @@ function feedQuerySettings(id: string | undefined, options: FeedOptions) {
  */
 export function useDevWorkflowCapability() {
 	return useQuery({
-		...withResponseValidation(getDevWorkflowCapabilityOptions()),
+		...getDevWorkflowCapabilityOptions(),
 		staleTime: 30_000,
 	});
 }
@@ -143,7 +141,7 @@ export function useDevWorkflowCapability() {
  */
 export function useDevWorkflowWorkItems(options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(listDevWorkflowWorkItemsOptions()),
+		...listDevWorkflowWorkItemsOptions(),
 		enabled: options.enabled ?? true,
 		refetchInterval: (query) => {
 			const anyRunLive = (query.state.data?.items ?? []).some(
@@ -156,7 +154,7 @@ export function useDevWorkflowWorkItems(options: FeedOptions = {}) {
 
 export function useDevWorkflowWorkItem(workItemId: string | undefined, options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(getDevWorkflowWorkItemOptions({ path: { workItemId: workItemId ?? "" } })),
+		...getDevWorkflowWorkItemOptions({ path: { workItemId: workItemId ?? "" } }),
 		...feedQuerySettings(workItemId, options),
 	});
 }
@@ -164,7 +162,7 @@ export function useDevWorkflowWorkItem(workItemId: string | undefined, options: 
 /** The picker's definition list. Archived templates are hidden — they are not startable. */
 export function useDevWorkflowDefinitions(options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(listDevWorkflowDefinitionsOptions({ query: { includeArchived: false } })),
+		...listDevWorkflowDefinitionsOptions({ query: { includeArchived: false } }),
 		enabled: options.enabled ?? true,
 	});
 }
@@ -175,7 +173,7 @@ export function useDevWorkflowDefinitions(options: FeedOptions = {}) {
  */
 export function useDevWorkflowDefinition(definitionId: string | undefined) {
 	return useQuery({
-		...withResponseValidation(getDevWorkflowDefinitionOptions({ path: { definitionId: definitionId ?? "" } })),
+		...getDevWorkflowDefinitionOptions({ path: { definitionId: definitionId ?? "" } }),
 		enabled: Boolean(definitionId),
 	});
 }
@@ -183,7 +181,7 @@ export function useDevWorkflowDefinition(definitionId: string | undefined) {
 /** Dev Mode projects, for the create dialog's OPTIONAL project binding. Read through the generated client. */
 export function useDevelopmentProjectOptions(options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(listDevelopmentProjectsOptions()),
+		...listDevelopmentProjectsOptions(),
 		enabled: options.enabled ?? true,
 	});
 }
@@ -191,14 +189,14 @@ export function useDevelopmentProjectOptions(options: FeedOptions = {}) {
 /** The run payload: status, node-runs and the pinned graph in one call. Backs the whole centre pane. */
 export function useDevWorkflowRun(runId: string | undefined, options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(getDevWorkflowRunOptions({ path: { runId: runId ?? "" } })),
+		...getDevWorkflowRunOptions({ path: { runId: runId ?? "" } }),
 		...feedQuerySettings(runId, options),
 	});
 }
 
 export function useDevWorkflowNodeRun(runId: string | undefined, nodeRunId: string | undefined, options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(getDevWorkflowNodeRunOptions({ path: { runId: runId ?? "", nodeRunId: nodeRunId ?? "" } })),
+		...getDevWorkflowNodeRunOptions({ path: { runId: runId ?? "", nodeRunId: nodeRunId ?? "" } }),
 		...feedQuerySettings(runId && nodeRunId ? nodeRunId : undefined, options),
 	});
 }
@@ -221,10 +219,9 @@ export function useDevWorkflowNodeRun(runId: string | undefined, nodeRunId: stri
  * `anchor: "oldest"` is the other end: the cursor is 0 and paging runs FORWARD off the server's `hasMore` probe, which
  * is the original behaviour and is what an operator reading a run from its beginning wants.
  *
- * Wired onto the generated SDK fn rather than `listDevWorkflowRunEventsOptions`, because hey-api emits `*InfiniteOptions`
- * only for the pagination parameters it recognises and `sinceSeq` is not one — the same reason `useBenchmarkRuns` pages
- * this way. The generated query KEY still identifies the cache entry, so `devWorkflowInvalidationKey(events, { runId })`
- * keeps matching it by partial deep equality and the hub's pings land where they always did.
+ * Built on the generated `listDevWorkflowRunEventsInfiniteOptions`. The page param is the whole `{ query }` object, not
+ * a bare cursor, because the tail page also differs in `limit`; it overrides the key's query. The key still carries
+ * `_id` and `path`, so `devWorkflowInvalidationKey(events, { runId })` matches it and the hub's pings land.
  *
  * A ping invalidates this query and TanStack then refetches every loaded page in order, recomputing each cursor from
  * the page before it. That default is kept rather than resetting to page one: events are append-only and never
@@ -238,13 +235,25 @@ export function useDevWorkflowRunEvents(
 ) {
 	const anchor = options.anchor ?? "newest";
 	const anchorParam = devWorkflowEventsAnchorParam(lastSequence, anchor);
+	// Only a genuine tail page spans two windows, which is what carries it past the quantized boundary to the run's
+	// actual last sequence. Every backward page is exactly one window wide, and an anchor of 0 has no boundary to span.
+	const path = { runId: runId ?? "" };
+	const page = (sinceSeq: number) => ({
+		path,
+		query: {
+			sinceSeq,
+			limit: anchorParam > 0 && sinceSeq === anchorParam ? devWorkflowEventsTailPageSize : devWorkflowEventsPageSize,
+		},
+	});
+	// The first page's request, which is what this cache entry IS: the feed from `anchorParam`, in pages of 200.
+	const { queryKey, queryFn } = listDevWorkflowRunEventsInfiniteOptions({
+		path,
+		query: { sinceSeq: anchorParam, limit: devWorkflowEventsPageSize },
+	});
 	return useInfiniteQuery({
-		// The first page's request, which is what this cache entry IS: the feed from `anchorParam`, in pages of 200.
-		queryKey: listDevWorkflowRunEventsQueryKey({
-			path: { runId: runId ?? "" },
-			query: { sinceSeq: anchorParam, limit: devWorkflowEventsPageSize },
-		}),
-		initialPageParam: anchorParam,
+		queryKey,
+		queryFn,
+		initialPageParam: page(anchorParam),
 		// Backward: the next page is the window below this one, and a cursor of 0 is the start of the log — there is
 		// nothing older to ask for. Forward (the "oldest" anchor): `hasMore` is the server's one-over-the-limit probe and
 		// `lastSequence` the highest sequence in the page, which is the next exclusive cursor. Requiring it to ADVANCE is
@@ -252,33 +261,17 @@ export function useDevWorkflowRunEvents(
 		getNextPageParam: (
 			lastPage: ListDevWorkflowRunEventsResponse,
 			_pages: readonly ListDevWorkflowRunEventsResponse[],
-			lastPageParam: number,
+			lastPageParam: number | { readonly query?: { readonly sinceSeq?: number } },
 		) => {
+			const cursor = typeof lastPageParam === "number" ? lastPageParam : (lastPageParam.query?.sinceSeq ?? 0);
 			// A cursor of 0 is the start of the log: there is nothing older, so the only honest continuation is the
 			// server's own forward probe. That covers the short run whose whole feed IS the first page, and the run
 			// payload not having landed yet — with no `lastSequence` there is no tail to anchor on, and answering
 			// "nothing more" to a feed that has hundreds of unread events would be the truncation this replaced.
 			if (anchorParam === 0) {
-				return lastPage.hasMore === true && (lastPage.lastSequence ?? 0) > lastPageParam ? lastPage.lastSequence : undefined;
+				return lastPage.hasMore === true && (lastPage.lastSequence ?? 0) > cursor ? page(lastPage.lastSequence ?? 0) : undefined;
 			}
-			return lastPageParam <= 0 ? undefined : Math.max(0, lastPageParam - devWorkflowEventsPageSize);
-		},
-		queryFn: async ({ pageParam, signal }) => {
-			const { data } = await callWithResponseValidation(
-				listDevWorkflowRunEvents({
-					path: { runId: runId ?? "" },
-					query: {
-						sinceSeq: pageParam,
-						// Only a genuine tail page spans two windows, which is what carries it past the quantized boundary to
-						// the run's actual last sequence. Every backward page is exactly one window wide, and an anchor of 0
-						// has no boundary to span.
-						limit: anchorParam > 0 && pageParam === anchorParam ? devWorkflowEventsTailPageSize : devWorkflowEventsPageSize,
-					},
-					signal,
-					throwOnError: true,
-				}),
-			);
-			return data;
+			return cursor <= 0 ? undefined : page(Math.max(0, cursor - devWorkflowEventsPageSize));
 		},
 		// One ascending list, deduplicated on the sequence: an overlap at a page boundary — a refetch racing a
 		// `fetchNextPage`, or a bound read one row too wide — must not render a row twice under a repeated React key.
@@ -294,16 +287,14 @@ export function useDevWorkflowRunEvents(
 
 export function useDevWorkflowArtifacts(runId: string | undefined, options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(listDevWorkflowArtifactsOptions({ path: { runId: runId ?? "" }, query: FULL_FEED })),
+		...listDevWorkflowArtifactsOptions({ path: { runId: runId ?? "" }, query: FULL_FEED }),
 		...feedQuerySettings(runId, options),
 	});
 }
 
 export function useDevWorkflowArtifactContent(runId: string | undefined, artifactId: string | undefined) {
 	return useQuery({
-		...withResponseValidation(
-			getDevWorkflowArtifactContentOptions({ path: { runId: runId ?? "", artifactId: artifactId ?? "" } }),
-		),
+		...getDevWorkflowArtifactContentOptions({ path: { runId: runId ?? "", artifactId: artifactId ?? "" } }),
 		enabled: Boolean(runId) && Boolean(artifactId),
 	});
 }
@@ -316,7 +307,7 @@ export function useDevWorkflowArtifactContent(runId: string | undefined, artifac
  */
 export function useDevWorkflowAgentOptions(options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(listAgentDefinitionsOptions()),
+		...listAgentDefinitionsOptions(),
 		enabled: options.enabled ?? true,
 		select: (data) => (data.items ?? []).map((agent) => ({ id: agent.id, label: agent.name })),
 	});
@@ -328,7 +319,7 @@ export function useDevWorkflowAgentOptions(options: FeedOptions = {}) {
  */
 export function useDevWorkflowModelOptions(options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(listLocalModelsOptions()),
+		...listLocalModelsOptions(),
 		enabled: options.enabled ?? true,
 		select: (data) =>
 			(data.items ?? [])
@@ -356,11 +347,11 @@ export function useDevWorkflowDefinitionMutations() {
 	};
 
 	const update = useMutation({
-		...withResponseValidation(updateDevWorkflowDefinitionMutation()),
+		...updateDevWorkflowDefinitionMutation(),
 		onSuccess: (_data, variables) => refresh(variables.path?.definitionId),
 	});
 	const archive = useMutation({
-		...withResponseValidation(archiveDevWorkflowDefinitionMutation()),
+		...archiveDevWorkflowDefinitionMutation(),
 		onSuccess: (_data, variables) => refresh(variables.path?.definitionId),
 	});
 
@@ -374,7 +365,7 @@ export function useDevWorkflowDefinitionMutations() {
  */
 export function useDevWorkflowRuleSets(options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(listDevWorkflowRuleSetsOptions()),
+		...listDevWorkflowRuleSetsOptions(),
 		enabled: options.enabled ?? true,
 	});
 }
@@ -382,7 +373,7 @@ export function useDevWorkflowRuleSets(options: FeedOptions = {}) {
 /** One rule set WITH its body, read only when the editor is actually open on it. */
 export function useDevWorkflowRuleSet(ruleSetId: string | undefined) {
 	return useQuery({
-		...withResponseValidation(getDevWorkflowRuleSetOptions({ path: { ruleSetId: ruleSetId ?? "" } })),
+		...getDevWorkflowRuleSetOptions({ path: { ruleSetId: ruleSetId ?? "" } }),
 		enabled: Boolean(ruleSetId),
 	});
 }
@@ -407,15 +398,15 @@ export function useDevWorkflowRuleSetMutations() {
 	};
 
 	const create = useMutation({
-		...withResponseValidation(createDevWorkflowRuleSetMutation()),
+		...createDevWorkflowRuleSetMutation(),
 		onSuccess: () => refresh(),
 	});
 	const update = useMutation({
-		...withResponseValidation(updateDevWorkflowRuleSetMutation()),
+		...updateDevWorkflowRuleSetMutation(),
 		onSuccess: (_data, variables) => refresh(variables.path?.ruleSetId),
 	});
 	const remove = useMutation({
-		...withResponseValidation(deleteDevWorkflowRuleSetMutation()),
+		...deleteDevWorkflowRuleSetMutation(),
 		onSuccess: (_data, variables) => refresh(variables.path?.ruleSetId),
 	});
 
@@ -425,7 +416,7 @@ export function useDevWorkflowRuleSetMutations() {
 export function useCreateDevWorkflowWorkItem() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(createDevWorkflowWorkItemMutation()),
+		...createDevWorkflowWorkItemMutation(),
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.workItems) }),
 	});
 }
@@ -439,7 +430,7 @@ export function useCreateDevWorkflowWorkItem() {
 export function useUpdateDevWorkflowWorkItem() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(updateDevWorkflowWorkItemMutation()),
+		...updateDevWorkflowWorkItemMutation(),
 		onSuccess: async (_data, variables) => {
 			const workItemId = variables.path?.workItemId;
 			if (workItemId) {
@@ -455,7 +446,7 @@ export function useUpdateDevWorkflowWorkItem() {
 export function useDeleteDevWorkflowWorkItem() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(deleteDevWorkflowWorkItemMutation()),
+		...deleteDevWorkflowWorkItemMutation(),
 		// The delete removes the runs, their owned work sessions and their artifact bytes, so the caller must navigate
 		// away rather than keep a route open on it. Only the list is refreshed here.
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.workItems) }),
@@ -470,7 +461,7 @@ export function useDeleteDevWorkflowWorkItem() {
 export function useStartDevWorkflowRun() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(startDevWorkflowRunMutation()),
+		...startDevWorkflowRunMutation(),
 		onSuccess: async (_data, variables) => {
 			const workItemId = variables.path?.workItemId;
 			if (workItemId) {
@@ -499,9 +490,9 @@ export function useDevWorkflowRunLifecycle(runId: string | undefined, workItemId
 		await queryClient.invalidateQueries({ queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.workItems) });
 	};
 
-	const pause = useMutation({ ...withResponseValidation(pauseDevWorkflowRunMutation()), onSuccess: refresh });
-	const resume = useMutation({ ...withResponseValidation(resumeDevWorkflowRunMutation()), onSuccess: refresh });
-	const cancel = useMutation({ ...withResponseValidation(cancelDevWorkflowRunMutation()), onSuccess: refresh });
+	const pause = useMutation({ ...pauseDevWorkflowRunMutation(), onSuccess: refresh });
+	const resume = useMutation({ ...resumeDevWorkflowRunMutation(), onSuccess: refresh });
+	const cancel = useMutation({ ...cancelDevWorkflowRunMutation(), onSuccess: refresh });
 
 	return { pause, resume, cancel };
 }
@@ -530,7 +521,7 @@ export function useDecideDevWorkflowNodeRun(runId: string | undefined, workItemI
 	};
 
 	return useMutation({
-		...withResponseValidation(decideDevWorkflowNodeRunMutation()),
+		...decideDevWorkflowNodeRunMutation(),
 		onSuccess: (_data, variables) => refresh(variables.path?.nodeRunId),
 		// A 409 means the server disagrees with what this panel is showing — the gate was already answered, or the node
 		// has moved on. Re-reading is what takes the live buttons away; without it the panel keeps offering a decision

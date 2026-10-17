@@ -77,7 +77,7 @@ export function NodeSettingsRuntimeCard({ form, bounds, errors, onChange, draftM
 						label={nodeSettingsFieldLabel(
 							t,
 							"llamaMaxLoadedProcesses",
-							t("pages.nodeSettings.fields.llamaMaxLoadedProcesses.label", "Max loaded llama-server processes"),
+							t("pages.nodeSettings.fields.llamaMaxLoadedProcesses.label", "Max loaded chat models"),
 						)}
 						description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.llamaMaxLoadedProcesses.min}–${bounds.llamaMaxLoadedProcesses.max}.`}
 						min={bounds.llamaMaxLoadedProcesses.min}

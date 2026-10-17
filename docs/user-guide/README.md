@@ -33,6 +33,7 @@ under Apache-2.0. This page is the user guide: how to download, install and use 
 | **Connect a cloud or remote model** | [Cloud providers](docs/cloud-providers.md) |
 | **Install curated apps that run beside it** | [External Apps](docs/external-apps.md) |
 | **Update to a newer build** | [Updating](docs/updating.md) |
+| **Run and maintain a node** (exit codes, backups, downgrade, what phones home) | [Operating a node](docs/operating-a-node.md) |
 | **Send feedback or report a bug** | [Giving feedback](docs/feedback.md) |
 | **Download the latest build** | [Releases](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases) |
 

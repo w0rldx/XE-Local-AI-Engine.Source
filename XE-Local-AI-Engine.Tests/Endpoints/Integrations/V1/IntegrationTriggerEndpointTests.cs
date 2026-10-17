@@ -90,6 +90,62 @@ public sealed class IntegrationTriggerEndpointTests
     }
 
     [Test]
+    public async Task Create_ForAGraphTarget_Returns201CarryingTheGraphIdAndNoAgent()
+    {
+        using var client = Factory.CreateClient();
+        var graphId = await IntegrationEndpointPayloads.SeedGraphAsync(Factory, "Lights");
+
+        using var response = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
+            client,
+            HttpMethod.Post,
+            IntegrationEndpointPayloads.TriggersRoute,
+            IntegrationEndpointPayloads.GraphTriggerBody("graph-create-probe", graphId));
+
+        AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
+        var view = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<IntegrationTriggerBody>(IntegrationEndpointPayloads.Json));
+        AssertEx.Equal("Graph", view.TargetKind);
+        AssertEx.Equal(graphId, view.TargetGraphWorkflowDefinitionId);
+        AssertEx.Null(view.TargetAgentDefinitionId, "a graph target names no agent.");
+    }
+
+    [Test]
+    [Arguments("neither")]
+    [Arguments("both")]
+    [Arguments("agent-id-on-a-graph-kind")]
+    public async Task Create_WithoutExactlyTheIdItsKindNames_Returns400(string scenario)
+    {
+        using var client = Factory.CreateClient();
+        var graphId = Guid.NewGuid();
+        var agentId = Guid.NewGuid();
+        var body = scenario switch
+        {
+            "neither" => IntegrationEndpointPayloads.GraphTriggerBody("one-target-probe", targetGraphWorkflowDefinitionId: null),
+            "both" => IntegrationEndpointPayloads.GraphTriggerBody("one-target-probe", graphId, agentId),
+            _ => IntegrationEndpointPayloads.GraphTriggerBody("one-target-probe", targetGraphWorkflowDefinitionId: null, agentId)
+        };
+
+        using var response = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory, client, HttpMethod.Post, IntegrationEndpointPayloads.TriggersRoute, body);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "targetGraphWorkflowDefinitionId", StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Test]
+    public async Task Create_ForAGraphThatDoesNotExist_Returns400()
+    {
+        using var client = Factory.CreateClient();
+
+        using var response = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
+            client,
+            HttpMethod.Post,
+            IntegrationEndpointPayloads.TriggersRoute,
+            IntegrationEndpointPayloads.GraphTriggerBody("missing-graph-probe", Guid.NewGuid()));
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "graph workflow no longer exists");
+    }
+
+    [Test]
     public async Task Create_CallerManagedWithAWriteToolAgent_Returns201()
     {
         // ADR 0008 R6-1: a caller-managed trigger used to be limited to agents whose every resolved tool is ReadLocal,

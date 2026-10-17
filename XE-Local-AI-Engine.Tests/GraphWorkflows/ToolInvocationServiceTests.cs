@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.GraphWorkflows;
 
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -11,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Tools;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -18,8 +20,8 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The invocation envelope, asserted where it is enforced. <c>IToolInvocationService</c> is the ONLY place a workflow node's
-///     tool call is admitted, so this class pins both halves of that claim: which tools get through (exactly the eight
-///     built-in read tools), and that every refusal — risk class, composed approval, unknown name, bad arguments, a
+///     tool call is admitted, so this class pins both halves of that claim: which tools get through (the eight
+///     built-in read tools plus custom tools flagged as actions, ADR 0021), and that every refusal — risk class, composed approval, unknown name, bad arguments, a
 ///     spent budget — comes back as an outcome rather than an exception or a silent success.
 ///     <para>
 ///         The service is feature-neutral and registered unconditionally, so the plain host is the right one: no
@@ -52,13 +54,14 @@ public sealed class ToolInvocationServiceTests
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
     public required TestServerWebAppFactory Factory { get; init; }
 
-    private static ToolInvocationContext Context(TimeSpan? timeout = null) =>
+    private static ToolInvocationContext Context(TimeSpan? timeout = null, Guid? definitionId = null) =>
         new()
         {
             RunId = Guid.NewGuid(),
             NodeRunId = Guid.NewGuid(),
             NodeKey = "tool-node",
-            Timeout = timeout ?? TimeSpan.FromSeconds(30)
+            Timeout = timeout ?? TimeSpan.FromSeconds(30),
+            DefinitionId = definitionId
         };
 
     private static IToolInvocationService ServiceOf(TestServerWebAppFactory factory) =>
@@ -85,14 +88,15 @@ public sealed class ToolInvocationServiceTests
     }
 
     [Test]
-    public async Task ListInvocableTools_IsExactlyTheEightBuiltInReadTools_EachWithASchema()
+    public async Task ListInvocableTools_IsTheEightBuiltInReadToolsPlusFlaggedActions_EachWithASchema()
     {
         // The set IS the invocation envelope, so it is asserted as a set rather than a spot-check: a future category or
         // approval change on any node tool moves this list and fails here rather than silently widening a Tool node.
         var invocable = await ServiceOf(Factory).ListInvocableToolsAsync();
 
         AssertEx.Equal(string.Join(',', ExpectedInvocable),
-            string.Join(',', invocable.Select(static tool => tool.Name).Order(StringComparer.Ordinal)));
+            string.Join(',', invocable.Where(static tool => !tool.IsAction).Select(static tool => tool.Name).Order(StringComparer.Ordinal)));
+        AssertEx.Empty(invocable.Where(static tool => tool.IsAction), "this host has no custom tool flagged for unattended use.");
         foreach (var tool in invocable)
         {
             AssertEx.NotNullOrEmpty(tool.ParameterSchema, $"{tool.Name} must carry the schema the service validates against.");
@@ -308,7 +312,7 @@ public sealed class ToolInvocationServiceTests
     ///     A real, enabled custom tool: the catalog leg is non-empty, so the envelope's closure over custom tools is asserted
     ///     rather than passing vacuously on a host that has none. This is also the definition-site pin for
     ///     <c>CustomToolCatalog</c> — <c>Network</c> for <c>HttpFetch</c>, approval forced on unconditionally — which is
-    ///     what makes "no custom tool can ever be invocable" true by construction rather than by policy.
+    ///     what keeps an UNFLAGGED custom tool out of the envelope by construction rather than by policy (a flagged one is an action, ADR 0021).
     /// </summary>
     [Test]
     public async Task ACustomTool_IsInTheCatalogAndStillOutsideTheEnvelope()
@@ -417,6 +421,193 @@ public sealed class ToolInvocationServiceTests
         AssertEx.Equal(ToolInvocationOutcomeKind.InvalidArguments, outcome.Kind, "a repair envelope is not a tool answer.");
         AssertEx.Equal("timezone must be a string.", outcome.Reason, "the envelope's own reason is carried through.");
         AssertEx.Null(outcome.Result);
+    }
+
+    /// <summary>
+    ///     The third admission branch (ADR 0021): a custom tool flagged for unattended use runs, listed as an action, with
+    ///     its strict audit row written BEFORE the executor is called, sourced to the definition.
+    /// </summary>
+    [Test]
+    public async Task AFlaggedAction_IsListedAndRunsAfterItsAuditRow()
+    {
+        await using var host = await ActionHost.CreateAsync();
+        var definitionId = Guid.NewGuid();
+        var context = Context(definitionId: definitionId);
+        var service = ServiceOf(host.Factory);
+
+        var listed = AssertEx.NotNull((await service.ListInvocableToolsAsync()).SingleOrDefault(static tool => tool.Name == ActionHost.ToolName));
+        var outcome = await service.InvokeAsync(ActionHost.ToolName, "{}", context);
+
+        AssertEx.True(listed.IsAction, "the picker marks it so the editor can ask for the definition flag.");
+        AssertEx.Equal(ToolInvocationOutcomeKind.Executed, outcome.Kind, outcome.Reason);
+        AssertEx.Equal(ActionHost.ExecutorAnswer, outcome.Result);
+        AssertEx.Equal("audit,execute", string.Join(',', host.Events), "the side effect never precedes its audit row.");
+        var row = AssertEx.NotNull(host.AuditRows.SingleOrDefault());
+        AssertEx.Equal($"graph-action:{definitionId:D}", row.Source);
+        AssertEx.Equal(context.NodeRunId, row.InvocationId);
+        AssertEx.Equal(nameof(ToolCategory.Network), row.Category);
+    }
+
+    [Test]
+    [Arguments(false, true, true, CustomToolMode.Fixed)]
+    [Arguments(true, false, true, CustomToolMode.Fixed)]
+    [Arguments(true, true, false, CustomToolMode.Fixed)]
+    [Arguments(true, true, true, CustomToolMode.Parameterized)]
+    public async Task AnActionMissingAnyCondition_IsNeitherListedNorRun(bool customToolsEnabled, bool allowUnattended, bool acknowledged, CustomToolMode mode)
+    {
+        await using var host = await ActionHost.CreateAsync(customToolsEnabled, allowUnattended, acknowledged, mode);
+        var service = ServiceOf(host.Factory);
+
+        var outcome = await service.InvokeAsync(ActionHost.ToolName, "{}", Context(definitionId: Guid.NewGuid()));
+
+        AssertEx.Equal(ToolInvocationOutcomeKind.UnknownTool, outcome.Kind, outcome.Reason);
+        AssertEx.False((await service.ListInvocableToolsAsync()).Any(static tool => tool.Name == ActionHost.ToolName));
+        AssertEx.Empty(host.Events, "neither an audit row nor a call.");
+    }
+
+    /// <summary>
+    ///     A failed side effect is the node's failure: <c>Faulted</c>, never retried for an action, with the executor's text
+    ///     as the result and a structural reason that never echoes it.
+    /// </summary>
+    [Test]
+    public async Task AnActionTheExecutorReportsFailed_IsFaultedWithItsTextAsTheResult()
+    {
+        await using var host = await ActionHost.CreateAsync(executionSucceeds: false);
+
+        var outcome = await ServiceOf(host.Factory).InvokeAsync(ActionHost.ToolName, "{}", Context(definitionId: Guid.NewGuid()));
+
+        AssertEx.Equal(ToolInvocationOutcomeKind.Faulted, outcome.Kind);
+        AssertEx.Equal("action-failed", outcome.Reason);
+        AssertEx.Equal(ActionHost.ExecutorRefusal, outcome.Result);
+        AssertEx.Equal("audit,execute", string.Join(',', host.Events));
+    }
+
+    [Test]
+    public async Task AnActionWhoseAuditWriteFails_IsRefusedAndNeverRun()
+    {
+        await using var host = await ActionHost.CreateAsync(auditFails: true);
+
+        var outcome = await ServiceOf(host.Factory).InvokeAsync(ActionHost.ToolName, "{}", Context(definitionId: Guid.NewGuid()));
+
+        AssertEx.Equal(ToolInvocationOutcomeKind.NotInvocable, outcome.Kind);
+        AssertEx.Equal("audit-failed", outcome.Reason);
+        AssertEx.Equal("audit", string.Join(',', host.Events), "the write was attempted and the executor never called.");
+    }
+
+    [Test]
+    public async Task AnActionWithoutADefinition_IsRefusedBeforeItsAuditRow()
+    {
+        await using var host = await ActionHost.CreateAsync();
+
+        var outcome = await ServiceOf(host.Factory).InvokeAsync(ActionHost.ToolName, "{}", Context());
+
+        AssertEx.Equal(ToolInvocationOutcomeKind.NotInvocable, outcome.Kind);
+        AssertEx.Equal("action-without-definition", outcome.Reason);
+        AssertEx.Empty(host.Events);
+    }
+
+    /// <summary>
+    ///     A real host with ONE seeded custom tool, the real catalog and recorder, a counting executor per kind and a
+    ///     substituted audit store, both of which log to <see cref="Events" /> so the order is asserted, not inferred.
+    /// </summary>
+    private sealed class ActionHost : IAsyncDisposable
+    {
+        public const string ToolName = "custom__probe_action";
+
+        public const string ExecutorAnswer = "the action ran";
+
+        public const string ExecutorRefusal = "The custom tool request failed: 503 from the target";
+
+        private ActionHost(TestServerWebAppFactory factory, List<string> events, List<ApprovalDecisionAuditInput> auditRows)
+        {
+            Factory = factory;
+            Events = events;
+            AuditRows = auditRows;
+        }
+
+        public TestServerWebAppFactory Factory { get; }
+
+        public List<string> Events { get; }
+
+        public List<ApprovalDecisionAuditInput> AuditRows { get; }
+
+        [SuppressMessage("Reliability",
+            "CA2000:Dispose objects before losing scope",
+            Justification = "Ownership transfers to the returned host, whose DisposeAsync disposes the factory.")]
+        public static async Task<ActionHost> CreateAsync(bool customToolsEnabled = true,
+            bool allowUnattended = true,
+            bool acknowledged = true,
+            CustomToolMode mode = CustomToolMode.Fixed,
+            bool auditFails = false,
+            bool executionSucceeds = true)
+        {
+            var events = new List<string>();
+            var auditRows = new List<ApprovalDecisionAuditInput>();
+            var log = Substitute.For<IAgentExecutionLogStore>();
+            _ = log.AddApprovalDecisionAsync(Arg.Any<ApprovalDecisionAuditInput>(), Arg.Any<CancellationToken>())
+                   .Returns(call =>
+                   {
+                       events.Add("audit");
+                       auditRows.Add(call.Arg<ApprovalDecisionAuditInput>());
+                       return auditFails ? Task.FromException(new IOException("audit unavailable")) : Task.CompletedTask;
+                   });
+            var factory = new TestServerWebAppFactory
+            {
+                ConfigureAdditionalTestServices = services =>
+                {
+                    services.RemoveAll<INodeRuntimeSettings>();
+                    services.AddSingleton(StubNodeRuntimeSettings.Create().WithCustomToolsEnabled(customToolsEnabled).Build());
+                    services.RemoveAll<IAgentExecutionLogStore>();
+                    services.AddSingleton(log);
+                    services.RemoveAll<ICustomToolExecutor>();
+                    services.AddSingleton<ICustomToolExecutor>(new CountingExecutor(CustomToolKind.HttpFetch, events, executionSucceeds));
+                    services.AddSingleton<ICustomToolExecutor>(new CountingExecutor(CustomToolKind.Command, events, executionSucceeds));
+                }
+            };
+            using (var scope = factory.Services.CreateScope())
+            {
+                _ = await scope.ServiceProvider.GetRequiredService<ICustomToolStore>()
+                               .CreateAsync(new CustomToolInput
+                               {
+                                   Name = ToolName,
+                                   Description = "A probe action for the Tool-node envelope.",
+                                   Kind = CustomToolKind.HttpFetch,
+                                   Mode = mode,
+                                   ConfigJson = """{"method":"POST","urlTemplate":"https://api.example.com/lights","headers":[]}""",
+                                   ParametersJson = "[]",
+                                   Enabled = true,
+                                   Acknowledged = acknowledged,
+                                   AllowUnattended = allowUnattended
+                               });
+            }
+
+            return new ActionHost(factory, events, auditRows);
+        }
+
+        public ValueTask DisposeAsync() =>
+            Factory.DisposeAsync();
+    }
+
+    /// <summary>An executor of one kind that only records that it ran; the real executors' own guards are their suites' subject.</summary>
+    private sealed class CountingExecutor : ICustomToolExecutor
+    {
+        private readonly List<string> _events;
+        private readonly bool _succeeds;
+
+        public CountingExecutor(CustomToolKind kind, List<string> events, bool succeeds)
+        {
+            Kind = kind;
+            _events = events;
+            _succeeds = succeeds;
+        }
+
+        public CustomToolKind Kind { get; }
+
+        public Task<CustomToolExecution> ExecuteAsync(CustomToolRecord tool, string jsonArguments, CancellationToken cancellationToken)
+        {
+            _events.Add("execute");
+            return Task.FromResult(_succeeds ? CustomToolExecution.Success(ActionHost.ExecutorAnswer) : CustomToolExecution.Failure(ActionHost.ExecutorRefusal));
+        }
     }
 
     /// <summary>The two built-in chat tools' metadata with one executable of this test's choosing behind it.</summary>

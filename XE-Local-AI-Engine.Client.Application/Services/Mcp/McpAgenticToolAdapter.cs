@@ -7,10 +7,10 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 internal sealed class McpAgenticToolAdapter : IMcpAgenticToolAdapter
 {
-    private readonly IMcpAgenticApprovalAuditRecorder _auditRecorder;
+    private readonly IUnattendedApprovalAuditRecorder _auditRecorder;
     private readonly ILogger<McpAgenticToolAdapter> _logger;
 
-    public McpAgenticToolAdapter(IMcpAgenticApprovalAuditRecorder auditRecorder,
+    public McpAgenticToolAdapter(IUnattendedApprovalAuditRecorder auditRecorder,
         ILogger<McpAgenticToolAdapter> logger)
     {
         ArgumentNullException.ThrowIfNull(auditRecorder);
@@ -44,14 +44,14 @@ internal sealed class McpAgenticToolAdapter : IMcpAgenticToolAdapter
         private readonly ToolCategory _category;
         private readonly string _keyPrefix;
         private readonly Guid _requestId;
-        private readonly IMcpAgenticApprovalAuditRecorder _auditRecorder;
+        private readonly IUnattendedApprovalAuditRecorder _auditRecorder;
         private readonly ILogger _logger;
 
         public AutoApprovedFunction(ApprovalRequiredAIFunction approvalRequired,
             ToolCategory category,
             string keyPrefix,
             Guid requestId,
-            IMcpAgenticApprovalAuditRecorder auditRecorder,
+            IUnattendedApprovalAuditRecorder auditRecorder,
             ILogger logger) : base(approvalRequired)
         {
             _category = category;
@@ -74,7 +74,7 @@ internal sealed class McpAgenticToolAdapter : IMcpAgenticToolAdapter
             var auditSucceeded = false;
             try
             {
-                await _auditRecorder.RecordAsync(_requestId, Name, _category, _keyPrefix, cancellationToken);
+                await _auditRecorder.RecordAsync(_requestId, Name, _category, IUnattendedApprovalAuditRecorder.McpAgentic(_keyPrefix), cancellationToken);
                 auditSucceeded = true;
                 return await InnerFunction.InvokeAsync(arguments, cancellationToken);
             }

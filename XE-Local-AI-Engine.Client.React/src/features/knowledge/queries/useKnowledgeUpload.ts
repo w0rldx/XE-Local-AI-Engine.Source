@@ -2,10 +2,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { t } from "i18next";
 import { useCallback, useState } from "react";
 
-import type { UploadKnowledgeDocumentResponse } from "@/core/api/generated";
-import { axiosInstance } from "@/core/api/axios/AxiosInstance";
 import { ApiError } from "@/core/api/errors/ApiError";
-import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
+import { uploadKnowledgeDocument } from "@/core/api/generated";
 import { toast } from "@/core/ui/notifications/Toast";
 import { KNOWLEDGE_DEFAULT_COLLECTION_ID, isAcceptedKnowledgeFile } from "@/features/knowledge/models/KnowledgeModels";
 import { knowledgeErrorMessage } from "@/features/knowledge/queries/KnowledgeErrorMessage";
@@ -25,12 +23,10 @@ export interface UseKnowledgeUploadResult {
 }
 
 // Owns document ingestion: a multipart POST per file with an axios upload-progress callback, then a list
-// invalidation so the freshly-queued row appears. Uploads go through the shared axiosInstance (NOT the generated
-// SDK) on purpose — the request is multipart/form-data, but the axios instance defaults Content-Type to
-// application/json and hey-api's binary body handling does not reliably override that (the file would serialize to
-// `{}` as JSON). Setting the multipart content type per-request lets axios append the boundary; auth + XSRF still
-// ride the instance interceptors, and the ProblemDetails interceptor turns a non-2xx into an ApiError. The server
-// is the authoritative validator (size cap, extension allow-list, extraction, dedup).
+// invalidation so the freshly-queued row appears. The generated `uploadKnowledgeDocument` serializes the body to
+// FormData and the instance's FormData interceptor drops the JSON Content-Type default, so the browser sets the
+// multipart boundary; the ProblemDetails interceptor turns a non-2xx into an ApiError. The server is the
+// authoritative validator (size cap, extension allow-list, extraction, dedup).
 export function useKnowledgeUpload(collectionId = KNOWLEDGE_DEFAULT_COLLECTION_ID): UseKnowledgeUploadResult {
 	const queryClient = useQueryClient();
 	const [pendingUploads, setPendingUploads] = useState<readonly KnowledgePendingUpload[]>([]);
@@ -49,21 +45,14 @@ export function useKnowledgeUpload(collectionId = KNOWLEDGE_DEFAULT_COLLECTION_I
 			setPendingUploads((current) => [...current, { tempId, name: file.name, sizeBytes: file.size, percent: 0 }]);
 
 			try {
-				const formData = new FormData();
-				formData.append("file", file);
-				formData.append("collectionId", collectionId);
-				const { data } = await axiosInstance.post<UploadKnowledgeDocumentResponse>(
-					buildLocalApiUrl("knowledge-base/documents"),
-					formData,
-					{
-						headers: { "Content-Type": "multipart/form-data" },
-						onUploadProgress: (event) => {
-							if (event.total) {
-								updatePendingPercent(tempId, (event.loaded / event.total) * 100);
-							}
-						},
+				const { data } = await uploadKnowledgeDocument({
+					body: { file, collectionId },
+					onUploadProgress: (event) => {
+						if (event.total) {
+							updatePendingPercent(tempId, (event.loaded / event.total) * 100);
+						}
 					},
-				);
+				});
 				await queryClient.invalidateQueries({ queryKey: knowledgeInvalidationKey(knowledgeQueryIds.listDocuments) });
 				// A deduplicated upload matched an already-indexed document by content hash — no new work was queued.
 				if (data.deduplicated) {
@@ -74,8 +63,8 @@ export function useKnowledgeUpload(collectionId = KNOWLEDGE_DEFAULT_COLLECTION_I
 					toast.success(t("pages.knowledgeBase.upload.queued", "{{name}} is being indexed.", { name: file.name }));
 				}
 			} catch (error) {
-				// The endpoint names the size limit in its own validation message. A body over the host's request limit is
-				// refused before the endpoint runs, as a bare 413, so that one gets its own message rather than "failed".
+				// An oversize file answers 413 with a problem body whose detail names the cap, and that detail is shown. The host's own
+				// refusal (a body the server read past the limit) carries a generic detail, so a 413 falls back to "larger than this node accepts".
 				const fallback =
 					error instanceof ApiError && error.statusCode === 413
 						? t("pages.knowledgeBase.upload.tooLargeForNode", "{{name}} is larger than this node accepts.", {

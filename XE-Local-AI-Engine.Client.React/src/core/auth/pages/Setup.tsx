@@ -184,7 +184,10 @@ export function Setup() {
 										<TextInput
 											label={t("auth.setup.emailLabel")}
 											description={t("auth.setup.emailLocalOnlyNote")}
-											type="email"
+											// Text, not type="email": the browser's rule rejects a non-ASCII local part that ASP.NET Identity
+											// accepts, and marked the field invalid with no message. validate() is the one client rule.
+											type="text"
+											inputMode="email"
 											autoComplete="email"
 											required={true}
 											value={values.email}

@@ -261,6 +261,90 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
     }
 
     [Test]
+    public void RunsOnStore_AWindowsLauncherWhosePyvenvHomeIsInTheStore_IsTrue()
+    {
+        var interpreter = WriteLauncherVenv(StoreInterpreterDirectory());
+
+        AssertEx.True(ComputePythonEnvironment.RunsOnStore(interpreter, Toolchain.PythonInstallDirectory));
+    }
+
+    [Test]
+    public void RunsOnStore_AWindowsLauncherWhosePyvenvHomeIsOutsideTheStore_IsFalse()
+    {
+        var outside = Directory.CreateDirectory(Path.Combine(_root, "elsewhere", "cpython")).FullName;
+        File.WriteAllText(Path.Combine(outside, "python.exe"), string.Empty);
+        var interpreter = WriteLauncherVenv(outside);
+
+        AssertEx.False(ComputePythonEnvironment.RunsOnStore(interpreter, Toolchain.PythonInstallDirectory));
+    }
+
+    [Test]
+    public void BaseInterpreterOf_AWindowsLauncher_IsTheStorePythonThePyvenvHomeNames_AndNullWithoutAConfig()
+    {
+        var store = StoreInterpreterDirectory();
+        var interpreter = WriteLauncherVenv(store);
+
+        AssertEx.Equal(Path.Combine(store, "python.exe"), ComputePythonEnvironment.BaseInterpreterOf(interpreter));
+
+        File.Delete(Path.Combine(VenvRoot, "pyvenv.cfg"));
+        AssertEx.Null(ComputePythonEnvironment.BaseInterpreterOf(interpreter), "no config, no base: the gateway keeps the venv launcher");
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public void BaseInterpreterOf_WhenThePyvenvHomeIsTheMinorVersionAlias_IsTheInterpreterInTheLinkedInstall()
+    {
+        // uv names the alias directory as home; CPython cannot resolve that link inside the AppContainer boundary and warns on stderr.
+        var versioned = StoreInterpreterDirectory();
+        var alias = Path.Combine(Toolchain.PythonInstallDirectory, "cpython-3.13-windows-x86_64-none");
+        _ = Directory.CreateSymbolicLink(alias, versioned);
+        var interpreter = WriteLauncherVenv(alias);
+
+        AssertEx.Equal(Path.Combine(versioned, "python.exe"), ComputePythonEnvironment.BaseInterpreterOf(interpreter));
+        AssertEx.True(ComputePythonEnvironment.RunsOnStore(interpreter, Toolchain.PythonInstallDirectory), "the alias spelling still reads as the store");
+    }
+
+    [Test]
+    public void RunsOnStore_AWindowsLauncherWithoutAPyvenvCfg_IsFalse()
+    {
+        var interpreter = WriteLauncherVenv(StoreInterpreterDirectory());
+        File.Delete(Path.Combine(VenvRoot, "pyvenv.cfg"));
+
+        AssertEx.False(ComputePythonEnvironment.RunsOnStore(interpreter, Toolchain.PythonInstallDirectory));
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public void RunsOnStore_AnInterpreterLinkedIntoTheStore_IsTrue_WithoutAPyvenvCfg()
+    {
+        var baseInterpreter = Path.Combine(StoreInterpreterDirectory(), "python3");
+        File.WriteAllText(baseInterpreter, string.Empty);
+        var bin = Directory.CreateDirectory(Path.Combine(VenvRoot, "bin")).FullName;
+        var interpreter = Path.Combine(bin, "python");
+        _ = File.CreateSymbolicLink(interpreter, baseInterpreter);
+
+        AssertEx.True(ComputePythonEnvironment.RunsOnStore(interpreter, Toolchain.PythonInstallDirectory));
+    }
+
+    // A store CPython directory holding python.exe, the directory uv names as `home` in a Windows venv.
+    private string StoreInterpreterDirectory()
+    {
+        var directory = Directory.CreateDirectory(Path.Combine(Toolchain.PythonInstallDirectory, "cpython-3.13.15-windows-x86_64-none")).FullName;
+        File.WriteAllText(Path.Combine(directory, "python.exe"), string.Empty);
+        return directory;
+    }
+
+    // uv's Windows layout: Scripts\python.exe is a plain launcher file, and pyvenv.cfg in the venv root names the base directory.
+    private string WriteLauncherVenv(string home)
+    {
+        var scripts = Directory.CreateDirectory(Path.Combine(VenvRoot, "Scripts")).FullName;
+        var interpreter = Path.Combine(scripts, "python.exe");
+        File.WriteAllText(interpreter, "launcher");
+        File.WriteAllText(Path.Combine(VenvRoot, "pyvenv.cfg"), $"implementation = CPython\nhome = {home}\nversion_info = 3.13.15\n");
+        return interpreter;
+    }
+
+    [Test]
     [RunOn(OS.Linux)]
     [UnsupportedOSPlatform("windows")]
     public async Task Status_WhenTheInterpreterIsGone_IsRepairRequired()
@@ -408,6 +492,7 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
 
         AssertEx.Equal(ManagedPythonEnvironmentState.RepairRequired, status.State);
         AssertEx.Equal("The compute runtime's state record is unreadable.", status.Reason);
+        AssertEx.Equal(ManagedPythonReasonCode.RecordUnreadable, status.ReasonCode);
     }
 
     [Test]
@@ -433,6 +518,7 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
         _ = await provision;
         AssertEx.Equal(ManagedPythonEnvironmentState.Provisioning, status.State);
         AssertEx.Equal("Another process is provisioning the compute runtime.", status.Reason);
+        AssertEx.Equal(ManagedPythonReasonCode.Provisioning, status.ReasonCode);
         AssertEx.Equal(ManagedPythonEnvironmentState.Ready, (await observer.ReadStatusAsync(CancellationToken.None)).State);
     }
 
@@ -462,6 +548,7 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
         AssertEx.Equal(ManagedPythonActionOutcome.Completed, (await remove).Outcome);
         AssertEx.Equal(ManagedPythonEnvironmentState.Provisioning, during.State);
         AssertEx.Equal("The compute runtime is being removed.", during.Reason);
+        AssertEx.Equal(ManagedPythonReasonCode.Removing, during.ReasonCode, "the state stays Provisioning; the code tells removal apart");
     }
 
     [Test]
@@ -557,6 +644,7 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
         var status = await upgraded.ReadStatusAsync(CancellationToken.None);
         AssertEx.Equal(ManagedPythonEnvironmentState.Ready, status.State);
         AssertEx.Equal("Installing the pinned compute runtime packages failed. The previous compute runtime stays in service.", status.Reason);
+        AssertEx.Equal(ManagedPythonReasonCode.ProvisionFailed, status.ReasonCode);
         AssertEx.Equal("lockfile", string.Join(",", status.Mismatches));
     }
 

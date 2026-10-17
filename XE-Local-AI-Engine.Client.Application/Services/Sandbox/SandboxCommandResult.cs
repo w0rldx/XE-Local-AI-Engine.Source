@@ -8,6 +8,9 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 /// </summary>
 public sealed record SandboxCommandResult
 {
+    /// <summary>How a disk-ceiling stop's <see cref="StandardError" /> starts; the compute gateway keys its typed reason on it.</summary>
+    public const string JailDiskCeilingExceededPrefix = "Command exceeded the sandbox jail disk ceiling";
+
     /// <summary>Echo of the request's execution id.</summary>
     public required string ExecutionId { get; init; }
 

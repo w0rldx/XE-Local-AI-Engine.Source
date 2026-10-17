@@ -130,6 +130,19 @@ public sealed class ExternalAppCatalogResponse
 
     public required string? LastRefreshFailure { get; init; }
 
+    /// <summary>The catalog listed no application when this node started, so External Apps stay off, the bridge closed, until a restart.</summary>
+    public required bool RestartRequired { get; init; }
+
+    /// <summary>The catalog is empty now but this node opened the container bridge at startup; the listener stays open until a restart.</summary>
+    /// <remarks>
+    ///     A state of its own, not "off": nothing may start or install, yet the non-loopback listener a refresh cannot
+    ///     close is still bound. The page says so rather than implying the bridge closed with the catalog.
+    /// </remarks>
+    public required bool BridgeOpenUntilRestart { get; init; }
+
+    /// <summary>An accepted online catalog URL is configured, so an empty catalog is waiting on that catalog rather than on configuration.</summary>
+    public required bool RefreshUrlConfigured { get; init; }
+
     public required IReadOnlyList<ExternalAppSummaryView> Applications { get; init; }
 }
 
@@ -384,10 +397,9 @@ public sealed class ExternalAppInstallPreview
     /// </summary>
     /// <remarks>
     ///     <c>GpuNotSupported</c> | <c>RuntimeIncompatible</c> | <c>RuntimeUnavailable</c> | <c>InsufficientMemory</c>
-    ///     | <c>InsufficientDisk</c> | <c>AlreadyInstalled</c> | <c>CatalogMissing</c> | <c>BridgeUnavailable</c>. The
-    ///     install path cannot produce <c>CatalogMissing</c> and the update path cannot produce
-    ///     <c>AlreadyInstalled</c>, but one closed vocabulary means the SPA ships eight labels once instead of two
-    ///     overlapping sets.
+    ///     | <c>InsufficientDisk</c> | <c>AlreadyInstalled</c> | <c>CatalogMissing</c> | <c>BridgeUnavailable</c> |
+    ///     <c>RestartRequired</c> | <c>CatalogEmpty</c>. Previews never report <c>CatalogEmpty</c> (an empty
+    ///     catalog is a 404) and only Start/Restart refuse with it, but one closed vocabulary means one label set.
     /// </remarks>
     public required string? BlockedReason { get; init; }
 

@@ -168,6 +168,34 @@ public sealed class DevWorkflowReconcileTests
         AssertEx.Equal(expected: 1, events.Count(item => item.EventType == DevWorkflowEventTypes.NodeRetryScheduled), "The repair records its own event, as the separate write did.");
     }
 
+    /// <summary>A repair that re-admits the row to <c>Queued</c> is a re-dispatch, so it starts clean like a collapse to <c>Pending</c>.</summary>
+    [Test]
+    public async Task ARepairThatReadmitsTheRow_DoesNotKeepTheInterruptedStart()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync();
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var (seed, nodeRunId) = await SeedRunningToolAsync(store);
+        var row = (await store.ListInterruptedNodeRunsAsync()).Single(candidate => candidate.NodeRunId == nodeRunId);
+
+        _ = await store.ReconcileNonTerminalNodeRunsAsync("The host restarted.",
+        [
+            Verdict(row,
+                new TransitionDevWorkflowNodeRunCommand
+                {
+                    RunId = seed.RunId,
+                    NodeRunId = nodeRunId,
+                    ExpectedVersion = DevWorkflowVersions.Any,
+                    TargetStatus = DevWorkflowNodeRunStatus.Queued,
+                    QueueReason = "re-admitted"
+                })
+        ]);
+
+        var readmitted = await store.GetNodeRunAsync(nodeRunId);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Queued, readmitted.Status);
+        AssertEx.Null(readmitted.StartedAtUtc, "a queued row has not started; only a settled or blocked one keeps the interrupted start.");
+    }
+
     /// <summary>
     ///     The window the atomicity exists for: a recovery that cannot finish must leave the stranded rows exactly as
     ///     the dead host left them, so the next boot judges the same evidence rather than finding half-repaired rows.
@@ -319,9 +347,12 @@ public sealed class DevWorkflowReconcileTests
         AssertEx.Equal(expected: 2, reconciled.Count, "A settling pass takes every stranded row: the ones it judged, and the ones it could not.");
         AssertEx.Empty(await store.ListInterruptedNodeRunsAsync(), "Nothing may still be in flight when the dispatcher starts.");
 
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, (await store.GetNodeRunAsync(steadyId)).Status);
+        var steady = await store.GetNodeRunAsync(steadyId);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, steady.Status);
+        AssertEx.Null(steady.StartedAtUtc, "a row collapsed for re-dispatch starts clean.");
 
         var settled = await store.GetNodeRunAsync(driftingId);
+        AssertEx.True(settled.StartedAtUtc.HasValue, "a row the pass blocked keeps the start of the attempt the restart cut short.");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, settled.Status, "A row nobody could judge goes to a human rather than staying live with no executor.");
         AssertEx.Equal(DevWorkflowDecisionKind.Abandon, settled.PendingDecisionKind, "and it asks for an answer, or no one would ever see it.");
         AssertEx.Equal(expected: 2, settled.Attempt, "Blocking costs nothing: the row never re-ran.");

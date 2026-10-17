@@ -370,7 +370,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     /// </remarks>
     private async Task<IList<AITool>> ResolveExecutableToolsAsync(InvocationAgentDefinition definition, CancellationToken cancellationToken)
     {
-        var tools = await InvocationToolResolver.ResolveAsync(definition.Tools,
+        var tools = await InvocationToolResolver.ResolveForAgentTurnAsync(definition.Tools,
                                                     _toolRegistry,
                                                     _clientLocalToolRegistry,
                                                     _mcpToolRegistry,

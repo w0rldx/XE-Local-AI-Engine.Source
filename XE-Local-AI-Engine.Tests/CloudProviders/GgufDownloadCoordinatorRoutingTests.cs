@@ -56,6 +56,45 @@ public sealed class GgufDownloadCoordinatorRoutingTests
     }
 
     [Test]
+    public async Task Restart_ListsADownloadItInterruptedAsFailedWithAReason_AndAStartResumesItInPlaceOfThatRow()
+    {
+        var canonical = GgufModelName.Format(Repo, Quant);
+        var store = new ProvisioningDownloadTransaction
+        {
+            Interrupted =
+            [
+                new InterruptedGgufDownload
+                {
+                    ModelName = canonical,
+                    TotalBytes = 42
+                }
+            ]
+        };
+        var coordinator = BuildCoordinator(store, new InMemoryCoordinatedModelProviderMapStore());
+
+        var listed = AssertEx.NotNull(coordinator.ListStatuses().SingleOrDefault());
+
+        AssertEx.Equal(canonical, listed.ModelName);
+        AssertEx.Equal(GgufDownloadPhase.Failed, listed.Phase);
+        AssertEx.Equal(GgufDownloadCoordinator.InterruptedErrorCode, listed.ErrorCode);
+        AssertEx.Equal(GgufDownloadCoordinator.InterruptedMessage, listed.SanitizedError);
+        AssertEx.Equal(42L, listed.TotalBytes);
+
+        var ticket = await coordinator.StartAsync(new GgufModelRequest
+        {
+            RepoId = Repo,
+            Quant = Quant
+        }, CancellationToken.None);
+        await WaitForPhaseAsync(coordinator, ticket.ModelName, GgufDownloadPhase.Completed);
+
+        AssertEx.Equal(GgufDownloadPhase.Completed, coordinator.GetStatus(canonical)!.Phase);
+        // V-03: the resumed download supersedes the Interrupted row instead of being listed beside it.
+        var rows = coordinator.ListStatuses();
+        AssertEx.Equal(expected: 1, rows.Count);
+        AssertEx.Equal(GgufDownloadPhase.Completed, rows[0].Phase);
+    }
+
+    [Test]
     public async Task FailedDownload_WritesNoMapRow()
     {
         var mapStore = new InMemoryCoordinatedModelProviderMapStore();
@@ -455,6 +494,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         };
 
         public bool FailDownload { get; init; }
+        public IReadOnlyList<InterruptedGgufDownload> Interrupted { get; init; } = [];
         public Exception? UnexpectedFailure { get; init; }
         public bool BlockPrepare { get; init; }
         public int PrepareCount { get; private set; }
@@ -464,6 +504,9 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         public bool ThrowPartialCommit { get; init; }
         public TaskCompletionSource PrepareStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _releasePrepare = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public IReadOnlyList<InterruptedGgufDownload> ListInterrupted() =>
+            Interrupted;
 
         public Task<ResolvedGgufDownload> ResolveAsync(GgufModelRequest request, CancellationToken cancellationToken) =>
             Task.FromResult(new ResolvedGgufDownload

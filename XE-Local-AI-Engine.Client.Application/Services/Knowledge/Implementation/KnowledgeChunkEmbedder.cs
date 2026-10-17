@@ -23,21 +23,21 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
 {
     // Fixed, content-free failure reasons: each is persisted on the document row and surfaced verbatim, so it names the
     // in-app affordance that resolves it — never Ollama vocabulary ("pull") or an Ollama-style name the UI never shows.
-    private const string EmbeddingUnavailableReason =
+    internal const string EmbeddingUnavailableReason =
         "No embedding model is installed, so documents cannot be indexed. Use \"Download recommended embedding model\" "
         + "in Node Settings, or install an embedding GGUF from Models → Browse Hugging Face, then retry.";
 
-    private const string EmbeddingIncompleteReason =
+    internal const string EmbeddingIncompleteReason =
         "The embedding model returned an incomplete result. Ensure the configured embedding model is loaded and retry.";
 
     // A REACHABLE server that REJECTED the request is a different failure from "no embedding model is installed", and
     // reporting it as the latter sends the user to install a model they have; the non-2xx status separates the two cases.
-    private const string EmbeddingRejectedReason =
+    internal const string EmbeddingRejectedReason =
         "The embedding model is installed but rejected the request. Check the node logs for the server's response, then retry.";
 
     // An INSTALLED model whose process died or stopped answering (killed, crashed, respawning) is not a missing model:
     // "install a model" would send the operator to re-download weights they have, so the confident resolution separates it.
-    private const string EmbeddingUnreachableReason =
+    internal const string EmbeddingUnreachableReason =
         "The embedding model is installed but its process stopped or became unreachable. Check the node logs, then retry the document.";
 
     private readonly KnowledgeBaseOptions _options;

@@ -11,9 +11,11 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     One work-session host for a whole test class (<c>ClassDataSource(SharedType.PerClass)</c>), so a class pays the
@@ -54,7 +56,7 @@ public sealed class WorkSessionServiceHostFixture : IAsyncInitializer, IAsyncDis
 }
 
 /// <summary>
-///     A host whose two work-session personas are already seeded, once, before any test runs.
+///     A host whose work-session personas are already seeded, once, before any test runs.
 ///     <para>
 ///         <c>seed_slug</c> carries a filtered unique index, so two tests seeding concurrently on one shared database
 ///         cannot double-insert — the loser takes a <c>DbUpdateException</c>, which the seeder's best-effort startup
@@ -79,7 +81,8 @@ public sealed class SeededWorkSessionAgentsFixture : IAsyncInitializer, IAsyncDi
         foreach (var slug in new[]
                  {
                      AgentDefaults.WorkSessionGeneralAgentSeedSlug,
-                     AgentDefaults.WorkSessionResearchAgentSeedSlug
+                     AgentDefaults.WorkSessionResearchAgentSeedSlug,
+                     AgentDefaults.WorkSessionRepositoryResearchAgentSeedSlug
                  })
         {
             _ = await store.GetBySeedSlugAsync(slug)
@@ -112,6 +115,9 @@ internal sealed class StepScript
 
     public bool Park { get; init; }
 
+    /// <summary>A reasoning-only delta yielded right after the park event, as a thinking model emits one.</summary>
+    public string? ReasoningDeltaAfterPark { get; init; }
+
     public bool ParkThenContinue { get; init; }
 
     public string ParkToolName { get; init; } = "ask_user";
@@ -119,6 +125,15 @@ internal sealed class StepScript
     public string ParkEventType { get; init; } = ChatStreamEventTypes.ApprovalRequested;
 
     public long ParkOccurredAtUtc { get; init; }
+
+    /// <summary>A park the real dispatcher sees: the turn takes the slot, raises its approval and gives the slot back.</summary>
+    /// <remarks>
+    ///     With <see cref="AnswerDispatcherPark" /> the card is answered at once and the turn waits for this gate before it retakes
+    ///     the slot and runs <see cref="EventTypes" />; without it, it waits for the gate or a cancel.
+    /// </remarks>
+    public TaskCompletionSource? DispatcherParkGate { get; init; }
+
+    public bool AnswerDispatcherPark { get; init; }
 
     // Rides on the scripted terminal event. The supervisor reads it to tell a step that spent a BOUND (the
     // provider-call cap, whose message is a fixed constant) from one that actually broke.
@@ -220,6 +235,55 @@ internal sealed class FakeNodeChatStreamService : INodeChatStreamService
             await during(_services, _sessionId);
         }
 
+        // Releases and retakes the slot by hand; the real park path is pinned in ToolApprovalCoordinatorTests and InvocationRunnerTests.
+        if (script.DispatcherParkGate is { } gate)
+        {
+            var dispatcher = _services.GetRequiredService<IWorkerEventDispatcher>();
+            var package = RuntimePackageBuilder.Valid().WithInvocationId(correlation.RequestId).WithConversationId(correlation.ConversationId).Build();
+            var lease = await dispatcher.ReportInvocationAssignedAsync(package, CancellationToken.None);
+            var cancelled = false;
+            try
+            {
+                await dispatcher.ReportApprovalRequestedAsync(new ApprovalRequestPayload
+                {
+                    InvocationId = correlation.RequestId,
+                    RequestId = $"approval-{correlation.RequestId:N}",
+                    Description = "A tool call requires approval."
+                });
+                _ = dispatcher.ReleaseSlotForPark(correlation.RequestId);
+                yield return Event(correlation, ChatStreamEventTypes.ApprovalRequested, script.ParkToolName, occurredAtUtc: script.ParkOccurredAtUtc);
+                if (script.AnswerDispatcherPark)
+                {
+                    await dispatcher.DispatchApprovalResolvedAsync(new ApprovalResolvedEvent
+                    {
+                        RequestId = $"approval-{correlation.RequestId:N}",
+                        Approved = true
+                    });
+                }
+
+                try
+                {
+                    await gate.Task.WaitAsync(turn.Token);
+                    await dispatcher.ReacquireSlotAsync(correlation.RequestId, turn.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    cancelled = true;
+                }
+            }
+            finally
+            {
+                await dispatcher.ReportInvocationCompletedAsync(correlation.RequestId);
+                await lease.DisposeAsync();
+            }
+
+            if (cancelled)
+            {
+                yield return Event(correlation, ChatStreamEventTypes.AssistantCancelled);
+                yield break;
+            }
+        }
+
         if (script.ParkThenContinue)
         {
             yield return Event(correlation, script.ParkEventType, script.ParkToolName, occurredAtUtc: script.ParkOccurredAtUtc);
@@ -228,6 +292,15 @@ internal sealed class FakeNodeChatStreamService : INodeChatStreamService
         if (script.Park)
         {
             yield return Event(correlation, script.ParkEventType, script.ParkToolName, occurredAtUtc: script.ParkOccurredAtUtc);
+            if (script.ReasoningDeltaAfterPark is { } reasoningDelta)
+            {
+                yield return Event(correlation, ChatStreamEventTypes.AssistantDelta) with
+                {
+                    Delta = null,
+                    ReasoningDelta = reasoningDelta
+                };
+            }
+
             try
             {
                 await Task.Delay(Timeout.InfiniteTimeSpan, turn.Token);
@@ -259,6 +332,8 @@ internal sealed class FakeNodeChatStreamService : INodeChatStreamService
             Sequence = 0,
             OccurredAtUtc = occurredAtUtc,
             Error = error,
+            // A scripted delta carries visible text, as the answer that ends a park does; a reasoning-only one is opt-in.
+            Delta = type == ChatStreamEventTypes.AssistantDelta ? "answer" : null,
             ToolName = toolName,
             ApprovalRequestId = toolName is null ? null : Guid.NewGuid().ToString("N")
         };

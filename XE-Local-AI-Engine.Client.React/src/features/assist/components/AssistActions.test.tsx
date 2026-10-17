@@ -4,7 +4,7 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // The affordance derives eligibility from the installed-model list; stub only that query so the rest of the generated
-// TanStack module (and the real withResponseValidation bridge) stays live.
+// TanStack module stays live.
 const { listLocalModelsSpy, runningModelsState } = vi.hoisted(() => ({
 	listLocalModelsSpy: vi.fn(),
 	runningModelsState: { data: [] as unknown[] },

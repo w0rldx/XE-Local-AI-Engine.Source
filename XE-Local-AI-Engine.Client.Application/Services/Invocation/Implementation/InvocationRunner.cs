@@ -2,10 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 
 using System.Collections.Frozen;
 using System.Diagnostics;
-using System.Globalization;
-using System.Text;
-using System.Text.Json;
-using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
@@ -32,7 +28,6 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.LlamaServer;
-using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Represents invocation runner.
@@ -77,6 +72,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
     // A turn whose answer ended on the output cap or the window rather than where the model chose to stop.
     private const string OutputLimitReachedNoticeMessage = "The answer stopped at the length limit before the model finished.";
+
+    private const string CpuFallbackNoticeMessage = "This answer ran on the CPU although a GPU was expected, so it is slower.";
 
     /// <summary>The authored effort that opens the dispatch path, and the value persisted as <c>authored_effort</c>.</summary>
     private const string AutoReasoningEffort = "auto";
@@ -265,326 +262,29 @@ public sealed partial class InvocationRunner : IInvocationRunner
         using var providerBudgetScope = ProviderCallBudget.BeginScope(providerCallBudgetOptions, harnessStartedTimestamp);
         var providerBudget = ProviderCallBudget.Current!;
 
-        // Declared ahead of the terminal-telemetry local function below, which reads the readiness duration off it: a
-        // local function may only capture a local that is already in scope where it is written.
-        StreamState? stream = null;
-
-        // Runs immediately BEFORE each of the three terminal reports and swallows its own faults, so telemetry can never replace a turn's real
-        // classification. Counts only, no tool name. See docs/wiki/04-agent-mode.md ("Usage and estimated cost") for what rides it and why on every path.
-        async Task ReportTerminalTelemetryAsync()
+        // Carries the turn-wide inputs into ExecuteTurnAsync and the stream it creates back out: the terminal telemetry and the
+        // finally below read the readiness duration and usage off it, and it stays null when the turn fails before the stream exists.
+        var turn = new TurnExecution
         {
-            try
-            {
-                var efficiency = providerBudget.CaptureEfficiencySnapshot();
-                await dispatcher.ReportToolSchemaTokensAsync(package.InvocationId, efficiency.ToolSchemaTokens, efficiency.MaximumToolSchemaTokens);
-                if (providerBudget.LastRoundContext is { } roundContext)
-                {
-                    await dispatcher.ReportTurnContextSnapshotAsync(package.InvocationId, roundContext);
-                }
-
-                await dispatcher.ReportTurnTelemetryAsync(package.InvocationId,
-                    stream?.ModelReadinessDurationMs is { } readinessMs ? (long)readinessMs : null,
-                    stream?.UsageSnapshot is { } turnUsage
-                        ? new TurnUsageTotals
-                        {
-                            InputTokens = turnUsage.InputTokens,
-                            OutputTokens = turnUsage.OutputTokens,
-                            TotalTokens = turnUsage.TotalTokens,
-                            ReasoningTokens = turnUsage.ReasoningTokens
-                        }
-                        : null);
-            }
-            catch (Exception exception)
-            {
-                _logger.LogWarning(exception, "Could not report the terminal telemetry for invocation {InvocationId}; the turn's outcome is unaffected.", package.InvocationId);
-            }
-        }
+            Context = context,
+            Dispatcher = dispatcher,
+            ProviderBudget = providerBudget,
+            TurnStartedTimestamp = turnStartedTimestamp,
+            HarnessStartedTimestamp = harnessStartedTimestamp
+        };
 
         string? invocationOutcome = null;
 
         try
         {
-            var invocationToken = _lifecycleTracker.GetInvocationCancellationToken();
-            // Read LIVE per turn, never captured in a field, INSIDE the try (a throw above it would fail the turn with no failure reported) and on
-            // invocationToken, which is what an operator Cancel or the turn watchdog cancels. See docs/wiki/04-agent-mode.md §1.3 for the scope's placement.
-            var toolRelevanceActive = await _runtimeSettings.GetToolRelevanceEnabledAsync(invocationToken)
-                                      && !package.DisableToolRelevanceFilter;
-            using var toolRelevanceScope = ToolRelevanceScope.BeginScope(toolRelevanceActive,
-                toolRelevanceActive ? _toolRelevanceCoreSet.GetCoreToolNames() : FrozenSet<string>.Empty);
-            if (toolRelevanceActive)
-            {
-                _logger.LogDebug("Tool-relevance filtering is ACTIVE for invocation {InvocationId}.", package.InvocationId);
-            }
-
-            ModelResolution modelResolution;
-            using (NodeActivitySource.Source.StartActivity("chat.invocation.resolve_model"))
-            {
-                modelResolution = await ResolveModelAsync(package.ModelProfile, invocationToken);
-            }
-
-            var resolvedModel = modelResolution.Model;
-
-            // `auto` resolves into a concrete {model, effort} HERE, between model resolution and the local warm, so an admitted small-model swap is what
-            // gets warmed. Declared FIRST so `using` disposes it LAST, after the ledger reservation made inside it; AsyncServiceScope's `default` is unsafe to dispose.
-            using var dispatchScope = ReasoningEffortNormalizer.Normalize(package.ReasoningEffort) is AutoReasoningEffort
-                ? _scopeFactory.CreateScope()
-                : null;
-
-            ReasoningDispatchDecision? dispatchDecision = null;
-
-            // The exact "auto" guard above is the whole byte-identical story for every other effort: no scope, no dispatcher
-            // resolution, no request allocation, no node-side lookup. The package builder has already normalised the value.
-            if (dispatchScope is not null)
-            {
-                dispatchDecision = await dispatchScope.ServiceProvider
-                                                      .GetRequiredService<IReasoningEffortDispatcher>()
-                                                      .DispatchAsync(BuildDispatchRequest(package, resolvedModel), invocationToken);
-            }
-
-            // The model the turn was AUTHORISED for, and its capability flags, captured before the dispatch block can
-            // rewrite any of them. The send-boundary retry below restores exactly these.
-            var originalModel = resolvedModel;
-            var originalSupportsThinking = package.SupportsThinking;
-            var originalReasoningBudgetEnforceable = package.ReasoningBudgetEnforceable;
-            using var fastReservation = dispatchDecision?.CapacityReservation;
-            if (dispatchDecision is { } dispatched)
-            {
-                resolvedModel = dispatched.Model;
-
-                // `package with { ... }` copies ConfigHash verbatim and the hash folds the AUTHORED effort, so two turns of one conversation dispatching to
-                // different tiers share one hash and no resume is invalidated. No tier caps output (ReasoningDispatchDecision.MaxOutputTokens), so the send keeps its shape.
-                package = package with
-                {
-                    ReasoningEffort = dispatched.Effort,
-                    SupportsThinking = dispatched.SupportsThinking,
-                    ReasoningBudgetEnforceable = dispatched.ReasoningBudgetEnforceable
-                };
-
-                // Onto the invocation state, so the terminalize write persists what `auto` resolved to with the envelope row: the tier plus the authored
-                // effort (`auto` by the branch above), which separates the dispatched population from the pre-`auto` one. Every other turn's envelope carries nulls.
-                await dispatcher.ReportEffortDispatchAsync(package.InvocationId, ReasoningTierLabels.For(dispatched.Tier), AutoReasoningEffort);
-            }
-
-            var modelWasSwapped = dispatchDecision is { } swapCandidate
-                                  && !string.Equals(swapCandidate.Model, originalModel, StringComparison.Ordinal);
-
-            // The one server-side record of what `auto` decided. The dispatcher takes no logger by design (its inputs are the user's message and the
-            // turn's shape), so only its OUTPUT is logged: tier, stable kebab-case reason code, swapped flag. No signal value, model name or message text.
-            if (dispatchDecision is { } logged)
-            {
-                _logger.LogInformation("Reasoning effort 'auto' dispatched for invocation {InvocationId}: tier {Tier}, reason {ReasonCode}, model swapped {ModelWasSwapped}.",
-                    package.InvocationId, ReasoningTierLabels.For(logged.Tier), logged.ReasonCode, modelWasSwapped);
-            }
-
-            // The retry below re-enters RunSingleAgentAsync, which owns the tool-relevance drain and its ToolsFiltered notice, so running it twice would emit
-            // that notice twice. A swap already requires no offered tools; stating the dependency here switches the retry off if a gate ever admits a tool-bearing swap.
-            var swapRetryEligible = modelWasSwapped && package.AllowedTools.Count == 0;
-
-            // Shared streaming state for both the single-agent and orchestration paths: response/reasoning accumulators, byte caps, monotonic sequence
-            // counters, terminal usage snapshot. Both feed it through the same Emit* helpers, so transport, size cap, dispatcher reporting and ordering stay identical.
-            stream = new StreamState
-            {
-                HarnessStartedTimestamp = harnessStartedTimestamp
-            };
-
-            // Keyed by the assistant message the endpoint addresses; disposed with the turn, so a finished turn answers 404.
-            using var reasoningControlTurn = _reasoningControl.Track(context.MessageId);
-            stream.ReasoningControl = reasoningControlTurn;
-
-            var transport = new StreamTransport(this, dispatcher, package);
-
-            // Surface the model-substitution fallback as a visible, non-fatal chat notice rather than a log line only,
-            // which the transport (and therefore the dispatcher) now makes possible.
-            if (modelResolution.Substituted)
-            {
-                await transport.EmitNoticeAsync(TurnNoticeKind.ModelSubstituted,
-                    BuildModelSubstitutedNoticeMessage(modelResolution.RequestedModel, resolvedModel));
-            }
-
-            // A decision the user did not make must be visible, but a NORMAL no-swap turn stays silent (noise), and the detail is the reason CODE only.
-            // A SWAPPED turn is silent here too: it may still fall back at the send boundary, and a turn carries exactly ONE effort notice, emitted once the send resolves.
-            if (dispatchDecision is { } announced && announced.Tier != ReasoningTier.Normal && !modelWasSwapped)
-            {
-                await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
-                    BuildEffortDispatchedNoticeMessage(announced.Tier, announced.Effort, resolvedModel, swapped: false),
-                    announced.ReasonCode);
-            }
-
-            // Seed the per-root spawn context (Depth 0) so spawn_subagent enforces the fan-out and cloud-spawn caps against ONE shared root. It flows as an
-            // AsyncLocal into the function-invocation pipeline running the tool body; disposal restores the prior ambient value, and a turn that never spawns pays one struct.
-            using var spawnRoot = SpawnContext.BeginRoot(await _runtimeSettings.GetSpawnMaxConcurrentAsync(invocationToken),
-                await _runtimeSettings.GetSpawnMaxCloudAsync(invocationToken),
-                resolvedModel);
-
-            // BOTH models, not just the dispatched one: the send-boundary retry switches `resolvedModel` back to the original inside this scope, and a pin it
-            // never resolved drops that fallback send onto the transport's weaker unpinned check. Identical ids de-duplicate, so the pin set is unchanged.
-            var turnPins = await ExternalProviderInvocationPin
-                .ResolveAsync(_externalProviderRegistry, [resolvedModel, originalModel], invocationToken);
-
-            // Pin the binding this turn is authorized against once, up front: the provider re-reads configuration on every send, so an operator edit landing
-            // mid-tool-loop would redirect the later ones. Opened here, not in the resolver — an AsyncLocal write never reaches its caller; no external model, no pin.
-            using var externalBindingPin = ExternalProviderBindingPinScope.Begin(turnPins);
-
-            // Seed the active conversation id into the same root tool-loop scope so the AgentHome tool gateway can stage this conversation's uploaded
-            // attachments into the sandbox. Like the spawn context it flows as an AsyncLocal through the pipeline; disposal restores the prior ambient value.
-            using var conversationScope = AgentRunConversationContext.BeginScope(package.ConversationId);
-
-            // Warm the local model BEFORE the watched streaming pull, so a cold big-model load runs in its own size-aware supervisor window and is never
-            // killed by the shorter stream-idle watchdog. Cloud and Ollama models no-op; the load is decoupled from this token, so a cancel only abandons the wait.
-            var requestedContextTokens = turnPolicy.RequestedContextTokens ?? turnPolicy.ContextCapacityTokens;
-            var localRuntime = await _localRuntimeWarmer.PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, stream, turnStartedTimestamp, invocationToken);
-            var effectiveContextTokens = localRuntime.EffectiveContextTokens;
-
-            // Once per turn, AFTER the chat model is ready so the companions never race its launch for admission or VRAM.
-            // Fire-and-forget: the first knowledge search may still find them cold and fall back to fusion order.
-            if (package.AllowedTools.Any(static tool => string.Equals(tool.Name, SearchKnowledgeBaseToolDefinition.ToolName, StringComparison.Ordinal))
-                && await _runtimeSettings.GetKnowledgeAgentToolsEnabledAsync(invocationToken))
-            {
-                _knowledgeModelPrewarmer.RequestWarm();
-            }
-
-            // Fold the launched effective window into the turn policy (precedence: TurnPolicy.WithEffectiveContext) so the OUTER budgeter sizes history against the
-            // real window and the INNER num_ctx budgeter resolves the same one. Captured BEFORE the fold: the swapped model's policy would size against a window the authorised model never had.
-            var preWarmPolicy = turnPolicy;
-            turnPolicy = turnPolicy.WithEffectiveContext(effectiveContextTokens);
-            await dispatcher.ReportTurnContextWindowAsync(package.InvocationId, turnPolicy.ContextCapacityTokens, turnPolicy.ReservedOutputTokens);
-
-            // Size every tool result to the window the model was launched with: a fixed 65,536-char ceiling let four results fill half a 64k-token window.
-            using var toolResultBudget = ToolResultBudgetScope.BeginTightenedScope(ToolResultBudgetFor(turnPolicy.ContextCapacityTokens));
-
-            if (context.GenerationAdmissionPolicy is { } admissionPolicy)
-            {
-                // The chat path lets generation retry a failed warm so the provider boundary surfaces its authoritative error. An admission-gated caller
-                // cannot: a null effective context would reject first and mask it, so rethrow the captured failure before consulting the policy.
-                localRuntime.WarmFailure?.Throw();
-
-                var admissionContext = new InvocationGenerationAdmissionContext
-                {
-                    InvocationId = package.InvocationId,
-                    RequestedContextTokens = requestedContextTokens,
-                    EffectiveContextTokens = effectiveContextTokens,
-                    ModelId = resolvedModel,
-                    ProviderName = localRuntime.ProviderName
-                };
-                var decision = await admissionPolicy.EvaluateAsync(admissionContext, invocationToken)
-                               ?? throw new InvalidOperationException("The invocation generation admission policy returned no decision.");
-                if (!decision.IsAllowed)
-                {
-                    throw new InvocationGenerationRejectedException(LocalRuntimeWarmer.BuildGenerationAdmissionRejectionMessage(decision.RejectionReasonCode,
-                        admissionContext));
-                }
-            }
-
-            // Branch: a package carrying a compiled orchestration spec drives the handoff workflow; everything else is
-            // the unchanged single-agent loop. Both accumulate into `stream`, then share the completion block below.
-            if (package.OrchestrationSpec is { } orchestrationSpec)
-            {
-                // The OUTER conversation budgeter sizes against the effective window via the updated turnPolicy above; the same window is threaded per
-                // participant, so each participant's INNER provider-round budgeter sizes against the window ITS model was launched with.
-                await RunOrchestrationAsync(package, orchestrationSpec, resolvedModel, transport, stream, turnPolicy, effectiveContextTokens, invocationToken);
-            }
-            else
-            {
-                try
-                {
-                    await RunSingleAgentAsync(package, resolvedModel, transport, stream, turnPolicy, effectiveContextTokens, invocationToken);
-
-                    // A swap served the turn. Announce it now, once, naming the model that actually ran. Every other
-                    // turn already emitted its notice (or is a silent NORMAL one) before the send.
-                    if (modelWasSwapped && dispatchDecision is { } served)
-                    {
-                        // The invocation state was seeded with the model the PACKAGE named, and the persisted message row and the envelope's provider
-                        // attribution both read it there, so a swapped turn that does not correct it is measured against a model that never saw it.
-                        await dispatcher.ReportServedModelAsync(package.InvocationId, resolvedModel);
-                        await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
-                            BuildEffortDispatchedNoticeMessage(served.Tier, served.Effort, resolvedModel, swapped: true),
-                            served.ReasonCode);
-                    }
-                }
-                // The fast model went away between the capacity probe and the send — profiled away, ejected, uninstalled, or it would not fit — and nothing has
-                // reached the client, so re-run once on the authorised model. Keyed on "nothing streamed", which covers every such cause and cannot rot on provider wording.
-                catch (Exception) when (swapRetryEligible && !stream.FirstOutputRecorded && !invocationToken.IsCancellationRequested)
-                {
-                    // RELEASE THE FAST RESERVATION FIRST: it books the small model's bytes and, on an Allow verdict, a launch admission and one of the
-                    // loaded-process slots, so carrying it in double-books the ledger and can starve the original model's own spawn at the process cap. Dispose is idempotent.
-                    fastReservation?.Dispose();
-                    resolvedModel = originalModel;
-                    package = package with
-                    {
-                        ReasoningEffort = FallbackDispatchEffort,
-                        SupportsThinking = originalSupportsThinking,
-                        ReasoningBudgetEnforceable = originalReasoningBudgetEnforceable
-                    };
-
-                    // Re-warm the ORIGINAL model and re-derive its window: the policy and effective context above were measured against the fast model's
-                    // launched window, and carrying them in would size this turn's history — and the definition's num_ctx — against a window this model never had.
-                    var retryRuntime = await _localRuntimeWarmer.PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, stream, turnStartedTimestamp, invocationToken);
-                    var retryContextTokens = retryRuntime.EffectiveContextTokens;
-                    var retryPolicy = preWarmPolicy.WithEffectiveContext(retryContextTokens);
-                    await dispatcher.ReportTurnContextWindowAsync(package.InvocationId, retryPolicy.ContextCapacityTokens, retryPolicy.ReservedOutputTokens);
-
-                    // The fast model's budget scope is closed and one sized to THIS model's window opened, so its results are not cut to the
-                    // swapped-out model's window. Closing twice is safe: the outer using re-restores the same prior value.
-                    toolResultBudget.Dispose();
-                    using var retryToolResultBudget = ToolResultBudgetScope.BeginTightenedScope(ToolResultBudgetFor(retryPolicy.ContextCapacityTokens));
-
-                    await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
-                        BuildEffortDispatchedNoticeMessage(ReasoningTier.Fast, FallbackDispatchEffort, resolvedModel, swapped: false),
-                        ReasoningDispatchReasons.FastModelUnavailable);
-
-                    // Exactly once. A second failure is a real failure and fails the turn normally.
-                    await RunSingleAgentAsync(package, resolvedModel, transport, stream, retryPolicy, retryContextTokens, invocationToken);
-                }
-                // The swapped send failed with no fallback left — it had already streamed, the turn offers tools, or it is being cancelled. A turn carries exactly
-                // ONE effort notice and the pre-send one is withheld for swapped turns, so without this a silently replaced model is never reported at all.
-                catch (Exception) when (modelWasSwapped && dispatchDecision is { } failedSwap)
-                {
-                    // Names the model that actually served. No served-model report: the turn produced no answer to attribute and the fast model may have died
-                    // before its first token, so the seeded (authorised) model stays on the failed row. The FAILURE is the outer handler's, as for any other turn.
-                    await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
-                        BuildEffortDispatchedNoticeMessage(failedSwap.Tier, failedSwap.Effort, resolvedModel, swapped: true),
-                        failedSwap.ReasonCode);
-                    throw;
-                }
-            }
-
-            // A turn cancelled by either watchdog, an operator stop or a shutdown drain as its stream ends with no further chunks returns NORMALLY without observing
-            // the token (callbacks run in reverse registration order) and would persist as a SUCCESSFUL answer nobody received. The category still comes from the recorded origin.
-            invocationToken.ThrowIfCancellationRequested();
-
-            // Read the whole-turn wall-clock duration once. The same value rides the dispatcher report, so the
-            // persisted tokens-per-second is computed from one authoritative measurement.
-            var generationDurationMs = (long)stream.GenerationStopwatch.Elapsed.TotalMilliseconds;
-
-            // Emit cumulative model token usage from the single per-turn finalize point, never the per-tool-loop usage-arrival site, which would
-            // double-count across rounds. Content-free: counts tagged by the coarse provider dimension, model id and direction only.
-            RecordTokenUsageMetric(stream, resolvedModel);
-
-            if (stream.LastRoundUsage is null)
-            {
-                _logger.LogWarning("Terminal model usage was not reported for invocation {InvocationId} using model {ModelName}. Token fields will remain unknown.",
-                    package.InvocationId,
-                    resolvedModel);
-            }
-
-            await ReportTerminalTelemetryAsync();
-            // LAST ROUND again: these reach InvocationState's token members, which the terminalize write persists onto the assistant message row, and which
-            // the resume registry and the memory-extraction hook read. The turn's own cost rode ReportTurnTelemetryAsync a line above, onto the envelope row.
-            await dispatcher.ReportInvocationCompletedAsync(package.InvocationId,
-                stream.LastRoundUsage?.InputTokens,
-                stream.LastRoundUsage?.OutputTokens,
-                stream.LastRoundUsage?.TotalTokens,
-                stream.LastRoundUsage?.ReasoningTokens,
-                generationDurationMs,
-                stream.FinishReason,
-                stream.ToThroughput());
+            await ExecuteTurnAsync(turn, package, turnPolicy);
             invocationOutcome = "completed";
         }
-        catch (OperationCanceledException) when (_lifecycleTracker.IsCurrentInvocation(package.InvocationId))
+        catch (OperationCanceledException) when (_lifecycleTracker.IsActive(package.InvocationId))
         {
             invocationOutcome = "cancelled";
             _lifecycleTracker.CancelPendingToolCalls(package.InvocationId);
-            var cancellationOrigin = _lifecycleTracker.ResolveCancellationOrigin();
+            var cancellationOrigin = _lifecycleTracker.ResolveCancellationOrigin(package.InvocationId);
             var failureCategory = InvocationLifecycleTracker.ClassifyCancellation(cancellationOrigin);
             // One fixed, path-free sentence per cancellation cause. A single shared string would leave the node's message-request ceiling, an operator
             // stop and a detached-run reaper collection indistinguishable in the persisted failure, and a cancelled turn unattributable after the fact.
@@ -592,13 +292,32 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // Count the cancellation by its cause (user | watchdog | shutdown). Distinct from InvocationFailedTotal — a cancel is an outcome, not a failure —
             // though an invocation-level timeout ("watchdog") is additionally reported as a Timeout failure below; the two metrics answer different questions.
             NodeMetrics.InvocationCancelledTotal.Add(1, new KeyValuePair<string, object?>("category", InvocationLifecycleTracker.ClassifyCancellationMetricCategory(cancellationOrigin)));
-            await ReportTerminalTelemetryAsync();
+            await ReportTerminalTelemetryAsync(turn, package.InvocationId);
             await dispatcher.ReportInvocationFailedAsync(package.InvocationId, cancellationMessage, failureCategory);
         }
         catch (Exception exception)
         {
-            invocationOutcome = exception is LlamaServerModelEjectedException ? "cancelled" : "failed";
-            _logger.LogError(exception, "Invocation {InvocationId} failed.", package.InvocationId);
+            invocationOutcome = exception switch
+            {
+                LlamaServerModelEjectedException => "cancelled",
+                ProviderCallBudgetExceededException => "stopped",
+                _ => "failed"
+            };
+            if (exception is ProviderCallBudgetExceededException)
+            {
+                // A designed bound: the budget already logged its own warning with the round count, so no stack trace here.
+                _logger.LogInformation("Invocation {InvocationId} stopped at its provider-call budget.", package.InvocationId);
+            }
+            else if (exception is ApprovalExpiredException)
+            {
+                // An expected, typed outcome: nobody answered the approval in time. No stack trace; the message names the tool.
+                _logger.LogWarning("Invocation {InvocationId} failed: {Reason}", package.InvocationId, exception.Message);
+            }
+            else
+            {
+                _logger.LogError(exception, "Invocation {InvocationId} failed.", package.InvocationId);
+            }
+
             var (failureCategory, message) = InvocationFailureClassifier.MapFailure(exception);
             // An operator force-eject surfaces as a Cancelled-category LlamaServerModelEjectedException here (not the OCE
             // path). Count it as a cancellation cause rather than a failure, mirroring the OCE branch above.
@@ -607,7 +326,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 NodeMetrics.InvocationCancelledTotal.Add(1, new KeyValuePair<string, object?>("category", "operator_eject"));
             }
 
-            await ReportTerminalTelemetryAsync();
+            await ReportTerminalTelemetryAsync(turn, package.InvocationId);
             await dispatcher.ReportInvocationFailedAsync(package.InvocationId, message, failureCategory);
         }
         finally
@@ -615,17 +334,20 @@ public sealed partial class InvocationRunner : IInvocationRunner
             var efficiencyRecord = new InvocationEfficiencyRecord
             {
                 InvocationId = package.InvocationId,
+                // With the try body in ExecuteTurnAsync the analyzer can see every path assigns it; the fallback is kept as it was before the split.
+#pragma warning disable CA1508
                 Outcome = invocationOutcome ?? "failed",
-                Provider = stream?.ProviderTag ?? "unknown",
+#pragma warning restore CA1508
+                Provider = turn.Stream?.ProviderTag ?? "unknown",
                 Orchestration = package.OrchestrationSpec is not null,
                 TotalDurationMs = Stopwatch.GetElapsedTime(harnessStartedTimestamp).TotalMilliseconds,
                 PreRunDurationMs = context.PreRunDurationMs,
                 QueueDurationMs = context.QueueDurationMs,
-                ModelReadinessDurationMs = stream?.ModelReadinessDurationMs,
-                FirstOutputLatencyMs = stream?.FirstOutputLatencyMs,
-                InputTokens = stream?.UsageSnapshot?.InputTokens,
-                OutputTokens = stream?.UsageSnapshot?.OutputTokens,
-                ReasoningTokens = stream?.UsageSnapshot?.ReasoningTokens,
+                ModelReadinessDurationMs = turn.Stream?.ModelReadinessDurationMs,
+                FirstOutputLatencyMs = turn.Stream?.FirstOutputLatencyMs,
+                InputTokens = turn.Stream?.UsageSnapshot?.InputTokens,
+                OutputTokens = turn.Stream?.UsageSnapshot?.OutputTokens,
+                ReasoningTokens = turn.Stream?.UsageSnapshot?.ReasoningTokens,
                 ProviderEfficiency = providerBudget.CaptureEfficiencySnapshot()
             };
             TryRecordInvocationEfficiency(efficiencyRecord, turnActivity);
@@ -635,6 +357,392 @@ public sealed partial class InvocationRunner : IInvocationRunner
             _lifecycleTracker.ClearActiveInvocation(package.InvocationId);
             _lifecycleTracker.CompleteActiveInvocation(package.InvocationId, activeInvocationCompletion);
         }
+    }
+
+    // Runs immediately BEFORE each of the three terminal reports and swallows its own faults, so telemetry can never replace a turn's real
+    // classification. Counts only, no tool name. See docs/wiki/04-agent-mode.md ("Usage and estimated cost") for what rides it and why on every path.
+    private async Task ReportTerminalTelemetryAsync(TurnExecution turn, Guid invocationId)
+    {
+        var dispatcher = turn.Dispatcher;
+        var providerBudget = turn.ProviderBudget;
+        try
+        {
+            var efficiency = providerBudget.CaptureEfficiencySnapshot();
+            await dispatcher.ReportToolSchemaTokensAsync(invocationId, efficiency.ToolSchemaTokens, efficiency.MaximumToolSchemaTokens);
+            if (providerBudget.LastRoundContext is { } roundContext)
+            {
+                await dispatcher.ReportTurnContextSnapshotAsync(invocationId, roundContext);
+            }
+
+            await dispatcher.ReportTurnTelemetryAsync(invocationId,
+                turn.Stream?.ModelReadinessDurationMs is { } readinessMs ? (long)readinessMs : null,
+                turn.Stream?.UsageSnapshot is { } turnUsage
+                    ? new TurnUsageTotals
+                    {
+                        InputTokens = turnUsage.InputTokens,
+                        OutputTokens = turnUsage.OutputTokens,
+                        TotalTokens = turnUsage.TotalTokens,
+                        ReasoningTokens = turnUsage.ReasoningTokens
+                    }
+                    : null);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Could not report the terminal telemetry for invocation {InvocationId}; the turn's outcome is unaffected.", invocationId);
+        }
+    }
+
+    // One human park of this turn: the slot goes back while the card waits and is taken again before the model runs.
+    private HumanPark ParkFor(RuntimePackage package) =>
+        new(_lifecycleTracker, _eventDispatcher.Value, package.InvocationId, _logger);
+
+    // RunAsync's try body, part one: the tool-relevance scope and the model the turn runs on. Every scope opened here stays open
+    // until RunSelectedModelTurnAsync returns, so each is disposed where RunAsync's try used to end.
+    private async Task ExecuteTurnAsync(TurnExecution turn, RuntimePackage package, TurnPolicy turnPolicy)
+    {
+        var dispatcher = turn.Dispatcher;
+        var invocationToken = _lifecycleTracker.GetInvocationCancellationToken(package.InvocationId);
+        // Read LIVE per turn, never captured in a field, INSIDE the try (a throw above it would fail the turn with no failure reported) and on
+        // invocationToken, which is what an operator Cancel or the turn watchdog cancels. See docs/wiki/04-agent-mode.md §1.3 for the scope's placement.
+        var toolRelevanceActive = await _runtimeSettings.GetToolRelevanceEnabledAsync(invocationToken)
+                                  && !package.DisableToolRelevanceFilter;
+        using var toolRelevanceScope = ToolRelevanceScope.BeginScope(toolRelevanceActive,
+            toolRelevanceActive ? _toolRelevanceCoreSet.GetCoreToolNames() : FrozenSet<string>.Empty);
+        if (toolRelevanceActive)
+        {
+            _logger.LogDebug("Tool-relevance filtering is ACTIVE for invocation {InvocationId}.", package.InvocationId);
+        }
+
+        ModelResolution modelResolution;
+        using (NodeActivitySource.Source.StartActivity("chat.invocation.resolve_model"))
+        {
+            modelResolution = await ResolveModelAsync(package.ModelProfile, invocationToken);
+        }
+
+        var resolvedModel = modelResolution.Model;
+
+        // `auto` resolves into a concrete {model, effort} HERE, between model resolution and the local warm, so an admitted small-model swap is what
+        // gets warmed. Declared FIRST so `using` disposes it LAST, after the ledger reservation made inside it; AsyncServiceScope's `default` is unsafe to dispose.
+        using var dispatchScope = ReasoningEffortNormalizer.Normalize(package.ReasoningEffort) is AutoReasoningEffort
+            ? _scopeFactory.CreateScope()
+            : null;
+
+        ReasoningDispatchDecision? dispatchDecision = null;
+
+        // The exact "auto" guard above is the whole byte-identical story for every other effort: no scope, no dispatcher
+        // resolution, no request allocation, no node-side lookup. The package builder has already normalised the value.
+        if (dispatchScope is not null)
+        {
+            dispatchDecision = await dispatchScope.ServiceProvider
+                                                  .GetRequiredService<IReasoningEffortDispatcher>()
+                                                  .DispatchAsync(BuildDispatchRequest(package, resolvedModel), invocationToken);
+        }
+
+        // The model the turn was AUTHORISED for, and its capability flags, captured before the dispatch block can
+        // rewrite any of them. The send-boundary retry below restores exactly these.
+        var originalModel = resolvedModel;
+        var originalSupportsThinking = package.SupportsThinking;
+        var originalReasoningBudgetEnforceable = package.ReasoningBudgetEnforceable;
+        using var fastReservation = dispatchDecision?.CapacityReservation;
+        if (dispatchDecision is { } dispatched)
+        {
+            resolvedModel = dispatched.Model;
+
+            // `package with { ... }` copies ConfigHash verbatim and the hash folds the AUTHORED effort, so two turns of one conversation dispatching to
+            // different tiers share one hash and no resume is invalidated. No tier caps output (ReasoningDispatchDecision.MaxOutputTokens), so the send keeps its shape.
+            package = package with
+            {
+                ReasoningEffort = dispatched.Effort,
+                SupportsThinking = dispatched.SupportsThinking,
+                ReasoningBudgetEnforceable = dispatched.ReasoningBudgetEnforceable
+            };
+
+            // Onto the invocation state, so the terminalize write persists what `auto` resolved to with the envelope row: the tier plus the authored
+            // effort (`auto` by the branch above), which separates the dispatched population from the pre-`auto` one. Every other turn's envelope carries nulls.
+            await dispatcher.ReportEffortDispatchAsync(package.InvocationId, ReasoningTierLabels.For(dispatched.Tier), AutoReasoningEffort);
+        }
+
+        var modelWasSwapped = dispatchDecision is { } swapCandidate
+                              && !string.Equals(swapCandidate.Model, originalModel, StringComparison.Ordinal);
+
+        // The one server-side record of what `auto` decided. The dispatcher takes no logger by design (its inputs are the user's message and the
+        // turn's shape), so only its OUTPUT is logged: tier, stable kebab-case reason code, swapped flag. No signal value, model name or message text.
+        if (dispatchDecision is { } logged)
+        {
+            _logger.LogInformation("Reasoning effort 'auto' dispatched for invocation {InvocationId}: tier {Tier}, reason {ReasonCode}, model swapped {ModelWasSwapped}.",
+                package.InvocationId, ReasoningTierLabels.For(logged.Tier), logged.ReasonCode, modelWasSwapped);
+        }
+
+        // The retry below re-enters RunSingleAgentAsync, which owns the tool-relevance drain and its ToolsFiltered notice, so running it twice would emit
+        // that notice twice. A swap already requires no offered tools; stating the dependency here switches the retry off if a gate ever admits a tool-bearing swap.
+        var swapRetryEligible = modelWasSwapped && package.AllowedTools.Count == 0;
+
+        var selection = new TurnModelSelection
+        {
+            ModelResolution = modelResolution,
+            Package = package,
+            ResolvedModel = resolvedModel,
+            OriginalModel = originalModel,
+            OriginalSupportsThinking = originalSupportsThinking,
+            OriginalReasoningBudgetEnforceable = originalReasoningBudgetEnforceable,
+            DispatchDecision = dispatchDecision,
+            FastReservation = fastReservation,
+            ModelWasSwapped = modelWasSwapped,
+            SwapRetryEligible = swapRetryEligible
+        };
+        await RunSelectedModelTurnAsync(turn, selection, turnPolicy, invocationToken);
+    }
+
+    // A llama.cpp turn that runs on the CPU although a GPU was expected says so in the answer, with the audit's remediation. Peek only: the
+    // memoized audit never probes, so a turn never waits on it, and an undetermined audit stays silent.
+    private async Task EmitCpuFallbackNoticeAsync(StreamTransport transport, LocalRuntimePreparationResult localRuntime)
+    {
+        if (localRuntime.WarmFailure is not null
+            || !string.Equals(localRuntime.ProviderName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        using var scope = _scopeFactory.CreateScope();
+        if (scope.ServiceProvider.GetService<IRuntimeDeviceAudit>()?.PeekCached() is { CpuFallback: true } audit)
+        {
+            var reason = audit.Reason ?? CpuFallbackNoticeMessage;
+            await transport.EmitNoticeAsync(TurnNoticeKind.CpuFallback, audit.Remediation is { Length: > 0 } remediation ? $"{reason} {remediation}" : reason);
+        }
+    }
+
+    // RunAsync's try body, part two: the stream, the notices, the ambient tool-loop scopes, the warm and the admission check. Every
+    // scope opened here stays open until RunAndCompleteTurnAsync returns.
+    private async Task RunSelectedModelTurnAsync(TurnExecution turn, TurnModelSelection selection, TurnPolicy turnPolicy, CancellationToken invocationToken)
+    {
+        var context = turn.Context;
+        var dispatcher = turn.Dispatcher;
+        var package = selection.Package;
+        var resolvedModel = selection.ResolvedModel;
+        var modelResolution = selection.ModelResolution;
+        var dispatchDecision = selection.DispatchDecision;
+        var modelWasSwapped = selection.ModelWasSwapped;
+
+        // Shared streaming state for both the single-agent and orchestration paths: response/reasoning accumulators, byte caps, monotonic sequence
+        // counters, terminal usage snapshot. Both feed it through the same Emit* helpers, so transport, size cap, dispatcher reporting and ordering stay identical.
+        var stream = new StreamState
+        {
+            HarnessStartedTimestamp = turn.HarnessStartedTimestamp
+        };
+        turn.Stream = stream;
+
+        // Keyed by the assistant message the endpoint addresses; disposed with the turn, so a finished turn answers 404.
+        using var reasoningControlTurn = _reasoningControl.Track(context.MessageId);
+        stream.ReasoningControl = reasoningControlTurn;
+
+        var transport = new StreamTransport(this, dispatcher, package);
+
+        // Surface the model-substitution fallback as a visible, non-fatal chat notice rather than a log line only,
+        // which the transport (and therefore the dispatcher) now makes possible.
+        if (modelResolution.Substituted)
+        {
+            await transport.EmitNoticeAsync(TurnNoticeKind.ModelSubstituted,
+                BuildModelSubstitutedNoticeMessage(modelResolution.RequestedModel, resolvedModel));
+        }
+
+        // A decision the user did not make must be visible, but a NORMAL no-swap turn stays silent (noise), and the detail is the reason CODE only.
+        // A SWAPPED turn is silent here too: it may still fall back at the send boundary, and a turn carries exactly ONE effort notice, emitted once the send resolves.
+        if (dispatchDecision is { } announced && announced.Tier != ReasoningTier.Normal && !modelWasSwapped)
+        {
+            await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
+                BuildEffortDispatchedNoticeMessage(announced.Tier, announced.Effort, resolvedModel, swapped: false),
+                announced.ReasonCode);
+        }
+
+        // Seed the per-root spawn context (Depth 0) so spawn_subagent enforces the fan-out and cloud-spawn caps against ONE shared root. It flows as an
+        // AsyncLocal into the function-invocation pipeline running the tool body; disposal restores the prior ambient value, and a turn that never spawns pays one struct.
+        using var spawnRoot = SpawnContext.BeginRoot(await _runtimeSettings.GetSpawnMaxConcurrentAsync(invocationToken),
+            await _runtimeSettings.GetSpawnMaxCloudAsync(invocationToken),
+            resolvedModel);
+
+        // BOTH models, not just the dispatched one: the send-boundary retry switches `resolvedModel` back to the original inside this scope, and a pin it
+        // never resolved drops that fallback send onto the transport's weaker unpinned check. Identical ids de-duplicate, so the pin set is unchanged.
+        var turnPins = await ExternalProviderInvocationPin
+            .ResolveAsync(_externalProviderRegistry, [resolvedModel, selection.OriginalModel], invocationToken);
+
+        // Pin the binding this turn is authorized against once, up front: the provider re-reads configuration on every send, so an operator edit landing
+        // mid-tool-loop would redirect the later ones. Opened here, not in the resolver — an AsyncLocal write never reaches its caller; no external model, no pin.
+        using var externalBindingPin = ExternalProviderBindingPinScope.Begin(turnPins);
+
+        // Seed the active conversation id into the same root tool-loop scope so the AgentHome tool gateway can stage this conversation's uploaded
+        // attachments into the sandbox. Like the spawn context it flows as an AsyncLocal through the pipeline; disposal restores the prior ambient value.
+        using var conversationScope = AgentRunConversationContext.BeginScope(package.ConversationId);
+
+        // Warm the local model BEFORE the watched streaming pull, so a cold big-model load runs in its own size-aware supervisor window and is never
+        // killed by the shorter stream-idle watchdog. Cloud and Ollama models no-op; the load is decoupled from this token, so a cancel only abandons the wait.
+        var requestedContextTokens = turnPolicy.RequestedContextTokens ?? turnPolicy.ContextCapacityTokens;
+        var localRuntime = await _localRuntimeWarmer.PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, stream, turn.TurnStartedTimestamp, invocationToken);
+        var effectiveContextTokens = localRuntime.EffectiveContextTokens;
+        await EmitCpuFallbackNoticeAsync(transport, localRuntime);
+
+        // Once per turn, AFTER the chat model is ready so the companions never race its launch for admission or VRAM.
+        // Fire-and-forget: the first knowledge search may still find them cold and fall back to fusion order.
+        if (package.AllowedTools.Any(static tool => string.Equals(tool.Name, SearchKnowledgeBaseToolDefinition.ToolName, StringComparison.Ordinal))
+            && await _runtimeSettings.GetKnowledgeAgentToolsEnabledAsync(invocationToken))
+        {
+            _knowledgeModelPrewarmer.RequestWarm();
+        }
+
+        // Fold the launched effective window into the turn policy (precedence: TurnPolicy.WithEffectiveContext) so the OUTER budgeter sizes history against the
+        // real window and the INNER num_ctx budgeter resolves the same one. Captured BEFORE the fold: the swapped model's policy would size against a window the authorised model never had.
+        var preWarmPolicy = turnPolicy;
+        turnPolicy = turnPolicy.WithEffectiveContext(effectiveContextTokens);
+        await dispatcher.ReportTurnContextWindowAsync(package.InvocationId, turnPolicy.ContextCapacityTokens, turnPolicy.ReservedOutputTokens);
+
+        // Size every tool result to the window the model was launched with: a fixed 65,536-char ceiling let four results fill half a 64k-token window.
+        using var toolResultBudget = ToolResultBudgetScope.BeginTightenedScope(ToolResultBudgetFor(turnPolicy.ContextCapacityTokens));
+
+        if (context.GenerationAdmissionPolicy is { } admissionPolicy)
+        {
+            // The chat path lets generation retry a failed warm so the provider boundary surfaces its authoritative error. An admission-gated caller
+            // cannot: a null effective context would reject first and mask it, so rethrow the captured failure before consulting the policy.
+            localRuntime.WarmFailure?.Throw();
+
+            var admissionContext = new InvocationGenerationAdmissionContext
+            {
+                InvocationId = package.InvocationId,
+                RequestedContextTokens = requestedContextTokens,
+                EffectiveContextTokens = effectiveContextTokens,
+                ModelId = resolvedModel,
+                ProviderName = localRuntime.ProviderName
+            };
+            var decision = await admissionPolicy.EvaluateAsync(admissionContext, invocationToken)
+                           ?? throw new InvalidOperationException("The invocation generation admission policy returned no decision.");
+            if (!decision.IsAllowed)
+            {
+                throw new InvocationGenerationRejectedException(LocalRuntimeWarmer.BuildGenerationAdmissionRejectionMessage(decision.RejectionReasonCode,
+                    admissionContext));
+            }
+        }
+
+        await RunAndCompleteTurnAsync(turn, selection, transport, turnPolicy, preWarmPolicy, effectiveContextTokens, toolResultBudget, invocationToken);
+    }
+
+    // RunAsync's try body, part three: the send (orchestration, or the single agent with its one swap fallback) and the completion report.
+    private async Task RunAndCompleteTurnAsync(TurnExecution turn,
+        TurnModelSelection selection,
+        StreamTransport transport,
+        TurnPolicy turnPolicy,
+        TurnPolicy preWarmPolicy,
+        int? effectiveContextTokens,
+        IDisposable toolResultBudget,
+        CancellationToken invocationToken)
+    {
+        var dispatcher = turn.Dispatcher;
+        var stream = turn.Stream!;
+        var package = selection.Package;
+        var resolvedModel = selection.ResolvedModel;
+        var dispatchDecision = selection.DispatchDecision;
+        var modelWasSwapped = selection.ModelWasSwapped;
+
+        // Branch: a package carrying a compiled orchestration spec drives the handoff workflow; everything else is
+        // the unchanged single-agent loop. Both accumulate into `stream`, then share the completion block below.
+        if (package.OrchestrationSpec is { } orchestrationSpec)
+        {
+            // The OUTER conversation budgeter sizes against the effective window via the updated turnPolicy above; the same window is threaded per
+            // participant, so each participant's INNER provider-round budgeter sizes against the window ITS model was launched with.
+            await RunOrchestrationAsync(package, orchestrationSpec, resolvedModel, transport, stream, turnPolicy, effectiveContextTokens, invocationToken);
+        }
+        else
+        {
+            try
+            {
+                await RunSingleAgentAsync(package, resolvedModel, transport, stream, turnPolicy, effectiveContextTokens, invocationToken);
+
+                // A swap served the turn. Announce it now, once, naming the model that actually ran. Every other
+                // turn already emitted its notice (or is a silent NORMAL one) before the send.
+                if (modelWasSwapped && dispatchDecision is { } served)
+                {
+                    // The invocation state was seeded with the model the PACKAGE named, and the persisted message row and the envelope's provider
+                    // attribution both read it there, so a swapped turn that does not correct it is measured against a model that never saw it.
+                    await dispatcher.ReportServedModelAsync(package.InvocationId, resolvedModel);
+                    await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
+                        BuildEffortDispatchedNoticeMessage(served.Tier, served.Effort, resolvedModel, swapped: true),
+                        served.ReasonCode);
+                }
+            }
+            // The fast model went away between the capacity probe and the send — profiled away, ejected, uninstalled, or it would not fit — and nothing has
+            // reached the client, so re-run once on the authorised model. Keyed on "nothing streamed", which covers every such cause and cannot rot on provider wording.
+            catch (Exception) when (selection.SwapRetryEligible && !stream.FirstOutputRecorded && !invocationToken.IsCancellationRequested)
+            {
+                // RELEASE THE FAST RESERVATION FIRST: it books the small model's bytes and, on an Allow verdict, a launch admission and one of the
+                // loaded-process slots, so carrying it in double-books the ledger and can starve the original model's own spawn at the process cap. Dispose is idempotent.
+                selection.FastReservation?.Dispose();
+                resolvedModel = selection.OriginalModel;
+                package = package with
+                {
+                    ReasoningEffort = FallbackDispatchEffort,
+                    SupportsThinking = selection.OriginalSupportsThinking,
+                    ReasoningBudgetEnforceable = selection.OriginalReasoningBudgetEnforceable
+                };
+
+                // Re-warm the ORIGINAL model and re-derive its window: the policy and effective context above were measured against the fast model's
+                // launched window, and carrying them in would size this turn's history — and the definition's num_ctx — against a window this model never had.
+                var retryRuntime = await _localRuntimeWarmer.PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, stream, turn.TurnStartedTimestamp, invocationToken);
+                var retryContextTokens = retryRuntime.EffectiveContextTokens;
+                var retryPolicy = preWarmPolicy.WithEffectiveContext(retryContextTokens);
+                await dispatcher.ReportTurnContextWindowAsync(package.InvocationId, retryPolicy.ContextCapacityTokens, retryPolicy.ReservedOutputTokens);
+
+                // The fast model's budget scope is closed and one sized to THIS model's window opened, so its results are not cut to the
+                // swapped-out model's window. Closing twice is safe: the outer using re-restores the same prior value.
+                toolResultBudget.Dispose();
+                using var retryToolResultBudget = ToolResultBudgetScope.BeginTightenedScope(ToolResultBudgetFor(retryPolicy.ContextCapacityTokens));
+
+                await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
+                    BuildEffortDispatchedNoticeMessage(ReasoningTier.Fast, FallbackDispatchEffort, resolvedModel, swapped: false),
+                    ReasoningDispatchReasons.FastModelUnavailable);
+
+                // Exactly once. A second failure is a real failure and fails the turn normally.
+                await RunSingleAgentAsync(package, resolvedModel, transport, stream, retryPolicy, retryContextTokens, invocationToken);
+            }
+            // The swapped send failed with no fallback left — it had already streamed, the turn offers tools, or it is being cancelled. A turn carries exactly
+            // ONE effort notice and the pre-send one is withheld for swapped turns, so without this a silently replaced model is never reported at all.
+            catch (Exception) when (modelWasSwapped && dispatchDecision is { } failedSwap)
+            {
+                // Names the model that actually served. No served-model report: the turn produced no answer to attribute and the fast model may have died
+                // before its first token, so the seeded (authorised) model stays on the failed row. The FAILURE is the outer handler's, as for any other turn.
+                await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
+                    BuildEffortDispatchedNoticeMessage(failedSwap.Tier, failedSwap.Effort, resolvedModel, swapped: true),
+                    failedSwap.ReasonCode);
+                throw;
+            }
+        }
+
+        // A turn cancelled by either watchdog, an operator stop or a shutdown drain as its stream ends with no further chunks returns NORMALLY without observing
+        // the token (callbacks run in reverse registration order) and would persist as a SUCCESSFUL answer nobody received. The category still comes from the recorded origin.
+        invocationToken.ThrowIfCancellationRequested();
+
+        // Read the whole-turn wall-clock duration once. The same value rides the dispatcher report, so the
+        // persisted tokens-per-second is computed from one authoritative measurement.
+        var generationDurationMs = (long)stream.GenerationStopwatch.Elapsed.TotalMilliseconds;
+
+        // Emit cumulative model token usage from the single per-turn finalize point, never the per-tool-loop usage-arrival site, which would
+        // double-count across rounds. Content-free: counts tagged by the coarse provider dimension, model id and direction only.
+        RecordTokenUsageMetric(stream, resolvedModel);
+
+        if (stream.LastRoundUsage is null)
+        {
+            _logger.LogWarning("Terminal model usage was not reported for invocation {InvocationId} using model {ModelName}. Token fields will remain unknown.",
+                package.InvocationId,
+                resolvedModel);
+        }
+
+        await ReportTerminalTelemetryAsync(turn, package.InvocationId);
+        // LAST ROUND again: these reach InvocationState's token members, which the terminalize write persists onto the assistant message row, and which
+        // the resume registry and the memory-extraction hook read. The turn's own cost rode ReportTurnTelemetryAsync a line above, onto the envelope row.
+        await dispatcher.ReportInvocationCompletedAsync(package.InvocationId,
+            stream.LastRoundUsage?.InputTokens,
+            stream.LastRoundUsage?.OutputTokens,
+            stream.LastRoundUsage?.TotalTokens,
+            stream.LastRoundUsage?.ReasoningTokens,
+            generationDurationMs,
+            stream.FinishReason,
+            stream.ToThroughput());
     }
 
     /// <inheritdoc />
@@ -791,505 +899,83 @@ public sealed partial class InvocationRunner : IInvocationRunner
         await using var agentContext = await _invocationAgentFactory.CreateAsync(definition, invocationToken);
         buildAgentActivity?.Dispose();
 
-        // Maps callId → the tool name plus what its Requested event carried, so a FunctionResultContent (which has no Name) resolves its tool from the
-        // matching FunctionCallContent, and a re-emitted FunctionCallContent is recognised as a repeat before it pays another serialize + dispatch.
-        var pendingLocalToolCalls = new Dictionary<string, RequestedToolCall>(StringComparer.Ordinal);
+        var loop = new SingleAgentLoop
+        {
+            AgentContext = agentContext,
+            ToolBudgetDefinitions = toolBudgetDefinitions,
+            BudgetGate = budgetGate,
 
-        // Tool calls requested (or approved) and not yet resulted: while one is open the pull is server-side tool execution, which neither the idle watchdog
-        // nor the model's turn budget is charged for. Cleared per segment and at the next round's provider output, so a stale id cannot keep them off.
-        var openToolCalls = new OpenToolCalls(_lifecycleTracker);
+            // Maps callId → the tool name plus what its Requested event carried, so a FunctionResultContent (which has no Name) resolves its tool from the
+            // matching FunctionCallContent, and a re-emitted FunctionCallContent is recognised as a repeat before it pays another serialize + dispatch.
+            PendingLocalToolCalls = new Dictionary<string, RequestedToolCall>(StringComparer.Ordinal),
 
-        // Surrogate ids for a provider that streams a BLANK CallId (Microsoft.Extensions.AI rejects a null one, so the empty string is the id-less shape): the FIRST
-        // call to a tool keys on the tool NAME, the id the approval card resolves, and later id-less calls take "<name>#2". Holds the one still awaiting a result.
-        var openSurrogateCallIds = new Dictionary<string, string>(StringComparer.Ordinal);
+            // Tool calls requested (or approved) and not yet resulted: while one is open the pull is server-side tool execution, which neither the idle watchdog
+            // nor the model's turn budget is charged for. Cleared per segment and at the next round's provider output, so a stale id cannot keep them off.
+            OpenToolCalls = new OpenToolCalls(_lifecycleTracker, package.InvocationId),
 
-        // Ever-used, not currently-open, so an OVERLAPPING call is told apart by openSurrogateCallIds above. ONCE CLOSED, NEVER REUSED: a second SEQUENTIAL call cannot
-        // land on the first call's key, where an identical payload would be swallowed as a streamed re-emission and a different one would merge its arguments with the last result.
-        var usedSurrogateNames = new HashSet<string>(StringComparer.Ordinal);
+            // Surrogate ids for a provider that streams a BLANK CallId (Microsoft.Extensions.AI rejects a null one, so the empty string is the id-less shape): the FIRST
+            // call to a tool keys on the tool NAME, the id the approval card resolves, and later id-less calls take "<name>#2". Holds the one still awaiting a result.
+            OpenSurrogateCallIds = new Dictionary<string, string>(StringComparer.Ordinal),
 
-        // The arrival-ordered queue the matching FunctionResultContent — which carries the call's own blank id — is paired back through. An approval-gated
-        // tool on an id-less provider therefore correlates only its FIRST card: a limitation of having no id, and not one this widens.
-        var pendingSurrogateResults = new Queue<SurrogateCall>();
-        var surrogateCallCount = 1;
+            // Ever-used, not currently-open, so an OVERLAPPING call is told apart by openSurrogateCallIds above. ONCE CLOSED, NEVER REUSED: a second SEQUENTIAL call cannot
+            // land on the first call's key, where an identical payload would be swallowed as a streamed re-emission and a different one would merge its arguments with the last result.
+            UsedSurrogateNames = new HashSet<string>(StringComparer.Ordinal),
 
-        // Which tools this turn already surfaced a ToolDisabled notice for, so a model that keeps calling a disabled tool — each further call short-circuits
-        // to the same "tool_disabled" result from ToolArgumentRepairAIFunction — is reported to the chat once per tool, not once per call.
-        var notifiedDisabledTools = new HashSet<string>(StringComparer.Ordinal);
+            // The arrival-ordered queue the matching FunctionResultContent — which carries the call's own blank id — is paired back through. An approval-gated
+            // tool on an id-less provider therefore correlates only its FIRST card: a limitation of having no id, and not one this widens.
+            PendingSurrogateResults = new Queue<SurrogateCall>(),
+            SurrogateCallCount = 1,
 
-        // The conversation grows across approval-gated segments: a tool wrapped in ApprovalRequiredAIFunction makes FunctionInvokingChatClient surface a
-        // ToolApprovalRequestContent and end the segment WITHOUT executing it, so the decision resumes threadlessly by replaying the folded segment plus the response.
-        var currentMessages = new List<ChatMessage>(agentContext.SeedMessages);
+            // Which tools this turn already surfaced a ToolDisabled notice for, so a model that keeps calling a disabled tool — each further call short-circuits
+            // to the same "tool_disabled" result from ToolArgumentRepairAIFunction — is reported to the chat once per tool, not once per call.
+            NotifiedDisabledTools = new HashSet<string>(StringComparer.Ordinal),
 
-        // One model turn can surface MORE than one approval request (parallel tool calls), so EVERY request in the segment is collected — a scalar would dangle
-        // all but the last forever — deduped against a provider re-emitting one across chunks, on a namespaced key so a CallId and an approval Id cannot collide.
-        var pendingApprovals = new List<ToolApprovalRequestContent>();
-        var pendingApprovalKeys = new HashSet<string>(StringComparer.Ordinal);
+            // The conversation grows across approval-gated segments: a tool wrapped in ApprovalRequiredAIFunction makes FunctionInvokingChatClient surface a
+            // ToolApprovalRequestContent and end the segment WITHOUT executing it, so the decision resumes threadlessly by replaying the folded segment plus the response.
+            CurrentMessages = new List<ChatMessage>(agentContext.SeedMessages),
 
-        // Inter-chunk idle bound for every segment: a provider stalling between streamed chunks past the policy's stream-idle timeout has its send cancelled
-        // by the watchdog, as a distinct Timeout-category failure. A non-positive value disables it, which the validator already rejects for a real package.
-        var streamIdleTimeout = turnPolicy.StreamIdleTimeout;
-        var streamIdleTimeoutMessage = turnPolicy.StreamIdleTimeoutMessage;
+            // One model turn can surface MORE than one approval request (parallel tool calls), so EVERY request in the segment is collected — a scalar would dangle
+            // all but the last forever — deduped against a provider re-emitting one across chunks, on a namespaced key so a CallId and an approval Id cannot collide.
+            PendingApprovals = new List<ToolApprovalRequestContent>(),
+            PendingApprovalKeys = new HashSet<string>(StringComparer.Ordinal),
 
-        // The pre-first-token retry + circuit breaker guards only the FIRST segment's send: once any chunk has streamed — and an approval-resume segment
-        // follows earlier output by definition — a retry could duplicate output, so later segments run the provider send directly.
-        var isFirstSegment = true;
+            // Inter-chunk idle bound for every segment: a provider stalling between streamed chunks past the policy's stream-idle timeout has its send cancelled
+            // by the watchdog, as a distinct Timeout-category failure. A non-positive value disables it, which the validator already rejects for a real package.
+            StreamIdleTimeout = turnPolicy.StreamIdleTimeout,
+            StreamIdleTimeoutMessage = turnPolicy.StreamIdleTimeoutMessage,
 
-        // The per-segment update list is retained ONLY to replay a folded segment, on approval or on the one tool-call-in-reasoning re-prompt below, so a
-        // turn offering no tool never keeps it.
-        var retainSegmentUpdates = package.AllowedTools.Count > 0;
+            // The pre-first-token retry + circuit breaker guards only the FIRST segment's send: once any chunk has streamed — and an approval-resume segment
+            // follows earlier output by definition — a retry could duplicate output, so later segments run the provider send directly.
+            IsFirstSegment = true,
 
-        // Model-matrix F4: a thinking model can write its tool call inside the reasoning block, where llama-server keeps it as reasoning. Re-prompted once, never more.
-        var reasoningToolCallReprompted = false;
-        var repromptPending = false;
+            // The per-segment update list is retained ONLY to replay a folded segment, on approval or on the one tool-call-in-reasoning re-prompt below, so a
+            // turn offering no tool never keeps it. Skills count: their approval-gated tools come through the skills context provider, not AllowedTools.
+            RetainSegmentUpdates = package.AllowedTools.Count > 0 || package.Skills is { Count: > 0 },
+
+            // Model-matrix F4: a thinking model can write its tool call inside the reasoning block, where llama-server keeps it as reasoning. Re-prompted once, never more.
+            ReasoningToolCallReprompted = false,
+            RepromptPending = false
+        };
 
         // The reviewed web results of THIS agent stream, read by the web tool handlers when the framework executes the approved calls.
         using var webReviewScope = WebReviewResultScope.BeginScope();
 
         // Whether the round after the last tool result produced text or a call. A turn that ends on a silent round would
         // otherwise complete as an empty "answer" the user cannot tell from a slow one.
-        var finalRoundHasOutput = false;
+        loop.FinalRoundHasOutput = false;
 
         // Where the final round's answer and reasoning start in the turn's builders, so the end-of-turn checks below
         // judge that round alone and never move text an earlier round (before a tool result) produced.
-        var finalRoundContentStart = stream.ResponseBuilder.Length;
-        var finalRoundReasoningStart = stream.ReasoningBuilder.Length;
+        loop.FinalRoundContentStart = stream.ResponseBuilder.Length;
+        loop.FinalRoundReasoningStart = stream.ReasoningBuilder.Length;
 
         do
         {
-            // Growth point (b): re-budget the approval-grown message list before each provider round — a cheap passthrough on the first iteration, and a bound on
-            // the folded tool-call + approval history on a resume. The protected recent turns carry the in-flight round and are never trimmed, so the list stays valid.
-            var budgetedMessages = await ApplyContextBudgetAsync(currentMessages, package, toolBudgetDefinitions, resolvedModel, "tool-loop", turnPolicy, transport, budgetGate);
-            if (!ReferenceEquals(budgetedMessages, currentMessages))
-            {
-                currentMessages = budgetedMessages as List<ChatMessage> ?? [.. budgetedMessages];
-            }
+            await RunSegmentAsync(loop, package, resolvedModel, transport, stream, turnPolicy, invocationToken);
+        } while (loop.PendingApprovals.Count > 0 || loop.RepromptPending);
 
-            pendingApprovals.Clear();
-            pendingApprovalKeys.Clear();
-            repromptPending = false;
-            var segmentUpdates = new List<AgentResponseUpdate>();
-
-            // A provider round's wait for its first output is prompt prefill, which streams nothing and grows with the prompt, so the idle bound is suspended
-            // until that output arrives: at the segment's start and after each tool result. The whole-turn deadline still bounds the wait.
-            var awaitingRoundOutput = true;
-
-            // The idle watchdog owns the token the provider call binds cancellation to, so an idle expiry actually cancels the send. The first segment also
-            // runs through the pre-first-token retry + circuit breaker, which re-invokes this whole factory, so a fresh idle watchdog guards every attempt.
-            IAsyncEnumerable<AgentResponseUpdate> ProviderSend(CancellationToken sendToken)
-            {
-                return StreamIdleWatchdog.WithIdleTimeout(innerToken => agentContext.Agent.RunStreamingAsync(currentMessages, session: null, agentContext.RunOptions, innerToken),
-                    streamIdleTimeout,
-                    streamIdleTimeoutMessage,
-                    _timeProvider,
-                    sendToken,
-                    isSuspended: () => openToolCalls.Any || awaitingRoundOutput);
-            }
-
-            var segmentStream = isFirstSegment
-                ? _providerStreamResilience.ExecuteStreamingAsync(resolvedModel, ProviderSend, invocationToken)
-                : ProviderSend(invocationToken);
-
-            await foreach (var update in segmentStream.WithCancellation(invocationToken))
-            {
-                // Any update but a tool result is the round's output; a result re-arms the wait below.
-                awaitingRoundOutput = false;
-
-                if (retainSegmentUpdates)
-                {
-                    segmentUpdates.Add(update);
-                }
-
-                var textChunk = update.Text;
-                if (!string.IsNullOrEmpty(textChunk))
-                {
-                    finalRoundHasOutput = true;
-                }
-
-                // Last-wins across the whole turn, segments included: an intermediate tool-call segment must not be the
-                // reason the turn is recorded as having stopped.
-                if (update.FinishReason is { } finishReason && !string.IsNullOrEmpty(finishReason.Value))
-                {
-                    stream.FinishReason = finishReason.Value;
-                }
-
-                // Folded on ARRIVAL, not once per drained stream: a tool-calling turn is several llama-server requests inside ONE RunStreamingAsync, which
-                // FunctionInvokingChatClient loops internally, so last-wins keeps only the final one. `timings` rides each request's LAST chunk; `timings_per_token`, which double-counts, stays off.
-                stream.AddSegmentTimings(LlamaServerGenerationTimings.TryRead(update.RawRepresentation));
-
-                // Reasoning text and the terminal usage snapshot are pulled in the SAME pass that fires the tool-call lifecycle events, so a streamed token
-                // costs one scan. Local tools run inside FunctionInvokingChatClient, so detecting the call/result content here is what puts their lifecycle events on the SSE stream.
-                StringBuilder? thinkingBuilder = null;
-                UsageDetails? usage = null;
-                // How much of this update's reasoning and whether its text were emitted ahead of a requested call in it.
-                var flushedThinkingLength = 0;
-                var textFlushed = false;
-
-                if (update.Contents is { Count: > 0 } contents)
-                {
-                    foreach (var content in contents)
-                    {
-                        switch (content)
-                        {
-                            case TextReasoningContent reasoning:
-                                (thinkingBuilder ??= new StringBuilder()).Append(reasoning.Text);
-                                break;
-
-                            case UsageContent usageContent:
-                                // LastOrDefault semantics: the last usage content in the update wins.
-                                usage = usageContent.Details;
-                                break;
-
-                            case FunctionCallContent functionCall:
-                                // A BLANK CallId takes an invocation-local surrogate (openSurrogateCallIds above), so a second same-name call is its own
-                                // card and its result is never reported under an id the Requested event did not use.
-                                var callName = functionCall.Name ?? string.Empty;
-                                var openSurrogate = string.IsNullOrEmpty(functionCall.CallId) && openSurrogateCallIds.TryGetValue(callName, out var open)
-                                    ? open
-                                    : null;
-                                var callId = openSurrogate ?? ResolveToolCallCardId(functionCall.CallId, functionCall.Name);
-
-                                // A retired surrogate is never revived. This runs BEFORE the repeat checks below, so they compare against the fresh key
-                                // and cannot mistake a genuine second call for a re-emission of the finished one.
-                                if (string.IsNullOrEmpty(functionCall.CallId) && openSurrogate is null && usedSurrogateNames.Contains(callName))
-                                {
-                                    callId = string.Concat(callName, "#", (++surrogateCallCount).ToString(CultureInfo.InvariantCulture));
-                                }
-
-                                // A provider re-emitting the SAME call across streamed chunks would otherwise pay a Serialize + dispatch + SignalR frame per
-                                // repeat and evict a real event from InvocationResumeRegistry's CAPPED tool history. Both guards are conservative: a distinct call still reports.
-                                var isRepeatedCall = pendingLocalToolCalls.TryGetValue(callId, out var alreadyRequested)
-                                                     && string.Equals(alreadyRequested.Name, callName, StringComparison.Ordinal);
-
-                                // Same content instance re-emitted: identical by construction, so skip the serialize too.
-                                if (isRepeatedCall && ReferenceEquals(alreadyRequested.Arguments, functionCall.Arguments))
-                                {
-                                    break;
-                                }
-
-                                var serializedArguments = functionCall.Arguments is not null
-                                    ? JsonSerializer.Serialize(functionCall.Arguments)
-                                    : null;
-
-                                // Distinct instance, byte-identical payload: the event would be indistinguishable from the one already on the wire.
-                                // Cache the new instance so the next repeat takes the cheaper reference check above.
-                                if (isRepeatedCall && string.Equals(alreadyRequested.SerializedArguments, serializedArguments, StringComparison.Ordinal))
-                                {
-                                    pendingLocalToolCalls[callId] = new RequestedToolCall(alreadyRequested.Name, functionCall.Arguments, alreadyRequested.SerializedArguments);
-                                    break;
-                                }
-
-                                if (string.IsNullOrEmpty(functionCall.CallId))
-                                {
-                                    // A surrogate still OPEN here means the payload DIFFERS from that call's. With no id, a second overlapping call and a
-                                    // revision of the same card are indistinguishable, and collapsing them loses a call and its result where separating costs one extra card.
-                                    if (openSurrogate is not null)
-                                    {
-                                        callId = string.Concat(callName, "#", (++surrogateCallCount).ToString(CultureInfo.InvariantCulture));
-                                    }
-
-                                    _ = usedSurrogateNames.Add(callName);
-                                    openSurrogateCallIds[callName] = callId;
-                                    pendingSurrogateResults.Enqueue(new SurrogateCall(callName, callId));
-                                }
-
-                                // callName, not functionCall.Name: the local above null-coalesces the property the compiler still treats as maybe-null.
-                                // The two are the same string whenever the provider gave a name at all.
-                                pendingLocalToolCalls[callId] = new RequestedToolCall(callName, functionCall.Arguments, serializedArguments);
-                                openToolCalls.Open(callId);
-                                finalRoundHasOutput = true;
-
-                                // The call's content offset must include narration riding the SAME update, or it lands in the answer after the card.
-                                if (thinkingBuilder is not null && thinkingBuilder.Length > flushedThinkingLength)
-                                {
-                                    await transport.EmitReasoningAsync(stream, thinkingBuilder.ToString(flushedThinkingLength, thinkingBuilder.Length - flushedThinkingLength));
-                                    flushedThinkingLength = thinkingBuilder.Length;
-                                }
-
-                                if (!textFlushed && !string.IsNullOrEmpty(textChunk))
-                                {
-                                    await transport.EmitTextAsync(stream, textChunk);
-                                    textFlushed = true;
-                                }
-
-                                await transport.Dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
-                                {
-                                    InvocationId = package.InvocationId,
-                                    ToolCallId = callId,
-                                    ToolName = callName,
-                                    Phase = ToolCallLifecyclePhase.Requested,
-                                    Arguments = serializedArguments,
-                                    RequiresApproval = false
-                                });
-                                break;
-
-                            case FunctionResultContent functionResult:
-                                // MEAI stamps the result with the CALL's id, so a blank call id yields a blank result id. Pair it with the oldest surrogate
-                                // still awaiting one (results arrive in call order without ids): Completed under the empty string is dropped by every id-correlating consumer.
-                                var resultCallId = functionResult.CallId ?? string.Empty;
-                                if (string.IsNullOrEmpty(resultCallId) && pendingSurrogateResults.TryDequeue(out var surrogate))
-                                {
-                                    resultCallId = surrogate.CallId;
-
-                                    // That call is closed: the next same-name call with no id opens its own card
-                                    // instead of reviving this one.
-                                    if (openSurrogateCallIds.TryGetValue(surrogate.Name, out var stillOpen)
-                                        && string.Equals(stillOpen, resultCallId, StringComparison.Ordinal))
-                                    {
-                                        _ = openSurrogateCallIds.Remove(surrogate.Name);
-                                    }
-                                }
-
-                                openToolCalls.Close(resultCallId);
-                                var toolName = pendingLocalToolCalls.TryGetValue(resultCallId, out var requested)
-                                    ? requested.Name
-                                    : resultCallId;
-                                var toolResultText = functionResult.Result?.ToString();
-
-                                // A result starts a new model round, which must produce its own text or call to count as an answer.
-                                finalRoundHasOutput = false;
-                                awaitingRoundOutput = true;
-                                finalRoundContentStart = stream.ResponseBuilder.Length;
-                                finalRoundReasoningStart = stream.ReasoningBuilder.Length;
-
-                                // Media rides beside the model's text (ToolResultMedia) so an image result persists as an image, never as a type name.
-                                await transport.Dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
-                                {
-                                    InvocationId = package.InvocationId,
-                                    ToolCallId = resultCallId,
-                                    ToolName = toolName,
-                                    Phase = ToolCallLifecyclePhase.Completed,
-                                    Result = toolResultText,
-                                    IsError = functionResult.Exception is not null || ToolFailureText.TryGetCode(functionResult.Result) is not null,
-                                    Media = ToolResultMedia.Get(functionResult.Result)
-                                });
-
-                                // ToolArgumentRepairAIFunction returns this structured result instead of throwing once repeated invalid-argument calls disable
-                                // a tool for the rest of the run; without this it is visible only in the tool-result JSON. Once per tool — every further call returns the same marker.
-                                if (IsToolDisabledResult(toolResultText) && notifiedDisabledTools.Add(toolName))
-                                {
-                                    await transport.EmitNoticeAsync(TurnNoticeKind.ToolDisabled,
-                                        BuildToolDisabledNoticeMessage(toolName),
-                                        toolName);
-                                }
-
-                                break;
-
-                            case ToolApprovalRequestContent approvalRequest:
-                                // FunctionInvokingChatClient surfaces this for an ApprovalRequiredAIFunction instead of executing the tool. Capture EVERY
-                                // request in the segment, deduped across re-emitting chunks; the outer loop then runs each round-trip and resumes threadlessly.
-                                if (!ToolApprovalCoordinator.IsDuplicatePendingApproval(approvalRequest, pendingApprovals, pendingApprovalKeys))
-                                {
-                                    pendingApprovals.Add(approvalRequest);
-                                }
-
-                                break;
-                        }
-                    }
-                }
-
-                if (thinkingBuilder is { Length: > 0 } || !string.IsNullOrEmpty(textChunk))
-                {
-                    openToolCalls.OnProviderOutput();
-                }
-
-                // "Answer now" may only fire while the armed completion is still reasoning: answer text or a finished completion ends that phase.
-                stream.ReasoningControl?.Observe(update.RawRepresentation,
-                    sawReasoning: thinkingBuilder is { Length: > 0 },
-                    sawAnswer: !string.IsNullOrEmpty(textChunk) || update.FinishReason is not null);
-
-                if (usage is not null)
-                {
-                    // ACCUMULATED, not assigned — same reason as AddSegmentTimings above: one UsageContent arrives per
-                    // provider round inside the single RunStreamingAsync, so last-wins reported only the final round.
-                    stream.AddUsage(usage);
-                    var cumulativeUsage = stream.UsageSnapshot!;
-                    _logger.LogDebug("Received cumulative usage for invocation {InvocationId}: input={InputTokens}, output={OutputTokens}, reasoning={ReasoningTokens}, total={TotalTokens}.",
-                        package.InvocationId,
-                        cumulativeUsage.InputTokens,
-                        cumulativeUsage.OutputTokens,
-                        cumulativeUsage.ReasoningTokens,
-                        cumulativeUsage.TotalTokens);
-                }
-
-                if (thinkingBuilder is not null && thinkingBuilder.Length > flushedThinkingLength)
-                {
-                    await transport.EmitReasoningAsync(stream, thinkingBuilder.ToString(flushedThinkingLength, thinkingBuilder.Length - flushedThinkingLength));
-                }
-
-                if (textFlushed || string.IsNullOrEmpty(textChunk))
-                {
-                    continue;
-                }
-
-                await transport.EmitTextAsync(stream, textChunk);
-            }
-
-            // Drained at the end of the FIRST segment so it FOLLOWS the first assistant text, exactly as HistoryTruncated does: the hop cannot reach the
-            // transport and leaves its counts on the ambient scope. Counts only, never a tool name; a first segment that THROWS emits nothing, since the line would read as the cause.
-            if (isFirstSegment && ToolRelevanceScope.Current is { } relevanceState)
-            {
-                var hiddenToolCount = Volatile.Read(ref relevanceState.PendingNoticeHiddenCount);
-                if (hiddenToolCount > 0)
-                {
-                    await transport.EmitNoticeAsync(TurnNoticeKind.ToolsFiltered,
-                        BuildToolsFilteredNoticeMessage(hiddenToolCount, Volatile.Read(ref relevanceState.PendingNoticeTotalCount)));
-                }
-            }
-
-            openToolCalls.Clear();
-
-            // The first segment has drained; any resume segment past this point follows earlier output and must not be
-            // retried (a retry there would replay already-streamed chunks).
-            isFirstSegment = false;
-
-            if (pendingApprovals.Count > 0)
-            {
-                // Fold the streamed segment into messages (the assistant tool calls plus the approval requests), run EACH round-trip over the existing transport,
-                // which presents one at a time, then replay history plus ONE user message carrying every response, from which FunctionInvokingChatClient executes or rejects each call.
-                var foldedMessages = segmentUpdates.ToAgentResponse().Messages;
-                currentMessages.AddRange(foldedMessages);
-
-                // Each web call is consented to one card at a time, outside the tool window; the consented ones are then retrieved at once, before the first
-                // review card, and the tool time is not charged to the model. A refused request has no preview, so the loop below hands its text to the model.
-                IReadOnlyDictionary<ToolApprovalRequestContent, WebReviewRetrieval> webRetrievals = FrozenDictionary<ToolApprovalRequestContent, WebReviewRetrieval>.Empty;
-                if (pendingApprovals.Exists(ToolApprovalCoordinator.IsWebReviewRequest))
-                {
-                    var consented = new List<ToolApprovalRequestContent>();
-                    var retrievals = new Dictionary<ToolApprovalRequestContent, WebReviewRetrieval>();
-                    foreach (var webRequest in pendingApprovals.Where(ToolApprovalCoordinator.IsWebReviewRequest))
-                    {
-                        if (await _toolApprovalCoordinator.RequestWebConsentAsync(package, webRequest, _lifecycleTracker.SetInvocationDeadline, invocationToken) is { } refusal)
-                        {
-                            retrievals[webRequest] = refusal;
-                        }
-                        else
-                        {
-                            consented.Add(webRequest);
-                        }
-                    }
-
-                    if (consented.Count > 0)
-                    {
-                        _lifecycleTracker.SetToolExecuting(executing: true);
-                        try
-                        {
-                            foreach (var (webRequest, retrieval) in await _toolApprovalCoordinator.RetrieveWebContentAsync(package, consented, invocationToken))
-                            {
-                                retrievals[webRequest] = retrieval;
-                            }
-                        }
-                        finally
-                        {
-                            _lifecycleTracker.SetToolExecuting(executing: false);
-                        }
-                    }
-
-                    webRetrievals = retrievals;
-                }
-
-                var approvalResponses = new List<AIContent>(pendingApprovals.Count);
-                foreach (var approvalRequest in pendingApprovals)
-                {
-                    // A web review, like ask_user, always approves: the handler returns whatever the review stashed, the decline text included.
-                    if (webRetrievals.TryGetValue(approvalRequest, out var webRetrieval))
-                    {
-                        var reviewNote = await _toolApprovalCoordinator.RequestWebReviewAsync(package, approvalRequest, webRetrieval, _lifecycleTracker.SetInvocationDeadline, invocationToken);
-                        approvalResponses.Add(approvalRequest.CreateResponse(approved: true, reviewNote));
-                        openToolCalls.OpenApproved(approvalRequest);
-                        continue;
-                    }
-
-                    // ask_user rides the approval seam for its BLOCKING behaviour, not a risk verdict (AskUserToolHandler): its round-trip collects an ANSWER
-                    // and then always approves, so the framework executes the tool and the handler returns that answer. Every other tool keeps the approve/deny path.
-                    if (ToolApprovalCoordinator.IsUserQuestionRequest(approvalRequest))
-                    {
-                        var answerNote = await _toolApprovalCoordinator.RequestUserAnswerAsync(package, approvalRequest, _lifecycleTracker.SetInvocationDeadline, invocationToken);
-                        approvalResponses.Add(approvalRequest.CreateResponse(approved: true, answerNote));
-                        openToolCalls.OpenApproved(approvalRequest);
-                        continue;
-                    }
-
-                    var approved = await _toolApprovalCoordinator.RequestToolApprovalAsync(package, approvalRequest, _lifecycleTracker.SetInvocationDeadline, invocationToken);
-                    approvalResponses.Add(approvalRequest.CreateResponse(approved, approved ? "Approved by user." : "Rejected by user."));
-                    if (approved)
-                    {
-                        openToolCalls.OpenApproved(approvalRequest);
-                    }
-                }
-
-                currentMessages.Add(new ChatMessage(ChatRole.User, approvalResponses));
-            }
-            else if (!finalRoundHasOutput && retainSegmentUpdates && !reasoningToolCallReprompted && !invocationToken.IsCancellationRequested
-                     && ReasoningCarriesToolCall(stream, finalRoundReasoningStart))
-            {
-                // The folded segment keeps every executed call and result but no reasoning, so the unparsed call is not replayed. A nudge recovered
-                // the bare 9B 5/5 at b10201 (.tmp/model-matrix-data/phase2/track-1b/probe-summary.txt).
-                reasoningToolCallReprompted = true;
-                foreach (var folded in segmentUpdates.ToAgentResponse().Messages)
-                {
-                    var kept = folded.Contents.Where(static content => content is not TextReasoningContent).ToList();
-                    if (kept.Exists(static content => content is not TextContent text || !string.IsNullOrWhiteSpace(text.Text)))
-                    {
-                        currentMessages.Add(new ChatMessage(folded.Role, kept));
-                    }
-                }
-
-                currentMessages.Add(new ChatMessage(ChatRole.User, ReasoningToolCallRepromptMessage));
-
-                // Thinking stays off for the rest of the turn: back on after the re-prompt, the 9B put its next call in the reasoning
-                // again (live C1: 2 of 6), with thinking off it never did. The next turn's budget starts with it on.
-                ProviderCallBudget.Current?.TurnThinkingOff();
-                finalRoundContentStart = stream.ResponseBuilder.Length;
-                finalRoundReasoningStart = stream.ReasoningBuilder.Length;
-                repromptPending = true;
-            }
-        } while (pendingApprovals.Count > 0 || repromptPending);
-
-        // A thinking model leaks its deliberation into the answer with thinking off too (LFM2.5 at effort none, model-matrix W3),
-        // so its round is checked whether or not the reasoning channel carried anything.
-        if ((package.SupportsThinking || stream.ReasoningBuilder.Length > finalRoundReasoningStart) && !invocationToken.IsCancellationRequested
-                                                                                                    && await ReclassifyLeakedThinkTextAsync(transport, stream, finalRoundContentStart,
-                                                                                                        package.SupportsThinking) is { } hasAnswer)
-        {
-            finalRoundHasOutput = hasAnswer;
-        }
-
-        var finalRoundReasoned = stream.ReasoningBuilder.Length > finalRoundReasoningStart;
-
-        // Not for a cancelled turn: the caller reports the cancellation. A round that reasoned and answered nothing ran out
-        // while thinking whatever the finish reason: a budget-forced end finishes "stop", the window "length".
-        if (!finalRoundHasOutput && !invocationToken.IsCancellationRequested)
-        {
-            var message = finalRoundReasoned ? StoppedWhileThinkingNoticeMessage : EmptyAnswerNoticeMessage;
-            if (ReasoningCarriesToolCall(stream, finalRoundReasoningStart))
-            {
-                message = ToolCallInReasoningNoticeMessage;
-            }
-
-            await transport.EmitNoticeAsync(TurnNoticeKind.EmptyAnswer, message, stream.FinishReason);
-        }
-        // The content-channel twin of a call in the reasoning: the text stays, since a turn never loses its only visible text, and the notice says it is no answer.
-        else if (finalRoundHasOutput && !invocationToken.IsCancellationRequested && AnswerIsOnlyToolCallMarkup(stream, finalRoundContentStart))
-        {
-            await transport.EmitNoticeAsync(TurnNoticeKind.EmptyAnswer, ToolCallAsTextNoticeMessage, stream.FinishReason);
-        }
-        else if (finalRoundHasOutput)
-        {
-            await EmitOutputLimitNoticeIfReachedAsync(transport, stream, outputCap, invocationToken);
-        }
+        await CompleteSingleAgentTurnAsync(loop, package, transport, stream, outputCap, invocationToken);
     }
-
-    // The one "stopped at length" rule for the single-agent turn and the orchestration run alike.
-    private static async Task EmitOutputLimitNoticeIfReachedAsync(StreamTransport transport, StreamState stream, ChatOutputCap outputCap, CancellationToken invocationToken)
-    {
-        if (outputCap.NotifiesOnLength && !invocationToken.IsCancellationRequested
-                                       && string.Equals(stream.FinishReason, "length", StringComparison.Ordinal))
-        {
-            await transport.EmitNoticeAsync(TurnNoticeKind.OutputLimitReached, OutputLimitReachedNoticeMessage, stream.FinishReason);
-        }
-    }
-
-    private readonly record struct SurrogateCall(string Name, string CallId);
 
     // Model-matrix F2: a small model can repeat itself until the window or the turn timeout ends it. A frozen benchmark keeps
     // the pre-node-settings behaviour: no default cap, no length notice, the fixed thinking ladder.
@@ -1309,85 +995,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
     /// <summary>The output cap and reasoning budgets a turn runs under: frozen for benchmarks, else the node settings.</summary>
     private readonly record struct OutputPolicy(ChatOutputCap OutputCap, ReasoningBudgets ReasoningBudgets);
-
-    // Qwen-family templates write a call as <tool_call>…</tool_call>; inside the reasoning block llama-server leaves it unparsed.
-    private static bool ReasoningCarriesToolCall(StreamState stream, int reasoningStart) =>
-        stream.ReasoningBuilder.Length > reasoningStart
-        && stream.ReasoningBuilder.ToString(reasoningStart, stream.ReasoningBuilder.Length - reasoningStart).Contains("<tool_call>", StringComparison.Ordinal);
-
-    // Strict: the whole trimmed round is one or more <tool_call> blocks and nothing else, so an answer that explains the syntax is untouched.
-    // The last block may be unclosed: a model that stops mid-call (F-13) leaves only markup all the same.
-    private static bool AnswerIsOnlyToolCallMarkup(StreamState stream, int contentStart)
-    {
-        const string OpenTag = "<tool_call>";
-        const string CloseTag = "</tool_call>";
-        var rest = stream.ResponseBuilder.ToString(contentStart, stream.ResponseBuilder.Length - contentStart).AsSpan().Trim();
-        if (rest.IsEmpty)
-        {
-            return false;
-        }
-
-        while (!rest.IsEmpty)
-        {
-            if (!rest.StartsWith(OpenTag, StringComparison.Ordinal))
-            {
-                return false;
-            }
-
-            var close = rest.IndexOf(CloseTag, StringComparison.Ordinal);
-            if (close < 0)
-            {
-                // Unclosed: markup only when a JSON object follows the tag, so prose that merely starts with the tag stays an answer.
-                return rest[OpenTag.Length..].TrimStart().StartsWith('{');
-            }
-
-            rest = rest[(close + CloseTag.Length)..].TrimStart();
-        }
-
-        return true;
-    }
-
-    /// <summary>
-    ///     Moves leaked think text from the final round's answer into the reasoning and reports the corrected texts so
-    ///     the terminal message persists them.
-    /// </summary>
-    /// <remarks>
-    ///     Only residue at the start of the answer: the text before a stray <c>&lt;/think&gt;</c> (Qwen3.5 9B, F19), or for a
-    ///     thinking model a whole <c>&lt;think&gt;…&lt;/think&gt;</c> block that opens the answer (Qwen3.5 0.8B, V2). A block after
-    ///     answer text is quoted markup and stays, tags included. The live stream showed it as the answer; the terminal event
-    ///     replaces it. Text that would leave no answer stays the answer, tags dropped. For a model that cannot think, a close
-    ///     tag after its own open tag is quoted markup and stays. Returns whether answer text remains, or null.
-    /// </remarks>
-    private static async Task<bool?> ReclassifyLeakedThinkTextAsync(StreamTransport transport, StreamState stream, int contentStart, bool thinkingModel)
-    {
-        const string OpenTag = "<think>";
-        const string CloseTag = "</think>";
-        var round = stream.ResponseBuilder.ToString(contentStart, stream.ResponseBuilder.Length - contentStart);
-        var close = round.IndexOf(CloseTag, StringComparison.Ordinal);
-        var open = close < 0 ? -1 : round.IndexOf(OpenTag, 0, close, StringComparison.Ordinal);
-        if (close < 0 || (open >= 0 && (!thinkingModel || !string.IsNullOrWhiteSpace(round[..open]))))
-        {
-            return null;
-        }
-
-        var leaked = (open < 0 ? round[..close] : round[(open + OpenTag.Length)..close]).Trim();
-        var answer = string.Concat(open < 0 ? string.Empty : round[..open], round[(close + CloseTag.Length)..].TrimStart()).TrimStart();
-
-        // The only text of the round is the answer with a stray tag (LFM2.5 at effort none: "Okay.\n</think>"): drop the tags, keep the text.
-        if (answer.Length == 0)
-        {
-            (answer, leaked) = (leaked, string.Empty);
-        }
-
-        var separator = stream.ReasoningBuilder.Length == 0 ? string.Empty : "\n\n";
-        var reasoningSuffix = leaked.Length == 0 ? string.Empty : string.Concat(separator, leaked);
-        var content = string.Concat(stream.ResponseBuilder.ToString(0, contentStart), answer);
-
-        stream.ResponseBuilder.Clear().Append(content);
-        stream.ReasoningBuilder.Append(reasoningSuffix);
-        await transport.Dispatcher.ReportInvocationTextReclassifiedAsync(transport.InvocationId, content, reasoningSuffix);
-        return answer.Length > 0;
-    }
 
     /// <summary>
     ///     The per-result character budget for a model window: about a quarter of the window, between
@@ -1468,7 +1075,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     // superstep. The description names the tool rather than the opaque id, so the card matches the single-agent UX.
                     var pendingApproval = ToApprovalRequest(update);
                     var approvalDescription = $"Tool '{ApprovalToolName(update)}' requires approval before it runs.";
-                    var approved = await _toolApprovalCoordinator.RequestToolApprovalAsync(package, pendingApproval, _lifecycleTracker.SetInvocationDeadline, invocationToken, approvalDescription);
+                    var approved = await _toolApprovalCoordinator.RequestToolApprovalAsync(package, pendingApproval, ParkFor(package), invocationToken, approvalDescription);
                     await session.RespondToApprovalAsync(requestId,
                         approved,
                         approved ? "Approved by user." : "Rejected by user.",
@@ -1507,63 +1114,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
         await RunAsync(context, cancellationToken);
     }
 
-    /// <summary>The turn's open tool calls, mirrored onto the whole-turn deadline so tool time is not charged to the model.</summary>
-    /// <remarks>
-    ///     A round's calls all run before the next provider round, so provider text or reasoning after a round boundary (a result, or a segment start)
-    ///     proves none is still running. Usage is not that proof: it closes the very round whose calls are about to run.
-    /// </remarks>
-    private sealed class OpenToolCalls
-    {
-        private readonly HashSet<string> _ids = new(StringComparer.Ordinal);
-        private readonly InvocationLifecycleTracker _tracker;
-        private bool _atRoundBoundary = true;
-
-        public OpenToolCalls(InvocationLifecycleTracker tracker) =>
-            _tracker = tracker;
-
-        public bool Any => _ids.Count > 0;
-
-        public void Open(string callId)
-        {
-            _ = _ids.Add(callId);
-            _atRoundBoundary = false;
-            _tracker.SetToolExecuting(executing: true);
-        }
-
-        /// <summary>An approved call runs in the resume segment before the provider streams; an id-less one could never be closed.</summary>
-        public void OpenApproved(ToolApprovalRequestContent approvalRequest)
-        {
-            if (!string.IsNullOrEmpty(approvalRequest.ToolCall.CallId))
-            {
-                Open(approvalRequest.ToolCall.CallId);
-                _atRoundBoundary = true;
-            }
-        }
-
-        public void Close(string callId)
-        {
-            _ = _ids.Remove(callId);
-            // A round boundary even with ids still open: the framework runs a round's calls one at a time (AllowConcurrentInvocation is false).
-            _atRoundBoundary = true;
-            _tracker.SetToolExecuting(Any);
-        }
-
-        public void OnProviderOutput()
-        {
-            if (_atRoundBoundary && Any)
-            {
-                Clear();
-            }
-        }
-
-        public void Clear()
-        {
-            _ids.Clear();
-            _atRoundBoundary = true;
-            _tracker.SetToolExecuting(executing: false);
-        }
-    }
-
     /// <summary>Derives the id that keys a tool-call card: the wire call id when present, otherwise the tool name.</summary>
     /// <remarks>
     ///     Microsoft.Extensions.AI rejects a null call id in the <c>FunctionCallContent</c>/<c>FunctionResultContent</c> constructors
@@ -1575,10 +1125,45 @@ public sealed partial class InvocationRunner : IInvocationRunner
     internal static string ResolveToolCallCardId(string? callId, string? toolName) =>
         string.IsNullOrEmpty(callId) ? toolName ?? string.Empty : callId;
 
-    /// <summary>A local tool call seen requested on the stream but not yet resulted: its name plus the arguments as they arrived.</summary>
-    /// <remarks>
-    ///     Kept so a repeated call for the same id is detected and the result is attributed to its tool. Distinct from
-    ///     <c>PendingToolCall</c>, which tracks a worker tool call's approval and result completions.
-    /// </remarks>
-    private readonly record struct RequestedToolCall(string Name, object? Arguments, string? SerializedArguments);
+    /// <summary>The turn-wide inputs RunAsync hands to its try body, and the stream that body creates, read back by the terminal reports.</summary>
+    private sealed class TurnExecution
+    {
+        public required InvocationExecutionContext Context { get; init; }
+
+        public required IWorkerEventDispatcher Dispatcher { get; init; }
+
+        public required ProviderCallBudget ProviderBudget { get; init; }
+
+        public required long TurnStartedTimestamp { get; init; }
+
+        public required long HarnessStartedTimestamp { get; init; }
+
+        // Set once the stream exists; null when the turn failed before that point.
+        public StreamState? Stream { get; set; }
+    }
+
+    /// <summary>The model a turn runs on after model resolution and `auto` dispatch, plus the authorised originals the swap fallback restores.</summary>
+    private sealed class TurnModelSelection
+    {
+        public required ModelResolution ModelResolution { get; init; }
+
+        public required RuntimePackage Package { get; init; }
+
+        public required string ResolvedModel { get; init; }
+
+        public required string OriginalModel { get; init; }
+
+        public required bool OriginalSupportsThinking { get; init; }
+
+        public required bool OriginalReasoningBudgetEnforceable { get; init; }
+
+        public required ReasoningDispatchDecision? DispatchDecision { get; init; }
+
+        // Owned by ExecuteTurnAsync's using; the swap fallback disposes it early, which is idempotent.
+        public required IDisposable? FastReservation { get; init; }
+
+        public required bool ModelWasSwapped { get; init; }
+
+        public required bool SwapRetryEligible { get; init; }
+    }
 }

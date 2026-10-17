@@ -28,6 +28,7 @@ public sealed partial class RealTimerCommentConventionTests
     [
         "XE-Local-AI-Engine.Tests/",
         "XE-Local-AI-Engine.AI.Agent.Tests/",
+        "XE-Local-AI-Engine.Cli.Tests/",
         "XE-Local-AI-Engine.Client.Persistence.Tests/"
     ];
 

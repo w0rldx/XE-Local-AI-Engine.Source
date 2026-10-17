@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.GraphWorkflows.V1.Mappers;
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Chat;
@@ -88,6 +89,8 @@ internal static class GraphWorkflowContractMapper
             NodeCount = value.NodeCount,
             SchemaVersion = value.SchemaVersion,
             Kind = value.Kind.ToString(),
+            AllowsActions = value.AllowsActions,
+            TriggerSources = ToWireTriggerSources(value.TriggerSources),
             Version = value.Version,
             CreatedAtUtc = value.CreatedAtUtc,
             UpdatedAtUtc = value.UpdatedAtUtc
@@ -119,11 +122,21 @@ internal static class GraphWorkflowContractMapper
             NodeCount = value.NodeCount,
             SchemaVersion = value.SchemaVersion,
             Kind = value.Kind.ToString(),
+            AllowsActions = value.AllowsActions,
+            TriggerSources = ToWireTriggerSources(value.TriggerSources),
             Version = value.Version,
             CreatedAtUtc = value.CreatedAtUtc,
             UpdatedAtUtc = value.UpdatedAtUtc
         };
     }
+
+    /// <summary>The set as member names in declaration order, the wire form of the <c>[Flags]</c> enum.</summary>
+    public static IReadOnlyList<string> ToWireTriggerSources(GraphWorkflowTriggerSource sources) =>
+        [.. Enum.GetValues<GraphWorkflowTriggerSource>().Where(source => sources.HasFlag(source)).Select(static source => source.ToString())];
+
+    /// <summary>Null stays null; names the validator already admitted fold into one flags value.</summary>
+    public static GraphWorkflowTriggerSource? FromWireTriggerSources(IReadOnlyList<string>? names) =>
+        names?.Aggregate((GraphWorkflowTriggerSource)0, static (sources, name) => sources | Enum.Parse<GraphWorkflowTriggerSource>(name));
 
     public static GraphWorkflowRunSummaryResponse ToResponse(this GraphWorkflowRunSnapshot value)
     {
@@ -137,6 +150,8 @@ internal static class GraphWorkflowContractMapper
             GraphHash = value.GraphHash,
             Status = value.Status.ToString(),
             FailureClass = value.FailureClass.ToString(),
+            TriggerSource = value.TriggerSource.ToString(),
+            PrincipalId = value.PrincipalId,
             CancelRequestedAtUtc = value.CancelRequestedAtUtc,
             StartedAtUtc = value.StartedAtUtc,
             CompletedAtUtc = value.CompletedAtUtc,

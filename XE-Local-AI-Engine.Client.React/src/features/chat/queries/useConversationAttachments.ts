@@ -2,14 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { t } from "i18next";
 import { useCallback, useMemo, useState } from "react";
 
-import { deleteConversationFile, listConversationFiles } from "@/core/api/generated";
-import { callWithResponseValidation } from "@/core/api/ResponseValidation";
-import { axiosInstance } from "@/core/api/axios/AxiosInstance";
-import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import { ApiError } from "@/core/api/errors/ApiError";
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { deleteConversationFile, listConversationFiles, uploadConversationFile } from "@/core/api/generated";
 import { toast } from "@/core/ui/notifications/Toast";
-import { toChatAttachment } from "@/features/chat/models/ChatAttachmentModels";
 import type { ChatAttachment, PendingAttachmentUpload } from "@/features/chat/models/ChatAttachmentModels";
+import { toChatAttachment } from "@/features/chat/models/ChatAttachmentModels";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 
 export interface UseConversationAttachmentsResult {
@@ -47,10 +45,8 @@ function uploadErrorMessage(error: unknown, fallback: string): string {
 			return title;
 		}
 	}
-	if (error instanceof Error && error.message.trim().length > 0) {
-		return error.message;
-	}
-	return fallback;
+	// The shared sink keeps a contract-mismatch ZodError's issue list out of the toast.
+	return apiErrorMessage(error, fallback);
 }
 
 interface UseConversationAttachmentsOptions {
@@ -83,9 +79,7 @@ export function useConversationAttachments({
 	const { data: attachments = [], isLoading } = useQuery({
 		queryKey: nodeChatQueryKeys.conversationFiles(conversationId),
 		queryFn: async ({ signal }) => {
-			const { data } = await callWithResponseValidation(
-				listConversationFiles({ path: { conversationId }, signal, throwOnError: true }),
-			);
+			const { data } = await listConversationFiles({ path: { conversationId }, signal });
 			return (data.items ?? []).map(toChatAttachment);
 		},
 		// No conversation yet → nothing to load (a fresh thread starts empty).
@@ -94,7 +88,7 @@ export function useConversationAttachments({
 
 	const removeMutation = useMutation({
 		mutationFn: async (fileId: string) => {
-			await callWithResponseValidation(deleteConversationFile({ path: { conversationId, fileId }, throwOnError: true }));
+			await deleteConversationFile({ path: { conversationId, fileId } });
 		},
 		onSuccess: async () => {
 			await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversationFiles(conversationId) });
@@ -120,16 +114,11 @@ export function useConversationAttachments({
 			setPendingUploads((current) => [...current, { tempId, name: file.name, sizeBytes: file.size, percent: 0 }]);
 
 			try {
-				const formData = new FormData();
-				formData.append("file", file);
-				// Posted through the shared axiosInstance (not the generated SDK) on purpose: the upload is
-				// multipart/form-data, but the axios instance defaults Content-Type to application/json and hey-api's
-				// binary body handling does not reliably override that — the file would serialize to `{}` as JSON.
-				// Setting the multipart content type per-request lets axios append the boundary; auth + XSRF still ride
-				// the instance interceptors, and the ProblemDetails interceptor turns a non-2xx into an ApiError. The
-				// server is the authoritative validator (size cap, extension allow-list, extraction).
-				await axiosInstance.post(buildLocalApiUrl(`chat/conversations/${targetConversationId}/uploads`), formData, {
-					headers: { "Content-Type": "multipart/form-data" },
+				// The instance's FormData interceptor drops the JSON Content-Type default so the browser sets the
+				// multipart boundary. The server is the authoritative validator (size cap, extension allow-list, extraction).
+				await uploadConversationFile({
+					path: { conversationId: targetConversationId },
+					body: { file },
 					onUploadProgress: (event) => {
 						if (event.total) {
 							updatePendingPercent(tempId, (event.loaded / event.total) * 100);

@@ -41,7 +41,8 @@ public sealed class TranscriptionUploadEndpointTests
         var sessionId = await CreateSessionAsync(factory, client);
         using var response = await UploadAsync(factory, client, sessionId, "big.wav", new byte[2 * 1024 * 1024]);
 
-        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+        await RequestBodyTooLargeAssert.DeclaredProblemShapeAsync(response, "the transcription upload");
         // The size-cap text, never "A file is required.": a host that refuses the body on its first read made the file look absent.
         AssertEx.Contains(await response.Content.ReadAsStringAsync(), TranscriptionUploadTooLargeException.MessageFor(1024 * 1024));
         AssertEx.Equal(expected: 0, transcriber.CallCount, "An oversize upload must never reach the runtime.");

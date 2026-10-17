@@ -178,6 +178,7 @@ public sealed class IntegrationSessionEndpointTests
                                      Enabled = true,
                                      TargetKind = IntegrationTargetKind.Agent,
                                      TargetAgentDefinitionId = Guid.NewGuid(),
+                                     TargetGraphWorkflowDefinitionId = null,
                                      SessionPolicy = IntegrationSessionPolicy.CallerManaged,
                                      AcceptedInputKinds = IntegrationInputKinds.Text | IntegrationInputKinds.Json
                                  });

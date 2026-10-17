@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
@@ -183,6 +184,9 @@ public sealed class NodeChatTerminalizeMessageRequest
 
     // Content-free context-window snapshot of the turn's last provider round. Null preserves any existing value, as Sources does.
     public NodeChatContextWindowDto? ContextWindow { get; init; }
+
+    // The category of a failed turn, persisted as its enum name in the metadata blob. Null preserves any existing value.
+    public FailureCategory? FailureCategory { get; init; }
 }
 
 /// <summary>

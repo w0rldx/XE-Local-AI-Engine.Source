@@ -444,9 +444,12 @@ Prefer to wipe everything and start fresh instead? See
 [How do I completely reset the app?](#how-do-i-completely-reset-the-app) above.
 
 ### How do I uninstall it?
-There's no uninstaller.
 
-**Windows:**
+**Windows:** run `current\uninstall-xe-local-ai-engine.ps1` from the folder you extracted (right-click → **Run with
+PowerShell**). It stops the app, asks before deleting your data folder, and asks again if that folder holds `node.key`.
+Then delete the extracted folder. → [Removing it](install-windows.md#removing-it)
+
+**Windows, by hand:**
 
 1. **Stop the app first** — **Quit XE** in the tray menu. Deleting files while it's running can
    corrupt the database.

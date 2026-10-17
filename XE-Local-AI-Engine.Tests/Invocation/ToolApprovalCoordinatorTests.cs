@@ -13,7 +13,9 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
+using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Client.Services.Interaction;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
@@ -53,7 +55,7 @@ public sealed class ToolApprovalCoordinatorTests
 
         var unattended = SkillPackage(conversationId).AsUnattended().Build();
         var exception = await AssertEx.ThrowsAsync<ApprovalUnavailableException>(() =>
-            coordinator.RequestToolApprovalAsync(unattended, SkillApprovalRequest(), static _ => { }, CancellationToken.None));
+            coordinator.RequestToolApprovalAsync(unattended, SkillApprovalRequest(), NoSlotPark(), CancellationToken.None));
 
         AssertEx.Contains(exception.Message, "unattended", StringComparison.OrdinalIgnoreCase);
 
@@ -99,7 +101,7 @@ public sealed class ToolApprovalCoordinatorTests
         // An entry that made it in before the cap is still honoured — overflow only ever ADDS prompts.
         var remembered = await coordinator.RequestToolApprovalAsync(SkillPackage(conversationId, version: 1).Build(),
             SkillApprovalRequest(),
-            static _ => { },
+            NoSlotPark(),
             CancellationToken.None);
 
         AssertEx.True(remembered);
@@ -120,7 +122,7 @@ public sealed class ToolApprovalCoordinatorTests
         var loopback = RuntimePackageBuilder.Valid()
                                             .Build();
 
-        var pending = coordinator.RequestToolApprovalAsync(loopback, ToolApprovalRequest(), static _ => { }, CancellationToken.None);
+        var pending = coordinator.RequestToolApprovalAsync(loopback, ToolApprovalRequest(), NoSlotPark(), CancellationToken.None);
         await AssertEx.EventuallyAsync(() => dispatchedLifecycle is not null, TimeSpan.FromSeconds(5));
 
         AssertEx.False(pending.IsCompleted, "the turn parks on the approval card");
@@ -144,7 +146,7 @@ public sealed class ToolApprovalCoordinatorTests
         var dispatcher = new RecordingApprovalDispatcher();
         var coordinator = CreateCoordinator(registry, auditRecorder, dispatcher, timeProvider);
 
-        var pending = coordinator.RequestToolApprovalAsync(RuntimePackageBuilder.Valid().Build(), ToolApprovalRequest(), static _ => { }, CancellationToken.None);
+        var pending = coordinator.RequestToolApprovalAsync(RuntimePackageBuilder.Valid().Build(), ToolApprovalRequest(), NoSlotPark(), CancellationToken.None);
         await AssertEx.EventuallyAsync(() => dispatcher.Approvals.Count == 1 && timeProvider.ArmedTimerCount > 0, TimeSpan.FromSeconds(5));
         var requestId = dispatcher.Approvals[0].RequestId;
 
@@ -164,6 +166,142 @@ public sealed class ToolApprovalCoordinatorTests
     }
 
     [Test]
+    public async Task RequestToolApprovalAsync_ParkGivesTheSlotBack_AndADecisionRetakesItBeforeReturning()
+    {
+        var dispatcher = new RecordingApprovalDispatcher();
+        var slots = Substitute.For<IWorkerEventDispatcher>();
+        slots.ReleaseSlotForPark(Arg.Any<Guid>()).Returns(true);
+        var coordinator = CreateCoordinator(dispatcher: dispatcher);
+        var invocationId = Guid.NewGuid();
+
+        var pending = coordinator.RequestToolApprovalAsync(RuntimePackageBuilder.Valid().WithInvocationId(invocationId).Build(),
+            ToolApprovalRequest(),
+            SlotPark(slots, invocationId),
+            CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => dispatcher.Approvals.Count == 1, TimeSpan.FromSeconds(5));
+        await AssertEx.EventuallyAsync(() => slots.ReceivedCalls().Any(), TimeSpan.FromSeconds(5));
+        await slots.DidNotReceive().ReacquireSlotAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+
+        coordinator.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = dispatcher.Approvals[0].RequestId,
+            Approved = false
+        });
+
+        AssertEx.False(await pending.WaitAsync(TimeSpan.FromSeconds(5)));
+        Received.InOrder(() =>
+        {
+            slots.ReleaseSlotForPark(invocationId);
+            slots.ReacquireSlotAsync(invocationId, Arg.Any<CancellationToken>());
+        });
+    }
+
+    [Test]
+    public async Task RequestToolApprovalAsync_WhenTheApprovalExpires_DoesNotRetakeTheSlot()
+    {
+        var timeProvider = new ManualTimeProvider();
+        var dispatcher = new RecordingApprovalDispatcher();
+        var slots = Substitute.For<IWorkerEventDispatcher>();
+        slots.ReleaseSlotForPark(Arg.Any<Guid>()).Returns(true);
+        var coordinator = CreateCoordinator(dispatcher: dispatcher, timeProvider: timeProvider);
+        var invocationId = Guid.NewGuid();
+
+        var pending = coordinator.RequestToolApprovalAsync(RuntimePackageBuilder.Valid().WithInvocationId(invocationId).Build(),
+            ToolApprovalRequest(),
+            SlotPark(slots, invocationId),
+            CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => dispatcher.Approvals.Count == 1 && timeProvider.ArmedTimerCount > 0, TimeSpan.FromSeconds(5));
+        timeProvider.Advance(TimeSpan.FromMinutes(5) + TimeSpan.FromSeconds(1));
+
+        _ = await AssertEx.ThrowsAsync<ApprovalExpiredException>(() => pending);
+        slots.Received(1).ReleaseSlotForPark(invocationId);
+        await slots.DidNotReceive().ReacquireSlotAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task RequestToolApprovalAsync_WhenTheTurnIsCancelledWhileParked_DoesNotRetakeTheSlot()
+    {
+        var dispatcher = new RecordingApprovalDispatcher();
+        var slots = Substitute.For<IWorkerEventDispatcher>();
+        slots.ReleaseSlotForPark(Arg.Any<Guid>()).Returns(true);
+        var coordinator = CreateCoordinator(dispatcher: dispatcher);
+        var invocationId = Guid.NewGuid();
+        using var cancellation = new CancellationTokenSource();
+
+        var pending = coordinator.RequestToolApprovalAsync(RuntimePackageBuilder.Valid().WithInvocationId(invocationId).Build(),
+            ToolApprovalRequest(),
+            SlotPark(slots, invocationId),
+            cancellation.Token);
+        await AssertEx.EventuallyAsync(() => dispatcher.Approvals.Count == 1, TimeSpan.FromSeconds(5));
+        await cancellation.CancelAsync();
+
+        _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => pending);
+        await slots.DidNotReceive().ReacquireSlotAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task RequestUserAnswerAsync_WhenTheQuestionTimesOut_ClosesTheCard_SoASendIsAdmittedAndTheMonitorShowsNone()
+    {
+        // The turn resumes after the timeout; a card still pending on it would refuse a send "waiting for your answer".
+        var time = new ManualTimeProvider();
+        var dispatcher = new WorkerEventDispatcher(Substitute.For<IInvocationRunner>(),
+            Substitute.For<IInvocationHistory>(),
+            NullLogger<WorkerEventDispatcher>.Instance,
+            TimeProvider.System);
+        var tracker = new InvocationLifecycleTracker(Substitute.For<IInvocationAttachmentTracker>(),
+            new PendingToolCallRegistry(),
+            StubNodeRuntimeSettings.Create().WithMaxPendingToolCallAgeMinutes(5).Build(),
+            TimeProvider.System);
+        var package = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).WithConversationId(Guid.NewGuid()).Build();
+        await using var lease = await dispatcher.ReportInvocationAssignedAsync(package);
+        tracker.RegisterActiveInvocation(package.InvocationId, TimeSpan.FromMinutes(5), CancellationToken.None);
+        var coordinator = CreateCoordinator(dispatcher: dispatcher, timeProvider: time);
+        var arguments = JsonSerializer.Deserialize<Dictionary<string, object?>>(
+            """{"questions":[{"header":"Auth","question":"Which auth method?","options":[{"label":"OAuth"},{"label":"API key"}]}]}""",
+            JsonSerializerOptions.Web)!;
+
+        var pending = coordinator.RequestUserAnswerAsync(package,
+            new ToolApprovalRequestContent("approval-ask", new FunctionCallContent("call-ask", AskUserTool.ToolName, arguments)),
+            new HumanPark(tracker, dispatcher, package.InvocationId),
+            CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => dispatcher.GetLiveInvocations().Single().PendingQuestion is not null && time.ArmedTimerCount > 0,
+            TimeSpan.FromSeconds(5));
+        time.Advance(TimeSpan.FromMinutes(5) + TimeSpan.FromSeconds(1));
+
+        AssertEx.Equal("No answer arrived in time.", await pending.WaitAsync(TimeSpan.FromSeconds(5)));
+        var snapshot = dispatcher.GetLiveSnapshot();
+        AssertEx.Null(snapshot.Live.Single().PendingQuestion, "the monitor's live row shows no card once it timed out");
+        AssertEx.Equal(package.InvocationId, AssertEx.NotNull(snapshot.Current).InvocationId);
+        InvocationSlotAdmission.EnsureNoParkedTurn(dispatcher, package.ConversationId);
+    }
+
+    [Test]
+    public async Task RequestToolApprovalAsync_WhenTheSlotReleasePublishThrows_StillEndsThePark()
+    {
+        // The park pushed the deadline past the human cap; a skipped End() would leave that backstop on a turn that no longer waits.
+        var time = new ManualTimeProvider();
+        var tracker = new InvocationLifecycleTracker(Substitute.For<IInvocationAttachmentTracker>(),
+            new PendingToolCallRegistry(),
+            StubNodeRuntimeSettings.Create().WithMaxPendingToolCallAgeMinutes(5).Build(),
+            time);
+        var invocationId = Guid.NewGuid();
+        tracker.RegisterActiveInvocation(invocationId, TimeSpan.FromSeconds(600), CancellationToken.None);
+        var slots = Substitute.For<IWorkerEventDispatcher>();
+        slots.ReleaseSlotForPark(invocationId).Returns(_ => throw new InvalidOperationException("subscriber failed"));
+        var coordinator = CreateCoordinator(dispatcher: new RecordingApprovalDispatcher());
+
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => coordinator.RequestToolApprovalAsync(RuntimePackageBuilder.Valid().WithInvocationId(invocationId).Build(),
+            ToolApprovalRequest(),
+            new HumanPark(tracker, slots, invocationId),
+            CancellationToken.None));
+        time.Advance(TimeSpan.FromSeconds(600));
+
+        await AssertEx.EventuallyAsync(() => tracker.GetInvocationCancellationToken(invocationId).IsCancellationRequested,
+            TimeSpan.FromSeconds(5),
+            "the park ended, so the turn is back on its plain 600 s budget");
+    }
+
+    [Test]
     public async Task RequestToolApprovalAsync_CarriesTheSerializedCallArgumentsOnTheApprovalPrompt()
     {
         // The operator approves WHAT runs; the tool-call card carrying the arguments only arrives after the decision.
@@ -178,7 +316,7 @@ public sealed class ToolApprovalCoordinatorTests
         var request = new ToolApprovalRequestContent("approval-args", new FunctionCallContent("call-args", "run_in_agent_home", arguments));
 
         using var cancellation = new CancellationTokenSource();
-        var pending = coordinator.RequestToolApprovalAsync(RuntimePackageBuilder.Valid().Build(), request, static _ => { }, cancellation.Token);
+        var pending = coordinator.RequestToolApprovalAsync(RuntimePackageBuilder.Valid().Build(), request, NoSlotPark(), cancellation.Token);
         await AssertEx.EventuallyAsync(() => dispatchedLifecycle is not null, TimeSpan.FromSeconds(5));
         await cancellation.CancelAsync();
         _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => pending);
@@ -201,13 +339,13 @@ public sealed class ToolApprovalCoordinatorTests
         var coordinator = CreateCoordinator(registry, dispatcher: dispatcher, timeProvider: timeProvider);
         var bridge = new ApiToolCallBridge(registry, timeProvider);
 
-        var abandoned = coordinator.RequestToolApprovalAsync(RuntimePackageBuilder.Valid().Build(), ToolApprovalRequest(), static _ => { }, CancellationToken.None);
+        var abandoned = coordinator.RequestToolApprovalAsync(RuntimePackageBuilder.Valid().Build(), ToolApprovalRequest(), NoSlotPark(), CancellationToken.None);
         await AssertEx.EventuallyAsync(() => dispatcher.Approvals.Count == 1, TimeSpan.FromSeconds(5));
         var abandonedRequestId = dispatcher.Approvals[0].RequestId;
 
         // The control is raised AFTER the clock moves, so the same cutoff that condemns the first call spares it.
         timeProvider.Advance(TimeSpan.FromMinutes(10));
-        var fresh = coordinator.RequestToolApprovalAsync(RuntimePackageBuilder.Valid().Build(), ToolApprovalRequest(), static _ => { }, CancellationToken.None);
+        var fresh = coordinator.RequestToolApprovalAsync(RuntimePackageBuilder.Valid().Build(), ToolApprovalRequest(), NoSlotPark(), CancellationToken.None);
         await AssertEx.EventuallyAsync(() => dispatcher.Approvals.Count == 2, TimeSpan.FromSeconds(5));
         var freshRequestId = dispatcher.Approvals[1].RequestId;
 
@@ -508,7 +646,7 @@ public sealed class ToolApprovalCoordinatorTests
             url = "  HTTPS://News.Example.com/tidal  "
         });
 
-        var pending = coordinator.RequestWebConsentAsync(RuntimePackageBuilder.Valid().Build(), request, static _ => { }, CancellationToken.None);
+        var pending = coordinator.RequestWebConsentAsync(RuntimePackageBuilder.Valid().Build(), request, NoSlotPark(), CancellationToken.None);
         await AssertEx.EventuallyAsync(() => !cards.IsEmpty, TimeSpan.FromSeconds(5));
         var card = cards.Single();
         var preview = AssertEx.NotNull(card.WebReview);
@@ -545,7 +683,7 @@ public sealed class ToolApprovalCoordinatorTests
             maxResults = 3
         });
 
-        var pending = coordinator.RequestWebConsentAsync(RuntimePackageBuilder.Valid().Build(), request, static _ => { }, CancellationToken.None);
+        var pending = coordinator.RequestWebConsentAsync(RuntimePackageBuilder.Valid().Build(), request, NoSlotPark(), CancellationToken.None);
         await AssertEx.EventuallyAsync(() => !cards.IsEmpty, TimeSpan.FromSeconds(5));
         var preview = AssertEx.NotNull(cards.Single().WebReview);
         AssertEx.Equal(WebReviewPreview.RequestStage, preview.Stage);
@@ -575,7 +713,7 @@ public sealed class ToolApprovalCoordinatorTests
             url = WebReviewTestServer.PageUrl
         });
 
-        var pending = coordinator.RequestWebConsentAsync(RuntimePackageBuilder.Valid().Build(), request, static _ => { }, CancellationToken.None);
+        var pending = coordinator.RequestWebConsentAsync(RuntimePackageBuilder.Valid().Build(), request, NoSlotPark(), CancellationToken.None);
         await AssertEx.EventuallyAsync(() => !cards.IsEmpty && timeProvider.ArmedTimerCount > 0, TimeSpan.FromSeconds(5));
         timeProvider.Advance(TimeSpan.FromMinutes(5) + TimeSpan.FromSeconds(1));
 
@@ -623,7 +761,7 @@ public sealed class ToolApprovalCoordinatorTests
             })
         };
 
-        var refusal = await coordinator.RequestWebConsentAsync(package, request, static _ => { }, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+        var refusal = await coordinator.RequestWebConsentAsync(package, request, NoSlotPark(), CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
 
         AssertEx.Null(refusal, "the retrieval step decides these calls: it refuses them or auto mode fetches");
         AssertEx.Empty(cards);
@@ -632,7 +770,7 @@ public sealed class ToolApprovalCoordinatorTests
     private static async Task<string> ReviewAsync(ToolApprovalCoordinator coordinator, RuntimePackage package, ToolApprovalRequestContent request)
     {
         var retrievals = await coordinator.RetrieveWebContentAsync(package, [request], CancellationToken.None);
-        return await coordinator.RequestWebReviewAsync(package, request, retrievals[request], static _ => { }, CancellationToken.None);
+        return await coordinator.RequestWebReviewAsync(package, request, retrievals[request], NoSlotPark(), CancellationToken.None);
     }
 
     private static Task<string> HandlerResultAsync(ToolApprovalRequestContent request) =>
@@ -668,7 +806,7 @@ public sealed class ToolApprovalCoordinatorTests
         RecordingApprovalDispatcher dispatcher,
         RuntimePackageBuilder packageBuilder)
     {
-        var pending = coordinator.RequestToolApprovalAsync(packageBuilder.Build(), SkillApprovalRequest(), static _ => { }, CancellationToken.None);
+        var pending = coordinator.RequestToolApprovalAsync(packageBuilder.Build(), SkillApprovalRequest(), NoSlotPark(), CancellationToken.None);
         await AssertEx.EventuallyAsync(() => dispatcher.Approvals.Count > 0 && !pending.IsCompleted, TimeSpan.FromSeconds(5));
         coordinator.ResolveApprovalResult(new ApprovalResolvedEvent
         {
@@ -689,6 +827,23 @@ public sealed class ToolApprovalCoordinatorTests
         public List<ApprovalRequestPayload> Approvals { get; } = [];
 
         public InvocationState? CurrentInvocation => _inner.CurrentInvocation;
+
+        public InvocationState? SlotHolder => _inner.SlotHolder;
+
+        public IReadOnlyList<InvocationState> GetLiveInvocations() =>
+            _inner.GetLiveInvocations();
+
+        public InvocationLiveSnapshot GetLiveSnapshot() =>
+            _inner.GetLiveSnapshot();
+
+        public bool ReleaseSlotForPark(Guid invocationId) =>
+            _inner.ReleaseSlotForPark(invocationId);
+
+        public Task ReportPromptTimedOutAsync(Guid invocationId, string requestId) =>
+            _inner.ReportPromptTimedOutAsync(invocationId, requestId);
+
+        public Task ReacquireSlotAsync(Guid invocationId, CancellationToken cancellationToken) =>
+            _inner.ReacquireSlotAsync(invocationId, cancellationToken);
 
         public event EventHandler<InvocationStateChangedEventArgs>? InvocationStateChanged
         {
@@ -819,6 +974,23 @@ public sealed class ToolApprovalCoordinatorTests
                                     .WithConversationId(conversationId)
                                     .WithSkills(new ResolvedSkill(SkillId, SkillName, "A skill.", "Skill body.", version, IsImported: false));
     }
+
+    private static HumanPark SlotPark(IWorkerEventDispatcher slots, Guid invocationId) =>
+        new(new InvocationLifecycleTracker(Substitute.For<IInvocationAttachmentTracker>(),
+                new PendingToolCallRegistry(),
+                StubNodeRuntimeSettings.Create().Build(),
+                TimeProvider.System),
+            slots,
+            invocationId);
+
+    // A park for a run that never held the invocation slot: the release reports false, so nothing is reacquired.
+    private static HumanPark NoSlotPark() =>
+        new(new InvocationLifecycleTracker(Substitute.For<IInvocationAttachmentTracker>(),
+                new PendingToolCallRegistry(),
+                StubNodeRuntimeSettings.Create().Build(),
+                TimeProvider.System),
+            Substitute.For<IWorkerEventDispatcher>(),
+            Guid.NewGuid());
 
     private static ToolApprovalCoordinator CreateCoordinator(PendingToolCallRegistry? registry = null,
         IToolApprovalAuditRecorder? auditRecorder = null,

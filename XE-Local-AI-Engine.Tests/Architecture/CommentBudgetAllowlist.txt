@@ -223,7 +223,7 @@ XE-Local-AI-Engine.Client.Persistence.Tests/MigrationChainTests.cs|summary|1
 XE-Local-AI-Engine.Client.Persistence.Tests/Models/InstalledModelSnapshotCoordinatorTests.cs|summary|1
 XE-Local-AI-Engine.Client.Persistence.Tests/Models/ModelCoordinationTests.cs|run|1
 XE-Local-AI-Engine.Client.Persistence.Tests/NativeSqliteVersionTests.cs|summary|1
-XE-Local-AI-Engine.Client.Persistence.Tests/PersistenceEncryptionTests.cs|run|2
+XE-Local-AI-Engine.Client.Persistence.Tests/PersistenceEncryptionTests.cs|run|1
 XE-Local-AI-Engine.Client.Persistence.Tests/RepairAndUniqueMessageSequenceMigrationTests.cs|summary|1
 XE-Local-AI-Engine.Client.Persistence.Tests/Scheduler/ModelRecommendationScheduleSeederTests.cs|run|1
 XE-Local-AI-Engine.Client.Persistence.Tests/Scheduler/NodeSchedulerRegistrationTests.cs|run|3
@@ -831,7 +831,6 @@ XE-Local-AI-Engine.Tests/DocumentIngestion/DocumentTextExtractorTests.cs|run|7
 XE-Local-AI-Engine.Tests/DocumentIngestion/DocumentTextExtractorTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Drafting/DefaultConfigDraftServiceTests.cs|run|2
 XE-Local-AI-Engine.Tests/Drafting/DefaultConfigDraftServiceTests.cs|summary|2
-XE-Local-AI-Engine.Tests/Drafting/DraftAdmissionGateTests.cs|run|1
 XE-Local-AI-Engine.Tests/Endpoints/Agents/AdaptiveMemoryEndpointTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Endpoints/Agents/AnalyzePlaybookEndpointTests.cs|run|1
 XE-Local-AI-Engine.Tests/Endpoints/Agents/CreateAgentDefinitionEndpointTests.cs|summary|1
@@ -1436,7 +1435,7 @@ XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorBenchmarkReceiptTests.c
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorBenchmarkReceiptTests.cs|summary|2
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorCrashAndSurfaceTests.cs|run|2
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorCrashAndSurfaceTests.cs|summary|1
-XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorEvictionTests.cs|run|3
+XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorEvictionTests.cs|run|2
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorEvictionTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorGateScopeTests.cs|block|1
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorGateScopeTests.cs|remarks|1

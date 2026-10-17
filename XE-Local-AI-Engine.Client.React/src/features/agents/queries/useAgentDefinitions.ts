@@ -9,13 +9,11 @@ import {
 	listAgentDefinitionsOptions,
 	updateAgentDefinitionMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toAgentDefinition, toAgentDefinitions } from "@/features/agents/models/AgentDefinitionMappers";
 
 // Server state for the agent-management surface. Reads use the generated hey-api `*Options()` (which wire the shared
 // axios instance + TanStack Query AbortSignal automatically) and a TanStack `select` that maps the optional-field
-// generated response into the stricter domain view-model. Every generated options object is wrapped in
-// withResponseValidation so a zod response-shape failure surfaces as an ApiError (never a raw ZodError). The
+// generated response into the stricter domain view-model. The
 // create/update/delete mutations keep their domain-friendly call signatures (the page/form pass domain values) and
 // dispatch into the generated `{ path, body }` envelope, then invalidate the definitions list on success.
 
@@ -32,7 +30,7 @@ export function agentDefinitionsInvalidationKey(operationId: string): readonly [
 
 export function useAgentDefinitions() {
 	return useQuery({
-		...withResponseValidation(listAgentDefinitionsOptions()),
+		...listAgentDefinitionsOptions(),
 		select: toAgentDefinitions,
 	});
 }
@@ -42,7 +40,7 @@ export function useAgentDefinitions() {
 // carries `{ models?: string[] }`; the select maps it to the bare `string[]` the page consumes.
 export function useToolCapableModels() {
 	return useQuery({
-		...withResponseValidation(getToolCapableModelsOptions()),
+		...getToolCapableModelsOptions(),
 		select: (data) => data.models ?? [],
 	});
 }
@@ -52,7 +50,7 @@ export function useToolCapableModels() {
 export function useDefaultAssistantToolOffer(modelProfile: string | null, enabled: boolean) {
 	const modelName = modelProfile?.trim() ? modelProfile : null;
 	return useQuery({
-		...withResponseValidation(getDefaultAssistantToolOfferOptions({ query: { modelName } })),
+		...getDefaultAssistantToolOfferOptions({ query: { modelName } }),
 		select: (data) => data.toolNames ?? [],
 		enabled,
 		// The offer follows node switches that can change in another tab; never show a cached pre-switch answer on open.
@@ -74,7 +72,7 @@ export function useCreateAgentDefinition() {
 
 	return useMutation({
 		mutationFn: async (request: XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest) => {
-			const options = withResponseValidation(createAgentDefinitionMutation());
+			const options = createAgentDefinitionMutation();
 			const data = await options.mutationFn?.({ body: request }, undefined as never);
 			return data ? toAgentDefinition(data) : undefined;
 		},
@@ -95,7 +93,7 @@ export function useUpdateAgentDefinition() {
 
 	return useMutation({
 		mutationFn: async ({ id, request }: UpdateAgentDefinitionVariables) => {
-			const options = withResponseValidation(updateAgentDefinitionMutation());
+			const options = updateAgentDefinitionMutation();
 			const data = await options.mutationFn?.({ path: { agentDefinitionId: id }, body: request }, undefined as never);
 			return data ? toAgentDefinition(data) : undefined;
 		},
@@ -110,7 +108,7 @@ export function useDeleteAgentDefinition() {
 
 	return useMutation({
 		mutationFn: async (id: string) => {
-			const options = withResponseValidation(deleteAgentDefinitionMutation());
+			const options = deleteAgentDefinitionMutation();
 			await options.mutationFn?.({ path: { agentDefinitionId: id } }, undefined as never);
 		},
 		onSuccess: () => invalidateList(queryClient),

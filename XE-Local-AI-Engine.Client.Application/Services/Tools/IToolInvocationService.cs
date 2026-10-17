@@ -6,7 +6,8 @@ namespace XE_Local_AI_Engine.Client.Services.Tools;
 ///     composed approval of <see langword="false" />) or has no in-process executable.
 /// </summary>
 /// <remarks>
-///     <see cref="InvalidArguments" /> = not a JSON object, or fails the tool's own schema. <see cref="Timeout" />,
+///     A custom tool flagged for unattended use is the one non-built-in that may run (ADR 0021); its audit refusals are
+///     <see cref="NotInvocable" /> too. <see cref="InvalidArguments" /> = not a JSON object, or fails the tool's own schema. <see cref="Timeout" />,
 ///     <see cref="Cancelled" /> and <see cref="Faulted" /> are self-describing.
 /// </remarks>
 public enum ToolInvocationOutcomeKind
@@ -44,6 +45,12 @@ public sealed class InvocableToolDescriptor
     ///     carry a link allow-list, and the graph executor calls the fetch service itself (ADR 0017, decision 6).
     /// </summary>
     public bool RequiresAllowedUrls { get; init; }
+
+    /// <summary>
+    ///     A custom tool flagged for unattended use: it has a side effect, so a Tool node may name it only in a definition
+    ///     that allows actions, and it runs once, audited first (ADR 0021). Built-ins are never actions.
+    /// </summary>
+    public bool IsAction { get; init; }
 }
 
 /// <summary>The calling node run, for logging and correlation.</summary>
@@ -57,6 +64,9 @@ public sealed class ToolInvocationContext
 
     /// <summary>Hard budget for the whole call, including argument validation.</summary>
     public required TimeSpan Timeout { get; init; }
+
+    /// <summary>The graph definition the node belongs to; an action tool is refused without one, since its audit row names it.</summary>
+    public Guid? DefinitionId { get; init; }
 }
 
 /// <summary>

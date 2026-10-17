@@ -7,7 +7,6 @@ import {
 	listAgentHomeRunsOptions,
 	listAgentHomeRunsQueryKey,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { agentRunPageSize, toAgentRunView } from "@/features/agentRuns/models/AgentRunModels";
 
 interface AgentRunListOptions {
@@ -24,14 +23,12 @@ interface AgentRunListOptions {
  */
 export function useAgentRuns(options: AgentRunListOptions = {}) {
 	return useQuery({
-		...withResponseValidation(
-			listAgentHomeRunsOptions({
-				query: {
-					limit: options.limit ?? agentRunPageSize,
-					offset: options.offset ?? 0,
-				},
-			}),
-		),
+		...listAgentHomeRunsOptions({
+			query: {
+				limit: options.limit ?? agentRunPageSize,
+				offset: options.offset ?? 0,
+			},
+		}),
 		placeholderData: keepPreviousData,
 		select: (data) => ({ items: data.items.map(toAgentRunView), totalCount: data.totalCount }),
 	});
@@ -61,7 +58,7 @@ export function useDeleteAgentHomeRun() {
  */
 export function useAgentRunLog(runId: string | null, enabled: boolean) {
 	return useQuery({
-		...withResponseValidation(getAgentHomeRunLogOptions({ path: { runId: runId ?? "" } })),
+		...getAgentHomeRunLogOptions({ path: { runId: runId ?? "" } }),
 		enabled: enabled && runId !== null,
 	});
 }
@@ -69,7 +66,7 @@ export function useAgentRunLog(runId: string | null, enabled: boolean) {
 /** The run's exported `changes.patch` as text, under the same open-only rule as the log. */
 export function useAgentRunPatch(runId: string | null, enabled: boolean) {
 	return useQuery({
-		...withResponseValidation(getAgentHomeRunPatchOptions({ path: { runId: runId ?? "" } })),
+		...getAgentHomeRunPatchOptions({ path: { runId: runId ?? "" } }),
 		enabled: enabled && runId !== null,
 	});
 }

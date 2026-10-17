@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
@@ -61,7 +62,9 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
             // A graph that parsed may still have something said about it, errors or not, so an author fixing one sees both lists.
             // Warnings ride out only on this path: they never block, so the save and start paths below discard them.
             var errors = new List<GraphWorkflowValidationError>();
-            var graph = await ParseCollectingErrorsAsync(graphJson, errors, cancellationToken);
+
+            // Actions count as allowed: the graph is judged without a definition, and save and start judge the flag itself.
+            var graph = await ParseCollectingErrorsAsync(graphJson, allowsActions: true, errors, cancellationToken);
             var warnings = await WarningsForRuntimeAsync(graph, cancellationToken);
             return errors.Count == 0
                 ? GraphWorkflowValidationResult.ValidWith(warnings)
@@ -77,13 +80,30 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
         }
     }
 
-    public async Task<GraphWorkflowDefinitionSnapshot> CreateAsync(string name,
+    public Task<GraphWorkflowDefinitionSnapshot> CreateAsync(string name,
         string? description,
         string graphJson,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        CreateGatedAsync(name, description, graphJson, actionsPassTheGate: false, cancellationToken);
+
+    public Task<GraphWorkflowDefinitionSnapshot> ImportAsync(string name,
+        string? description,
+        string graphJson,
+        CancellationToken cancellationToken = default) =>
+        CreateGatedAsync(name, description, graphJson, actionsPassTheGate: true, cancellationToken);
+
+    /// <summary>
+    ///     Both creates store <c>AllowsActions</c> false (ADR 0021); only the Operator update sets it. They differ in whether
+    ///     an action node passes the gate: refused for a drawn graph, admitted for an import, which the start then refuses.
+    /// </summary>
+    private async Task<GraphWorkflowDefinitionSnapshot> CreateGatedAsync(string name,
+        string? description,
+        string graphJson,
+        bool actionsPassTheGate,
+        CancellationToken cancellationToken)
     {
         // Node count and kind are denormalized from the SAME parse, so the list and the picker never decrypt a blob.
-        var graph = await ValidateAndParseAsync(graphJson, cancellationToken);
+        var graph = await ValidateAndParseAsync(graphJson, actionsPassTheGate, cancellationToken);
         return await _store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand
             {
                 DefinitionId = Guid.NewGuid(),
@@ -101,11 +121,15 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
         string? name,
         string? description,
         string? graphJson,
+        bool? allowsActions = null,
+        GraphWorkflowTriggerSource? triggerSources = null,
         CancellationToken cancellationToken = default)
     {
         // A null graph leaves the stored one alone, so the node count and kind must stay null with it: writing either for a
         // graph nobody sent would denormalize a lie the definition list then reports.
-        var graph = graphJson is null ? null : await ValidateAndParseAsync(graphJson, cancellationToken);
+        var graph = graphJson is null
+            ? null
+            : await ValidateAndParseAsync(graphJson, allowsActions ?? (await _store.GetDefinitionAsync(definitionId, cancellationToken)).AllowsActions, cancellationToken);
         return await _store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand
             {
                 DefinitionId = definitionId,
@@ -114,7 +138,9 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
                 Description = description,
                 GraphJson = graphJson,
                 NodeCount = graph?.Nodes.Count,
-                Kind = graph?.Kind
+                Kind = graph?.Kind,
+                AllowsActions = allowsActions,
+                TriggerSources = triggerSources
             },
             cancellationToken);
     }
@@ -139,10 +165,10 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
     ///     warnings and re-parsing for either would run the rule set twice. The tool gate runs once the structural rules
     ///     passed, beside the per-node errors, so one answer carries both; a config that failed to parse is no tool node.
     /// </remarks>
-    private async Task<GraphWorkflowGraph> ValidateAndParseAsync(string graphJson, CancellationToken cancellationToken)
+    private async Task<GraphWorkflowGraph> ValidateAndParseAsync(string graphJson, bool allowsActions, CancellationToken cancellationToken)
     {
         var errors = new List<GraphWorkflowValidationError>();
-        var graph = await ParseCollectingErrorsAsync(graphJson, errors, cancellationToken);
+        var graph = await ParseCollectingErrorsAsync(graphJson, allowsActions, errors, cancellationToken);
         return errors.Count == 0
             ? graph
             : throw new GraphWorkflowValidationException(GraphWorkflowValidationResult.Invalid(errors));
@@ -150,6 +176,7 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
 
     /// <summary>The parse and the tool gate, adding per-node errors to <paramref name="errors" />; whole-document and structural failures still throw.</summary>
     private async Task<GraphWorkflowGraph> ParseCollectingErrorsAsync(string graphJson,
+        bool allowsActions,
         List<GraphWorkflowValidationError> errors,
         CancellationToken cancellationToken)
     {
@@ -159,7 +186,7 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
         }
 
         var graph = GraphWorkflowGraphContract.ValidateAndParse(graphJson, _options.Value.MaxNodesPerDefinition, errors);
-        errors.AddRange(await GraphWorkflowToolGate.ErrorsAsync(graph, _tools, _runtimeSettings, cancellationToken));
+        errors.AddRange(await GraphWorkflowToolGate.ErrorsAsync(graph, allowsActions, _tools, _runtimeSettings, cancellationToken));
         return graph;
     }
 

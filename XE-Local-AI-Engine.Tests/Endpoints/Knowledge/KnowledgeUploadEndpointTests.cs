@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Implementation;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
@@ -53,6 +54,25 @@ public sealed class KnowledgeUploadEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         // An already-indexed dedupe hit is done: re-running the pipeline would be wasted work.
+        AssertEx.Empty(dispatcher.Enqueued);
+    }
+
+    /// <summary>R3-04: a knowledge upload past the cap answered "malformed form data"; it is the shared 413 naming the cap.</summary>
+    [Test]
+    public async Task Upload_PastTheSizeCap_Returns413NamingTheCap()
+    {
+        var dispatcher = new RecordingDispatcher(KnowledgeIngestionEnqueueResult.Accepted);
+        await using var factory = new TestServerWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services => services.Configure<SecurityOptions>(options => options.MaxUploadFileSizeMb = 1)
+        };
+        using var client = factory.CreateClient();
+
+        using var response = await PostFileAsync(factory, client, content: new byte[2 * 1024 * 1024]);
+
+        AssertEx.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+        await RequestBodyTooLargeAssert.DeclaredProblemShapeAsync(response, "the knowledge-base upload");
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "The file exceeds the maximum upload size of 1 MB.");
         AssertEx.Empty(dispatcher.Enqueued);
     }
 

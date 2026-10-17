@@ -94,7 +94,7 @@ public interface INodeRuntimeSettings
     /// <summary>The draft-model GPU layers <c>--spec-draft-ngl</c>, or <see langword="null" /> when unset (flag omitted).</summary>
     Task<int?> GetSpeculativeDraftGpuLayersAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>The knowledge-base reranker model name (stored &gt; off), or <see langword="null" /> when reranking is disabled.</summary>
+    /// <summary>The knowledge-base reranker model (stored &gt; <c>KnowledgeBase:RerankerModelName</c> &gt; off); <see langword="null" /> turns reranking off.</summary>
     Task<string?> GetRerankerModelNameAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -164,6 +164,12 @@ public interface INodeRuntimeSettings
 
     /// <summary>The time budget of one <c>web_fetch</c> or <c>web_search</c> call (stored &gt; 20 s).</summary>
     Task<TimeSpan> GetWebFetchTimeoutAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The graph workflow the intent service routes through when no alias matches; null routes on aliases alone.</summary>
+    Task<Guid?> GetIntentRouterDefinitionIdAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>How old an intent utterance may be before it is refused (stored &gt; 30 s).</summary>
+    Task<TimeSpan> GetIntentMaxUtteranceAgeAsync(CancellationToken cancellationToken = default);
 
     /// <summary>The cap on the readable text one <c>web_fetch</c> returns, in characters (stored &gt; 12000).</summary>
     Task<int> GetWebFetchMaxContentCharsAsync(CancellationToken cancellationToken = default);
@@ -424,9 +430,6 @@ public interface INodeRuntimeSettings
 
     /// <inheritdoc cref="GetSpeculativeDraftGpuLayersAsync" />
     int? GetSpeculativeDraftGpuLayers();
-
-    /// <inheritdoc cref="GetRerankerModelNameAsync" />
-    string? GetRerankerModelName();
 
     // Synchronous only: each of these is read once, by the host-build factory or Configure delegate that seeds a provider
     // option object, so an edit applies on the next node restart.

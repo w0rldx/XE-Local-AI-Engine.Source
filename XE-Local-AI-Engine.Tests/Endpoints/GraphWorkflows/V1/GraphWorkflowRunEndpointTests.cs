@@ -161,6 +161,46 @@ public sealed class GraphWorkflowRunEndpointTests
         AssertEx.Equal("GraphWorkflowRunConflict", await ConflictTypeAsync(response));
     }
 
+    /// <summary>A definition that no longer accepts Manual refuses the page's start with the same run-conflict envelope.</summary>
+    [Test]
+    public async Task StartRun_OnADefinitionThatDoesNotAcceptManual_Answers409WithTheRunConflictDiscriminator()
+    {
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        await using (var scope = Host.Factory.Services.CreateAsyncScope())
+        {
+            var current = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().GetDefinitionAsync(definitionId);
+            _ = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowDefinitionService>()
+                           .UpdateAsync(definitionId, current.Version, name: null, description: null, graphJson: null, triggerSources: GraphWorkflowTriggerSource.Chat);
+        }
+
+        using var response = await SendAsync("POST", $"{Root}/definitions/{definitionId}/runs", JsonSerializer.Serialize(new
+        {
+            requestId = Guid.NewGuid()
+        }));
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        AssertEx.Equal("GraphWorkflowRunConflict", await ConflictTypeAsync(response));
+    }
+
+    /// <summary>The page's start records Manual, and both the detail and the list say so, with no principal.</summary>
+    [Test]
+    public async Task StartRun_RecordsManualAsTheOrigin_InTheDetailAndTheList()
+    {
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var runId = await StartRunAsync(definitionId);
+
+        using var detail = await SendAsync("GET", $"{Runs}/{runId}");
+        using var detailDocument = JsonDocument.Parse(await detail.Content.ReadAsStringAsync());
+        using var list = await SendAsync("GET", $"{Runs}?status=Pending&limit=200");
+        using var listDocument = JsonDocument.Parse(await list.Content.ReadAsStringAsync());
+
+        var run = detailDocument.RootElement.GetProperty("run");
+        AssertEx.Equal("Manual", run.GetProperty("triggerSource").GetString());
+        AssertEx.Equal(JsonValueKind.Null, run.GetProperty("principalId").ValueKind, "a run the operator started names no principal.");
+        var row = listDocument.RootElement.GetProperty("runs").EnumerateArray().Single(entry => entry.GetProperty("id").GetGuid() == runId);
+        AssertEx.Equal("Manual", row.GetProperty("triggerSource").GetString());
+    }
+
     /// <summary>The other way: a cancel of a run that has already finished. Same story, same discriminator.</summary>
     [Test]
     public async Task CancelRun_OnATerminalRun_Answers409WithTheRunConflictDiscriminator()

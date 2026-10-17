@@ -68,6 +68,10 @@ where Debug was green.
 
 ## Build and NuGet state
 
+### TUnit, `Microsoft.Testing.Platform` and its extensions move as one cohort
+
+**Rule:** bump `TUnit`, `Microsoft.Testing.Platform`, `Microsoft.Testing.Extensions.TrxReport` and `Microsoft.Testing.Extensions.CodeCoverage` together in `Directory.Packages.props`: TUnit requires an exact platform version, so raising one member alone fails restore or leaves the runner on a mismatched platform. `TUnit.Playwright` follows the `Microsoft.Playwright` pin (see the comment beside it). **Prevents:** a single-package dependency bump that restores red or runs the suite on the wrong platform. **Authority:** `Directory.Packages.props`.
+
 ### After ANY failed build, rebuild to green before trusting a `--no-build` gate
 
 **Rule:** after any failed build, rebuild to `0 Error(s)` before a `--no-build` run: a project that fails leaves its output directory untouched, including its copies of dependencies that did compile, so the test host loads a pre-change product assembly. The same holds for a Debug build with `XE_FULL_ANALYSIS=1`: an analyzer failure writes no new assembly, so a focused test-host run executes the previous one. **Prevents:** grading old code as new. `scripts/assembly-guard.sh` cannot see it: it compares output before and after its own run, not output already stale at the start. **Authority:** `scripts/assembly-guard.sh`; reproduced with a two-project solution.
@@ -85,6 +89,10 @@ where Debug was green.
 **Rule:** Development Mode gives each sandboxed task its own `NUGET_PACKAGES`; a reusable worker (`MSBuild.dll /nodemode:1`) can outlive the task with that path and write it into `obj/*.dgspec.json` on a later restore anywhere on the host (NU5037 or CS0006 naming a `/tmp/xe-…/nuget` directory). Recover with `dotnet build-server shutdown`, then `MSBUILDDISABLENODEREUSE=1 NUGET_PACKAGES=$HOME/.nuget/packages dotnet restore --force`; unlike the props trap above, a live worker re-poisons a plain re-restore. Prefix long-lived agent shells with the same two variables. **Prevents:** chasing a package path nothing asked for. **Authority:** `DevelopmentWorkspaceTools.BuildEnvironment` (sets `MSBUILDDISABLENODEREUSE=1`), asserted by `DevelopmentMountBrokerTests`. [evidence](../agent-knowledge-evidence.md#a-dev-mode-sandbox-run-leaves-msbuild-worker-nodes-holding-a-dead-nuget_packages)
 
 ## Architecture guards and refactors
+
+### The host reaches shared provider rules through Client.Application, never OpenAICompatible.Core
+
+**Rule:** `XE-Local-AI-Engine.Client` does not reference `Providers.OpenAICompatible.Core`. An endpoint or validator that needs a shared rule (header names, base-address normalization) calls the `Client.Application` surface that wraps it (`StoredExternalProviderHeader.FindViolations`, `OpenAICompatibleBaseAddress` via the store), never the Core type directly. **Prevents:** a host project reference to the leaf transport layer, which `LayerDependencyTests` rejects after the endpoint is already written. **Authority:** `LayerDependencyTests`; the `Client.Application` csproj references.
 
 ### Measure a non-vacuity floor through the guard itself, never with a grep over source
 

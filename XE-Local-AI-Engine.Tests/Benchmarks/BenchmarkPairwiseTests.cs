@@ -22,6 +22,9 @@ public sealed class BenchmarkPairwiseTests
     private static readonly Guid RunA = new("11111111-1111-1111-1111-111111111111");
     private static readonly Guid RunB = new("22222222-2222-2222-2222-222222222222");
     private static readonly Guid RunC = new("33333333-3333-3333-3333-333333333333");
+    private static readonly Guid RunD = new("77777777-7777-7777-7777-777777777777");
+    private static readonly Guid ItemZero = new("cccccccc-0000-0000-0000-000000000000");
+    private static readonly Guid ItemOne = new("dddddddd-0000-0000-0000-000000000000");
     private const string PolicyHash = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     private const string ExecutionKey = "exec-v1";
     private static readonly JsonSerializerOptions ScoreOptions = new(JsonSerializerDefaults.Web);
@@ -69,19 +72,22 @@ public sealed class BenchmarkPairwiseTests
             {
                 RunId = RunA,
                 TaskCaseId = null,
-                TaskInputHash = "hash-one"
+                TaskInputHash = "hash-one",
+                ModelName = "model-a"
             },
             new()
             {
                 RunId = RunB,
                 TaskCaseId = null,
-                TaskInputHash = "hash-one"
+                TaskInputHash = "hash-one",
+                ModelName = "model-b"
             },
             new()
             {
                 RunId = RunC,
                 TaskCaseId = null,
-                TaskInputHash = "hash-two"
+                TaskInputHash = "hash-two",
+                ModelName = "model-c"
             }
         ];
 
@@ -89,6 +95,100 @@ public sealed class BenchmarkPairwiseTests
 
         AssertEx.Equal(expected: 1, plan.Slots.Count);
         AssertEx.True(plan.Slots.All(static slot => slot.RunAId != RunC && slot.RunBId != RunC), "A run answering another case is in another group.");
+    }
+
+    [Test]
+    public void Plan_TwoItemsByTwoModels_PairsOnlyDifferentModelsOnTheSameItem()
+    {
+        // R7-02: 2 items x 2 models used to produce 6 pairs, including one model's item 1 against its own item 0.
+        var item0Repeat = new Guid("44444444-4444-4444-4444-444444444444");
+        var item1Large = new Guid("55555555-5555-5555-5555-555555555555");
+        var item1Small = new Guid("66666666-6666-6666-6666-666666666666");
+        BenchmarkPairwiseCandidate[] candidates =
+        [
+            Candidate(RunA, ItemZero, "cell-27b"),
+            Candidate(RunB, ItemZero, "cell-9b"),
+            Candidate(item0Repeat, ItemZero, "cell-27b"),
+            Candidate(item1Large, ItemOne, "cell-27b"),
+            Candidate(item1Small, ItemOne, "cell-9b")
+        ];
+
+        var plan = BenchmarkPairwisePlanner.Plan(candidates, BenchmarkPairwisePolicy.MaximumRuns);
+
+        var pairs = plan.Slots.Select(static slot => string.Join('|', new[]
+        {
+            slot.RunAId,
+            slot.RunBId
+        }.Order())).Order().ToArray();
+        string[] expected =
+        [
+            .. new[]
+            {
+                new[]
+                {
+                    RunA,
+                    RunB
+                },
+                new[]
+                {
+                    item0Repeat,
+                    RunB
+                },
+                new[]
+                {
+                    item1Large,
+                    item1Small
+                }
+            }.Select(static pair => string.Join('|', pair.Order())).Order()
+        ];
+        AssertEx.Equal(string.Join(", ", expected), string.Join(", ", pairs),
+            "Only different models answering the same item are compared; a repeat of the same model is not.");
+    }
+
+    [Test]
+    public async Task Fitter_TwoItems_ScoresEveryRunWithinItsOwnItem()
+    {
+        var store = StubCohort(out var published, TwoItemCandidates(), TwoItemComparisons(withStaleCrossItemPair: false));
+
+        AssertEx.True(await Fitter(store).TryPublishAsync(ProjectId, CancellationToken.None));
+
+        var scores = Entries(published.Value);
+        AssertEx.Equal(expected: 4, scores.Count(static entry => entry.Score is not null),
+            "Each item is fitted on its own; one fit over both would score only the largest component.");
+        AssertEx.True(scores.Single(entry => entry.RunId == RunA).Score > scores.Single(entry => entry.RunId == RunB).Score);
+        AssertEx.True(scores.Single(entry => entry.RunId == RunC).Score > scores.Single(entry => entry.RunId == RunD).Score);
+    }
+
+    /// <summary>One model with repeats plans no pair; the cohort must not read pending forever behind an older fit.</summary>
+    [Test]
+    public async Task Fitter_SeveralRunsOfOneCell_PublishesARefusalInsteadOfStayingPending()
+    {
+        BenchmarkPairwiseCandidate[] candidates =
+        [
+            Candidate(RunA, ItemZero, "cell-27b"),
+            Candidate(RunB, ItemZero, "cell-27b"),
+            Candidate(RunC, ItemZero, "cell-27b")
+        ];
+        var store = StubCohort(out var published, candidates, [], referenceExecutionKey: null);
+
+        AssertEx.True(await Fitter(store).TryPublishAsync(ProjectId, CancellationToken.None));
+
+        var scores = Entries(published.Value);
+        AssertEx.Equal(expected: 3, scores.Length);
+        AssertEx.True(scores.All(static entry => entry.Score is null && entry.Reason == BenchmarkRunJudgeStates.ReasonPairwiseInsufficient),
+            "Every run of the single cell reads why it has no pairwise score.");
+    }
+
+    [Test]
+    public async Task Fitter_StaleCrossItemComparison_IsNotFitted()
+    {
+        // Comparisons stored before pairing respected task items stay in the cohort; the fit must ignore them.
+        var store = StubCohort(out var published, TwoItemCandidates(), TwoItemComparisons(withStaleCrossItemPair: true));
+
+        AssertEx.True(await Fitter(store).TryPublishAsync(ProjectId, CancellationToken.None));
+
+        using var fitted = JsonDocument.Parse(published.Value.FittedSetJson);
+        AssertEx.Equal(expected: 4, fitted.RootElement.GetArrayLength(), "Only the two within-item pairs, both orders, are fitted.");
     }
 
     [Test]
@@ -253,9 +353,6 @@ public sealed class BenchmarkPairwiseTests
         bool truncateFirstComparison = false,
         BenchmarkJudgeAttemptStatus firstComparisonStatus = BenchmarkJudgeAttemptStatus.Succeeded)
     {
-        var store = Substitute.For<IBenchmarkStore>();
-        var capture = new Captured<BenchmarkPairwiseFitCommand>();
-        published = capture;
         var (runA, runB) = RunA.CompareTo(RunB) < 0 ? (RunA, RunB) : (RunB, RunA);
         BenchmarkComparisonRecord[] comparisons =
         [
@@ -263,6 +360,17 @@ public sealed class BenchmarkPairwiseTests
                 mismatchedKeyOnFirstComparison ? "other-runtime" : ExecutionKey, truncateFirstComparison),
             Comparison(runA, runB, order: 1, "a", BenchmarkJudgeAttemptStatus.Succeeded, ExecutionKey, false)
         ];
+        return StubCohort(out published, Candidates(runA, runB), comparisons, referenceExecutionKey);
+    }
+
+    private static IBenchmarkStore StubCohort(out Captured<BenchmarkPairwiseFitCommand> published,
+        BenchmarkPairwiseCandidate[] candidates,
+        BenchmarkComparisonRecord[] comparisons,
+        string? referenceExecutionKey = ExecutionKey)
+    {
+        var store = Substitute.For<IBenchmarkStore>();
+        var capture = new Captured<BenchmarkPairwiseFitCommand>();
+        published = capture;
         store.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
              .Returns(new BenchmarkJudgePolicyRevisionRecord
              {
@@ -284,21 +392,7 @@ public sealed class BenchmarkPairwiseTests
                  ComparisonSetVersion = 7,
                  ReferenceExecutionKey = referenceExecutionKey,
                  ProjectVersion = 1,
-                 Candidates =
-                 [
-                     new BenchmarkPairwiseCandidate
-                     {
-                         RunId = runA,
-                         TaskCaseId = null,
-                         TaskInputHash = string.Empty
-                     },
-                     new BenchmarkPairwiseCandidate
-                     {
-                         RunId = runB,
-                         TaskCaseId = null,
-                         TaskInputHash = string.Empty
-                     }
-                 ],
+                 Candidates = candidates,
                  Comparisons = comparisons
              });
         store.GetActivePairwiseFitAsync(ProjectId, Arg.Any<CancellationToken>()).Returns((BenchmarkPairwiseFitRecord?)null);
@@ -340,13 +434,51 @@ public sealed class BenchmarkPairwiseTests
             Version = 1
         };
 
+    private static BenchmarkPairwiseCandidate Candidate(Guid run, Guid item, string cell) =>
+        new()
+        {
+            RunId = run,
+            TaskCaseId = item,
+            TaskInputHash = "hash-" + item,
+            ModelName = cell
+        };
+
+    /// <summary>Item 0: RunA (27B) and RunB (9B); item 1: RunC (27B) and RunD (9B).</summary>
+    private static BenchmarkPairwiseCandidate[] TwoItemCandidates() =>
+    [
+        Candidate(RunA, ItemZero, "cell-27b"),
+        Candidate(RunB, ItemZero, "cell-9b"),
+        Candidate(RunC, ItemOne, "cell-27b"),
+        Candidate(RunD, ItemOne, "cell-9b")
+    ];
+
+    /// <summary>The 27B wins both orders on both items; the stale pair is the 27B's item 0 against its own item 1.</summary>
+    private static BenchmarkComparisonRecord[] TwoItemComparisons(bool withStaleCrossItemPair)
+    {
+        List<BenchmarkComparisonRecord> comparisons =
+        [
+            Comparison(RunA, RunB, order: 0, "a", BenchmarkJudgeAttemptStatus.Succeeded, ExecutionKey, false),
+            Comparison(RunA, RunB, order: 1, "a", BenchmarkJudgeAttemptStatus.Succeeded, ExecutionKey, false),
+            Comparison(RunC, RunD, order: 0, "a", BenchmarkJudgeAttemptStatus.Succeeded, ExecutionKey, false),
+            Comparison(RunC, RunD, order: 1, "a", BenchmarkJudgeAttemptStatus.Succeeded, ExecutionKey, false)
+        ];
+        if (withStaleCrossItemPair)
+        {
+            comparisons.Add(Comparison(RunA, RunC, order: 0, "b", BenchmarkJudgeAttemptStatus.Succeeded, ExecutionKey, false));
+            comparisons.Add(Comparison(RunA, RunC, order: 1, "b", BenchmarkJudgeAttemptStatus.Succeeded, ExecutionKey, false));
+        }
+
+        return [.. comparisons];
+    }
+
     private static BenchmarkPairwiseCandidate[] Candidates(params Guid[] runs) =>
     [
         .. runs.Select(static run => new BenchmarkPairwiseCandidate
         {
             RunId = run,
             TaskCaseId = null,
-            TaskInputHash = string.Empty
+            TaskInputHash = string.Empty,
+            ModelName = "model-" + run
         })
     ];
 

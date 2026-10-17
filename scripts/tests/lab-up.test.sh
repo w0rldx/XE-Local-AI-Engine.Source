@@ -233,7 +233,8 @@ run_lab() {
   while [[ $# -gt 0 && "$1" != "--" ]]; do extra+=("$1"); shift; done
   shift
   rm -f -- "${MANIFEST}" "${CTL}/calls.log"
-  "${TEST_ENV[@]}" ${extra[@]+"${extra[@]}"} "${REPO}/scripts/lab-up.sh" --profile test "$@" >/dev/null 2>"${CTL}/stderr"
+  # --cpu: TEST_ENV unsets the bring-your-own runtime, which section 17 covers on its own.
+  "${TEST_ENV[@]}" ${extra[@]+"${extra[@]}"} "${REPO}/scripts/lab-up.sh" --profile test --cpu "$@" >/dev/null 2>"${CTL}/stderr"
   STATUS=$?
   ERR="$(cat "${CTL}/stderr")"
 }
@@ -540,7 +541,7 @@ check "--fresh with a foreign AppHost deleted nothing" "db-v1" "$(cat "${DATA}/n
 check "no manifest for a refused AppHost" "absent" "$([[ -e "${MANIFEST}" ]] && echo present || echo absent)"
 rm -f -- "${MANIFEST}"
 (cd "${REPO}" && "${TEST_ENV[@]}" XE_ASPIRE_APPHOST=XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj \
-  "${REPO}/scripts/lab-up.sh" --profile test --until host >/dev/null 2>"${CTL}/stderr")
+  "${REPO}/scripts/lab-up.sh" --profile test --cpu --until host >/dev/null 2>"${CTL}/stderr")
 check "a relative override naming this checkout's AppHost is accepted" "0" "$?"
 check "the accepted override reaches dev-status as the absolute path" "dev-status ${OWN_APPHOST} ${OWN_KEY}" \
   "$(sort -u "${CTL}/apphost.log")"
@@ -553,7 +554,7 @@ check "no dev script ran for a foreign secret file" "0" "$(count_lines "${CTL}/a
 check "--fresh with a foreign secret file deleted nothing" "db-v1" "$(cat "${DATA}/node.db" 2>/dev/null)"
 check "--fresh with a foreign secret file kept dp-keys" "present" "$([[ -d "${CLIENT}/dp-keys" ]] && echo present || echo absent)"
 (cd "${REPO}" && "${TEST_ENV[@]}" XE_NODE_OPERATOR_SECRET_FILE=XE-Local-AI-Engine.AppHost/.data/node.key \
-  "${REPO}/scripts/lab-up.sh" --profile test --until host >/dev/null 2>"${CTL}/stderr")
+  "${REPO}/scripts/lab-up.sh" --profile test --cpu --until host >/dev/null 2>"${CTL}/stderr")
 check "a relative secret path naming this checkout's node.key is accepted" "0" "$?"
 check "the accepted secret path reaches dev-status as the absolute path" "dev-status ${OWN_APPHOST} ${OWN_KEY}" \
   "$(sort -u "${CTL}/apphost.log")"
@@ -568,7 +569,7 @@ run_owner() {
   local extra=()
   while [[ $# -gt 0 && "$1" != "--" ]]; do extra+=("$1"); shift; done
   shift
-  "${TEST_ENV[@]}" ${extra[@]+"${extra[@]}"} "${REPO}/scripts/lab-up.sh" --profile owner --until data "$@" \
+  "${TEST_ENV[@]}" ${extra[@]+"${extra[@]}"} "${REPO}/scripts/lab-up.sh" --profile owner --cpu --until data "$@" \
     >/dev/null 2>"${CTL}/stderr"
   STATUS=$?
   ERR="$(cat "${CTL}/stderr")"
@@ -617,6 +618,24 @@ run_owner -- --plan 'bad plan'
 check "an invalid plan name => exit 2" "2" "${STATUS}"
 check "an invalid plan name leaves OWNER alone" "plan-c" "$(owner_key plan)"
 
+echo "== 17. runtime: bring-your-own CUDA server or an explicit --cpu =="
+: >"${CTL}/apphost.log"
+before_owner="$(cat "${OWNER}")"
+"${TEST_ENV[@]}" "${REPO}/scripts/lab-up.sh" --profile owner --until data --plan plan-c >/dev/null 2>"${CTL}/stderr"
+STATUS=$?
+ERR="$(cat "${CTL}/stderr")"
+check "no XE_LLAMACPP_SERVER_PATH and no --cpu => exit 2" "2" "${STATUS}"
+check "the refusal is one line" "1" "$(grep -c . <<<"${ERR}")"
+check_contains "the refusal names the variable and the flag" "REFUSED: XE_LLAMACPP_SERVER_PATH is not set" "${ERR}"
+check_contains "the refusal offers --cpu" "pass --cpu" "${ERR}"
+check "a refused run calls no dev script" "0" "$(count_lines "${CTL}/apphost.log")"
+check "a refused run leaves OWNER alone" "${before_owner}" "$(cat "${OWNER}")"
+"${TEST_ENV[@]}" XE_LLAMACPP_SERVER_PATH=/opt/byo/llama-server "${REPO}/scripts/lab-up.sh" --profile owner --until data \
+  --plan plan-c >/dev/null 2>"${CTL}/stderr"
+check "a bring-your-own server is accepted without --cpu" "0" "$?"
+run_owner -- --plan plan-c
+check "--cpu is accepted without a bring-your-own server" "0" "${STATUS}"
+
 echo "== 11. redaction =="
 LOG="$(cat "${LAB}/evidence/lab-up.log")"
 check_contains "lab-up.log records the auth call" "--password ***" "${LOG}"
@@ -628,7 +647,7 @@ echo "== 10. lab-api.sh =="
 API_ENV=("${TEST_ENV[@]}")
 echo "tok-old-opaque" >"${LAB}/token"
 rm -f "${CTL}/calls.log" "${CTL}/curl.log"
-ctl curl-queue "401\t{\"error\":\"expired\"}\n200\t{\"ok\":true,\"accessToken\":\"leak-me\"}\n"
+ctl curl-queue "401\t{\"error\":\"expired\"}\n200\t{\"ok\":true,\"accessToken\":\"leak-me\",\"key\":\"xemcp_key-leak\",\"privateKey\":\"pk-leak\",\"pem\":\"-----BEGIN PRIVATE KEY-----pem-leak\",\"mcp\":{\"apiKey\":{\"prefix\":\"p\"},\"key\":\"mcp-shape-leak\"},\"setting\":{\"key\":\"keep-generic-key\"},\"integration\":{\"secret_value\":\"xeint_int-leak\"},\"proxy\":[\"xeprx_prx-leak\"]}\n"
 out="$("${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test POST chat/conversations \
   "{\"password\":\"${PASSWORD}\",\"title\":\"t\"}" 2>&1)"; status=$?
 check "401 then 200 exits 0" "0" "${status}"
@@ -646,6 +665,14 @@ check_contains "http.log logs a non-empty response body" '"ok": true' "${HTTP_LO
 check_contains "http.log has the redacted password field" '"password": "(redacted)"' "${HTTP_LOG}"
 check_absent "http.log never holds the password" "${PASSWORD}" "${HTTP_LOG}"
 check_absent "http.log never holds a response token" "leak-me" "${HTTP_LOG}"
+# An inbound MCP key create answers the plaintext key once, under "key".
+check_absent "http.log never holds a created key" "xemcp_key-leak" "${HTTP_LOG}"
+check_absent "http.log never holds a private key" "pk-leak" "${HTTP_LOG}"
+check_absent "http.log never holds a PEM block" "pem-leak" "${HTTP_LOG}"
+check_absent "http.log never holds the key of an MCP key response" "mcp-shape-leak" "${HTTP_LOG}"
+check_contains "http.log keeps a generic key field" "keep-generic-key" "${HTTP_LOG}"
+check_absent "http.log never holds an integration key" "int-leak" "${HTTP_LOG}"
+check_absent "http.log never holds a proxy key" "prx-leak" "${HTTP_LOG}"
 check_absent "http.log never holds the bearer token" "tok-1-opaque" "${HTTP_LOG}"
 check "every curl call is bounded (connect 10, max 120)" "2" "$(grep -c ' ct=10 mt=120$' "${CTL}/curl.log")"
 check "the 401 retry keeps the first call's max-time" "1" "$(grep -c 'tok-1-opaque ct=10 mt=120$' "${CTL}/curl.log")"
@@ -764,7 +791,9 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
     def do_GET(self):
-        self.answer(BODY)
+        # The memory model the node reports: the content of <port file>.memory when present, else unset (null).
+        memory = sys.argv[1] + ".memory"
+        self.answer(dict(BODY, memoryExtractionModelName=open(memory).read() if os.path.exists(memory) else None))
     def do_PUT(self):
         self.rfile.read(int(self.headers.get("Content-Length") or 0))
         self.answer({})
@@ -792,6 +821,19 @@ for secret in tok-secret-1 tok-secret-2 key-secret-3 pw-secret-4; do
 done
 check_contains "http.jsonl keeps non-secret token counters" "promptTokens" "${JSONL}"
 check_contains "http.jsonl keeps the PUT's other fields" "externalAccessProfile" "${JSONL}"
+# A desired "" is the retired clear signal: the PUT refuses it, so the driver sends null instead.
+printf 'qwen3:8b' >"${CTL}/node-port.memory"
+EV_CLEAR="${TEMP_ROOT}/driver-evidence-clear"
+python3 "${REAL}/lab-driver.py" settings-ensure --base-url "http://127.0.0.1:$(cat "${CTL}/node-port" 2>/dev/null)" \
+  --token t --evidence "${EV_CLEAR}" --desired '{"memoryExtractionModelName":""}' >/dev/null 2>&1
+check "settings-ensure with a desired empty string exits 0" "0" "$?"
+check "a desired empty string is PUT as null" '{"memoryExtractionModelName": null}' \
+  "$(python3 -c 'import json,sys; print(next(json.loads(l)["request"] for l in open(sys.argv[1]) if json.loads(l)["method"] == "PUT"))' "${EV_CLEAR}/http.jsonl" 2>/dev/null)"
+rm -f "${CTL}/node-port.memory"
+out="$(python3 "${REAL}/lab-driver.py" settings-ensure --base-url "http://127.0.0.1:$(cat "${CTL}/node-port" 2>/dev/null)" \
+  --token t --evidence "${TEMP_ROOT}/driver-evidence-unset" --desired '{"memoryExtractionModelName":""}' 2>/dev/null)"
+check "a desired empty string against an unset member is skipped" $'skipped\ttrue' "$(grep '^skipped' <<<"${out}")"
+check "a desired empty string against an unset member verifies" $'verified\ttrue' "$(grep '^verified' <<<"${out}")"
 # The sink scrubs too, so a record that bypasses RecordingClient (hub events) cannot write a credential.
 python3 -c '
 import importlib.util, json, sys

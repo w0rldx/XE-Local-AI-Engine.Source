@@ -130,4 +130,16 @@ public interface IGgufDownloadTransaction
     Task RollbackCommittedAsync(GgufDownloadCommitReceipt commitReceipt, CancellationToken cancellationToken);
 
     Task DiscardPreparedAsync(PreparedGgufDownload preparedDownload, CancellationToken cancellationToken);
+
+    /// <summary>Downloads a previous process left unfinished: their resumable partial is still on disk.</summary>
+    IReadOnlyList<InterruptedGgufDownload> ListInterrupted() =>
+        [];
+}
+
+/// <summary>A download whose process ended before it finished; starting it again resumes the partial.</summary>
+public sealed record InterruptedGgufDownload
+{
+    public required string ModelName { get; init; }
+
+    public required long TotalBytes { get; init; }
 }

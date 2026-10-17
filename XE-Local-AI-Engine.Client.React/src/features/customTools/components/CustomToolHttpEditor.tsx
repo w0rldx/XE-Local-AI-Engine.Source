@@ -11,7 +11,7 @@ import {
 	type CustomToolHeader,
 } from "@/features/customTools/models/CustomToolModels";
 
-// HttpFetch editor: method, URL template, headers (name/value/isSecret), body template, allowedHosts.
+// HttpFetch editor: method, URL template, headers (name/value/isSecret), body template, allowedHosts, privateHosts.
 export function HttpEditor({ values, errors, update, storedSecrets }: CustomToolSecretSectionProps) {
 	const { t } = useTranslation();
 	const http = values.http;
@@ -23,6 +23,25 @@ export function HttpEditor({ values, errors, update, storedSecrets }: CustomTool
 	const removeHeader = (index: number) => patchHttp({ headers: http.headers.filter((_, i) => i !== index) });
 	const patchHeader = (index: number, patch: Partial<CustomToolHeader>) =>
 		patchHttp({ headers: http.headers.map((header, i) => (i === index ? { ...header, ...patch } : header)) });
+
+	const privateHostError = (index: number): string | undefined => {
+		switch (fieldError(errors, `http.privateHosts.${index}`)) {
+			case "privateHostInvalid":
+				return t(
+					"pages.customTools.form.http.privateHostInvalid",
+					"Enter an exact host name or IP address, without scheme, port, path, credentials or wildcard.",
+				);
+			case "privateHostAlwaysDenied":
+				return t(
+					"pages.customTools.form.http.privateHostAlwaysDenied",
+					"Loopback, link-local, metadata, multicast and unspecified addresses stay blocked even when listed.",
+				);
+			case "privateHostNotAllowed":
+				return t("pages.customTools.form.http.privateHostNotAllowed", "Add this host to Allowed hosts as well.");
+			default:
+				return undefined;
+		}
+	};
 
 	return (
 		<Stack gap="sm" data-testid="custom-tool-form-http">
@@ -81,6 +100,13 @@ export function HttpEditor({ values, errors, update, storedSecrets }: CustomTool
 			/>
 
 			<CustomToolHostList value={http.allowedHosts} onChange={(allowedHosts) => patchHttp({ allowedHosts })} />
+
+			<CustomToolHostList
+				variant="private"
+				value={http.privateHosts}
+				onChange={(privateHosts) => patchHttp({ privateHosts })}
+				rowError={privateHostError}
+			/>
 		</Stack>
 	);
 }

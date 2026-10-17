@@ -143,7 +143,8 @@ describe("AgentToolSelector", () => {
 	});
 
 	it("keeps a tool this node withholds unselectable, its label intact, but lets a stored selection be removed", () => {
-		const description = "Runs Python. (Linux only: not available on this node, an agent selecting it gets no tool)";
+		const description =
+			"Runs Python. (not available on this node's platform: Linux x64 and Windows x64 only; an agent selecting it gets no tool)";
 		const withheld: ToolCatalogEntry = {
 			name: "run_python",
 			description,

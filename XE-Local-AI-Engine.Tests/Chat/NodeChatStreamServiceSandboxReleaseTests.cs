@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
@@ -165,7 +166,8 @@ public sealed class NodeChatStreamServiceSandboxReleaseTests
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance);
+            NullLogger<NodeChatStreamService>.Instance,
+            new GpuWorkGate());
     }
 
     private static IModelCapabilityResolver CreateModelCapabilityResolver()

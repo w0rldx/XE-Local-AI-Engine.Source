@@ -1,10 +1,11 @@
 import { AxiosError } from "axios";
 import { describe, expect, it } from "vitest";
+import { ZodError } from "zod";
 
 import { ApiError } from "@/core/api/errors/ApiError";
 import { NetworkError } from "@/core/api/errors/NetworkError";
-import type { ProblemDetails } from "@/core/api/models/ProblemDetails";
 import { getErrorStatus, isTransientError, shouldRetryQuery } from "@/core/api/errors/RetryClassification";
+import type { ProblemDetails } from "@/core/api/models/ProblemDetails";
 
 // Builds an ApiError the way the ProblemDetails interceptor does for any non-2xx status except 401/429.
 function apiError(status: number): ApiError {
@@ -47,6 +48,13 @@ describe("getErrorStatus", () => {
 
 	it("reads response.status from a raw AxiosError", () => {
 		expect(getErrorStatus(axiosStatusError(429))).toBe(429);
+	});
+
+	it("answers 422 for a response-shape mismatch, so a contract failure is attempted once", () => {
+		const zodError = new ZodError([]);
+
+		expect(getErrorStatus(zodError)).toBe(422);
+		expect(totalAttempts(zodError)).toBe(1);
 	});
 
 	it("returns undefined for a transport error with no response", () => {

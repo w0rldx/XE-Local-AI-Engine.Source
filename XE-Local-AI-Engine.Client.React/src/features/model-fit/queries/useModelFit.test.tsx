@@ -4,7 +4,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The refresh hook dispatches the domain `scheduledJobId` to the generated `refreshRecommendationsMutation()`'s
-// `mutationFn`, wrapping it in withResponseValidation. Mock the generated TanStack module so the test owns the
+// `mutationFn`. Mock the generated TanStack module so the test owns the
 // mutationFn and can assert the wire envelope the hook built without hitting the network.
 const { mutationMock } = vi.hoisted(() => ({
 	mutationMock: { mutationFn: vi.fn() },

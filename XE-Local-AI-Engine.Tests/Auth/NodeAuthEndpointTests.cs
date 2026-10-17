@@ -22,6 +22,9 @@ public sealed class NodeAuthEndpointTests
 
     private const string OperatorProbeUrl = "/api/local/v1/node-settings";
 
+    // The wire name, spelled out rather than taken from the endpoint so a rename breaks this contract test.
+    private const string RefreshTokenHeader = "X-XE-Refresh-Token";
+
     [Test]
     public async Task AuthFlow_WhenSetupLoginRefreshAndLogout_RunSuccessfully()
     {
@@ -106,6 +109,204 @@ public sealed class NodeAuthEndpointTests
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         AssertRefreshCookieCleared(response);
+    }
+
+    // Body mode (a non-browser client): the refresh token travels in the body, never in a cookie, and cookie mode stays
+    // byte-identical, so the SPA's login body never gains the field.
+    [Test]
+    public async Task Login_WhenReturnRefreshTokenIsSet_ReturnsTheRefreshTokenInTheBodyAndSetsNoCookie()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+        using (var setupResponse = await SetupAsync(client))
+        {
+            AssertEx.Equal(HttpStatusCode.OK, setupResponse.StatusCode);
+        }
+
+        using var bodyLogin = await LoginAsync(client, returnRefreshToken: true);
+
+        AssertEx.Equal(HttpStatusCode.OK, bodyLogin.StatusCode);
+        AssertEx.Empty(GetSetCookieHeaders(bodyLogin), "Body mode must not write, or clear, any cookie.");
+        var tokens = await ReadBodyTokensAsync(bodyLogin);
+        AssertEx.NotNullOrEmpty(tokens.AccessToken);
+        AssertEx.NotNullOrEmpty(tokens.RefreshToken);
+        AssertEx.True(tokens.RefreshTokenExpiresAtUtc > tokens.ExpiresAtUtc, "The refresh token must outlive the access token.");
+
+        using var cookieLogin = await LoginAsync(client);
+        AssertEx.Equal(HttpStatusCode.OK, cookieLogin.StatusCode);
+        GetRefreshCookie(cookieLogin);
+        var cookieBody = await cookieLogin.Content.ReadAsStringAsync();
+        AssertEx.False(cookieBody.Contains("refreshToken", StringComparison.OrdinalIgnoreCase),
+            $"Cookie mode must not carry the refresh token in the body: {cookieBody}");
+    }
+
+    [Test]
+    public async Task Refresh_WhenTheHeaderCarriesTheToken_RotatesInBodyModeAndTheOldTokenDiesAfterTheGrace()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
+        await using var factory = CreateFactory(clock);
+        using var client = factory.CreateClient();
+        var login = await SetupAndBodyLoginAsync(client);
+
+        using var first = await RefreshWithHeaderAsync(client, login.RefreshToken);
+        AssertEx.Equal(HttpStatusCode.OK, first.StatusCode);
+        AssertEx.Empty(GetSetCookieHeaders(first), "A header refresh must never set or clear a cookie.");
+        var rotated = await ReadBodyTokensAsync(first);
+        AssertEx.NotEqual(login.RefreshToken, rotated.RefreshToken);
+        AssertEx.NotEqual(login.AccessToken, rotated.AccessToken);
+
+        clock.Advance(TimeSpan.FromSeconds(11));
+        using var replay = await RefreshWithHeaderAsync(client, login.RefreshToken);
+        AssertEx.Equal(HttpStatusCode.Unauthorized, replay.StatusCode, "Past the grace window the rotated token is a replay.");
+        AssertEx.Empty(GetSetCookieHeaders(replay));
+
+        using var next = await RefreshWithHeaderAsync(client, AssertEx.NotNull(rotated.RefreshToken));
+        AssertEx.Equal(HttpStatusCode.OK, next.StatusCode, "The rotated token must refresh like any other.");
+        AssertEx.NotNullOrEmpty((await ReadBodyTokensAsync(next)).RefreshToken);
+    }
+
+    // A browser that also carries the header (nothing in the SPA sends it) is still answered from its cookie, and the
+    // header token is not consumed.
+    [Test]
+    public async Task Refresh_WhenBothTheCookieAndTheHeaderAreSent_UsesTheCookieAndLeavesTheHeaderTokenUnspent()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+        var bodyLogin = await SetupAndBodyLoginAsync(client);
+        using var cookieLogin = await LoginAsync(client);
+        var cookie = GetRefreshCookie(cookieLogin);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/auth/refresh");
+        request.Headers.Add("Cookie", cookie);
+        request.Headers.Add(RefreshTokenHeader, bodyLogin.RefreshToken);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.NotEqual(cookie, GetRefreshCookie(response));
+        AssertEx.Null((await ReadBodyTokensAsync(response)).RefreshToken, "The cookie path answers in cookie mode.");
+
+        using var headerOnly = await RefreshWithHeaderAsync(client, bodyLogin.RefreshToken);
+        AssertEx.Equal(HttpStatusCode.OK, headerOnly.StatusCode, "The ignored header token must still be live.");
+    }
+
+    // The header path's bypass table: a failing row answers the bodyless 401 and leaves the cookie alone unless one was sent.
+    // An empty header value never reaches the endpoint and an empty node_rt is no cookie, so both fall to the other credential.
+    [Test]
+    [Arguments("header-live", HttpStatusCode.OK, "none", true)]
+    [Arguments("header-empty", HttpStatusCode.Unauthorized, "cleared", false)]
+    [Arguments("header-whitespace", HttpStatusCode.Unauthorized, "none", false)]
+    [Arguments("header-oversized", HttpStatusCode.Unauthorized, "none", false)]
+    [Arguments("header-unknown", HttpStatusCode.Unauthorized, "none", false)]
+    [Arguments("header-sent-twice", HttpStatusCode.Unauthorized, "none", false)]
+    [Arguments("header-access-token", HttpStatusCode.Unauthorized, "none", false)]
+    [Arguments("header-rotated-past-grace", HttpStatusCode.Unauthorized, "none", false)]
+    [Arguments("header-after-logout", HttpStatusCode.Unauthorized, "none", false)]
+    [Arguments("header-after-password-change", HttpStatusCode.Unauthorized, "none", false)]
+    [Arguments("empty-cookie-and-live-header", HttpStatusCode.OK, "none", true)]
+    [Arguments("unknown-cookie-and-live-header", HttpStatusCode.Unauthorized, "cleared", false)]
+    [Arguments("unlock-ticket-cookie-and-live-header", HttpStatusCode.OK, "none", true)]
+    [Arguments("no-cookie-no-header", HttpStatusCode.Unauthorized, "cleared", false)]
+    public async Task Refresh_HeaderAndCookieCombinations_AreDecidedCookieFirst(string scenario,
+        HttpStatusCode expectedStatus,
+        string expectedRefreshCookie,
+        bool expectBodyRefreshToken)
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
+        await using var factory = CreateFactory(clock);
+        using var client = factory.CreateClient();
+        var login = await SetupAndBodyLoginAsync(client);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/auth/refresh");
+        switch (scenario)
+        {
+            case "header-live":
+                request.Headers.Add(RefreshTokenHeader, login.RefreshToken);
+                break;
+            case "header-empty":
+                AssertEx.True(request.Headers.TryAddWithoutValidation(RefreshTokenHeader, string.Empty));
+                break;
+            case "header-whitespace":
+                AssertEx.True(request.Headers.TryAddWithoutValidation(RefreshTokenHeader, "   "));
+                break;
+            case "header-oversized":
+                request.Headers.Add(RefreshTokenHeader, new string('A', 16 * 1024));
+                break;
+            case "header-unknown":
+                request.Headers.Add(RefreshTokenHeader, Convert.ToBase64String(new byte[64]));
+                break;
+            case "header-sent-twice":
+                request.Headers.Add(RefreshTokenHeader, [login.RefreshToken, login.RefreshToken]);
+                break;
+            case "header-access-token":
+                request.Headers.Add(RefreshTokenHeader, login.AccessToken);
+                break;
+            case "header-rotated-past-grace":
+                using (var rotation = await RefreshWithHeaderAsync(client, login.RefreshToken))
+                {
+                    AssertEx.Equal(HttpStatusCode.OK, rotation.StatusCode);
+                }
+
+                clock.Advance(TimeSpan.FromSeconds(11));
+                request.Headers.Add(RefreshTokenHeader, login.RefreshToken);
+                break;
+            case "header-after-logout":
+                await SendAuthorizedAsync(client, "/api/local/v1/auth/logout", login.AccessToken, content: null, HttpStatusCode.NoContent);
+                request.Headers.Add(RefreshTokenHeader, login.RefreshToken);
+                break;
+            case "header-after-password-change":
+                await SendAuthorizedAsync(client, "/api/local/v1/auth/change-password", login.AccessToken,
+                    JsonContent.Create(new
+                    {
+                        currentPassword = Password,
+                        newPassword = "An0ther!Password456"
+                    }), HttpStatusCode.NoContent);
+                request.Headers.Add(RefreshTokenHeader, login.RefreshToken);
+                break;
+            case "empty-cookie-and-live-header":
+                request.Headers.Add("Cookie", $"{NodeAuthCookie.RefreshCookieName}=");
+                request.Headers.Add(RefreshTokenHeader, login.RefreshToken);
+                break;
+            case "unknown-cookie-and-live-header":
+                request.Headers.Add("Cookie", $"{NodeAuthCookie.RefreshCookieName}=a-refresh-token-the-node-never-issued");
+                request.Headers.Add(RefreshTokenHeader, login.RefreshToken);
+                break;
+            case "unlock-ticket-cookie-and-live-header":
+                request.Headers.Add("Cookie", $"{NodeAuthCookie.UnlockTicketCookieName}={VaultUnlockTicket.NewValue()}");
+                request.Headers.Add(RefreshTokenHeader, login.RefreshToken);
+                break;
+            case "no-cookie-no-header":
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(scenario), scenario, "Unknown bypass row.");
+        }
+
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(expectedStatus, response.StatusCode, scenario);
+        var refreshCookies = GetSetCookieHeaders(response)
+                             .Where(static header => header.StartsWith($"{NodeAuthCookie.RefreshCookieName}=", StringComparison.Ordinal))
+                             .ToArray();
+        switch (expectedRefreshCookie)
+        {
+            case "none":
+                AssertEx.Empty(refreshCookies, $"{scenario}: the refresh cookie must be left alone.");
+                break;
+            case "cleared":
+                AssertEx.ContainsSingle(refreshCookies, static header => header.StartsWith($"{NodeAuthCookie.RefreshCookieName}=;", StringComparison.Ordinal),
+                    $"{scenario}: the cookie path's 401 clears the cookie, as before.");
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(expectedRefreshCookie), expectedRefreshCookie, "Unknown cookie expectation.");
+        }
+
+        if (expectBodyRefreshToken)
+        {
+            AssertEx.NotNullOrEmpty((await ReadBodyTokensAsync(response)).RefreshToken, scenario);
+        }
+        else if (expectedStatus == HttpStatusCode.Unauthorized)
+        {
+            AssertEx.Empty(await response.Content.ReadAsStringAsync(), $"{scenario}: the 401 stays bodyless, as on the cookie path.");
+        }
     }
 
     [Test]
@@ -252,6 +453,32 @@ public sealed class NodeAuthEndpointTests
     // Pins the deliberate shape behind the OpenAPI spec listing only `password` as required on the login request:
     // `NodeLoginRequest.Email` is nullable on purpose, and `NodeAuthService.ResolveLoginUserAsync` resolves the single
     // SetupCompleted user when no email is supplied.
+    /// <summary>R1-08: a non-ASCII address the setup form accepts must set the node up and sign in, not fail Identity's user-name rule.</summary>
+    [Test]
+    public async Task SetupAndLogin_WithANonAsciiEmail_Succeed()
+    {
+        const string email = "jürgen-ß@localhost.test";
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+
+        using var setupResponse = await SetupAsync(client, email);
+        AssertEx.Equal(HttpStatusCode.OK, setupResponse.StatusCode, await setupResponse.Content.ReadAsStringAsync());
+
+        using var loginResponse = await client.PostAsJsonAsync("/api/local/v1/auth/login",
+            new
+            {
+                email,
+                password = Password
+            });
+        AssertEx.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
+        var token = await ReadTokenAsync(loginResponse);
+
+        using var probeRequest = new HttpRequestMessage(HttpMethod.Get, OperatorProbeUrl);
+        probeRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
+        using var probeResponse = await client.SendAsync(probeRequest);
+        AssertEx.Equal(HttpStatusCode.OK, probeResponse.StatusCode);
+    }
+
     [Test]
     public async Task Login_WhenEmailIsOmitted_ResolvesTheSingleCompletedAdmin()
     {
@@ -424,6 +651,66 @@ public sealed class NodeAuthEndpointTests
             });
     }
 
+    private static Task<HttpResponseMessage> LoginAsync(HttpClient client, bool returnRefreshToken)
+    {
+        return client.PostAsJsonAsync("/api/local/v1/auth/login",
+            new
+            {
+                password = Password,
+                returnRefreshToken
+            });
+    }
+
+    private static async Task<BodyTokenPair> SetupAndBodyLoginAsync(HttpClient client)
+    {
+        using (var setupResponse = await SetupAsync(client))
+        {
+            AssertEx.Equal(HttpStatusCode.OK, setupResponse.StatusCode);
+        }
+
+        using var loginResponse = await LoginAsync(client, returnRefreshToken: true);
+        AssertEx.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
+        var tokens = await ReadBodyTokensAsync(loginResponse);
+        return new BodyTokenPair
+        {
+            AccessToken = tokens.AccessToken,
+            RefreshToken = AssertEx.NotNull(tokens.RefreshToken, "Body-mode login must return the refresh token.")
+        };
+    }
+
+    private static async Task<HttpResponseMessage> RefreshWithHeaderAsync(HttpClient client, string refreshToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/auth/refresh");
+        request.Headers.Add(RefreshTokenHeader, refreshToken);
+        return await client.SendAsync(request);
+    }
+
+    private static async Task SendAuthorizedAsync(HttpClient client, string url, string accessToken, HttpContent? content, HttpStatusCode expected)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        request.Content = content;
+        using var response = await client.SendAsync(request);
+        AssertEx.Equal(expected, response.StatusCode, await response.Content.ReadAsStringAsync());
+    }
+
+    private static async Task<BodyTokenResponse> ReadBodyTokensAsync(HttpResponseMessage response)
+    {
+        return AssertEx.NotNull(await response.Content.ReadFromJsonAsync<BodyTokenResponse>());
+    }
+
+    private static TestServerWebAppFactory CreateFactory(ManualTimeProvider clock)
+    {
+        return new TestServerWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<TimeProvider>();
+                services.AddSingleton<TimeProvider>(clock);
+            }
+        };
+    }
+
     private static async Task<AuthTokenResponse> ReadTokenAsync(HttpResponseMessage response)
     {
         var token = await response.Content.ReadFromJsonAsync<AuthTokenResponse>();
@@ -522,4 +809,22 @@ public sealed class NodeAuthEndpointTests
     private sealed record AuthStatusResponse(bool SetupRequired, bool Authenticated);
 
     private sealed record AuthTokenResponse(string AccessToken, DateTime ExpiresAtUtc);
+
+    internal sealed class BodyTokenResponse
+    {
+        public required string AccessToken { get; init; }
+
+        public required DateTime ExpiresAtUtc { get; init; }
+
+        public string? RefreshToken { get; init; }
+
+        public DateTime? RefreshTokenExpiresAtUtc { get; init; }
+    }
+
+    private sealed class BodyTokenPair
+    {
+        public required string AccessToken { get; init; }
+
+        public required string RefreshToken { get; init; }
+    }
 }

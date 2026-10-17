@@ -54,8 +54,8 @@ public sealed class DecideDevWorkflowNodeRunEndpoint : Endpoint<DevWorkflowDecis
 
         var result = await _runs.DecideAsync(req.RunId, req.NodeRunId, req.OperationId, decision, req.Comment, req.PayloadJson, subject, ct);
 
-        // The run status may still read Running or WaitingForApproval: what follows a decision is the dispatcher's
-        // work, taken out of band on its own clock. Reporting the CURRENT state is the same honesty the 202s encode.
+        // The service has advanced the run one tick, so these are the statuses the decision led to; what the nodes after
+        // it do is still the dispatcher's work, on its own clock.
         var nodeRun = result.Detail.NodeRuns.FirstOrDefault(entry => entry.Id == req.NodeRunId)
                       ?? throw new DevWorkflowNotFoundException($"Node run '{req.NodeRunId}' was not found on run '{req.RunId}' after its decision.");
         await Send.OkAsync(new DevWorkflowDecisionResultResponse

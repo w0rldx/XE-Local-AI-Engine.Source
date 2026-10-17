@@ -155,6 +155,14 @@ internal sealed partial class ExternalAppService
             var admitted = AdmittedStatusFor(kind, row.Status)
                            ?? throw new ExternalAppInvalidTransitionException($"{kind} is not available while the application is {row.Status}.");
 
+            // D6 first: after an empty-catalog start the bridge's absence is the restart's to fix, so the operator is told that rather than BridgeUnavailable.
+            // Reset counts as a start: it rebuilds and starts the application again. Stop and Uninstall stay admitted so what runs can be cleared.
+            if (kind is ExternalAppOperationKind.Start or ExternalAppOperationKind.Restart or ExternalAppOperationKind.Reset
+                && await CatalogPolicyAsync(services, cancellationToken) is { } refused)
+            {
+                throw Refuse(refused, refused == ExternalAppBlockedReason.RestartRequired ? RestartRequiredDetail : CatalogEmptyDetail);
+            }
+
             // After the transition table and before the compare-and-swap: a bridge closed since install refuses with install's own 400 rather than settling the row Failed inside the pipeline.
             // Stop, Reset, Uninstall, Cancel and Configure stay ungated, so an operator can still stop or clear an application on a node that lost its bridge.
             if (kind is ExternalAppOperationKind.Start or ExternalAppOperationKind.Restart && BridgeUnavailableFor(row))

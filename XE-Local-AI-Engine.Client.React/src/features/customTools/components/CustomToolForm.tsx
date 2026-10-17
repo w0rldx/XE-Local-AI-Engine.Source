@@ -239,6 +239,38 @@ export function CustomToolForm({
 				data-testid="custom-tool-form-acknowledge"
 			/>
 
+			<Checkbox
+				label={t("pages.customTools.form.allowUnattended.label", "Allow unattended use in workflows")}
+				description={
+					values.kind === "Command"
+						? t(
+								"pages.customTools.form.allowUnattended.commandDanger",
+								"A workflow may run this exact invocation with nobody present: a program is launched on this machine without asking anyone. Requires the acknowledgement above and Fixed mode.",
+							)
+						: t(
+								"pages.customTools.form.allowUnattended.httpDanger",
+								"A workflow may run this exact invocation with nobody present: the request is sent without asking anyone. Requires the acknowledgement above and Fixed mode.",
+							)
+				}
+				color="red"
+				checked={values.allowUnattended}
+				// Turning it on needs the acknowledgement and Fixed mode; turning it off is always possible.
+				disabled={!values.allowUnattended && (!values.acknowledged || values.mode !== "Fixed")}
+				onChange={(event) => {
+					const checked = event.currentTarget.checked;
+					update((current) => ({ ...current, allowUnattended: checked }));
+				}}
+				error={
+					fieldError(errors, "allowUnattended")
+						? t(
+								"pages.customTools.form.allowUnattended.needsFixed",
+								"Unattended use needs Fixed mode. Switch to Fixed or clear this option.",
+							)
+						: undefined
+				}
+				data-testid="custom-tool-form-allow-unattended"
+			/>
+
 			{showEnabledToggle ? (
 				<Switch
 					label={t("pages.customTools.form.enabled.label", "Enabled")}

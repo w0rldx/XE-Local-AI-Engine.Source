@@ -226,6 +226,236 @@ public sealed class CustomToolServiceTests
         AssertEx.False(result.Ok);
     }
 
+    [Test]
+    public async Task Create_RejectsAllowUnattendedOnParameterizedTool()
+    {
+        var service = BuildService(out _, out _);
+
+        // Unattended use is a verbatim invocation: a Parameterized tool would let a model fill part of it.
+        var definition = ValidHttpFetch() with
+        {
+            Mode = CustomToolMode.Parameterized,
+            AllowUnattended = true,
+            Parameters =
+            [
+                new CustomToolParameterModel
+                {
+                    Name = "city",
+                    Type = "string",
+                    Required = true
+                }
+            ],
+            Http = ValidHttpFetch().Http! with
+            {
+                UrlTemplate = "https://api.example.com/weather/{city}"
+            }
+        };
+
+        var exception = await AssertEx.ThrowsAsync<CustomToolValidationException>(() => service.CreateAsync(definition));
+        AssertEx.Contains(exception.Message, "Fixed mode");
+    }
+
+    [Test]
+    public async Task Create_RejectsAllowUnattendedWithoutAcknowledgement()
+    {
+        var service = BuildService(out _, out _);
+
+        await AssertEx.ThrowsAsync<CustomToolValidationException>(() =>
+            service.CreateAsync(ValidCommand() with
+            {
+                AllowUnattended = true,
+                Acknowledged = false
+            }));
+    }
+
+    [Test]
+    [Arguments(CustomToolKind.HttpFetch)]
+    [Arguments(CustomToolKind.Command)]
+    public async Task Create_PersistsAllowUnattendedOnFixedTool(CustomToolKind kind)
+    {
+        var service = BuildService(out var store, out _);
+        var definition = (kind == CustomToolKind.HttpFetch ? ValidHttpFetch() : ValidCommand()) with
+        {
+            AllowUnattended = true
+        };
+
+        var view = await service.CreateAsync(definition);
+
+        AssertEx.True(view.AllowUnattended, "The view must echo the stored flag.");
+        await store.Received(1).CreateAsync(Arg.Is<CustomToolInput>(input => input.AllowUnattended), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Update_ThreadsAllowUnattendedIntoTheInput()
+    {
+        var service = BuildService(out var store, out _);
+        var id = Guid.NewGuid();
+        store.UpdateAsync(id, Arg.Any<CustomToolInput>(), Arg.Any<CancellationToken>())
+             .Returns(call => Task.FromResult<CustomToolRecord?>(ToRecord(call.Arg<CustomToolInput>())));
+
+        var view = await service.UpdateAsync(id, ValidCommand() with
+        {
+            AllowUnattended = true
+        });
+
+        // Before ADR 0021 every update wrote false, silently clearing the flag.
+        AssertEx.True(AssertEx.NotNull(view).AllowUnattended, "An update must keep the flag the client sent.");
+        await store.Received(1).UpdateAsync(id, Arg.Is<CustomToolInput>(input => input.AllowUnattended), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [Arguments("192.168.1.20")]
+    [Arguments("fd00::20")]
+    [Arguments("homeassistant.lan")]
+    public async Task Create_AcceptsListedPrivateHostAndEchoesIt(string host)
+    {
+        var service = BuildService(out _, out _);
+        var urlHost = host.Contains(':', StringComparison.Ordinal) ? $"[{host}]" : host;
+
+        var view = await service.CreateAsync(ValidHttpFetch() with
+        {
+            AllowUnattended = true,
+            Http = ValidHttpFetch().Http! with
+            {
+                UrlTemplate = $"http://{urlHost}:8123/api/services/light/turn_on",
+                AllowedHosts = [host],
+                PrivateHosts = [host]
+            }
+        });
+
+        AssertEx.Equal(host, string.Join(",", AssertEx.NotNull(view.Http).PrivateHosts));
+    }
+
+    [Test]
+    public async Task Create_RejectsFixedPrivateLiteralThatIsNotListed()
+    {
+        var service = BuildService(out _, out _);
+
+        await AssertEx.ThrowsAsync<CustomToolValidationException>(() =>
+            service.CreateAsync(ValidHttpFetch() with
+            {
+                Http = ValidHttpFetch().Http! with
+                {
+                    UrlTemplate = "http://192.168.1.21/api",
+                    AllowedHosts = ["192.168.1.20", "192.168.1.21"],
+                    PrivateHosts = ["192.168.1.20"]
+                }
+            }));
+    }
+
+    [Test]
+    public async Task Create_RejectsPrivateHostMissingFromAllowedHosts()
+    {
+        var service = BuildService(out _, out _);
+
+        var exception = await AssertEx.ThrowsAsync<CustomToolValidationException>(() =>
+            service.CreateAsync(ValidHttpFetch() with
+            {
+                Http = ValidHttpFetch().Http! with
+                {
+                    UrlTemplate = "http://192.168.1.20/api",
+                    AllowedHosts = [],
+                    PrivateHosts = ["192.168.1.20"]
+                }
+            }));
+        AssertEx.Contains(exception.Message, "allowedHosts");
+    }
+
+    [Test]
+    [Arguments("http://192.168.1.20")]
+    [Arguments("192.168.1.20:8123")]
+    [Arguments("*.lan")]
+    [Arguments("user@homeassistant.lan")]
+    [Arguments("homeassistant.lan/api")]
+    [Arguments("0300.0250.1.20")]
+    [Arguments("[fd00::20]")]
+    public async Task Create_RejectsMalformedPrivateHost(string entry)
+    {
+        var service = BuildService(out _, out _);
+
+        var exception = await AssertEx.ThrowsAsync<CustomToolValidationException>(() =>
+            service.CreateAsync(ValidHttpFetch() with
+            {
+                Http = ValidHttpFetch().Http! with
+                {
+                    AllowedHosts = [entry],
+                    PrivateHosts = [entry]
+                }
+            }));
+        AssertEx.Contains(exception.Message, "exact host name");
+    }
+
+    [Test]
+    [Arguments("127.0.0.1")]
+    [Arguments("169.254.169.254")]
+    [Arguments("fe80::1")]
+    [Arguments("224.0.0.1")]
+    [Arguments("0.0.0.0")]
+    public async Task Create_RejectsAlwaysDeniedPrivateHost(string entry)
+    {
+        var service = BuildService(out _, out _);
+
+        var exception = await AssertEx.ThrowsAsync<CustomToolValidationException>(() =>
+            service.CreateAsync(ValidHttpFetch() with
+            {
+                Http = ValidHttpFetch().Http! with
+                {
+                    AllowedHosts = [entry],
+                    PrivateHosts = [entry]
+                }
+            }));
+        AssertEx.Contains(exception.Message, "stays denied");
+    }
+
+    [Test]
+    public async Task Create_DetachedCommand_RoundTripsTheFlag()
+    {
+        var service = BuildService(out _, out _);
+
+        var view = await service.CreateAsync(ValidCommand() with
+        {
+            Command = ValidCommand().Command! with
+            {
+                TimeoutSeconds = 0,
+                Detach = true
+            }
+        });
+
+        AssertEx.True(AssertEx.NotNull(view.Command).Detach, "The view must echo the stored detach flag.");
+    }
+
+    [Test]
+    public async Task Create_RejectsDetachedCommandWithATimeout()
+    {
+        var service = BuildService(out _, out _);
+
+        var exception = await AssertEx.ThrowsAsync<CustomToolValidationException>(() =>
+            service.CreateAsync(ValidCommand() with
+            {
+                Command = ValidCommand().Command! with
+                {
+                    Detach = true
+                }
+            }));
+        AssertEx.Contains(exception.Message, "timeout must be 0");
+    }
+
+    [Test]
+    public async Task Create_RejectsPrivateHostsOnCommandTool()
+    {
+        var service = BuildService(out _, out _);
+
+        await AssertEx.ThrowsAsync<CustomToolValidationException>(() =>
+            service.CreateAsync(ValidCommand() with
+            {
+                Http = new HttpFetchDefinition
+                {
+                    AllowedHosts = ["192.168.1.20"],
+                    PrivateHosts = ["192.168.1.20"]
+                }
+            }));
+    }
+
     private static ICustomToolService BuildService(out ICustomToolStore store, out ILocalToolOfferProvider offerProvider)
     {
         store = Substitute.For<ICustomToolStore>();
@@ -253,6 +483,7 @@ public sealed class CustomToolServiceTests
             ConfigJson = input.ConfigJson,
             Enabled = input.Enabled,
             Acknowledged = input.Acknowledged,
+            AllowUnattended = input.AllowUnattended,
             Version = 1,
             CreatedAtUtc = 10,
             UpdatedAtUtc = 10

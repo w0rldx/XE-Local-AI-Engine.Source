@@ -51,9 +51,11 @@ internal static class GraphWorkflowToolGate
     /// <remarks>
     ///     Empty for a graph whose tools are all invocable, which is what lets both callers treat "no errors" as the
     ///     whole answer. A tool outside the envelope is an ERROR, never a warning: a workflow node runs unattended, so
-    ///     a write, execute or approval-gated tool has nobody to ask (ADR 0006).
+    ///     a write, execute or approval-gated tool has nobody to ask (ADR 0006). An action tool is an error too unless
+    ///     <paramref name="allowsActions" />, the definition's own flag (ADR 0021).
     /// </remarks>
     public static async Task<IReadOnlyList<GraphWorkflowValidationError>> ErrorsAsync(GraphWorkflowGraph graph,
+        bool allowsActions,
         IToolInvocationService tools,
         INodeRuntimeSettings runtimeSettings,
         CancellationToken cancellationToken)
@@ -69,21 +71,22 @@ internal static class GraphWorkflowToolGate
             return [];
         }
 
-        var names = new HashSet<string>((await ListAsync(tools, runtimeSettings, cancellationToken)).Select(static tool => tool.Name), StringComparer.Ordinal);
+        var invocable = (await ListAsync(tools, runtimeSettings, cancellationToken)).ToDictionary(static tool => tool.Name, static tool => tool.IsAction, StringComparer.Ordinal);
         return
         [
             .. graph.Nodes.Values.OrderBy(static node => node.NodeKey, StringComparer.Ordinal)
                     .Select(node => new
                     {
                         node.NodeKey,
-                        Error = node.Config is GraphWorkflowToolConfig config ? ErrorFor(config, names) : null
+                        Error = node.Config is GraphWorkflowToolConfig config ? ErrorFor(config, invocable, allowsActions) : null
                     })
                     .Where(static entry => entry.Error is not null)
                     .Select(static entry => new GraphWorkflowValidationError(entry.NodeKey, entry.Error!))
         ];
     }
 
-    private static string? ErrorFor(GraphWorkflowToolConfig config, HashSet<string> invocable)
+    /// <summary>The one node's error, or <see langword="null" />. <paramref name="invocable" /> maps each runnable name to whether it is an action.</summary>
+    private static string? ErrorFor(GraphWorkflowToolConfig config, Dictionary<string, bool> invocable, bool allowsActions)
     {
         if (string.Equals(config.ToolName, WebSearchToolDefinition.ToolName, StringComparison.Ordinal))
         {
@@ -91,11 +94,16 @@ internal static class GraphWorkflowToolGate
                    + $"'{WebFetchToolDefinition.ToolName}' against the node's allowed links.";
         }
 
-        if (!invocable.Contains(config.ToolName))
+        if (!invocable.TryGetValue(config.ToolName, out var isAction))
         {
             return string.Equals(config.ToolName, WebFetchToolDefinition.ToolName, StringComparison.Ordinal)
                 ? $"Tool '{WebFetchToolDefinition.ToolName}' needs web access, which is off on this node."
                 : Refusal(config.ToolName);
+        }
+
+        if (isAction && !allowsActions)
+        {
+            return $"Tool '{config.ToolName}' is an action with a side effect, so this node needs 'Allow actions' on this definition.";
         }
 
         if (!string.Equals(config.ToolName, WebFetchToolDefinition.ToolName, StringComparison.Ordinal))

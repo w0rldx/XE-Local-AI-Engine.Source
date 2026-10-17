@@ -31,6 +31,38 @@ public sealed class GgufAcquisitionArtifactStartupReaperTests
         AssertEx.True(File.Exists(freshPart), "a fresh .part file must survive the sweep");
     }
 
+    /// <summary>
+    ///     A download intent is written once, at the start; a download that ran past the stale age keeps it while its
+    ///     partial is fresh, so the interrupted row still appears. With a stale partial both go.
+    /// </summary>
+    [Test]
+    public async Task Reaper_AgesADownloadIntentByItsPartial()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        var longRunning = dir.FilePath("Long-Q8_0.gguf");
+        var abandoned = dir.FilePath("Gone-Q8_0.gguf");
+        var stale = DateTime.UtcNow - GgufAcquisitionArtifactStartupReaper.StaleArtifactAge - TimeSpan.FromMinutes(1);
+        foreach (var final in new[]
+                 {
+                     longRunning,
+                     abandoned
+                 })
+        {
+            await File.WriteAllTextAsync(final + ".intent.part", "{}");
+            await File.WriteAllTextAsync(final + ".part", "partial");
+            File.SetLastWriteTimeUtc(final + ".intent.part", stale);
+        }
+
+        File.SetLastWriteTimeUtc(abandoned + ".part", stale);
+
+        await RunReaperAsync(options);
+
+        AssertEx.True(File.Exists(longRunning + ".intent.part"), "an old intent whose partial is still being written must survive");
+        AssertEx.True(File.Exists(longRunning + ".part"));
+        AssertEx.False(File.Exists(abandoned + ".intent.part"), "an intent whose partial is stale goes with it");
+    }
+
     [Test]
     public async Task Reaper_DeletesFreshDownloadLeftoversOfAnInstalledFile_ButKeepsAResumablePartial()
     {

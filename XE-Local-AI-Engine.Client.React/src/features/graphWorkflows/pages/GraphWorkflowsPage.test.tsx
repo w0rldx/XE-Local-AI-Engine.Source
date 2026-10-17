@@ -5,7 +5,7 @@
 // server's answer, and that a Pause node's decision buttons come from the DEFINITION rather than from the panel's
 // fallback. Every component below is real; only the three things jsdom cannot host are stood in for.
 
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -293,6 +293,37 @@ describe("GraphWorkflowsPage", () => {
 		expect(await screen.findByTestId("gw-page-unsaved-layout")).toBeDefined();
 		expect(screen.getByTestId<HTMLButtonElement>("gw-page-save").disabled).toBe(true);
 		expect(screen.getByTestId("graph-workflow-validation-unkeyed").textContent).toMatch(/no End node/i);
+	});
+
+	it("offers Rename on a graph whose only unsaved change is the layout computed on open, until the content changes", async () => {
+		const noLayoutGraph: GraphWorkflowGraph = {
+			...eightNodeGraph,
+			nodes: eightNodeGraph.nodes?.map(({ position: _position, ...node }) => node),
+		};
+		server.use(...editorRoutes(noLayoutGraph));
+
+		renderPage({ definitionId });
+
+		expect(await screen.findByTestId("gw-page-unsaved-layout")).toBeDefined();
+		expect(screen.getByTestId<HTMLButtonElement>("gw-page-rename").disabled).toBe(false);
+
+		fireEvent.click(screen.getByTestId("graph-workflow-palette-agent"));
+		await waitFor(() => {
+			expect(screen.getByTestId<HTMLButtonElement>("gw-page-rename").disabled).toBe(true);
+		});
+	});
+
+	it("keeps Rename off after a position-only change on a graph with a stored layout", async () => {
+		server.use(...editorRoutes());
+
+		renderPage({ definitionId });
+
+		await waitFor(() => {
+			expect(screen.getByTestId<HTMLButtonElement>("gw-page-rename").disabled).toBe(false);
+		});
+		// Auto-arrange moves nodes and nothing else: the same change a drag makes.
+		await openAndDirty();
+		expect(screen.getByTestId<HTMLButtonElement>("gw-page-rename").disabled).toBe(true);
 	});
 
 	// Live round, HIGH: clicking a card with unsaved edits opened "Discard unsaved changes?", because selecting a node
@@ -662,6 +693,22 @@ describe("GraphWorkflowsPage", () => {
 			await openAndDirty();
 			expect(screen.getByTestId<HTMLButtonElement>("gw-page-export").disabled).toBe(true);
 		});
+	});
+
+	it("opens the stored definition's settings under that title, with the Allow actions switch", async () => {
+		server.use(...editorRoutes());
+		renderPage({ definitionId });
+
+		const settings = await screen.findByTestId<HTMLButtonElement>("gw-page-rename");
+		await waitFor(() => {
+			expect(settings.disabled).toBe(false);
+		});
+		fireEvent.click(settings);
+
+		const dialog = await screen.findByTestId("gw-definition-meta-dialog");
+		expect(within(dialog).getByText(en.pages.graphWorkflows.page.renameTitle)).toBeDefined();
+		expect(en.pages.graphWorkflows.page.renameTitle).toBe("Workflow settings");
+		expect(within(dialog).getByTestId<HTMLInputElement>("gw-definition-meta-allow-actions").checked).toBe(false);
 	});
 
 	it("offers a Result tab only once the run carries its End node's result, and renders it there", async () => {

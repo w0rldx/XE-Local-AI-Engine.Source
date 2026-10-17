@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Transcription;
 
 using System.Net;
-using System.Net.Http.Json;
 using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -123,7 +122,7 @@ public sealed class TranscriptionFeatureGateTests
         using var request = new HttpRequestMessage(HttpMethod.Put, $"{ApiPrefix}/node-settings");
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             TranscriptionEnabled = enabled
         });

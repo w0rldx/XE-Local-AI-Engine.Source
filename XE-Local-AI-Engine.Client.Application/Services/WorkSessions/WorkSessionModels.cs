@@ -236,6 +236,13 @@ public sealed class WorkSessionRuntimeOverride
     /// </remarks>
     public bool RefuseUndeclaredWrites { get; init; }
 
+    /// <summary>The canonical root of the Development repository this session's coder reads serve, or null for the AgentHome workspace.</summary>
+    /// <remarks>
+    ///     Set by a development-workflow Agent node whose work item is bound to a project and whose agent is offered the read-only
+    ///     repository tools, re-resolved on every drive like the rest of the override. A host path, held in memory only.
+    /// </remarks>
+    public string? RepositoryRoot { get; init; }
+
     /// <summary>
     ///     Nothing pinned and nothing to enforce, which is the shape every caller but the workflow runtime has.
     /// </summary>
@@ -243,7 +250,7 @@ public sealed class WorkSessionRuntimeOverride
     ///     The refusal flag counts: a node that pins no model and no effort still has to have its turns judged, and
     ///     the supervisor drops an override this reports empty.
     /// </remarks>
-    public bool IsEmpty => string.IsNullOrWhiteSpace(ModelProfile) && string.IsNullOrWhiteSpace(ReasoningEffort) && !RefuseUndeclaredWrites;
+    public bool IsEmpty => string.IsNullOrWhiteSpace(ModelProfile) && string.IsNullOrWhiteSpace(ReasoningEffort) && !RefuseUndeclaredWrites && RepositoryRoot is null;
 }
 
 /// <summary>

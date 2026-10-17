@@ -3,6 +3,8 @@ namespace XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
+using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
+using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog.Implementation;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
@@ -24,8 +26,15 @@ public sealed class NodeStartupSettings
     /// <summary>Whether the Quartz scheduler runtime is registered.</summary>
     public bool SchedulerEnabled { get; init; } = true;
 
-    /// <summary>Whether external apps are on, which also lets the container bridge listener open.</summary>
+    /// <summary>Whether External Apps start with this node: the switch is on AND the catalog listed an application at startup. Only this opens the container bridge.</summary>
+    /// <remarks>
+    ///     Rc.3 decision D6: the bridge binds a container-facing, non-loopback address, so an empty catalog keeps it
+    ///     closed. The runtime switch, the route family and the hub still follow the stored setting alone.
+    /// </remarks>
     public bool ExternalAppsEnabled { get; init; }
+
+    /// <summary>The switch is on but the catalog listed no application at startup, so installing waits for a node restart.</summary>
+    public bool ExternalAppsAwaitingCatalog { get; init; }
 
     /// <summary>Reads the stored switches for the data directory <paramref name="configuration" /> resolves.</summary>
     /// <param name="includeLegacyContentRoot">
@@ -45,6 +54,7 @@ public sealed class NodeStartupSettings
         var contentRoot = environment.ContentRootPath;
         var configuredRoot = configuration[NodeDataDirectory.ConfigurationKey];
         var root = string.IsNullOrWhiteSpace(configuredRoot) ? contentRoot : configuredRoot;
+        var dataRoot = root;
         if (includeLegacyContentRoot
             && !string.Equals(root, contentRoot, StringComparison.Ordinal)
             && !File.Exists(Path.Combine(root, SettingsFileName))
@@ -59,11 +69,19 @@ public sealed class NodeStartupSettings
             stored = store.Load(CancellationToken.None);
         }
 
+        var externalAppsSwitch = stored.ExternalAppsEnabled ?? configuration.GetValue($"{ExternalAppsOptions.SectionName}:Enabled", defaultValue: false);
+
+        // The catalog cache lives under the data directory proper, never under the legacy content-root fallback above.
+        var catalogListsApplications = externalAppsSwitch
+                                       && ExternalAppStartupCatalog.ListsApplications(dataRoot,
+                                           configuration[$"{ExternalAppCatalogOptions.SectionName}:{nameof(ExternalAppCatalogOptions.RefreshUrl)}"]);
+
         return new NodeStartupSettings
         {
             DevelopmentEnabled = stored.DevelopmentEnabled ?? configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true),
             SchedulerEnabled = stored.SchedulerEnabled ?? configuration.GetValue($"{SchedulerOptions.Section}:Enabled", defaultValue: true),
-            ExternalAppsEnabled = stored.ExternalAppsEnabled ?? configuration.GetValue($"{ExternalAppsOptions.SectionName}:Enabled", defaultValue: false)
+            ExternalAppsEnabled = catalogListsApplications,
+            ExternalAppsAwaitingCatalog = externalAppsSwitch && !catalogListsApplications
         };
     }
 

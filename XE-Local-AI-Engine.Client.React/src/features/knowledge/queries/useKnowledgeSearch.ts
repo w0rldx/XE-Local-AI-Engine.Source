@@ -2,8 +2,11 @@ import { useMutation } from "@tanstack/react-query";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { searchKnowledgeMutation } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
-import { KNOWLEDGE_DEFAULT_COLLECTION_ID, type KnowledgeSearchHit } from "@/features/knowledge/models/KnowledgeModels";
+import {
+	KNOWLEDGE_DEFAULT_COLLECTION_ID,
+	type KnowledgeSearchDegradation,
+	type KnowledgeSearchHit,
+} from "@/features/knowledge/models/KnowledgeModels";
 
 /* eslint-disable react-doctor/no-adjust-state-on-prop-change -- This is a hook, not a component: there is no key prop to remount it with, so an effect reacting to a changed collectionId argument is the only reset mechanism, and requestGenerationRef already invalidates searches still in flight for the old collection. */
 
@@ -13,6 +16,8 @@ const SEARCH_RESULT_LIMIT = 10;
 
 export interface UseKnowledgeSearchResult {
 	readonly results: readonly KnowledgeSearchHit[];
+	// Why the most recently resolved search ran degraded (lexical-only, reranker unavailable); empty when it ran fully.
+	readonly degradations: readonly KnowledgeSearchDegradation[];
 	readonly isSearching: boolean;
 	readonly error: unknown;
 	// True once at least one search has resolved this session — drives the empty-vs-no-results distinction.
@@ -26,9 +31,10 @@ export interface UseKnowledgeSearchResult {
 // Semantic search over the indexed corpus. Search is a POST (embedding the query server-side), so it rides a
 // TanStack mutation rather than a cached query — each submit is an explicit, non-cached action. Results + the
 // "has searched" flag live in local state so the panel can distinguish "nothing typed yet" from "searched, no
-// hits". Response-shape failures surface as ApiError via withResponseValidation.
+// hits". A response-shape failure throws a ZodError the shared error sinks handle.
 export function useKnowledgeSearch(collectionId = KNOWLEDGE_DEFAULT_COLLECTION_ID): UseKnowledgeSearchResult {
 	const [results, setResults] = useState<readonly KnowledgeSearchHit[]>([]);
+	const [degradations, setDegradations] = useState<readonly KnowledgeSearchDegradation[]>([]);
 	const [hasSearched, setHasSearched] = useState(false);
 	const [lastQuery, setLastQuery] = useState("");
 	const activeCollectionRef = useRef(collectionId);
@@ -40,7 +46,7 @@ export function useKnowledgeSearch(collectionId = KNOWLEDGE_DEFAULT_COLLECTION_I
 	}, [collectionId]);
 
 	const mutation = useMutation({
-		...withResponseValidation(searchKnowledgeMutation()),
+		...searchKnowledgeMutation(),
 	});
 
 	const { mutate, reset: resetMutation } = mutation;
@@ -54,6 +60,7 @@ export function useKnowledgeSearch(collectionId = KNOWLEDGE_DEFAULT_COLLECTION_I
 		requestGenerationRef.current += 1;
 		resetMutation();
 		setResults([]);
+		setDegradations([]);
 		setHasSearched(false);
 		setLastQuery("");
 	}, [collectionId, resetMutation]);
@@ -75,6 +82,7 @@ export function useKnowledgeSearch(collectionId = KNOWLEDGE_DEFAULT_COLLECTION_I
 							return;
 						}
 						setResults(response.results ?? []);
+						setDegradations(response.degradations ?? []);
 						setLastQuery(trimmed);
 						setHasSearched(true);
 					},
@@ -88,12 +96,14 @@ export function useKnowledgeSearch(collectionId = KNOWLEDGE_DEFAULT_COLLECTION_I
 		requestGenerationRef.current += 1;
 		resetMutation();
 		setResults([]);
+		setDegradations([]);
 		setHasSearched(false);
 		setLastQuery("");
 	}, [resetMutation]);
 
 	return {
 		results,
+		degradations,
 		isSearching: mutation.isPending,
 		error: mutation.error,
 		hasSearched,

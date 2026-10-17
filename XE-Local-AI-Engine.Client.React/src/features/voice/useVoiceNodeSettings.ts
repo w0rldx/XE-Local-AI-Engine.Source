@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { getNodeSettingsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 
 // The saved node-level voice settings, read from the shared node-settings query: the master gate
@@ -22,7 +21,7 @@ export function useVoiceNodeSettings(): UseVoiceNodeSettingsResult {
 	// being able to get it wrong.
 	const isAuthenticated = useNodeAuthStore((state) => Boolean(state.accessToken));
 	const settingsQuery = useQuery({
-		...withResponseValidation(getNodeSettingsOptions()),
+		...getNodeSettingsOptions(),
 		enabled: isAuthenticated,
 	});
 

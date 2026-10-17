@@ -344,6 +344,138 @@ public sealed class SandboxOrphanReaperTests : IDisposable
         return Marker(pgid: null, ownerProcessId, scopeUnitName);
     }
 
+    [Test]
+    public async Task SessionSweep_DeletesTheFolderOfADeadOwner_AndLeavesALiveOwnersTheMarkersAndYoungUnownedOnes()
+    {
+        // Real liveness on both platforms: this process with the wrong start time is a recycled pid, so its owner is gone.
+        var containerRoot = CreateScratchContainerRoot();
+        var current = SandboxSessionOwner.ForCurrentProcess();
+        var dead = SessionRoot(containerRoot, new SandboxSessionOwner
+        {
+            ProcessId = current.ProcessId,
+            ProcessStartTimeUtc = current.ProcessStartTimeUtc.AddHours(-1)
+        });
+        var live = SessionRoot(containerRoot, current);
+        var youngUnowned = SessionRoot(containerRoot, owner: null);
+        var markers = Directory.CreateDirectory(Path.Combine(containerRoot, Path.GetFileName(SandboxPaths.MarkersRoot))).FullName;
+        Directory.SetLastWriteTimeUtc(markers, DateTime.UtcNow.AddDays(-30));
+
+        await new SandboxOrphanReaper(new FakeMarkerStore(), new FakeKiller(), NullLogger<SandboxOrphanReaper>.Instance, containmentProbe: null, scopeKiller: null, containerRoot)
+            .StartAsync(CancellationToken.None);
+
+        AssertEx.False(Directory.Exists(dead), "a killed engine's session folder must go at the next start");
+        AssertEx.True(Directory.Exists(live), "a running engine's session folder must never be touched");
+        AssertEx.True(Directory.Exists(youngUnowned), "a folder with no owner record is never deleted");
+        AssertEx.True(Directory.Exists(markers), "the markers folder is not a session folder");
+    }
+
+    [Test]
+    public async Task SessionSweep_KeepsAnUnownedFolderWhateverItsAge_AndAsksTheSeamAboutOwners()
+    {
+        var containerRoot = CreateScratchContainerRoot();
+        var started = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var deadOwner = SessionRoot(containerRoot, new SandboxSessionOwner
+        {
+            ProcessId = 111,
+            ProcessStartTimeUtc = started
+        });
+        var liveOwner = SessionRoot(containerRoot, new SandboxSessionOwner
+        {
+            ProcessId = 222,
+            ProcessStartTimeUtc = started
+        });
+        var oldUnowned = SessionRoot(containerRoot, owner: null);
+        AgeTree(oldUnowned, TimeSpan.FromDays(30));
+        var asked = new List<int>();
+
+        await new SandboxOrphanReaper(new FakeMarkerStore(),
+                new FakeKiller(),
+                NullLogger<SandboxOrphanReaper>.Instance,
+                containmentProbe: null,
+                scopeKiller: null,
+                containerRoot,
+                isOwnerAlive: (pid, startedUtc) =>
+                {
+                    asked.Add(pid);
+                    return pid == 222 && startedUtc == started;
+                })
+            .StartAsync(CancellationToken.None);
+
+        AssertEx.False(Directory.Exists(deadOwner));
+        AssertEx.True(Directory.Exists(liveOwner));
+        AssertEx.True(Directory.Exists(oldUnowned), "no owner record proves nothing about who uses it, so age never deletes it");
+        AssertEx.Equal("111,222", string.Join(",", asked.Order()), "only folders with an owner record ask about liveness");
+    }
+
+    [Test]
+    public async Task SessionSweep_NeverDeletesARootHoldingALiveMarkersJail_EvenWhenItsOwnerRecordIsDead()
+    {
+        var containerRoot = CreateScratchContainerRoot();
+        var root = SessionRoot(containerRoot, new SandboxSessionOwner
+        {
+            ProcessId = 111,
+            ProcessStartTimeUtc = DateTime.UnixEpoch
+        });
+        var jail = Path.Combine(root, "process-jail");
+        var killer = new FakeKiller();
+        killer.Alive.Add(4321);
+        var store = new FakeMarkerStore(Marker(processGroupId: 4242, leaderStartTicks: 1, jailPath: jail, ownerProcessId: 4321));
+
+        await new SandboxOrphanReaper(store,
+                killer,
+                NullLogger<SandboxOrphanReaper>.Instance,
+                containmentProbe: null,
+                scopeKiller: null,
+                containerRoot,
+                isOwnerAlive: static (_, _) => false)
+            .StartAsync(CancellationToken.None);
+
+        AssertEx.True(Directory.Exists(jail), "a live engine's marker names this jail, whatever the folder's owner record says");
+    }
+
+    // Backdates a session root and its jail folder, as a tree nothing wrote to for that long would be.
+    private static void AgeTree(string root, TimeSpan age)
+    {
+        var then = DateTime.UtcNow - age;
+        foreach (var directory in Directory.EnumerateDirectories(root))
+        {
+            Directory.SetLastWriteTimeUtc(directory, then);
+        }
+
+        Directory.SetLastWriteTimeUtc(root, then);
+    }
+
+    [Test]
+    public void SessionOwner_RoundTrips_AndTheCurrentProcessIsAlive_ButNotUnderAnotherStartTime()
+    {
+        var root = CreateScratchContainerRoot();
+        var current = SandboxSessionOwner.ForCurrentProcess();
+        current.WriteTo(root);
+
+        var read = AssertEx.NotNull(SandboxSessionOwner.TryReadFrom(root));
+
+        AssertEx.Equal(Environment.ProcessId, read.ProcessId);
+        AssertEx.Equal(current.ProcessStartTimeUtc, read.ProcessStartTimeUtc);
+        AssertEx.True(SandboxSessionOwner.IsAlive(read.ProcessId, read.ProcessStartTimeUtc));
+        AssertEx.False(SandboxSessionOwner.IsAlive(read.ProcessId, read.ProcessStartTimeUtc.AddMinutes(-10)), "a recycled pid is not the owner");
+        AssertEx.Null(SandboxSessionOwner.TryReadFrom(Path.Combine(root, "missing")));
+    }
+
+    private string CreateScratchContainerRoot()
+    {
+        var root = Directory.CreateTempSubdirectory("xe-reaper-root-").FullName;
+        _tempPaths.Add(root);
+        return root;
+    }
+
+    private static string SessionRoot(string containerRoot, SandboxSessionOwner? owner)
+    {
+        var root = Directory.CreateDirectory(Path.Combine(containerRoot, Guid.NewGuid().ToString("N"))).FullName;
+        Directory.CreateDirectory(Path.Combine(root, "process-jail"));
+        owner?.WriteTo(root);
+        return root;
+    }
+
     private static SandboxOrphanReaper CreateReaper(ISandboxMarkerStore store, ISandboxProcessGroupKiller killer)
     {
         return new SandboxOrphanReaper(store, killer, NullLogger<SandboxOrphanReaper>.Instance);

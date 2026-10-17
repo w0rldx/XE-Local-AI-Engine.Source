@@ -218,6 +218,11 @@ describe("node chat mapper", () => {
 		expect(mapSingleMessage({ contextWindow: null }).contextWindow).toBeUndefined();
 	});
 
+	it("maps the persisted failure category and leaves it undefined when absent", () => {
+		expect(mapSingleMessage({ failureCategory: "InsufficientCapacity" }).failureCategory).toBe("InsufficientCapacity");
+		expect(mapSingleMessage({ failureCategory: null }).failureCategory).toBeUndefined();
+	});
+
 	it("maps message-borne feedback (rating + comment) onto the message model", () => {
 		expect(mapSingleMessage({ feedbackRating: "up", feedbackComment: "Clear answer" })).toMatchObject({
 			feedbackRating: "up",

@@ -20,15 +20,6 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
     /// </summary>
     private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
-    /// <summary>The only hosts a plain-<c>http</c> refresh URL may name (the local catalog server used in live validation).</summary>
-    private static readonly HashSet<string> LoopbackHosts = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "127.0.0.1",
-        "::1",
-        "[::1]",
-        "localhost"
-    };
-
     private readonly IExternalAppCatalogCacheStore _cacheStore;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<ApplicationCatalogProvider> _logger;
@@ -116,20 +107,19 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
     ///     after one Error naming the scheme and host but never the value. A rejected URL never fails startup: the node
     ///     comes up bundled-only and makes no outbound request.
     /// </summary>
-    private static string? ResolveRefreshUrl(string? configured, ILogger logger)
+    internal static string? ResolveRefreshUrl(string? configured, ILogger logger)
     {
         if (string.IsNullOrWhiteSpace(configured))
         {
             return null;
         }
 
-        if (Uri.TryCreate(configured, UriKind.Absolute, out var uri)
-            && (string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal)
-                || (string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.Ordinal) && LoopbackHosts.Contains(uri.Host))))
+        if (ExternalAppCatalogOptions.IsAcceptedRefreshUrl(configured))
         {
             return configured;
         }
 
+        _ = Uri.TryCreate(configured, UriKind.Absolute, out var uri);
         logger.LogError(
             "External Apps catalog refresh URL was rejected (scheme '{Scheme}', host '{Host}'): only https, or http to 127.0.0.1/::1/localhost, are accepted. Serving the bundled catalog only.",
             uri?.Scheme ?? "(unparseable)",

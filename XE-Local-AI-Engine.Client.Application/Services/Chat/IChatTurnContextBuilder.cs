@@ -19,6 +19,9 @@ public interface IChatTurnContextBuilder
     /// </summary>
     Task<bool> HasAttachmentContentAsync(Guid conversationId, IReadOnlyList<Guid>? requestedFileIds, CancellationToken cancellationToken = default);
 
+    /// <summary>The requested file ids that are not uploads of <paramref name="conversationId" />, which a send refuses by name.</summary>
+    Task<IReadOnlyList<Guid>> ListForeignAttachmentIdsAsync(Guid conversationId, IReadOnlyList<Guid>? requestedFileIds, CancellationToken cancellationToken = default);
+
     /// <summary>
     ///     The synthetic plain-chat message inlining the extracted text of the attachments the send names, capped to
     ///     the configured budget with a truncation notice and fenced as untrusted content.

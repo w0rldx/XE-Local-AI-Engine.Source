@@ -217,6 +217,7 @@ public sealed class ChatInvocationStatePump
 
                 await TerminalizeInterruptedStreamAsync(eventSink,
                     correlation,
+                    requestedModel,
                     sequence.Next(),
                     persistCursor,
                     cancellationToken.IsCancellationRequested);
@@ -231,6 +232,7 @@ public sealed class ChatInvocationStatePump
                 : persistCursor;
             await TerminalizeInterruptedStreamAsync(eventSink,
                 correlation,
+                requestedModel,
                 sequence.Next(),
                 seenCursor,
                 wasCancelled: true);
@@ -290,11 +292,12 @@ public sealed class ChatInvocationStatePump
 
     private async Task TerminalizeInterruptedStreamAsync(IChatStreamEventSink eventSink,
         NodeChatMessageCorrelation correlation,
+        string? requestedModel,
         long sequence,
         NodeChatPumpCursor cursor,
         bool wasCancelled)
     {
-        var terminal = await _invocationPump.TerminalizeInterruptedAsync(correlation, cursor, wasCancelled);
+        var terminal = await _invocationPump.TerminalizeInterruptedAsync(correlation, cursor, wasCancelled, requestedModel);
 
         await eventSink.WriteAsync(ChatStreamEventMapper.MessageEvent(terminal.EventType, correlation, terminal.Persisted, NowUnixMilliseconds(), sequence), CancellationToken.None);
     }

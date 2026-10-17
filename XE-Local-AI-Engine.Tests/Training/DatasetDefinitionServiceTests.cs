@@ -48,6 +48,22 @@ public sealed class DatasetDefinitionServiceTests
         AssertEx.Equal(fraction, harness.Saved().HoldoutFraction);
     }
 
+    /// <summary>R7-04: a reranker or embedder teacher used to be saved and could only fail at generation.</summary>
+    [Test]
+    [Arguments("gpustack/bge-reranker-v2-m3-GGUF:Q4_K_M")]
+    [Arguments("nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M")]
+    public async Task Definition_NonTextGenerationTeacher_IsRefusedAtSave(string teacher)
+    {
+        var harness = new Harness();
+
+        var exception = await AssertEx.ThrowsAsync<TrainingValidationException>(() => harness.Service.CreateAsync(Draft(Body() with
+        {
+            TeacherModelName = teacher
+        })));
+
+        AssertEx.Contains(exception.Message, "not a text-generation model");
+    }
+
     [Test]
     public async Task Definition_DefaultHoldoutFraction_IsTenPercent()
     {
@@ -167,7 +183,7 @@ public sealed class DatasetDefinitionServiceTests
             var capabilities = Substitute.For<IModelCapabilityResolver>();
             _ = capabilities.ResolveAsync("teacher.gguf", Arg.Any<CancellationToken>()).Returns(new ModelCapabilitySnapshot(teacherSupportsThinking, true, false));
 
-            Service = new DatasetDefinitionService(store, offerProvider, Policy, capabilities);
+            Service = new DatasetDefinitionService(store, offerProvider, Policy, capabilities, Substitute.For<IModelClassificationStore>());
         }
 
         public IDatasetDefinitionService Service { get; }

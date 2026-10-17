@@ -1,7 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 
 import { draftAgentDefinition, draftImagePrompt, draftSkill } from "@/core/api/generated";
-import { callWithResponseValidation } from "@/core/api/ResponseValidation";
 import type { AssistDraft, AssistMode, AssistSurface } from "@/features/assist/models/AssistModels";
 
 // Variables for one draft attempt. `signal` rides straight into the generated SDK call (which forwards it to axios),
@@ -27,7 +26,7 @@ export function useAssistDraft(surface: AssistSurface) {
 	return useMutation<AssistDraft, Error, AssistDraftVariables>({
 		mutationFn: async ({ signal, ...body }) => {
 			if (surface === "agent") {
-				const { data } = await callWithResponseValidation(draftAgentDefinition({ body, signal, throwOnError: true }));
+				const { data } = await draftAgentDefinition({ body, signal });
 				return {
 					name: data.name,
 					description: data.description,
@@ -38,13 +37,10 @@ export function useAssistDraft(surface: AssistSurface) {
 
 			if (surface === "image") {
 				const { existingContent, existingDescription, mode, modelName, brief } = body;
-				const { data } = await callWithResponseValidation(
-					draftImagePrompt({
-						body: { mode, modelName, brief, existingPrompt: existingContent, existingNegativePrompt: existingDescription },
-						signal,
-						throwOnError: true,
-					}),
-				);
+				const { data } = await draftImagePrompt({
+					body: { mode, modelName, brief, existingPrompt: existingContent, existingNegativePrompt: existingDescription },
+					signal,
+				});
 				return {
 					name: "",
 					description: data.negativePrompt,
@@ -53,7 +49,7 @@ export function useAssistDraft(surface: AssistSurface) {
 				};
 			}
 
-			const { data } = await callWithResponseValidation(draftSkill({ body, signal, throwOnError: true }));
+			const { data } = await draftSkill({ body, signal });
 			return {
 				name: data.name,
 				description: data.description,

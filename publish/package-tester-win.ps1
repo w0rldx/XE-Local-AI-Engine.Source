@@ -735,6 +735,12 @@ dotnet publish XE-Local-AI-Engine.Desktop\XE-Local-AI-Engine.Desktop.csproj `
     --output $publishDir
 Assert-LastExitCode "dotnet publish desktop"
 
+dotnet publish XE-Local-AI-Engine.Cli\XE-Local-AI-Engine.Cli.csproj `
+    --configuration Release `
+    -p:PublishProfile=win-x64 `
+    --output $publishDir
+Assert-LastExitCode "dotnet publish terminal client"
+
 dotnet publish XE-Local-AI-Engine.WindowsLauncher\XE-Local-AI-Engine.WindowsLauncher.csproj `
     --configuration Release `
     -p:PublishProfile=win-x64 `
@@ -742,6 +748,15 @@ dotnet publish XE-Local-AI-Engine.WindowsLauncher\XE-Local-AI-Engine.WindowsLaun
 Assert-LastExitCode "dotnet publish launcher"
 
 & "$PSScriptRoot/../scripts/tests/windows-framework-launcher-smoke.ps1" -PublishDirectory $publishDir
+# The portable zip has no Windows uninstall entry; this script is how a user removes the data folder. It lands
+# beside the launcher, i.e. in current\ of the packed zip.
+function Copy-UninstallScript {
+    param([Parameter(Mandatory)][string] $PublishRoot, [Parameter(Mandatory)][string] $PublishDirectory)
+    $staged = Join-Path $PublishDirectory 'uninstall-xe-local-ai-engine.ps1'
+    Copy-Item -LiteralPath (Join-Path $PublishRoot 'windows/uninstall-xe-local-ai-engine.ps1') -Destination $staged -Force
+    return $staged
+}
+$null = Copy-UninstallScript -PublishRoot $PSScriptRoot -PublishDirectory $publishDir
 
 
 foreach ($required in @("$publishDir\wwwroot\index.html", "$publishDir\wwwroot\assets")) {

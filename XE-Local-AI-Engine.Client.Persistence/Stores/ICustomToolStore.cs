@@ -24,7 +24,8 @@ public interface ICustomToolStore
     /// </summary>
     /// <remarks>
     ///     Stamps <c>UpdatedAtUtc</c> and increments <c>Version</c> only when a content-affecting field changed: Name,
-    ///     Description, Kind, Mode, parameters or config — never the <c>Enabled</c> or <c>Acknowledged</c> toggle.
+    ///     Description, Kind, Mode, parameters or config — never the <c>Enabled</c>, <c>Acknowledged</c> or
+    ///     <c>AllowUnattended</c> toggle.
     /// </remarks>
     Task<CustomToolRecord?> UpdateAsync(Guid id, CustomToolInput input, CancellationToken cancellationToken = default);
 
@@ -67,6 +68,9 @@ public sealed class CustomToolRecord
 
     public required bool Acknowledged { get; init; }
 
+    /// <summary>The operator allows a graph workflow to run this tool unattended. Defaults to <c>false</c>.</summary>
+    public bool AllowUnattended { get; init; }
+
     public required int Version { get; init; }
 
     public required long CreatedAtUtc { get; init; }
@@ -100,4 +104,6 @@ public sealed class CustomToolInput
     public bool Enabled { get; init; } = true;
 
     public bool Acknowledged { get; init; }
+
+    public bool AllowUnattended { get; init; }
 }

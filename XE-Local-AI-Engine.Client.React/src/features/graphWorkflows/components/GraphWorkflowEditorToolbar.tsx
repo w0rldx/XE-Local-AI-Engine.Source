@@ -1,4 +1,4 @@
-import { Button, Text } from "@mantine/core";
+import { Badge, Button, Text } from "@mantine/core";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -6,11 +6,15 @@ import { DisabledReasonTooltip } from "@/core/ui/components/DisabledReasonToolti
 
 export interface GraphWorkflowEditorToolbarProps {
 	readonly definitionName: string;
+	/** The definition may run action tools (ADR 0021); shown as a badge beside the name. */
+	readonly allowsActions?: boolean;
 	/** No definition open: everything but the list is inert. */
 	readonly hasDefinition: boolean;
 	readonly isDirty: boolean;
 	/** A stored graph that had no layout was laid out on open, so it opens dirty — different words, same state. */
 	readonly layoutIsUnsaved: boolean;
+	/** Rename (a metadata write that bumps the version and reloads the canvas) is safe now. */
+	readonly canEditMeta: boolean;
 	readonly isValidating: boolean;
 	readonly isSaving: boolean;
 	readonly canSave: boolean;
@@ -29,9 +33,11 @@ export interface GraphWorkflowEditorToolbarProps {
 /** The canvas's own toolbar: what an operator can do to the open definition, and why a Save is being asked for. */
 export function GraphWorkflowEditorToolbar({
 	definitionName,
+	allowsActions = false,
 	hasDefinition,
 	isDirty,
 	layoutIsUnsaved,
+	canEditMeta,
 	isValidating,
 	isSaving,
 	canSave,
@@ -51,7 +57,18 @@ export function GraphWorkflowEditorToolbar({
 			<Text size="sm" fw={600} data-testid="gw-page-definition-name">
 				{definitionName}
 			</Text>
-			<Button size="xs" variant="default" disabled={!hasDefinition || isDirty} onClick={onRename} data-testid="gw-page-rename">
+			{allowsActions ? (
+				<Badge size="xs" color="orange" variant="light" data-testid="gw-page-actions-badge">
+					{t("pages.graphWorkflows.definitions.actionsBadge", "Actions")}
+				</Badge>
+			) : null}
+			<Button
+				size="xs"
+				variant="default"
+				disabled={!hasDefinition || !canEditMeta}
+				onClick={onRename}
+				data-testid="gw-page-rename"
+			>
 				{t("pages.graphWorkflows.page.rename", "Rename")}
 			</Button>
 			{settings}

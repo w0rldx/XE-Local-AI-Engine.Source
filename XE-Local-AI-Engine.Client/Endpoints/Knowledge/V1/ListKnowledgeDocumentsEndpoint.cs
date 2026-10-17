@@ -49,6 +49,7 @@ public sealed class ListKnowledgeDocumentsEndpoint : Endpoint<ListKnowledgeDocum
             DisplayName = summary.DisplayName,
             Status = summary.Status,
             FailureReason = summary.FailureReason,
+            FailureReasonCode = KnowledgeFailureReasonCodes.CodeOf(summary.FailureReason),
             ChunkCount = summary.ChunkCount,
             EmbeddingModel = summary.EmbeddingModel,
             StaleModel = summary.StaleModel,

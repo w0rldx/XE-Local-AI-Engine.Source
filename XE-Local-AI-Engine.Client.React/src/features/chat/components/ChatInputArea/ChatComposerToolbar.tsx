@@ -48,6 +48,7 @@ interface ChatComposerToolbarProps {
 	agentControlsAvailable: boolean;
 	agentOptions: readonly AgentOption[];
 	agentModeEnabled: boolean;
+	conversationAgentBound: boolean;
 	selectedAgentId: string;
 	agentSelectorDisabled: boolean;
 	onSelectAgent?: (agentId: string) => void;
@@ -99,6 +100,7 @@ export function ChatComposerToolbar({
 	agentControlsAvailable,
 	agentOptions,
 	agentModeEnabled,
+	conversationAgentBound,
 	selectedAgentId,
 	agentSelectorDisabled,
 	onSelectAgent,
@@ -217,6 +219,7 @@ export function ChatComposerToolbar({
 						agentOptions={agentOptions}
 						agentModeEnabled={agentModeEnabled}
 						selectedAgentId={selectedAgentId}
+						defaultOptionDisabled={conversationAgentBound}
 						disabled={agentSelectorDisabled}
 						onSelectAgent={onSelectAgent ?? (() => undefined)}
 					/>

@@ -1,4 +1,4 @@
-import { Alert, Checkbox, Input, Select, Stack, Switch, Textarea, TextInput } from "@mantine/core";
+import { Alert, Checkbox, Input, SegmentedControl, Select, Stack, Switch, Textarea, TextInput } from "@mantine/core";
 import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -7,8 +7,11 @@ import { IntegrationApprovalWarning } from "@/features/integrations/components/I
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import {
 	type IntegrationAgentOption,
+	type IntegrationGraphOption,
 	type IntegrationSessionPolicy,
+	type IntegrationTargetKind,
 	integrationSessionPolicies,
+	integrationTargetKinds,
 	type IntegrationToolFacts,
 	type IntegrationTriggerFormValues,
 	integrationTriggerFormSchema,
@@ -24,6 +27,7 @@ export interface IntegrationTriggerFormHandle {
 interface IntegrationTriggerFormProps {
 	initialValues: IntegrationTriggerFormValues;
 	agents: readonly IntegrationAgentOption[];
+	graphs: readonly IntegrationGraphOption[];
 	toolsByName: ReadonlyMap<string, IntegrationToolFacts>;
 	isEditing: boolean;
 	submitError?: string;
@@ -44,6 +48,7 @@ function computeIsDirty(current: IntegrationTriggerFormValues, initial: Integrat
 export function IntegrationTriggerForm({
 	initialValues,
 	agents,
+	graphs,
 	toolsByName,
 	isEditing,
 	submitError,
@@ -62,10 +67,11 @@ export function IntegrationTriggerForm({
 	}, [values, initialValues, onDirtyChange]);
 
 	const agentData = useMemo(() => agents.map((agent) => ({ value: agent.id, label: agent.name })), [agents]);
+	const graphData = useMemo(() => graphs.map((graph) => ({ value: graph.id, label: graph.name })), [graphs]);
 
 	const selectedAgent = useMemo(
-		() => agents.find((agent) => agent.id === values.targetAgentDefinitionId),
-		[agents, values.targetAgentDefinitionId],
+		() => (values.targetKind === "Agent" ? agents.find((agent) => agent.id === values.targetAgentDefinitionId) : undefined),
+		[agents, values.targetKind, values.targetAgentDefinitionId],
 	);
 
 	// Live slug validation: the message appears the moment the value stops matching, not on submit.
@@ -157,26 +163,70 @@ export function IntegrationTriggerForm({
 				data-testid="integration-trigger-form-enabled"
 			/>
 
-			<Select
-				label={t("pages.integrations.triggers.form.targetAgent.label", "Target agent")}
-				description={t(
-					"pages.integrations.triggers.form.targetAgent.description",
-					"The saved agent this trigger runs, unattended, for every invocation.",
-				)}
-				placeholder={t("pages.integrations.triggers.form.targetAgent.placeholder", "Select an agent")}
-				data={agentData}
-				value={values.targetAgentDefinitionId || null}
-				allowDeselect={false}
-				required={true}
-				error={fieldError("targetAgentDefinitionId", "A target agent is required.")}
-				onChange={(value) => {
-					if (value === null) {
-						return;
-					}
-					setValues((current) => ({ ...current, targetAgentDefinitionId: value }));
-				}}
-				data-testid="integration-trigger-form-agent"
-			/>
+			<Input.Wrapper label={t("pages.integrations.triggers.form.targetKind.label", "Target")}>
+				<SegmentedControl
+					fullWidth={true}
+					mt="xs"
+					data={integrationTargetKinds.map((kind) => ({
+						value: kind,
+						label: t(
+							`pages.integrations.triggers.form.targetKind.options.${kind}`,
+							kind === "Graph" ? "Graph workflow" : "Agent",
+						),
+					}))}
+					value={values.targetKind}
+					onChange={(value) => {
+						setValues((current) => ({ ...current, targetKind: value as IntegrationTargetKind }));
+					}}
+					data-testid="integration-trigger-form-target-kind"
+				/>
+			</Input.Wrapper>
+
+			{values.targetKind === "Graph" ? (
+				<Select
+					label={t("pages.integrations.triggers.form.targetGraph.label", "Target graph workflow")}
+					description={t(
+						"pages.integrations.triggers.form.targetGraph.description",
+						"The saved graph workflow this trigger starts for every invocation. It must accept the Integration trigger source in its workflow settings.",
+					)}
+					placeholder={t("pages.integrations.triggers.form.targetGraph.placeholder", "Select a graph workflow")}
+					data={graphData}
+					value={values.targetGraphWorkflowDefinitionId || null}
+					allowDeselect={false}
+					required={true}
+					error={fieldError("targetGraphWorkflowDefinitionId", "A target graph workflow is required.")}
+					onChange={(value) => {
+						if (value === null) {
+							return;
+						}
+						setValues((current) => ({ ...current, targetGraphWorkflowDefinitionId: value }));
+					}}
+					data-testid="integration-trigger-form-graph"
+				/>
+			) : null}
+
+			{values.targetKind === "Agent" ? (
+				<Select
+					label={t("pages.integrations.triggers.form.targetAgent.label", "Target agent")}
+					description={t(
+						"pages.integrations.triggers.form.targetAgent.description",
+						"The saved agent this trigger runs, unattended, for every invocation.",
+					)}
+					placeholder={t("pages.integrations.triggers.form.targetAgent.placeholder", "Select an agent")}
+					data={agentData}
+					value={values.targetAgentDefinitionId || null}
+					allowDeselect={false}
+					required={true}
+					error={fieldError("targetAgentDefinitionId", "A target agent is required.")}
+					onChange={(value) => {
+						if (value === null) {
+							return;
+						}
+						setValues((current) => ({ ...current, targetAgentDefinitionId: value }));
+					}}
+					data-testid="integration-trigger-form-agent"
+				/>
+			) : null}
 
 			{toolCatalogNotice ? (
 				<Alert color="gray" variant="light" data-testid="integration-trigger-form-catalog-notice">

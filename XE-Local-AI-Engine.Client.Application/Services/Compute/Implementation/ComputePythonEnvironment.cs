@@ -28,6 +28,9 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
     // An operator's remove waits this long for another host's provision before answering busy.
     private static readonly TimeSpan RemoveLockWait = TimeSpan.FromSeconds(10);
 
+    // The base interpreter a pyvenv.cfg `home` directory holds: python.exe on Windows, python3 or python on Unix.
+    private static readonly string[] BaseInterpreterNames = ["python.exe", "python3", "python"];
+
     private readonly UvBinaryAcquirer _acquirer;
     private readonly ComputeRuntimeDirectory _directory;
     private readonly ILogger<ComputePythonEnvironment> _logger;
@@ -106,11 +109,11 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
             return cached;
         }
 
-        // The uv binary pin and the process runner are both Linux-x64 and the lockfile resolves for that platform alone, so
-        // there is nothing to provision elsewhere. Refused with a plain sentence rather than a deeper missing-file error naming a path the model must not see.
-        if (!OperatingSystem.IsLinux())
+        // The uv pin, the process runner and the lockfile cover Linux x64 and Windows x64 only, so nothing provisions elsewhere.
+        // Refused with a plain sentence rather than a deeper missing-file error naming a path the model must not see.
+        if (!ManagedPythonPins.IsCurrentPlatformSupported)
         {
-            throw new ComputeEnvironmentException("The Python compute tool is available on Linux only.");
+            throw new ComputeEnvironmentException("The Python compute tool is available on Linux x64 and Windows x64 only.");
         }
 
         await _provisionGate.WaitAsync(cancellationToken);
@@ -132,22 +135,23 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
     {
         if (_provisionGate.CurrentCount == 0)
         {
-            return Status(ManagedPythonEnvironmentState.Provisioning,
-                _removing ? "The compute runtime is being removed." : "The compute runtime is being provisioned.");
+            return _removing
+                ? Status(ManagedPythonEnvironmentState.Provisioning, ManagedPythonReasonCode.Removing, "The compute runtime is being removed.")
+                : Status(ManagedPythonEnvironmentState.Provisioning, ManagedPythonReasonCode.Provisioning, "The compute runtime is being provisioned.");
         }
 
         // A failed rebuild that left the previous venv in service reads Ready with the failure as its reason, as Training's does.
         if (Volatile.Read(ref _lastFailure) is { } failure)
         {
             return Volatile.Read(ref _runtime) is null
-                ? Status(ManagedPythonEnvironmentState.Failed, failure)
+                ? Status(ManagedPythonEnvironmentState.Failed, ManagedPythonReasonCode.ProvisionFailed, failure)
                 : await ServedStatusAsync(failure, cancellationToken);
         }
 
         var expected = await _directory.TryComputeExpectedIdentityAsync(cancellationToken);
         if (expected is null)
         {
-            return Status(ManagedPythonEnvironmentState.Failed, "The pinned compute runtime lockfile is missing from this installation.");
+            return Status(ManagedPythonEnvironmentState.Failed, ManagedPythonReasonCode.LockfileMissing, "The pinned compute runtime lockfile is missing from this installation.");
         }
 
         var installed = await _directory.ReadInstalledStateAsync(cancellationToken);
@@ -155,34 +159,36 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         {
             if (File.Exists(_directory.LegacyStatePath))
             {
-                return Status(ManagedPythonEnvironmentState.UpdateRequired, "The compute runtime was provisioned by an older build and is rebuilt on next use.");
+                return Status(ManagedPythonEnvironmentState.UpdateRequired, ManagedPythonReasonCode.OlderBuild, "The compute runtime was provisioned by an older build and is rebuilt on next use.");
             }
 
             // Another host mid-sync looks exactly like an interrupted or absent one, except that it holds the provision lock.
             if (await _directory.IsProvisionLockHeldElsewhereAsync())
             {
-                return Status(ManagedPythonEnvironmentState.Provisioning, "Another process is provisioning the compute runtime.");
+                return Status(ManagedPythonEnvironmentState.Provisioning, ManagedPythonReasonCode.Provisioning, "Another process is provisioning the compute runtime.");
             }
 
             var recordUnreadable = File.Exists(_directory.StatePath);
             if (!recordUnreadable && !Directory.Exists(_directory.VenvRoot))
             {
-                return Status(ManagedPythonEnvironmentState.NotProvisioned, reason: null);
+                return Status(ManagedPythonEnvironmentState.NotProvisioned, ManagedPythonReasonCode.None, reason: null);
             }
 
-            return Status(ManagedPythonEnvironmentState.RepairRequired,
-                recordUnreadable ? "The compute runtime's state record is unreadable." : "An interrupted provision left an incomplete compute runtime.");
+            return recordUnreadable
+                ? Status(ManagedPythonEnvironmentState.RepairRequired, ManagedPythonReasonCode.RecordUnreadable, "The compute runtime's state record is unreadable.")
+                : Status(ManagedPythonEnvironmentState.RepairRequired, ManagedPythonReasonCode.IncompleteProvision, "An interrupted provision left an incomplete compute runtime.");
         }
 
         if (!File.Exists(_directory.InterpreterPath))
         {
-            return Status(ManagedPythonEnvironmentState.RepairRequired, "The compute runtime's Python interpreter is missing.", installed.Identity);
+            return Status(ManagedPythonEnvironmentState.RepairRequired, ManagedPythonReasonCode.InterpreterMissing, "The compute runtime's Python interpreter is missing.", installed.Identity);
         }
 
         var mismatches = _directory.MismatchesAgainst(installed, expected);
         return mismatches.Count > 0
-            ? Status(ManagedPythonEnvironmentState.UpdateRequired, "The compute runtime is out of date and is rebuilt on next use.", installed.Identity, mismatches)
-            : Status(ManagedPythonEnvironmentState.Ready, reason: null, installed.Identity);
+            ? Status(ManagedPythonEnvironmentState.UpdateRequired, ManagedPythonReasonCode.UpdateRequired, "The compute runtime is out of date and is rebuilt on next use.", installed.Identity,
+                mismatches)
+            : Status(ManagedPythonEnvironmentState.Ready, ManagedPythonReasonCode.None, reason: null, installed.Identity);
     }
 
     /// <summary>What a failed rebuild left in service; a missing lockfile or record still reads Ready, since the venv is what runs.</summary>
@@ -191,6 +197,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         var installed = await _directory.ReadInstalledStateAsync(cancellationToken);
         var expected = await _directory.TryComputeExpectedIdentityAsync(cancellationToken);
         return Status(ManagedPythonEnvironmentState.Ready,
+            ManagedPythonReasonCode.ProvisionFailed,
             $"{failure} The previous compute runtime stays in service.",
             installed?.Identity,
             installed is not null && expected is not null ? _directory.MismatchesAgainst(installed, expected) : null);
@@ -456,6 +463,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         var previous = new ComputePythonRuntime
         {
             InterpreterPath = _directory.InterpreterPath,
+            BaseInterpreterPath = WindowsBaseInterpreterOf(_directory.InterpreterPath),
             ReadOnlyTrees = [_directory.VenvRoot, installed.PythonInstallDirectory]
         };
         Volatile.Write(ref _runtime, previous);
@@ -463,22 +471,106 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
     }
 
     /// <summary>
-    ///     True when <paramref name="interpreter" /> finally resolves to an existing file under <paramref name="pythonInstallDirectory" />,
-    ///     the tree the jail binds. <c>File.Exists</c> alone answers true for a dangling link.
+    ///     True when the venv <paramref name="interpreter" /> runs on a base interpreter under <paramref name="pythonInstallDirectory" />, the
+    ///     tree the jail binds: by its final link target, or else by the <c>home</c> line of the venv's <c>pyvenv.cfg</c>.
     /// </summary>
-    private static bool RunsOnStore(string interpreter, string pythonInstallDirectory)
+    /// <remarks>
+    ///     Linux venvs link <c>bin/python</c> into the store. uv's Windows <c>Scripts\python.exe</c> is a plain launcher file that reads
+    ///     <c>home</c> instead, so the link route alone never proves a Windows venv. <c>File.Exists</c> alone answers true for a dangling link.
+    /// </remarks>
+    internal static bool RunsOnStore(string interpreter, string pythonInstallDirectory)
     {
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var storePrefix = Path.TrimEndingDirectorySeparator(pythonInstallDirectory) + Path.DirectorySeparatorChar;
         try
         {
             var link = new FileInfo(interpreter);
             var target = link.ResolveLinkTarget(returnFinalTarget: true) ?? link;
-            return target.Exists
-                   && target.FullName.StartsWith(Path.TrimEndingDirectorySeparator(pythonInstallDirectory) + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+            if (target.Exists && target.FullName.StartsWith(storePrefix, comparison))
+            {
+                return true;
+            }
+
+            return BaseInterpreterOf(interpreter) is { } baseInterpreter && baseInterpreter.StartsWith(storePrefix, comparison);
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
             return false;
         }
+    }
+
+    /// <summary>
+    ///     The base interpreter that the <c>home</c> line of the venv's <c>pyvenv.cfg</c> names, when it exists on disk; otherwise
+    ///     <see langword="null" />. An unreadable config throws, as <see cref="File.ReadLines(string)" /> does.
+    /// </summary>
+    internal static string? BaseInterpreterOf(string venvInterpreter)
+    {
+        // The venv root is the parent of Scripts (Windows) or bin (Unix).
+        var venvRoot = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetFullPath(venvInterpreter)));
+        var config = venvRoot is null ? null : Path.Combine(venvRoot, "pyvenv.cfg");
+        if (config is null || !File.Exists(config) || ReadVenvHome(config) is not { } configured)
+        {
+            return null;
+        }
+
+        var home = ResolveFinalDirectory(Path.GetFullPath(configured));
+        return BaseInterpreterNames.Select(name => Path.Combine(home, name)).FirstOrDefault(File.Exists);
+    }
+
+    /// <summary>
+    ///     The final target of a linked directory, or the path itself when it is not a link or cannot be resolved.
+    /// </summary>
+    /// <remarks>
+    ///     uv's <c>home</c> names the minor-version alias (<c>cpython-3.13-…</c>), a link to the versioned install beside it in the same
+    ///     granted store. CPython cannot resolve that link inside the AppContainer boundary and warns on stderr, so the target is launched.
+    /// </remarks>
+    private static string ResolveFinalDirectory(string directory)
+    {
+        try
+        {
+            return new DirectoryInfo(directory).ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? directory;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return directory;
+        }
+    }
+
+    /// <summary>
+    ///     <see cref="BaseInterpreterOf" /> on Windows, where uv's venv launcher is a trampoline that spawns it. Null elsewhere and
+    ///     when it cannot be read, so the gateway falls back to the venv launcher.
+    /// </summary>
+    private static string? WindowsBaseInterpreterOf(string venvInterpreter)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return null;
+        }
+
+        try
+        {
+            return BaseInterpreterOf(venvInterpreter);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return null;
+        }
+    }
+
+    // The value of the first `home = <dir>` line (key matched exactly after trimming); every other key is ignored.
+    private static string? ReadVenvHome(string config)
+    {
+        foreach (var line in File.ReadLines(config))
+        {
+            var separator = line.IndexOf('=', StringComparison.Ordinal);
+            if (separator > 0 && string.Equals(line[..separator].Trim(), "home", StringComparison.Ordinal))
+            {
+                var value = line[(separator + 1)..].Trim();
+                return value.Length > 0 ? value : null;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -655,6 +747,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         return new ComputePythonRuntime
         {
             InterpreterPath = interpreter,
+            BaseInterpreterPath = WindowsBaseInterpreterOf(interpreter),
             ReadOnlyTrees = [venvRoot, _toolchain.PythonInstallDirectory]
         };
     }
@@ -694,6 +787,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
     }
 
     private static ManagedPythonEnvironmentStatus Status(ManagedPythonEnvironmentState state,
+        ManagedPythonReasonCode reasonCode,
         string? reason,
         ManagedPythonEnvironmentIdentity? installed = null,
         IReadOnlyList<string>? mismatches = null)
@@ -703,6 +797,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
             ProfileId = ProfileId,
             State = state,
             Reason = reason,
+            ReasonCode = reasonCode,
             Installed = installed,
             Mismatches = mismatches ?? []
         };

@@ -21,6 +21,17 @@ function claimReload(): boolean {
 	}
 }
 
+// An explicit user Retry always reloads: the stamp only guards the automatic reload against a loop. A reload, not a
+// second `import()`, because most browsers cache a failed module import and would fail again without a request.
+export function reloadForUserRetry(): void {
+	try {
+		sessionStorage.removeItem(RELOAD_STAMP_KEY);
+	} catch {
+		// No storage means no stamp to clear.
+	}
+	window.location.reload();
+}
+
 export function installPreloadErrorReload(): void {
 	window.addEventListener("vite:preloadError", (event) => {
 		if (claimReload()) {

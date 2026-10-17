@@ -116,6 +116,9 @@ public sealed class KnowledgeDocumentResponse
 
     public string? FailureReason { get; init; }
 
+    /// <summary>Stable code for <see cref="FailureReason" /> the UI translates; <see langword="null" /> when the reason has none.</summary>
+    public string? FailureReasonCode { get; init; }
+
     public required int ChunkCount { get; init; }
 
     public required string EmbeddingModel { get; init; }
@@ -179,6 +182,9 @@ public sealed class KnowledgeDocumentDetailResponse
     public required KnowledgeDocumentStatus Status { get; init; }
 
     public string? FailureReason { get; init; }
+
+    /// <summary>Stable code for <see cref="FailureReason" /> the UI translates; <see langword="null" /> when the reason has none.</summary>
+    public string? FailureReasonCode { get; init; }
 
     public required int ChunkCount { get; init; }
 
@@ -254,6 +260,9 @@ public sealed class KnowledgeSearchHitResponse
 public sealed class SearchKnowledgeResponse
 {
     public required IReadOnlyList<KnowledgeSearchHitResponse> Results { get; init; }
+
+    /// <summary>Every degradation the search ran under (enum names), empty when the full pipeline ran; the UI shows each as a notice.</summary>
+    public required IReadOnlyList<KnowledgeSearchDegradation> Degradations { get; init; }
 }
 
 /// <summary>Result of a corpus-wide reindex: how many stale-model documents were reset to Pending and enqueued.</summary>

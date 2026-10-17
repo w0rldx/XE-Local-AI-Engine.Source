@@ -10,19 +10,16 @@ import {
 	inspectGgufRepositoryOptions,
 	startGgufDownloadMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
-import { toGgufRepository, toGgufRepositoryDetail, toGgufTestedModel } from "@/features/models/models/GgufMappers";
 import type { GgufAcquisitionStatus } from "@/features/models/models/GgufAcquisitionModels";
+import { toGgufRepository, toGgufRepositoryDetail, toGgufTestedModel } from "@/features/models/models/GgufMappers";
 import { sortTestedModelsByFit } from "@/features/models/models/GgufModels";
 import { useActiveGgufAcquisitions } from "@/features/models/queries/useGgufAcquisitions";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 
 // Server state for the Hugging Face GGUF browse + download flow on the Model Management page. Reads use the generated
 // hey-api `*Options()` (which wire the shared axios instance + TanStack Query AbortSignal automatically) and a
-// TanStack `select` that maps the optional-field generated response into the stricter domain view-model. Every
-// generated options object is wrapped in withResponseValidation so a zod response-shape failure surfaces as an
-// ApiError (never a raw ZodError). Mutations adapt the domain variables to the generated `{ body }` envelope and
-// invalidate the caches they affect.
+// TanStack `select` that maps the optional-field generated response into the stricter domain view-model.
+// Mutations adapt the domain variables to the generated `{ body }` envelope and invalidate the caches they affect.
 
 // Generated keys are object arrays; TanStack partial matching on `_id` invalidates every endpoint variant.
 const ggufQueryIds = {
@@ -48,7 +45,7 @@ function invalidate(queryClient: ReturnType<typeof useQueryClient>, operationId:
 export function useBrowseGgufRepositories(query: string, enabled: boolean) {
 	const trimmed = query.trim();
 	return useQuery({
-		...withResponseValidation(browseGgufRepositoriesOptions({ query: { query: trimmed } })),
+		...browseGgufRepositoriesOptions({ query: { query: trimmed } }),
 		select: (data) => (data.items ?? []).map(toGgufRepository),
 		enabled: enabled && trimmed.length > 0,
 	});
@@ -62,12 +59,12 @@ export function useBrowseGgufRepositories(query: string, enabled: boolean) {
 // so this cannot loop.
 export function useTestedCatalogModels(enabled: boolean) {
 	const catalog = useQuery({
-		...withResponseValidation(getModelCatalogInfoOptions()),
+		...getModelCatalogInfoOptions(),
 		select: (data) => sortTestedModelsByFit((data.testedModels ?? []).map(toGgufTestedModel)),
 		enabled,
 	});
 	const profileUpdatedAt = useQuery({
-		...withResponseValidation(getHardwareProfileOptions({ query: { refresh: false } })),
+		...getHardwareProfileOptions({ query: { refresh: false } }),
 		enabled,
 		refetchOnMount: false,
 	}).dataUpdatedAt;
@@ -89,7 +86,7 @@ export function useTestedCatalogModels(enabled: boolean) {
 export function useInspectGgufRepository(repoId: string, enabled: boolean) {
 	const trimmed = repoId.trim();
 	return useQuery({
-		...withResponseValidation(inspectGgufRepositoryOptions({ query: { repoId: trimmed } })),
+		...inspectGgufRepositoryOptions({ query: { repoId: trimmed } }),
 		select: toGgufRepositoryDetail,
 		enabled: enabled && trimmed.length > 0,
 	});
@@ -116,7 +113,7 @@ export function useStartGgufDownload() {
 
 	return useMutation({
 		mutationFn: async (variables: StartGgufDownloadVariables) => {
-			const options = withResponseValidation(startGgufDownloadMutation());
+			const options = startGgufDownloadMutation();
 			return await options.mutationFn?.({ body: { ...variables } }, undefined as never);
 		},
 		// Invalidate the downloads list so the active-downloads poll refetches immediately and re-arms its interval — the
@@ -136,7 +133,7 @@ export function useCancelGgufDownload() {
 
 	return useMutation({
 		mutationFn: async (modelName: string) => {
-			const options = withResponseValidation(cancelGgufDownloadMutation());
+			const options = cancelGgufDownloadMutation();
 			return await options.mutationFn?.({ body: { modelName } }, undefined as never);
 		},
 		onSuccess: () =>

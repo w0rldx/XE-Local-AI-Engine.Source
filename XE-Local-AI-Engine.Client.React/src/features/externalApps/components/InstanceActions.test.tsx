@@ -103,6 +103,16 @@ describe("InstanceActions", () => {
 		expect((screen.getByTestId("external-app-action-open") as HTMLButtonElement).disabled).toBe(true);
 	});
 
+	// A disabled button takes no focus, so the reason rides on the shared wrapper's tab stop instead of a `title`.
+	it("reveals why Open is disabled on keyboard focus", async () => {
+		renderActions(externalAppInstance({ status: "Stopped" }));
+
+		const wrapper = screen.getByTestId("external-app-action-open").parentElement as HTMLElement;
+		expect(wrapper.getAttribute("tabindex")).toBe("0");
+		fireEvent.focus(wrapper);
+		expect((await screen.findByRole("tooltip")).textContent).toBe("The application has to be running before you can open it.");
+	});
+
 	// Stop follows the server's admission rule, not the happy path: `AdmittedStatusFor` takes it from Running, Failed
 	// and StoppedUnexpectedly, and on the two failure states it is what tears the leftover containers down. Restart
 	// stays Running-only.

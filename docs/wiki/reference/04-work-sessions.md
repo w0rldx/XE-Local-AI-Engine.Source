@@ -31,6 +31,18 @@ ends up left mid-flight by the operation meant to settle it. The loop stops betw
 
 The section introduction is in [Agent Mode](../04-agent-mode.md#52-the-node-has-one-invocation-slot).
 
+### An answered park waiting for the slot
+
+A parked step gives the invocation slot back, so after its card is answered it may wait for another turn to
+finish before it continues. Nothing arrives on its stream during that wait, so neither disarm signal (a
+non-whitespace delta, a `ToolCallCompleted`) fires. `StepCancellationGuard` therefore checks at fire time:
+when the dispatcher's live state for the step's invocation has neither a pending approval nor a pending
+question, the guard logs and leaves the step running instead of cancelling it. The check reads dispatcher
+state rather than `PendingToolCallRegistry` because questions have no registry row. `MaxParkedSeconds`
+still bounds an unanswered card; it no longer protects the slot. The answered step is still bounded by the
+turn's parked deadline (the pending-card age plus the turn budget), and the session keeps showing
+`WaitingForApproval` until the step's first delta after it retakes the slot.
+
 ### A dropped park event
 
 The stream sink is a bounded channel with `FullMode = DropWrite` whose `ChatStreamEventSink.TryWrite`
@@ -107,7 +119,9 @@ turn now also seeds a result budget sized to its model's window (`InvocationRunn
 seed, so a step's own bound is never loosened.
 
 **A spent call cap ends the STEP, not the session.** `ProviderCallBudgetExceededException` classifies as
-a failure, so the supervisor recognises the budget's own fixed terminal message
+`FailureCategory.CallBudgetReached`: the runner logs it at Information, not as an error, and the invocation monitor
+shows "Stopped at call budget" rather than a failure. The turn still ends failed on the wire, so the supervisor
+recognises the budget's own fixed terminal message
 (`ProviderCallBudget.CeilingExceededMessage`, forwarded verbatim onto the failed row), writes a
 `StepEnded` event with outcome `ProviderCallBudget`, and settles the step as if it had completed. The
 tools that ran are already persisted and the state block carries the plan, so the next step resumes the

@@ -2,6 +2,7 @@ import { isAxiosError } from "axios";
 
 import { ApiError } from "@/core/api/errors/ApiError";
 import { NetworkError } from "@/core/api/errors/NetworkError";
+import { isResponseValidationError } from "@/core/api/ResponseValidation";
 
 // How many times a transient failure is retried before the query is allowed to settle as an error.
 // Total attempts = MAX_QUERY_RETRIES + 1 (the initial try plus the retries).
@@ -14,6 +15,11 @@ const MAX_QUERY_RETRIES = 3;
 export function getErrorStatus(error: unknown): number | undefined {
 	if (error instanceof ApiError) {
 		return error.statusCode;
+	}
+
+	// A response-shape mismatch is deterministic: answer 422 so it is never retried.
+	if (isResponseValidationError(error)) {
+		return 422;
 	}
 
 	if (isAxiosError(error)) {

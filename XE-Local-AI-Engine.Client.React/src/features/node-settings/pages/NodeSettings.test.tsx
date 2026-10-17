@@ -57,6 +57,11 @@ const { generatedMock } = vi.hoisted(() => ({
 		saveFn: vi.fn(),
 		// Installed-models query feeding the speculative draft-model picker.
 		listLocalModelsOptions: vi.fn(),
+		// Saved graph workflows feeding the intent-router picker.
+		listGraphWorkflowDefinitionsOptions: vi.fn(() => ({
+			queryKey: fakeQueryKey("listGraphWorkflowDefinitions"),
+			queryFn: async () => ({ definitions: [] }),
+		})),
 		// Local-runtime cards (llama.cpp + HF token) relocated from the model-fit advisor.
 		ensureLlamaCppBinaryMutation: vi.fn(),
 		getHfTokenStatusOptions: vi.fn(),
@@ -104,6 +109,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getNodeSettingsQueryKey: generatedMock.getNodeSettingsQueryKey,
 	saveNodeSettingsMutation: generatedMock.saveNodeSettingsMutation,
 	listLocalModelsOptions: generatedMock.listLocalModelsOptions,
+	listGraphWorkflowDefinitionsOptions: generatedMock.listGraphWorkflowDefinitionsOptions,
 	ensureLlamaCppBinaryMutation: generatedMock.ensureLlamaCppBinaryMutation,
 	getHfTokenStatusOptions: generatedMock.getHfTokenStatusOptions,
 	setHfTokenMutation: generatedMock.setHfTokenMutation,
@@ -1195,7 +1201,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 
 		await waitFor(() =>
 			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
-				body: { webAccessEnabled: true, webSearchSearxngUrl: "", maxMessageRequestTimeoutSeconds: 600 },
+				body: { webAccessEnabled: true, webSearchSearxngUrl: null, maxMessageRequestTimeoutSeconds: 600 },
 			}),
 		);
 	});
@@ -1339,7 +1345,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		expect(generatedMock.saveFn).not.toHaveBeenCalled();
 	});
 
-	it("saves a return to automatic prompt-cache memory as the -1 reset", async () => {
+	it("saves a return to automatic prompt-cache memory as a null clear", async () => {
 		generatedMock.getNodeSettingsOptions.mockReturnValue({
 			queryKey: ["getNodeSettings"],
 			queryFn: async () => ({ ...settingsResponse, llamaChatCacheRamMiB: 2048 }),
@@ -1354,7 +1360,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 
 		await waitFor(() =>
 			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
-				body: { llamaChatCacheRamMiB: -1, maxMessageRequestTimeoutSeconds: 600 },
+				body: { llamaChatCacheRamMiB: null, maxMessageRequestTimeoutSeconds: 600 },
 			}),
 		);
 	});

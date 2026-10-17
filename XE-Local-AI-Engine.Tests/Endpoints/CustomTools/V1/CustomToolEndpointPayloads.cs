@@ -32,7 +32,9 @@ internal static class CustomToolEndpointPayloads
         bool acknowledged = true,
         string? secretHeaderValue = null,
         string urlTemplate = "https://api.example.com/things",
-        bool enabled = true)
+        bool enabled = true,
+        bool allowUnattended = false,
+        string[]? privateHosts = null)
     {
         object[] headers = secretHeaderValue is null
             ? []
@@ -54,13 +56,15 @@ internal static class CustomToolEndpointPayloads
             mode = "Fixed",
             enabled,
             acknowledged,
+            allowUnattended,
             parameters = Array.Empty<object>(),
             http = new
             {
                 method = "GET",
                 urlTemplate,
                 headers,
-                allowedHosts = Array.Empty<string>()
+                allowedHosts = privateHosts ?? [],
+                privateHosts = privateHosts ?? []
             }
         };
     }

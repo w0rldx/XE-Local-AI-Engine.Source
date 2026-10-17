@@ -156,7 +156,7 @@ export function ImageJobCard({ job, isCancelling, onCancel, onEdit }: ImageJobCa
 								width: job.width,
 								height: job.height,
 								steps: job.steps,
-								sampler: job.sampler,
+								sampler: job.sampler ?? t("pages.images.job.defaultSampler", "default sampler"),
 							})}
 						</Text>
 						<ImageEditLineage job={job} />

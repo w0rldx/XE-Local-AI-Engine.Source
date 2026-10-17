@@ -25,7 +25,11 @@ public sealed class IntegrationTriggerView
 
     public required IntegrationTargetKind TargetKind { get; init; }
 
-    public required Guid TargetAgentDefinitionId { get; init; }
+    /// <summary>The saved agent an <c>Agent</c> target runs; null for a <c>Graph</c> target.</summary>
+    public Guid? TargetAgentDefinitionId { get; init; }
+
+    /// <summary>The saved graph workflow a <c>Graph</c> target starts; null for an <c>Agent</c> target.</summary>
+    public Guid? TargetGraphWorkflowDefinitionId { get; init; }
 
     public required IntegrationSessionPolicy SessionPolicy { get; init; }
 
@@ -59,7 +63,11 @@ public sealed class CreateIntegrationTriggerRequest
 
     public IntegrationTargetKind TargetKind { get; init; } = IntegrationTargetKind.Agent;
 
-    public required Guid TargetAgentDefinitionId { get; init; }
+    /// <summary>Required for an <c>Agent</c> target, and must be absent for a <c>Graph</c> one.</summary>
+    public Guid? TargetAgentDefinitionId { get; init; }
+
+    /// <summary>Required for a <c>Graph</c> target, and must be absent for an <c>Agent</c> one.</summary>
+    public Guid? TargetGraphWorkflowDefinitionId { get; init; }
 
     public IntegrationSessionPolicy SessionPolicy { get; init; } = IntegrationSessionPolicy.PerInvocation;
 
@@ -79,7 +87,13 @@ public sealed class UpdateIntegrationTriggerRequest
 
     public bool Enabled { get; init; } = true;
 
-    public required Guid TargetAgentDefinitionId { get; init; }
+    public IntegrationTargetKind TargetKind { get; init; } = IntegrationTargetKind.Agent;
+
+    /// <summary>Required for an <c>Agent</c> target, and must be absent for a <c>Graph</c> one.</summary>
+    public Guid? TargetAgentDefinitionId { get; init; }
+
+    /// <summary>Required for a <c>Graph</c> target, and must be absent for an <c>Agent</c> one.</summary>
+    public Guid? TargetGraphWorkflowDefinitionId { get; init; }
 
     public IntegrationSessionPolicy SessionPolicy { get; init; } = IntegrationSessionPolicy.PerInvocation;
 
@@ -202,6 +216,9 @@ public sealed class IntegrationExecutionDetailDto
     /// <summary><see cref="Guid.Empty" /> until the run actually reaches the invocation runner.</summary>
     public required Guid InvocationId { get; init; }
 
+    /// <summary>The graph run a <c>Graph</c> target started, or null.</summary>
+    public Guid? GraphWorkflowRunId { get; init; }
+
     /// <summary>Plaintext UTF-8 bytes of the committed output payloads, so an operator can see a run approaching its cap.</summary>
     public required long OutputBytes { get; init; }
 
@@ -322,7 +339,8 @@ public sealed class IntegrationSessionResponse
     /// </summary>
     public required Guid PrincipalId { get; init; }
 
-    public required Guid AgentDefinitionId { get; init; }
+    /// <summary>The agent the session runs; null when its trigger targets a graph workflow.</summary>
+    public Guid? AgentDefinitionId { get; init; }
 
     public required IntegrationSessionStatus Status { get; init; }
 

@@ -37,7 +37,10 @@ export function CommandList({ commands, isMutating, onEdit, onDelete }: CommandL
 									</Group>
 									{command.description ? (
 										<Text size="sm" c="dimmed">
-											{command.description}
+											{/* A built-in's description is the node's English text, so the client labels it by name. */}
+											{command.source === "builtIn"
+												? t(`pages.commands.builtInDescriptions.${command.name}`, command.description)
+												: command.description}
 										</Text>
 									) : null}
 								</Stack>

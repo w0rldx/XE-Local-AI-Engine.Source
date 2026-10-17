@@ -172,19 +172,23 @@ supported reverse-proxy/headless deployment mode.
 
 ### 3.1a The inbound MCP endpoint sits inside the gate — deliberately
 
-`MapMcp` mounts this node's own MCP server at `/api/local/v1/mcp/server` (`Program.cs`, beside the
-`MapHub` calls). The path is not cosmetic: `IsLocalApiRequest` matches on the `/api/local/v1` prefix
+`MapMcp` mounts this node's own MCP server at `/api/local/v1/mcp/server` (`InboundApiEndpointExtensions.MapNodeInboundApis`,
+mapped right after the `MapHub` calls). The path is not cosmetic: `IsLocalApiRequest` matches on the `/api/local/v1` prefix
 **alone**, so an MCP endpoint mounted at a bare `/mcp` would be reachable without any of §3.1's peer,
 Host or Origin checks, leaving the bearer key as the only control. Keep it inside the prefix.
 
 See [the reference page](reference/12-admin-api-surface.md#31a-the-inbound-mcp-endpoint-sits-inside-the-gate--deliberately) for the WSL2 topology measurement.
 
-#### Tool invocation writes no approval-audit row
+#### Tool invocation audits only unattended actions
 
-`ToolInvocationService` is the one place a workflow node's tool call is admitted or refused, and it deliberately writes
-no `approve` record. [ADR 0006](../adr/0006-agentic-trust-mcp-key-scopes-and-auto-approval.md)'s strict pre-invocation record exists for
-*adapting* an approval-required function into a non-approval one for an agentic MCP root. This service refuses that
-class twice and adapts nothing, so an `approve` row here would assert a decision nobody made.
+`ToolInvocationService` is the one place a workflow node's tool call is admitted or refused. For a built-in tool it
+deliberately writes no `approve` record: [ADR 0006](../adr/0006-agentic-trust-mcp-key-scopes-and-auto-approval.md)'s strict pre-invocation record exists for
+*adapting* an approval-required function into a non-approval one, and the built-in branch adapts nothing, so an
+`approve` row there would assert a decision nobody made. The action branch ([ADR 0021](../adr/0021-unattended-actions-in-graph-tool-nodes.md))
+does adapt one: a custom tool flagged `AllowUnattended` in a definition that allows actions runs without its approval
+wrapper. It therefore writes the strict metadata-only `ApprovalDecision` row through
+`IUnattendedApprovalAuditRecorder`, with source `graph-action:<definitionId>`, BEFORE calling the custom-tool executor.
+A failed write refuses the call and the executor never runs ([Graph Workflows](21-graph-workflows.md) §4.3).
 
 ### 3.2 Authentication & authorization
 
@@ -197,7 +201,7 @@ impersonate another: an operator JWT does not open the MCP endpoint or the proxy
 neither key opens the key-management endpoints (or anything else). Both directions are asserted for
 MCP in `XE-Local-AI-Engine.Tests/Mcp/McpServerInboundAuthTests.cs`.
 
-Authorization is deny-by-default in two layers: a global FastEndpoints configurator applies `NodeOperator` to every endpoint that did not opt out with `AllowAnonymous()`, the four pre-authentication `auth/*` routes are the entire anonymous set, and `AuthorizationOptions.FallbackPolicy` requires a JWT on every other routed surface. The MCP key is a 256-bit secret stored as a one-way SHA-256 digest, returned once, and a node with no key generated authenticates nobody. See [the reference page](reference/12-admin-api-surface.md#32-authentication--authorization) for browser sessions and the 10-second refresh reuse grace with its residual, the canary test, the MCP key's storage and scopes, and agentic-scope audit.
+Authorization is deny-by-default in two layers: a global FastEndpoints configurator applies `NodeOperator` to every endpoint that did not opt out with `AllowAnonymous()`, the four pre-authentication `auth/*` routes are the entire anonymous set, and `AuthorizationOptions.FallbackPolicy` requires a JWT on every other routed surface. The MCP key is a 256-bit secret stored as a one-way SHA-256 digest, returned once, and a node with no key generated authenticates nobody. A non-browser loopback client opts into body mode (`returnRefreshToken` on login, the `X-XE-Refresh-Token` header on refresh, read only when no refresh cookie is sent) and gets the same rotation and revocation. See [the reference page](reference/12-admin-api-surface.md#32-authentication--authorization) for browser sessions, body mode and the 10-second refresh reuse grace with its residual, the canary test, the MCP key's storage and scopes, and agentic-scope audit.
 
 #### 3.2.1 The inbound model-proxy bearer key
 
@@ -230,7 +234,7 @@ middleware together keep the admin surface off the network.
 
 ### 3.4 Startup bind guard (`LoopbackBindGuard`)
 
-`LoopbackBindGuard` (`XE-Local-AI-Engine.Client/Hosting/LoopbackBindGuard.cs`, wired via `LoopbackBindGuard.Guard(app)` in `Program.cs`) is defense-in-depth behind the request-time middleware: instead of trusting the configured URLs, it inspects the addresses Kestrel *actually* bound (post `ApplicationStarted`, so an OS-assigned port and wildcard expansion are already resolved) and, if any is non-loopback, logs a **critical** line naming the offending address(es) and shuts the app down.
+`LoopbackBindGuard` (`XE-Local-AI-Engine.Client/Hosting/LoopbackBindGuard.cs`, wired via `LoopbackBindGuard.Guard(app)` in `Program.Host.cs`) is defense-in-depth behind the request-time middleware: instead of trusting the configured URLs, it inspects the addresses Kestrel *actually* bound (post `ApplicationStarted`, so an OS-assigned port and wildcard expansion are already resolved) and, if any is non-loopback, logs a **critical** line naming the offending address(es) and shuts the app down.
 
 - The shutdown sets `Environment.ExitCode = 1` before calling `StopApplication()`, so a supervisor/CI treats the guarded stop as an **error** (exit code 1) rather than a clean shutdown (see the guarded-stop branch in `LoopbackBindGuard.Guard()`).
 - Wildcard binds (`*`, `+`, `0.0.0.0`, `::`) are treated as non-loopback and trigger the guard; `localhost` and any loopback IP literal pass.
@@ -390,14 +394,23 @@ surface cannot enable host-command authoring unattended.
 values and is encrypted at rest by `NodeEncryptionSaveChangesInterceptor` with the
 `custom_tool_config_json` AAD column name. List/detail DTOs replace each secret with a mask sentinel; an update that
 round-trips that sentinel resolves it against the stored record instead of clearing or disclosing the value. Tool
-descriptions are also encrypted; names, kinds, modes, parameter schemas, enabled/acknowledged flags, and versions are
-structural plaintext. Secret header/env values are scrubbed from model-facing errors and output.
+descriptions are also encrypted; names, kinds, modes, parameter schemas, enabled/acknowledged/allow-unattended flags, and versions are
+structural plaintext; `privateHosts` lives inside the encrypted config. Secret header/env values are scrubbed from model-facing errors and output.
 
 **HTTP fetch controls.** `CustomToolSsrfGuard.ValidateRequestUrl()` accepts only HTTP(S), rejects URL userinfo,
 non-canonical numeric hosts, and private/loopback/link-local/CGNAT/metadata/reserved address ranges. A model-parameterized
 host requires `allowedHosts`. The named client disables redirects and uses
 `CustomToolSsrfGuard.CreatePinnedConnectCallback()` to validate every DNS result and connect to the validated address,
-closing the DNS-rebind re-resolution gap. Requests have a 30-second wall-clock limit, a 64 KiB response-body cap,
+closing the DNS-rebind re-resolution gap. One per-tool exception exists ([ADR 0021](../adr/0021-unattended-actions-in-graph-tool-nodes.md)):
+an operator-listed `privateHosts` entry (an exact host name or canonical IP literal, also in `allowedHosts`) may reach
+the private LAN ranges, meaning RFC 1918, CGNAT and IPv6 unique-local (`CustomToolSsrfGuard.IsPrivateLanAddress`).
+Loopback, link-local including the cloud-metadata address, multicast, unspecified, reserved, NAT64 and the
+IPv4-compatible IPv6 form stay denied even when listed (`CustomToolSsrfGuard.IsAlwaysDeniedAddress`). Both layers
+enforce it: `ValidateRequestUrl` admits a listed literal, and the shared, stateless connect callback reads the list from
+the request's `CustomToolSsrfGuard.PrivateHostsOption`, refusing a resolution in which any address is neither public nor
+a listed LAN address. A request without the option, which includes every `web_fetch` request, gets the deny-all rule
+unchanged; a request under the exception sends `Connection: close`, so its pinned connection never returns to the shared
+pool for a request without it. Requests have a 30-second wall-clock limit, a 64 KiB response-body cap,
 credential-bearing response headers are stripped, and the process-wide concurrency limiter defaults to four runs.
 
 **Host program controls and residual risk.** `HostProcessExecutor` does **not** use the AgentHome process jail: host
@@ -413,6 +426,22 @@ small check-to-`execve` TOCTOU window remains — eliminating it would need `ope
 validation and execution share one open file description — and host commands retain the signed-in user's filesystem and network
 rights with no per-process CPU/memory ceiling. Approval, time/output/concurrency bounds, and explicit acknowledgement
 reduce risk; they do not create OS isolation.
+
+### Intent commands: a replay window, not a consent
+
+`POST graph-workflows/intents/invoke` can start a workflow that acts unattended, so two node settings bound it
+(**Node Settings**, read per request; `GraphWorkflowIntentService`, [Graph Workflows](21-graph-workflows.md) §11):
+
+- `IntentMaxUtteranceAgeSeconds` (default 30, range 5 to 600): a command whose `utteredAt` is older is refused with
+  409 `GraphWorkflowIntentExpired`, and one stamped more than 5 s in the future with a 400. The user's Enter is the
+  consent; the window only stops a captured request being replayed later. The `requestId` is the idempotency key, so a
+  replay inside the window answers the run it already started rather than starting a second one.
+- `IntentRouterDefinitionId` (default unset): the graph workflow asked when no alias matches. Unset routes on exact
+  aliases alone and runs no model.
+
+Only definitions whose trigger sources include `Intent` can be reached, router included, and only the Operator
+update route sets trigger sources ([ADR 0021](../adr/0021-unattended-actions-in-graph-tool-nodes.md)). An alias carries
+no authority: import brings it along, but not the `Intent` source.
 
 ### Web access tools: `web_search` and `web_fetch`
 
@@ -543,7 +572,7 @@ Guards a contributor must not weaken:
 
 **What it is not.** It is a namespace boundary, not a kernel-hardened one — no seccomp filter, no LSM profile, no user-namespace-free design; a kernel LPE is out of scope for it exactly as it is for the default posture. There is no read-only *mount* capability (`SupportsReadOnlyMounts` stays off; `ReadOnlyTrees` is the isolated-mode surface, and a tree under a mount point the chain owns — `/usr`, `/dev`, `/proc`, `/work`, `/tmp`, the legacy roots — is **rejected** rather than mounted and silently shadowed). Isolation and a trusted host workspace are refused together: an isolated jail is tightened to 0700 and unreachable at its host path, which is the opposite of what a preserved checkout is for. And the jail-disk watchdog underneath it is unchanged — a best-effort visible-file occupancy check sampled every two seconds, which an unlink-then-write loop bypasses entirely. It is not a quota, and nothing here should be read as one; the current provider has neither a project quota nor a size-bounded mount.
 
-**On Windows the same floor is served by the MXC AppContainer boundary, a Preview mechanism** ([ADR 0019](../adr/0019-execution-previews-and-the-appcontainer-boundary.md)). The startup probe measures MXC's ProcessContainer (`Microsoft.Mxc.Sdk` 1.0.0) on every Windows host, but the boundary serves a sandbox only while the operator has turned on `ExecutionPreviewsEnabled` (Operator node settings, with a confirmation dialog; no MCP client or agent can write it), and only for `run_python` and Sandboxed MCP servers (`run_python` additionally needs its Python runtime, which is still provisioned on Linux only, so on Windows the boundary runs Sandboxed MCP servers today). The child runs in an AppContainer with one DACL-granted writable jail and the engine-granted read-only trees: it cannot reach the node data directory, the engine directory or any path it was not granted, unless a folder carries an `ALL APPLICATION PACKAGES` ACE, and it has no network. Since the ADR 0019 amendment of 2026-10-11 it may use the Windows UI subsystem (Win32k), but not the clipboard or input injection, under MXC's `Container` UI isolation. The round-5 Windows run showed it can read the real screen and show windows on the desktop, while foreign windows, desktop switching and key observation are blocked. It still sees host path names, can read OS system trees, and has **no CPU, memory or process ceiling** — the command timeout is the only bound. A host where MXC warns that its one-time `wxc-host-prep` administrator step is missing reports the boundary unavailable and names the command. The capability summary reports such a role as `PreviewIsolated` with backend `appcontainer`, never `Isolated`. See [the reference page](reference/12-sandbox-modes-and-options.md#71-the-isolated-launch-mode-sandboxisolationmodefilesystem--opt-in-consumed-by-run_python) for the environment, deny roots and residue sweep.
+**On Windows the same floor is served by the MXC AppContainer boundary, a Preview mechanism** ([ADR 0019](../adr/0019-execution-previews-and-the-appcontainer-boundary.md)). The startup probe measures MXC's ProcessContainer (`Microsoft.Mxc.Sdk` 1.0.0) on every Windows host, but the boundary serves a sandbox only while the operator has turned on `ExecutionPreviewsEnabled` (Operator node settings, with a confirmation dialog; no MCP client or agent can write it), and only for `run_python` and Sandboxed MCP servers (both floor workloads run there; `run_python` additionally needs its compute Python runtime, provisioned for Linux x64 and Windows x64). The child runs in an AppContainer with one DACL-granted writable jail and the engine-granted read-only trees: it cannot reach the node data directory, the engine directory or any path it was not granted, unless a folder carries an `ALL APPLICATION PACKAGES` ACE, and it has no network. Since the ADR 0019 amendment of 2026-10-11 it may use the Windows UI subsystem (Win32k), but not the clipboard or input injection, under MXC's `Container` UI isolation. The round-5 Windows run showed it can read the real screen and show windows on the desktop, while foreign windows, desktop switching and key observation are blocked. It still sees host path names, can read OS system trees, and has **no CPU, memory or process ceiling** — the command timeout is the only bound. A host where MXC warns that its one-time `wxc-host-prep` administrator step is missing reports the boundary unavailable and names the command. The capability summary reports such a role as `PreviewIsolated` with backend `appcontainer`, never `Isolated`. See [the reference page](reference/12-sandbox-modes-and-options.md#71-the-isolated-launch-mode-sandboxisolationmodefilesystem--opt-in-consumed-by-run_python) for the environment, deny roots and residue sweep.
 
 The same no-follow / byte-recheck philosophy appears in AgentHome host-path safety (`Services/Workspace/Implementation/HostPathSafety.cs`: `TryResolveReparseWithinRoot`, `IsReparsePoint`, `IsPathWithinRoot`) and `HostGitRunner`. Reuse these utilities rather than re-implementing path validation.
 

@@ -64,6 +64,28 @@ public sealed class RunSavedAgentHandlerTests
     }
 
     [Test]
+    public async Task ValidateReferencesAsync_RefusesAnAgentThatDoesNotExist()
+    {
+        using var harness = new Harness();
+        harness.Store.GetByIdAsync(AgentId, Arg.Any<CancellationToken>()).Returns((AgentDefinitionRecord?)null);
+
+        var thrown = await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => harness.Handler.ValidateReferencesAsync(ValidParams(), CancellationToken.None));
+
+        AssertEx.Contains(thrown.Message, "agentDefinitionId:");
+    }
+
+    [Test]
+    public async Task ValidateReferencesAsync_AcceptsAnAgentThatExistsButHasNoModelYet()
+    {
+        using var harness = new Harness();
+
+        // The harness agent pins no model: which model a fire runs on is the fire's question, not create's.
+        await harness.Handler.ValidateReferencesAsync(ValidParams(), CancellationToken.None);
+
+        _ = await harness.Store.Received(1).GetByIdAsync(AgentId, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     [Arguments("")]
     [Arguments("not json")]
     [Arguments("""{ "prompt": "hi" }""")]
@@ -303,7 +325,7 @@ public sealed class RunSavedAgentHandlerTests
         AssertEx.Equal(expected: 0, harness.RunCount);
         AssertEx.False(harness.ReservationDisposed, "a reject carries no reservation to dispose.");
         // A capacity refusal is not a missing model: it carries the category the chat path gives a refused model launch.
-        await harness.Dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), exception.Message, FailureCategory.ModelLoadFailed);
+        await harness.Dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), exception.Message, FailureCategory.InsufficientCapacity);
     }
 
     // Capacity is decided with the node-wide invocation slot HELD. Deciding first let a second fire for the same cold

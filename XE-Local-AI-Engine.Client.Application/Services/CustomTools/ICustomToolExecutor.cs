@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     The catalog resolves the executor for a tool's <see cref="Kind" /> and invokes it with the decrypted record plus the model's JSON
 ///     arguments. The executor owns config parsing, parameter substitution, the kind-specific safety guards (SSRF for fetch, executable and
 ///     timeout for command) and secret value-scrubbing of everything it returns. It never throws a guard failure into the caller: a blocked or
-///     failed call returns a scrubbed, model-readable failure string, so the run continues.
+///     failed call returns a scrubbed, model-readable failure text marked unsucceeded, so the run continues.
 /// </remarks>
 internal interface ICustomToolExecutor
 {
@@ -17,7 +17,7 @@ internal interface ICustomToolExecutor
 
     /// <summary>
     ///     Executes <paramref name="tool" /> with the model-supplied <paramref name="jsonArguments" />, returning the
-    ///     secret-scrubbed, size-bounded result the model sees.
+    ///     secret-scrubbed, size-bounded result the model sees and whether the action succeeded.
     /// </summary>
-    Task<string> ExecuteAsync(CustomToolRecord tool, string jsonArguments, CancellationToken cancellationToken);
+    Task<CustomToolExecution> ExecuteAsync(CustomToolRecord tool, string jsonArguments, CancellationToken cancellationToken);
 }

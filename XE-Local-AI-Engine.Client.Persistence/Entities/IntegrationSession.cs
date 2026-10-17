@@ -26,8 +26,8 @@ internal sealed record class IntegrationSession
     /// </remarks>
     public Guid ConversationId { get; set; }
 
-    /// <summary>The saved agent the session's executions run. Loose reference with no FK. Plaintext (structural).</summary>
-    public Guid AgentDefinitionId { get; set; }
+    /// <summary>The saved agent the session's executions run; null when the trigger targets a graph. Loose reference with no FK. Plaintext (structural).</summary>
+    public Guid? AgentDefinitionId { get; set; }
 
     /// <summary>Whether the session still accepts executions. Plaintext (structural).</summary>
     public IntegrationSessionStatus Status { get; set; }

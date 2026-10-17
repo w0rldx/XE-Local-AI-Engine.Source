@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 
 import { getLocalModelDetailsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 
 /**
  * The per-model details dialog. Its details endpoint is fetched only while the dialog is open for a named model, so
@@ -15,7 +14,7 @@ export function useModelDetailsDialog(modelsAvailable: boolean) {
 	const [opened, { open: openDialog, close }] = useDisclosure(false);
 
 	const { data: details, isFetching } = useQuery({
-		...withResponseValidation(getLocalModelDetailsOptions({ path: { modelName: modelName ?? "" } })),
+		...getLocalModelDetailsOptions({ path: { modelName: modelName ?? "" } }),
 		enabled: Boolean(opened && modelName && modelsAvailable),
 	});
 

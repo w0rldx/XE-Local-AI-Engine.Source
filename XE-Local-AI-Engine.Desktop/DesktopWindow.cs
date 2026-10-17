@@ -14,7 +14,9 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
     private GtkDesktopBridge? _linux;
     private bool _disposed;
 
-    internal DesktopWindow(DesktopLaunchOptions options, bool devTools)
+    /// <summary>Opens <paramref name="path" /> on the engine origin under the shell's one profile, document policy and
+    ///     navigation guard; <paramref name="top" />, when given, docks above the page.</summary>
+    internal DesktopWindow(DesktopLaunchOptions options, bool devTools, string path = "/", Control? top = null)
     {
         _options = options;
         _devTools = devTools;
@@ -43,8 +45,24 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
         _webView.NavigationStarted += OnNavigationStarted;
         _webView.NavigationCompleted += OnNavigationCompleted;
         _webView.NewWindowRequested += OnNewWindowRequested;
-        Content = _webView;
-        _webView.Source = options.Origin;
+        if (top is null)
+        {
+            Content = _webView;
+        }
+        else
+        {
+            DockPanel.SetDock(top, Dock.Top);
+            Content = new DockPanel
+            {
+                Children =
+                {
+                    top,
+                    _webView
+                }
+            };
+        }
+
+        _webView.Source = new Uri(options.Origin, path);
     }
 
     private void OnEnvironmentRequested(object? sender, WebViewEnvironmentRequestedEventArgs args)

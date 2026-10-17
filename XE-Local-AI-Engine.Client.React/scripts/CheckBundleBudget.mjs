@@ -43,13 +43,16 @@ export function checkBundleBudget({
 } = {}) {
 	const budget = JSON.parse(readFileSync(budgetPath, "utf8"));
 	const measurements = measureJavaScriptAssets(distDirectory);
-	return { measurements, violations: evaluateBundleBudget(measurements, budget) };
+	return { measurements, budget, violations: evaluateBundleBudget(measurements, budget) };
 }
 
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
 if (isMain) {
 	try {
-		const { measurements, violations } = checkBundleBudget();
+		const { measurements, violations, budget } = checkBundleBudget();
+		const app = measurements.applicationJavaScriptBytes;
+		const appBudget = budget.applicationJavaScriptBytes;
+		process.stdout.write(`app: ${app} of ${appBudget} (${((appBudget - app) / 1_000).toFixed(1)} kB headroom)\n`);
 		process.stdout.write(
 			`Bundle budget: app ${(measurements.applicationJavaScriptBytes / 1_000_000).toFixed(2)} MB, lazy editor ${(measurements.lazyEditorJavaScriptBytes / 1_000_000).toFixed(2)} MB. Largest deployed scripts:\n` +
 				`${measurements.largestAssets.map((asset) => `  ${asset.name} ${(asset.bytes / 1_000).toFixed(1)} kB`).join("\n")}\n`,

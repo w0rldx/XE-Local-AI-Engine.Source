@@ -143,7 +143,7 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
             LlamaBinary binary;
             using (await _processSupervisor.EnterRuntimeMutationSharedAsync(cancellationToken))
             {
-                binary = await _binaryManager.EnsureBinaryAsync(variant, cancellationToken);
+                binary = await _binaryManager.AcquireBinaryAsync(variant, cancellationToken);
             }
 
             var recommendedTag = await _nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(cancellationToken);
@@ -377,7 +377,7 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
     {
         await using (lease)
         {
-            await _binaryManager.EnsureBinaryAsync(variant, lease, applicationStopping);
+            await _binaryManager.AcquireBinaryAsync(variant, applicationStopping);
         }
 
         await RuntimeDeviceAuditWarmup.WarmAsync(_deviceAudit, variant, _logger, applicationStopping);

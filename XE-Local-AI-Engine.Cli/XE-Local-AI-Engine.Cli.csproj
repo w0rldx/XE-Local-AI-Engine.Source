@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>XE_Local_AI_Engine.Cli</RootNamespace>
+    <AssemblyName>xe</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- No ProjectReference by design: the terminal client talks to a running node over loopback REST and SignalR
+         only, like Desktop and WindowsLauncher. LayerDependencyTests pins the empty list. -->
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
+    <PackageReference Include="Spectre.Console" />
+    <PackageReference Include="System.CommandLine" />  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="XE-Local-AI-Engine.Cli.Tests" />
+  </ItemGroup>
+
+</Project>

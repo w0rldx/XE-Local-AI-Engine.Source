@@ -56,6 +56,12 @@ describe("GraphWorkflowRunToolbar", () => {
 		expect(screen.getByTestId("graph-workflow-run-toolbar-started")).toBeDefined();
 	});
 
+	it("labels who started the run", () => {
+		renderToolbar(graphWorkflowRunSummary({ triggerSource: "Chat" }));
+
+		expect(screen.getByTestId("graph-workflow-run-toolbar-origin").textContent).toBe("Chat");
+	});
+
 	it("asks before cancelling, and sends nothing when the operator backs out", async () => {
 		const cancels = recordCancels();
 		renderToolbar(graphWorkflowRunSummary({ status: "Running" }));

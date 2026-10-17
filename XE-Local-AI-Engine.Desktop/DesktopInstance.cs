@@ -145,6 +145,12 @@ internal sealed class DesktopInstance : IAsyncDisposable
                     return;
                 }
             }
+            catch (Exception) when (cancellationToken.IsCancellationRequested)
+            {
+                // StopListeningAsync disposes the server while WaitForConnectionAsync is in flight; on Unix that
+                // surfaces as a NullReferenceException from inside the runtime rather than ObjectDisposedException.
+                return;
+            }
             finally
             {
                 if (!cancellationToken.IsCancellationRequested && _server.IsConnected)

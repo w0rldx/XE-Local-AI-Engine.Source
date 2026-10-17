@@ -50,7 +50,10 @@ export function SlashCommandAutocomplete({
 								<Text fw={600}>/{option.name}</Text>
 								{option.description ? (
 									<Text size="sm" c="dimmed" lineClamp={1}>
-										{option.description}
+										{/* A built-in's description is the node's English text, so the client labels it by name. */}
+										{option.source === "builtIn"
+											? t(`pages.commands.builtInDescriptions.${option.name}`, option.description)
+											: option.description}
 									</Text>
 								) : null}
 							</Group>

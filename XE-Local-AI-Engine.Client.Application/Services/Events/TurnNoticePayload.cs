@@ -122,8 +122,9 @@ public enum TurnNoticeKind
     /// </summary>
     /// <remarks>
     ///     Unlike <see cref="ToolsFiltered" /> nothing is callable through <c>list_tools</c>: no tool is offered at all.
-    ///     An external model whose tool support is Unknown reads as unsupported here. <see cref="TurnNoticePayload.Detail" />
-    ///     names the effective model.
+    ///     An external model whose tool support is Unknown reads as unsupported here. Also raised, with its own message, when
+    ///     the model declares tool support but is not on the tool-capable model allow-list, so only the basic tools were
+    ///     offered. <see cref="TurnNoticePayload.Detail" /> names the effective model.
     /// </remarks>
     ToolsWithheld = 11,
 
@@ -168,5 +169,44 @@ public enum TurnNoticeKind
     ///     The fixed node cap; <see cref="AttachmentShortened" /> is the further cut to the launched context window.
     ///     <see cref="TurnNoticePayload.Detail" /> lists the affected file names.
     /// </remarks>
-    AttachmentsTruncated = 17
+    AttachmentsTruncated = 17,
+
+    /// <summary>
+    ///     The node-local llama.cpp model ran on the CPU although a GPU was expected (the device audit's CPU fallback); the
+    ///     message carries the audit's reason and remediation.
+    /// </summary>
+    CpuFallback = 18,
+
+    /// <summary>
+    ///     The agent definition the turn was bound to (the conversation's binding or the send's pick) no longer exists, so
+    ///     the default assistant answered with its own persona and tools.
+    /// </summary>
+    /// <remarks><see cref="TurnNoticePayload.Detail" /> carries the missing definition id.</remarks>
+    AgentUnavailable = 19,
+
+    /// <summary>
+    ///     Obsolete: no longer emitted. A turn parked on an approval or a question now gives the slot back, so nothing queues behind it.
+    /// </summary>
+    /// <remarks>Kept so persisted replies that carry it still render. <see cref="TurnNoticePayload.Detail" /> was the holder's conversation id.</remarks>
+    QueuedBehindParkedTurn = 20,
+
+    /// <summary>
+    ///     The turn is queued behind a work session step, which holds the node's one invocation slot until the step ends.
+    /// </summary>
+    /// <remarks><see cref="TurnNoticePayload.Detail" /> carries the conversation id that holds the slot.</remarks>
+    QueuedBehindWorkSession = 21,
+
+    /// <summary>
+    ///     The turn needs the GPU while a benchmark, training run, evaluation or export holds it, so it waits for that
+    ///     work (a training run holds the node until it ends).
+    /// </summary>
+    /// <remarks><see cref="TurnNoticePayload.Message" /> names the holder; there is no detail line.</remarks>
+    QueuedBehindGpuWork = 22,
+
+    /// <summary>
+    ///     The turn's card was answered, and it waits for the node's one invocation slot, which another turn holds, before it
+    ///     continues. Emitted only when the slot is not free at once.
+    /// </summary>
+    /// <remarks><see cref="TurnNoticePayload.Detail" /> carries the conversation id that holds the slot.</remarks>
+    ResumeQueuedBehindTurn = 23
 }

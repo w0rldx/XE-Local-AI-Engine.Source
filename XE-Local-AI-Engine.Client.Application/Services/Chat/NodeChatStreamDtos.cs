@@ -88,6 +88,8 @@ public sealed record NodeChatStreamRequest(
     Guid? MessageId = null,
     Guid? RequestId = null,
     string? Model = null,
+    // The composer's local-tools toggle: gates only the node-wide offer, never an agent's own non-empty tool list.
+    // See ChatToolOfferResolver.
     bool UseLocalTools = false,
     string? ReasoningEffort = null,
     IReadOnlyDictionary<Guid, Guid>? SelectedPath = null,
@@ -195,4 +197,11 @@ public sealed record ChatStreamEvent
 
     /// <summary>On a terminal event only: the content-free context-window snapshot of the turn's last provider round.</summary>
     public NodeChatContextWindowDto? ContextWindow { get; init; }
+
+    /// <summary>
+    ///     On a terminal event only: the <c>FailureCategory</c> enum name of a failed turn, so a client
+    ///     can show a localized headline above the raw <see cref="Error" /> text. Null when the turn did not fail or
+    ///     carried no category.
+    /// </summary>
+    public string? FailureCategory { get; init; }
 }

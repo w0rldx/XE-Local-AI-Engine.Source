@@ -30,6 +30,7 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.DependencyInjection;
 using XE_Local_AI_Engine.Client.Endpoints.Automation.V1;
 using XE_Local_AI_Engine.Client.Endpoints.Development;
+using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Hubs;
@@ -303,6 +304,9 @@ public static class ConfigureServices
                {
                    options.Password.RequiredLength = 12;
                    options.User.RequireUniqueEmail = true;
+                   // The user name IS the e-mail address, already validated as one; the default letters-and-digits set refused a
+                   // non-ASCII address (jürgen-ß@…) the setup form and the e-mail validator accept. Empty switches the check off.
+                   options.User.AllowedUserNameCharacters = string.Empty;
                    options.SignIn.RequireConfirmedAccount = false;
                    options.Lockout.AllowedForNewUsers = true;
                    options.Lockout.MaxFailedAccessAttempts = 5;
@@ -558,6 +562,13 @@ public static class ConfigureServices
             options.PropertyNameCaseInsensitive = true;
             options.DefaultIgnoreCondition = JsonIgnoreCondition.Never;
             options.TypeInfoResolver ??= new DefaultJsonTypeInfoResolver();
+
+            // PUT node-settings tells an explicit null (clear) from an omitted member (keep); see SaveNodeSettingsRequest. A chain entry,
+            // not a DefaultJsonTypeInfoResolver modifier: FastEndpoints and ASP.NET hand these options a resolver CHAIN, not that type.
+            if (!options.TypeInfoResolverChain.Contains(SaveNodeSettingsRequest.ExplicitNullTracking))
+            {
+                options.TypeInfoResolverChain.Insert(index: 0, SaveNodeSettingsRequest.ExplicitNullTracking);
+            }
 
             if (!options.Converters.OfType<SlashCommandActionTypeDtoJsonConverter>().Any())
             {

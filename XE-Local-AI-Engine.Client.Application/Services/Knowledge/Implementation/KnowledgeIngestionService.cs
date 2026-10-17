@@ -19,12 +19,13 @@ using static Chat.Implementation.NodeChatPersistenceSql;
 /// </remarks>
 public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
 {
-    private const string ContentMissingReason = "The document content could not be found.";
-    private const string UnsupportedReason = "This file type is not supported for the knowledge base.";
-    private const string ExtractionFailedReason = "The document text could not be extracted.";
-    private const string EmptyDocumentReason = "No extractable text was found in the document.";
-    private const string UnexpectedReason = "Ingestion failed unexpectedly. Retry the upload.";
-    private const string TimedOutReason = "The document took too long to process and was stopped.";
+    internal const string ContentMissingReason = "The document content could not be found.";
+    internal const string UnsupportedReason = "This file type is not supported for the knowledge base.";
+    internal const string ExtractionFailedReason = "The document text could not be extracted.";
+    internal const string EmptyDocumentReason = "No extractable text was found in the document.";
+    internal const string UnexpectedReason = "Ingestion failed unexpectedly. Retry the upload.";
+    internal const string EmbeddingModelChangedReason = "The embedding model changed while the document was being indexed. Retry the document.";
+    internal const string TimedOutReason = "The document took too long to process and was stopped.";
 
     private readonly NodeChatDbContext _dbContext;
     private readonly IKnowledgeDocumentBlobStore _blobStore;
@@ -294,7 +295,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
                     || !string.Equals(generated.VectorIdentity, descriptor.VectorIdentity, StringComparison.Ordinal)
                     || generated.Dimension != descriptor.Dimension)
                 {
-                    throw new KnowledgeIngestionException("The embedding model changed while the document was being indexed. Retry the document.");
+                    throw new KnowledgeIngestionException(EmbeddingModelChangedReason);
                 }
 
                 return generated.Vectors;

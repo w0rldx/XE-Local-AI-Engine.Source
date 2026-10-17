@@ -30,11 +30,17 @@ internal sealed class GraphWorkflowScriptedTool
 
     public string Reason { get; init; } = "read-local";
 
+    /// <summary>The text a non-<c>Executed</c> outcome carries, the way a failed action carries its executor's answer.</summary>
+    public string? FailedResult { get; init; }
+
     public bool Parks { get; init; }
 
     public bool Throws { get; init; }
 
     public bool Blocks { get; init; }
+
+    /// <summary>Lists the tool as an action, the way the real service lists a custom tool flagged for unattended use.</summary>
+    public bool IsAction { get; init; }
 }
 
 /// <summary>
@@ -181,7 +187,7 @@ internal sealed class FakeGraphWorkflowToolInvocation : IToolInvocationService, 
         return new ToolInvocationOutcome
         {
             Kind = script.Kind,
-            Result = script.Kind == ToolInvocationOutcomeKind.Executed ? script.Result : null,
+            Result = script.Kind == ToolInvocationOutcomeKind.Executed ? script.Result : script.FailedResult,
             Reason = script.Reason
         };
     }
@@ -189,12 +195,13 @@ internal sealed class FakeGraphWorkflowToolInvocation : IToolInvocationService, 
     /// <summary>The scripted names, which is all a picker on this host could offer.</summary>
     public Task<IReadOnlyList<InvocableToolDescriptor>> ListInvocableToolsAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<InvocableToolDescriptor>>([
-            .. _scripts.Keys.Order(StringComparer.Ordinal)
-                       .Select(static name => new InvocableToolDescriptor
+            .. _scripts.OrderBy(static entry => entry.Key, StringComparer.Ordinal)
+                       .Select(static entry => new InvocableToolDescriptor
                        {
-                           Name = name,
-                           Description = $"The fake {name}.",
-                           ParameterSchema = """{"type":"object","properties":{}}"""
+                           Name = entry.Key,
+                           Description = $"The fake {entry.Key}.",
+                           ParameterSchema = """{"type":"object","properties":{}}""",
+                           IsAction = entry.Value.IsAction
                        })
         ]);
 

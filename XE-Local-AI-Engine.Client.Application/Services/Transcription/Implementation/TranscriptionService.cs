@@ -356,6 +356,31 @@ public sealed class TranscriptionService : ITranscriptionService
         };
     }
 
+    public async Task<DictationSessionStart> StartDictationAsync(string? language, CancellationToken cancellationToken)
+    {
+        var modelId = await _runtimeService.ResolveEffectiveModelIdAsync(cancellationToken);
+        _ = await _supervisor.EnsureRunningAsync(modelId, cancellationToken);
+
+        var sessionId = Guid.NewGuid();
+        await _live.StartLiveSessionAsync(sessionId,
+            new LiveSessionOptions
+            {
+                ModelId = modelId,
+                Language = language,
+                Settings = LiveSegmenterSettings.FromSessionConfig(maxWindowSeconds: null),
+                Channels = MonoLanes,
+                SourceKind = TranscriptionSourceKind.Dictation,
+                Persist = false
+            },
+            cancellationToken);
+
+        return new DictationSessionStart
+        {
+            SessionId = sessionId,
+            StartedAt = _timeProvider.GetUtcNow()
+        };
+    }
+
     public async Task AppendLiveSegmentAsync(Guid sessionId,
         long seq,
         TranscriptChannel channel,

@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
+using System.Text.Json;
+
 /// <summary>
 ///     The serialized shape of a node chat message's <c>metadata_json</c> blob: UTF-8 JSON in memory, which the
 ///     raw-ADO path encrypts at rest through <c>NodeChatDbContext.EncryptMessageMetadata</c> under per-record AAD.
@@ -30,4 +32,7 @@ internal sealed record NodeChatMessageMetadata(
     IReadOnlyList<NodeChatMessageSource>? Sources = null,
     // Content-free context-window snapshot of the last provider round: a trailing optional member, so a legacy blob
     // omits the key and deserializes to null. Names and counts only, in the same encrypted blob.
-    NodeChatContextWindowDto? ContextWindow = null);
+    NodeChatContextWindowDto? ContextWindow = null,
+    // The FailureCategory enum NAME of a failed turn (trailing optional, legacy blobs omit it). A raw JsonElement, so a
+    // non-string token cannot fail the message read; ParseFailureCategory accepts only an exact member name.
+    JsonElement? FailureCategory = null);

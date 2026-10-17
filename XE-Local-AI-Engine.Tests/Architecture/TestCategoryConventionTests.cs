@@ -28,6 +28,7 @@ public sealed class TestCategoryConventionTests
         "XE-Local-AI-Engine.Tests",
         "XE-Local-AI-Engine.Client.Persistence.Tests",
         "XE-Local-AI-Engine.AI.Agent.Tests",
+        "XE-Local-AI-Engine.Cli.Tests",
         "XE-Local-AI-Engine.Client.Testing",
         "XE-Local-AI-Engine.Testing.FakeOllama",
         "XE-Local-AI-Engine.Testing.FakeDocker",

@@ -10,7 +10,6 @@ import {
 	getAgentUsageSummaryOptions,
 	listExternalProviderConnectionsOptions,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
@@ -93,9 +92,7 @@ export function UsageDashboard() {
 		refetch,
 		isFetching,
 	} = useQuery({
-		...withResponseValidation(
-			getAgentUsageSummaryOptions({ query: { fromEpochMs: queryRange.fromEpochMs, toEpochMs: queryRange.toEpochMs } }),
-		),
+		...getAgentUsageSummaryOptions({ query: { fromEpochMs: queryRange.fromEpochMs, toEpochMs: queryRange.toEpochMs } }),
 	});
 
 	const retentionDays = summary?.retentionDays ?? FALLBACK_RETENTION_DAYS;
@@ -122,7 +119,7 @@ export function UsageDashboard() {
 	// one string per run and the name can change. The operator-facing names are resolved here, from the configuration
 	// this page can already read, and handed to the presenters; a connection deleted since the run is simply absent and
 	// its rows read "External". Nothing on the usage endpoint changes for this.
-	const { data: externalConnections } = useQuery(withResponseValidation(listExternalProviderConnectionsOptions()));
+	const { data: externalConnections } = useQuery(listExternalProviderConnectionsOptions());
 	const externalConnectionNames = useMemo(
 		() => new Map((externalConnections?.connections ?? []).map((connection) => [connection.id, connection.displayName])),
 		[externalConnections],

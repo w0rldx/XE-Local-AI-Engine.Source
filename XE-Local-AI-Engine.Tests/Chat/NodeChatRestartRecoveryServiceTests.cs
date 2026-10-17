@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -262,7 +263,7 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
         {
             AgentExecutionLogRetentionEnabled = true,
             AgentExecutionLogRetentionDays = 30
-        }));
+        }), UnknownUsageProviderResolver.Instance);
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
             Title = "Retention",
@@ -528,6 +529,32 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
         AssertEx.Equal(AgentRunEnvelope.CurrentSchemaVersion, envelope.SchemaVersion);
         AssertEx.Null(envelope.ToolSchemaTokens);
         AssertEx.Null(envelope.MaxToolSchemaTokens);
+    }
+
+    [Test]
+    public async Task RecoverInterruptedMessagesAsync_BackfillsAStoppedTurnWithTheModelFromItsEncryptedMetadata()
+    {
+        // R5-07: the SQL backfill wrote model_name '' because the model lives in the encrypted metadata; it is now read per row.
+        const string Model = "stopped-model.gguf";
+        await using var provider = await BuildProviderAsync("restart-recovery-envelope-model.sqlite");
+        var persistence = CreatePersistenceService(provider);
+        var resolver = Substitute.For<IUsageProviderResolver>();
+        resolver.ResolveAsync(Model, Arg.Any<CancellationToken>()).Returns(AgentUsageProviders.Local);
+        var recovery = CreateRecoveryService(provider, resolver);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Model",
+            UserId = "node",
+            CreatedAtUtc = 10
+        });
+        _ = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 11, model: Model);
+
+        _ = await recovery.RecoverInterruptedMessagesAsync(99);
+
+        var envelope = (await ReadEnvelopesAsync(provider, conversation.ConversationId)).Single();
+        AssertEx.Equal(Model, envelope.ModelName);
+        AssertEx.Equal(AgentUsageProviders.Local, envelope.Provider);
+        AssertEx.Equal(NodeChatMessageStatusValues.Interrupted, envelope.TerminalStatus);
     }
 
     [Test]
@@ -800,12 +827,14 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
 
     private static NodeChatPersistenceService CreatePersistenceService(ServiceProvider provider)
     {
-        return new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        return new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
     }
 
-    private static NodeChatRestartRecoveryService CreateRecoveryService(ServiceProvider provider)
+    private static NodeChatRestartRecoveryService CreateRecoveryService(ServiceProvider provider, IUsageProviderResolver? usageProviderResolver = null)
     {
-        return new NodeChatRestartRecoveryService(provider.GetRequiredService<NodeChatPersistenceWriter>(), SettingsStore(new StoredNodeSettings()));
+        return new NodeChatRestartRecoveryService(provider.GetRequiredService<NodeChatPersistenceWriter>(),
+            SettingsStore(new StoredNodeSettings()),
+            usageProviderResolver is null ? UnknownUsageProviderResolver.Instance : new Lazy<IUsageProviderResolver>(usageProviderResolver));
     }
 
     private static INodeSettingsStore SettingsStore(StoredNodeSettings settings)
@@ -818,7 +847,8 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
     private static async Task<NodeChatMessageCorrelation> CreateAssistantPlaceholderAsync(NodeChatPersistenceService persistence,
         Guid conversationId,
         long createdAtUtc,
-        Guid? agentDefinitionId = null)
+        Guid? agentDefinitionId = null,
+        string? model = null)
     {
         var messageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
@@ -828,7 +858,8 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
             MessageId = messageId,
             RequestId = requestId,
             CreatedAtUtc = createdAtUtc,
-            AgentDefinitionId = agentDefinitionId
+            AgentDefinitionId = agentDefinitionId,
+            Model = model
         });
         return new NodeChatMessageCorrelation
         {

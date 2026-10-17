@@ -43,7 +43,13 @@ public enum ExternalAppBlockedReason
     ///     inside the pipeline: on an install that is after the row exists, and on an update after a version that was
     ///     working had been stopped.
     /// </remarks>
-    BridgeUnavailable = 7
+    BridgeUnavailable = 7,
+
+    /// <summary>The catalog listed no application when the node started, so External Apps and the bridge stayed off until a restart.</summary>
+    RestartRequired = 8,
+
+    /// <summary>The catalog lists no application now, after a refresh emptied it, so nothing may start until it lists one again.</summary>
+    CatalogEmpty = 9
 }
 
 /// <summary>

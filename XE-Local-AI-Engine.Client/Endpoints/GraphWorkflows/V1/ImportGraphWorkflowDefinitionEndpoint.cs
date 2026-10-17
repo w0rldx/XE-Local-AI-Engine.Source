@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
-/// <summary>Creates a definition from a share file, through the same service call, parser and tool gate as create.</summary>
+/// <summary>Creates a definition from a share file, through create's parser and tool gate, minus the action flag (ADR 0021).</summary>
 /// <remarks>
 ///     The validator refuses a foreign format or version before the graph is read; everything after that is create's
 ///     path, so an imported graph is held to exactly the rules a drawn one is.
@@ -45,7 +45,7 @@ public sealed class ImportGraphWorkflowDefinitionEndpoint : Endpoint<ImportGraph
         try
         {
             var graphJson = GraphWorkflowContractMapper.ToGraphJson(req.Graph);
-            var created = await _definitions.CreateAsync(req.Name, req.Description, graphJson, ct);
+            var created = await _definitions.ImportAsync(req.Name, req.Description, graphJson, ct);
             await Send.CreatedAtAsync<GetGraphWorkflowDefinitionEndpoint>(new
                 {
                     definitionId = created.Id

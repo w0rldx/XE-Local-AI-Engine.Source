@@ -6,20 +6,21 @@ import {
 	removeComputePythonEnvironmentMutation,
 	repairComputePythonEnvironmentMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 
 // Server state for the Managed Python card. The status read never provisions anything, so it is safe on mount; it
-// polls only while an environment is mid-provision, because nothing else pushes that transition to the page.
+// polls while the card is mounted, because nothing pushes a state change to the page (a chat call provisions Compute
+// behind its back), and faster while an environment is mid-provision.
 
 const managedPythonPollIntervalMs = 5_000;
+const managedPythonIdlePollIntervalMs = 10_000;
 
 export function useManagedPythonStatus() {
 	return useQuery({
-		...withResponseValidation(getManagedPythonStatusOptions()),
+		...getManagedPythonStatusOptions(),
 		refetchInterval: (query) =>
 			query.state.data?.environments.some((environment) => environment.state === "Provisioning") === true
 				? managedPythonPollIntervalMs
-				: false,
+				: managedPythonIdlePollIntervalMs,
 	});
 }
 
@@ -28,7 +29,7 @@ export function useManagedPythonStatus() {
 export function useRepairComputePython() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(repairComputePythonEnvironmentMutation()),
+		...repairComputePythonEnvironmentMutation(),
 		onSuccess: (data) => queryClient.setQueryData(getManagedPythonStatusQueryKey(), data),
 	});
 }
@@ -36,7 +37,7 @@ export function useRepairComputePython() {
 export function useRemoveComputePython() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(removeComputePythonEnvironmentMutation()),
+		...removeComputePythonEnvironmentMutation(),
 		onSuccess: (data) => queryClient.setQueryData(getManagedPythonStatusQueryKey(), data),
 	});
 }

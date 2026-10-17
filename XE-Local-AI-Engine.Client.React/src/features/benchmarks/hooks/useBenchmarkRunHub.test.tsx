@@ -51,7 +51,9 @@ vi.mock("@microsoft/signalr", () => {
 		LogLevel: { Warning: 3 },
 	};
 });
-vi.mock("@/core/auth/stores/NodeAuthStore", () => ({ useNodeAuthStore: { getState: () => ({ accessToken: "token" }) } }));
+vi.mock("@/core/auth/stores/NodeAuthStore", () => ({
+	useNodeAuthStore: { getState: () => ({ accessToken: "token" }), subscribe: () => () => undefined },
+}));
 
 function run(overrides: Partial<BenchmarkRunDetail> = {}): BenchmarkRunDetail {
 	return benchmarkRunDetailFixture({

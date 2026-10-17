@@ -217,7 +217,7 @@ partial name does not change between attempts, the downloader's `Range` resume w
 
 | Event | Partial + cursors | Next start |
 |---|---|---|
-| Transient failure after retries, a cancellation the operator did not request (idle timeout), or node restart mid-download | kept | resumes from the recorded cursors (the in-memory status is lost; the bytes are not) |
+| Transient failure after retries, a cancellation the operator did not request (idle timeout), or node restart mid-download | kept | resumes from the recorded cursors; after a restart the download list shows the model as `Failed` with error code `Interrupted` until it is started again |
 | Failure after a file finished and verified (projector download, sidecar write) | the verified file moves back to its partial, recorded as complete | commits it without a request |
 | Operator cancel | both deleted | byte 0 |
 | Completed download | the partial becomes the staged file; the cursors are deleted | n/a |
@@ -227,6 +227,11 @@ Partials from the older per-operation layout (`<file>.gguf.<operation>.part.part
 over on the next start of the same model: the newest one is renamed to the stable name and resumed, the rest are deleted.
 The startup `GgufAcquisitionArtifactStartupReaper` deletes any `<file>.gguf.…part` leftover whose `<file>.gguf` already
 exists, and any other `*.part` untouched for 24 hours. So a resumable partial survives a restart for a day.
+
+Beside the partial, `PrepareAsync` writes `<file>.gguf.intent.part`, which names the model and its size, because the
+partial's file name does not. It is deleted when the download is prepared or cancelled. On the first download start or
+read after a restart, `GgufDownloadCoordinator` lists each intent whose partial still exists as a `Failed` row with error
+code `Interrupted` and the neutral reason "This download did not finish", so the operator can see the download and start it again. The startup reaper ages an intent by its partial, so a download that ran longer than a day before the restart keeps its row.
 
 ### Weights-only installs (`includeProjector`)
 
@@ -293,7 +298,7 @@ All endpoints are loopback/local-only, authenticated, and secret-redacted — se
 
 `src/features/model-fit/` (page `ModelRecommendationsPage.tsx`):
 
-- **`queries/useModelFit.ts`** — `useLatestRecommendations(filters)` (cache-read, `select` maps the optional-field generated DTO into the stricter domain view-model), `useHardwareProfile(refresh)`, and `useRefreshRecommendations()` (a mutation that fires the seeded job and invalidates the latest cache on success). Every generated `*Options()` is wrapped in `withResponseValidation` so a malformed response surfaces as an `ApiError`, never a raw `ZodError`. **All reads are cache-only.**
+- **`queries/useModelFit.ts`** — `useLatestRecommendations(filters)` (cache-read, `select` maps the optional-field generated DTO into the stricter domain view-model), `useHardwareProfile(refresh)`, and `useRefreshRecommendations()` (a mutation that fires the seeded job and invalidates the latest cache on success). A malformed response throws a `ZodError` that the shared error sinks render as a generic sentence. **All reads are cache-only.**
 - **"Refresh now" stays pending until the runs finish.** Each refresh POST answers the `fireId` that `TriggerNowAsync` minted and stamped on that fire (JobDataMap key `SchedulerJobKeys.ManualFireIdKey`); the dispatcher carries it in memory onto the fire's run events as `manualFireId` (never persisted). `useModelRecommendations` keeps the set of fire ids its POSTs returned and stays loading until `useModelFitSchedulerEvents` reports a terminal run for each of them (its optional `onTerminalRun` callback receives the event's `manualFireId`), or until the job's 600 s maximum runtime passes, so a missed push cannot leave it spinning. A terminal run without an id (a cron fire) or with an id this page did not enqueue (another tab's refresh) still refetches but never ends the wait, and a run that finishes before its own POST answered is remembered until that answer lands.
 - **`hooks/useModelFitSchedulerEvents.ts`** — subscribes to the **shared** scheduler SignalR hub (no second hub server), reacts only to terminal runs of the `model-recommendation-check` template, invalidates the latest-recommendations cache (TanStack Query refetches canonical state) and raises a transient toast. SignalR push is primary; a one-shot REST **catch-up** fires on every (re)connect to cover the connect-race / reconnect-gap (deduped by run id). There is **no interval polling**. The effect deliberately keeps `t` and `scheduledJobId` in refs so a new translation function or a late-resolving job id never rebuilds the connection mid-negotiation (a real StrictMode race the comments call out).
 - **`components/`** — `HardwareProfileCard.tsx`, `RecommendationTable.tsx`, `ModelFitFormatters.ts`, and **`InferenceProfilePanel.tsx`** (the Inference Optimizer surface); **`models/`** — domain types + mappers incl. `InferenceProfileModels.ts` / `InferenceProfileMappers.ts`; **`queries/`** — also `useInferenceProfiles.ts` (the `explore`/`benchmark`/`freeze`/`invalidate` mutations, each invalidating the profiles list on success); **`notifications/`** — toast helpers; **`stores/`** — `ModelFitManagementStore.ts`. The GGUF quant picker (which renders the ★ recommended variant from `model-fit/gguf/inspect`) lives in the Model Management feature, not here — see the UI-ownership note above.
@@ -306,6 +311,7 @@ All endpoints are loopback/local-only, authenticated, and secret-redacted — se
 4. **Sanitization everywhere.** Snapshot errors, download statuses, and hardware profiles are sanitized of paths/URLs/tokens and machine identifiers before they leave the node.
 5. **The HF token is write-only over the wire** — GET reports presence only.
 6. **The recommendation advisor is estimator-only** and the approved-image concept is removed — don't reintroduce a container path or make a refresh spawn a process; advisor ranking is pure `MemoryFitEstimator` + quant ladder. This is unaffected by [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md), whose Docker permission is scoped to Development Mode execution. The one place a model *is* spawned for measurement is the **Inference Optimizer** benchmark (launch-arg tuning of an already-chosen model), which is a separate operator-triggered surface — keep the two paths distinct.
+7. **The loaded-process cap counts chat models only.** `MaxLoadedProcesses` (Node Settings "Max loaded chat models") bounds chat-role `llama-server` processes; the knowledge embedder and reranker hold two separate companion slots, so a recommendation that leaves room for the companions' memory (the companion reserve above) is never undone by a slot fight. Up to three chat models (the default cap) can then be resident beside the two companions; the capacity admission still guards memory for every load, so the counts bound processes, not memory. Rule and history: [reference/03](reference/03-llama-server-supervisor.md#eviction--reaper).
 
 ## Related pages
 

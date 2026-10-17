@@ -58,6 +58,8 @@ export interface CustomToolHttpDefinition {
 	readonly headers: readonly CustomToolHeader[];
 	readonly bodyTemplate: string;
 	readonly allowedHosts: readonly string[];
+	// Hosts inside the private LAN ranges this tool may reach (ADR 0021); each is also an allowed host.
+	readonly privateHosts: readonly string[];
 }
 
 export interface CustomToolCommandDefinition {
@@ -66,6 +68,8 @@ export interface CustomToolCommandDefinition {
 	readonly workingDirectory: string;
 	readonly timeoutSeconds: number;
 	readonly env: readonly CustomToolEnvVar[];
+	// Launch and do not wait (a GUI program); the backend requires timeoutSeconds 0 then.
+	readonly detach: boolean;
 }
 
 // Full record as shown in the list/editor. Secret header/env values arrive masked as CUSTOM_TOOL_SECRET_SENTINEL.
@@ -77,6 +81,7 @@ export interface CustomToolView {
 	readonly mode: CustomToolMode;
 	readonly enabled: boolean;
 	readonly acknowledged: boolean;
+	readonly allowUnattended: boolean;
 	readonly version: number;
 	readonly createdAtUtc: number;
 	readonly updatedAtUtc: number;
@@ -94,6 +99,8 @@ export interface CustomToolFormValues {
 	mode: CustomToolMode;
 	enabled: boolean;
 	acknowledged: boolean;
+	// A graph workflow may run this exact invocation with nobody present; the backend requires Fixed mode for it.
+	allowUnattended: boolean;
 	parameters: CustomToolParameter[];
 	http: CustomToolHttpDefinition;
 	command: CustomToolCommandDefinition;
@@ -137,6 +144,7 @@ export const buildCustomToolFormSchema = (maxTimeoutSeconds: number = CUSTOM_TOO
 			// The danger acknowledgement is mandatory: the server enforces it on every create/update, so a false here can
 			// never save. Gating Save on it in the UI just makes the requirement visible before the round-trip.
 			acknowledged: z.literal(true),
+			allowUnattended: z.boolean(),
 			parameters: z.array(parameterSchema),
 			http: z.object({
 				method: z.string().trim().min(1),
@@ -147,6 +155,7 @@ export const buildCustomToolFormSchema = (maxTimeoutSeconds: number = CUSTOM_TOO
 				headers: z.array(headerSchema),
 				bodyTemplate: z.string(),
 				allowedHosts: z.array(z.string().trim().min(1)),
+				privateHosts: z.array(z.string().trim()),
 			}),
 			command: z.object({
 				// Required only for the ACTIVE kind — see superRefine, and the urlTemplate note above.
@@ -155,9 +164,21 @@ export const buildCustomToolFormSchema = (maxTimeoutSeconds: number = CUSTOM_TOO
 				workingDirectory: z.string(),
 				timeoutSeconds: z.number().int().min(0).max(maxTimeoutSeconds),
 				env: z.array(envSchema),
+				detach: z.boolean(),
 			}),
 		})
 		.superRefine((values, ctx) => {
+			if (values.allowUnattended && values.mode !== "Fixed") {
+				ctx.addIssue({ code: z.ZodIssueCode.custom, message: "unattendedNeedsFixed", path: ["allowUnattended"] });
+			}
+			if (values.kind === "HttpFetch") {
+				values.http.privateHosts.forEach((host, index) => {
+					const issue = privateHostIssue(host, values.http.allowedHosts);
+					if (issue) {
+						ctx.addIssue({ code: z.ZodIssueCode.custom, message: issue, path: ["http", "privateHosts", index] });
+					}
+				});
+			}
 			if (values.mode === "Fixed" && values.parameters.length > 0) {
 				ctx.addIssue({ code: z.ZodIssueCode.custom, message: "fixedNoParameters", path: ["mode"] });
 			}
@@ -167,7 +188,93 @@ export const buildCustomToolFormSchema = (maxTimeoutSeconds: number = CUSTOM_TOO
 			if (values.kind === "Command" && values.command.executable.trim().length === 0) {
 				ctx.addIssue({ code: z.ZodIssueCode.custom, message: "executableRequired", path: ["command", "executable"] });
 			}
+			// Mirrors CustomToolService: a detached launch is not waited for, so it has no timeout.
+			if (values.kind === "Command" && values.command.detach && values.command.timeoutSeconds !== 0) {
+				ctx.addIssue({ code: z.ZodIssueCode.custom, message: "detachNeedsNoTimeout", path: ["command", "timeoutSeconds"] });
+			}
 		});
+
+export type PrivateHostIssue = "privateHostInvalid" | "privateHostAlwaysDenied" | "privateHostNotAllowed";
+
+const IPV4_PATTERN = /^(?:0|[1-9]\d{0,2})(?:\.(?:0|[1-9]\d{0,2})){3}$/;
+const DNS_NAME_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$/;
+
+type Ipv4Octets = readonly [number, number, number, number];
+
+function ipv4Octets(host: string): Ipv4Octets | undefined {
+	if (!IPV4_PATTERN.test(host)) {
+		return undefined;
+	}
+	const [a = 0, b = 0, c = 0, d = 0] = host.split(".").map(Number);
+	const octets: Ipv4Octets = [a, b, c, d];
+	return octets.every((octet) => octet <= 255) ? octets : undefined;
+}
+
+// Mirrors CustomToolSsrfGuard.IsAlwaysDeniedAddress for IPv4: denied, and outside the LAN ranges a listed host may reach.
+function isAlwaysDeniedIpv4([a, b, c]: Ipv4Octets): boolean {
+	const lan = a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
+	if (lan) {
+		return false;
+	}
+	return (
+		a === 0 ||
+		a === 127 ||
+		(a === 169 && b === 254) ||
+		(a === 192 && b === 0 && c === 0) ||
+		(a === 198 && (b === 18 || b === 19)) ||
+		a >= 224
+	);
+}
+
+// The IPv6 side of the same rule: only unique-local (fc00::/7) is a LAN range; the deny-listed rest stays denied.
+function isAlwaysDeniedIpv6(host: string): boolean {
+	const mapped = /^::ffff:(.+)$/.exec(host);
+	if (mapped) {
+		const octets = ipv4Octets(mapped[1] ?? "");
+		return octets ? isAlwaysDeniedIpv4(octets) : true;
+	}
+	// ::, ::1 and the IPv4-compatible ::/96 forms; link-local and site-local (fe80::/9..fec0::/10); multicast; NAT64.
+	return host.startsWith("::") || /^(?:ff|fe[89a-f])/.test(host) || host.startsWith("64:ff9b::");
+}
+
+/**
+ * Client mirror of the backend's private-host save rule: an exact host name or canonical IP literal (no scheme, port,
+ * path, credentials or wildcard), never an always-denied address, and also present in allowedHosts. The backend
+ * (CustomToolService) stays authoritative.
+ */
+export function privateHostIssue(entry: string, allowedHosts: readonly string[]): PrivateHostIssue | undefined {
+	const host = entry.trim();
+	const octets = ipv4Octets(host);
+	let alwaysDenied = false;
+	if (octets) {
+		alwaysDenied = isAlwaysDeniedIpv4(octets);
+	} else if (host.includes(":")) {
+		let canonical: string | undefined;
+		try {
+			canonical = new URL(`http://[${host}]/`).hostname;
+		} catch {
+			canonical = undefined;
+		}
+		const isMappedV4 = /^::ffff:\d+\.\d+\.\d+\.\d+$/i.test(host);
+		if (!isMappedV4 && canonical !== `[${host.toLowerCase()}]`) {
+			return "privateHostInvalid";
+		}
+		alwaysDenied = isAlwaysDeniedIpv6(host.toLowerCase());
+	} else if (!DNS_NAME_PATTERN.test(host) || /^[\d.]+$/.test(host) || /0x/i.test(host)) {
+		return "privateHostInvalid";
+	}
+	if (alwaysDenied) {
+		return "privateHostAlwaysDenied";
+	}
+	const listed = allowedHosts.some(
+		(allowed) =>
+			allowed
+				.trim()
+				.replace(/^\[|\]$/g, "")
+				.toLowerCase() === host.toLowerCase(),
+	);
+	return listed ? undefined : "privateHostNotAllowed";
+}
 
 export type CustomToolFormSchema = z.infer<ReturnType<typeof buildCustomToolFormSchema>>;
 

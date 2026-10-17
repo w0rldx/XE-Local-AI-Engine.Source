@@ -96,6 +96,8 @@ public sealed class NodeInfoService : INodeInfoService
         nameof(StoredNodeSettings.MaxProviderCallsPerInvocation),
         nameof(StoredNodeSettings.CustomToolMaxTimeoutSeconds),
         nameof(StoredNodeSettings.WebFetchTimeoutSeconds),
+        nameof(StoredNodeSettings.IntentRouterDefinitionId),
+        nameof(StoredNodeSettings.IntentMaxUtteranceAgeSeconds),
         nameof(StoredNodeSettings.WebFetchMaxContentChars),
         nameof(StoredNodeSettings.KnowledgeSearchDefaultResults),
         nameof(StoredNodeSettings.KnowledgeSearchMaxResults),

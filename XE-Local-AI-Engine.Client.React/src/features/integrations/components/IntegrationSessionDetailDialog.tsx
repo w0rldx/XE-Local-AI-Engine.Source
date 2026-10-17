@@ -82,7 +82,7 @@ export function IntegrationSessionDetailDialog({ session, onClose }: Integration
 					<Text size="sm" c="dimmed" w={160}>
 						{t("pages.integrations.sessions.detail.agent", "Agent")}
 					</Text>
-					<Code>{session.agentDefinitionId}</Code>
+					<Code>{session.agentDefinitionId ?? "—"}</Code>
 				</Group>
 				<Group gap="sm">
 					<Text size="sm" c="dimmed" w={160}>

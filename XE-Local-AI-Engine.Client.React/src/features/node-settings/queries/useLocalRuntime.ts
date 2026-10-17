@@ -15,7 +15,6 @@ import {
 	startLlamaCppSourceBuildMutation,
 	updateLlamaCppRuntimeMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toLlamaCppRuntimeStatus } from "@/features/node-settings/models/LocalRuntimeMappers";
 import type { LlamaCppVariant } from "@/features/node-settings/models/LocalRuntimeModels";
 import { toSourceBuildPrerequisites, toSourceBuildStatus } from "@/features/node-settings/models/SourceBuildMappers";
@@ -24,8 +23,7 @@ import { sourceBuildPrerequisiteStaleTime, sourceBuildRequest } from "@/features
 
 // Server state for the local-runtime cards on the Node Settings page (relocated from the model-fit advisor — they
 // tune this worker's local runtime, not model recommendations). Reads use the generated hey-api `*Options()` (which
-// wire the shared axios instance + TanStack Query AbortSignal automatically) wrapped in withResponseValidation so a
-// zod response-shape failure surfaces as an ApiError. Mutations adapt the domain variables to the generated `{ body }`
+// wire the shared axios instance + TanStack Query AbortSignal automatically). Mutations adapt the domain variables to the generated `{ body }`
 // envelope and invalidate the caches they affect; the HF token is write-only — only its boolean status is fetched.
 
 // Generated keys are object arrays; TanStack partial matching on `_id` invalidates every endpoint variant.
@@ -53,7 +51,7 @@ export function useEnsureLlamaCppBinary() {
 
 	return useMutation({
 		mutationFn: async (variant: LlamaCppVariant) => {
-			const options = withResponseValidation(ensureLlamaCppBinaryMutation());
+			const options = ensureLlamaCppBinaryMutation();
 			return await options.mutationFn?.({ body: { variant } }, undefined as never);
 		},
 		onSuccess: () => invalidate(queryClient, localRuntimeQueryIds.llamaCppRuntime),
@@ -67,7 +65,7 @@ export function useEnsureLlamaCppBinary() {
 // subscribed panel re-renders. The mapper coalesces the optional generated fields into the domain shape.
 export function useLlamaCppRuntimeStatus(enabled = true) {
 	return useQuery({
-		...withResponseValidation(getLlamaCppRuntimeOptions()),
+		...getLlamaCppRuntimeOptions(),
 		select: toLlamaCppRuntimeStatus,
 		enabled,
 	});
@@ -81,7 +79,7 @@ export function useRefreshLlamaCppRuntime() {
 	const queryClient = useQueryClient();
 
 	return async (): Promise<void> => {
-		const refreshOptions = withResponseValidation(getLlamaCppRuntimeOptions({ query: { refresh: true } }));
+		const refreshOptions = getLlamaCppRuntimeOptions({ query: { refresh: true } });
 		const fresh = await queryClient.fetchQuery(refreshOptions);
 		// Seed the mount-key cache (no `query`) so the panel + banner — which subscribe to the cheap mount read — update
 		// in place. The mount query key is the no-param variant; the refresh fetch lives under a distinct key.
@@ -99,7 +97,7 @@ export function useRefreshLlamaCppRuntime() {
  */
 export function useDefaultSourceBuildBackend(): LlamaCppSourceBackend {
 	const { data } = useQuery({
-		...withResponseValidation(getHardwareProfileOptions({ query: { refresh: false } })),
+		...getHardwareProfileOptions({ query: { refresh: false } }),
 		select: (profile) => profile.gpuVendor,
 	});
 	if (data === "nvidia") {
@@ -113,7 +111,7 @@ export function useUpdateLlamaCppRuntime() {
 
 	return useMutation({
 		mutationFn: async (variables: { tag: string; variant?: LlamaCppVariant }) => {
-			const options = withResponseValidation(updateLlamaCppRuntimeMutation());
+			const options = updateLlamaCppRuntimeMutation();
 			return await options.mutationFn?.({ body: { tag: variables.tag, variant: variables.variant ?? null } }, undefined as never);
 		},
 		onSuccess: () => invalidate(queryClient, localRuntimeQueryIds.llamaCppRuntime),
@@ -152,7 +150,7 @@ export function keepLatestAcquisitionStatus(
 // arrival order no matter which leg lands last.
 export function useRuntimeAcquisitionStatus(enabled = true) {
 	return useQuery({
-		...withResponseValidation(getRuntimeAcquisitionStatusOptions()),
+		...getRuntimeAcquisitionStatusOptions(),
 		structuralSharing: (current, incoming) =>
 			keepLatestAcquisitionStatus(current as RuntimeAcquisitionStatus | undefined, incoming as RuntimeAcquisitionStatus),
 		enabled,
@@ -162,7 +160,7 @@ export function useRuntimeAcquisitionStatus(enabled = true) {
 // HF token status — a boolean only. The token value itself is write-only and never returned by the API.
 export function useHfTokenStatus() {
 	return useQuery({
-		...withResponseValidation(getHfTokenStatusOptions()),
+		...getHfTokenStatusOptions(),
 		select: (data) => data.hasToken ?? false,
 	});
 }
@@ -174,7 +172,7 @@ export function useSetHfToken() {
 
 	return useMutation({
 		mutationFn: async (token: string | undefined) => {
-			const options = withResponseValidation(setHfTokenMutation());
+			const options = setHfTokenMutation();
 			// An empty string clears the token server-side; coalesce undefined to null so the body carries an explicit value.
 			await options.mutationFn?.({ body: { token: token && token.length > 0 ? token : null } }, undefined as never);
 		},
@@ -184,7 +182,7 @@ export function useSetHfToken() {
 
 export function useSourceBuildPrerequisites(backend: LlamaCppSourceBackend, enabled = true) {
 	return useQuery({
-		...withResponseValidation(getLlamaCppSourceBuildPrerequisitesOptions({ query: { backend } })),
+		...getLlamaCppSourceBuildPrerequisitesOptions({ query: { backend } }),
 		select: toSourceBuildPrerequisites,
 		enabled,
 		staleTime: sourceBuildPrerequisiteStaleTime,
@@ -193,7 +191,7 @@ export function useSourceBuildPrerequisites(backend: LlamaCppSourceBackend, enab
 
 export function useSourceBuildStatus(enabled = true) {
 	return useQuery({
-		...withResponseValidation(getLlamaCppSourceBuildStatusOptions()),
+		...getLlamaCppSourceBuildStatusOptions(),
 		select: toSourceBuildStatus,
 		enabled,
 	});
@@ -203,7 +201,7 @@ export function useStartSourceBuild() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async (draft: SourceBuildDraft) => {
-			const options = withResponseValidation(startLlamaCppSourceBuildMutation());
+			const options = startLlamaCppSourceBuildMutation();
 			return await options.mutationFn?.({ body: sourceBuildRequest(draft) }, undefined as never);
 		},
 		onSuccess: () =>
@@ -218,7 +216,7 @@ export function useCancelSourceBuild() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async () => {
-			const options = withResponseValidation(cancelLlamaCppSourceBuildMutation());
+			const options = cancelLlamaCppSourceBuildMutation();
 			return await options.mutationFn?.({}, undefined as never);
 		},
 		onSuccess: () => invalidate(queryClient, localRuntimeQueryIds.sourceBuildStatus),
@@ -229,7 +227,7 @@ export function useRemoveSourceBuild() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async () => {
-			const options = withResponseValidation(removeLlamaCppSourceBuildMutation());
+			const options = removeLlamaCppSourceBuildMutation();
 			return await options.mutationFn?.({}, undefined as never);
 		},
 		onSuccess: () =>

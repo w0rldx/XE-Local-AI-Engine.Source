@@ -185,6 +185,69 @@ public sealed class LiveSessionEndToEndTests
     }
 
     /// <summary>
+    ///     The dictation path end to end: start, subscribe, push, commit, end — through the same hub methods a
+    ///     persisted session uses, with no row behind it at any point.
+    /// </summary>
+    [Test]
+    [NotInParallel(LiveSessionKey)]
+    public async Task Dictation_StartSubscribePushEnd_PublishesTheCommitAndTheStatusAndWritesNoRow()
+    {
+        await using var factory = FactoryWith(OneSegmentPerWindow());
+        using var client = factory.CreateClient();
+        var registry = factory.Services.GetRequiredService<ILiveTranscriptionSessionRegistry>();
+
+        Guid sessionId;
+        using var start = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/dictation-sessions");
+        start.Content = JsonContent.Create(new
+        {
+        });
+        using (var started = await client.SendAsync(start))
+        {
+            AssertEx.Equal(HttpStatusCode.OK, started.StatusCode, await started.Content.ReadAsStringAsync());
+            sessionId = (await ReadJsonAsync(started)).GetProperty("sessionId").GetGuid();
+        }
+
+        var committed = new TaskCompletionSource<TranscriptSegmentCommittedPush>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ended = new TaskCompletionSource<TranscriptionSessionStatusPush>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var connection = Connect(factory);
+        _ = connection.On<TranscriptSegmentCommittedPush>(TranscriptionHubEvents.SegmentCommitted, push =>
+        {
+            if (push.SessionId == sessionId)
+            {
+                _ = committed.TrySetResult(push);
+            }
+        });
+        _ = connection.On<TranscriptionSessionStatusPush>(TranscriptionHubEvents.SessionStatusChanged, push =>
+        {
+            if (push.SessionId == sessionId)
+            {
+                _ = ended.TrySetResult(push);
+            }
+        });
+        await connection.StartAsync();
+
+        var snapshot = await connection.InvokeAsync<TranscriptionSessionSubscriptionSnapshot>("SubscribeSession", sessionId, 0L);
+        AssertEx.Equal("Transcribing", snapshot.Status, "a rowless session is accepted while it is live.");
+        AssertEx.Empty(snapshot.Segments);
+
+        await PushWindowAsync(connection, sessionId, fromMs: 0);
+        var push = await committed.Task.WaitAsync(TestBudgets.Contended);
+        AssertEx.Equal(expected: 1L, push.Seq);
+        AssertEx.Equal("hello from the lane", push.Text);
+
+        await connection.InvokeAsync("EndSession", sessionId);
+        var status = await ended.Task.WaitAsync(TestBudgets.Contended);
+        AssertEx.Equal("Completed", status.Status);
+        await AssertEx.EventuallyAsync(() => !registry.IsRegistered(sessionId), TestBudgets.Contended, "the registry forgets an ended session.");
+
+        using var listed = await SendAsync(client, factory, HttpMethod.Get, $"{ApiPrefix}/transcription/sessions");
+        AssertEx.Equal(HttpStatusCode.OK, listed.StatusCode);
+        AssertEx.Equal(expected: 0, (await ReadJsonAsync(listed)).GetProperty("totalCount").GetInt32(), "dictation writes no session row.");
+        using var read = await SendAsync(client, factory, HttpMethod.Get, $"{ApiPrefix}/transcription/sessions/{sessionId}");
+        AssertEx.Equal(HttpStatusCode.NotFound, read.StatusCode);
+    }
+
+    /// <summary>
     ///     A transcriber that answers only once the lane submits a whole window, so exactly one segment commits per
     ///     <see cref="WindowMs" /> of audio. The tick submissions below the cap return nothing, as a silent stretch does.
     /// </summary>

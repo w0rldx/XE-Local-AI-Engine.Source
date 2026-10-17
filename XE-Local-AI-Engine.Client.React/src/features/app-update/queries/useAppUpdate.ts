@@ -1,18 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { GetAppUpdateStatusResponse } from "@/core/api/generated";
-import { getAppUpdateStatus } from "@/core/api/generated/sdk.gen";
 import {
 	applyAppUpdateMutation,
 	getAppUpdateStatusOptions,
 	getAppUpdateStatusQueryKey,
 	setAppUpdateChannelMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { callWithResponseValidation, withResponseValidation } from "@/core/api/ResponseValidation";
+import { getAppUpdateStatus } from "@/core/api/generated/sdk.gen";
 
 export function useAppUpdateStatus(refresh?: boolean) {
 	return useQuery({
-		...withResponseValidation(getAppUpdateStatusOptions({ query: { refresh: refresh ?? null } })),
+		...getAppUpdateStatusOptions({ query: { refresh: refresh ?? null } }),
 		// Poll only the local cached snapshot. A live GitHub check remains explicit through refresh=true.
 		refetchInterval: 60_000,
 	});
@@ -22,7 +21,7 @@ export function useRefreshAppUpdateStatus() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationFn: () => queryClient.fetchQuery(withResponseValidation(getAppUpdateStatusOptions({ query: { refresh: true } }))),
+		mutationFn: () => queryClient.fetchQuery(getAppUpdateStatusOptions({ query: { refresh: true } })),
 		onSuccess: (data) => {
 			const statusKey = getAppUpdateStatusQueryKey({ query: { refresh: null } });
 			const cached = queryClient.getQueryData<GetAppUpdateStatusResponse>(statusKey);
@@ -41,12 +40,9 @@ export function useRefreshAppUpdateStatus() {
 export function useProbeAppUpdateStatus() {
 	return useMutation({
 		mutationFn: async () => {
-			const { data } = await callWithResponseValidation(
-				getAppUpdateStatus({
-					query: { refresh: null },
-					throwOnError: true,
-				}),
-			);
+			const { data } = await getAppUpdateStatus({
+				query: { refresh: null },
+			});
 			return data;
 		},
 	});
@@ -56,7 +52,7 @@ export function useApplyAppUpdate() {
 	const queryClient = useQueryClient();
 	const statusKey = getAppUpdateStatusQueryKey({ query: { refresh: null } });
 	return useMutation({
-		...withResponseValidation(applyAppUpdateMutation()),
+		...applyAppUpdateMutation(),
 		onSuccess: (result) => {
 			if (!result.applying) {
 				queryClient.setQueryData<GetAppUpdateStatusResponse>(statusKey, (current) =>
@@ -71,7 +67,7 @@ export function useSetAppUpdateChannel() {
 	const queryClient = useQueryClient();
 	const statusKey = getAppUpdateStatusQueryKey({ query: { refresh: null } });
 	return useMutation({
-		...withResponseValidation(setAppUpdateChannelMutation()),
+		...setAppUpdateChannelMutation(),
 		onSuccess: (fresh) => {
 			// The endpoint answers with the status it just recomputed, so seeding the key the About dialog observes
 			// renders the new channel on the next commit with no round-trip and no flicker.

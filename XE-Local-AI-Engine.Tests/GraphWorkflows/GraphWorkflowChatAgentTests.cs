@@ -59,6 +59,7 @@ public sealed class GraphWorkflowChatAgentTests
         var definitionId = await harness.SeedDefinitionAsync(ChatAgentGraph(instructions));
         var conversationId = await CreateConversationAsync(harness.Services);
         var runId = await StartAsync(definitionId, conversationId);
+        AssertEx.Equal(GraphWorkflowTriggerSource.Chat, (await harness.ReadRunAsync(runId)).TriggerSource, "a run a chat message started records Chat as its origin.");
 
         await harness.AdvanceUntilAsync(runId, async () => (await harness.ReadRunAsync(runId)).Status == GraphWorkflowRunStatus.Completed, "the run never completed");
         _ = await harness.AdvanceAsync(runId);

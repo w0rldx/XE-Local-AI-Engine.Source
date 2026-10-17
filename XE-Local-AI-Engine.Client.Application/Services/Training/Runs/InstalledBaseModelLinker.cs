@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Runs;
 
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>An installed GGUF that stands in for a base checkpoint: the model an adapter is served against and the base side of a comparison.</summary>
@@ -48,8 +49,9 @@ public sealed class InstalledBaseModelLinker : IInstalledBaseModelLinker
         var entries = await _registry.ListAsync(cancellationToken);
         return entries
                .Where(entry => MatchesBase(entry.RepoId, baseRepoId))
-               // Adapter entries are themselves derived from a base and cannot serve as one.
-               .Where(entry => string.IsNullOrEmpty(entry.BaseModelName))
+               // Adapter entries are themselves derived from a base and cannot serve as one; neither can a promoted
+               // tuned model, which carries its base's repo id and would otherwise become the next run's "base".
+               .Where(entry => string.IsNullOrEmpty(entry.BaseModelName) && entry.Origin != LocalModelOrigin.Trained)
                .OrderBy(entry => string.Equals(entry.RepoId, baseRepoId, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
                .ThenBy(entry => entry.ModelName, StringComparer.Ordinal)
                .Select(entry => new InstalledBaseModelLink
@@ -67,6 +69,11 @@ public sealed class InstalledBaseModelLinker : IInstalledBaseModelLinker
         {
             var entry = await _registry.FindAsync(explicitModelName, cancellationToken)
                         ?? throw new TrainingRunRejectedException($"'{explicitModelName}' is not an installed model.");
+            if (entry.Origin == LocalModelOrigin.Trained)
+            {
+                throw new TrainingRunRejectedException($"'{explicitModelName}' is a tuned model this node trained, not a base checkpoint; link the installed GGUF of the run's base model instead.");
+            }
+
             return new InstalledBaseModelLink
             {
                 ModelName = entry.ModelName,

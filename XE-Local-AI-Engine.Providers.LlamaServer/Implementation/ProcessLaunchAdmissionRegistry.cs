@@ -21,7 +21,10 @@ public sealed class ProcessLaunchAdmissionRegistry : IProcessLaunchAdmissionRegi
                                .Select(static pair => pair.Key)
                                .ToHashSet(),
                 HasRequestedKey = _entries.ContainsKey(requested),
-                HasGlobalBlocker = _entries.Values.Any(static entry => entry is { LaunchReferences: > 0, IsUnbound: true } or { IsOrphaned: true })
+                HasGlobalBlocker = _entries.Values.Any(static entry => IsGlobalBlocker(entry)),
+                BlockingKeys = _entries.Where(static pair => IsGlobalBlocker(pair.Value))
+                                       .Select(static pair => pair.Key)
+                                       .ToHashSet()
             };
         }
     }
@@ -32,8 +35,7 @@ public sealed class ProcessLaunchAdmissionRegistry : IProcessLaunchAdmissionRegi
         var key = Key(admission.ModelName, admission.Role);
         lock (_sync)
         {
-            if (_entries.ContainsKey(key)
-                || _entries.Values.Any(static entry => entry is { LaunchReferences: > 0, IsUnbound: true } or { IsOrphaned: true }))
+            if (_entries.ContainsKey(key) || _entries.Values.Any(static entry => IsGlobalBlocker(entry)))
             {
                 return null;
             }
@@ -140,6 +142,9 @@ public sealed class ProcessLaunchAdmissionRegistry : IProcessLaunchAdmissionRegi
             _entries.Remove(key);
         }
     }
+
+    private static bool IsGlobalBlocker(Entry entry) =>
+        entry is { LaunchReferences: > 0, IsUnbound: true } or { IsOrphaned: true };
 
     private static ProcessLaunchAdmissionKey Key(string modelName, ModelRole role) =>
         new(modelName, role);

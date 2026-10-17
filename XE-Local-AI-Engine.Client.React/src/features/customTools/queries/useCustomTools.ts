@@ -10,18 +10,16 @@ import {
 	updateCustomToolMutation,
 	validateExecutableMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toCustomToolView } from "@/features/customTools/models/CustomToolMappers";
 
 // Server state for the node custom-tool library. Reads use the generated hey-api `*Options()` (which wire the shared
 // axios instance + TanStack Query AbortSignal) with a `select` that maps the optional-field generated response into
-// the stricter domain view-model. Every generated options/mutation object is wrapped in withResponseValidation so a
-// zod response-shape failure surfaces as an ApiError. Mutations invalidate the list; an edit also invalidates the
+// the stricter domain view-model. Mutations invalidate the list; an edit also invalidates the
 // single-tool cache so a re-opened editor shows fresh values.
 
 export function useCustomTools() {
 	return useQuery({
-		...withResponseValidation(listCustomToolsOptions()),
+		...listCustomToolsOptions(),
 		select: (data) => (data.items ?? []).map(toCustomToolView),
 	});
 }
@@ -29,7 +27,7 @@ export function useCustomTools() {
 // Full single tool. Disabled until an id is supplied so the editor only fetches when a tool is actually being edited.
 export function useCustomTool(id: string | null) {
 	return useQuery({
-		...withResponseValidation(getCustomToolOptions({ path: { customToolId: id ?? "" } })),
+		...getCustomToolOptions({ path: { customToolId: id ?? "" } }),
 		enabled: id !== null,
 		select: toCustomToolView,
 	});
@@ -52,7 +50,7 @@ export function useCreateCustomTool() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(createCustomToolMutation()),
+		...createCustomToolMutation(),
 		onSuccess: (_data: CreateCustomToolResponse) => invalidateCustomToolsList(queryClient),
 	});
 }
@@ -61,7 +59,7 @@ export function useUpdateCustomTool() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(updateCustomToolMutation()),
+		...updateCustomToolMutation(),
 		onSuccess: (_data: UpdateCustomToolResponse) =>
 			Promise.all([invalidateCustomToolsList(queryClient), invalidateAllSingleCustomTools(queryClient)]).then(() => undefined),
 	});
@@ -71,7 +69,7 @@ export function useDeleteCustomTool() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(deleteCustomToolMutation()),
+		...deleteCustomToolMutation(),
 		onSuccess: (_data: DeleteCustomToolResponse) => invalidateCustomToolsList(queryClient),
 	});
 }
@@ -80,5 +78,5 @@ export function useDeleteCustomTool() {
 // confirm a path resolves to a regular, non-shell executable before the operator commits to it. Not a cached read —
 // it is an on-demand action against the current filesystem, so it stays a mutation.
 export function useValidateExecutable() {
-	return useMutation(withResponseValidation(validateExecutableMutation()));
+	return useMutation(validateExecutableMutation());
 }

@@ -10,6 +10,7 @@ import { ChatSourcesStrip } from "@/features/chat/components/ChatSourcesStrip";
 import { CHAT_ACCENT, CHAT_ASSISTANT_BACKGROUND, CHAT_ASSISTANT_BORDER } from "@/features/chat/components/ChatVisualTokens";
 import { MessageParts } from "@/features/chat/components/MessageParts";
 import type { ChatMessageDisplay } from "@/features/chat/models/ChatMessageDisplay";
+import { chatFailureCategoryLabel, chatFailureHeadline } from "@/features/chat/models/ChatFailureCategory";
 import { hasText } from "@/features/chat/models/ChatMessageDisplay";
 import type { ChatMessageModel, ReasoningEffort } from "@/features/chat/models/ChatModels";
 import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
@@ -43,7 +44,8 @@ export function AssistantMessageBubble({
 	failureCategory,
 	showTokensPerSecond,
 }: AssistantMessageBubbleProps) {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
+	const failureHeadline = chatFailureHeadline(t, i18n, failureCategory);
 	const reducedMotion = useReducedMotion();
 	// When this turn's answer is being read aloud, silence the screen reader on the answer block to avoid a
 	// double-read against the active TTS. Inert when no voice provider is mounted.
@@ -146,21 +148,36 @@ export function AssistantMessageBubble({
 						message={
 							<Stack gap={6}>
 								{/* A "Local runtime default" send with no installed GGUF chat model is surfaced as a friendly,
-								    actionable message (with a Models CTA) rather than the raw backend error string. Every other
-								    category keeps the backend-provided message. */}
-								<Text size="sm">
-									{failureCategory === "ModelNotInstalled"
-										? t("pages.chat.error.modelNotInstalled", "No chat model installed. Pull a GGUF model to start chatting.")
-										: display.errorText}
-								</Text>
+								    actionable message (with a Models CTA) rather than the raw backend error string. A category
+								    with a localized headline shows it above the raw server text, which stays as a dimmed detail
+								    line because it names the models and what to do; any other category keeps the raw text alone. */}
+								{failureCategory === "ModelNotInstalled" ? (
+									<Text size="sm">
+										{t("pages.chat.error.modelNotInstalled", "No chat model installed. Pull a GGUF model to start chatting.")}
+									</Text>
+								) : failureHeadline ? (
+									<>
+										<Text size="sm" data-testid={`chat-message-error-headline-${message.id}`}>
+											{failureHeadline}
+										</Text>
+										{display.errorText ? (
+											<Text size="xs" c="dimmed" data-testid={`chat-message-error-detail-${message.id}`}>
+												{display.errorText}
+											</Text>
+										) : null}
+									</>
+								) : (
+									<Text size="sm">{display.errorText}</Text>
+								)}
 								{failureCategory === "ModelNotInstalled" ? (
 									<Anchor component={Link} to="/models" size="sm" data-testid={`chat-message-error-models-link-${message.id}`}>
 										{t("pages.chat.error.goToModels", "Go to Models")}
 									</Anchor>
 								) : null}
-								{hasText(failureCategory) ? (
+								{/* The badge names the category only when no headline already says it. */}
+								{failureCategory && hasText(failureCategory) && !failureHeadline ? (
 									<Badge color="red" size="sm" variant="light" data-testid={`chat-message-error-category-${message.id}`}>
-										{failureCategory}
+										{chatFailureCategoryLabel(t, failureCategory)}
 									</Badge>
 								) : null}
 							</Stack>

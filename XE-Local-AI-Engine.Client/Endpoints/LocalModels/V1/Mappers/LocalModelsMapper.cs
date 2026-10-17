@@ -81,7 +81,10 @@ internal static class LocalModelsMapper
                        IsSelected = string.Equals(descriptor.ModelName, selectedModelName, StringComparison.OrdinalIgnoreCase),
                        Kind = kind.ToString(),
                        DetectedKind = kind.ToString(),
-                       Capabilities = descriptor.Capabilities,
+                       // The template detector adds "completion" to every GGUF; an embedding or reranker head generates no text.
+                       Capabilities = kind is ModelKind.Embedding or ModelKind.Reranker
+                           ? [.. descriptor.Capabilities.Where(static capability => !string.Equals(capability, "completion", StringComparison.Ordinal))]
+                           : descriptor.Capabilities,
                        IsReasoningCapable = descriptor.IsReasoningCapable,
                        IsNativeReasoningCapable = descriptor.IsNativeReasoningCapable,
                        // Detected from the SAME chat template as the reasoning flags: a graded model whose template renders no reasoning end marker keeps its effort but

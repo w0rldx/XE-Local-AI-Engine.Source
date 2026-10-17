@@ -67,7 +67,14 @@ export function ScheduledJobList({ jobs, isMutating, onEdit, onDelete, onTrigger
 								) : null}
 							</Table.Td>
 							<Table.Td>
-								<Badge variant="light" color="blue">
+								{/* The badge clips with an ellipsis, so a squeezed column cut it to "ON…"; a max-content floor keeps the
+								    longest English and German label whole. */}
+								<Badge
+									variant="light"
+									color="blue"
+									style={{ minWidth: "max-content" }}
+									data-testid={`scheduler-job-kind-${job.id}`}
+								>
 									{t(`pages.scheduler.form.scheduleKind.options.${job.scheduleKind}`, job.scheduleKind)}
 								</Badge>
 							</Table.Td>

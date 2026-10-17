@@ -34,17 +34,17 @@ replace fails on Windows). Frozen profiles bypass the fallback; capacity estimat
 
 | # | Gate | Meaning |
 |---|---|---|
-| 1 | `request.UseLocalTools` | per-message toggle |
+| 1 | `request.UseLocalTools` | node-wide offer only; agent list bypasses it |
 | 2 | `enableTools` | node setting |
 | 3 | `resolution.SupportsTools` | model template capability; the `TOOLS` chip |
 | 4 | `AgentHome:ToolCapableModels` | operator allow-list |
 | 5 | agent `AllowedToolNames` | offered ∩ allowed; Default Assistant has none |
 
-**Rule:** walk them in order; gate 3 is capability, gate 4 permission. Gate 4 is read live via `CachedNodeSettingsStore`,
-never captured at DI composition; matching is exact-case at the offer. Use a bound agent for positive tests. Note: gate 4
-auto-admits; `ToolCapableModelRegistrar` unions each installed template-capable GGUF in the descriptor's casing, and the
-persisted list replaces shipped defaults (wiki 08). **Prevents:** a partial offer read as a model defect. **Authority:**
-`CachedNodeSettingsStore`, `ToolCapableModelRegistrar`.
+**Rule:** walk them in order; 3 is capability, 4 permission. Gate 4 is read live via `CachedNodeSettingsStore`,
+never captured at DI composition; matching is exact-case at the offer. Bound agent for positive tests; gate 4
+auto-admits: `ToolCapableModelRegistrar` adds template-capable GGUFs at startup, on download and on an offer miss
+(wiki 08); an unhealed trim raises `ToolsWithheld` naming it. **Prevents:** a partial offer read as a model bug.
+**Authority:** `CachedNodeSettingsStore`, `ToolCapableModelRegistrar`.
 
 ### Passing all five gates is still not enough — llama.cpp must be able to COMPILE the tool schemas
 
@@ -96,14 +96,15 @@ token waits for the job the previous turn queued. Do not read that delay as a re
 
 **Rule:** a rule that acts on a chat process having no inference lease (unload it, refuse around it) treats "leased" as "wait, bounded", not as "unavailable": memory extraction and the other post-turn jobs take a lease on the model the moment the user's turn ends. Live-check any such rule with a turn on model A followed at once by a turn on model B. **Prevents:** the ordinary "switch model right after a turn" being refused with "Eject one of them" because the first model was busy for a few seconds (seen live, 2026-10-05). **Authority:** `PooledRoleLaunchAdmission.AdmitChatAsync` (`BusyResidentWaitCap`), `IdleChatEvictionResult`; model-matrix follow-ups W1.
 
-### A work session is chat turns in a loop, and it takes the node's only invocation slot
+### A work session is chat turns in a loop, and a running step takes the node's only invocation slot
 
 **Rule:** mechanics are in wiki 04 §5. Drive `INodeChatStreamService.SendMessageAsync`, not
 `IInvocationRunner`; stop through `INodeChatStreamCancellationRegistry.TryCancel` and write terminals with
 `CancellationToken.None`. Seed `ToolResultBudgetScope`/`ProviderCallCapScope` before `await foreach`; an `AsyncLocal` set
 inside the send never flows back, and `UsageSnapshot` is the last round, not a turn total. A call cap ends the STEP
 (`ProviderCallBudget`), not the session. Fresh DI scope per store write; checkpoint operation ids are per phase. Session
-identity comes from `AgentRunConversationContext`, never a tool argument. **Prevents:** leaked slots and wrong totals.
+identity comes from `AgentRunConversationContext`, never a tool argument. A parked step frees the slot (`HumanPark`).
+**Prevents:** leaked slots and wrong totals.
 **Authority:** `ProviderCallBudgetChatClient`, `BudgetedToolResultAIFunction`.
 [evidence](../agent-knowledge-evidence.md#work-session-context-incidents)
 
@@ -111,7 +112,7 @@ identity comes from `AgentRunConversationContext`, never a tool argument. **Prev
 
 **Rule:** graded thinking and `native_reasoning` are separate, mutually exclusive; Harmony markers (`<|channel|>analysis`,
 `reasoning_effort`) never enter the graded branch or get `think` kwargs. The tools detector matches the bare word `tools`,
-even in comments, so the `TOOLS` chip is weak evidence and satisfies neither gate 4 nor 5. Work-session create/repoint checks
+even in comments, so the `TOOLS` chip is weak evidence; it reaches gate 4 only through the registrar and never gate 5. Work-session create/repoint checks
 gates 3 and 4; a gate-4 failure at step start pauses (`StepEnded`/`ToolGate`), not `Failed`, and gate 4 is never cached in a
 constructor. A partial offer is normal: the small arithmetic/time tools can still work while coder, KB, sub-agent and MCP
 tools are filtered. **Prevents:** unsupported kwargs and unrecoverable sessions. **Authority:** `WorkSessionToolGate`,
@@ -154,6 +155,8 @@ Superseded claims; the entries above are the active rules.
 
 | Stale belief | Current correction |
 |---|---|
+| A GGUF that reaches the store while the host runs (copied, linked) stays off the tool-capable list until a restart, and its two-tool offer is silent. | The offer self-heals the miss through `ToolCapableModelRegistrar`; an unhealed allow-list trim raises a `ToolsWithheld` notice naming the setting. |
+| A parked turn holds the node's invocation slot until its card is answered or expires. | A parked turn releases it (`HumanPark`, `ReleaseSlotForPark`) and waits for it again on resume (`ReacquireSlotAsync`). |
 | Harmony reasoning must remain undetected. | It is detected as distinct `native_reasoning`, mutually exclusive with graded thinking |
 | An Agent node's `responseJsonSchema` is merely obeyed, not grammar-enforced. | Grammar-enforced from generation start, proven live with a negative control and the captured GBNF. |
 | A `maxLength` in a response schema never reaches llama.cpp, because the MEAI OpenAI strict-schema transform rewrote it into a `description` first. | Still true of every other provider (validate bounds downstream); on llama-server `ApplyResponseSchemaPassthrough` writes the schema onto the body, so the grammar enforces it. |

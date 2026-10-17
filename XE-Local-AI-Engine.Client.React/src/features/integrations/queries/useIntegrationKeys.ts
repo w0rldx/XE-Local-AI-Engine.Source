@@ -5,7 +5,6 @@ import {
 	listIntegrationApiKeysOptions,
 	revokeIntegrationApiKeyMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toIntegrationApiKey } from "@/features/integrations/models/IntegrationMappers";
 import { integrationInvalidationKey, integrationQueryIds } from "@/features/integrations/queries/useIntegrationTriggers";
 
@@ -17,7 +16,7 @@ import { integrationInvalidationKey, integrationQueryIds } from "@/features/inte
 
 export function useIntegrationKeys() {
 	return useQuery({
-		...withResponseValidation(listIntegrationApiKeysOptions()),
+		...listIntegrationApiKeysOptions(),
 		select: (data) => data.items.map(toIntegrationApiKey),
 	});
 }
@@ -30,7 +29,7 @@ export function useGenerateIntegrationApiKey() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(generateIntegrationApiKeyMutation()),
+		...generateIntegrationApiKeyMutation(),
 		// Collect the entry the moment the page's `reset()` detaches this observer. Resetting alone only removes the
 		// observer; without a zero gc time the plaintext-bearing `data` stays in the cache for the default window.
 		gcTime: 0,
@@ -42,7 +41,7 @@ export function useRevokeIntegrationApiKey() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(revokeIntegrationApiKeyMutation()),
+		...revokeIntegrationApiKeyMutation(),
 		onSuccess: () => invalidateKeys(queryClient),
 	});
 }

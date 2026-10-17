@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 
+using System.Diagnostics;
 using System.Formats.Tar;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
-using System.Diagnostics;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;

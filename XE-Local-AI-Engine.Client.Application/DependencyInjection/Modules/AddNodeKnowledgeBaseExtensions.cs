@@ -21,8 +21,8 @@ internal static class AddNodeKnowledgeBaseExtensions
         // singletons (data directory, sqlite key holder, time provider), so the singleton ingestion and cleanup surfaces can take it.
         builder.Services.AddSingleton<IKnowledgeDocumentBlobStore, KnowledgeDocumentBlobStore>();
 
-        // Ingestion + embedding options (section "KnowledgeBase"). The reranker model name is a MIGRATED knob, like the llama.cpp
-        // cap/TTL ones: PostConfigure reads the stored node setting (sync twin, startup path) and overrides config, giving stored > config > off.
+        // Ingestion + embedding options (section "KnowledgeBase"). The reranker model is read live per search through
+        // INodeRuntimeSettings (stored > config > off), so it is not folded into the options here.
         _ = builder.Services.AddOptions<KnowledgeBaseOptions>()
                    .Bind(configuration.GetSection(KnowledgeBaseOptions.Section))
 #pragma warning disable MA0045 // Options Configure delegate is synchronous by contract; the INodeRuntimeSettings sync twin is the designated composition-path read.
@@ -33,16 +33,6 @@ internal static class AddNodeKnowledgeBaseExtensions
                        options.ScheduledModelReindexIntervalMinutes = runtimeSettings.GetKnowledgeScheduledReindexIntervalMinutes();
                    })
 #pragma warning restore MA0045
-                   .PostConfigure<INodeRuntimeSettings>(static (options, runtimeSettings) =>
-                   {
-#pragma warning disable MA0045 // Options PostConfigure delegate is synchronous by contract; the INodeRuntimeSettings sync twin is the designated composition-path read.
-                       var storedRerankerModel = runtimeSettings.GetRerankerModelName();
-#pragma warning restore MA0045
-                       if (!string.IsNullOrWhiteSpace(storedRerankerModel))
-                       {
-                           options.RerankerModelName = storedRerankerModel;
-                       }
-                   })
                    .ValidateOnStart();
 
         // Stateless, thread-safe collaborators — safe as singletons and injectable into the scoped ingestion service.

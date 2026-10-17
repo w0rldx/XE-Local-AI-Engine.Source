@@ -88,6 +88,107 @@ public sealed class GraphWorkflowStoreTests
     }
 
     /// <summary>
+    ///     <c>AllowsActions</c>: false unless the create names it, written through a fresh context, and left alone by an
+    ///     edit that does not carry it.
+    /// </summary>
+    [Test]
+    public async Task AllowsActions_RoundTripsAndAnEditWithoutItLeavesItAlone()
+    {
+        using var fixture = new GraphWorkflowTestFixture();
+        Guid revokedId;
+        Guid keptId;
+
+        await using (var context = await fixture.CreateSchemaAsync())
+        {
+            var store = GraphWorkflowTestFixture.StoreFor(context);
+            var plain = await GraphWorkflowTestFixture.SeedDefinitionAsync(store, "Plain");
+            AssertEx.False(plain.AllowsActions, "a command that does not name the flag creates a definition without actions.");
+
+            var created = await store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand
+            {
+                DefinitionId = Guid.NewGuid(),
+                Name = "Lights",
+                GraphJson = GraphWorkflowTestFixture.SampleGraph,
+                NodeCount = 2,
+                AllowsActions = true
+            });
+            AssertEx.True(created.AllowsActions);
+
+            var renamed = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand
+            {
+                DefinitionId = created.Id,
+                ExpectedVersion = created.Version,
+                Name = "Lights renamed"
+            });
+            AssertEx.True(renamed.AllowsActions, "an edit that does not carry the flag leaves it alone.");
+
+            var revoked = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand
+            {
+                DefinitionId = created.Id,
+                ExpectedVersion = renamed.Version,
+                AllowsActions = false
+            });
+            AssertEx.False(revoked.AllowsActions, "an edit that carries the flag writes it.");
+            revokedId = created.Id;
+
+            keptId = (await store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand
+            {
+                DefinitionId = Guid.NewGuid(),
+                Name = "Kept",
+                GraphJson = GraphWorkflowTestFixture.SampleGraph,
+                NodeCount = 2,
+                AllowsActions = true
+            })).Id;
+        }
+
+        await using var readContext = fixture.CreateContext();
+        var readStore = GraphWorkflowTestFixture.StoreFor(readContext);
+        AssertEx.True((await readStore.GetDefinitionAsync(keptId)).AllowsActions, "a set flag reads back through a fresh context.");
+        AssertEx.False((await readStore.GetDefinitionAsync(revokedId)).AllowsActions, "a revoked flag reads back through a fresh context.");
+    }
+
+    /// <summary>
+    ///     <c>TriggerSources</c>: Manual | Chat unless the create names it, written by an edit that carries it, left alone by
+    ///     one that does not, and read back by both the get and the list.
+    /// </summary>
+    [Test]
+    public async Task TriggerSources_DefaultsToManualAndChat_AndAnEditWithoutItLeavesItAlone()
+    {
+        using var fixture = new GraphWorkflowTestFixture();
+        const GraphWorkflowTriggerSource widened = GraphWorkflowTriggerSource.Manual | GraphWorkflowTriggerSource.Schedule;
+        Guid definitionId;
+
+        await using (var context = await fixture.CreateSchemaAsync())
+        {
+            var store = GraphWorkflowTestFixture.StoreFor(context);
+            var created = await GraphWorkflowTestFixture.SeedDefinitionAsync(store, "Lights");
+            AssertEx.Equal(GraphWorkflowTriggerSource.Manual | GraphWorkflowTriggerSource.Chat, created.TriggerSources, "a create that does not name the set accepts Manual and Chat.");
+
+            var widenedSnapshot = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand
+            {
+                DefinitionId = created.Id,
+                ExpectedVersion = created.Version,
+                TriggerSources = widened
+            });
+            AssertEx.Equal(widened, widenedSnapshot.TriggerSources, "an edit that carries the set writes it.");
+
+            var renamed = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand
+            {
+                DefinitionId = created.Id,
+                ExpectedVersion = widenedSnapshot.Version,
+                Name = "Lights renamed"
+            });
+            AssertEx.Equal(widened, renamed.TriggerSources, "an edit that does not carry the set leaves it alone.");
+            definitionId = created.Id;
+        }
+
+        await using var readContext = fixture.CreateContext();
+        var readStore = GraphWorkflowTestFixture.StoreFor(readContext);
+        AssertEx.Equal(widened, (await readStore.GetDefinitionAsync(definitionId)).TriggerSources, "the set reads back through a fresh context.");
+        AssertEx.Equal(widened, (await readStore.ListDefinitionsAsync()).Single(summary => summary.Id == definitionId).TriggerSources, "the list carries it without the graph.");
+    }
+
+    /// <summary>
     ///     The list's promise, proved rather than asserted: with the graph blob corrupted beyond authentication the
     ///     list still answers, and only the read that genuinely needs the graph fails.
     /// </summary>

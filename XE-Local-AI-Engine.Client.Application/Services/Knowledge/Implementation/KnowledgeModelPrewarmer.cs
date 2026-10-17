@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
@@ -21,10 +22,14 @@ public sealed partial class KnowledgeModelPrewarmer : IKnowledgeModelPrewarmer
 
     internal static readonly TimeSpan RetryCooldown = TimeSpan.FromSeconds(30);
 
+    // Stands in for the model name when the reranker setting itself could not be read.
+    private const string RerankerSettingLabel = "the reranker model setting";
+
     private readonly ILlamaServerProcessSupervisor _supervisor;
     private readonly ILocalModelProviderResolver _providerResolver;
     private readonly IEmbeddingModelResolver _embeddingModelResolver;
     private readonly KnowledgeBaseOptions _options;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IHostApplicationLifetime _lifetime;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<KnowledgeModelPrewarmer> _logger;
@@ -36,6 +41,7 @@ public sealed partial class KnowledgeModelPrewarmer : IKnowledgeModelPrewarmer
         ILocalModelProviderResolver providerResolver,
         IEmbeddingModelResolver embeddingModelResolver,
         IOptions<KnowledgeBaseOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         IHostApplicationLifetime lifetime,
         TimeProvider timeProvider,
         ILogger<KnowledgeModelPrewarmer> logger)
@@ -45,6 +51,7 @@ public sealed partial class KnowledgeModelPrewarmer : IKnowledgeModelPrewarmer
         _embeddingModelResolver = embeddingModelResolver ?? throw new ArgumentNullException(nameof(embeddingModelResolver));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -81,9 +88,21 @@ public sealed partial class KnowledgeModelPrewarmer : IKnowledgeModelPrewarmer
     private async Task WarmAsync(CancellationToken cancellationToken)
     {
         var failed = false;
-        if (!string.IsNullOrWhiteSpace(_options.RerankerModelName))
+        string? rerankerModelName = null;
+        try
         {
-            failed |= !await TryEnsureAsync(_options.RerankerModelName, ModelRole.Reranker, cancellationToken);
+            rerankerModelName = await _runtimeSettings.GetRerankerModelNameAsync(cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // A failed settings read is a failed warm like a refused spawn: logged, cooled down, and the embedder still warms.
+            WarmFailed(_logger, RerankerSettingLabel, ModelRole.Reranker, exception.GetType().Name);
+            failed = true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(rerankerModelName))
+        {
+            failed |= !await TryEnsureAsync(rerankerModelName, ModelRole.Reranker, cancellationToken);
         }
 
         var embedder = await TryResolveLlamaCppEmbedderAsync(cancellationToken);

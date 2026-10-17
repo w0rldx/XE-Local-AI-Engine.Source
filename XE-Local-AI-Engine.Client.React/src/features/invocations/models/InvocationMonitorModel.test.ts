@@ -5,10 +5,13 @@ import {
 	type InvocationSummaryInput,
 	buildInvocationSummary,
 	formatInvocationDuration,
+	getInvocationErrorText,
+	getInvocationStatusBadge,
 	getInvocationStatusColor,
 	isInvocationActive,
 	sortInvocationHistory,
 } from "@/features/invocations/models/InvocationMonitorModel";
+import de from "@/locales/de.json";
 
 // A minimal stand-in for i18next's `t`: returns the English default with {{placeholders}} interpolated, so the tests
 // exercise the real sentence composition (verb + duration + model + counts + tool note) without an i18n runtime.
@@ -134,6 +137,41 @@ describe("buildInvocationSummary", () => {
 		expect(buildInvocationSummary(run, t)).toBe(
 			"Failed after 12.5 s with gemma3 — Invocation ended with a failure. See local logs for details.",
 		);
+	});
+
+	// R5-05: a step stopped at its provider-call cap is a designed bound, not a failure, on the badge and in the sentence.
+	it("shows a run stopped at its call budget as that outcome, not as a failure", () => {
+		const run = summaryInput({
+			status: "Failed",
+			failureCategory: "CallBudgetReached",
+			error: "Stopped at the provider-call budget; a work session continues on its next step.",
+		});
+
+		expect(getInvocationStatusBadge(run, t)).toEqual({ label: "Stopped at call budget", color: "yellow" });
+		expect(buildInvocationSummary(run, t)).toBe("Stopped at the provider-call budget after 4.2 s with gemma3.");
+		expect(getInvocationStatusBadge(summaryInput({ status: "Failed", failureCategory: "Timeout" }), t).color).toBe("red");
+	});
+
+	it("translates a call-budget stop's result text from its category, not the English server sentence", () => {
+		const keyOnly = ((key: string) => key) as unknown as TFunction;
+		const run = summaryInput({ status: "Failed", failureCategory: "CallBudgetReached", error: "English server sentence." });
+
+		expect(getInvocationErrorText(run, keyOnly)).toBe("pages.invocations.monitor.callBudgetReached");
+		expect(de.pages.invocations.monitor.callBudgetReached).toContain("Arbeitssitzung");
+		expect(getInvocationErrorText(summaryInput({ status: "Failed", error: "Other failure." }), keyOnly)).toBe("Other failure.");
+	});
+
+	// R5-07: the badge read the raw wire status, so the German page showed COMPLETED and CANCELLED.
+	it("labels every status badge through the catalogue, with a German translation for each", () => {
+		const keyOnly = ((key: string) => key) as unknown as TFunction;
+		const statuses = ["Pending", "Assigned", "Running", "Completed", "Failed", "Cancelled"] as const;
+		const germanStatus: Record<string, string> = de.pages.invocations.monitor.status;
+
+		for (const status of statuses) {
+			const key = getInvocationStatusBadge(summaryInput({ status }), keyOnly).label;
+			expect(key).toBe(`pages.invocations.monitor.status.${status.toLowerCase()}`);
+			expect(germanStatus[status.toLowerCase()]).not.toBe(status);
+		}
 	});
 
 	it("leaves the duration out when a terminal run has no completion time", () => {

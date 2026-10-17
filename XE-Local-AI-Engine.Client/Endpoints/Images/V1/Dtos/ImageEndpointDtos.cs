@@ -89,7 +89,8 @@ public sealed class ImageJobResponse
 
     public required int Steps { get; init; }
 
-    public required string Sampler { get; init; }
+    /// <summary>The sampler the job ran with; <see langword="null" /> when sd-server chose its own default.</summary>
+    public required string? Sampler { get; init; }
 
     public required double CfgScale { get; init; }
 

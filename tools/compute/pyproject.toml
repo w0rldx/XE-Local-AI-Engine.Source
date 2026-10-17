@@ -12,9 +12,9 @@
 # functions) and sympy (exact symbolic algebra and calculus). Adding anything else is a
 # deliberate decision, not a convenience — every package here is code a model can execute.
 #
-# tool.uv.environments narrows resolution to linux/x86_64 for the same reason the training
-# closure does: the uv binary pin and the process runner are Linux-only, so solving for
-# other platforms would only produce a lockfile no supported host ever installs.
+# tool.uv.environments narrows resolution to linux/x86_64 and windows/AMD64: those are the two
+# platforms with a uv binary pin and a process runner (ADR 0016 §5), so solving for any other
+# platform would only produce lockfile entries no supported host ever installs.
 
 [project]
 name = "xe-compute-runtime"
@@ -28,4 +28,7 @@ dependencies = [
 ]
 
 [tool.uv]
-environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
+environments = [
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'win32' and platform_machine == 'AMD64'",
+]

@@ -8,7 +8,8 @@ when an interaction failed (transport, auth, a response off-contract): 1 for tha
 
 Subcommands:
   snapshot-key     sha256 over the sorted EF migration file names; the lab snapshot is valid only for an equal key
-  settings-ensure  GET node-settings, PUT only the desired keys that differ, re-GET and verify
+  settings-ensure  GET node-settings, PUT only the desired keys that differ, re-GET and verify; a desired null (or the
+                   retired "") clears a setting, because the PUT refuses "" and keeps an omitted key
   model-ensure     installed?, select as the node default, optionally eject other chat servers, resident?
   download         install a GGUF through the node's own model-fit/download and poll it to a terminal phase
   first-turn       one canned chat turn over the chat hub; wire events and the answer land in the evidence dir
@@ -59,19 +60,30 @@ def append_jsonl(path: Path, record: dict) -> None:
 
 
 SECRET_KEYS = frozenset({"accesstoken", "refreshtoken", "token", "bearer", "password", "secret", "apikey", "api_key"})
+# Values that are credentials whatever field holds them: PEM blocks and inbound MCP, integration and proxy keys.
+SECRET_VALUE_PREFIXES = ("-----BEGIN", "xemcp_", "xeint_", "xeprx_")
 
 
 def is_secret_key(key: str) -> bool:
     lowered = key.lower()
-    return lowered in SECRET_KEYS or lowered.endswith(("password", "secret", "apikey"))
+    return lowered in SECRET_KEYS or lowered.endswith(
+        ("password", "secret", "apikey", "api_key", "privatekey", "private_key")
+    )
 
 
 def scrub(value: object) -> object:
     """Replace credential-like fields (passwords, access/refresh tokens, secrets, API keys) at any depth."""
     if isinstance(value, dict):
-        return {k: "(redacted)" if is_secret_key(str(k)) else scrub(v) for k, v in value.items()}
+        # The inbound MCP key create answers its one-time plaintext under a bare "key" beside "apiKey"; a generic
+        # "key" anywhere else (a setting name, a map entry) stays readable.
+        mcp_key = "key" in value and "apiKey" in value
+        return {
+            k: "(redacted)" if is_secret_key(str(k)) or (mcp_key and k == "key") else scrub(v) for k, v in value.items()
+        }
     if isinstance(value, list):
         return [scrub(v) for v in value]
+    if isinstance(value, str) and value.lstrip().startswith(SECRET_VALUE_PREFIXES):
+        return "(redacted)"
     # Tool-call arguments and results arrive as strings holding JSON, so a nested credential would pass through.
     if isinstance(value, str) and value.strip()[:1] in ("{", "["):
         try:
@@ -168,7 +180,7 @@ def load_desired(text: str) -> dict:
 
 def command_settings_ensure(args: argparse.Namespace) -> int:
     """The PUT is a partial merge (SaveNodeSettingsEndpoint), so only the differing keys are sent."""
-    desired = load_desired(args.desired)
+    desired = {k: None if v == "" else v for k, v in load_desired(args.desired).items()}
     client = client_for(args)
     current = client.get("/node-settings")
     changed = {k: v for k, v in desired.items() if not same(current.get(k), v)}

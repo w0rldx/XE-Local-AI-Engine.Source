@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The two work-session personas against the real wired graph. Each has to carry the four state tool names in
+///     The work-session personas against the real wired graph. Each has to carry the four state tool names in
 ///     <c>AllowedToolNames</c>: the agent-send path intersects the offer with that list, and the state tools appear only
 ///     in the profile-opt-in offer, so an agent that does not name them gets none of them.
 /// </summary>
@@ -39,10 +39,12 @@ public sealed class WorkSessionAgentSeederTests
         var slugs = await store.ListSeededSlugsAsync();
         AssertEx.Contains(slugs, AgentDefaults.WorkSessionGeneralAgentSeedSlug);
         AssertEx.Contains(slugs, AgentDefaults.WorkSessionResearchAgentSeedSlug);
+        AssertEx.Contains(slugs, AgentDefaults.WorkSessionRepositoryResearchAgentSeedSlug);
 
         var definitions = await store.ListAsync();
         AssertEx.Equal(expected: 1, definitions.Count(definition => definition.SeedSlug == AgentDefaults.WorkSessionGeneralAgentSeedSlug));
         AssertEx.Equal(expected: 1, definitions.Count(definition => definition.SeedSlug == AgentDefaults.WorkSessionResearchAgentSeedSlug));
+        AssertEx.Equal(expected: 1, definitions.Count(definition => definition.SeedSlug == AgentDefaults.WorkSessionRepositoryResearchAgentSeedSlug));
     }
 
     [Test]
@@ -102,13 +104,28 @@ public sealed class WorkSessionAgentSeederTests
         AssertEx.Equal(expected: 9, definition.AllowedToolNames.Count);
     }
 
+    /// <summary>The repository persona reads the bound repository and nothing else: no knowledge base, nothing that writes.</summary>
     [Test]
-    public async Task BothPersonas_ApproveEveryToolExceptAskUser()
+    public async Task RepositoryResearchPersona_AddsTheThreeRepositoryReads()
+    {
+        var definition = await ReadSeededAsync(Host.Factory, AgentDefaults.WorkSessionRepositoryResearchAgentSeedSlug);
+
+        AssertEx.Equal(AgentDefaults.WorkSessionRepositoryResearchAgentName, definition.Name);
+        AssertEx.Contains(definition.AllowedToolNames, "list_files");
+        AssertEx.Contains(definition.AllowedToolNames, "read_file");
+        AssertEx.Contains(definition.AllowedToolNames, "search_text");
+        AssertEx.False(definition.AllowedToolNames.Contains(SearchKnowledgeBaseToolDefinition.ToolName, StringComparer.Ordinal));
+        AssertEx.Equal(expected: 9, definition.AllowedToolNames.Count);
+    }
+
+    [Test]
+    public async Task EveryPersona_ApprovesEveryToolExceptAskUser()
     {
         foreach (var slug in new[]
                  {
                      AgentDefaults.WorkSessionGeneralAgentSeedSlug,
-                     AgentDefaults.WorkSessionResearchAgentSeedSlug
+                     AgentDefaults.WorkSessionResearchAgentSeedSlug,
+                     AgentDefaults.WorkSessionRepositoryResearchAgentSeedSlug
                  })
         {
             var definition = await ReadSeededAsync(Host.Factory, slug);

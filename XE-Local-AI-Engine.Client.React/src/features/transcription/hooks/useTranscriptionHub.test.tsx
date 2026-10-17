@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
-import { CaptureError } from "@/features/transcription/capture/CaptureSource";
+import { CaptureError } from "@/core/audio/capture/CaptureSource";
 import { liveTranscriptKey, useLiveTranscript, useTranscriptionHub } from "@/features/transcription/hooks/useTranscriptionHub";
 import {
 	TRANSCRIPTION_ADMISSION_CLOSED,
@@ -89,7 +89,7 @@ vi.mock("@microsoft/signalr", () => {
 });
 
 vi.mock("@/core/auth/stores/NodeAuthStore", () => ({
-	useNodeAuthStore: { getState: () => ({ accessToken: "token" }) },
+	useNodeAuthStore: { getState: () => ({ accessToken: "token" }), subscribe: () => () => undefined },
 }));
 
 interface SnapshotRow {

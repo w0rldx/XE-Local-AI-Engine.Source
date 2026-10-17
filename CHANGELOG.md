@@ -24,6 +24,8 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Added
 
+- Windows portable build ships `uninstall-xe-local-ai-engine.ps1` next to the app; it stops the node (and stops if a process survives), refuses a data folder that contains the extracted app or is a junction or symlink, and removes the data folder only on confirmation, with a typed `delete key` when `node.key` is present. The installer page and FAQ point at it.
+
 - **Delete a finished graph-workflow run** — the run toolbar offers "Delete run" on a finished run; after a
   confirmation the run, its node results and its event log are removed for good and the workflow itself is kept
   (`DELETE graph-workflows/runs/{runId}`, 409 while the run is still live).
@@ -300,10 +302,53 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Fixed
 
+- External Apps is off while the app catalog is empty: with an empty catalog at startup the container bridge does not open, and install, update, Start, Restart and Reset refuse until a restart after the first catalog entry (`restartRequired` on the catalog response, restart card in English and German; Stop and Uninstall stay allowed). A catalog that empties while the node runs refuses the same operations and the page says the bridge stays open until a restart. Install and Open reasons on the External Apps page are keyboard-reachable through the shared disabled-reason tooltip.
+
 - The external-provider connection store wrote its encrypted file in place; a crash mid-write could lose every
   external connection. It now writes through the same atomic temp-file-and-rename path as the other credential stores.
 - The playbook "Approve" button never showed why it was disabled; the tooltip's wrapper was missing.
 - The German playbook behaviour placeholder used the informal form.
+- Windows tester round on `1.0.0-rc.2.dev.20261013.109` (tray, dialogs, unlock page, first-run chooser):
+  - After an update, the desktop window and any browser with a cached copy kept the previous build's web app: the
+    shell page is served for revalidation, but its validator was derived from the file's modification time and length,
+    the installer stores every file with a 1980 timestamp, and the shell's byte length does not change between builds
+    (only the content-hashed bundle name inside it does), so the server answered "not modified". The validator of
+    every file that is not a content-hashed asset is now derived from the file's content, and all of those files are
+    served for revalidation, so the first start after an update loads the new app (N-57).
+  - The desktop settings dialog draws the stored choice as the accent button (N-58).
+  - The shell registers an explicit application identity on Windows, so the taskbar groups and names the window as
+    XE Local AI Engine instead of ".NET Host", and the window and taskbar use a filled high-contrast icon; the tray
+    keeps its own icon (N-59).
+  - The first-run sandbox-profile chooser's recommendation on a Windows host was read for the first time: Low, with
+    the three workloads High would refuse listed, closing the ADR 0020 item.
+- Windows tester round on `1.0.0-rc.2.dev.20261013.108` (sandbox + tray):
+  - The vault unlock page now notices an unlock performed elsewhere (another browser, the REST API) and moves on by
+    itself: while idle it polls the auth status every 5 s for a minute, then every 15 s. Before, the desktop window sat
+    on "Unlock this node" until a reload (N-56).
+  - The desktop close dialog is titled by its purpose ("Close XE", "Quit XE", "Desktop settings") instead of always
+    "Desktop settings", the settings variant names the stored choice and marks it as the default button, and the dialogs
+    no longer offer minimize or maximize (N-55).
+  - The tray uses its own high-contrast icon (white glyph with a thin dark stroke) instead of the coloured favicon,
+    which was nearly invisible on a dark taskbar; the window icon is unchanged (N-54).
+  - Docs: a Windows volume mounted inside a folder resolves to its own drive-letter root and is refused as a volume
+    root (proven live); only Linux mount points remain the known residue.
+- Windows tester round on `1.0.0-rc.2.dev.20261013.107` (sandbox-only):
+  - Every volume root (`/`, `C:\`, `D:\`, …) is now refused as a Sandboxed MCP server's command or working folder,
+    judged on the resolved name so a `subst` drive is its target; before, only the current drive's root was refused,
+    and a working directory of `D:\` granted the whole drive read-only (N-49). An existing folder that resolves to a
+    network share, or whose real name cannot be read, is refused by name instead of being dropped silently (N-50).
+    The refusal now names the relation: inside a protected store, holding the home directory, or holding N protected
+    folders, instead of the first root matched in list order (N-52).
+  - Sandboxed MCP servers connect in parallel again: the connection manager's refresh gate now covers only slug
+    assignment, registration and the stale-revoke pass, so one server's hanging handshake no longer delays the start
+    of every other server by up to the handshake timeout (N-51).
+  - The desktop shell's tray icon is attached again. Avalonia 12.1.4 creates the platform icon only when it is
+    attached to the application, so since the dependency round no tray icon appeared and the stored "Minimize to
+    tray" preference was silently downgraded to a disabled option in the close dialog (N-53).
+  - The `Sandbox containment probe (Windows)` log line now carries the Update Build Revision (`OS … (UBR n)`), the
+    number the MXC floor is defined by.
+  - The redacted command tail keeps bare `--` flag names and the common PowerShell host switches visible
+    (`--no-warnings`, `-NoProfile`); values, glued values (`-pSecret`, `--token=…`) and bare file names stay redacted.
 - Windows tester round on `1.0.0-rc.2.dev.20261011.106`:
   - A Sandboxed MCP server's command or working folder is now refused when it lies inside a protected root as well as
     when it is or contains one, so subfolders of the browser and Windows credential stores (a Firefox profile,
@@ -311,7 +356,7 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
     `Local` and `/` are still refused as roots, `AppData\Roaming\npm` still binds, and the Store app alias folder
     `AppData\Local\Microsoft\WindowsApps` is allowed. An account whose home directory lies under `/root` or `/var` (for example the engine run as root) has every Sandboxed-tier server refused; use a regular user account or the Privileged host tier.
     The Windows stores of Thunderbird, BraveSoftware, Opera Software, Vivaldi, gnupg, GitHub CLI and gcloud and the Linux stores `.mozilla`, `.thunderbird`, `.local/share/keyrings`, `.password-store`, `.pki` and redirected AppData
-    profile folders are now covered too, and non-drive-letter Windows spellings are handled precisely: a `\\?\`, `\\.\`, volume-GUID, stream or `subst` spelling of an existing folder is resolved to its real drive-letter name and then judged by the denylist, so a `subst` drive into a store is refused as the store. A spelling that resolves to a network share, or whose real name cannot be read, is never granted: the folder is dropped and the server's start failure carries the "folder the sandbox cannot read" hint. A non-existent non-drive-letter spelling is refused by name.
+    profile folders are now covered too, and non-drive-letter Windows spellings are handled precisely: a `\\?\`, `\\.\`, volume-GUID, stream or `subst` spelling of an existing folder is resolved to its real drive-letter name and then judged by the denylist, so a `subst` drive into a store is refused as the store. An existing folder that resolves to a network share, or whose real name cannot be read, is never granted: it is refused by name (round 6; round 5 dropped it silently). A non-existent non-drive-letter spelling is refused by name.
   - node.js servers whose script sits under the user profile now start: the Windows sandbox sets `NODE_OPTIONS` to
     `--preserve-symlinks --preserve-symlinks-main` unless the registration sets its own; the default can break pnpm or
     linked installs, and setting `NODE_OPTIONS` in the registration replaces it (a harmless value such as `--no-warnings` is enough) (N-41).

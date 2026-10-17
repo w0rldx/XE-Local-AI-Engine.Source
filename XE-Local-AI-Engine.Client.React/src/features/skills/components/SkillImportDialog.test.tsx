@@ -21,7 +21,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 // The dialog drives the two generated import mutations; stub their mutationFns so the preview→commit wiring can be
-// asserted without a backend. `withResponseValidation` preserves mutationFn, so the spies still receive the variables.
+// asserted without a backend. The hook spreads mutationFn, so the spies still receive the variables.
 const { commitSpy, previewSpy } = vi.hoisted(() => ({ commitSpy: vi.fn(), previewSpy: vi.fn() }));
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@/core/api/generated/@tanstack/react-query.gen")>()),

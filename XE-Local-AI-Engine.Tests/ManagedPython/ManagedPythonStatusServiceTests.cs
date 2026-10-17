@@ -6,6 +6,7 @@ using TUnit.Core.Enums;
 using XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 using XE_Local_AI_Engine.Client.Services.ManagedPython;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Providers.Python;
 using XE_Local_AI_Engine.Providers.Python.Implementation;
 using XE_Local_AI_Engine.Providers.Training;
@@ -63,7 +64,11 @@ public sealed class ManagedPythonStatusServiceTests : IDisposable
         {
             _training.GetStatus().Returns(TrainingStatus(phase, isRunning: true));
 
-            AssertEx.Equal(ManagedPythonEnvironmentState.Provisioning, (await TrainingRowAsync()).State, phase.ToString());
+            var row = await TrainingRowAsync();
+            AssertEx.Equal(ManagedPythonEnvironmentState.Provisioning, row.State, phase.ToString());
+            AssertEx.Equal(phase == TrainingRuntimePhase.Removing ? ManagedPythonReasonCode.TrainingRemoving : ManagedPythonReasonCode.TrainingInstalling,
+                row.ReasonCode,
+                phase.ToString());
         }
     }
 
@@ -76,6 +81,7 @@ public sealed class ManagedPythonStatusServiceTests : IDisposable
 
         AssertEx.Equal(ManagedPythonEnvironmentState.Failed, row.State);
         AssertEx.Equal("The training runtime install was cancelled.", row.Reason);
+        AssertEx.Equal(ManagedPythonReasonCode.TrainingFailed, row.ReasonCode);
     }
 
     [Test]
@@ -95,6 +101,7 @@ public sealed class ManagedPythonStatusServiceTests : IDisposable
 
         AssertEx.Equal(ManagedPythonEnvironmentState.Ready, row.State, "the uv version is informational only");
         AssertEx.Null(row.Reason);
+        AssertEx.Equal(ManagedPythonReasonCode.None, row.ReasonCode);
         AssertEx.Equal("0.1.0", AssertEx.NotNull(row.Installed).UvVersion);
     }
 
@@ -107,6 +114,7 @@ public sealed class ManagedPythonStatusServiceTests : IDisposable
 
         AssertEx.Equal(ManagedPythonEnvironmentState.Ready, row.State);
         AssertEx.Equal("Verifying the provisioned training runtime failed.", row.Reason);
+        AssertEx.Equal(ManagedPythonReasonCode.TrainingFailed, row.ReasonCode);
     }
 
     [Test]
@@ -126,6 +134,7 @@ public sealed class ManagedPythonStatusServiceTests : IDisposable
 
         AssertEx.Equal(ManagedPythonEnvironmentState.UpdateRequired, row.State);
         AssertEx.Equal(expectedMismatch, string.Join(",", row.Mismatches));
+        AssertEx.Equal(ManagedPythonReasonCode.TrainingOutOfDate, row.ReasonCode);
     }
 
     [Test]
@@ -142,20 +151,42 @@ public sealed class ManagedPythonStatusServiceTests : IDisposable
         _training.GetStatus().Returns(TrainingStatus(TrainingRuntimePhase.Ready, Installed()));
         _training.ResolveInterpreterPath().Returns((string?)null);
 
-        AssertEx.Equal(ManagedPythonEnvironmentState.RepairRequired, (await TrainingRowAsync()).State);
+        var row = await TrainingRowAsync();
+        AssertEx.Equal(ManagedPythonEnvironmentState.RepairRequired, row.State);
+        AssertEx.Equal(ManagedPythonReasonCode.TrainingInterpreterMissing, row.ReasonCode);
     }
 
     [Test]
-    public async Task BothEnvironments_OffLinux_AreUnsupported_WithoutAskingTheTrainingService()
+    public async Task BothEnvironments_OffLinuxOnAnUnpinnedPlatform_AreUnsupported_WithoutAskingTheTrainingService()
+    {
+        using var compute = CreateCompute();
+        var service = CreateService(compute, isLinux: false, platformSupported: false);
+
+        var status = await service.GetStatusAsync(CancellationToken.None);
+        var computeRow = status.Environments.Single(static row => row.ProfileId == ComputePythonEnvironment.ProfileId);
+
+        AssertEx.True(status.Environments.All(static row => row.State == ManagedPythonEnvironmentState.Unsupported));
+        AssertEx.Equal("The Python compute tool is available on Linux x64 and Windows x64 only.", computeRow.Reason);
+        AssertEx.Equal(ManagedPythonReasonCode.PlatformUnsupported, computeRow.ReasonCode);
+        _ = _training.DidNotReceive().GetStatus();
+    }
+
+    [Test]
+    public async Task Compute_OffLinuxOnAPinnedPlatform_IsNotRefusedForThePlatform_WhileTrainingStaysLinuxOnly()
     {
         using var compute = CreateCompute();
         var service = CreateService(compute, isLinux: false);
 
         var status = await service.GetStatusAsync(CancellationToken.None);
+        var computeRow = status.Environments.Single(static row => row.ProfileId == ComputePythonEnvironment.ProfileId);
+        var trainingRow = status.Environments.Single(static row => row.ProfileId == ManagedPythonStatusService.TrainingProfileId);
 
-        AssertEx.True(status.Environments.All(static row => row.State == ManagedPythonEnvironmentState.Unsupported));
-        AssertEx.True(status.Environments.All(static row => row.Reason?.Contains("Linux", StringComparison.Ordinal) == true));
-        _ = _training.DidNotReceive().GetStatus();
+        AssertEx.Equal(ManagedPythonEnvironmentState.NotProvisioned, computeRow.State);
+        AssertEx.False(computeRow.Reason?.Contains("available on", StringComparison.Ordinal) == true);
+        AssertEx.Equal(ManagedPythonEnvironmentState.Unsupported, trainingRow.State);
+        AssertEx.Contains(trainingRow.Reason, "Training is available on Linux x64 only.");
+        AssertEx.Equal(ManagedPythonReasonCode.TrainingPlatformUnsupported, trainingRow.ReasonCode);
+        AssertEx.Equal(ManagedPythonReasonCode.None, computeRow.ReasonCode);
     }
 
     [Test]
@@ -184,7 +215,8 @@ public sealed class ManagedPythonStatusServiceTests : IDisposable
         var remove = await service.RemoveComputeAsync(CancellationToken.None);
 
         AssertEx.Equal(ManagedPythonEnvironmentState.Unsupported, row.State);
-        AssertEx.Contains(row.Reason, "Compute:Enabled=false");
+        AssertEx.Contains(row.Reason, "Turn on Compute tools in Node Settings");
+        AssertEx.Equal(ManagedPythonReasonCode.ComputeDisabled, row.ReasonCode);
         AssertEx.Equal(ManagedPythonActionOutcome.Unsupported, repair.Outcome);
         AssertEx.Equal(ManagedPythonActionOutcome.Unsupported, remove.Outcome);
         AssertEx.Equal(AssertEx.NotNull(row.Reason), repair.Message);
@@ -200,6 +232,33 @@ public sealed class ManagedPythonStatusServiceTests : IDisposable
 
         AssertEx.Equal(ManagedPythonEnvironmentState.Unsupported, row.State);
         AssertEx.Contains(row.Reason, "isolate");
+        AssertEx.Equal(ManagedPythonReasonCode.IsolationUnavailable, row.ReasonCode);
+    }
+
+    [Test]
+    public async Task Compute_WhenOnlyThePreviewsSwitchIsMissing_NamesItInsteadOfEveryPossibleCause()
+    {
+        using var compute = CreateCompute();
+        var service = CreateService(compute, isolation: false, isolationCause: SandboxContainment.ExecutionPreviewsDisabledReason);
+
+        var row = await ComputeRowAsync(service);
+
+        AssertEx.Equal(ManagedPythonReasonCode.ExecutionPreviewsDisabled, row.ReasonCode);
+        AssertEx.Equal("This node cannot isolate the compute sandbox filesystem (execution previews are disabled). "
+                       + "An operator can turn on execution previews in the Sandbox & isolation section of Node settings.",
+            row.Reason);
+    }
+
+    [Test]
+    public async Task Compute_WhenAnotherCauseIsNamed_CarriesItWithTheHostRemedy()
+    {
+        using var compute = CreateCompute();
+        var service = CreateService(compute, isolation: false, isolationCause: "bwrap is not installed");
+
+        var row = await ComputeRowAsync(service);
+
+        AssertEx.Equal(ManagedPythonReasonCode.IsolationUnavailable, row.ReasonCode);
+        AssertEx.Equal($"This node cannot isolate the compute sandbox filesystem (bwrap is not installed). {SandboxBoundaryRemedy.ForThisHost()}.", row.Reason);
     }
 
     [Test]
@@ -274,10 +333,12 @@ public sealed class ManagedPythonStatusServiceTests : IDisposable
         bool isLinux = true,
         bool enabled = true,
         bool isolation = true,
-        bool platformSupported = true)
+        bool platformSupported = true,
+        string? isolationCause = null)
     {
         var sandbox = Substitute.For<IAgentSandboxRuntimeProvider>();
         sandbox.Capabilities.Returns(isolation ? SandboxProviderCapabilities.SupportsFilesystemIsolation : SandboxProviderCapabilities.None);
+        sandbox.FilesystemIsolationUnavailableReason.Returns(isolationCause);
         return new ManagedPythonStatusService(compute,
             _training,
             SeededNodeRuntimeSettings.FromSeed("Compute:Enabled", enabled),

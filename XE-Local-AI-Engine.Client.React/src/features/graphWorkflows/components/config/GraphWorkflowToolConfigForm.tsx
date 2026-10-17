@@ -3,7 +3,7 @@
 // `canvasToGraph` owns both conversions; this file only makes the tool's own parameter schema drive what the operator
 // can pick, so a binding names a real parameter rather than a typed guess.
 
-import { ActionIcon, Button, Group, Select, Stack, Text, TextInput } from "@mantine/core";
+import { ActionIcon, Badge, Button, Group, Select, Stack, Text, TextInput } from "@mantine/core";
 import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
@@ -78,6 +78,8 @@ export interface GraphWorkflowToolConfigFormProps {
 	readonly errorFor: (field: string) => string | undefined;
 	readonly onTouch: (field: string) => void;
 	readonly tools: readonly GraphWorkflowToolResponse[];
+	/** The definition's `allowsActions`. An action tool is offered disabled without it, saying what the save gate would say. */
+	readonly allowsActions?: boolean;
 	readonly readOnly?: boolean;
 }
 
@@ -87,6 +89,7 @@ export function GraphWorkflowToolConfigForm({
 	errorFor,
 	onTouch,
 	tools,
+	allowsActions = false,
 	readOnly = false,
 }: GraphWorkflowToolConfigFormProps) {
 	const { t } = useTranslation();
@@ -94,6 +97,7 @@ export function GraphWorkflowToolConfigForm({
 	const properties = schemaProperties(selectedTool?.parameterSchema);
 	// The flag is the server's word; the name keeps the list visible on a node whose tool web access no longer offers.
 	const needsAllowedUrls = selectedTool?.requiresAllowedUrls === true || node.toolName === webFetchToolName;
+	const actionLabel = t("pages.graphWorkflows.config.actionBadge", "Action");
 
 	return (
 		<>
@@ -103,7 +107,13 @@ export function GraphWorkflowToolConfigForm({
 				// Exactly the list the page was given: `GET graph-workflows/tools` is already filtered server-side to what
 				// a graph node may run, and re-deriving that here would be a second rule that drifts.
 				data={withCurrentValue(
-					tools.map((tool) => ({ value: tool.name ?? "", label: tool.name ?? "" })),
+					// An action stays listed when the definition does not allow actions, disabled, so the author learns it exists and why
+					// it cannot be picked here rather than meeting the save gate's refusal later (ADR 0021).
+					tools.map((tool) => ({
+						value: tool.name ?? "",
+						label: tool.isAction ? `${tool.name ?? ""} · ${actionLabel}` : (tool.name ?? ""),
+						disabled: tool.isAction && !allowsActions,
+					})),
 					node.toolName,
 				)}
 				value={node.toolName}
@@ -129,6 +139,37 @@ export function GraphWorkflowToolConfigForm({
 			{selectedTool?.description ? (
 				<Text size="xs" c="dimmed" data-testid="gw-node-config-tool-description">
 					{selectedTool.description}
+				</Text>
+			) : null}
+			{selectedTool?.isAction ? (
+				<Stack gap={4} data-testid="gw-node-config-tool-action">
+					<Group gap="xs">
+						<Badge size="sm" color="orange" variant="light" data-testid="gw-node-config-tool-action-badge">
+							{actionLabel}
+						</Badge>
+						<Text size="xs" c="dimmed">
+							{t(
+								"pages.graphWorkflows.config.actionNote",
+								"Runs unattended and exactly once per run: it has a side effect, and nothing retries it.",
+							)}
+						</Text>
+					</Group>
+					{allowsActions ? null : (
+						<Text size="xs" c="red" data-testid="gw-node-config-tool-action-refused">
+							{t(
+								"pages.graphWorkflows.config.actionNeedsAllowActions",
+								"Tool '{{name}}' is an action with a side effect, so this node needs 'Allow actions' on this definition.",
+								{ name: selectedTool.name ?? "" },
+							)}
+						</Text>
+					)}
+				</Stack>
+			) : !allowsActions && tools.some((tool) => tool.isAction) ? (
+				<Text size="xs" c="dimmed" data-testid="gw-node-config-tool-actions-disabled">
+					{t(
+						"pages.graphWorkflows.config.actionsDisabledHint",
+						"Action tools are greyed out: turn on 'Allow actions' in this workflow's settings to use them.",
+					)}
 				</Text>
 			) : null}
 			{needsAllowedUrls ? (

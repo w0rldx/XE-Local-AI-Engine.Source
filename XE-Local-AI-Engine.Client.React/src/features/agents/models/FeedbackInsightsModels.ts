@@ -6,7 +6,7 @@
 // The wire `rating` is the string "up"/"down" (enum-free on the wire). Counts are non-negative integers;
 // `downRate` is the fraction of down-rated feedback (0..1); `meetsThreshold` encodes the "recurring, not
 // n=1" gate (total >= minOccurrenceThreshold) the backend computes. Boundary validation is owned by the
-// generated hey-api zod validator + the withResponseValidation bridge; FeedbackInsightsMappers projects the
+// generated hey-api zod validator; FeedbackInsightsMappers projects the
 // validated wire shape into these immutable domain view-models.
 
 export type FeedbackRating = "up" | "down";

@@ -1,5 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1;
 
+using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
@@ -354,6 +358,16 @@ public sealed record NodeSettingsResponse
 
     public int MaxAllowedWebFetchTimeoutSeconds { get; init; }
 
+    /// <summary>The graph workflow the intent endpoint asks when no alias matches; null routes on aliases alone. Applies to the next request.</summary>
+    public Guid? IntentRouterDefinitionId { get; init; }
+
+    /// <summary>How old an intent utterance may be, in seconds, before it is refused as a replay. Applies to the next request.</summary>
+    public int? IntentMaxUtteranceAgeSeconds { get; init; }
+
+    public int MinIntentMaxUtteranceAgeSeconds { get; init; }
+
+    public int MaxAllowedIntentMaxUtteranceAgeSeconds { get; init; }
+
     /// <summary>Cap on the readable text one web_fetch returns, in characters. Applies to the next call.</summary>
     public int? WebFetchMaxContentChars { get; init; }
 
@@ -586,13 +600,13 @@ public sealed record NodeSettingsResponse
     /// <summary>Whether a cloud-hosted model may start sub-agents. Applies to the next turn. Effective value: stored, else off.</summary>
     public bool AllowCloudModelSubAgents { get; init; }
 
-    /// <summary>Model that proposes playbook actions; blank or absent inherits the default model. Applies to the next run.</summary>
+    /// <summary>Model that proposes playbook actions; null inherits the default model. Applies to the next run.</summary>
     public string? PlaybookAnalysisModelName { get; init; }
 
-    /// <summary>Model that runs playbook evals; blank or absent inherits the default model. Applies to the next run.</summary>
+    /// <summary>Model that runs playbook evals; null inherits the default model. Applies to the next run.</summary>
     public string? PlaybookEvalModelName { get; init; }
 
-    /// <summary>Model that mines lessons from completed runs; blank or absent inherits the default model. Applies to the next run.</summary>
+    /// <summary>Model that mines lessons from completed runs; null inherits the default model. Applies to the next run.</summary>
     public string? MemoryExtractionModelName { get; init; }
 
     /// <summary>Whether old conversations are deleted. Applies to the next sweep. Effective value: stored, else the configuration seed.</summary>
@@ -755,12 +769,18 @@ public sealed record NodeSettingsResponse
 ///     Body for <c>PUT api/local/v1/node-settings</c>. EVERY field is OPTIONAL, including the chat timeout.
 /// </summary>
 /// <remarks>
-///     A <see langword="null" /> request field keeps the current stored value — the mapper merges into the loaded
-///     <see cref="StoredNodeSettings" />. Provided values are validated at the boundary by
-///     <see cref="Validators.SaveNodeSettingsRequestValidator" /> (ranges, URL format, tag format, array element constraints).
+///     Omitted keeps the stored value, an explicit JSON null clears it to the effective default, a value sets it; -1 and
+///     "" are refused. Null cannot clear the three first-run profile members and resets the chat timeout, so a client
+///     serializing a whole object must omit nulls. An unknown top-level property is a 400; an unknown member inside a
+///     <c>usageRates</c> entry (a <see cref="ModelRate" />, also the persisted shape) is still ignored.
 /// </remarks>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SaveNodeSettingsRequest
 {
+    // Filled only while the body is deserialized, by TrackExplicitNulls. A `with` copy shares the set and record equality
+    // compares it by reference; no code copies or compares a request.
+    private readonly HashSet<string> _explicitNulls = new(StringComparer.Ordinal);
+
     public int? MaxMessageRequestTimeoutSeconds { get; init; }
 
     public string? DefaultModelName { get; init; }
@@ -768,8 +788,8 @@ public sealed record SaveNodeSettingsRequest
     public bool? EnableTools { get; init; }
 
     /// <summary>
-    ///     Node kill-switch for the user-defined custom tools feature. <see langword="null" /> keeps the current
-    ///     stored value.
+    ///     Node kill-switch for the user-defined custom tools feature. Omitted keeps the stored value; null clears it
+    ///     to the default.
     /// </summary>
     /// <remarks>
     ///     DANGER: enabling this allows agents to run user-defined tools that execute host commands, launch programs
@@ -779,20 +799,20 @@ public sealed record SaveNodeSettingsRequest
     public bool? CustomToolsEnabled { get; init; }
 
     /// <summary>
-    ///     Node switch for the per-turn tool-relevance offer. <see langword="null" /> keeps the current stored value.
+    ///     Node switch for the per-turn tool-relevance offer. Omitted keeps the stored value; null clears it.
     ///     Off by default; a per-agent opt-out still wins when it is on.
     /// </summary>
     public bool? ToolRelevanceEnabled { get; init; }
 
     /// <summary>
-    ///     Node switch for the built-in web tools. <see langword="null" /> keeps the current stored value. Retrieved web
+    ///     Node switch for the built-in web tools. Omitted keeps the stored value; null clears it. Retrieved web
     ///     content is reviewed by the user before it reaches the model; a conversation can auto-accept instead.
     /// </summary>
     public bool? WebAccessEnabled { get; init; }
 
     /// <summary>
-    ///     The SearXNG base URL (absolute http or https) for <c>web_search</c>. <see langword="null" /> keeps the current
-    ///     stored value; an empty string clears it, so DuckDuckGo is used again.
+    ///     The SearXNG base URL (absolute http or https) for <c>web_search</c>. Null clears it, so
+    ///     DuckDuckGo is used again.
     /// </summary>
     public string? WebSearchSearxngUrl { get; init; }
 
@@ -802,8 +822,9 @@ public sealed record SaveNodeSettingsRequest
     /// <remarks>
     ///     The server writes that preset's three switches and ignores any switch sent alongside it. <c>custom</c> and
     ///     <c>pending</c> are engine-written states and are REJECTED as input — a client never computes either.
-    ///     <see langword="null" /> keeps the current stored value, unless one of the three switches below is supplied,
-    ///     which stamps <c>custom</c>.
+    ///     Omitted keeps the current stored value, unless one of the three switches below is supplied, which stamps
+    ///     the preset the switches match, else <c>custom</c>. Null is refused with a 400: it would re-open the first-run
+    ///     decision.
     /// </remarks>
     public string? ExternalAccessProfile { get; init; }
 
@@ -811,7 +832,8 @@ public sealed record SaveNodeSettingsRequest
     ///     Set the navigation mode: <c>simple</c> or <c>advanced</c> ONLY; anything else is rejected with a 400.
     /// </summary>
     /// <remarks>
-    ///     <see langword="null" /> keeps the current stored value. It composes with no other field, so it can be sent
+    ///     Omitted keeps the current stored value; null is refused with a 400 (it would re-open the first-run choice).
+    ///     It composes with no other field, so it can be sent
     ///     on its own — which is how both the first-run step and the Node Settings toggle save it.
     /// </remarks>
     public string? UiMode { get; init; }
@@ -820,7 +842,8 @@ public sealed record SaveNodeSettingsRequest
     ///     Set the sandbox security profile: <c>low</c> or <c>high</c> ONLY; anything else, <c>pending</c> included, is rejected with a 400.
     /// </summary>
     /// <remarks>
-    ///     <see langword="null" /> keeps the current stored value. Applies to the next sandbox created. Lowering it (<c>high</c> to
+    ///     Omitted keeps the current stored value; null is refused with a 400 (it would re-open the first-run choice).
+    ///     Applies to the next sandbox created. Lowering it (<c>high</c> to
     ///     <c>low</c>) is security-widening: the UI confirms the change before saving it (ADR 0020).
     /// </remarks>
     public string? SandboxSecurityProfile { get; init; }
@@ -830,7 +853,8 @@ public sealed record SaveNodeSettingsRequest
     ///     with a 400.
     /// </summary>
     /// <remarks>
-    ///     <see langword="null" /> keeps the current stored value. The SPA uses the dedicated
+    ///     Omitted keeps the current stored value; null clears it to the configured default channel. The SPA uses the
+    ///     dedicated
     ///     <c>PUT app-update/channel</c> endpoint instead, which also re-checks immediately; this member exists so the
     ///     MCP and Node Settings surfaces stay consistent with it.
     /// </remarks>
@@ -840,8 +864,8 @@ public sealed record SaveNodeSettingsRequest
     ///     Whether the node checks for application updates on its own.
     /// </summary>
     /// <remarks>
-    ///     <see langword="null" /> keeps the current stored value; supplying it (without a preset) stamps the profile
-    ///     <c>custom</c>. The manual check and apply flow are unaffected, and the automatic check runs once per
+    ///     Omitted keeps the current stored value; supplying it, null included (without a preset), restamps the
+    ///     profile. The manual check and apply flow are unaffected, and the automatic check runs once per
     ///     process, so turning it back on applies at the next start.
     /// </remarks>
     public bool? AutoCheckApplicationUpdates { get; init; }
@@ -850,15 +874,15 @@ public sealed record SaveNodeSettingsRequest
     ///     Whether the node checks for llama.cpp / runtime updates on its own.
     /// </summary>
     /// <remarks>
-    ///     <see langword="null" /> keeps the current stored value; supplying it (without a preset) stamps the profile
-    ///     <c>custom</c>. The manual runtime-status refresh and the runtime install are unaffected, and the automatic
+    ///     Omitted keeps the current stored value; supplying it, null included (without a preset), restamps the
+    ///     profile. The manual runtime-status refresh and the runtime install are unaffected, and the automatic
     ///     check runs once per process.
     /// </remarks>
     public bool? AutoCheckRuntimeUpdates { get; init; }
 
     /// <summary>
-    ///     Whether the node downloads a first-run model and runtime on its own. <see langword="null" /> keeps the current
-    ///     stored value; supplying it (without a preset) stamps the profile <c>custom</c>. A manual model download or
+    ///     Whether the node downloads a first-run model and runtime on its own. Omitted keeps the current stored
+    ///     value; supplying it, null included (without a preset), restamps the profile. A manual model download or
     ///     install is unaffected.
     /// </summary>
     public bool? AutoProvisionFirstRunModel { get; init; }
@@ -869,25 +893,25 @@ public sealed record SaveNodeSettingsRequest
 
     public string? HuggingFaceDefaultQuant { get; init; }
 
-    /// <summary>llama-server processes kept loaded at once; -1 resets to the default.</summary>
+    /// <summary>llama-server processes kept loaded at once; null resets to the default.</summary>
     public int? LlamaMaxLoadedProcesses { get; init; }
 
-    /// <summary>Idle time-to-live of a llama-server, in seconds; -1 resets to the default.</summary>
+    /// <summary>Idle time-to-live of a llama-server, in seconds; null resets to the default.</summary>
     public int? LlamaIdleTimeToLiveSeconds { get; init; }
 
     public bool? KeepModelWarmEnabled { get; init; }
 
     public string? KeepModelWarmModelName { get; init; }
 
-    /// <summary>Seconds between keep-warm touches; -1 resets to the default.</summary>
+    /// <summary>Seconds between keep-warm touches; null resets to the default.</summary>
     public int? KeepModelWarmIntervalSeconds { get; init; }
 
-    /// <summary>Worker response-size cap in MiB; -1 resets to the default.</summary>
+    /// <summary>Worker response-size cap in MiB; null resets to the default.</summary>
     public int? MaxResponseSizeMb { get; init; }
 
     public string? RecommendedLlamaCppTag { get; init; }
 
-    /// <summary>Chat-role prompt-cache reuse window in tokens; <c>0</c> disables it and -1 resets to the default.</summary>
+    /// <summary>Chat-role prompt-cache reuse window in tokens; <c>0</c> disables it and null resets to the default.</summary>
     public int? ChatCacheReuse { get; init; }
 
     public string? SpeculativeMode { get; init; }
@@ -902,46 +926,46 @@ public sealed record SaveNodeSettingsRequest
     ///     Which container runtime External Apps resolves against: <c>auto</c> or <c>docker</c>, case-insensitive.
     /// </summary>
     /// <remarks>
-    ///     <see langword="null" /> keeps the current stored value, like every other member of this partial update. A
+    ///     Omitted keeps the current stored value and null clears it, like every other member of this partial update. A
     ///     STRING, not an enum: a JSON number cannot bind to it, so an undefined selection can never be persisted.
     /// </remarks>
     public string? ContainerRuntimeSelection { get; init; }
 
     public string? SpeculativeDraftModelName { get; init; }
 
-    /// <summary>Draft tokens per step; <c>0</c> omits the flag and -1 resets to the default.</summary>
+    /// <summary>Draft tokens per step; <c>0</c> omits the flag and null resets to the default.</summary>
     public int? SpeculativeDraftMaxTokens { get; init; }
 
-    /// <summary>Draft-model GPU layers. Takes no -1: llama.cpp reads a negative layer count as a value, not as "unset".</summary>
+    /// <summary>Draft-model GPU layers; null resets to the default.</summary>
     public int? SpeculativeDraftGpuLayers { get; init; }
 
-    /// <summary>Installed cross-encoder reranker model name for knowledge-base search rerank. Empty/blank disables reranking.</summary>
+    /// <summary>Installed cross-encoder reranker model name for knowledge-base search rerank. Null disables reranking.</summary>
     public string? RerankerModelName { get; init; }
 
     public string? AutoEffortFastModelName { get; init; }
 
-    /// <summary>Hugging Face disk-guard safety margin in bytes; -1 resets to the default.</summary>
+    /// <summary>Hugging Face disk-guard safety margin in bytes; null resets to the default.</summary>
     public long? HuggingFaceDiskMarginBytes { get; init; }
 
-    /// <summary>Orchestration idle timeout in seconds; -1 resets to the default.</summary>
+    /// <summary>Orchestration idle timeout in seconds; null resets to the default.</summary>
     public int? OrchestrationIdleTimeoutSeconds { get; init; }
 
-    /// <summary>AgentHome prepare-phase timeout in seconds; -1 resets to the default.</summary>
+    /// <summary>AgentHome prepare-phase timeout in seconds; null resets to the default.</summary>
     public int? AgentHomePrepareTimeoutSeconds { get; init; }
 
-    /// <summary>AgentHome per-command timeout in seconds; -1 resets to the default.</summary>
+    /// <summary>AgentHome per-command timeout in seconds; null resets to the default.</summary>
     public int? AgentHomeCommandTimeoutSeconds { get; init; }
 
-    /// <summary>AgentHome per-folder byte budget; -1 resets to the default.</summary>
+    /// <summary>AgentHome per-folder byte budget; null resets to the default.</summary>
     public long? AgentHomeMaxSelectedFolderBytes { get; init; }
 
-    /// <summary>AgentHome exported-patch byte budget; -1 resets to the default.</summary>
+    /// <summary>AgentHome exported-patch byte budget; null resets to the default.</summary>
     public long? AgentHomeMaxPatchBytes { get; init; }
 
-    /// <summary>Minutes an unanswered tool approval waits before it expires; -1 resets to the default.</summary>
+    /// <summary>Minutes an unanswered tool approval waits before it expires; null resets to the default.</summary>
     public int? MaxPendingToolCallAgeMinutes { get; init; }
 
-    /// <summary>Seconds a run with no attached client keeps going before it is cancelled. <c>0</c> never cancels; -1 resets to the default.</summary>
+    /// <summary>Seconds a run with no attached client keeps going before it is cancelled. <c>0</c> never cancels; null resets to the default.</summary>
     public int? DetachedGraceSeconds { get; init; }
 
     public bool? VoiceFeatureEnabled { get; init; }
@@ -952,139 +976,144 @@ public sealed record SaveNodeSettingsRequest
     ///     Operator override of usage cost rates, keyed by model NAME to its USD-per-1M input/output rate.
     /// </summary>
     /// <remarks>
-    ///     <see langword="null" /> keeps the currently stored override; a supplied map REPLACES it, and an empty map
-    ///     clears it because the store's <c>Normalize</c> collapses it to null. Negative or non-finite rates are
+    ///     Omitted keeps the currently stored override, null clears it, a supplied map REPLACES it, and an empty map
+    ///     clears it too because the store's <c>Normalize</c> collapses it to null. Negative or non-finite rates are
     ///     rejected at the boundary with a 400.
     /// </remarks>
     public IReadOnlyDictionary<string, ModelRate>? UsageRates { get; init; }
 
-    /// <summary>Whisper.cpp daemon idle time-to-live in minutes; -1 resets to the default. Applies after a node restart.</summary>
+    /// <summary>Whisper.cpp daemon idle time-to-live in minutes; null resets to the default. Applies after a node restart.</summary>
     public int? TranscriptionIdleTimeoutMinutes { get; init; }
 
-    /// <summary>Cap on how long a llama-server may take to become ready, in seconds; -1 resets to the default. Applies after a node restart.</summary>
+    /// <summary>Cap on how long a llama-server may take to become ready, in seconds; null resets to the default. Applies after a node restart.</summary>
     public int? LlamaReadinessTimeoutCapSeconds { get; init; }
 
-    /// <summary>Chat-role HTTP timeout to a llama-server, in seconds; -1 resets to the default. Applies after a node restart.</summary>
+    /// <summary>Chat-role HTTP timeout to a llama-server, in seconds; null resets to the default. Applies after a node restart.</summary>
     public int? LlamaChatHttpTimeoutSeconds { get; init; }
 
-    /// <summary>Embedding/rerank-role HTTP timeout to a llama-server, in seconds; -1 resets to the default. Applies after a node restart.</summary>
+    /// <summary>Embedding/rerank-role HTTP timeout to a llama-server, in seconds; null resets to the default. Applies after a node restart.</summary>
     public int? LlamaEmbeddingHttpTimeoutSeconds { get; init; }
 
     /// <summary>
-    ///     Chat-role host prompt-cache budget in MiB; <c>0</c> disables it. <see langword="null" /> keeps the stored value,
-    ///     and <c>-1</c> resets it to automatic. Applies after a node restart.
+    ///     Chat-role host prompt-cache budget in MiB; <c>0</c> disables it. Null resets it to automatic. Applies after a node restart.
     /// </summary>
     public int? LlamaChatCacheRamMiB { get; init; }
 
-    /// <summary>CPU threads left free for the host when a spawn derives its thread count; -1 resets to the default. Applies after a node restart.</summary>
+    /// <summary>CPU threads left free for the host when a spawn derives its thread count; null resets to the default. Applies after a node restart.</summary>
     public int? LlamaCpuThreadReserve { get; init; }
 
-    /// <summary>Share of GPU memory, in percent, the context allocator keeps free; -1 resets to the default. Applies after a node restart and invalidates frozen inference profiles.</summary>
+    /// <summary>Share of GPU memory, in percent, the context allocator keeps free; null resets to the default. Applies after a node restart and invalidates frozen inference profiles.</summary>
     public int? LlamaGpuReservePercent { get; init; }
 
-    /// <summary>Share of RAM, in percent, the context allocator keeps free; -1 resets to the default. Applies after a node restart and invalidates frozen inference profiles.</summary>
+    /// <summary>Share of RAM, in percent, the context allocator keeps free; null resets to the default. Applies after a node restart and invalidates frozen inference profiles.</summary>
     public int? LlamaRamReservePercent { get; init; }
 
-    /// <summary>Idle time-to-live of an sd-server daemon, in seconds; -1 resets to the default. Applies after a node restart.</summary>
+    /// <summary>Idle time-to-live of an sd-server daemon, in seconds; null resets to the default. Applies after a node restart.</summary>
     public int? ImageIdleTimeToLiveSeconds { get; init; }
 
-    /// <summary>Model-fit safety margin in percent of weights plus KV cache; -1 resets to the default. Applies to the next fit estimate.</summary>
+    /// <summary>Model-fit safety margin in percent of weights plus KV cache; null resets to the default. Applies to the next fit estimate.</summary>
     public int? ModelFitSafetyMarginPercent { get; init; }
 
-    /// <summary>Ceiling on raw provider rounds per invocation; -1 resets to the default. Applies after a node restart.</summary>
+    /// <summary>Ceiling on raw provider rounds per invocation; null resets to the default. Applies after a node restart.</summary>
     public int? MaxProviderCallsPerInvocation { get; init; }
 
-    /// <summary>Ceiling on a custom command tool's timeout, in seconds; -1 resets to the default. Applies to the next save or call.</summary>
+    /// <summary>Ceiling on a custom command tool's timeout, in seconds; null resets to the default. Applies to the next save or call.</summary>
     public int? CustomToolMaxTimeoutSeconds { get; init; }
 
-    /// <summary>Time budget of one web_fetch or web_search call, in seconds; -1 resets to the default. Applies to the next call.</summary>
+    /// <summary>Time budget of one web_fetch or web_search call, in seconds; null resets to the default. Applies to the next call.</summary>
     public int? WebFetchTimeoutSeconds { get; init; }
 
-    /// <summary>Cap on the readable text one web_fetch returns, in characters; -1 resets to the default. Applies to the next call.</summary>
+    /// <summary>The intent router graph workflow id; null clears it (alias-only routing). Applies to the next request.</summary>
+    public string? IntentRouterDefinitionId { get; init; }
+
+    /// <summary>How old an intent utterance may be, in seconds; null resets to the default. Applies to the next request.</summary>
+    public int? IntentMaxUtteranceAgeSeconds { get; init; }
+
+    /// <summary>Cap on the readable text one web_fetch returns, in characters; null resets to the default. Applies to the next call.</summary>
     public int? WebFetchMaxContentChars { get; init; }
 
-    /// <summary>search_knowledge_base hit count when the model names none; must not exceed the maximum; -1 resets to the default. Applies to the next call.</summary>
+    /// <summary>search_knowledge_base hit count when the model names none; must not exceed the maximum; null resets to the default. Applies to the next call.</summary>
     public int? KnowledgeSearchDefaultResults { get; init; }
 
-    /// <summary>Ceiling on the search_knowledge_base hit count; -1 resets to the default. Applies to the next call.</summary>
+    /// <summary>Ceiling on the search_knowledge_base hit count; null resets to the default. Applies to the next call.</summary>
     public int? KnowledgeSearchMaxResults { get; init; }
 
-    /// <summary>llama.cpp thinking budget for effort minimal, in tokens; -1 resets to the default. Applies to the next turn.</summary>
+    /// <summary>llama.cpp thinking budget for effort minimal, in tokens; null resets to the default. Applies to the next turn.</summary>
     public int? ReasoningBudgetMinimalTokens { get; init; }
 
-    /// <summary>llama.cpp thinking budget for effort low, in tokens; -1 resets to the default. Applies to the next turn.</summary>
+    /// <summary>llama.cpp thinking budget for effort low, in tokens; null resets to the default. Applies to the next turn.</summary>
     public int? ReasoningBudgetLowTokens { get; init; }
 
-    /// <summary>llama.cpp thinking budget for effort medium, in tokens; -1 resets to the default. Applies to the next turn.</summary>
+    /// <summary>llama.cpp thinking budget for effort medium, in tokens; null resets to the default. Applies to the next turn.</summary>
     public int? ReasoningBudgetMediumTokens { get; init; }
 
-    /// <summary>llama.cpp thinking budget for efforts high and xhigh, in tokens; -1 resets to the default. Applies to the next turn.</summary>
+    /// <summary>llama.cpp thinking budget for efforts high and xhigh, in tokens; null resets to the default. Applies to the next turn.</summary>
     public int? ReasoningBudgetHighTokens { get; init; }
 
-    /// <summary>Whose budget a turn that names no effort gets: minimal, low, medium or high; empty resets to the default. Applies to the next turn.</summary>
+    /// <summary>Whose budget a turn that names no effort gets: minimal, low, medium or high; null resets to the default. Applies to the next turn.</summary>
     public string? DefaultReasoningEffort { get; init; }
 
-    /// <summary>Chat output-cap variant: cap, notice or off; empty resets to the default. Applies to the next turn.</summary>
+    /// <summary>Chat output-cap variant: cap, notice or off; null resets to the default. Applies to the next turn.</summary>
     public string? ChatOutputCapMode { get; init; }
 
-    /// <summary>Ceiling on the chat output cap (half the launched window), in tokens; -1 resets to the default. Applies to the next turn.</summary>
+    /// <summary>Ceiling on the chat output cap (half the launched window), in tokens; null resets to the default. Applies to the next turn.</summary>
     public int? ChatOutputCapMaxTokens { get; init; }
 
-    /// <summary>Parallel range connections per large model download; -1 resets to the default. Applies after a node restart.</summary>
+    /// <summary>Parallel range connections per large model download; null resets to the default. Applies after a node restart.</summary>
     public int? HuggingFaceDownloadConnections { get; init; }
 
-    /// <summary>Whisper.cpp per-request inference timeout, in minutes; -1 resets to the default. Applies after a node restart.</summary>
+    /// <summary>Whisper.cpp per-request inference timeout, in minutes; null resets to the default. Applies after a node restart.</summary>
     public int? TranscriptionInferenceTimeoutMinutes { get; init; }
 
-    /// <summary>AgentHome whole-run time limit in seconds; must be at least the command timeout; -1 resets to the default. Applies to the next run.</summary>
+    /// <summary>AgentHome whole-run time limit in seconds; must be at least the command timeout; null resets to the default. Applies to the next run.</summary>
     public int? AgentHomeMaxRunSeconds { get; init; }
 
-    /// <summary>Days an AgentHome run folder is kept; -1 resets to the default. Applies after a node restart.</summary>
+    /// <summary>Days an AgentHome run folder is kept; null resets to the default. Applies after a node restart.</summary>
     public int? AgentHomeRunRetentionDays { get; init; }
 
-    /// <summary>Tool-loop iterations per request; -1 resets to the default. Applies after a node restart.</summary>
+    /// <summary>Tool-loop iterations per request; null resets to the default. Applies after a node restart.</summary>
     public int? ToolPipelineMaxIterationsPerRequest { get; init; }
 
-    /// <summary>Characters one tool result may hand the model; -1 resets to the default. Applies after a node restart.</summary>
+    /// <summary>Characters one tool result may hand the model; null resets to the default. Applies after a node restart.</summary>
     public int? ToolPipelineMaxToolResultChars { get; init; }
 
-    /// <summary>Invalid calls to one tool in a row before it is refused; -1 resets to the default. Applies after a node restart.</summary>
+    /// <summary>Invalid calls to one tool in a row before it is refused; null resets to the default. Applies after a node restart.</summary>
     public int? ToolPipelineMaxConsecutiveInvalidToolCalls { get; init; }
 
-    /// <summary>Context window, in tokens, assumed when a send names none; -1 resets to the default. Applies to the next turn.</summary>
+    /// <summary>Context window, in tokens, assumed when a send names none; null resets to the default. Applies to the next turn.</summary>
     public int? DefaultContextTokens { get; init; }
 
-    /// <summary>Recent messages a provider-round trim always keeps; -1 resets to the default. Applies to the next turn.</summary>
+    /// <summary>Recent messages a provider-round trim always keeps; null resets to the default. Applies to the next turn.</summary>
     public int? ProviderBudgetRecentMessagesToKeep { get; init; }
 
-    /// <summary>Input tokens one agent run may send in total; -1 resets to the default. Applies to the next turn.</summary>
+    /// <summary>Input tokens one agent run may send in total; null resets to the default. Applies to the next turn.</summary>
     public int? ProviderBudgetMaxCumulativeInputTokens { get; init; }
 
-    /// <summary>Recent turns the history budget never trims; -1 resets to the default. Applies to the next turn.</summary>
+    /// <summary>Recent turns the history budget never trims; null resets to the default. Applies to the next turn.</summary>
     public int? ContextBudgetRecentTurnKeepCount { get; init; }
 
-    /// <summary>Share of the usable window, in percent, above which a chat is compacted; -1 resets to the default. Applies to the next compaction check.</summary>
+    /// <summary>Share of the usable window, in percent, above which a chat is compacted; null resets to the default. Applies to the next compaction check.</summary>
     public int? CompactionAutoCompactPercent { get; init; }
 
-    /// <summary>Recent messages a compaction keeps word for word; -1 resets to the default. Applies to the next compaction.</summary>
+    /// <summary>Recent messages a compaction keeps word for word; null resets to the default. Applies to the next compaction.</summary>
     public int? CompactionRecentMessagesVerbatim { get; init; }
 
-    /// <summary>Attachment text inlined into one chat turn, in characters; -1 resets to the default. Applies to the next turn.</summary>
+    /// <summary>Attachment text inlined into one chat turn, in characters; null resets to the default. Applies to the next turn.</summary>
     public int? MaxInlinedAttachmentChars { get; init; }
 
-    /// <summary>Knowledge-base passages grounded into one chat turn; -1 resets to the default. Applies to the next turn.</summary>
+    /// <summary>Knowledge-base passages grounded into one chat turn; null resets to the default. Applies to the next turn.</summary>
     public int? KnowledgeChatTopK { get; init; }
 
-    /// <summary>Retries of a model send that failed before its first token; -1 resets to the default. Applies to the next send.</summary>
+    /// <summary>Retries of a model send that failed before its first token; null resets to the default. Applies to the next send.</summary>
     public int? ProviderMaxRetries { get; init; }
 
-    /// <summary>Sub-agents one run may have in flight at once; -1 resets to the default. Applies to the next run.</summary>
+    /// <summary>Sub-agents one run may have in flight at once; null resets to the default. Applies to the next run.</summary>
     public int? SpawnMaxConcurrent { get; init; }
 
-    /// <summary>Cloud sub-agents one run may start; 0 forbids them and -1 resets to the default. Applies to the next run.</summary>
+    /// <summary>Cloud sub-agents one run may start; 0 forbids them and null resets to the default. Applies to the next run.</summary>
     public int? SpawnMaxCloud { get; init; }
 
-    /// <summary>Seconds a sub-agent waits for its busy model; 0 rejects at once and -1 resets to the default. Applies to the next spawn.</summary>
+    /// <summary>Seconds a sub-agent waits for its busy model; 0 rejects at once and null resets to the default. Applies to the next spawn.</summary>
     public int? SpawnQueueWaitSeconds { get; init; }
 
     /// <summary>Whether a long chat is compacted automatically. Applies to the next turn.</summary>
@@ -1099,13 +1128,13 @@ public sealed record SaveNodeSettingsRequest
     /// <summary>Whether a configured reranker runs only for ambiguous candidate sets. Applies to the next search.</summary>
     public bool? KnowledgeAdaptiveRerankingEnabled { get; init; }
 
-    /// <summary>Retrieval latency budget in milliseconds; -1 resets to the default. Applies to the next search.</summary>
+    /// <summary>Retrieval latency budget in milliseconds; null resets to the default. Applies to the next search.</summary>
     public int? KnowledgeRetrievalLatencyBudgetMs { get; init; }
 
     /// <summary>Whether stale-vector documents are re-queued after an embedding-model change. Applies after a node restart.</summary>
     public bool? KnowledgeScheduledReindexEnabled { get; init; }
 
-    /// <summary>Stale-vector polling interval in minutes; -1 resets to the default. Applies after a node restart.</summary>
+    /// <summary>Stale-vector polling interval in minutes; null resets to the default. Applies after a node restart.</summary>
     public int? KnowledgeScheduledReindexIntervalMinutes { get; init; }
 
     /// <summary>Whether the knowledge-base agent tools are offered and run. Applies to the next turn.</summary>
@@ -1126,73 +1155,73 @@ public sealed record SaveNodeSettingsRequest
     /// <summary>Whether a cloud-hosted model may start sub-agents. Applies to the next turn.</summary>
     public bool? AllowCloudModelSubAgents { get; init; }
 
-    /// <summary>Model that proposes playbook actions; blank or absent inherits the default model. Applies to the next run.</summary>
+    /// <summary>Model that proposes playbook actions; null inherits the default model. Applies to the next run.</summary>
     public string? PlaybookAnalysisModelName { get; init; }
 
-    /// <summary>Model that runs playbook evals; blank or absent inherits the default model. Applies to the next run.</summary>
+    /// <summary>Model that runs playbook evals; null inherits the default model. Applies to the next run.</summary>
     public string? PlaybookEvalModelName { get; init; }
 
-    /// <summary>Model that mines lessons from completed runs; blank or absent inherits the default model. Applies to the next run.</summary>
+    /// <summary>Model that mines lessons from completed runs; null inherits the default model. Applies to the next run.</summary>
     public string? MemoryExtractionModelName { get; init; }
 
     /// <summary>Whether old conversations are deleted. Applies to the next sweep.</summary>
     public bool? ChatRetentionEnabled { get; init; }
 
-    /// <summary>Conversation retention window in days; -1 resets to the default. Applies to the next sweep.</summary>
+    /// <summary>Conversation retention window in days; null resets to the default. Applies to the next sweep.</summary>
     public int? ChatRetentionDays { get; init; }
 
     /// <summary>Whether old agent execution logs are deleted. Applies to the next sweep.</summary>
     public bool? AgentExecutionLogRetentionEnabled { get; init; }
 
-    /// <summary>Agent execution-log retention window in days; -1 resets to the default. Applies to the next sweep.</summary>
+    /// <summary>Agent execution-log retention window in days; null resets to the default. Applies to the next sweep.</summary>
     public int? AgentExecutionLogRetentionDays { get; init; }
 
-    /// <summary>Node database snapshots kept; -1 resets to the default. Applies to the next backup.</summary>
+    /// <summary>Node database snapshots kept; null resets to the default. Applies to the next backup.</summary>
     public int? NodeDbBackupRetainCount { get; init; }
 
-    /// <summary>Benchmark KL-divergence base cache ceiling in bytes; -1 resets to the default. Applies to the next trim.</summary>
+    /// <summary>Benchmark KL-divergence base cache ceiling in bytes; null resets to the default. Applies to the next trim.</summary>
     public long? BenchmarkKldCacheMaxBytes { get; init; }
 
-    /// <summary>Scheduled-job run history window in days; -1 resets to the default. Applies to the next sweep.</summary>
+    /// <summary>Scheduled-job run history window in days; null resets to the default. Applies to the next sweep.</summary>
     public int? SchedulerHistoryRetentionDays { get; init; }
 
-    /// <summary>sd-server processes kept loaded at once; -1 resets to the default. Applies after a node restart.</summary>
+    /// <summary>sd-server processes kept loaded at once; null resets to the default. Applies after a node restart.</summary>
     public int? ImageMaxLoadedProcesses { get; init; }
 
     /// <summary>Whether sd-server keeps the text encoder on the GPU. Applies after a node restart.</summary>
     public bool? ImageTextEncoderOnGpu { get; init; }
 
-    /// <summary>Graph-workflow runs live at once; -1 resets to the default. Applies after a node restart.</summary>
+    /// <summary>Graph-workflow runs live at once; null resets to the default. Applies after a node restart.</summary>
     public int? GraphWorkflowMaxConcurrentRuns { get; init; }
 
-    /// <summary>Graph-workflow node timeout in seconds when a node names none; -1 resets to the default. Applies after a node restart.</summary>
+    /// <summary>Graph-workflow node timeout in seconds when a node names none; null resets to the default. Applies after a node restart.</summary>
     public int? GraphWorkflowDefaultNodeTimeoutSeconds { get; init; }
 
-    /// <summary>Work-session steps per start or resume; -1 resets to the default. Applies after a node restart.</summary>
+    /// <summary>Work-session steps per start or resume; null resets to the default. Applies after a node restart.</summary>
     public int? WorkSessionMaxStepsPerRun { get; init; }
 
-    /// <summary>Work sessions running at once; -1 resets to the default. Applies after a node restart.</summary>
+    /// <summary>Work sessions running at once; null resets to the default. Applies after a node restart.</summary>
     public int? WorkSessionMaxConcurrentSessions { get; init; }
 
-    /// <summary>Development attempt wall clock in seconds; -1 resets to the default. Applies after a node restart.</summary>
+    /// <summary>Development attempt wall clock in seconds; null resets to the default. Applies after a node restart.</summary>
     public int? DevelopmentMaxAttemptDurationSeconds { get; init; }
 
-    /// <summary>Tool calls per development attempt; -1 resets to the default. Applies after a node restart.</summary>
+    /// <summary>Tool calls per development attempt; null resets to the default. Applies after a node restart.</summary>
     public int? DevelopmentMaxToolCalls { get; init; }
 
-    /// <summary>Output tokens per development attempt; -1 resets to the default. Applies after a node restart.</summary>
+    /// <summary>Output tokens per development attempt; null resets to the default. Applies after a node restart.</summary>
     public int? DevelopmentMaxOutputTokens { get; init; }
 
-    /// <summary>AgentHome inner tool calls per run (developer-only); -1 resets to the default. Applies to the next run.</summary>
+    /// <summary>AgentHome inner tool calls per run (developer-only); null resets to the default. Applies to the next run.</summary>
     public int? AgentHomeMaxInnerToolCalls { get; init; }
 
-    /// <summary>AgentHome patch-apply git timeout in seconds (developer-only); -1 resets to the default. Applies to the next apply.</summary>
+    /// <summary>AgentHome patch-apply git timeout in seconds (developer-only); null resets to the default. Applies to the next apply.</summary>
     public int? AgentHomePatchApplyTimeoutSeconds { get; init; }
 
-    /// <summary>AgentHome runs kept, 0 = no count limit (developer-only); -1 resets to the default. Applies to the next sweep.</summary>
+    /// <summary>AgentHome runs kept, 0 = no count limit (developer-only); null resets to the default. Applies to the next sweep.</summary>
     public int? AgentHomeRunRetentionMaxRuns { get; init; }
 
-    /// <summary>AgentHome runs byte ceiling, 0 = no byte limit (developer-only); -1 resets to the default. Applies to the next sweep.</summary>
+    /// <summary>AgentHome runs byte ceiling, 0 = no byte limit (developer-only); null resets to the default. Applies to the next sweep.</summary>
     public long? AgentHomeRunRetentionMaxTotalBytes { get; init; }
 
     /// <summary>Whether Development Mode is on. After a node restart for its endpoints, services and hub; the live switch closes them sooner.</summary>
@@ -1227,6 +1256,83 @@ public sealed record SaveNodeSettingsRequest
     ///     Applies to the next sandbox created. Security-widening: the UI confirms the off-to-on change before saving it.
     /// </summary>
     public bool? ExecutionPreviewsEnabled { get; init; }
+
+    /// <summary>Whether the body carried <paramref name="member" /> (the CLR property name) as an explicit JSON null.</summary>
+    internal bool Clears(string member) =>
+        _explicitNulls.Contains(member);
+
+    /// <summary>
+    ///     The serializer resolver that records explicit nulls on this type and answers for no other. Inserted at the head of
+    ///     the resolver chain once, by <c>ConfigureServices.ConfigureJsonSerializerOptions</c>.
+    /// </summary>
+    /// <remarks>
+    ///     It builds nothing itself: it takes the type info the rest of the chain produces, so every modifier a later resolver
+    ///     applies (FastEndpoints' binding attributes included) still runs, and adds the null tracking on top.
+    /// </remarks>
+    internal static IJsonTypeInfoResolver ExplicitNullTracking { get; } = new ExplicitNullTrackingResolver();
+
+    private sealed class ExplicitNullTrackingResolver : IJsonTypeInfoResolver
+    {
+        // FastEndpoints wraps the chain, this resolver included, in a modifier resolver that sits in the chain again, so asking
+        // the chain re-enters here: the inner call steps aside and the outermost one adds the tracking.
+        private static readonly AsyncLocal<bool> Resolving = new();
+
+        public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
+        {
+            if (type != typeof(SaveNodeSettingsRequest) || Resolving.Value)
+            {
+                return null;
+            }
+
+            Resolving.Value = true;
+            try
+            {
+                foreach (var next in options.TypeInfoResolverChain)
+                {
+                    if (!ReferenceEquals(next, this) && next.GetTypeInfo(type, options) is { } typeInfo)
+                    {
+                        TrackExplicitNulls(typeInfo);
+                        return typeInfo;
+                    }
+                }
+
+                return null;
+            }
+            finally
+            {
+                Resolving.Value = false;
+            }
+        }
+
+        // The serializer calls a property's setter only for a member the body carries, so a setter called with null records an
+        // explicit null; a later value for the same member (a duplicate key) takes it back out.
+        private static void TrackExplicitNulls(JsonTypeInfo typeInfo)
+        {
+            foreach (var property in typeInfo.Properties)
+            {
+                if (property.Set is not { } set || property.AttributeProvider is not MemberInfo member)
+                {
+                    continue;
+                }
+
+                var name = member.Name;
+                property.Set = (target, value) =>
+                {
+                    var explicitNulls = ((SaveNodeSettingsRequest)target)._explicitNulls;
+                    if (value is null)
+                    {
+                        explicitNulls.Add(name);
+                    }
+                    else
+                    {
+                        explicitNulls.Remove(name);
+                    }
+
+                    set(target, value);
+                };
+            }
+        }
+    }
 }
 
 /// <summary>

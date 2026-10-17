@@ -5,7 +5,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// The hooks call the generated SDK fns directly through callWithResponseValidation. Mock the generated module so the
+// The hooks call the generated SDK fns directly. Mock the generated module so the
 // test owns the fns and can assert the request shape + the mapped result without hitting the network.
 const { sdkMock } = vi.hoisted(() => ({
 	sdkMock: {
@@ -77,7 +77,7 @@ describe("useLoadedModels", () => {
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-		expect(sdkMock.getRunningLocalModels).toHaveBeenCalledWith(expect.objectContaining({ throwOnError: true }));
+		expect(sdkMock.getRunningLocalModels).toHaveBeenCalledWith(expect.objectContaining({ signal: expect.any(AbortSignal) }));
 		expect(result.current.data?.isAvailable).toBe(true);
 		expect(result.current.data?.models.map((model) => model.modelName)).toEqual(["llama3.1:8b", "qwen2.5:3b"]);
 	});

@@ -23,7 +23,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
 {
     // Ingestion starts after which startup recovery stops re-queuing a document and fails it instead.
     private const int MaxInterruptedAttempts = 3;
-    private const string InterruptedRepeatedlyReason = "Ingestion was interrupted repeatedly and was stopped.";
+    internal const string InterruptedRepeatedlyReason = "Ingestion was interrupted repeatedly and was stopped.";
 
     private readonly NodeChatDbContext _dbContext;
     private readonly ILocalModelProviderResolver _providerResolver;

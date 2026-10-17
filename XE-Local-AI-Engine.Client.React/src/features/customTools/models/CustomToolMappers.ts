@@ -22,13 +22,21 @@ function toParameterType(type: string | undefined): CustomToolParameterType {
 	return CUSTOM_TOOL_PARAMETER_TYPES.includes(type as CustomToolParameterType) ? (type as CustomToolParameterType) : "string";
 }
 
-const emptyHttp: CustomToolHttpDefinition = { method: "GET", urlTemplate: "", headers: [], bodyTemplate: "", allowedHosts: [] };
+const emptyHttp: CustomToolHttpDefinition = {
+	method: "GET",
+	urlTemplate: "",
+	headers: [],
+	bodyTemplate: "",
+	allowedHosts: [],
+	privateHosts: [],
+};
 const emptyCommand: CustomToolCommandDefinition = {
 	executable: "",
 	argsTemplate: [],
 	workingDirectory: "",
 	timeoutSeconds: 0,
 	env: [],
+	detach: false,
 };
 
 function toHttpDefinition(
@@ -47,6 +55,7 @@ function toHttpDefinition(
 		})),
 		bodyTemplate: dto.bodyTemplate ?? "",
 		allowedHosts: dto.allowedHosts ?? [],
+		privateHosts: dto.privateHosts ?? [],
 	};
 }
 
@@ -66,6 +75,7 @@ function toCommandDefinition(
 			value: variable.value ?? "",
 			isSecret: variable.isSecret ?? false,
 		})),
+		detach: dto.detach ?? false,
 	};
 }
 
@@ -78,6 +88,7 @@ export function toCustomToolView(dto: XeLocalAiEngineClientServicesCustomToolsCu
 		mode: dto.mode ?? "Fixed",
 		enabled: dto.enabled ?? false,
 		acknowledged: dto.acknowledged ?? false,
+		allowUnattended: dto.allowUnattended ?? false,
 		version: dto.version ?? 0,
 		createdAtUtc: dto.createdAtUtc ?? 0,
 		updatedAtUtc: dto.updatedAtUtc ?? 0,
@@ -103,8 +114,16 @@ export function toFormValues(view: CustomToolView): CustomToolFormValues {
 		enabled: view.enabled,
 		// Force a fresh acknowledgement on every edit: enabling a host-exec tool is a decision the operator re-affirms.
 		acknowledged: false,
+		allowUnattended: view.allowUnattended,
 		parameters: view.parameters.map((parameter) => ({ ...parameter })),
-		http: view.http ? { ...view.http, headers: [...view.http.headers], allowedHosts: [...view.http.allowedHosts] } : emptyHttp,
+		http: view.http
+			? {
+					...view.http,
+					headers: [...view.http.headers],
+					allowedHosts: [...view.http.allowedHosts],
+					privateHosts: [...view.http.privateHosts],
+				}
+			: emptyHttp,
 		command: view.command
 			? { ...view.command, argsTemplate: [...view.command.argsTemplate], env: [...view.command.env] }
 			: emptyCommand,
@@ -123,6 +142,7 @@ export function toDefinition(form: CustomToolFormValues): XeLocalAiEngineClientS
 		mode: form.mode,
 		enabled: form.enabled,
 		acknowledged: form.acknowledged,
+		allowUnattended: form.allowUnattended,
 		// A Fixed tool must declare no parameters (the backend rejects them); drop any stale rows on submit.
 		parameters: isParameterized
 			? form.parameters.map((parameter) => ({
@@ -144,6 +164,7 @@ export function toDefinition(form: CustomToolFormValues): XeLocalAiEngineClientS
 						})),
 						bodyTemplate: form.http.bodyTemplate.length > 0 ? form.http.bodyTemplate : null,
 						allowedHosts: form.http.allowedHosts.map((host) => host.trim()).filter((host) => host.length > 0),
+						privateHosts: form.http.privateHosts.map((host) => host.trim()).filter((host) => host.length > 0),
 					}
 				: null,
 		command:
@@ -158,6 +179,7 @@ export function toDefinition(form: CustomToolFormValues): XeLocalAiEngineClientS
 							value: variable.value,
 							isSecret: variable.isSecret,
 						})),
+						detach: form.command.detach,
 					}
 				: null,
 	};

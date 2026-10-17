@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { CaptureChannel } from "@/features/transcription/capture/CaptureSource";
+import type { CaptureChannel } from "@/core/audio/capture/CaptureSource";
 import type { TranscriptChannel } from "@/features/transcription/models/TranscriptionModels";
 
 // The wire contract of the live transcription hub (`TranscriptionHub`, `TranscriptionHubEvents`).

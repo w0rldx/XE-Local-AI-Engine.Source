@@ -10,6 +10,11 @@ export type IntegrationSessionPolicy = "PerInvocation" | "CallerManaged";
 
 export const integrationSessionPolicies: readonly IntegrationSessionPolicy[] = ["PerInvocation", "CallerManaged"];
 
+/** What a trigger runs: a saved agent or a saved graph workflow. Exactly the id the kind names is set. */
+export type IntegrationTargetKind = "Agent" | "Graph";
+
+export const integrationTargetKinds: readonly IntegrationTargetKind[] = ["Agent", "Graph"];
+
 /** The input payload kinds a trigger accepts. Never empty — the backend validator rejects an empty array. */
 export type IntegrationInputKind = "text" | "json";
 
@@ -26,7 +31,11 @@ export interface IntegrationTrigger {
 	readonly displayName: string;
 	readonly description: string;
 	readonly enabled: boolean;
-	readonly targetAgentDefinitionId: string;
+	readonly targetKind: IntegrationTargetKind;
+	/** Set for an `Agent` target, null for a `Graph` one. */
+	readonly targetAgentDefinitionId: string | null;
+	/** Set for a `Graph` target, null for an `Agent` one. */
+	readonly targetGraphWorkflowDefinitionId: string | null;
 	readonly sessionPolicy: IntegrationSessionPolicy;
 	readonly acceptedInputKinds: readonly IntegrationInputKind[];
 	readonly createdAtUtc: number;
@@ -58,7 +67,9 @@ export interface IntegrationTriggerFormValues {
 	readonly displayName: string;
 	readonly description: string;
 	readonly enabled: boolean;
+	readonly targetKind: IntegrationTargetKind;
 	readonly targetAgentDefinitionId: string;
+	readonly targetGraphWorkflowDefinitionId: string;
 	readonly sessionPolicy: IntegrationSessionPolicy;
 	readonly acceptsText: boolean;
 	readonly acceptsJson: boolean;
@@ -69,7 +80,9 @@ export const emptyIntegrationTriggerFormValues: IntegrationTriggerFormValues = {
 	displayName: "",
 	description: "",
 	enabled: true,
+	targetKind: "Agent",
 	targetAgentDefinitionId: "",
+	targetGraphWorkflowDefinitionId: "",
 	sessionPolicy: "PerInvocation",
 	acceptsText: true,
 	acceptsJson: false,
@@ -85,12 +98,21 @@ export const integrationTriggerFormSchema = z
 		displayName: z.string().trim().min(1, "displayNameRequired").max(128, "displayNameTooLong"),
 		description: z.string().max(1024, "descriptionTooLong"),
 		enabled: z.boolean(),
-		targetAgentDefinitionId: z.string().trim().min(1, "targetRequired"),
+		targetKind: z.enum(["Agent", "Graph"]),
+		// Only the id the kind names is required (IntegrationTriggerValidationRules.ApplyTarget); see superRefine.
+		targetAgentDefinitionId: z.string().trim(),
+		targetGraphWorkflowDefinitionId: z.string().trim(),
 		sessionPolicy: sessionPolicySchema,
 		acceptsText: z.boolean(),
 		acceptsJson: z.boolean(),
 	})
 	.superRefine((value, ctx) => {
+		if (value.targetKind === "Agent" && value.targetAgentDefinitionId === "") {
+			ctx.addIssue({ code: "custom", message: "targetRequired", path: ["targetAgentDefinitionId"] });
+		}
+		if (value.targetKind === "Graph" && value.targetGraphWorkflowDefinitionId === "") {
+			ctx.addIssue({ code: "custom", message: "graphTargetRequired", path: ["targetGraphWorkflowDefinitionId"] });
+		}
 		if (!(value.acceptsText || value.acceptsJson)) {
 			ctx.addIssue({ code: "custom", message: "inputKindRequired", path: ["acceptedInputKinds"] });
 		}
@@ -143,6 +165,12 @@ export interface IntegrationAgentOption {
  * string and is treated as failing, which is the safe direction.
  */
 export const integrationToolContinuesUnanswered = "continuesUnanswered";
+
+/** One selectable graph workflow in the trigger editor's target picker. */
+export interface IntegrationGraphOption {
+	readonly id: string;
+	readonly name: string;
+}
 
 /** The catalog facts the unattended-approval warning reads, keyed by tool name. */
 export interface IntegrationToolFacts {
@@ -219,8 +247,8 @@ export interface IntegrationExecution {
 	readonly startedAtUtc: number | null;
 	readonly endedAtUtc: number | null;
 	/**
-	 * One of the backend's closed set of ten categories, rendered VERBATIM. No locale map and no icon per value: a
-	 * category the client does not recognise must still reach the operator rather than blanking the cell.
+	 * One of the backend's closed set of categories, shown through `formatFailureCategory`. A category the client does
+	 * not recognise falls back to the raw value rather than blanking the cell.
 	 */
 	readonly failureCategory: string | null;
 	readonly failureSummary: string | null;
@@ -234,6 +262,8 @@ export interface IntegrationExecutionDetail {
 	readonly keyPrefix: string;
 	readonly requestId: string;
 	readonly invocationId: string;
+	/** The graph run a `Graph` target started, or null. */
+	readonly graphWorkflowRunId: string | null;
 	readonly outputBytes: number;
 	readonly stopRequestedAtUtc: number | null;
 }
@@ -256,7 +286,8 @@ export interface IntegrationSession {
 	readonly triggerName: string;
 	/** The integrator that owns the session. Stable across a key rotation, so it is the identity, not the credential. */
 	readonly principalId: string;
-	readonly agentDefinitionId: string;
+	/** Null when the session's trigger targets a graph workflow. */
+	readonly agentDefinitionId: string | null;
 	readonly status: IntegrationSessionStatus;
 	readonly createdAtUtc: number;
 	readonly lastActivityUtc: number;

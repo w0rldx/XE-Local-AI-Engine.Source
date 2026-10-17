@@ -21,6 +21,13 @@ public interface ISandboxRuntimeProvider
     /// <summary>The operations this provider can serve. AgentHome gates optional behavior on these flags.</summary>
     SandboxProviderCapabilities Capabilities { get; }
 
+    /// <summary>
+    ///     Why this provider cannot isolate the filesystem right now, as a lower-case clause (for example
+    ///     <c>execution previews are disabled</c>), or <see langword="null" /> when it can or does not know.
+    /// </summary>
+    /// <remarks>Read per call: the cause can change with a node setting, as <see cref="Capabilities" /> can.</remarks>
+    string? FilesystemIsolationUnavailableReason => null;
+
     /// <summary>Create a new sandbox, or attach to the existing one for the same attach key. An owner change forbids reuse.</summary>
     Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default);
 

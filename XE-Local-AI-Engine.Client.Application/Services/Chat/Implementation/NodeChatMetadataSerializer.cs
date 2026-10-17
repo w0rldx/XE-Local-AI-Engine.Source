@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using System.Text;
 using System.Text.Json;
+using XE_Local_AI_Engine.Client.Models.Enums;
 
 /// <summary>
 ///     Shared serialization helpers for the node chat raw-ADO persistence path: content byte encoding, the
@@ -57,11 +58,12 @@ internal static class NodeChatMetadataSerializer
         string? reasoningEffort = null,
         long? generationDurationMs = null,
         IReadOnlyList<NodeChatMessageSource>? sources = null,
-        NodeChatContextWindowDto? contextWindow = null)
+        NodeChatContextWindowDto? contextWindow = null,
+        FailureCategory? failureCategory = null)
     {
         if (metadataJson is null && reasoning is null && model is null && inputTokens is null && outputTokens is null && totalTokens is null && reasoningTokens is null && parts is null
             && agentDefinitionId is null && agentName is null && reasoningEffort is null && generationDurationMs is null && sources is null
-            && contextWindow is null)
+            && contextWindow is null && failureCategory is null)
         {
             return null;
         }
@@ -70,7 +72,8 @@ internal static class NodeChatMetadataSerializer
                 reasoningEffort,
                 generationDurationMs,
                 sources,
-                contextWindow),
+                contextWindow,
+                failureCategory is { } category ? JsonSerializer.SerializeToElement(category.ToString()) : null),
             MetadataJsonOptions));
     }
 
@@ -110,6 +113,16 @@ internal static class NodeChatMetadataSerializer
         }
 
         return parsed.Count == 0 ? null : parsed;
+    }
+
+    /// <summary>
+    ///     Parses a persisted failure-category name. Only a JSON string holding an exact member name round-trips; a number,
+    ///     a comma list, padding or an unknown name reads as null.
+    /// </summary>
+    internal static FailureCategory? ParseFailureCategory(JsonElement? value)
+    {
+        var name = value is { ValueKind: JsonValueKind.String } element ? element.GetString() : null;
+        return Enum.TryParse(name, out FailureCategory category) && string.Equals(category.ToString(), name, StringComparison.Ordinal) ? category : null;
     }
 
     internal static NodeChatMessageMetadata DeserializeMetadata(string? metadataJson)

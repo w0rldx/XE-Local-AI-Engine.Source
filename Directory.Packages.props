@@ -45,6 +45,11 @@
          arrive transitively and lock-step to the same version, so they need no entry of their own. -->
     <PackageVersion Include="Docker.DotNet.Enhanced" Version="4.3.3" />
     <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Sqlite" Version="13.5.0" />
+    <!-- Transitive only (CommunityToolkit.Aspire.Hosting.Sqlite 13.5.0 and StreamJsonRpc 2.25.29 both resolve 2.5.302):
+         pinned upward under CentralPackageTransitivePinningEnabled past GHSA-qhrr-8q5h-9q3h (moderate; patched in
+         2.5.303), which NuGetAudit otherwise reports as NU1902 and TreatWarningsAsErrors turns into a restore failure.
+         Drop this pin once either parent floors at 2.5.303 or newer. -->
+    <PackageVersion Include="MessagePack" Version="2.5.303" />
     <PackageVersion Include="FastEndpoints" Version="8.3.0" />
     <PackageVersion Include="FastEndpoints.Swagger" Version="8.3.0" />
     <PackageVersion Include="Meziantou.Analyzer" Version="3.0.299" />
@@ -65,7 +70,7 @@
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
     <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.12" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.13" />
     <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.12" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
@@ -101,15 +106,15 @@
          which requires Configuration.Abstractions >= 10.0.10, and central transitive pinning turns a mismatch into
          an NU1109 downgrade error across five projects. Same servicing band as the DependencyInjection.Abstractions
          and Logging.Abstractions pins directly below. -->
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.13" />
     <!-- Already in every host graph transitively; referenced directly only by Providers.ProcessSupervision, whose stale
          reaper is an IHostedService. -->
-    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.13" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.10.0" />
     <!-- Compatibility cohort: upgrade the stable MAF trio together after verifying their matching release set. -->
     <PackageVersion Include="Microsoft.Agents.AI" Version="1.22.0" />
@@ -162,6 +167,10 @@
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.35.0.4138" />
+    <!-- Terminal client (XE-Local-AI-Engine.Cli) only: argument parsing and console rendering. Spectre.Console is the
+         core package alone; its ImageSharp add-on is deliberately not referenced. -->
+    <PackageVersion Include="Spectre.Console" Version="0.57.2" />
+    <PackageVersion Include="System.CommandLine" Version="2.0.13" />
     <PackageVersion Include="System.Numerics.Tensors" Version="10.0.12" />
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
     <PackageVersion Include="TUnit" Version="1.74.0" />

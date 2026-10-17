@@ -10,6 +10,7 @@ import {
 	type KnowledgeDocument,
 	formatKnowledgeBytes,
 	formatKnowledgeTimestamp,
+	knowledgeFailureReasonKey,
 } from "@/features/knowledge/models/KnowledgeModels";
 
 interface KnowledgeDocumentsTableProps {
@@ -63,8 +64,10 @@ export function KnowledgeDocumentsTable({
 										{document.status === "Failed" && document.failureReason ? (
 											<Group gap={4} wrap="nowrap" c="red">
 												<IconAlertTriangle size={13} />
-												<Text size="xs" c="red" truncate="end">
-													{document.failureReason}
+												<Text size="xs" c="red" truncate="end" data-testid={`knowledge-failure-${document.documentId}`}>
+													{document.failureReasonCode
+														? t(knowledgeFailureReasonKey(document.failureReasonCode), { defaultValue: document.failureReason })
+														: document.failureReason}
 												</Text>
 											</Group>
 										) : null}
@@ -77,11 +80,13 @@ export function KnowledgeDocumentsTable({
 									</Group>
 								</Table.Td>
 								<Table.Td>
-									<Stack gap={1} style={{ minWidth: 0 }}>
-										<Text size="sm" truncate="end">
-											{document.sourcePath ?? document.sourceKind}
-										</Text>
-										<Text size="xs" c="dimmed">
+									<Stack gap={1} style={{ minWidth: 0 }} data-testid={`knowledge-source-${document.documentId}`}>
+										{document.sourcePath ? (
+											<Text size="sm" truncate="end">
+												{document.sourcePath}
+											</Text>
+										) : null}
+										<Text size={document.sourcePath ? "xs" : "sm"} c={document.sourcePath ? "dimmed" : undefined}>
 											{document.sourceKind}
 										</Text>
 									</Stack>
@@ -89,8 +94,11 @@ export function KnowledgeDocumentsTable({
 								<Table.Td>{document.chunkCount}</Table.Td>
 								<Table.Td>
 									<Group gap={6} wrap="nowrap">
-										<Text size="sm">{document.embeddingModel || "—"}</Text>
-										{document.staleModel ? (
+										{/* Only embedded chunks carry a model: an unembedded or failed row would otherwise show the configured default. */}
+										<Text size="sm" data-testid={`knowledge-embedding-model-${document.documentId}`}>
+											{document.chunkCount > 0 && document.embeddingModel ? document.embeddingModel : "—"}
+										</Text>
+										{document.chunkCount > 0 && document.staleModel ? (
 											<Tooltip
 												label={t(
 													"pages.knowledgeBase.table.staleTooltip",

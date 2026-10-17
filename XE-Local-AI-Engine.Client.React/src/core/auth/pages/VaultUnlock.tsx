@@ -39,6 +39,9 @@ const handoverBudgetMs = 60_000;
 const handoverFirstDelayMs = 500;
 const handoverMaxDelayMs = 2_000;
 const handoverRequestTimeoutMs = 5_000;
+const idlePollFastMs = 5_000;
+const idlePollSlowMs = 15_000;
+const idlePollFastWindowMs = 60_000;
 
 const passwordRuleKeys = [
 	"auth.setup.passwordRuleLength",
@@ -140,6 +143,48 @@ export function VaultUnlock() {
 			unmounted.current = true;
 		};
 	}, []);
+
+	// An unlock done elsewhere (REST, another tab) moves this page on too; paused while this page's own unlock is in flight
+	// or its rotated recovery code is on screen, so it never races `waitForUnlockedHost` or skips the reveal.
+	const idle = !submitting && handover === "idle" && newRecoveryCode === undefined;
+	useEffect(() => {
+		if (!idle) {
+			return;
+		}
+
+		let cancelled = false;
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const startedAt = Date.now();
+		const schedule = (): void => {
+			const delay = Date.now() - startedAt < idlePollFastWindowMs ? idlePollFastMs : idlePollSlowMs;
+			timer = setTimeout(() => {
+				getNodeAuthStatus({ timeout: handoverRequestTimeoutMs })
+					.then((status) => {
+						if (cancelled) {
+							return;
+						}
+
+						if (status.vault !== "locked") {
+							navigate({ to: "/" }).catch(() => undefined);
+							return;
+						}
+
+						schedule();
+					})
+					.catch(() => {
+						// The next tick decides.
+						if (!cancelled) {
+							schedule();
+						}
+					});
+			}, delay);
+		};
+		schedule();
+		return () => {
+			cancelled = true;
+			clearTimeout(timer);
+		};
+	}, [idle, navigate]);
 
 	const visibleError = (field: keyof RecoveryFormValues): string | undefined =>
 		touched[field] === true ? recoveryErrors[field] : undefined;

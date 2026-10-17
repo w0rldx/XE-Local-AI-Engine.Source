@@ -7,6 +7,8 @@ import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPref
 
 interface ChatAgentSelection {
 	agentModeEnabled: boolean;
+	// The open conversation's own binding is what a send without a pick runs as.
+	conversationAgentBound: boolean;
 	selectedAgentId: string;
 	agentOptions: AgentOption[];
 	agentControlsAvailable: boolean;
@@ -18,14 +20,24 @@ interface ChatAgentSelection {
 	handleSelectAgent: (agentId: string) => void;
 }
 
-/** Agent binding for the chat composer: the live option list, the scope's pin, and the merged agent control. */
-export function useChatAgentSelection(scope: ChatScope | undefined, showAgentControls: boolean): ChatAgentSelection {
+/**
+ * Agent binding for the chat composer: the live option list, the scope's pin, and the merged agent control.
+ * `conversationAgentId` is the open conversation's own binding, which the send path uses whenever the composer picks
+ * no agent, so the control shows it then instead of the Default Assistant.
+ */
+export function useChatAgentSelection(
+	scope: ChatScope | undefined,
+	showAgentControls: boolean,
+	conversationAgentId?: string,
+): ChatAgentSelection {
 	const preferredAgentModeEnabled = useNodeChatPreferencesStore((state) => state.agentModeEnabled);
 	const preferredSelectedAgentId = useNodeChatPreferencesStore((state) => state.selectedAgentId);
 	const { setAgentModeEnabled, setSelectedAgentId } = useNodeChatPreferencesStore((state) => state.actions);
-	// A scope that pins an agent wins over the stored composer preference: the session owns the binding.
-	const agentModeEnabled = scope?.pinnedAgentId ? true : preferredAgentModeEnabled;
-	const selectedAgentId = scope?.pinnedAgentId ?? preferredSelectedAgentId;
+	// A scope that pins an agent wins over the stored composer preference: the session owns the binding. Without a
+	// composer pick, the conversation's binding answers (request agent ?? conversation agent on the server).
+	const boundAgentId = scope?.pinnedAgentId ?? (preferredAgentModeEnabled ? undefined : conversationAgentId);
+	const agentModeEnabled = boundAgentId ? true : preferredAgentModeEnabled;
+	const selectedAgentId = boundAgentId ?? preferredSelectedAgentId;
 	// …and so does the model that agent pins. The scoped selectors are read-only, so falling back to the operator's
 	// stored `/chat` choice would show a model label they cannot correct AND poll details for a model this session
 	// is not running. An agent that pins nothing (both seeded personas do) resolves to the local default — which is
@@ -82,6 +94,7 @@ export function useChatAgentSelection(scope: ChatScope | undefined, showAgentCon
 
 	return {
 		agentModeEnabled,
+		conversationAgentBound: scope?.pinnedAgentId === undefined && conversationAgentId !== undefined,
 		selectedAgentId,
 		agentOptions,
 		agentControlsAvailable,

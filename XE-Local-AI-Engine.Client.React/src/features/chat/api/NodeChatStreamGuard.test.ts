@@ -134,6 +134,126 @@ describe("guardNodeChatStream", () => {
 		release?.();
 	});
 
+	it("does not fail a resumed turn parked on an approval, then re-arms once the park ends", async () => {
+		vi.useFakeTimers();
+		let answer: (() => void) | undefined;
+		async function* resumedPark(): AsyncGenerator<NodeChatStreamEventDto> {
+			// The resume replay order: the parked prompt, then the snapshot and the phase. None of it carries a floor.
+			yield { ...event(0, ""), type: "approval-requested", delta: undefined };
+			yield { ...event(1, ""), type: "assistant-snapshot", delta: undefined };
+			yield phaseEvent(2, "generating");
+			await new Promise<void>((resolve) => {
+				answer = resolve;
+			});
+			yield event(3, "a");
+			await new Promise<void>(() => {
+				// never resolves: a stall after the park is still a stall
+			});
+		}
+
+		const iterator = guardNodeChatStream(resumedPark(), { firstChunkTimeoutMs: 5_000, interChunkTimeoutMs: 1_000 })[
+			Symbol.asyncIterator
+		]();
+		for (const sequence of [0, 1, 2]) {
+			// biome-ignore lint/performance/noAwaitInLoops: the replay is consumed in order.
+			await expect(iterator.next()).resolves.toMatchObject({ value: { sequence }, done: false });
+		}
+
+		const pending = iterator.next();
+		// A work-session park lasts minutes; nothing arrives while it waits for the operator or for the node to end it.
+		await vi.advanceTimersByTimeAsync(300_000);
+		answer?.();
+		await expect(pending).resolves.toMatchObject({ value: { sequence: 3 }, done: false });
+
+		const stalled = iterator.next().then(
+			() => undefined,
+			(error: unknown) => error,
+		);
+		await vi.advanceTimersByTimeAsync(1_000);
+		expect(await stalled).toMatchObject({ category: "inter-chunk-stall" });
+	});
+
+	it("keeps the park armed across a reasoning-only delta after the request (V-04)", async () => {
+		vi.useFakeTimers();
+		let answer: (() => void) | undefined;
+		async function* parkWithTrailingReasoning(): AsyncGenerator<NodeChatStreamEventDto> {
+			yield { ...event(0, ""), type: "approval-requested", delta: undefined };
+			yield { ...event(1, ""), delta: undefined, content: undefined, reasoningDelta: "\n" };
+			await new Promise<void>((resolve) => {
+				answer = resolve;
+			});
+			yield event(2, "a");
+		}
+
+		const iterator = guardNodeChatStream(parkWithTrailingReasoning(), { firstChunkTimeoutMs: 5_000, interChunkTimeoutMs: 1_000 })[
+			Symbol.asyncIterator
+		]();
+		for (const sequence of [0, 1]) {
+			// biome-ignore lint/performance/noAwaitInLoops: the events are consumed in order.
+			await expect(iterator.next()).resolves.toMatchObject({ value: { sequence }, done: false });
+		}
+
+		const pending = iterator.next();
+		await vi.advanceTimersByTimeAsync(300_000);
+		answer?.();
+		await expect(pending).resolves.toMatchObject({ value: { sequence: 2 }, done: false });
+	});
+
+	it("bounds a park whose ceiling the stream never carried", async () => {
+		vi.useFakeTimers();
+		async function* wedgedPark(): AsyncGenerator<NodeChatStreamEventDto> {
+			yield { ...event(0, ""), type: "approval-requested", delta: undefined };
+			await new Promise<void>(() => {
+				// never resolves: the transport is alive but the node never ends the park
+			});
+		}
+
+		const iterator = guardNodeChatStream(wedgedPark(), { firstChunkTimeoutMs: 5_000, interChunkTimeoutMs: 1_000 })[
+			Symbol.asyncIterator
+		]();
+		await expect(iterator.next()).resolves.toMatchObject({ value: { sequence: 0 }, done: false });
+
+		let caught: unknown;
+		const stalled = iterator.next().then(
+			() => undefined,
+			(error: unknown) => {
+				caught = error;
+			},
+		);
+		await vi.advanceTimersByTimeAsync(659_000);
+		expect(caught).toBeUndefined();
+		await vi.advanceTimersByTimeAsync(1_000);
+		await stalled;
+		expect(caught).toMatchObject({ category: "inter-chunk-stall" });
+	});
+
+	it("disarms the park when a cold load starts after the answer", async () => {
+		vi.useFakeTimers();
+		async function* answeredThenLoads(): AsyncGenerator<NodeChatStreamEventDto> {
+			yield { ...event(0, ""), type: "approval-requested", delta: undefined };
+			yield phaseEvent(1, "loading_model");
+			yield phaseEvent(2, "generating");
+			await new Promise<void>(() => {
+				// never resolves: generation stalls once the load is done
+			});
+		}
+
+		const iterator = guardNodeChatStream(answeredThenLoads(), { firstChunkTimeoutMs: 5_000, interChunkTimeoutMs: 1_000 })[
+			Symbol.asyncIterator
+		]();
+		for (const sequence of [0, 1, 2]) {
+			// biome-ignore lint/performance/noAwaitInLoops: the events are consumed in order.
+			await expect(iterator.next()).resolves.toMatchObject({ value: { sequence }, done: false });
+		}
+
+		const stalled = iterator.next().then(
+			() => undefined,
+			(error: unknown) => error,
+		);
+		await vi.advanceTimersByTimeAsync(1_000);
+		expect(await stalled).toMatchObject({ category: "inter-chunk-stall" });
+	});
+
 	it("does not false-fail during a silent cold model load (loading_model phase)", async () => {
 		vi.useFakeTimers();
 		let release: (() => void) | undefined;

@@ -19,6 +19,7 @@ import {
 	graphWorkflowNodeRunStatuses,
 	graphWorkflowRunStatuses,
 	graphWorkflowTabs,
+	graphWorkflowTriggerSources,
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import { graphWorkflowGraphRules } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
 import en from "@/locales/en.json";
@@ -86,6 +87,7 @@ describe("graph-workflow enum label maps are complete", () => {
 		{ section: "joinPolicy", members: graphWorkflowJoinPolicies },
 		{ section: "conditionOperator", members: graphWorkflowConditionOperators },
 		{ section: "tab", members: graphWorkflowTabs },
+		{ section: "triggerSource", members: graphWorkflowTriggerSources },
 		// The rule name IS the key suffix, so a rule added without a message fails here rather than rendering its own name
 		// into the validation strip.
 		{ section: "definition.issues", members: graphWorkflowGraphRules },

@@ -225,6 +225,16 @@ public sealed record StartLiveResult
     public LiveSessionOptions? Options { get; init; }
 }
 
+/// <summary>A started persist-free dictation session: the id the server minted and when its lanes were registered.</summary>
+public sealed record DictationSessionStart
+{
+    /// <summary>The session to subscribe to, push audio into and end, over the transcription hub.</summary>
+    public required Guid SessionId { get; init; }
+
+    /// <summary>When the registry accepted the session.</summary>
+    public required DateTimeOffset StartedAt { get; init; }
+}
+
 /// <summary>
 ///     Raised when a live session is asked of a source kind that has no live capture path — an uploaded file.
 /// </summary>

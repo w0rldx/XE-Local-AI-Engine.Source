@@ -677,7 +677,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
 
     private static NodeChatPersistenceService CreateService(ServiceProvider provider)
     {
-        return new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(),
+        return new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance,
             provider.GetRequiredService<IConversationUploadedFileStore>());
     }
 

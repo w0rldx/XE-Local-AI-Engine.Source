@@ -106,6 +106,7 @@ public sealed class GraphWorkflowToolsEndpointTests
             AssertEx.NotNullOrEmpty(schema, $"{name} must carry the schema the runtime validates its arguments against.");
             using var parsed = JsonDocument.Parse(schema!);
             AssertEx.Equal(JsonValueKind.Object, parsed.RootElement.ValueKind, $"{name}'s parameterSchema must parse as a JSON schema object.");
+            AssertEx.False(tool.GetProperty("isAction").GetBoolean(), $"{name} is a built-in, and built-ins are never actions (ADR 0021).");
         }
     }
 

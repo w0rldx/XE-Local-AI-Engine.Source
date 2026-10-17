@@ -1,13 +1,13 @@
 import { Badge, Collapse, Group, Paper, Stack, Text, UnstyledButton } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { IconBooks, IconChevronRight } from "@tabler/icons-react";
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { KnowledgeScoreBadge } from "@/core/ui/components/KnowledgeScoreBadge/KnowledgeScoreBadge";
 import type { ChatMessageSource } from "@/features/chat/models/ChatModels";
 import { KnowledgeDocumentDrawer } from "@/features/knowledge/components/KnowledgeDocumentDrawer";
-import { useKnowledgeDocumentDetail } from "@/features/knowledge/queries/useKnowledgeDocuments";
+import { useKnowledgeDocumentDetail, useKnowledgeDocuments } from "@/features/knowledge/queries/useKnowledgeDocuments";
 
 interface ChatSourcesStripProps {
 	sources: readonly ChatMessageSource[];
@@ -37,6 +37,14 @@ export const ChatSourcesStrip = memo(function ChatSourcesStrip({ sources }: Chat
 	const [activeSource, setActiveSource] = useState<ChatMessageSource | undefined>();
 	const [drawerOpened, { open: openDrawer, close: closeDrawer }] = useDisclosure(false);
 	const { data: detail, isFetching: detailIsFetching } = useKnowledgeDocumentDetail(activeSource?.documentId ?? "", drawerOpened);
+
+	// A source's server title is the non-sensitive storage reference (a GUID file name) when its chunk has no heading
+	// trail; label it with the decrypted display name the operator's own document list carries, as the KB page does.
+	const { data: documents } = useKnowledgeDocuments(sources.length > 0);
+	const documentNames = useMemo(
+		() => new Map((documents ?? []).map((document) => [document.documentId, document.displayName])),
+		[documents],
+	);
 
 	const openSource = useCallback(
 		(source: ChatMessageSource): void => {
@@ -73,15 +81,17 @@ export const ChatSourcesStrip = memo(function ChatSourcesStrip({ sources }: Chat
 						<UnstyledButton
 							key={source.chunkId || `${source.documentId}:${source.title}`}
 							onClick={() => openSource(source)}
-							aria-label={t("pages.chat.sources.open", "Open source: {{title}}", { title: source.title })}
+							aria-label={t("pages.chat.sources.open", "Open source: {{title}}", {
+								title: documentNames.get(source.documentId) ?? source.title,
+							})}
 							data-testid="chat-source-card"
 							style={{ width: "100%", display: "block" }}
 						>
 							<Paper withBorder={true} p="xs" radius="sm">
 								<Group gap={8} justify="space-between" align="flex-start" wrap="nowrap">
 									<Stack gap={2} style={{ minWidth: 0 }}>
-										<Text size="xs" fw={500} ta="left" style={{ overflowWrap: "anywhere" }}>
-											{source.title}
+										<Text size="xs" fw={500} ta="left" style={{ overflowWrap: "anywhere" }} data-testid="chat-source-title">
+											{documentNames.get(source.documentId) ?? source.title}
 										</Text>
 										{source.section ? (
 											<Text size="xs" c="dimmed" ta="left" style={{ overflowWrap: "anywhere" }}>

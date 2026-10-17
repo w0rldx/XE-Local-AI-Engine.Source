@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
 
 using FastEndpoints;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1.Mappers;
@@ -20,8 +19,6 @@ using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 /// </remarks>
 public sealed class UploadConversationFileEndpoint : Endpoint<UploadConversationFileRequest, ConversationUploadedFileResponse>
 {
-    private const long MultipartEnvelopeBytes = 64 * 1024;
-
     private readonly IConversationUploadIngestor _ingestor;
     private readonly long _maxUploadBytes;
 
@@ -36,12 +33,8 @@ public sealed class UploadConversationFileEndpoint : Endpoint<UploadConversation
     {
         Post(LocalApiRoutes.LocalChat.ConversationUploads);
         AllowFileUploads();
-        // Without both, Kestrel's ~28.6 MiB body limit or the form reader's 128 MiB multipart limit, not the configured cap, rejects a large upload.
-        Options(builder => builder.WithMetadata(new RequestSizeLimitAttribute(_maxUploadBytes + MultipartEnvelopeBytes),
-            new RequestFormLimitsAttribute
-            {
-                MultipartBodyLengthLimit = _maxUploadBytes + MultipartEnvelopeBytes
-            }));
+        // Without both limits, Kestrel's ~28.6 MiB body limit or the form reader's 128 MiB multipart limit, not the configured cap, rejects a large upload.
+        Options(builder => MultipartUploadLimits.Apply(builder, _maxUploadBytes));
         Policies(NodeAuthorizationPolicies.Operator);
         Description(static x => x.ProducesConflictProblemDetails());
     }
@@ -65,8 +58,7 @@ public sealed class UploadConversationFileEndpoint : Endpoint<UploadConversation
 
         if (file.Length > _maxUploadBytes)
         {
-            AddError($"The file exceeds the maximum upload size of {_maxUploadBytes / (1024L * 1024L)} MB.");
-            await Send.ErrorsAsync(cancellation: ct);
+            await Send.ResultAsync(MultipartUploadLimits.TooLarge(_maxUploadBytes));
             return;
         }
 

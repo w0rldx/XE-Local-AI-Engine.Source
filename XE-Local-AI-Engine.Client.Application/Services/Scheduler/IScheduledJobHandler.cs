@@ -33,4 +33,12 @@ public interface IScheduledJobHandler
     void ValidateParameters(string? parametersJson)
     {
     }
+
+    /// <summary>
+    ///     Checks, at create and update, that what the parameters point at exists and accepts a scheduled run, throwing
+    ///     <see cref="ScheduledJobValidationException" />. Runs after <see cref="ValidateParameters" />; the default
+    ///     checks nothing.
+    /// </summary>
+    Task ValidateReferencesAsync(string? parametersJson, CancellationToken cancellationToken) =>
+        Task.CompletedTask;
 }

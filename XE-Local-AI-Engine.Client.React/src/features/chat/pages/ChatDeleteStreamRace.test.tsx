@@ -54,8 +54,7 @@ vi.mock("@/features/chat/api/NodeChatAdapter", () => ({
 
 // Chat.tsx repointed its model list/details onto the generated SDK (listLocalModelsOptions /
 // getLocalModelDetailsOptions). Partially mock the generated TanStack module so the page's
-// useQuery(withResponseValidation(...)) resolves a deterministic empty list without a real request; the real
-// withResponseValidation bridge still wraps the mocked queryFn. The list queryFn is hoisted so beforeEach can set
+// useQuery(...) resolves a deterministic empty list without a real request. The list queryFn is hoisted so beforeEach can set
 // the resolved payload, mirroring the prior listLocalModels mock.
 const { listLocalModelsQueryFn } = vi.hoisted(() => ({
 	listLocalModelsQueryFn: vi.fn(),

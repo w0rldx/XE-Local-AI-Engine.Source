@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
@@ -180,6 +181,29 @@ public sealed class LlamaCppSourceBuildTransportTests
         AssertEx.Equal("keep-model-warm-enabled", body.RootElement.GetProperty("reason").GetString());
         AssertEx.Contains(body.RootElement.GetProperty("message").GetString()!, "Disable Keep Model Warm", StringComparison.Ordinal);
         await service.DidNotReceive().StartAsync(Arg.Any<LlamaCppSourceBuildRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>V-02: a body missing a required member names the member, never the request DTO's CLR type.</summary>
+    [Test]
+    public async Task StartEndpoint_WhenARequiredMemberIsMissing_NamesTheMemberNotTheClrType()
+    {
+        await using var factory = new TestServerWebAppFactory
+        {
+            EnableDevelopmentMode = true
+        };
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/model-fit/llamacpp/source-build")
+        {
+            Content = new StringContent("{\"backend\":\"cpu\",\"source\":\"official\"}", Encoding.UTF8, "application/json")
+        };
+        factory.AddNodeBearerToken(request);
+
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        AssertEx.Contains(body, "The request body is missing required properties: 'acknowledgeCustomSourceRisk'.");
+        AssertEx.False(body.Contains("XE_Local_AI_Engine", StringComparison.Ordinal), body);
     }
 
     [Test]

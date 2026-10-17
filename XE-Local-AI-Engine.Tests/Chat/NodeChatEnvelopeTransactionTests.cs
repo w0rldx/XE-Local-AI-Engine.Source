@@ -5,11 +5,13 @@ using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -23,6 +25,7 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
 {
     private const int RaceIterations = 64;
     private const int EnvelopeKind = (int)AgentExecutionLogRecordKind.ChatRunEnvelope;
+    private const string ThinModel = "thin-model.gguf";
 
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
@@ -288,6 +291,97 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         });
 
         AssertEx.Equal(AgentUsageProviders.Unknown, await ReadEnvelopeProviderAsync(provider, correlation));
+    }
+
+    [Test]
+    public async Task Cancel_BeforeTheRunStarted_AttributesTheThinEnvelopeFromTheRowsModel()
+    {
+        // R5-07: a cancel before the run writes a thin envelope; it is booked under the row model's provider, never "unknown", and its tokens stay NULL (not reported).
+        await using var provider = await BuildProviderAsync("envelope-cancel-provider.sqlite");
+        var persistence = CreateService(provider, LocalResolver());
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Cancel",
+            UserId = "node",
+            CreatedAtUtc = 1
+        });
+        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId, ThinModel);
+
+        await persistence.CancelMessageAsync(new NodeChatCancelRequest
+        {
+            Correlation = correlation,
+            CancelledAtUtc = 2
+        });
+
+        AssertEx.Equal(AgentUsageProviders.Local, await ReadEnvelopeProviderAsync(provider, correlation));
+        AssertEx.Equal(ThinModel, await ReadEnvelopeModelAsync(provider, correlation));
+        var tokens = await ReadEnvelopeTokensAsync(provider, correlation);
+        AssertEx.Null(tokens.PromptTokens);
+        AssertEx.Null(tokens.TotalTokens);
+    }
+
+    [Test]
+    public async Task Terminalize_AThinFailureEnvelope_IsAttributedFromTheRowsModel()
+    {
+        // The pre-run refusal and the pre-ownership teardown send an envelope with no provider; the row's model names it.
+        await using var provider = await BuildProviderAsync("envelope-thin-failure-provider.sqlite");
+        var persistence = CreateService(provider, LocalResolver());
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Thin",
+            UserId = "node",
+            CreatedAtUtc = 1
+        });
+        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId, ThinModel);
+
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = correlation,
+            Status = NodeChatMessageStatusValues.Failed,
+            UpdatedAtUtc = 2,
+            Error = "refused",
+            Envelope = new AgentRunEnvelopeMetadata
+            {
+                InvocationId = null,
+                DurationMs = 0L
+            }
+        });
+
+        AssertEx.Equal(AgentUsageProviders.Local, await ReadEnvelopeProviderAsync(provider, correlation));
+        AssertEx.Equal(ThinModel, await ReadEnvelopeModelAsync(provider, correlation));
+    }
+
+    [Test]
+    public async Task Terminalize_AnEnvelopeThatNamesItsProvider_KeepsIt()
+    {
+        await using var provider = await BuildProviderAsync("envelope-named-provider-kept.sqlite");
+        var resolver = LocalResolver();
+        var persistence = CreateService(provider, resolver);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Named",
+            UserId = "node",
+            CreatedAtUtc = 1
+        });
+        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId, ThinModel);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
+
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = correlation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = 3,
+            Content = "answer",
+            Envelope = new AgentRunEnvelopeMetadata
+            {
+                InvocationId = Guid.NewGuid(),
+                DurationMs = 5L,
+                Provider = AgentUsageProviders.Codex
+            }
+        });
+
+        AssertEx.Equal(AgentUsageProviders.Codex, await ReadEnvelopeProviderAsync(provider, correlation));
+        await resolver.DidNotReceiveWithAnyArgs().ResolveAsync(default, default);
     }
 
     [Test]
@@ -572,12 +666,33 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         return provider;
     }
 
-    private static NodeChatPersistenceService CreateService(ServiceProvider provider)
+    private static NodeChatPersistenceService CreateService(ServiceProvider provider, IUsageProviderResolver? usageProviderResolver = null)
     {
-        return new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        return new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(),
+            usageProviderResolver is null ? UnknownUsageProviderResolver.Instance : new Lazy<IUsageProviderResolver>(usageProviderResolver));
     }
 
-    private static async Task<NodeChatMessageCorrelation> CreatePlaceholderAsync(NodeChatPersistenceService persistence, Guid conversationId)
+    private static IUsageProviderResolver LocalResolver()
+    {
+        var resolver = Substitute.For<IUsageProviderResolver>();
+        resolver.ResolveAsync(ThinModel, Arg.Any<CancellationToken>()).Returns(AgentUsageProviders.Local);
+        return resolver;
+    }
+
+    private static async Task<string> ReadEnvelopeModelAsync(ServiceProvider provider, NodeChatMessageCorrelation correlation)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var connection = dbContext.Database.GetDbConnection();
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT model_name FROM agent_execution_logs WHERE record_kind = $record_kind AND message_id = $message_id;";
+        AddParameter(command, "$record_kind", EnvelopeKind);
+        AddParameter(command, "$message_id", correlation.MessageId);
+        return await command.ExecuteScalarAsync() as string ?? throw new InvalidOperationException("The run-envelope row was not found.");
+    }
+
+    private static async Task<NodeChatMessageCorrelation> CreatePlaceholderAsync(NodeChatPersistenceService persistence, Guid conversationId, string? model = null)
     {
         var correlation = new NodeChatMessageCorrelation
         {
@@ -590,7 +705,8 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
             ConversationId = conversationId,
             MessageId = correlation.MessageId,
             RequestId = correlation.RequestId,
-            CreatedAtUtc = 1
+            CreatedAtUtc = 1,
+            Model = model
         });
         return correlation;
     }

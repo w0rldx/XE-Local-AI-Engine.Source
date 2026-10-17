@@ -88,7 +88,9 @@ Keep backups of data you care about. A binary update does not replace a backup p
 
 When an update brings database changes, the app first copies `node.sqlite` to
 `<data-directory>/backups/node-chat-<timestamp>.sqlite` and keeps the newest few copies. The copy is skipped, with a
-warning in the log, when the disk has too little free space or the copy takes too long. If the app then refuses to start
+warning in the log, when the disk has too little free space or the copy takes too long. When the copy is skipped or fails,
+the update still goes ahead without a fresh snapshot; the log and the **Database snapshots** card on the **Diagnostics**
+page say why. If the app then refuses to start
 because its database could not be updated, or because the database is damaged, the error names the newest snapshot. To
 restore it:
 

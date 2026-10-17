@@ -107,6 +107,39 @@ public sealed class GraphWorkflowShareFileEndpointTests
             "the exported graph is the detail route's graph, byte for byte.");
     }
 
+    /// <summary>
+    ///     A shared graph never brings authority with it (ADR 0021): neither the action flag nor the accepted trigger
+    ///     sources are exported or imported; an import gets the defaults.
+    /// </summary>
+    [Test]
+    public async Task AFlaggedDefinition_ExportsWithoutTheFlag_AndAnImportCarryingItCreatesWithoutIt()
+    {
+        var store = Store();
+        store.GetDefinitionAsync(DefinitionId, Arg.Any<CancellationToken>())
+             .Returns(Snapshot("Triage", GraphWorkflowGraphs.StartAgentEnd, allowsActions: true, triggerSources: GraphWorkflowTriggerSource.Schedule | GraphWorkflowTriggerSource.Intent));
+        CreateGraphWorkflowDefinitionCommand? command = null;
+        store.CreateDefinitionAsync(Arg.Any<CreateGraphWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call =>
+             {
+                 command = call.Arg<CreateGraphWorkflowDefinitionCommand>();
+                 return Snapshot(command.Name, command.GraphJson);
+             });
+        await using var factory = EnabledFactory(store);
+
+        using var export = await SendAsync(factory, "GET", Export);
+        var exportBody = await export.Content.ReadAsStringAsync();
+        using var imported = await SendAsync(factory, "POST", Import,
+            ImportBody(GraphWorkflowGraphs.StartAgentEnd).Replace("\"name\"", "\"allowsActions\":true,\"triggerSources\":[\"Schedule\"],\"name\"", StringComparison.Ordinal));
+
+        AssertEx.Equal(HttpStatusCode.OK, export.StatusCode, exportBody);
+        AssertEx.False(exportBody.Contains("allowsActions", StringComparison.Ordinal), $"the share file never carries the flag: {exportBody}");
+        AssertEx.Equal(HttpStatusCode.Created, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+        AssertEx.False(exportBody.Contains("triggerSources", StringComparison.Ordinal), $"the share file never carries the trigger sources: {exportBody}");
+        var created = AssertEx.NotNull(command);
+        AssertEx.False(created.AllowsActions, "an import never creates a definition that may act.");
+        AssertEx.Equal(GraphWorkflowTriggerSource.Manual | GraphWorkflowTriggerSource.Chat, created.TriggerSources, "an import accepts the default sources only.");
+    }
+
     [Test]
     public async Task Export_WhenTheStoreHasNoSuchRow_ReturnsNotFound()
     {
@@ -263,7 +296,8 @@ public sealed class GraphWorkflowShareFileEndpointTests
         return store;
     }
 
-    private static GraphWorkflowDefinitionSnapshot Snapshot(string name, string graphJson, Guid? id = null) =>
+    private static GraphWorkflowDefinitionSnapshot Snapshot(string name, string graphJson, Guid? id = null, bool allowsActions = false,
+        GraphWorkflowTriggerSource triggerSources = GraphWorkflowTriggerSource.Manual | GraphWorkflowTriggerSource.Chat) =>
         new()
         {
             Id = id ?? DefinitionId,
@@ -274,6 +308,8 @@ public sealed class GraphWorkflowShareFileEndpointTests
             NodeCount = 3,
             SchemaVersion = 1,
             Kind = GraphWorkflowDefinitionKind.Standard,
+            AllowsActions = allowsActions,
+            TriggerSources = triggerSources,
             Version = 1,
             CreatedAtUtc = 1,
             UpdatedAtUtc = 2

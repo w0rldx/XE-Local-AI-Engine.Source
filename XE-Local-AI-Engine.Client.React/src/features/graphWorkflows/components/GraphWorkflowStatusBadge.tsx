@@ -1,4 +1,4 @@
-import type { MantineColor } from "@mantine/core";
+import { Badge, type MantineColor } from "@mantine/core";
 import { useReducedMotion } from "framer-motion";
 import { useTranslation } from "react-i18next";
 
@@ -8,6 +8,7 @@ import {
 	type GraphWorkflowRunStatus,
 	narrowGraphWorkflowNodeRunStatus,
 	narrowGraphWorkflowRunStatus,
+	narrowGraphWorkflowTriggerSource,
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 
 // Colour maps only — the pill is the shared StatusBadge, exactly as DevWorkflowStatusBadge does it. Both maps are
@@ -92,5 +93,29 @@ export function GraphWorkflowNodeStatusBadge({ status, "data-testid": testId }: 
 			aria-label={label}
 			data-testid={testId ?? "graph-workflow-node-status-badge"}
 		/>
+	);
+}
+
+/** Who started a run, as a small neutral label: the source is a fact about the run, not a state to act on. */
+export function GraphWorkflowRunOriginBadge({
+	source,
+	"data-testid": testId,
+}: {
+	readonly source: string | undefined;
+	readonly "data-testid"?: string;
+}) {
+	const { t } = useTranslation();
+	const narrowed = narrowGraphWorkflowTriggerSource(source);
+	const label = t(`pages.graphWorkflows.triggerSource.${narrowed}`, narrowed);
+	return (
+		<Badge
+			size="xs"
+			variant="outline"
+			color="gray"
+			title={t("pages.graphWorkflows.runs.origin", "Started by: {{source}}", { source: label })}
+			data-testid={testId ?? "graph-workflow-run-origin-badge"}
+		>
+			{label}
+		</Badge>
 	);
 }

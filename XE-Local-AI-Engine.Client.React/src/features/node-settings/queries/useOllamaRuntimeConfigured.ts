@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { getRunningLocalModels } from "@/core/api/generated";
-import { callWithResponseValidation } from "@/core/api/ResponseValidation";
 
 /**
  * Reads whether the optional Ollama runtime is configured/enabled on this node at all (the
@@ -19,7 +18,7 @@ export function useOllamaRuntimeConfigured() {
 	return useQuery<boolean>({
 		queryKey: ["ollama-runtime", "configured"],
 		queryFn: async ({ signal }) => {
-			const { data } = await callWithResponseValidation(getRunningLocalModels({ signal, throwOnError: true }));
+			const { data } = await getRunningLocalModels({ signal });
 			// Absent on an older backend that predates the flag: assume configured, the pre-flag behavior.
 			return data.ollamaConfigured ?? true;
 		},

@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>XE_Local_AI_Engine.Cli.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.TestHost"/>
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage"/>
+    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport"/>
+    <PackageReference Include="Microsoft.Testing.Platform"/>
+    <PackageReference Include="NSubstitute"/>
+    <PackageReference Include="NSubstitute.Analyzers.CSharp" PrivateAssets="all"/>
+    <PackageReference Include="TUnit"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Cli\XE-Local-AI-Engine.Cli.csproj"/>
+    <!-- In-process integration tests drive a real node through TestServerWebAppFactory. -->
+    <ProjectReference Include="..\XE-Local-AI-Engine.Client.Testing\XE-Local-AI-Engine.Client.Testing.csproj"/>
+    <Compile Include="..\XE-Local-AI-Engine.Tests\Testing\AssertionException.cs" Link="Testing\AssertionException.cs"/>
+    <Compile Include="..\XE-Local-AI-Engine.Tests\Testing\AssertEx.cs" Link="Testing\AssertEx.cs"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="XE_Local_AI_Engine.Cli.Tests.Categories"/>
+  </ItemGroup>
+
+</Project>

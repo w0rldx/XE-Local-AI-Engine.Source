@@ -2,7 +2,7 @@ import axios from "axios";
 
 import {
 	addApiProblemDetailsInterceptor,
-	addAuthRequestInterceptor,
+	addBearerReconciliationInterceptor,
 	addFormDataContentTypeInterceptor,
 	addRateLimitingInterceptor,
 	addUnauthorizedErrorInterceptor,
@@ -16,7 +16,7 @@ const axiosInstance = axios.create({
 	// a falsy baseURL as "unset" and falls back to THIS instance default. With "/" here,
 	// getUrl emits "/" + "/api/local/v1/<path>" = "//api/local/v1/<path>" — a protocol-relative
 	// URL the browser parses with host "api" (ERR_NAME_NOT_RESOLVED, request hangs forever).
-	// "" keeps both the generated SDK and the hand-wrapped (buildLocalApiUrl) calls same-origin.
+	// "" keeps the generated SDK calls same-origin.
 	baseURL: "",
 	withCredentials: true,
 	headers: {
@@ -25,8 +25,9 @@ const axiosInstance = axios.create({
 	},
 });
 
+// The bearer comes from the generated client's `auth` callback (Generated.runtime.ts); this only refreshes its value.
 addFormDataContentTypeInterceptor(axiosInstance);
-addAuthRequestInterceptor(axiosInstance);
+addBearerReconciliationInterceptor(axiosInstance);
 
 addUnauthorizedErrorInterceptor(axiosInstance);
 addVaultLockedInterceptor(axiosInstance);

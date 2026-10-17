@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
@@ -110,6 +111,9 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         var cloudWithheldTools = supportsTools
             ? await ResolveCloudWithheldToolsAsync(definition, effectiveModel, effectiveModelIsCloud, effectiveCloudGrants, cancellationToken)
             : null;
+        // The offer drops a listed run_python while compute is off; the flag lets the turn say so instead of a log line.
+        var computeWithheld = supportsTools && definition.AllowedToolNames.Contains(ComputeToolDefinition.ToolName, StringComparer.Ordinal)
+                                            && !await _runtimeSettings.GetComputeEnabledAsync(cancellationToken);
 
         return new ResolvedAgentRuntime(resolvedPrompt,
             allowedTools,
@@ -126,7 +130,9 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             customTools,
             definition.DisableToolRelevanceFilter,
             playbookWithheld,
-            cloudWithheldTools);
+            cloudWithheldTools,
+            !AgentDefaults.IsDefaultAssistant(definition) && definition.AllowedToolNames.Count > 0,
+            computeWithheld);
     }
 
     // Narrowed to what THIS agent would have been offered: the Default Assistant reproduces plain chat, which never

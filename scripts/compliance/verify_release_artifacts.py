@@ -60,6 +60,8 @@ RID_REQUIRED = {
         *(f"wwwroot/licenses/dotnet/{name.lower()}" for name in DOTNET_RUNTIME_DOCUMENT_NAMES),
     ),
 }
+WINDOWS_LAUNCHER = "xe-local-ai-engine.windowslauncher.exe"
+WINDOWS_UNINSTALL_SCRIPT = "uninstall-xe-local-ai-engine.ps1"
 WINDOWS_FORBIDDEN_RUNTIME_SUFFIXES = (
     "coreclr.dll",
     "hostfxr.dll",
@@ -93,6 +95,20 @@ def assert_required_paths(paths: list[str], runtime_identifier: str, label: str)
     for required in required_suffixes(runtime_identifier):
         if not any(path.endswith(required) for path in normalized):
             raise ValueError(f"{label} is missing required {required.upper()}")
+    if runtime_identifier == "win-x64":
+        assert_uninstall_script_beside_launcher(normalized, label)
+
+
+def assert_uninstall_script_beside_launcher(normalized: list[str], label: str) -> None:
+    # The portable zip has no Windows uninstall entry, so this script is how a user removes the data folder. An exact
+    # member in the launcher's own folder (publish root, current/ in the zip, the full package's app folder), not a
+    # suffix, so a look-alike name or a nested copy does not pass.
+    launchers = [path for path in normalized if path == WINDOWS_LAUNCHER or path.endswith(f"/{WINDOWS_LAUNCHER}")]
+    if len(launchers) != 1:
+        raise ValueError(f"{label} must contain exactly one {WINDOWS_LAUNCHER.upper()}, found {len(launchers)}")
+    expected = launchers[0].removesuffix(WINDOWS_LAUNCHER) + WINDOWS_UNINSTALL_SCRIPT
+    if expected not in normalized:
+        raise ValueError(f"{label} is missing required {expected.upper()}")
 
 
 def assert_framework_distribution(paths: list[str], runtime_identifier: str, label: str) -> None:

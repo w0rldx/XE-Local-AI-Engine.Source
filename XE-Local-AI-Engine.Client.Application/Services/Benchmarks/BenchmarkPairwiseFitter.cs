@@ -56,13 +56,23 @@ public sealed class BenchmarkPairwiseFitter : IBenchmarkPairwiseFitter
         }
 
         var cohort = await _store.GetPairwiseCohortAsync(projectId, cancellationToken);
-        if (cohort.PolicyRevisionId is not { } revisionId || !IsComplete(cohort))
+
+        // Several runs but no pair to judge: every run is one cell (one model with repeats). Nothing will ever complete,
+        // so the cohort publishes a refusal instead of reading pending forever behind a fit from an older rule.
+        var plan = BenchmarkPairwisePlanner.Plan(cohort.Candidates, BenchmarkPairwisePolicy.MaximumRuns);
+        var nothingToCompare = plan.Slots.Count == 0 && plan.PairedRunIds.Count > 1;
+        if (cohort.PolicyRevisionId is not { } revisionId || (!nothingToCompare && !IsComplete(cohort)))
         {
             return false;
         }
 
-        var succeeded = cohort.Comparisons.Where(static comparison => comparison.Status == BenchmarkJudgeAttemptStatus.Succeeded
-                                                                      && comparison.Verdict is not null)
+        // Only the planned pairs are fitted: a comparison the current plan no longer forms (one paired across task
+        // items before pairing respected them) answered two different questions and must not move a score.
+        var planned = plan.Slots.ToDictionary(static slot => new UnorderedPair(slot.RunAId, slot.RunBId),
+            static slot => new TaskCase(slot.TaskCaseId, slot.TaskInputHash));
+        var succeeded = cohort.Comparisons.Where(comparison => comparison.Status == BenchmarkJudgeAttemptStatus.Succeeded
+                                                               && comparison.Verdict is not null
+                                                               && planned.ContainsKey(new UnorderedPair(comparison.RunAId, comparison.RunBId)))
                               .OrderBy(static comparison => comparison.Sequence)
                               .ToArray();
         var fitKey = ComputeFitKey(policy, revisionId, cohort);
@@ -72,17 +82,8 @@ public sealed class BenchmarkPairwiseFitter : IBenchmarkPairwiseFitter
             return false;
         }
 
-        var refusal = Refuse(cohort, succeeded);
-        var fit = refusal is null
-            ? BenchmarkBradleyTerry.Fit([
-                .. succeeded.Select(static comparison => new BenchmarkPairwiseVerdict
-                {
-                    RunAId = comparison.RunAId,
-                    RunBId = comparison.RunBId,
-                    Verdict = comparison.Verdict!
-                })
-            ])
-            : null;
+        var refusal = nothingToCompare ? BenchmarkRunJudgeStates.ReasonPairwiseInsufficient : Refuse(cohort, succeeded);
+        var fit = refusal is null ? FitPerTaskCase(succeeded, planned) : null;
         var scores = ToScoreEntries(cohort, fit, refusal ?? fit?.Refusal);
         var command = new BenchmarkPairwiseFitCommand
         {
@@ -116,6 +117,33 @@ public sealed class BenchmarkPairwiseFitter : IBenchmarkPairwiseFitter
         }
 
         return published;
+    }
+
+    /// <summary>One Bradley–Terry fit per task case, concatenated.</summary>
+    /// <remarks>
+    ///     Runs of different cases are never compared, so one fit over all of them sees a disconnected graph and would
+    ///     score only its largest component. Each case is centred on its own, and the cell aggregates its runs' scores.
+    /// </remarks>
+    private static BenchmarkBradleyTerryFit FitPerTaskCase(IReadOnlyList<BenchmarkComparisonRecord> succeeded,
+        IReadOnlyDictionary<UnorderedPair, TaskCase> planned)
+    {
+        var fits = succeeded.GroupBy(comparison => planned[new UnorderedPair(comparison.RunAId, comparison.RunBId)])
+                            .Select(static group => BenchmarkBradleyTerry.Fit([
+                                .. group.Select(static comparison => new BenchmarkPairwiseVerdict
+                                {
+                                    RunAId = comparison.RunAId,
+                                    RunBId = comparison.RunBId,
+                                    Verdict = comparison.Verdict!
+                                })
+                            ]))
+                            .ToArray();
+        return new BenchmarkBradleyTerryFit
+        {
+            Scores = [.. fits.SelectMany(static fit => fit.Scores)],
+            Iterations = fits.Length == 0 ? 0 : fits.Max(static fit => fit.Iterations),
+            Replicates = BenchmarkBradleyTerry.DefaultReplicates,
+            Refusal = fits.Select(static fit => fit.Refusal).FirstOrDefault(static refusal => refusal is not null)
+        };
     }
 
     /// <summary>A cohort is complete when BOTH presentation orders of every planned pair carry a succeeded comparison.</summary>
@@ -212,12 +240,19 @@ public sealed class BenchmarkPairwiseFitter : IBenchmarkPairwiseFitter
             pairwiseOutputSchemaVersion = policy.PairwiseOutputSchemaVersion,
             taskCaseId = (Guid?)null,
             taskInputHash = string.Empty,
+            pairing = "per-task-case",
             judgeExecutionKey = cohort.ReferenceExecutionKey ?? string.Empty,
             comparisonSetVersion = cohort.ComparisonSetVersion
         });
 
     [StructLayout(LayoutKind.Auto)]
     private readonly record struct OrderedComparison(Guid RunAId, Guid RunBId, int Order);
+
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct UnorderedPair(Guid RunAId, Guid RunBId);
+
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct TaskCase(Guid? TaskCaseId, string TaskInputHash);
 
     /// <summary>One row of the auditable answer to "which verdicts produced this number".</summary>
     private sealed record FittedVerdict

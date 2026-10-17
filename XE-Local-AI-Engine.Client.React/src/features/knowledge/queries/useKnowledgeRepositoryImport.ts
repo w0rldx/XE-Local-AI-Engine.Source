@@ -1,7 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { importKnowledgeRepositoryMutation } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import type { KnowledgeRepositoryImportResult } from "@/features/knowledge/models/KnowledgeModels";
 import { knowledgeInvalidationKey, knowledgeQueryIds } from "@/features/knowledge/queries/useKnowledgeDocuments";
 
@@ -14,7 +13,7 @@ export interface KnowledgeRepositoryImportCallbacks {
 export function useKnowledgeRepositoryImport(callbacks: KnowledgeRepositoryImportCallbacks = {}) {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(importKnowledgeRepositoryMutation()),
+		...importKnowledgeRepositoryMutation(),
 		onSuccess: async (result) => {
 			await queryClient.invalidateQueries({ queryKey: knowledgeInvalidationKey(knowledgeQueryIds.listDocuments) });
 			callbacks.onSuccess?.(result);

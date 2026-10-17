@@ -87,6 +87,8 @@ const triggers: IntegrationTrigger[] = [
 		description: "",
 		enabled: true,
 		targetAgentDefinitionId: "agent-read",
+		targetKind: "Agent",
+		targetGraphWorkflowDefinitionId: null,
 		sessionPolicy: "PerInvocation",
 		acceptedInputKinds: ["text"],
 		createdAtUtc: 1000,

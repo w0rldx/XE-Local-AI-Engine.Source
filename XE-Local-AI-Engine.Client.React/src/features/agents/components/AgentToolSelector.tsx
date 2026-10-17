@@ -37,9 +37,9 @@ const askUserToolName = "ask_user";
 
 const EMPTY_TOOL_NAMES: readonly string[] = [];
 
-// The catalog marks a tool this node never offers (run_python off Linux) only in its description, with this exact text
-// from LocalToolOfferProvider's catalog entry: change both together. Such a tool cannot be newly selected.
-const withheldOnNodeMarker = "(Linux only: not available on this node";
+// The catalog marks a tool this node never offers (run_python off Linux x64 and Windows x64) only in its description, with this
+// exact text from LocalToolOfferProvider's catalog entry: change both together. Such a tool cannot be newly selected.
+const withheldOnNodeMarker = "(not available on this node's platform";
 
 // Synthesize a catalog entry for a tool that is selected on the definition but no longer present in the live
 // catalog (e.g. an MCP tool whose server was disabled/removed). It is shown so the user can still see and

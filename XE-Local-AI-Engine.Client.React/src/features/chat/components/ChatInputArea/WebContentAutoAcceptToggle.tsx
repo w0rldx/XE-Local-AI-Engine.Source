@@ -10,7 +10,6 @@ import {
 	getTutorialStateQueryKey,
 	saveTutorialStateMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { useSetWebContentAutoAccept, useWebContentAutoAccept } from "@/features/chat/stores/WebContentAutoAcceptStore";
 
@@ -31,10 +30,10 @@ interface WebContentAutoAcceptToggleProps {
 export function WebContentAutoAcceptToggle({ conversationId, disabled }: WebContentAutoAcceptToggleProps) {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
-	const settings = useQuery(withResponseValidation(getNodeSettingsOptions()));
+	const settings = useQuery(getNodeSettingsOptions());
 	const webAccessEnabled = settings.data?.webAccessEnabled === true;
-	const tutorialState = useQuery({ ...withResponseValidation(getTutorialStateOptions()), enabled: webAccessEnabled });
-	const saveTutorialState = useMutation(withResponseValidation(saveTutorialStateMutation()));
+	const tutorialState = useQuery({ ...getTutorialStateOptions(), enabled: webAccessEnabled });
+	const saveTutorialState = useMutation(saveTutorialStateMutation());
 	const autoAccept = useWebContentAutoAccept(conversationId);
 	const setAutoAccept = useSetWebContentAutoAccept();
 	const [noticeOpen, setNoticeOpen] = useState(false);

@@ -84,7 +84,7 @@ public sealed class GraphWorkflowRunBinding
 ///     <b>The commands are fire-and-forget.</b> Each validates, commits a durable intent, signals the dispatcher and
 ///     returns the CURRENT state — which legitimately reads <c>Pending</c> or <c>Cancelling</c>. Nothing here waits
 ///     for the runtime to act, which is what keeps the HTTP path off the node's one invocation slot.
-///     <see cref="StartAsync(Guid, Guid, string, int?, CancellationToken)" /> is idempotent on a caller-minted request id: the same id always answers with the
+///     <see cref="StartAsync(Guid, Guid, string, int?, GraphWorkflowRunOrigin, CancellationToken)" /> is idempotent on a caller-minted request id: the same id always answers with the
 ///     same run, so an integration that never saw the first answer retries without risking a second run.
 /// </remarks>
 public interface IGraphWorkflowRunService
@@ -99,10 +99,12 @@ public interface IGraphWorkflowRunService
     ///     <see cref="GraphWorkflowRunConflictException" /> rather than running a graph the caller never saw; null skips
     ///     the check.
     /// </param>
+    /// <param name="origin">Who starts it; required, so no start is Manual by omission. A source the definition does not accept is a conflict.</param>
     Task<GraphWorkflowRunDetail> StartAsync(Guid definitionId,
         Guid requestId,
         string? inputJson,
         int? definitionVersion,
+        GraphWorkflowRunOrigin origin,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -113,6 +115,7 @@ public interface IGraphWorkflowRunService
         Guid requestId,
         string? inputJson,
         int? definitionVersion,
+        GraphWorkflowRunOrigin origin,
         GraphWorkflowRunBinding? binding,
         CancellationToken cancellationToken = default);
 

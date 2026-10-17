@@ -131,6 +131,9 @@ export function externalAppCatalog(overrides: Partial<ExternalAppCatalogResponse
 		fromBundledSeed: false,
 		refreshFailureMessage: null,
 		lastRefreshFailure: null,
+		restartRequired: false,
+		bridgeOpenUntilRestart: false,
+		refreshUrlConfigured: false,
 		applications: [externalAppSummary()],
 		...overrides,
 	};

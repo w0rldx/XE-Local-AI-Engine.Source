@@ -37,8 +37,18 @@ describe("GraphWorkflowRunList", () => {
 		expect(screen.getByTestId(`graph-workflow-run-status-${older.id}`).textContent).toBe("Failed");
 		expect(screen.getByTestId(`graph-workflow-run-version-${older.id}`).textContent).toBe("Version 1");
 		expect(screen.getByTestId(`graph-workflow-run-failure-${older.id}`).textContent).toBe("The node failed");
+		expect(screen.getByTestId(`graph-workflow-run-origin-${older.id}`).textContent).toBe("Manual");
 		// `None` is "nothing went wrong": a failure word on a healthy run is noise.
 		expect(screen.queryByTestId(`graph-workflow-run-failure-${newer.id}`)).toBeNull();
+	});
+
+	it("labels who started each run", () => {
+		const scheduled = graphWorkflowRunSummary({ id: "33333333-3333-4333-8333-333333333333", triggerSource: "Schedule" });
+		renderWithProviders(<GraphWorkflowRunList runs={[scheduled]} onSelectRun={vi.fn()} />);
+
+		const badge = screen.getByTestId(`graph-workflow-run-origin-${scheduled.id}`);
+		expect(badge.textContent).toBe("Schedule");
+		expect(badge.getAttribute("title")).toBe("Started by: Schedule");
 	});
 
 	it("selects a run when its row is clicked", () => {

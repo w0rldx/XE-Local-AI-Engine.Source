@@ -9,7 +9,6 @@ import {
 	removeStableDiffusionCppSourceBuildMutation,
 	startStableDiffusionCppSourceBuildMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import {
 	toImageRuntimeSourceBuildPrerequisites,
 	toImageRuntimeSourceBuildStatus,
@@ -34,7 +33,7 @@ function invalidate(queryClient: ReturnType<typeof useQueryClient>, operationId:
 
 export function useImageRuntimeStatus(enabled = true) {
 	return useQuery({
-		...withResponseValidation(getImageRuntimeStatusOptions()),
+		...getImageRuntimeStatusOptions(),
 		select: toImageRuntimeStatus,
 		enabled,
 	});
@@ -42,7 +41,7 @@ export function useImageRuntimeStatus(enabled = true) {
 
 export function useImageRuntimeSourceBuildPrerequisites(backend: ImageRuntimeSourceBackend, enabled = true) {
 	return useQuery({
-		...withResponseValidation(getStableDiffusionCppSourceBuildPrerequisitesOptions({ query: { backend } })),
+		...getStableDiffusionCppSourceBuildPrerequisitesOptions({ query: { backend } }),
 		select: toImageRuntimeSourceBuildPrerequisites,
 		enabled,
 		staleTime: sourceBuildPrerequisiteStaleTime,
@@ -51,7 +50,7 @@ export function useImageRuntimeSourceBuildPrerequisites(backend: ImageRuntimeSou
 
 export function useImageRuntimeSourceBuildStatus(enabled = true) {
 	return useQuery({
-		...withResponseValidation(getStableDiffusionCppSourceBuildStatusOptions()),
+		...getStableDiffusionCppSourceBuildStatusOptions(),
 		select: toImageRuntimeSourceBuildStatus,
 		enabled,
 	});
@@ -61,7 +60,7 @@ export function useStartImageRuntimeSourceBuild() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async (draft: ImageRuntimeSourceBuildDraft) => {
-			const options = withResponseValidation(startStableDiffusionCppSourceBuildMutation());
+			const options = startStableDiffusionCppSourceBuildMutation();
 			return await options.mutationFn?.({ body: sourceBuildRequest(draft) }, undefined as never);
 		},
 		onSuccess: () =>
@@ -76,7 +75,7 @@ export function useCancelImageRuntimeSourceBuild() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async () => {
-			const options = withResponseValidation(cancelStableDiffusionCppSourceBuildMutation());
+			const options = cancelStableDiffusionCppSourceBuildMutation();
 			return await options.mutationFn?.({ body: {} }, undefined as never);
 		},
 		onSuccess: () => invalidate(queryClient, imageRuntimeQueryIds.sourceBuildStatus),
@@ -87,7 +86,7 @@ export function useRemoveImageRuntimeSourceBuild() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async () => {
-			const options = withResponseValidation(removeStableDiffusionCppSourceBuildMutation());
+			const options = removeStableDiffusionCppSourceBuildMutation();
 			return await options.mutationFn?.({ body: {} }, undefined as never);
 		},
 		onSuccess: () =>
@@ -102,7 +101,7 @@ export function useEjectImageRuntime() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async () => {
-			const options = withResponseValidation(ejectImageRuntimeMutation());
+			const options = ejectImageRuntimeMutation();
 			return await options.mutationFn?.({ body: {} }, undefined as never);
 		},
 		onSuccess: () => invalidate(queryClient, imageRuntimeQueryIds.runtime),

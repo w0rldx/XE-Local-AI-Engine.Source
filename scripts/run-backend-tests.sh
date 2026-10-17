@@ -53,7 +53,14 @@
 #   Every run that got past argument parsing appends ONE tab-separated line to the MAIN checkout's
 #   .tmp/gate-history.log (resolved like the build lock, so all worktrees share one file; never truncated):
 #     <ISO time> <worktree real path or -> <tip> Tests=p/f/s Persistence=p/f/s Agent=p/f/s
-#     Contracts=p/f/s|skipped scope=<scope> wall=<seconds> exit=<code>
+#     Contracts=p/f/s|skipped scope=<scope> wall=<seconds> reason=<reason> skips=<slug:n,...> exit=<code>
+#   Twelve fields, exit= always last (scripts/squash-guard.sh keys on it). reason is ok on exit 0;
+#   otherwise lock-timeout (69), contaminated (75), killed (130/143), build (Release build red), fail-fast
+#   (Architecture pre-lane red), tests (a lane red, hollow or without a summary), setup (anything else).
+#   skips groups every skipped test of the finished lanes by reason: a sibling's reason is the TUnit skip
+#   text from its TRX, lowercased with non-alphanumerics folded to "-" and cut to 24 characters; a skip
+#   with no recorded reason counts as "unreported", which is every skip of the batched lane (its runner
+#   writes no TRX without COVERAGE_DIR). Empty when nothing was skipped or no lane finished.
 #   tip is HEAD when the lock was taken, before the build ("-" outside git), suffixed "+dirty" when the
 #   tree had changes (untracked included) then and "+moved" when HEAD differed at exit; a suffixed tip
 #   certifies nothing. scope is full only when this invocation built and ran every lane unsharded;
@@ -222,8 +229,23 @@ history_lane() {
   read -r p f rc dur s <"$LANE_DIR/$1.result"
   printf '%s/%s/%s' "$p" "$f" "$s"
 }
+# "<slug>:<count>,..." over every finished lane: a sibling's slugs come from its TRX (run_sibling), and a
+# lane's skips without a recorded reason (the batched lane writes no TRX) count as "unreported".
+history_skips() {
+  local r s n
+  [[ -n "${LANE_DIR:-}" && -d "$LANE_DIR" ]] || return 0
+  for r in "$LANE_DIR"/*.result; do
+    [[ -f "$r" ]] || continue
+    read -r _ _ _ _ s <"$r"
+    n=0
+    if [[ -f "${r%.result}.skips" ]]; then n="$(wc -l <"${r%.result}.skips")"; cat "${r%.result}.skips"; fi
+    for ((; n < ${s:-0}; n++)); do echo unreported; done
+  done | sort | uniq -c | awk '{ printf "%s%s:%s", (NR > 1 ? "," : ""), $2, $1 }'
+}
+# Set just before the exits that a bare exit code cannot tell apart (all three are 1); see "Gate history".
+GATE_REASON=""
 gate_history_on_exit() {
-  local rc=$? file sha now contracts scope worktree="$REPO"
+  local rc=$? file sha now contracts scope reason worktree="$REPO"
   # The unlocked instance owns the line unless the locked one appended its token (see "Gate history").
   if [[ -n "$GATE_ACK" ]] && ! grep -q '^owned ' "$GATE_ACK" 2>/dev/null; then GATE_HISTORY_OWNER=1; fi
   if [[ -n "$GATE_HISTORY_OWNER" ]]; then
@@ -243,10 +265,17 @@ gate_history_on_exit() {
     fi
     contracts="$(history_lane release-contract-tests)"
     [[ -n "${CONTRACT_WHY:-}" && -z "${CONTRACT_LANE:-}" ]] && contracts=skipped
-    mkdir -p "$(dirname "$file")" && printf '%s\t%s\t%s\tTests=%s\tPersistence=%s\tAgent=%s\tContracts=%s\tscope=%s\twall=%s\texit=%s\n' \
+    case "$rc" in
+      0)       reason=ok ;;
+      69)      reason=lock-timeout ;;
+      75)      reason=contaminated ;;
+      130|143) reason=killed ;;
+      *)       reason="${GATE_REASON:-setup}" ;;
+    esac
+    mkdir -p "$(dirname "$file")" && printf '%s\t%s\t%s\tTests=%s\tPersistence=%s\tAgent=%s\tContracts=%s\tscope=%s\twall=%s\treason=%s\tskips=%s\texit=%s\n' \
       "$(date -Iseconds)" "$worktree" "$sha" "$(history_lane XE-Local-AI-Engine.Tests)" \
       "$(history_lane XE-Local-AI-Engine.Client.Persistence.Tests)" "$(history_lane XE-Local-AI-Engine.AI.Agent.Tests)" \
-      "$contracts" "$scope" "$((EPOCHSECONDS - GATE_T0))" "$rc" >>"$file" \
+      "$contracts" "$scope" "$((EPOCHSECONDS - GATE_T0))" "$reason" "$(history_skips)" "$rc" >>"$file" \
       || echo "WARN: could not append to $file" >&2
   fi
   [[ -z "$LANE_DIR" ]] || rm -rf "$LANE_DIR"
@@ -473,6 +502,7 @@ if [[ -z "${NO_BUILD:-}" ]]; then
   dotnet build-server shutdown >/dev/null 2>&1 || true
   if ! dotnet build "$SLN" --configuration Release; then
     echo "BUILD FAILED — nothing was run." >&2
+    GATE_REASON=build
     exit 1
   fi
   GATE_BUILT=1
@@ -510,6 +540,7 @@ run_architecture_fail_fast() {
     sed 's/^/[architecture] /' "$log" >&2
     echo "ERROR: --list-tests for $ARCH_FILTER exited $rc (8 = the filter matched no test)." >&2
     echo "FAIL-FAST: Architecture conventions red; long lanes not run" >&2
+    GATE_REASON=fail-fast
     exit 1
   fi
   env -u XE_BUILD_LOCK_HELD TUNIT_DISABLE_HTML_REPORTER=1 "$REPO/scripts/assembly-guard.sh" guard --test-bins -- \
@@ -532,6 +563,7 @@ run_architecture_fail_fast() {
     echo "FAILED CLASS: ${class:+$(basename "$class" .cs)}${class:-? (no source matched $name)}" >&2
   done < <(sed -nE 's/^[[:space:]]*failed (.+) \([0-9][^()]*\)[[:space:]]*$/\1/p' "$log" | sort -u)
   echo "FAIL-FAST: Architecture conventions red; long lanes not run" >&2
+  GATE_REASON=fail-fast
   exit 1
 }
 if [[ -z "$SIBLINGS_ONLY" && "${XE_GATE_FAIL_FAST:-1}" != 0 ]]; then
@@ -627,6 +659,8 @@ run_sibling() {
     guard=()  # static instrumentation rewrites this project's own bin — see the header.
   fi
   mkdir -p "$RESULTS_ROOT/$module"
+  # Only a TRX written after this marker is this run's: a COVERAGE_DIR tree is never cleared.
+  : >"$LANE_DIR/$module.t0"
   # env -u: the lock marker is for the nested memory-safe runner, which must not re-take the lock we
   # already hold. A leaf `dotnet test` has no such re-entry to suppress, and leaving the marker in
   # its environment would let anything it spawns believe it holds a lock that it does not.
@@ -643,6 +677,13 @@ run_sibling() {
          "Check project names or IsTestingPlatformApplication." >&2
     rc=90
   fi
+  # One slug per skipped test for the history's skips= field: TUnit writes "Skipped: <reason>" as the
+  # result's DebugTrace in the TRX. Lowercased, non-alphanumerics folded to "-", cut to 24 characters.
+  local trx
+  trx="$(find "$RESULTS_ROOT/$module" -maxdepth 1 -name '*.trx' -newer "$LANE_DIR/$module.t0" 2>/dev/null | head -1)"
+  [[ -z "$trx" ]] || grep -oE '<DebugTrace>Skipped: [^<]*' "$trx" \
+    | sed -E 's/^<DebugTrace>Skipped: //' | tr '[:upper:]' '[:lower:]' \
+    | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/^(.{24}).*/\1/; s/-+$//; s/^$/no-reason/' >"$LANE_DIR/$module.skips"
   echo "$p $f $rc $((EPOCHSECONDS-t0)) $s" >"$LANE_DIR/$module.result"
 }
 
@@ -795,6 +836,7 @@ if [[ "${#FAILED[@]}" -gt 0 ]]; then
     lane_log="$RESULTS_ROOT/${module%%(*}/gate.log"
     [[ -f "$lane_log" ]] && print_failed_tests "$lane_log"
   done
+  GATE_REASON=tests
   exit 1
 fi
 echo "BACKEND GATE GREEN"

@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Training.Runs;
 
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -32,6 +33,58 @@ public sealed class InstalledBaseModelLinkerTests
         AssertEx.Equal(expected: 2, suggestions.Count);
         AssertEx.Equal("Qwen/Qwen2.5-0.5B-Instruct:F16", suggestions[0].ModelName);
         AssertEx.Equal("Qwen/Qwen2.5-0.5B-Instruct-GGUF:Q8_0", suggestions[1].ModelName);
+    }
+
+    /// <summary>R7-05: a promoted tuned model carries its base's repo id and was auto-linked as the next run's base.</summary>
+    [Test]
+    public async Task Resolve_WithoutExplicitName_NeverPicksAPromotedTrainedModel()
+    {
+        var registry = Substitute.For<IGgufModelRegistry>();
+        _ = registry.ListAsync(Arg.Any<CancellationToken>()).Returns(new[]
+        {
+            Entry("r7/tuned:Q4_K_M", BaseRepo) with
+            {
+                Origin = LocalModelOrigin.Trained
+            }
+        });
+        var linker = new InstalledBaseModelLinker(registry);
+
+        AssertEx.Empty(await linker.SuggestAsync(BaseRepo));
+        AssertEx.Null(await linker.ResolveAsync(BaseRepo, explicitModelName: null));
+    }
+
+    [Test]
+    public async Task Resolve_WithATunedModelBesideTheRealBase_PicksTheRealBase()
+    {
+        var registry = Substitute.For<IGgufModelRegistry>();
+        _ = registry.ListAsync(Arg.Any<CancellationToken>()).Returns(new[]
+        {
+            Entry("r7/tuned:Q4_K_M", BaseRepo) with
+            {
+                Origin = LocalModelOrigin.Trained
+            },
+            Entry("Qwen/Qwen2.5-0.5B-Instruct-GGUF:Q8_0", "Qwen/Qwen2.5-0.5B-Instruct-GGUF")
+        });
+        var linker = new InstalledBaseModelLinker(registry);
+
+        var link = AssertEx.NotNull(await linker.ResolveAsync(BaseRepo, explicitModelName: null));
+
+        AssertEx.Equal("Qwen/Qwen2.5-0.5B-Instruct-GGUF:Q8_0", link.ModelName);
+    }
+
+    [Test]
+    public async Task Resolve_ExplicitlyNamingATunedModel_IsRefusedWithTheReason()
+    {
+        var registry = Substitute.For<IGgufModelRegistry>();
+        _ = registry.FindAsync("r7/tuned:Q4_K_M", Arg.Any<CancellationToken>()).Returns(Entry("r7/tuned:Q4_K_M", BaseRepo) with
+        {
+            Origin = LocalModelOrigin.Trained
+        });
+        var linker = new InstalledBaseModelLinker(registry);
+
+        var refusal = await AssertEx.ThrowsAsync<TrainingRunRejectedException>(() => linker.ResolveAsync(BaseRepo, "r7/tuned:Q4_K_M"));
+
+        AssertEx.Contains(refusal.Message, "not a base checkpoint");
     }
 
     [Test]

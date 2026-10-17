@@ -16,7 +16,7 @@ const { authApiMock, routerMock } = vi.hoisted(() => ({
 vi.mock("@/core/auth/api/NodeAuthApi", () => authApiMock);
 
 import {
-	addAuthRequestInterceptor,
+	addBearerReconciliationInterceptor,
 	addFormDataContentTypeInterceptor,
 	addUnauthorizedErrorInterceptor,
 	addVaultLockedInterceptor,
@@ -94,22 +94,6 @@ describe("auth axios interceptors", () => {
 		useNodeAuthStore.getState().actions.clear();
 	});
 
-	it("adds the in-memory access token as a bearer header", async () => {
-		let observedAuthorization: unknown;
-		const instance = axios.create({
-			adapter: async (config) => {
-				observedAuthorization = config.headers.Authorization;
-				return okResponse(config);
-			},
-		});
-		addAuthRequestInterceptor(instance);
-		useNodeAuthStore.getState().actions.setToken({ accessToken: "access-token", expiresAtUtc: "2026-05-25T12:00:00Z" });
-
-		await instance.get("/api/local/v1/protected");
-
-		expect(observedAuthorization).toBe("Bearer access-token");
-	});
-
 	it("refreshes once and replays a 401 request with the new token", async () => {
 		let callCount = 0;
 		let replayAuthorization: unknown;
@@ -155,9 +139,10 @@ describe("auth axios interceptors", () => {
 				throw unauthorizedError(config);
 			},
 		});
-		addAuthRequestInterceptor(instance);
 		addUnauthorizedErrorInterceptor(instance);
 		useNodeAuthStore.getState().actions.setToken({ accessToken: "old-token", expiresAtUtc: "2026-05-25T12:00:00Z" });
+		// The generated client's `auth` callback puts the bearer on the request headers; send it the same way.
+		const sentWithOldToken = { headers: { Authorization: "Bearer old-token" } };
 		let releaseRefresh!: () => void;
 		const freshToken = { accessToken: "fresh-token", expiresAtUtc: "2026-05-25T12:15:00Z" };
 		authApiMock.refreshNodeAuthToken
@@ -169,8 +154,8 @@ describe("auth axios interceptors", () => {
 			)
 			.mockResolvedValue(freshToken);
 
-		const first = instance.get("/api/local/v1/first");
-		const late = instance.get("/api/local/v1/late");
+		const first = instance.get("/api/local/v1/first", sentWithOldToken);
+		const late = instance.get("/api/local/v1/late", sentWithOldToken);
 		await vi.waitFor(() => expect(authApiMock.refreshNodeAuthToken).toHaveBeenCalledTimes(1));
 		expect(sentAuthorizations).toEqual(["Bearer old-token", "Bearer old-token"]);
 		releaseRefresh();
@@ -181,6 +166,52 @@ describe("auth axios interceptors", () => {
 
 		expect(authApiMock.refreshNodeAuthToken).toHaveBeenCalledTimes(1);
 		expect(sentAuthorizations.at(-1)).toBe("Bearer fresh-token");
+	});
+
+	it("refreshes once when the replay after a successful refresh answers 401 again", async () => {
+		// axios merges a replayed config into a new object, so a retry marker keyed by object identity was lost and a
+		// persistent 401 refreshed and replayed again.
+		let sendCount = 0;
+		const instance = axios.create({
+			adapter: async (config) => {
+				sendCount += 1;
+				// Bound a regression: an unmarked replay loops refresh/replay without end, so stop it with a non-401.
+				if (sendCount > 5) {
+					throw new Error("refresh/replay loop");
+				}
+				throw unauthorizedError(config);
+			},
+		});
+		addUnauthorizedErrorInterceptor(instance);
+		useNodeAuthStore.getState().actions.setToken({ accessToken: "old-token", expiresAtUtc: "2026-05-25T12:00:00Z" });
+		authApiMock.refreshNodeAuthToken.mockResolvedValue({ accessToken: "fresh-token", expiresAtUtc: "2026-05-25T12:15:00Z" });
+
+		await expect(
+			instance.get("/api/local/v1/protected", { headers: { Authorization: "Bearer old-token" } }),
+		).rejects.toMatchObject({ response: { status: 401 } });
+
+		expect(authApiMock.refreshNodeAuthToken).toHaveBeenCalledTimes(1);
+		expect(sendCount).toBe(2);
+		expect(useNodeAuthStore.getState().accessToken).toBeUndefined();
+		expect(routerMock.navigate).toHaveBeenCalledWith({ to: "/login", search: { redirect: "/" } });
+	});
+
+	it("re-reads the current token at dispatch for a request that carries a bearer, and adds none otherwise", async () => {
+		const sent: unknown[] = [];
+		const instance = axios.create({
+			adapter: async (config) => {
+				sent.push(config.headers.get("Authorization"));
+				return okResponse(config);
+			},
+		});
+		addBearerReconciliationInterceptor(instance);
+		useNodeAuthStore.getState().actions.setToken({ accessToken: "current-token", expiresAtUtc: "2026-05-25T12:00:00Z" });
+
+		await instance.get("/api/local/v1/protected", { headers: { Authorization: "Bearer stale-token" } });
+		await instance.get("/api/local/v1/protected", { headers: { authorization: "Bearer stale-token" } });
+		await instance.get("/api/local/v1/auth/status");
+
+		expect(sent).toEqual(["Bearer current-token", "Bearer current-token", undefined]);
 	});
 
 	it("clears local auth and redirects to login when refresh answers 401", async () => {

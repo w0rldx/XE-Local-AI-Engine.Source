@@ -73,6 +73,20 @@ public interface ITranscriptionService
     Task<StartLiveResult> StartLiveAsync(Guid sessionId, CancellationToken cancellationToken);
 
     /// <summary>
+    ///     Starts a persist-free <c>Dictation</c> session under a server-minted id: the node's effective model, one
+    ///     <c>Mono</c> lane, the default window, <see cref="LiveSessionOptions.Persist" /> off.
+    /// </summary>
+    /// <param name="language">The whisper language code to force; null detects it per window.</param>
+    /// <param name="cancellationToken">Cancels the warm-up and the registration.</param>
+    /// <remarks>
+    ///     No store is read or written, now or later: commits reach the hub and nothing else, and the session ends
+    ///     through <see cref="ILiveTranscriptionSessionRegistry.EndAsync" /> like any live one. The runtime is warmed
+    ///     first, as <see cref="StartLiveAsync" /> does, so a spawn failure throws before anything is registered.
+    /// </remarks>
+    /// <exception cref="XE_Local_AI_Engine.Providers.WhisperCpp.WhisperRuntimeException">whisper-server could not be started.</exception>
+    Task<DictationSessionStart> StartDictationAsync(string? language, CancellationToken cancellationToken);
+
+    /// <summary>
     ///     Persists one committed live segment under the sequence the registry's commit pipeline allocated for it.
     /// </summary>
     Task AppendLiveSegmentAsync(Guid sessionId,

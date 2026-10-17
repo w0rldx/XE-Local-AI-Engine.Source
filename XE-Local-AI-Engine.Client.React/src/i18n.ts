@@ -2,39 +2,41 @@ import i18next from "i18next";
 import LanguageDetector from "i18next-browser-languagedetector";
 import { initReactI18next } from "react-i18next";
 
-import translationEnglish from "./locales/en.json";
-
-// Only the fallback locale is bundled into the entry chunk. Importing every locale statically put BOTH
-// translation files (~293 KB raw / ~79 KB gzip combined) into the initial payload of every session, so each
-// user downloaded a full language they would never render. Non-fallback locales are split into their own
-// chunks and fetched on demand — see `loadLocale` below and the render gate in Main.tsx.
+// No locale is bundled into the entry chunk: each one is its own chunk, fetched on demand by `loadLocale` below and
+// awaited by the render gate in Main.tsx. The fallback `en` used to be a static import, which put its ~364 KB raw
+// into the boot chunk of every session; it now loads in parallel with the detected language before the first paint.
 const lazyLocales: Record<string, () => Promise<{ default: unknown }>> = {
 	de: () => import("./locales/de.json"),
+	en: () => import("./locales/en.json"),
 };
 
-const requested = new Set<string>();
+// In-flight or finished loads by base language. A second caller gets the SAME promise: `init` fires `languageChanged`
+// synchronously, so the listener below starts the detected language's fetch before i18nReady asks for it, and a
+// plain "already requested" early return let the first paint go ahead before the chunk had landed.
+const requested = new Map<string, Promise<void>>();
 
 // Fetches the chunk for `language` and merges it into the live i18next store. Resolves (never rejects) so a
-// failed chunk fetch degrades to the English fallback rather than blocking the first paint.
-async function loadLocale(language: string | undefined): Promise<void> {
+// failed chunk fetch degrades to whatever did load rather than blocking the first paint.
+function loadLocale(language: string | undefined): Promise<void> {
 	const base = language?.split("-")[0];
-	if (!base) {
-		return;
+	const load = base ? lazyLocales[base] : undefined;
+	if (!base || !load || i18next.hasResourceBundle(base, "translation")) {
+		return Promise.resolve();
 	}
 
-	const load = lazyLocales[base];
-	if (!load || requested.has(base) || i18next.hasResourceBundle(base, "translation")) {
-		return;
-	}
-
-	requested.add(base);
-	try {
-		const bundle = await load();
-		i18next.addResourceBundle(base, "translation", bundle.default, true, true);
-	} catch {
-		// Allow a later languageChanged to retry the fetch.
-		requested.delete(base);
-	}
+	const pending =
+		requested.get(base) ??
+		load().then(
+			(bundle) => {
+				i18next.addResourceBundle(base, "translation", bundle.default, true, true);
+			},
+			() => {
+				// Allow a later languageChanged to retry the fetch.
+				requested.delete(base);
+			},
+		);
+	requested.set(base, pending);
+	return pending;
 }
 
 // Keeps `<html lang>` on the language actually being rendered. index.html ships a static `lang="en"`, so a
@@ -58,11 +60,9 @@ i18next
 	.use(LanguageDetector)
 	.use(initReactI18next)
 	.init({
-		resources: {
-			en: {
-				translation: translationEnglish,
-			},
-		},
+		// Empty but present: with no `resources` i18next would look for a backend to load from. Bundles arrive
+		// through `addResourceBundle` in `loadLocale`.
+		resources: {},
 		fallbackLng: "en",
 		detection: {
 			order: ["localStorage"],
@@ -82,7 +82,25 @@ i18next
 // `languageChanged` does not fire for the language `init` itself detected, so the initial value is set here.
 syncDocumentLanguage(undefined);
 
-// Resolves once the detected language is renderable. Already-resolved for "en" (statically bundled), so an
-// English session paints exactly as before; a non-English session waits on one same-origin chunk instead of
-// painting English and swapping it a frame later.
-export const i18nReady: Promise<void> = loadLocale(i18next.resolvedLanguage ?? i18next.language);
+// Resolves once the UI is renderable; rejects when the `en` fallback did not load, because then every `t()` would print
+// its raw key. A failed detected-language chunk is not fatal: the UI renders in English. The boot error screen retries
+// with a document reload, not a second call: browsers commonly cache a failed module import.
+async function loadI18n(): Promise<void> {
+	const language = i18next.language;
+	await Promise.all([loadLocale("en"), loadLocale(language)]);
+	if (!i18next.hasResourceBundle("en", "translation")) {
+		throw new Error("The English translation bundle failed to load.");
+	}
+	// `init` ran with no bundle, so `resolvedLanguage` is unset until the language is applied again. The
+	// `languageChanged` listener re-fetches a detected-language chunk that failed; wait for that attempt as well and
+	// re-apply if it landed, so the first paint is not swapped a frame later.
+	await i18next.changeLanguage(language);
+	await loadLocale(language);
+	const base = language?.split("-")[0];
+	if (base && i18next.resolvedLanguage !== base && i18next.hasResourceBundle(base, "translation")) {
+		await i18next.changeLanguage(language);
+	}
+}
+
+// Main.tsx holds the first render on it (a load-error screen with a retry when it rejects); the vitest setup awaits it.
+export const i18nReady: Promise<void> = loadI18n();

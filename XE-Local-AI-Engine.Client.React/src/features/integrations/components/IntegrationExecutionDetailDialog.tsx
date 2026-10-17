@@ -1,14 +1,20 @@
-import { Code, Divider, Group, Loader, Stack, Text, Tooltip } from "@mantine/core";
+import { Anchor, Code, Divider, Group, Loader, Stack, Text, Tooltip } from "@mantine/core";
+import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { LabelValueRow } from "@/core/ui/components/LabelValueRow/LabelValueRow";
 import { IntegrationExecutionTimeline } from "@/features/integrations/components/IntegrationExecutionTimeline";
-import { formatIntegrationDuration, shortPrincipalId } from "@/features/integrations/components/IntegrationFormatters";
+import {
+	formatFailureCategory,
+	formatIntegrationDuration,
+	shortPrincipalId,
+} from "@/features/integrations/components/IntegrationFormatters";
 import { IntegrationExecutionStatusBadge } from "@/features/integrations/components/IntegrationStatusBadge";
 import {
 	type IntegrationExecution,
@@ -152,6 +158,20 @@ export function IntegrationExecutionDetailDialog({ executionId, listExecution, o
 						<LabelValueRow labelWidth={160} label={t("pages.integrations.executions.detail.outputBytes", "Output bytes")}>
 							<Text size="sm">{detail.outputBytes}</Text>
 						</LabelValueRow>
+						{detail.graphWorkflowRunId === null ? null : (
+							<LabelValueRow labelWidth={160} label={t("pages.integrations.executions.detail.graphRun", "Graph run")}>
+								{/* `Link` directly, not `Anchor component={Link}`: the polymorphic prop erases the router's search typing. */}
+								<Link
+									to={nodeRoutePaths.graphWorkflows}
+									search={{ runId: detail.graphWorkflowRunId }}
+									data-testid="integration-execution-graph-run"
+								>
+									<Anchor component="span" size="sm">
+										{t("pages.integrations.executions.detail.openGraphRun", "Open graph run")}
+									</Anchor>
+								</Link>
+							</LabelValueRow>
+						)}
 					</>
 				)}
 
@@ -161,7 +181,7 @@ export function IntegrationExecutionDetailDialog({ executionId, listExecution, o
 							<Stack gap={2}>
 								{execution.failureCategory === null ? null : (
 									<Text size="sm">
-										{`${t("pages.integrations.executions.detail.failureCategory", "Failure category")}: ${execution.failureCategory}`}
+										{`${t("pages.integrations.executions.detail.failureCategory", "Failure category")}: ${formatFailureCategory(t, execution.failureCategory)}`}
 									</Text>
 								)}
 								{execution.failureSummary === null ? null : <Text size="sm">{execution.failureSummary}</Text>}

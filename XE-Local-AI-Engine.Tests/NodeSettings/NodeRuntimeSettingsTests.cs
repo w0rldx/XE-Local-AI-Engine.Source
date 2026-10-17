@@ -733,6 +733,32 @@ public sealed class NodeRuntimeSettingsTests
     }
 
     [Test]
+    [Arguments(null, "config-reranker")]
+    [Arguments("  ", "config-reranker")]
+    [Arguments("stored-reranker", "stored-reranker")]
+    public async Task RerankerModelName_ResolvesStoredOverConfigSeed(string? stored, string expected)
+    {
+        var sut = CreateSut(new StoredNodeSettings
+            {
+                RerankerModelName = stored
+            },
+            seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["KnowledgeBase:RerankerModelName"] = "config-reranker"
+            });
+
+        AssertEx.Equal(expected, await sut.GetRerankerModelNameAsync());
+    }
+
+    [Test]
+    public async Task RerankerModelName_NeitherStoredNorConfigured_IsOff()
+    {
+        var sut = CreateSut(new StoredNodeSettings(), seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
+
+        AssertEx.Null(await sut.GetRerankerModelNameAsync());
+    }
+
+    [Test]
     public async Task RetentionSeeds_BelowOneDay_FallBackToTheDefault()
     {
         // A zero or negative window puts the cutoff at or past now and would purge everything, so such a seed is never used.

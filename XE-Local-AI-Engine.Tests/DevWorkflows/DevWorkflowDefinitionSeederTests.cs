@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -56,14 +58,52 @@ public sealed class DevWorkflowDefinitionSeederTests
     }
 
     /// <summary>
-    ///     The revision kept for the build this one replaces is that build's graph and nothing else. Compared by
-    ///     structure and by every node's text, so the assertion is "only the decomposition's instructions moved" rather
-    ///     than "the two strings differ", which any edit at all would satisfy.
+    ///     The shipped research node binds the repository-research persona, and that persona is offered every repository read
+    ///     the agent lane serves from the work item's project: the knowledge-base persona it used to bind could read nothing there.
+    /// </summary>
+    [Test]
+    public void TheShippedResearchNodeBindsAPersonaThatReadsTheRepository()
+    {
+        var research = DevWorkflowGraph.Parse(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph).Nodes["research"];
+        var persona = WorkSessionAgentSeeder.BuildRepositoryResearchSeedInput();
+
+        AssertEx.Equal(AgentDefaults.WorkSessionRepositoryResearchAgentSeedSlug, research.AgentSeedSlug);
+        foreach (var tool in DevWorkflowAgentExecutor.RepositoryToolNames)
+        {
+            AssertEx.Contains(persona.AllowedToolNames, tool);
+        }
+
+        AssertEx.False(WorkSessionAgentSeeder.BuildResearchSeedInput().AllowedToolNames.Any(DevWorkflowAgentExecutor.RepositoryToolNames.Contains),
+            "the knowledge-base persona other features bind is left as it was; the template got its own.");
+    }
+
+    /// <summary>
+    ///     The revision this build replaces differs from the shipped graph only in which persona its research node binds, compared
+    ///     by structure and by every node's text so any other drift in the kept copy fails here.
+    /// </summary>
+    [Test]
+    public void TheNewestKeptRevisionDiffersFromTheShippedTemplateOnlyInTheResearchPersona()
+    {
+        var shipped = DevWorkflowGraph.Parse(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph);
+        var kept = DevWorkflowGraph.Parse(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraphRevision3);
+
+        AssertEx.Equal(string.Join(",", shipped.Edges.Select(static edge => edge.ToString()).Order(StringComparer.Ordinal)),
+            string.Join(",", kept.Edges.Select(static edge => edge.ToString()).Order(StringComparer.Ordinal)));
+        foreach (var (key, node) in shipped.Nodes)
+        {
+            AssertEx.Equal(node.Instructions ?? string.Empty, kept.Nodes[key].Instructions ?? string.Empty, $"node '{key}' was not the one this change was about.");
+            AssertEx.Equal(key == "research" ? AgentDefaults.WorkSessionResearchAgentSeedSlug : node.AgentSeedSlug ?? string.Empty, kept.Nodes[key].AgentSeedSlug ?? string.Empty);
+        }
+    }
+
+    /// <summary>
+    ///     Revision 2 is the graph revision 3 replaced, and nothing else. Compared by structure and by every node's text, so the
+    ///     assertion is "only the decomposition's instructions moved" rather than "the two strings differ", which any edit would satisfy.
     /// </summary>
     [Test]
     public void TheKeptRevisionDiffersFromTheShippedTemplateOnlyInWhatTheDecompositionIsTold()
     {
-        var shipped = DevWorkflowGraph.Parse(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph);
+        var shipped = DevWorkflowGraph.Parse(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraphRevision3);
         var kept = DevWorkflowGraph.Parse(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraphRevision2);
 
         AssertEx.Equal(string.Join(",", shipped.Nodes.Keys.Order(StringComparer.Ordinal)), string.Join(",", kept.Nodes.Keys.Order(StringComparer.Ordinal)));
@@ -91,10 +131,10 @@ public sealed class DevWorkflowDefinitionSeederTests
     public void TheKeptRevisionIsInTheListTheSeederIsGivenAndHashesApartFromTheShippedGraph()
     {
         AssertEx.Contains(DevWorkflowDefinitionSeeder.FeatureDevelopmentPriorRevisions,
-            revision => string.Equals(revision, DevWorkflowDefinitionSeeder.FeatureDevelopmentGraphRevision2, StringComparison.Ordinal),
+            revision => string.Equals(revision, DevWorkflowDefinitionSeeder.FeatureDevelopmentGraphRevision3, StringComparison.Ordinal),
             "the revision this build replaces has to reach the seeder, not merely exist beside it.");
 
-        AssertEx.False(string.Equals(DevWorkflowDefinitionSeeder.GraphHash(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraphRevision2),
+        AssertEx.False(string.Equals(DevWorkflowDefinitionSeeder.GraphHash(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraphRevision3),
                 DevWorkflowDefinitionSeeder.GraphHash(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph),
                 StringComparison.Ordinal),
             "a revision that hashes to the current graph is a copy of it, which catches nobody up and hides the edit it was meant to preserve.");

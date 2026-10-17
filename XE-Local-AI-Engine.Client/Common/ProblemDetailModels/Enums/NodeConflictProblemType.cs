@@ -140,6 +140,9 @@ public enum NodeConflictProblemType
     /// <summary>A steer of a node run that already took <c>GraphWorkflows:MaxSteersPerNode</c> steers. Stop the run instead.</summary>
     GraphWorkflowSteerLimitReached,
 
+    /// <summary>An intent utterance older than the node's <c>IntentMaxUtteranceAgeSeconds</c>: refused as a replay. Say it again.</summary>
+    GraphWorkflowIntentExpired,
+
     /// <summary>
     ///     A normal chat send into a conversation whose bound workflow run is still live, a parked run included. Answer
     ///     through the workflow, or stop the run, then send.
@@ -184,5 +187,11 @@ public enum NodeConflictProblemType
     ///     A write lost a race — the reconciler moves status while an operator saves variables, or a command carries a
     ///     stale <c>expectedVersion</c>. Ordinary rather than exceptional: refresh and retry.
     /// </summary>
-    ExternalAppVersionConflict
+    ExternalAppVersionConflict,
+
+    /// <summary>
+    ///     A chat send or regenerate into a conversation whose reply waits on an approval or a question, or was answered and
+    ///     waits to resume. Answer the waiting card, then send.
+    /// </summary>
+    ConversationTurnParked
 }

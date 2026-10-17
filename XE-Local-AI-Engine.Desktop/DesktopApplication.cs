@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Desktop;
 
+using System.Runtime.Versioning;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -22,6 +23,13 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
     private NativeMenuItem? _traySettings;
     private NativeMenuItem? _trayLogs;
     private NativeMenuItem? _trayQuit;
+    private NativeMenuItem? _trayOverlay;
+    private MenuItem? _menuOverlay;
+    private DesktopCommandWindow? _overlay;
+    private DesktopOverlayBounds? _overlayBounds;
+    private DesktopHotkey _hotkey = DesktopHotkey.Default;
+    private nint _hotkeyWindow;
+    private bool _hotkeyFailed;
     private Window? _window;
     private DesktopCloseDialog? _dialog;
     private Task _initialization = Task.CompletedTask;
@@ -33,6 +41,9 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
 
     // The shell's own exit code: the owned engine's when it stopped the session, so a launcher and a script see why it ended.
     private int _exitCode;
+
+    private const int OverlayHotkeyId = 1;
+    private const int OverlayEscapeId = 2;
 
     // The engine's Program.DataDirectoryUnusableExitCode, duplicated: the shell has no reference to the engine assembly.
     internal const int DataDirectoryUnusableExitCode = 10;
@@ -125,6 +136,8 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             _instance.Listen(() => Dispatcher.UIThread.Post(ShowWindow));
             _preference = await DesktopPreferences.ReadAsync(_options.DataDirectory, _stopping.Token);
             DesktopText.Apply(await DesktopPreferences.ReadLanguageAsync(_options.DataDirectory, _stopping.Token));
+            _hotkey = await DesktopPreferences.ReadHotkeyAsync(_options.DataDirectory, _stopping.Token);
+            _overlayBounds = await DesktopPreferences.ReadOverlayBoundsAsync(_options.DataDirectory, _stopping.Token);
             _engine = await DesktopEngineSession.StartAsync(_options, _stopping.Token);
             _stopping.Token.ThrowIfCancellationRequested();
             engineReady = true;
@@ -134,7 +147,19 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             }
 
             var startupWindow = _window!;
-            var mainWindow = new DesktopWindow(new DesktopLaunchOptions(_engine.Origin, _options.ProfileDirectory), _options.Debug);
+            _menuOverlay = new MenuItem
+            {
+                Header = DesktopText.CommandOverlay
+            };
+            _menuOverlay.Click += (_, _) => ShowOverlay(toggle: false);
+            var mainWindow = new DesktopWindow(new DesktopLaunchOptions(_engine.Origin, _options.ProfileDirectory), _options.Debug,
+                top: new Menu
+                {
+                    Items =
+                    {
+                        _menuOverlay
+                    }
+                });
             mainWindow.Closing += OnClosing;
             // A tray click deactivates the window first, so the flyout it opens already carries the SPA's language.
             mainWindow.Deactivated += (_, _) => _ = RefreshLanguageAsync();
@@ -142,6 +167,8 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             _desktop!.MainWindow = mainWindow;
             await CreateTrayAsync();
             mainWindow.Show();
+            if (OperatingSystem.IsWindows()) { RegisterOverlayHotkey(mainWindow); }
+
             startupWindow.Closing -= OnClosing;
             startupWindow.Close();
             await mainWindow.WaitUntilReadyAsync(_stopping.Token);
@@ -150,6 +177,8 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             {
                 _ = ExitWithEngineAsync(exit);
             }
+
+            if (_hotkeyFailed) { _ = ShowNoticeAsync(DesktopText.HotkeyFailed(_hotkey.ToString())); }
         }
         catch (OperationCanceledException) when (_stopping.IsCancellationRequested)
         {
@@ -193,10 +222,14 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         }
 
         var icon = new WindowIcon(iconStream);
-        _window!.Icon = icon;
+        // The filled hexagon with a white glyph reads on light and dark title bars; the favicon is only the fallback.
+        await using var windowStream = typeof(DesktopApplication).Assembly.GetManifestResourceStream("WindowIcon.png");
+        _window!.Icon = windowStream is null ? icon : new WindowIcon(windowStream);
+        // A white glyph with a dark stroke reads on light and dark trays.
+        await using var trayStream = typeof(DesktopApplication).Assembly.GetManifestResourceStream("TrayIcon.png");
         _tray = new TrayIcon
         {
-            Icon = icon,
+            Icon = trayStream is null ? icon : new WindowIcon(trayStream),
             ToolTipText = DesktopText.Title,
             IsVisible = true
         };
@@ -207,14 +240,90 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         _traySettings.Click += (_, _) => OpenSettings();
         _trayLogs = new NativeMenuItem(DesktopText.OpenLogs);
         _trayLogs.Click += (_, _) => _ = OpenLogsAsync();
+        _trayOverlay = new NativeMenuItem(DesktopText.CommandOverlay);
+        _trayOverlay.Click += (_, _) => ShowOverlay(toggle: false);
         _trayQuit = new NativeMenuItem(DesktopText.Quit);
         _trayQuit.Click += (_, _) => _ = RequestQuitAsync();
         menu.Items.Add(_trayOpen);
+        menu.Items.Add(_trayOverlay);
         menu.Items.Add(_traySettings);
         menu.Items.Add(_trayLogs);
         menu.Items.Add(_trayQuit);
         _tray.Menu = menu;
         _tray.Clicked += (_, _) => ShowWindow();
+        // Avalonia 12.1.4 creates the platform icon (and NativeMenuExporter) only when the icon is attached to the application.
+        TrayIcon.SetIcons(this, new TrayIcons
+        {
+            _tray
+        });
+    }
+
+    /// <summary>Registers the overlay chord on the main window; a taken chord is recorded and noticed once, never fatal.</summary>
+    [SupportedOSPlatform("windows")]
+    private void RegisterOverlayHotkey(DesktopWindow window)
+    {
+        Win32Properties.AddWndProcHookCallback(window, OnWindowMessage);
+        _hotkeyWindow = window.TryGetPlatformHandle()?.Handle ?? 0;
+        var error = _hotkeyWindow == 0 ? -1 : DesktopWindowsShell.RegisterHotkey(_hotkeyWindow, OverlayHotkeyId, _hotkey);
+        if (error != 0)
+        {
+            _hotkeyFailed = true;
+            DesktopStartupDiagnostics.Record($"The command overlay shortcut {_hotkey} could not be registered (Win32 error {error}).");
+        }
+    }
+
+    private nint OnWindowMessage(nint window, uint message, nint wParam, nint lParam, ref bool handled)
+    {
+        if (message == DesktopWindowsShell.HotkeyMessage)
+        {
+            handled = true;
+            if (wParam == OverlayHotkeyId) { ShowOverlay(toggle: true); }
+            else if (wParam == OverlayEscapeId) { _overlay?.Hide(); }
+        }
+
+        return 0;
+    }
+
+    /// <summary>Creates the overlay on first use; the engine origin is fixed for the session, so it never re-navigates.</summary>
+    private void ShowOverlay(bool toggle)
+    {
+        if (_engine is null || _exiting || _failed) { return; }
+
+        try
+        {
+            _overlay ??= new DesktopCommandWindow(new DesktopLaunchOptions(_engine.Origin, _options.ProfileDirectory), _options.Debug,
+                _overlayBounds, OnOverlayShown, OnOverlayHidden);
+            _overlay.Show(toggle);
+        }
+        catch (Exception exception)
+        {
+            DesktopStartupDiagnostics.Record($"The command overlay could not open ({exception.GetType().Name}). {exception.Message}");
+        }
+    }
+
+    private void OnOverlayShown()
+    {
+        if (OperatingSystem.IsWindows() && _hotkeyWindow != 0)
+        {
+            _ = DesktopWindowsShell.RegisterEscape(_hotkeyWindow, OverlayEscapeId);
+        }
+    }
+
+    private void OnOverlayHidden(DesktopOverlayBounds bounds)
+    {
+        if (OperatingSystem.IsWindows()) { DesktopWindowsShell.UnregisterHotkey(_hotkeyWindow, OverlayEscapeId); }
+
+        _overlayBounds = bounds;
+        _ = SaveOverlayBoundsAsync(bounds);
+    }
+
+    private async Task SaveOverlayBoundsAsync(DesktopOverlayBounds bounds)
+    {
+        try { await DesktopPreferences.WriteOverlayBoundsAsync(_options.DataDirectory, bounds, _stopping.Token); }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or OperationCanceledException)
+        {
+            // A lost placement only costs the next start its centered default.
+        }
     }
 
     private void ShowWindow()
@@ -270,7 +379,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             var action = DesktopPreferences.Resolve(_preference, TrayAvailable);
             if (settings || action == DesktopCloseAction.Ask)
             {
-                _dialog = new DesktopCloseDialog(TrayAvailable, _engine.OwnsEngine, settings);
+                _dialog = new DesktopCloseDialog(TrayAvailable, _engine.OwnsEngine, settings, current: _preference);
                 var choice = await _dialog.ShowDialog<DesktopCloseChoice?>(_window);
                 _dialog = null;
                 if (choice is null || _exiting)
@@ -390,6 +499,10 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
 
         if (_trayQuit is not null) { _trayQuit.Header = DesktopText.Quit; }
 
+        if (_trayOverlay is not null) { _trayOverlay.Header = DesktopText.CommandOverlay; }
+
+        if (_menuOverlay is not null) { _menuOverlay.Header = DesktopText.CommandOverlay; }
+
         try
         {
             await DesktopPreferences.WriteLanguageAsync(_options.DataDirectory, DesktopText.Language, _stopping.Token);
@@ -412,6 +525,14 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         try
         {
             await _stopping.CancelAsync();
+            if (OperatingSystem.IsWindows())
+            {
+                DesktopWindowsShell.UnregisterHotkey(_hotkeyWindow, OverlayHotkeyId);
+                DesktopWindowsShell.UnregisterHotkey(_hotkeyWindow, OverlayEscapeId);
+            }
+
+            if (_overlay is not null) { await _overlay.DisposeAsync(); }
+
             if (_window is DesktopWindow nativeWindow) { await nativeWindow.DisposeAsync(); }
 
             if (_window is not null)

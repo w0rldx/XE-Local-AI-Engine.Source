@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Integrations;
 
 using System.Text;
+using System.Text.Json;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
@@ -38,6 +39,49 @@ public static class IntegrationSeedComposer
         }
 
         return string.Join(BlockSeparator, blocks);
+    }
+
+    /// <summary>
+    ///     A graph target's run input: <c>{ "input": text | null, "documents": [{ "label", "json" }] }</c>, in caller order.
+    /// </summary>
+    /// <remarks>
+    ///     The text inputs joined by a blank line, or null when there are none; each JSON input verbatim under its label. No
+    ///     fence: a graph reads the documents as data through bindings, and a node that hands them to a model frames them
+    ///     there. It is stored as the seed turn, so the seed ceiling bounds it like any other.
+    /// </remarks>
+    public static string ComposeGraphInput(IReadOnlyList<IntegrationInputDto> inputs)
+    {
+        ArgumentNullException.ThrowIfNull(inputs);
+
+        var texts = inputs.Where(static input => input.Kind == IntegrationInputKinds.Text).Select(static input => input.Text?.Trim() ?? string.Empty).ToList();
+        using var buffer = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            if (texts.Count == 0)
+            {
+                writer.WriteNull("input");
+            }
+            else
+            {
+                writer.WriteString("input", string.Join(BlockSeparator, texts));
+            }
+
+            writer.WriteStartArray("documents");
+            foreach (var input in inputs.Where(static input => input.Kind == IntegrationInputKinds.Json))
+            {
+                writer.WriteStartObject();
+                writer.WriteString("label", input.Label ?? "json");
+                writer.WritePropertyName("json");
+                writer.WriteRawValue(input.Json ?? "null");
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+
+        return Encoding.UTF8.GetString(buffer.ToArray());
     }
 
     /// <summary>The composed seed's size against the configured ceiling, measured the way the ceiling is expressed.</summary>

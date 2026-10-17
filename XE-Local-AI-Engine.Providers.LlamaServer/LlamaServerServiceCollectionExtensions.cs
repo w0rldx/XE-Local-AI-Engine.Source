@@ -95,7 +95,8 @@ public static class LlamaServerServiceCollectionExtensions
                 sp.GetRequiredService<LlamaServerRuntimeOverrideOptions>(),
                 sp.GetRequiredService<ICudaManagedBuildSignal>(),
                 sp.GetRequiredService<IRuntimeAcquisitionStatusRegistry>(),
-                sp.GetRequiredService<ILogger<LlamaCppBinaryManager>>()));
+                sp.GetRequiredService<ILogger<LlamaCppBinaryManager>>(),
+                sp.GetService<ILlamaCppImplicitAcquisitionPolicy>()));
 
         // In-app Linux source build (no upstream prebuilt CUDA asset exists): the per-backend prerequisite probe, the no-op build-event publisher (the Client host
         // swaps in a hub-backed one) and the single-flight build service; the startup service cleans a stale work dir and seeds the managed-CUDA signal from the record.

@@ -69,8 +69,10 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
     /// <summary>Admits an eligible Tool node run, and answers how many transitions it wrote.</summary>
     /// <remarks>
     ///     The row goes to <c>Queued</c> first ALWAYS, carrying the input document the bindings resolve against, and
-    ///     moves on to <c>Running</c> in the same tick once the call actually holds a slot. A lane with none free
-    ///     leaves it <c>Queued</c> saying what it waits for, and the next tick asks again.
+    ///     moves on to <c>Running</c> in the same tick once the call holds a slot. The call does not START until that
+    ///     <c>Running</c> write has committed (ADR 0021): a restart collapses a <c>Queued</c> row back to <c>Pending</c>
+    ///     without spending an attempt, so an action fired from one would fire again. A failed write faults the parked
+    ///     call unstarted. A lane with no slot free leaves the row <c>Queued</c> saying what it waits for.
     /// </remarks>
     public async Task<int> DispatchAsync(IGraphWorkflowStore store,
         GraphWorkflowRunSnapshot run,
@@ -106,6 +108,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
                 GraphWorkflowFailureClass.ValidationFailed,
                 $"Node '{node.NodeKey}' is a Tool node without tool settings.",
                 eventType: null,
+                output: null,
                 cancellationToken);
         }
 
@@ -144,22 +147,44 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         {
             // Never retried, and correctly so: the same document resolves the same way, so a re-attempt would spend an
             // attempt to reach the identical refusal.
-            return written + await FailAsync(store, graph, run, node, nodeRun, GraphWorkflowFailureClass.ValidationFailed, refusal, eventType: null, cancellationToken);
+            return written + await FailAsync(store, graph, run, node, nodeRun, GraphWorkflowFailureClass.ValidationFailed, refusal, eventType: null, output: null, cancellationToken);
         }
+
+        var admitted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         // Guid.Empty rather than a minted id: the lane takes one because the agent lane's stop path must hand its runner something, and a tool call has
         // no such handle — an in-process await its token ends. An id minted here would appear on the row as a correlation nothing else in the system carries.
         var flight = await _lane.TryStartAsync(nodeRun.Id,
             nodeRun.Attempt,
             Guid.Empty,
-            (leaseAcquired, token) => InvokeAsync(run.Id, nodeRun.Id, node, config, argumentsJson, leaseAcquired, token),
+            async (leaseAcquired, token) =>
+            {
+                // Opened only once Running has committed; the lane cancelling the token ends the wait too.
+                await admitted.Task.WaitAsync(token);
+                return await InvokeAsync(run.Id, run.DefinitionId, nodeRun.Id, node, config, argumentsJson, leaseAcquired, token);
+            },
             cancellationToken);
 
-        // Queueing, not failure: every slot is held. No event and no failure class — the row's reason says what it is
-        // waiting for, and the next tick asks again.
-        return flight is null
-            ? written
-            : written + await RunningAsync(store, run, nodeRun, cancellationToken);
+        // Queueing, not failure: every slot is held, nothing started, and the gate is dropped. No event and no failure
+        // class — the row's reason says what it waits for, and the next tick asks again.
+        if (flight is null)
+        {
+            return written;
+        }
+
+        try
+        {
+            written += await RunningAsync(store, run, nodeRun, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            // The call never starts: its flight faults, and the poll fails the row through the fault mapping.
+            admitted.SetException(exception);
+            throw;
+        }
+
+        admitted.SetResult();
+        return written;
     }
 
     /// <summary>Settles the row if its tool call has landed, and answers how many transitions that wrote.</summary>
@@ -188,6 +213,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
                 GraphWorkflowFailures.Classify(GraphWorkflowFailureClass.Interrupted, nodeRun.Attempt, node.MaxAttempts),
                 "The host stopped while this node run's tool call was in flight.",
                 GraphWorkflowEventTypes.NodeInterrupted,
+                output: null,
                 cancellationToken);
         }
 
@@ -222,6 +248,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
                 GraphWorkflowFailures.Classify(GraphWorkflowFailureClass.NodeFailed, nodeRun.Attempt, node.MaxAttempts),
                 "This node run's tool call did not complete. See the node logs for details.",
                 eventType: null,
+                output: null,
                 cancellationToken);
         }
         else
@@ -272,6 +299,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
     ///     call without ever rethrowing.
     /// </summary>
     private async Task<ToolInvocationOutcome> InvokeAsync(Guid runId,
+        Guid definitionId,
         Guid nodeRunId,
         GraphWorkflowGraphNode node,
         GraphWorkflowToolConfig config,
@@ -304,7 +332,8 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
             RunId = runId,
             NodeRunId = nodeRunId,
             NodeKey = node.NodeKey,
-            Timeout = timeout
+            Timeout = timeout,
+            DefinitionId = definitionId
         }, cancellationToken);
     }
 
@@ -483,7 +512,8 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
     ///     <c>Executed</c> succeeds; <c>UnknownTool</c>, <c>NotInvocable</c> and <c>InvalidArguments</c> fail
     ///     <c>ValidationFailed</c> and are therefore never re-attempted; <c>Timeout</c> and <c>Faulted</c> fail on the
     ///     two retryable classes. The service's own reason is repeated verbatim, and it is structural by contract — it
-    ///     never echoes an argument value.
+    ///     never echoes an argument value. A failure that still carries text (a failed action's executor answer) keeps it
+    ///     in the <c>Failed</c> document under <c>result</c>, as a success would; over the cap it falls back to the empty envelope.
     /// </remarks>
     private async Task<int> SettleLandedAsync(IGraphWorkflowStore store,
         GraphWorkflowGraph graph,
@@ -514,6 +544,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
                 GraphWorkflowFailures.Classify(failureClass, nodeRun.Attempt, node.MaxAttempts),
                 outcome.Reason,
                 eventType: null,
+                string.IsNullOrEmpty(outcome.Result) ? null : GraphWorkflowDocuments.ToolOutput(outcome.Result),
                 cancellationToken);
         }
 
@@ -539,6 +570,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
                 GraphWorkflowFailureClass.OutputTooLarge,
                 $"{exception.Message} Its tool was '{toolName}'.",
                 eventType: null,
+                output: null,
                 cancellationToken);
         }
 
@@ -580,6 +612,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
     ///     Fails the row with the document that failure produces, walking a <c>Pending</c> row through <c>Running</c>
     ///     first for the same reason the dispatcher does: a failure about an attempt needs an attempt to have opened.
     /// </summary>
+    /// <remarks><paramref name="output" /> is the document's output, or null for the empty object.</remarks>
     private async Task<int> FailAsync(IGraphWorkflowStore store,
         GraphWorkflowGraph graph,
         GraphWorkflowRunSnapshot run,
@@ -588,6 +621,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         GraphWorkflowFailureClass failureClass,
         string sanitizedReason,
         string? eventType,
+        JsonElement? output,
         CancellationToken cancellationToken)
     {
         var written = 0;
@@ -609,19 +643,11 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
             written++;
         }
 
-        string? document = null;
-        try
+        var document = TryComposeFailed(graph, node, nodeRun.Attempt, output);
+        if (document is null && output is not null)
         {
-            document = GraphWorkflowDocuments.Compose(graph,
-                node,
-                nodeRun.Attempt,
-                GraphWorkflowNodeOutputStatuses.Failed,
-                GraphWorkflowDocuments.EmptyObject,
-                _options.MaxOutputJsonBytes);
-        }
-        catch (GraphWorkflowOutputTooLargeException)
-        {
-            // A cap small enough to refuse an empty envelope. The row still fails, and says why.
+            // The text did not fit under the cap: the row fails with the empty envelope instead, and its reason is unchanged.
+            document = TryComposeFailed(graph, node, nodeRun.Attempt, output: null);
         }
 
         GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Failed, nodeRun.NodeKey);
@@ -638,5 +664,24 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
             },
             cancellationToken);
         return written + 1;
+    }
+
+    /// <summary>The <c>Failed</c> document over <paramref name="output" /> (the empty object when null), or null when it is over the cap.</summary>
+    private string? TryComposeFailed(GraphWorkflowGraph graph, GraphWorkflowGraphNode node, int attempt, JsonElement? output)
+    {
+        try
+        {
+            return GraphWorkflowDocuments.Compose(graph,
+                node,
+                attempt,
+                GraphWorkflowNodeOutputStatuses.Failed,
+                output ?? GraphWorkflowDocuments.EmptyObject,
+                _options.MaxOutputJsonBytes);
+        }
+        catch (GraphWorkflowOutputTooLargeException)
+        {
+            // A cap small enough to refuse even an empty envelope. The row still fails, and says why.
+            return null;
+        }
     }
 }

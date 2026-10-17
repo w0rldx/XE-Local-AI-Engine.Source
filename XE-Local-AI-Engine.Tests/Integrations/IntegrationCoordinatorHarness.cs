@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
@@ -234,6 +235,7 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
         services.AddSingleton(FenceSeeds);
         services.AddSingleton<IToolApprovalPolicy>(_ => ToolApprovalPolicy);
         services.AddSingleton<IIntegrationApiKeyStore>(_keys);
+        services.AddSingleton<IGraphWorkflowRunService>(GraphRuns);
         services.AddSingleton(_ => new IntegrationSessionService(_sessions,
             Executions,
             _triggers,
@@ -464,7 +466,8 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
         long? receivedAtUtc = null,
         long lastSequence = 1,
         long version = 0,
-        long? stopRequestedAtUtc = null)
+        long? stopRequestedAtUtc = null,
+        Guid? graphWorkflowRunId = null)
     {
         var executionId = Guid.NewGuid();
         _ = Executions.Seed(executionId,
@@ -476,7 +479,8 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
             receivedAtUtc ?? (_constructedAtUtc - 1_000),
             lastSequence,
             version,
-            stopRequestedAtUtc);
+            stopRequestedAtUtc,
+            graphWorkflowRunId: graphWorkflowRunId);
         _ = _buffer.TryCreate(executionId, lastSequence);
         return executionId;
     }
@@ -493,6 +497,15 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
 
     public void DisableTrigger() =>
         _triggers.Disable(_trigger.Id);
+
+    /// <summary>The scripted graph run a <c>Graph</c> target starts.</summary>
+    public FakeGraphWorkflowRunService GraphRuns { get; } = new();
+
+    public Guid GraphDefinitionId { get; } = Guid.NewGuid();
+
+    /// <summary>Repoints the trigger at <see cref="GraphDefinitionId" />, so the coordinator takes its graph branch.</summary>
+    public void TargetGraph() =>
+        _triggers.TargetGraph(_trigger.Id, GraphDefinitionId);
 
     /// <summary>Repoints the trigger's session policy, which decides whether the caller-managed tool rule judges it.</summary>
     public void SetSessionPolicy(IntegrationSessionPolicy sessionPolicy) =>

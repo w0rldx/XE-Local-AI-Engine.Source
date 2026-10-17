@@ -33,7 +33,7 @@ internal static class InvocationToolResolver
         ArgumentNullException.ThrowIfNull(mcpToolRegistry);
         ArgumentNullException.ThrowIfNull(logger);
 
-        return ResolveCore(offeredTools, toolRegistry, clientLocalToolRegistry, mcpToolRegistry, preResolvedCustom: null, logger);
+        return ResolveCore(offeredTools, toolRegistry, clientLocalToolRegistry, mcpToolRegistry, preResolvedCustom: null, preflightRefusals: null, logger);
     }
 
     /// <summary>
@@ -46,13 +46,42 @@ internal static class InvocationToolResolver
     ///     BEFORE the synchronous core runs, so nothing ever blocks the thread pool. Each custom executable arrives
     ///     ALREADY wrapped in <c>ApprovalRequiredAIFunction</c>, so the core's tighten-only wrap is a no-op on it.
     /// </remarks>
-    public static async Task<IList<AITool>> ResolveAsync(IReadOnlyList<AITool> offeredTools,
+    public static Task<IList<AITool>> ResolveAsync(IReadOnlyList<AITool> offeredTools,
         IAgentToolRegistry toolRegistry,
         IClientLocalToolRegistry clientLocalToolRegistry,
         IMcpToolRegistry mcpToolRegistry,
         ICustomToolCatalog customToolCatalog,
         ILogger logger,
         CancellationToken cancellationToken = default)
+    {
+        return ResolveWithCatalogAsync(offeredTools, toolRegistry, clientLocalToolRegistry, mcpToolRegistry, customToolCatalog, logger, preflight: false, cancellationToken);
+    }
+
+    /// <summary><see cref="ResolveAsync" /> for one agent turn, running each offered client-local tool's preflight.</summary>
+    /// <remarks>
+    ///     A tool whose <see cref="IClientLocalToolPreflight" /> refuses every call right now resolves to the registry's approval-free
+    ///     refusing variant, so the turn shows the refusal instead of an approval card for a call the node would refuse. Evaluated per
+    ///     call of this method, never cached.
+    /// </remarks>
+    public static Task<IList<AITool>> ResolveForAgentTurnAsync(IReadOnlyList<AITool> offeredTools,
+        IAgentToolRegistry toolRegistry,
+        IClientLocalToolRegistry clientLocalToolRegistry,
+        IMcpToolRegistry mcpToolRegistry,
+        ICustomToolCatalog customToolCatalog,
+        ILogger logger,
+        CancellationToken cancellationToken = default)
+    {
+        return ResolveWithCatalogAsync(offeredTools, toolRegistry, clientLocalToolRegistry, mcpToolRegistry, customToolCatalog, logger, preflight: true, cancellationToken);
+    }
+
+    private static async Task<IList<AITool>> ResolveWithCatalogAsync(IReadOnlyList<AITool> offeredTools,
+        IAgentToolRegistry toolRegistry,
+        IClientLocalToolRegistry clientLocalToolRegistry,
+        IMcpToolRegistry mcpToolRegistry,
+        ICustomToolCatalog customToolCatalog,
+        ILogger logger,
+        bool preflight,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(offeredTools);
         ArgumentNullException.ThrowIfNull(toolRegistry);
@@ -81,7 +110,19 @@ internal static class InvocationToolResolver
             ? null
             : await customToolCatalog.TryResolveManyAsync(customNames, cancellationToken).ConfigureAwait(false);
 
-        return ResolveCore(offeredTools, toolRegistry, clientLocalToolRegistry, mcpToolRegistry, preResolvedCustom, logger);
+        Dictionary<string, AITool>? preflightRefusals = null;
+        if (preflight)
+        {
+            foreach (var name in offeredTools.Select(static offer => offer.Name).Where(static name => !string.IsNullOrWhiteSpace(name)).Distinct(StringComparer.Ordinal))
+            {
+                if (await clientLocalToolRegistry.ResolvePreflightRefusalAsync(name, cancellationToken).ConfigureAwait(false) is { } refusing)
+                {
+                    (preflightRefusals ??= new Dictionary<string, AITool>(StringComparer.Ordinal))[name] = refusing;
+                }
+            }
+        }
+
+        return ResolveCore(offeredTools, toolRegistry, clientLocalToolRegistry, mcpToolRegistry, preResolvedCustom, preflightRefusals, logger);
     }
 
     private static IList<AITool> ResolveCore(IReadOnlyList<AITool> offeredTools,
@@ -89,6 +130,7 @@ internal static class InvocationToolResolver
         IClientLocalToolRegistry clientLocalToolRegistry,
         IMcpToolRegistry mcpToolRegistry,
         IReadOnlyDictionary<string, AITool>? preResolvedCustom,
+        IReadOnlyDictionary<string, AITool>? preflightRefusals,
         ILogger logger)
     {
         if (offeredTools.Count == 0)
@@ -137,6 +179,12 @@ internal static class InvocationToolResolver
         for (var index = 0; index < resolved.Count; index++)
         {
             var tool = resolved[index];
+            // The refusing variant stays unwrapped: it never runs the handler, and an approval card for a certain refusal is the noise it removes.
+            if (preflightRefusals is not null && preflightRefusals.TryGetValue(tool.Name, out var refusing) && ReferenceEquals(refusing, tool))
+            {
+                continue;
+            }
+
             var requiresApproval = !approvalByName.TryGetValue(tool.Name, out var policy) || policy;
             if (requiresApproval && tool is not ApprovalRequiredAIFunction && tool is AIFunction executable)
             {
@@ -150,6 +198,11 @@ internal static class InvocationToolResolver
         // first match wins. A custom executable is already approval-wrapped, so the wrap above leaves it as-is.
         AITool? ResolveDynamicTool(string name)
         {
+            if (preflightRefusals is not null && preflightRefusals.TryGetValue(name, out var refusingTool))
+            {
+                return refusingTool;
+            }
+
             if (clientLocalToolRegistry.TryResolve(name, out var clientLocalTool))
             {
                 return clientLocalTool;

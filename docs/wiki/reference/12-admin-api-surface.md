@@ -30,8 +30,8 @@ if (IsLocalApiRequest(context.Request.Path)
 
 ## 3.1a The inbound MCP endpoint sits inside the gate — deliberately
 
-`MapMcp` mounts this node's own MCP server at `/api/local/v1/mcp/server` (`Program.cs`, beside the
-`MapHub` calls). The path is not cosmetic: `IsLocalApiRequest` matches on the `/api/local/v1` prefix
+`MapMcp` mounts this node's own MCP server at `/api/local/v1/mcp/server` (`InboundApiEndpointExtensions.MapNodeInboundApis`,
+mapped right after the `MapHub` calls). The path is not cosmetic: `IsLocalApiRequest` matches on the `/api/local/v1` prefix
 **alone**, so an MCP endpoint mounted at a bare `/mcp` would be reachable without any of §3.1's peer,
 Host or Origin checks, leaving the bearer key as the only control. Keep it inside the prefix.
 
@@ -59,6 +59,14 @@ signs the first one out. `NodeAuthService.RefreshAsync` rotates the presented to
 revoked and linked to its successor inside one serializable transaction; other sessions are untouched. Logout
 (`RevokeRefreshTokensAsync`), `ChangePasswordAsync` and `ResetAdminPasswordAsync` still revoke **every** session of
 the user. A failed refresh (missing, expired or revoked cookie) answers a bodyless 401 and clears the cookie.
+
+A non-browser loopback client (the `xe` terminal client) uses **body mode** instead of the cookie: `auth/login` with
+`returnRefreshToken: true` returns `refreshToken` and `refreshTokenExpiresAtUtc` in the body and writes no cookie, and
+`auth/refresh` reads the `X-XE-Refresh-Token` header **only when no `node_rt` cookie is sent** (the cookie always
+wins). A header refresh runs the same `RefreshAsync`, so rotation, the grace, logout, the password change and the
+auth rate limit apply unchanged; it answers in body mode and never sets or clears a cookie, and its failure is the
+same bodyless 401. The header is not gated on `Origin`; the loopback peer and `Host` checks above still apply.
+`NodeAuthEndpointTests` pins the header and cookie combinations.
 
 Rotation carries a **10-second reuse grace for rotation alone**: a token that rotation replaced still buys a
 pair until the window closes, because a reload racing its own in-flight refresh (or a second tab sharing the cookie)

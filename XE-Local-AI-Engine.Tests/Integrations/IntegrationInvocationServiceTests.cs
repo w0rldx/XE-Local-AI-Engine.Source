@@ -44,6 +44,34 @@ public sealed class IntegrationInvocationServiceTests
     }
 
     [Test]
+    public async Task Accept_ForAGraphTarget_SeedsTheRunInputDocument_AndASessionWithNoAgent()
+    {
+        var harness = new IntegrationInvokeHarness();
+        var trigger = harness.SeedTrigger("lights-on");
+        var graphId = Guid.NewGuid();
+        harness.Triggers.TargetGraph(trigger.Id, graphId);
+
+        var result = await harness.AcceptAsync(trigger.Name,
+        [
+            IntegrationInvokeHarness.Text("turn on the hall lights"),
+            new IntegrationInputDto
+            {
+                Kind = IntegrationInputKinds.Json,
+                Text = null,
+                Label = "room",
+                Json = """{"name":"hall"}"""
+            }
+        ]);
+
+        AssertEx.Equal(IntegrationAcceptOutcome.Accepted, result.Outcome);
+        AssertEx.Null(harness.Executions.CreatedSessions.Single().AgentDefinitionId, "a graph target's session runs no agent.");
+        AssertEx.Null(harness.CapturedConversation().AgentDefinitionId);
+        AssertEx.Equal("""{"input":"turn on the hall lights","documents":[{"label":"room","json":{"name":"hall"}}]}""",
+            harness.CapturedSeed().Content,
+            "the seed turn of a graph target IS the run's input document: no untrusted-content fence, the JSON verbatim.");
+    }
+
+    [Test]
     public async Task Accept_CarriesTheBufferMintedSequenceIntoTheAcceptedEventRow()
     {
         var harness = new IntegrationInvokeHarness();

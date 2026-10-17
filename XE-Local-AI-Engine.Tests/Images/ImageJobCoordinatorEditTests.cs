@@ -67,17 +67,21 @@ public sealed class ImageJobCoordinatorEditTests
     }
 
     [Test]
-    public async Task EnqueueAsync_ForAModelMissingFromTheRegistry_StillOffersImg2Img()
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task EnqueueAsync_ForAModelMissingFromTheRegistry_IsRejectedNamingTheModel(bool asEdit)
     {
         using var harness = Harness.Create(sourceRowExists: true, sourceBytes: SourceBytes);
 
-        var input = EditInput(ImageEditMode.Img2Img, Guid.NewGuid()) with
+        var input = (asEdit ? EditInput(ImageEditMode.Img2Img, Guid.NewGuid()) : TextInput()) with
         {
             ModelName = "not-installed"
         };
-        var jobId = await harness.Coordinator.EnqueueAsync(input, CancellationToken.None);
+        var rejected = await AssertEx.ThrowsAsync<ImageJobInputRejectedException>(() => harness.Coordinator.EnqueueAsync(input, CancellationToken.None));
 
-        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Succeeded);
+        AssertEx.Equal("The image model 'not-installed' is not installed.", rejected.Message);
+        AssertEx.Empty(harness.Store.Created, "A job for a model that is not installed must not be persisted.");
+        AssertEx.Equal(expected: 0, harness.Runtime.CallCount);
     }
 
     [Test]
@@ -148,6 +152,49 @@ public sealed class ImageJobCoordinatorEditTests
         await WaitForStatusAsync(harness, jobId, ImageJobStatus.Succeeded);
     }
 
+    [Test]
+    [Arguments(null, "euler_a")]
+    [Arguments(" ", "euler_a")]
+    [Arguments("dpm++2m", "dpm++2m")]
+    public async Task EnqueueAsync_StoresAndSendsTheEffectiveSampler(string? requested, string expected)
+    {
+        using var harness = Harness.Create(sourceRowExists: true);
+
+        var jobId = await harness.Coordinator.EnqueueAsync(TextInput() with
+        {
+            Sampler = requested
+        }, CancellationToken.None);
+
+        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Succeeded);
+        AssertEx.Equal(expected, AssertEx.NotNull(harness.Store.Created.GetValueOrDefault(jobId)).Sampler);
+        AssertEx.Equal(expected, AssertEx.NotNull(harness.Runtime.Requests.LastOrDefault()).Sampler);
+    }
+
+    [Test]
+    public async Task EnqueueAsync_ForAnUnclassifiedModel_LeavesTheSamplerToTheRuntime()
+    {
+        using var harness = Harness.Create(sourceRowExists: true, family: ImageModelFamily.Unknown);
+
+        var jobId = await harness.Coordinator.EnqueueAsync(TextInput(), CancellationToken.None);
+
+        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Succeeded);
+        AssertEx.Equal(string.Empty, AssertEx.NotNull(harness.Store.Created.GetValueOrDefault(jobId)).Sampler);
+        AssertEx.Null(AssertEx.NotNull(harness.Runtime.Requests.LastOrDefault()).Sampler);
+    }
+
+    [Test]
+    public async Task EnqueueAsync_ForAMissingModelWithAnOverlongName_CapsTheEchoedName()
+    {
+        using var harness = Harness.Create(sourceRowExists: true);
+
+        var rejected = await AssertEx.ThrowsAsync<ImageJobInputRejectedException>(() => harness.Coordinator.EnqueueAsync(TextInput() with
+        {
+            ModelName = new string('m', count: 5000)
+        }, CancellationToken.None));
+
+        AssertEx.Equal($"The image model '{new string('m', count: 120)}…' is not installed.", rejected.Message);
+    }
+
     private static CreateImageJobInput TextInput()
     {
         return new CreateImageJobInput
@@ -190,7 +237,8 @@ public sealed class ImageJobCoordinatorEditTests
         public static Harness Create(bool sourceRowExists,
             byte[]? sourceBytes = null,
             bool blockFirstCall = false,
-            Exception? runtimeFailure = null)
+            Exception? runtimeFailure = null,
+            ImageModelFamily family = ImageModelFamily.Sd15)
         {
             var store = new RecordingJobStore();
             var runtime = new RecordingRuntime(blockFirstCall, runtimeFailure);
@@ -226,7 +274,7 @@ public sealed class ImageJobCoordinatorEditTests
                     {
                         ModelName = Sd15Model,
                         RepoId = "leejet/stable-diffusion-1.5-gguf",
-                        Family = ImageModelFamily.Sd15,
+                        Family = family,
                         Kind = ImageModelKind.Txt2Img,
                         Parts = [],
                         SizeBytes = 0,

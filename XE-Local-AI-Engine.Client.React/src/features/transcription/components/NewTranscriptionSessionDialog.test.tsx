@@ -139,6 +139,15 @@ describe("NewTranscriptionSessionDialog", () => {
 		}
 	});
 
+	// The picker's accessible name is its visible label, so a screen reader announces "Microphone" rather than an
+	// unnamed combobox. The source radio shares the word, hence the membership check.
+	it("names the microphone picker through its label", () => {
+		renderDialog();
+		fireEvent.click(screen.getByRole("radio", { name: "Microphone" }));
+
+		expect(screen.getAllByLabelText("Microphone")).toContain(screen.getByTestId("new-transcription-session-device"));
+	});
+
 	it("offers a microphone picker only for the microphone sources", () => {
 		renderDialog();
 

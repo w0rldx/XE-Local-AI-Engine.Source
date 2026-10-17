@@ -125,6 +125,7 @@ internal sealed class FakeIntegrationTriggerStore : IIntegrationTriggerStore
             Enabled = command.Enabled,
             TargetKind = command.TargetKind,
             TargetAgentDefinitionId = command.TargetAgentDefinitionId,
+            TargetGraphWorkflowDefinitionId = command.TargetGraphWorkflowDefinitionId,
             SessionPolicy = command.SessionPolicy,
             AcceptedInputKinds = command.AcceptedInputKinds,
             CreatedAtUtc = 1,
@@ -150,7 +151,9 @@ internal sealed class FakeIntegrationTriggerStore : IIntegrationTriggerStore
             DisplayName = command.DisplayName,
             Description = command.Description,
             Enabled = command.Enabled,
+            TargetKind = command.TargetKind,
             TargetAgentDefinitionId = command.TargetAgentDefinitionId,
+            TargetGraphWorkflowDefinitionId = command.TargetGraphWorkflowDefinitionId,
             SessionPolicy = command.SessionPolicy,
             AcceptedInputKinds = command.AcceptedInputKinds,
             UpdatedAtUtc = 2,
@@ -208,6 +211,7 @@ internal sealed class FakeIntegrationTriggerStore : IIntegrationTriggerStore
             Enabled = enabled,
             TargetKind = IntegrationTargetKind.Agent,
             TargetAgentDefinitionId = agentDefinitionId,
+            TargetGraphWorkflowDefinitionId = null,
             SessionPolicy = sessionPolicy,
             AcceptedInputKinds = acceptedInputKinds,
             CreatedAtUtc = 1,
@@ -225,6 +229,18 @@ internal sealed class FakeIntegrationTriggerStore : IIntegrationTriggerStore
         _rows[index] = _rows[index] with
         {
             SessionPolicy = sessionPolicy
+        };
+    }
+
+    /// <summary>Repoints a seeded trigger at a saved graph workflow, the one-target shape the real store's constraint enforces.</summary>
+    public void TargetGraph(Guid triggerId, Guid graphWorkflowDefinitionId)
+    {
+        var index = _rows.FindIndex(row => row.Id == triggerId);
+        _rows[index] = _rows[index] with
+        {
+            TargetKind = IntegrationTargetKind.Graph,
+            TargetAgentDefinitionId = null,
+            TargetGraphWorkflowDefinitionId = graphWorkflowDefinitionId
         };
     }
 
@@ -534,7 +550,8 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
         long lastSequence = 1,
         long version = 0,
         long? stopRequestedAtUtc = null,
-        string keyPrefix = "xeint_abcdefgh")
+        string keyPrefix = "xeint_abcdefgh",
+        Guid? graphWorkflowRunId = null)
     {
         lock (_gate)
         {
@@ -548,6 +565,7 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
                 RequestFingerprint = ReadOnlyMemory<byte>.Empty,
                 KeyPrefix = keyPrefix,
                 InvocationId = Guid.Empty,
+                GraphWorkflowRunId = graphWorkflowRunId,
                 Status = status,
                 ReceivedAtUtc = receivedAtUtc,
                 StartedAtUtc = null,
@@ -686,6 +704,7 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
                 StartedAtUtc = command.StartedAtUtc ?? _rows[index].StartedAtUtc,
                 EndedAtUtc = command.EndedAtUtc ?? _rows[index].EndedAtUtc,
                 InvocationId = command.InvocationId ?? _rows[index].InvocationId,
+                GraphWorkflowRunId = command.GraphWorkflowRunId ?? _rows[index].GraphWorkflowRunId,
                 StopRequestedAtUtc = command.StopRequestedAtUtc ?? _rows[index].StopRequestedAtUtc,
                 FailureCategory = command.FailureCategory ?? _rows[index].FailureCategory,
                 FailureSummary = command.FailureSummary ?? _rows[index].FailureSummary,

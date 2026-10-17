@@ -58,5 +58,17 @@ public enum FailureCategory
     ///     The provider or gateway rate-limited the request (HTTP 429). The message quotes a bounded <c>Retry-After</c>
     ///     value when the response carried one.
     /// </summary>
-    ProviderRateLimited = 13
+    ProviderRateLimited = 13,
+
+    /// <summary>
+    ///     The turn stopped at its provider-call budget: a work session step's own cap, or the node-wide ceiling on a
+    ///     runaway tool or hand-off loop. A designed bound rather than a fault; a work session continues on its next step.
+    /// </summary>
+    CallBudgetReached = 14,
+
+    /// <summary>
+    ///     The node had no room to load the model next to the models already loaded or loading (a capacity refusal of
+    ///     the model's launch). The sanitized message names those models and says what to do.
+    /// </summary>
+    InsufficientCapacity = 15
 }

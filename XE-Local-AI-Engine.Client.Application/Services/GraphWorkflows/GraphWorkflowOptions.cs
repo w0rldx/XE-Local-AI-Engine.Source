@@ -79,4 +79,8 @@ public sealed class GraphWorkflowOptions
     /// </remarks>
     [Range(1, 1_000)]
     public int MaxSteersPerNode { get; init; } = 5;
+
+    /// <summary>How long the intent service waits for the router graph's run before cancelling it and answering NotMatched.</summary>
+    [Range(1, 3_600)]
+    public int IntentRouterTimeoutSeconds { get; init; } = 120;
 }

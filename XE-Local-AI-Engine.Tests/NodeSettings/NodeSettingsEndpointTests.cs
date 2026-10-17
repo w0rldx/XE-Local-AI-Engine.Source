@@ -4,11 +4,14 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1;
 using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Validators;
@@ -59,7 +62,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             MaxMessageRequestTimeoutSeconds = 600
         });
@@ -84,7 +87,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             MaxMessageRequestTimeoutSeconds = 600
         });
@@ -129,7 +132,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             MaxMessageRequestTimeoutSeconds = 900
         });
@@ -158,7 +161,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             MaxMessageRequestTimeoutSeconds = 900
         });
@@ -180,13 +183,32 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             MaxMessageRequestTimeoutSeconds = 1
         });
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>A misspelt setting name is refused naming it, and nothing is saved, instead of a 200 that saved nothing.</summary>
+    [Test]
+    public async Task SaveNodeSettings_WithAnUnknownProperty_IsRejectedNamingIt()
+    {
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = new StringContent("""{"maxMessageRequestTimeoutSeconds":1700,"notARealSetting":1}""", Encoding.UTF8, "application/json");
+        using var response = await client.SendAsync(request);
+
+        var body = await response.Content.ReadAsStringAsync();
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, body);
+        AssertEx.Contains(body, "The request body has an unknown property: 'notARealSetting'.");
+        AssertEx.False(body.Contains("XE_Local_AI_Engine", StringComparison.Ordinal), $"The 400 must not name the CLR request type: {body}");
         await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
@@ -209,7 +231,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        putRequest.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        putRequest.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             MaxMessageRequestTimeoutSeconds = 300,
             EnableTools = false,
@@ -276,14 +298,12 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        putRequest.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        putRequest.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             TranscriptionIdleTimeoutMinutes = 30,
             LlamaReadinessTimeoutCapSeconds = 900,
             LlamaChatHttpTimeoutSeconds = 7200,
             LlamaEmbeddingHttpTimeoutSeconds = 120,
-            // -1 is "back to automatic": the stored 2048 must become null.
-            LlamaChatCacheRamMiB = StoredNodeSettings.LlamaChatCacheRamMiBAuto,
             LlamaCpuThreadReserve = 2,
             LlamaGpuReservePercent = 10,
             LlamaRamReservePercent = 20,
@@ -306,7 +326,7 @@ public sealed class NodeSettingsEndpointTests
             DefaultReasoningEffort = "minimal",
             ChatOutputCapMode = "notice",
             ChatOutputCapMaxTokens = 8192
-        });
+        }, nameof(SaveNodeSettingsRequest.LlamaChatCacheRamMiB)); // null is "back to automatic": the stored 2048 must become null.
         using var putResponse = await client.SendAsync(putRequest);
         AssertEx.Equal(HttpStatusCode.OK, putResponse.StatusCode);
 
@@ -365,7 +385,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             HuggingFaceDefaultQuant = quant,
             DefaultModelName = modelName
@@ -390,7 +410,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(wireName switch
+        request.Content = NodeSettingsRequestContent.Create(wireName switch
         {
             "keepModelWarmModelName" => new SaveNodeSettingsRequest
             {
@@ -425,7 +445,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             MaxMessageRequestTimeoutSeconds = StoredNodeSettings.MinMaxMessageRequestTimeoutSeconds - 1
         });
@@ -436,6 +456,72 @@ public sealed class NodeSettingsEndpointTests
         var error = document.RootElement.GetProperty("errors")[0];
         AssertEx.Equal("maxMessageRequestTimeoutSeconds", error.GetProperty("name").GetString());
         AssertEx.Contains(error.GetProperty("reason").GetString(), "'maxMessageRequestTimeoutSeconds' must be between");
+    }
+
+    /// <summary>
+    ///     Bypass table: a refused value names its camelCase wire field, never <c>x.Value</c>. The flag marks the agentic
+    ///     whitelist rows, which McpInboundProtocolTests drives through the real update_node_settings tool.
+    /// </summary>
+    // Every later validation finding adds a row here (and an MCP row there when it is on the whitelist).
+    [Test]
+    // InclusiveBetween over int? / int.
+    [Arguments("llamaChatCacheRamMiB", "-2", "'llamaChatCacheRamMiB' must be between", false)]
+    [Arguments("maxMessageRequestTimeoutSeconds", "4", "'maxMessageRequestTimeoutSeconds' must be between", true)]
+    [Arguments("speculativeDraftGpuLayers", "1001", "'speculativeDraftGpuLayers' must be between", true)]
+    // The shared UnsetOrBetween rule, over int? and long?, and two fields sharing one bound pair.
+    [Arguments("huggingFaceDiskMarginBytes", "0", "'huggingFaceDiskMarginBytes' must be between", false)]
+    [Arguments("agentHomePrepareTimeoutSeconds", "0", "'agentHomePrepareTimeoutSeconds' must be between", false)]
+    [Arguments("agentHomeCommandTimeoutSeconds", "0", "'agentHomeCommandTimeoutSeconds' must be between", false)]
+    [Arguments("llamaMaxLoadedProcesses", "0", "'llamaMaxLoadedProcesses' must be between", true)]
+    [Arguments("llamaIdleTimeToLiveSeconds", "29", "'llamaIdleTimeToLiveSeconds' must be between", true)]
+    [Arguments("keepModelWarmIntervalSeconds", "-5", "'keepModelWarmIntervalSeconds' must be between", true)]
+    [Arguments("chatCacheReuse", "8193", "'chatCacheReuse' must be between", true)]
+    [Arguments("speculativeDraftMaxTokens", "17", "'speculativeDraftMaxTokens' must be between", true)]
+    // Custom messages: one embedding {PropertyName}, one shared by four rules, one fixed, one over a nested double.
+    [Arguments("agentHomeMaxPatchBytes", "0", "'agentHomeMaxPatchBytes' must be greater than '0'", false)]
+    [Arguments("reasoningBudgetLowTokens", "1", "A reasoning budget must be from", false)]
+    [Arguments("reasoningBudgetHighTokens", "200000", "A reasoning budget must be from", false)]
+    [Arguments("chatOutputCapMaxTokens", "1", "The chat output cap ceiling must be from", false)]
+    [Arguments("usageRates", "{\"m\":{\"inputPer1M\":-1,\"outputPer1M\":0}}", "Usage rates must have", false)]
+    // A body the serializer cannot convert names the wire path, never the CLR type (R1-05).
+    [Arguments("usageRates.x", "1", "The value of 'usageRates.x' has the wrong JSON type or shape.", false)]
+    // Shape checks on the agentic whitelist.
+    [Arguments("speculativeMode", "\"bogus\"", "Unknown speculative decoding mode.", true)]
+    [Arguments("kvCacheType", "\"bogus\"", "Unknown KV cache type.", true)]
+    [Arguments("huggingFaceDefaultQuant", "\"notaquant\"", "Unknown Hugging Face default quant.", true)]
+    [Arguments("defaultModelName", "\"unsloth/model\\u0001-GGUF:Q4_K_M\"", "Default model name must be at most", true)]
+    [Arguments("keepModelWarmModelName", "\"unsloth/model\\u0001-GGUF:Q4_K_M\"", "Model name must be at most", true)]
+    [Arguments("rerankerModelName", "\"unsloth/model\\u0001-GGUF:Q4_K_M\"", "Model name must be at most", true)]
+    [Arguments("autoEffortFastModelName", "\"unsloth/model\\u0001-GGUF:Q4_K_M\"", "Model name must be at most", true)]
+    [Arguments("toolCapableModels", "[]", "Tool-capable models must be", true)]
+    [Arguments("toolCapableModels", "[\" \"]", "Tool-capable models must be", true)]
+    public async Task SaveNodeSettings_BypassTable_RefusesUnderTheWireField(string wireName, string jsonValue, string reasonFragment,
+        bool onAgenticWhitelist)
+    {
+        var body = wireName.Split('.') is [var parent, var child]
+            ? $"{{\"{parent}\":{{\"{child}\":{jsonValue}}}}}"
+            : $"{{\"{wireName}\":{jsonValue}}}";
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var error = document.RootElement.GetProperty("errors")[0];
+        AssertEx.Equal(wireName, error.GetProperty("name").GetString());
+        var reason = AssertEx.NotNull(error.GetProperty("reason").GetString());
+        AssertEx.Contains(reason, reasonFragment, StringComparison.Ordinal);
+        AssertEx.False(reason.Contains(".Value", StringComparison.Ordinal), $"The reason names a nullable's .Value member: {reason}");
+        AssertEx.False(reason.Contains("XE_Local_AI_Engine", StringComparison.Ordinal), $"The reason names a CLR type: {reason}");
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+
+        var patchHasField = typeof(NodeSettingsAgenticPatch).GetProperty(wireName.Split('.')[0],
+            BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase) is not null;
+        AssertEx.Equal(onAgenticWhitelist, patchHasField);
     }
 
     /// <summary>Shape only: a model that is not installed yet is accepted, in both the <c>repo:quant</c> and the <c>ext:</c> form.</summary>
@@ -449,7 +535,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             HuggingFaceDefaultQuant = quant,
             DefaultModelName = modelName
@@ -470,7 +556,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             DefaultReasoningEffort = "none"
         });
@@ -509,7 +595,7 @@ public sealed class NodeSettingsEndpointTests
 
         // A save of an unrelated field (all seven null) keeps every stored value.
         using var keepRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        keepRequest.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        keepRequest.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             WebFetchTimeoutSeconds = 30
         });
@@ -519,16 +605,14 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.Equal("off", saved.ChatOutputCapMode);
 
         using var unsetRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        unsetRequest.Content = JsonContent.Create(new SaveNodeSettingsRequest
-        {
-            ReasoningBudgetMinimalTokens = StoredNodeSettings.TokenSettingUnset,
-            ReasoningBudgetLowTokens = StoredNodeSettings.TokenSettingUnset,
-            ReasoningBudgetMediumTokens = StoredNodeSettings.TokenSettingUnset,
-            ReasoningBudgetHighTokens = StoredNodeSettings.TokenSettingUnset,
-            DefaultReasoningEffort = "",
-            ChatOutputCapMode = "",
-            ChatOutputCapMaxTokens = StoredNodeSettings.TokenSettingUnset
-        });
+        unsetRequest.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest(),
+            nameof(SaveNodeSettingsRequest.ReasoningBudgetMinimalTokens),
+            nameof(SaveNodeSettingsRequest.ReasoningBudgetLowTokens),
+            nameof(SaveNodeSettingsRequest.ReasoningBudgetMediumTokens),
+            nameof(SaveNodeSettingsRequest.ReasoningBudgetHighTokens),
+            nameof(SaveNodeSettingsRequest.DefaultReasoningEffort),
+            nameof(SaveNodeSettingsRequest.ChatOutputCapMode),
+            nameof(SaveNodeSettingsRequest.ChatOutputCapMaxTokens));
         using var unsetResponse = await client.SendAsync(unsetRequest);
         AssertEx.Equal(HttpStatusCode.OK, unsetResponse.StatusCode);
 
@@ -556,13 +640,14 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.Equal(StoredNodeSettings.DefaultChatOutputCapMaxTokens, outputCap.MaxTokens);
     }
 
-    /// <summary>Only -1 and the empty string are the "back to default" sentinels; every other out-of-range value is still refused.</summary>
+    /// <summary>Null is the only "back to default" signal: -1 and every other out-of-range value is refused, with a message naming null.</summary>
     [Test]
+    [Arguments(-1)]
     [Arguments(-2)]
     [Arguments(0)]
     [Arguments(StoredNodeSettings.MinReasoningBudgetTokens - 1)]
     [Arguments(StoredNodeSettings.MaxReasoningBudgetTokens + 1)]
-    public void SaveNodeSettings_ReasoningBudgetAndOutputCapCeiling_RejectEverythingOutOfRangeButTheSentinel(int tokens)
+    public void SaveNodeSettings_ReasoningBudgetAndOutputCapCeiling_RejectEverythingOutOfRange(int tokens)
     {
         var validator = new SaveNodeSettingsRequestValidator();
 
@@ -574,28 +659,21 @@ public sealed class NodeSettingsEndpointTests
         {
             ChatOutputCapMaxTokens = tokens
         });
-        var sentinels = validator.Validate(new SaveNodeSettingsRequest
-        {
-            ReasoningBudgetMinimalTokens = StoredNodeSettings.TokenSettingUnset,
-            ChatOutputCapMaxTokens = StoredNodeSettings.TokenSettingUnset,
-            DefaultReasoningEffort = "",
-            ChatOutputCapMode = ""
-        });
 
-        AssertEx.False(budget.IsValid);
-        AssertEx.False(ceiling.IsValid);
-        AssertEx.True(sentinels.IsValid, string.Join("; ", sentinels.Errors.Select(static error => error.ErrorMessage)));
+        AssertEx.Contains(budget.Errors.Single().ErrorMessage, "or null for the default", StringComparison.Ordinal);
+        AssertEx.Contains(ceiling.Errors.Single().ErrorMessage, "or null for the default", StringComparison.Ordinal);
     }
 
-    /// <summary>F-70: -1 clears a stored nullable numeric knob back to "unset, use the default"; a null member still keeps it.</summary>
+    /// <summary>F-70: an explicit null clears a stored nullable numeric knob back to "unset, use the default"; an omitted member keeps it.</summary>
     [Test]
     [Arguments(nameof(SaveNodeSettingsRequest.LlamaIdleTimeToLiveSeconds), 600L)]
     [Arguments(nameof(SaveNodeSettingsRequest.DetachedGraceSeconds), 0L)]
     [Arguments(nameof(SaveNodeSettingsRequest.MaxPendingToolCallAgeMinutes), 30L)]
+    [Arguments(nameof(SaveNodeSettingsRequest.IntentMaxUtteranceAgeSeconds), 45L)]
     [Arguments(nameof(SaveNodeSettingsRequest.SpawnMaxCloud), 0L)]
     [Arguments(nameof(SaveNodeSettingsRequest.AgentHomeMaxPatchBytes), 1024L)]
     [Arguments(nameof(SaveNodeSettingsRequest.BenchmarkKldCacheMaxBytes), StoredNodeSettings.MinBenchmarkKldCacheMaxBytes)]
-    public async Task SaveNodeSettings_MinusOne_ClearsAStoredKnobBackToTheDefault(string knob, long value)
+    public async Task SaveNodeSettings_Null_ClearsAStoredKnobBackToTheDefault(string knob, long value)
     {
         var saved = new StoredNodeSettings();
         var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
@@ -612,10 +690,10 @@ public sealed class NodeSettingsEndpointTests
         var knobType = Nullable.GetUnderlyingType(requestProperty.PropertyType)!;
         var responseProperty = typeof(NodeSettingsResponse).GetProperty(knob)!;
 
-        async Task<NodeSettingsResponse> PutAndGetAsync(SaveNodeSettingsRequest body)
+        async Task<NodeSettingsResponse> PutAndGetAsync(SaveNodeSettingsRequest body, params string[] clears)
         {
             using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-            putRequest.Content = JsonContent.Create(body);
+            putRequest.Content = NodeSettingsRequestContent.Create(body, clears);
             using var putResponse = await client.SendAsync(putRequest);
             AssertEx.Equal(HttpStatusCode.OK, putResponse.StatusCode, await putResponse.Content.ReadAsStringAsync());
             using var getRequest = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/node-settings");
@@ -633,32 +711,104 @@ public sealed class NodeSettingsEndpointTests
         var stored = await PutAndGetAsync(RequestWith(value));
         AssertEx.Equal(Convert.ChangeType(value, knobType, CultureInfo.InvariantCulture), responseProperty.GetValue(stored));
 
-        // An unrelated save sends the knob as null, which keeps it.
+        // An unrelated save omits the knob, which keeps it.
         var kept = await PutAndGetAsync(new SaveNodeSettingsRequest
         {
             WebFetchTimeoutSeconds = 30
         });
         AssertEx.Equal(Convert.ChangeType(value, knobType, CultureInfo.InvariantCulture), responseProperty.GetValue(kept));
 
-        var cleared = await PutAndGetAsync(RequestWith(StoredNodeSettings.TokenSettingUnset));
+        var cleared = await PutAndGetAsync(new SaveNodeSettingsRequest(), knob);
         AssertEx.Null(responseProperty.GetValue(cleared));
         AssertEx.Null(typeof(StoredNodeSettings).GetProperty(knob)!.GetValue(saved));
     }
 
+    /// <summary>The intent router id: a GUID sets it, an omitted member keeps it, null clears it, anything else (the empty string included) is a 400.</summary>
+    [Test]
+    public async Task SaveNodeSettings_IntentRouterDefinitionId_SetsKeepsAndClears()
+    {
+        var routerId = Guid.NewGuid();
+        var saved = new StoredNodeSettings();
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(_ => saved);
+        nodeSettingsStore.UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>())
+                         .Returns(call =>
+                         {
+                             saved = call.Arg<Func<StoredNodeSettings, StoredNodeSettings>>()(saved);
+                             return Task.FromResult(saved);
+                         });
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        async Task<HttpResponseMessage> PutAsync(SaveNodeSettingsRequest body, params string[] clears)
+        {
+            using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+            putRequest.Content = NodeSettingsRequestContent.Create(body, clears);
+            return await client.SendAsync(putRequest);
+        }
+
+        using (var set = await PutAsync(new SaveNodeSettingsRequest
+               {
+                   IntentRouterDefinitionId = routerId.ToString()
+               }))
+        {
+            AssertEx.Equal(HttpStatusCode.OK, set.StatusCode, await set.Content.ReadAsStringAsync());
+        }
+
+        AssertEx.Equal(routerId, saved.IntentRouterDefinitionId);
+
+        using (var kept = await PutAsync(new SaveNodeSettingsRequest
+               {
+                   WebFetchTimeoutSeconds = 30
+               }))
+        {
+            AssertEx.Equal(HttpStatusCode.OK, kept.StatusCode);
+        }
+
+        AssertEx.Equal(routerId, saved.IntentRouterDefinitionId);
+
+        using (var refused = await PutAsync(new SaveNodeSettingsRequest
+               {
+                   IntentRouterDefinitionId = "not-a-guid"
+               }))
+        {
+            AssertEx.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        }
+
+        using (var blank = await PutAsync(new SaveNodeSettingsRequest
+               {
+                   IntentRouterDefinitionId = ""
+               }))
+        {
+            AssertEx.Equal(HttpStatusCode.BadRequest, blank.StatusCode);
+            AssertEx.Contains(await blank.Content.ReadAsStringAsync(), "send null to clear it", StringComparison.Ordinal);
+        }
+
+        AssertEx.Equal(routerId, saved.IntentRouterDefinitionId);
+
+        using (var cleared = await PutAsync(new SaveNodeSettingsRequest(), nameof(SaveNodeSettingsRequest.IntentRouterDefinitionId)))
+        {
+            AssertEx.Equal(HttpStatusCode.OK, cleared.StatusCode);
+        }
+
+        AssertEx.Null(saved.IntentRouterDefinitionId);
+    }
+
     /// <summary>
-    ///     -1 is the only extra value a covered knob accepts; the draft GPU layer count, which takes no sentinel, still
-    ///     refuses it, and the range message still names the real range.
+    ///     The old -1 clear sentinel is refused on every covered knob, the draft GPU layer count and the prompt-cache RAM
+    ///     included, and the range message names the real range and says to send null.
     /// </summary>
     [Test]
-    public void SaveNodeSettings_ClearSentinel_IsTheOnlyNewlyAcceptedValue()
+    public void SaveNodeSettings_FormerClearSentinel_IsRefusedWithAMessageNamingNull()
     {
         var validator = new SaveNodeSettingsRequestValidator();
 
         var sentinels = validator.Validate(new SaveNodeSettingsRequest
         {
-            LlamaIdleTimeToLiveSeconds = StoredNodeSettings.TokenSettingUnset,
-            AgentHomeMaxPatchBytes = StoredNodeSettings.TokenSettingUnset,
-            BenchmarkKldCacheMaxBytes = StoredNodeSettings.TokenSettingUnset
+            LlamaIdleTimeToLiveSeconds = -1,
+            AgentHomeMaxPatchBytes = -1,
+            BenchmarkKldCacheMaxBytes = -1,
+            LlamaChatCacheRamMiB = -1
         });
         var idleTtl = validator.Validate(new SaveNodeSettingsRequest
         {
@@ -674,15 +824,20 @@ public sealed class NodeSettingsEndpointTests
         });
         var draftLayers = validator.Validate(new SaveNodeSettingsRequest
         {
-            SpeculativeDraftGpuLayers = StoredNodeSettings.TokenSettingUnset
+            SpeculativeDraftGpuLayers = -1
         });
 
-        AssertEx.True(sentinels.IsValid, string.Join("; ", sentinels.Errors.Select(static error => error.ErrorMessage)));
+        AssertEx.Equal(expected: 4, sentinels.Errors.Count);
+        foreach (var error in sentinels.Errors)
+        {
+            AssertEx.Contains(error.ErrorMessage, "or null for the default", StringComparison.Ordinal);
+        }
+
         AssertEx.False(idleTtl.IsValid);
-        AssertEx.Contains(idleTtl.Errors.Single().ErrorMessage, "must be between 30 and 86400, or -1 for the default", StringComparison.Ordinal);
+        AssertEx.Contains(idleTtl.Errors.Single().ErrorMessage, "must be between 30 and 86400, or null for the default", StringComparison.Ordinal);
         AssertEx.False(patchBytes.IsValid);
         AssertEx.False(detachedGrace.IsValid);
-        AssertEx.False(draftLayers.IsValid);
+        AssertEx.Contains(draftLayers.Errors.Single().ErrorMessage, "or null for the default", StringComparison.Ordinal);
     }
 
     [Test]
@@ -711,7 +866,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             KnowledgeSearchDefaultResults = 10,
             KnowledgeSearchMaxResults = 5
@@ -735,7 +890,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             AgentHomeMaxRunSeconds = 300
         });
@@ -764,7 +919,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        putRequest.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        putRequest.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             ToolPipelineMaxIterationsPerRequest = 80,
             ToolPipelineMaxToolResultChars = 100_000,
@@ -829,7 +984,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             SpawnMaxConcurrent = spawnMaxConcurrent
         });
@@ -851,7 +1006,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             LlamaChatCacheRamMiB = cacheRamMiB
         });
@@ -874,7 +1029,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             HuggingFaceDiskMarginBytes = marginBytes
         });
@@ -906,7 +1061,7 @@ public sealed class NodeSettingsEndpointTests
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
         // Omit EVERY field — including the chat timeout (now optional) — so the merge must keep all current values.
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest());
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest());
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -934,7 +1089,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             MaxMessageRequestTimeoutSeconds = 300,
             RecommendedLlamaCppTag = "not-a-tag"
@@ -953,7 +1108,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             MaxMessageRequestTimeoutSeconds = 300,
             OllamaEndpoint = "not a url"
@@ -972,7 +1127,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             MaxMessageRequestTimeoutSeconds = 300,
             LlamaMaxLoadedProcesses = 999
@@ -991,7 +1146,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             KeepModelWarmIntervalSeconds = StoredNodeSettings.MaxKeepModelWarmIntervalSeconds + 1
         });
@@ -1009,7 +1164,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             KeepModelWarmEnabled = true
         });
@@ -1032,7 +1187,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             LlamaMaxLoadedProcesses = 1
         });
@@ -1056,7 +1211,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             LlamaIdleTimeToLiveSeconds = 300
         });
@@ -1083,7 +1238,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest());
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest());
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -1107,7 +1262,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest());
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest());
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -1125,7 +1280,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             AutoEffortFastModelName = "ext:studio/qwen3-1.7b"
         });
@@ -1171,7 +1326,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             KvCacheType = "q5_1"
         });
@@ -1189,7 +1344,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             KvCacheType = "q4_0"
         });
@@ -1210,7 +1365,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             SpeculativeMode = "draft-simple"
         });
@@ -1229,7 +1384,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             SpeculativeMode = "ngram-mod"
         });
@@ -1249,7 +1404,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             SpeculativeMode = "draft-simple",
             SpeculativeDraftModelName = "my-draft"
@@ -1276,7 +1431,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             SpeculativeDraftModelName = "   "
         });
@@ -1341,7 +1496,7 @@ public sealed class NodeSettingsEndpointTests
     public void NodeSettings_RerankerModelName_RoundTripsThroughMapper()
     {
         // A supplied (trimmed) value is stored and surfaced; omitting it on a later save keeps the current value; an
-        // empty string is the "Off" signal that clears it (the store's Normalize later maps blank to null = disabled).
+        // explicit null is the "Off" signal that clears it (reranking disabled).
         var request = new SaveNodeSettingsRequest
         {
             RerankerModelName = "  bge-reranker-v2-m3  "
@@ -1357,19 +1512,16 @@ public sealed class NodeSettingsEndpointTests
         var merged = new SaveNodeSettingsRequest().ToStoredSettings(stored);
         AssertEx.Equal("bge-reranker-v2-m3", merged.RerankerModelName);
 
-        // The "Off" option sends an empty string, which clears the reranker model name.
-        var cleared = new SaveNodeSettingsRequest
-        {
-            RerankerModelName = string.Empty
-        }.ToStoredSettings(stored);
-        AssertEx.Equal(string.Empty, cleared.RerankerModelName);
+        // The "Off" option sends null, which clears the reranker model name.
+        var cleared = ParseRequest("""{"rerankerModelName":null}""").ToStoredSettings(stored);
+        AssertEx.Null(cleared.RerankerModelName);
     }
 
     [Test]
     public void NodeSettings_AutoEffortFastModelName_RoundTripsThroughMapper()
     {
         // Same shape as the reranker select: a trimmed value round-trips, omitting the field keeps the stored value,
-        // and the "Off" option sends an empty string that clears it.
+        // and the "Off" option sends null, which clears it.
         var request = new SaveNodeSettingsRequest
         {
             AutoEffortFastModelName = "  qwen3-1.7b  "
@@ -1384,11 +1536,8 @@ public sealed class NodeSettingsEndpointTests
         var merged = new SaveNodeSettingsRequest().ToStoredSettings(stored);
         AssertEx.Equal("qwen3-1.7b", merged.AutoEffortFastModelName);
 
-        var cleared = new SaveNodeSettingsRequest
-        {
-            AutoEffortFastModelName = string.Empty
-        }.ToStoredSettings(stored);
-        AssertEx.Equal(string.Empty, cleared.AutoEffortFastModelName);
+        var cleared = ParseRequest("""{"autoEffortFastModelName":null}""").ToStoredSettings(stored);
+        AssertEx.Null(cleared.AutoEffortFastModelName);
     }
 
     [Test]
@@ -1416,7 +1565,7 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.False(unsaved.AllowCloudModelSubAgents, "An unsaved cloud permission must report off.");
 
         using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        putRequest.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        putRequest.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             AllowCloudModelUnattendedRuns = true,
             AllowCloudModelWebTools = true,
@@ -1470,7 +1619,7 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.True(unsaved.ChatRetentionEnabled, "An unsaved switch must report its seeded effective value.");
 
         using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        putRequest.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        putRequest.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             AllowCloudModelAccess = false,
             ChatRetentionEnabled = false
@@ -1526,7 +1675,7 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.False(unsaved.ExecutionPreviewsEnabled, "execution previews are off unless the operator turns them on");
 
         using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        putRequest.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        putRequest.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             DevelopmentEnabled = false,
             WorkSessionsEnabled = true,
@@ -1583,7 +1732,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             DevWorkflowsEnabled = devWorkflows,
             WorkSessionsEnabled = workSessions
@@ -1604,7 +1753,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             AgentHomeEnabled = true
         });
@@ -1644,7 +1793,7 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.Equal(StoredNodeSettings.DefaultAgentExecutionLogRetentionDays, unsaved.AgentExecutionLogRetentionDays);
 
         using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        putRequest.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        putRequest.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             ChatRetentionDays = 7
         });
@@ -1677,7 +1826,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        putRequest.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        putRequest.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             KnowledgeAdaptiveRerankingEnabled = false,
             KnowledgeRetrievalLatencyBudgetMs = 1500,
@@ -1735,7 +1884,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(field == "chatRetentionDays"
+        request.Content = NodeSettingsRequestContent.Create(field == "chatRetentionDays"
             ? new SaveNodeSettingsRequest
             {
                 ChatRetentionDays = StoredNodeSettings.MinRetentionDays - 1
@@ -1769,7 +1918,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        putRequest.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        putRequest.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             ImageMaxLoadedProcesses = 2,
             ImageTextEncoderOnGpu = true,
@@ -1825,7 +1974,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(field == "imageMaxLoadedProcesses"
+        request.Content = NodeSettingsRequestContent.Create(field == "imageMaxLoadedProcesses"
             ? new SaveNodeSettingsRequest
             {
                 ImageMaxLoadedProcesses = StoredNodeSettings.MaxImageMaxLoadedProcesses + 1
@@ -1853,7 +2002,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             PlaybookEvalModelName = "ext:studio/qwen3-8b"
         });
@@ -1868,8 +2017,8 @@ public sealed class NodeSettingsEndpointTests
     [Test]
     public void NodeSettings_BackgroundModelNames_RoundTripThroughMapper()
     {
-        // A trimmed value round-trips, omitting the field keeps the stored value, and the "Inherit" option sends an
-        // empty string that clears it (Normalize then stores null).
+        // A trimmed value round-trips, omitting the field keeps the stored value, and the "Inherit" option sends null,
+        // which clears it.
         var stored = new SaveNodeSettingsRequest
         {
             PlaybookAnalysisModelName = "  qwen3:8b  ",
@@ -1886,11 +2035,9 @@ public sealed class NodeSettingsEndpointTests
         var merged = new SaveNodeSettingsRequest().ToStoredSettings(stored);
         AssertEx.Equal("repo/model:Q4_K_M", merged.PlaybookEvalModelName);
 
-        var cleared = new SaveNodeSettingsRequest
-        {
-            MemoryExtractionModelName = string.Empty
-        }.ToStoredSettings(stored);
-        AssertEx.Equal(string.Empty, cleared.MemoryExtractionModelName);
+        var cleared = ParseRequest("""{"memoryExtractionModelName":null}""").ToStoredSettings(stored);
+        AssertEx.Null(cleared.MemoryExtractionModelName);
+        AssertEx.Equal("repo/model:Q4_K_M", cleared.PlaybookEvalModelName);
     }
 
     [Test]
@@ -1951,14 +2098,10 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.Equal(expected: true, merged.WebAccessEnabled);
         AssertEx.Equal("https://searx.example.org/", merged.WebSearchSearxngUrl);
 
-        // An empty string clears the URL (Normalize maps blank to null), and false turns web access off.
-        var cleared = new SaveNodeSettingsRequest
-        {
-            WebAccessEnabled = false,
-            WebSearchSearxngUrl = string.Empty
-        }.ToStoredSettings(stored);
+        // Null clears the URL, and false turns web access off.
+        var cleared = ParseRequest("""{"webAccessEnabled":false,"webSearchSearxngUrl":null}""").ToStoredSettings(stored);
         AssertEx.Equal(expected: false, cleared.WebAccessEnabled);
-        AssertEx.Equal(string.Empty, cleared.WebSearchSearxngUrl);
+        AssertEx.Null(cleared.WebSearchSearxngUrl);
     }
 
     [Test]
@@ -1966,7 +2109,7 @@ public sealed class NodeSettingsEndpointTests
     [Arguments("ftp://searx.example.org", false)]
     [Arguments("https://searx.example.org", true)]
     [Arguments("http://127.0.0.1:8888", true)]
-    [Arguments("", true)]
+    [Arguments("", false)]
     public void SaveNodeSettings_SearxngUrlValidation(string url, bool expectedValid)
     {
         var result = new SaveNodeSettingsRequestValidator().Validate(new SaveNodeSettingsRequest
@@ -2238,24 +2381,25 @@ public sealed class NodeSettingsEndpointTests
     }
 
     [Test]
-    public async Task SaveNodeSettings_WhenTheLastSwitchIsFlippedBackOn_StaysCustom()
+    [Arguments(true, StoredNodeSettings.ExternalAccessProfileRecommended)]
+    [Arguments(false, StoredNodeSettings.ExternalAccessProfileOffline)]
+    public async Task SaveNodeSettings_WhenTheEditedSwitchIsFlippedBack_RestoresThePresetTheTripleMatches(bool presetValue, string preset)
     {
-        // The stamp is UNCONDITIONAL, never re-derived from the resulting triple: a node at "custom" whose owner flips
-        // the third switch back on stays "custom". Re-deriving would silently relabel it "recommended".
+        // R1-05: the triple is exactly a preset again, so the label is that preset, not "custom".
         var settings = await SaveAsync(new StoredNodeSettings
             {
                 ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfileCustom,
-                AutoCheckApplicationUpdates = true,
-                AutoCheckRuntimeUpdates = true,
-                AutoProvisionFirstRunModel = false
+                AutoCheckApplicationUpdates = !presetValue,
+                AutoCheckRuntimeUpdates = presetValue,
+                AutoProvisionFirstRunModel = presetValue
             },
             new SaveNodeSettingsRequest
             {
-                AutoProvisionFirstRunModel = true
+                AutoCheckApplicationUpdates = presetValue
             });
 
-        AssertEx.Equal(StoredNodeSettings.ExternalAccessProfileCustom, settings.ExternalAccessProfile);
-        AssertEx.Equal(expected: true, settings.AutoProvisionFirstRunModel);
+        AssertEx.Equal(preset, settings.ExternalAccessProfile);
+        AssertEx.Equal(presetValue, settings.AutoCheckApplicationUpdates);
     }
 
     [Test]
@@ -2298,7 +2442,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             ExternalAccessProfile = profile
         });
@@ -2318,7 +2462,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfileOffline
         });
@@ -2350,7 +2494,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             UiMode = mode
         });
@@ -2381,7 +2525,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             UiMode = mode
         });
@@ -2419,7 +2563,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             SandboxSecurityProfile = profile
         });
@@ -2450,7 +2594,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             SandboxSecurityProfile = profile
         });
@@ -2512,7 +2656,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             UpdateChannel = channel
         });
@@ -2542,7 +2686,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
         {
             UpdateChannel = channel
         });
@@ -2588,7 +2732,7 @@ public sealed class NodeSettingsEndpointTests
             using var client = factory.CreateClient();
 
             using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-            request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+            request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
             {
                 MaxMessageRequestTimeoutSeconds = 600
             });
@@ -2618,10 +2762,189 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var httpRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        httpRequest.Content = JsonContent.Create(request);
+        httpRequest.Content = NodeSettingsRequestContent.Create(request);
         using var response = await client.SendAsync(httpRequest);
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         return await ReadJsonAsync<NodeSettingsResponse>(response);
+    }
+
+    /// <summary>
+    ///     The null contract through the real HTTP binder: an explicit null clears each kind of member back to its default
+    ///     (a range knob, text, a switch, the rate map, the draft GPU layers, the update channel), and an omitted one keeps.
+    /// </summary>
+    [Test]
+    public async Task SaveNodeSettings_ExplicitNull_ClearsTheMemberAndAnOmittedMemberKeeps()
+    {
+        var stored = new StoredNodeSettings
+        {
+            LlamaMaxLoadedProcesses = 3,
+            OllamaEndpoint = "http://ollama.example:11434",
+            EnableTools = true,
+            UsageRates = new NodeUsageRateSettings
+            {
+                Models = new Dictionary<string, ModelRate>
+                {
+                    ["m"] = new()
+                    {
+                        InputPer1M = 1,
+                        OutputPer1M = 2
+                    }
+                }
+            },
+            SpeculativeDraftGpuLayers = 10,
+            UpdateChannel = "preview",
+            WebFetchTimeoutSeconds = 20
+        };
+        var nodeSettingsStore = NewSettingsStore(stored);
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = new StringContent("""{"llamaMaxLoadedProcesses":null,"ollamaEndpoint":null,"enableTools":null,"usageRates":null,"speculativeDraftGpuLayers":null,"updateChannel":null}""",
+            Encoding.UTF8, "application/json");
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+        await nodeSettingsStore.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
+                Persisted(mutate, stored).LlamaMaxLoadedProcesses == null
+                && Persisted(mutate, stored).OllamaEndpoint == null
+                && Persisted(mutate, stored).EnableTools == null
+                && Persisted(mutate, stored).UsageRates == null
+                && Persisted(mutate, stored).SpeculativeDraftGpuLayers == null
+                && Persisted(mutate, stored).UpdateChannel == null
+                && Persisted(mutate, stored).WebFetchTimeoutSeconds == 20),
+            Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>The retired clear sentinels and null on a first-run decision answer 400 under the wire name, saying what to send instead.</summary>
+    [Test]
+    [Arguments("llamaMaxLoadedProcesses", "-1", "or null for the default")]
+    [Arguments("llamaChatCacheRamMiB", "-1", "or null for the default")]
+    [Arguments("agentHomeMaxPatchBytes", "-1", "or null for the default")]
+    [Arguments("reasoningBudgetLowTokens", "-1", "or null for the default")]
+    [Arguments("ollamaEndpoint", "\"\"", "'ollamaEndpoint' cannot be blank; send null to clear it.")]
+    [Arguments("defaultModelName", "\"\"", "'defaultModelName' cannot be blank; send null to clear it.")]
+    [Arguments("intentRouterDefinitionId", "\"\"", "'intentRouterDefinitionId' cannot be blank; send null to clear it.")]
+    [Arguments("defaultReasoningEffort", "\"\"", "'defaultReasoningEffort' cannot be blank; send null to clear it.")]
+    [Arguments("chatOutputCapMode", "\" \"", "'chatOutputCapMode' cannot be blank; send null to clear it.")]
+    [Arguments("updateChannel", "\"\"", "'updateChannel' cannot be blank; send null to clear it.")]
+    [Arguments("externalAccessProfile", "null", "'externalAccessProfile' cannot be cleared.")]
+    [Arguments("uiMode", "null", "'uiMode' cannot be cleared.")]
+    [Arguments("sandboxSecurityProfile", "null", "'sandboxSecurityProfile' cannot be cleared.")]
+    public async Task SaveNodeSettings_RefusedClearSignal_ReturnsBadRequestNamingTheWireField(string wireName, string jsonValue, string reasonFragment)
+    {
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = new StringContent($"{{\"{wireName}\":{jsonValue}}}", Encoding.UTF8, "application/json");
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var errors = document.RootElement.GetProperty("errors");
+        AssertEx.Equal(expected: 1, errors.GetArrayLength());
+        AssertEx.Equal(wireName, errors[0].GetProperty("name").GetString());
+        AssertEx.Contains(AssertEx.NotNull(errors[0].GetProperty("reason").GetString()), reasonFragment, StringComparison.Ordinal);
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>The chat timeout is stored as a plain number, so null resets it to the shipped default rather than storing null.</summary>
+    [Test]
+    public async Task SaveNodeSettings_NullChatTimeout_ResetsItToTheDefault()
+    {
+        var stored = new StoredNodeSettings
+        {
+            MaxMessageRequestTimeoutSeconds = 120
+        };
+        var nodeSettingsStore = NewSettingsStore(stored);
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest(), nameof(SaveNodeSettingsRequest.MaxMessageRequestTimeoutSeconds));
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+        await nodeSettingsStore.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
+                Persisted(mutate, stored).MaxMessageRequestTimeoutSeconds == StoredNodeSettings.DefaultMaxMessageRequestTimeoutSeconds),
+            Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>A null external-access switch counts as sent: it clears that switch to its default and restamps the profile.</summary>
+    [Test]
+    public async Task SaveNodeSettings_NullAutoCheckSwitch_ClearsItAndRestampsTheProfile()
+    {
+        var stored = new StoredNodeSettings
+        {
+            ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfileOffline,
+            AutoCheckApplicationUpdates = false,
+            AutoCheckRuntimeUpdates = false,
+            AutoProvisionFirstRunModel = false
+        };
+        var nodeSettingsStore = NewSettingsStore(stored);
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest(), nameof(SaveNodeSettingsRequest.AutoCheckApplicationUpdates));
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+        await nodeSettingsStore.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
+                Persisted(mutate, stored).AutoCheckApplicationUpdates == null
+                && Persisted(mutate, stored).AutoCheckRuntimeUpdates == false
+                && Persisted(mutate, stored).ExternalAccessProfile == StoredNodeSettings.ExternalAccessProfileCustom),
+            Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    ///     The null tracking records an explicit null and nothing else, registers once, and keeps a modifier the rest of the
+    ///     chain applies (FastEndpoints hands the host a modifier-wrapped resolver).
+    /// </summary>
+    [Test]
+    public void ExplicitNullTracking_RecordsOnlyAnExplicitNull_KeepsLaterModifiers_AndRegistersOnce()
+    {
+        AssertEx.True(ParseRequest("""{"ollamaEndpoint":null}""").Clears(nameof(SaveNodeSettingsRequest.OllamaEndpoint)));
+        AssertEx.False(ParseRequest("{}").Clears(nameof(SaveNodeSettingsRequest.OllamaEndpoint)));
+        AssertEx.False(ParseRequest("""{"ollamaEndpoint":"http://ollama.example:11434"}""").Clears(nameof(SaveNodeSettingsRequest.OllamaEndpoint)));
+        // A duplicate key: the last value wins, so a later value takes the clear back.
+        AssertEx.False(ParseRequest("""{"ollamaEndpoint":null,"ollamaEndpoint":"http://ollama.example:11434"}""")
+            .Clears(nameof(SaveNodeSettingsRequest.OllamaEndpoint)));
+
+        var chainModifierRan = false;
+        var wrapped = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            TypeInfoResolver = new DefaultJsonTypeInfoResolver().WithAddedModifier(typeInfo =>
+                chainModifierRan |= typeInfo.Type == typeof(SaveNodeSettingsRequest))
+        };
+        ConfigureServices.ConfigureJsonSerializerOptions(wrapped);
+        var parsed = AssertEx.NotNull(JsonSerializer.Deserialize<SaveNodeSettingsRequest>("""{"ollamaEndpoint":null}""", wrapped));
+        AssertEx.True(parsed.Clears(nameof(SaveNodeSettingsRequest.OllamaEndpoint)));
+        AssertEx.True(chainModifierRan);
+
+        // The FastEndpoints shape: a later modifier wrapper around the chain that already holds the tracking resolver.
+        var rewrapped = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        ConfigureServices.ConfigureJsonSerializerOptions(rewrapped);
+        rewrapped.TypeInfoResolver = rewrapped.TypeInfoResolver!.WithAddedModifier(static _ => { });
+        ConfigureServices.ConfigureJsonSerializerOptions(rewrapped);
+        AssertEx.True(AssertEx.NotNull(JsonSerializer.Deserialize<SaveNodeSettingsRequest>("""{"ollamaEndpoint":null}""", rewrapped))
+                              .Clears(nameof(SaveNodeSettingsRequest.OllamaEndpoint)));
+
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        ConfigureServices.ConfigureJsonSerializerOptions(options);
+        var once = options.TypeInfoResolverChain.Count;
+        ConfigureServices.ConfigureJsonSerializerOptions(options);
+        AssertEx.Equal(once, options.TypeInfoResolverChain.Count);
+    }
+
+    /// <summary>Deserializes a request body with the host's own JSON policy, so an explicit null is recorded as a clear.</summary>
+    private static SaveNodeSettingsRequest ParseRequest(string json)
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        ConfigureServices.ConfigureJsonSerializerOptions(options);
+        return AssertEx.NotNull(JsonSerializer.Deserialize<SaveNodeSettingsRequest>(json, options));
     }
 
     private static TestServerWebAppFactory CreateFactory(INodeSettingsStore nodeSettingsStore,

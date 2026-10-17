@@ -461,6 +461,23 @@ public sealed class ImageJobEndpointTests
     }
 
     [Test]
+    public async Task CreateImageJob_WhenNoSamplerWasStored_AnswersNullNotAnEmptyString()
+    {
+        var coordinator = new StubImageJobCoordinator
+        {
+            StoredSampler = string.Empty
+        };
+        await using var factory = NewFactory(coordinator);
+        using var client = factory.CreateClient();
+
+        var jobId = await CreateJobAsync(factory, client);
+        var page = await ReadJobPageAsync(factory, client, string.Empty);
+
+        var job = page.GetProperty("items").EnumerateArray().Single(item => item.GetProperty("id").GetGuid() == jobId);
+        AssertEx.Equal(JsonValueKind.Null, job.GetProperty("sampler").ValueKind);
+    }
+
+    [Test]
     public async Task CreateImageJob_WhenTheCoordinatorRejectsTheEdit_Returns400WithItsMessage()
     {
         var coordinator = new StubImageJobCoordinator
@@ -609,6 +626,9 @@ public sealed class ImageJobEndpointTests
         /// <summary>When set, every enqueue is refused with this message, as the coordinator's edit checks do.</summary>
         public string? Rejection { get; init; }
 
+        /// <summary>When set, the stored view carries this sampler instead of the requested one.</summary>
+        public string? StoredSampler { get; init; }
+
         public Task<Guid> EnqueueAsync(CreateImageJobInput input, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(input);
@@ -629,7 +649,7 @@ public sealed class ImageJobEndpointTests
                 Width = input.Width,
                 Height = input.Height,
                 Steps = input.Steps,
-                Sampler = input.Sampler ?? "euler_a",
+                Sampler = StoredSampler ?? input.Sampler ?? "euler_a",
                 CfgScale = input.CfgScale,
                 Status = ImageJobStatus.Queued,
                 CreatedAtUtc = 0,

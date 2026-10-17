@@ -18,6 +18,9 @@ using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Extraction;
 /// <remarks>Stateless and thread-safe, so it is safe to register as a singleton.</remarks>
 public sealed class DocumentTextExtractor : IDocumentTextExtractor
 {
+    // Fixed, content-free reason for a reader that threw: the exception type goes to the log only, never to the user.
+    internal const string UnreadableReason = "The file could not be read. It may be damaged or not a valid file of its type.";
+
     private readonly IReadOnlyDictionary<string, IngestionDocumentReader> _readersByExtension;
     private readonly int _maxOutputChars;
     private readonly int _maxStructuredOutputChars;
@@ -167,7 +170,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
                 Status = DocumentExtractionStatus.Failed,
                 Markdown = null,
                 ExtractedChars = null,
-                Error = string.Create(CultureInfo.InvariantCulture, $"Extraction failed ({exception.GetType().Name}).")
+                Error = UnreadableReason
             };
         }
     }
@@ -236,7 +239,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
             {
                 Status = DocumentExtractionStatus.Failed,
                 Document = null,
-                Error = string.Create(CultureInfo.InvariantCulture, $"Extraction failed ({exception.GetType().Name}).")
+                Error = UnreadableReason
             };
         }
     }
@@ -468,7 +471,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
 
     // Content-free reason surfaced when the PDF preflight's own PdfDocument.Open fails to parse the document. It stands
     // in for the reader's generic failure so a malformed PDF is NOT handed to the reader for a second full parse.
-    private const string PdfUnparseableReason = "The document could not be parsed.";
+    internal const string PdfUnparseableReason = "The document could not be parsed.";
 
     /// <summary>
     ///     Opens the PDF far enough to read its declared page count and rejects one past the page ceiling, before the

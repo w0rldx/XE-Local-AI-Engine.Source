@@ -135,6 +135,31 @@ public sealed class StartLiveTranscriptionSessionResponse
     public required long LastSeq { get; init; }
 }
 
+/// <summary>The JSON body of <c>POST transcription/dictation-sessions</c>; <c>{}</c> detects the language.</summary>
+public sealed class StartDictationSessionRequest
+{
+    /// <summary>
+    ///     The whisper language code to force, as a session's language override. Null or absent detects it per window,
+    ///     which flips short English commands to German for some speakers.
+    /// </summary>
+    public string? Language { get; init; }
+}
+
+/// <summary>
+///     What <c>POST transcription/dictation-sessions</c> answers: the live, persist-free session to subscribe to
+///     from <see cref="LastSeq" /> and push microphone audio into over the transcription hub.
+/// </summary>
+public sealed class StartDictationSessionResponse
+{
+    public required Guid SessionId { get; init; }
+
+    /// <summary>Unix milliseconds at which the session's lanes were registered.</summary>
+    public required long StartedAtUtc { get; init; }
+
+    /// <summary>Always zero: nothing is stored, so the subscription starts from an empty transcript.</summary>
+    public required long LastSeq { get; init; }
+}
+
 /// <summary>
 ///     The options a new session is created with. The title is decided here and never at upload time, so the file
 ///     flow sends the chosen file's name; a blank one falls back to a generated <c>Transcription {date}</c>.

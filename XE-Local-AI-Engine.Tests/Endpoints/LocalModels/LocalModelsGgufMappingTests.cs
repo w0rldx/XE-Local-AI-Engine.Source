@@ -63,6 +63,19 @@ public sealed class LocalModelsGgufMappingTests
         AssertEx.Equal(enforceable, response[0].ReasoningBudgetEnforceable);
     }
 
+    /// <summary>R1-07: an embedding or reranker GGUF generates no text, so its row carries no COMPLETION chip; a chat row keeps it.</summary>
+    [Test]
+    [Arguments("nomic-ai/nomic-embed-text-v1.5-GGUF:F16", "Embedding", "")]
+    [Arguments("gpustack/bge-reranker-v2-m3-GGUF:Q4_K_M", "Reranker", "")]
+    [Arguments("unsloth/Qwen3.5-9B-GGUF:Q4_K_M", "Chat", "completion")]
+    public void ToLlamaCppModelResponses_ListsCompletionOnlyForAModelThatGeneratesText(string modelName, string kind, string expected)
+    {
+        var response = LocalModelsMapper.ToLlamaCppModelResponses([Gguf(modelName, capabilities: ["completion"])], selectedModelName: null);
+
+        AssertEx.Equal(kind, response[0].Kind);
+        AssertEx.Equal(expected, string.Join(",", response[0].Capabilities));
+    }
+
     /// <summary>
     ///     The Models page renders family, parameter size and quant from the list response; a GGUF row showed "—" for
     ///     all three because the mapper dropped them. An undeclared value stays null, never a guess.

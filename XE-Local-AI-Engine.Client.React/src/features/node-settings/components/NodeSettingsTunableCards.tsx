@@ -27,6 +27,7 @@ import {
 	defaultReasoningEffortSelectValues,
 	type NodeSettingsFieldBounds,
 	type NodeSettingsFieldsForm,
+	type NodeSettingsModelOption,
 	shippedDefaults,
 } from "@/features/node-settings/models/NodeSettingsFieldsModel";
 
@@ -860,8 +861,13 @@ export function NodeSettingsRetentionCard({ bounds, ...field }: NodeSettingsTuna
 	);
 }
 
-// The graph-workflow, work-session and development limits. All seven apply after a node restart.
-export function NodeSettingsWorkspaceLimitsCard({ bounds, ...field }: NodeSettingsTunableCardProps) {
+// The graph-workflow, work-session and development limits. Those seven apply after a node restart; the two intent
+// settings beside them are read per request.
+export function NodeSettingsWorkspaceLimitsCard({
+	bounds,
+	intentRouterOptions,
+	...field
+}: NodeSettingsTunableCardProps & { readonly intentRouterOptions: readonly NodeSettingsModelOption[] }) {
 	const { t } = useTranslation();
 	const seconds = t("pages.nodeSettings.fields.seconds", "seconds");
 	return (
@@ -892,6 +898,38 @@ export function NodeSettingsWorkspaceLimitsCard({ bounds, ...field }: NodeSettin
 				bounds={bounds.tunables.graphWorkflowDefaultNodeTimeoutSeconds}
 				unit={seconds}
 				testId="node-settings-graph-workflow-node-timeout"
+			/>
+			<Select
+				label={nodeSettingsFieldLabel(
+					t,
+					"intentRouterDefinitionId",
+					t("pages.nodeSettings.fields.intentRouterDefinitionId.label", "Intent router workflow"),
+				)}
+				description={t(
+					"pages.nodeSettings.fields.intentRouterDefinitionId.description",
+					"The graph workflow that picks a workflow for a spoken or typed command when no alias matches.",
+				)}
+				data={[
+					{ value: "", label: t("pages.nodeSettings.fields.intentRouterDefinitionId.none", "None (aliases only)") },
+					...intentRouterOptions,
+				]}
+				value={field.form.intentRouterDefinitionId}
+				onChange={(value) => field.onChange("intentRouterDefinitionId", value ?? "")}
+				allowDeselect={false}
+				data-testid="node-settings-intent-router"
+			/>
+			<NodeSettingsNumberField
+				{...field}
+				field="intentMaxUtteranceAgeSeconds"
+				label={t("pages.nodeSettings.fields.intentMaxUtteranceAgeSeconds.label", "Maximum utterance age")}
+				description={t(
+					"pages.nodeSettings.fields.intentMaxUtteranceAgeSeconds.description",
+					"An older command is refused as a replay and has to be said again.",
+				)}
+				bounds={bounds.tunables.intentMaxUtteranceAgeSeconds}
+				unit={seconds}
+				shippedDefault={shippedDefaults.intentMaxUtteranceAgeSeconds}
+				testId="node-settings-intent-max-utterance-age"
 			/>
 			<NodeSettingsNumberField
 				{...field}

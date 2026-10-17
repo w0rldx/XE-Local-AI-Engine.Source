@@ -117,6 +117,11 @@ if [[ -n "${FAKE_SLEEP:-}" ]]; then
 fi
 [[ -n "${FAKE_NO_SUMMARY:-}" ]] && exit 1
 if [[ -n "${FAKE_ALL_SKIPPED:-}" ]]; then
+  # TUnit's TRX shape for a skip: the reason is the result's DebugTrace. Two of the three carry one.
+  [[ -z "${FAKE_SKIP_TRX:-}" ]] || printf '%s\n' '<UnitTestResult outcome="NotExecuted"><Output>' \
+    '<DebugTrace>Skipped: Live retrieval eval: set XE_RETRIEVAL_EVAL_SERVER first.</DebugTrace>' \
+    '</Output></UnitTestResult><UnitTestResult outcome="NotExecuted"><Output>' \
+    '<DebugTrace>Skipped: Needs a GPU &amp; CUDA</DebugTrace></Output></UnitTestResult>' >"$results/fake.trx"
   printf 'Test run summary: Passed!\n  total: 3\n  failed: 0\n  succeeded: 0\n  skipped: 3\n'
   exit 0
 fi
@@ -304,7 +309,8 @@ refute_grep '^arch-' "$TMP/arch-off.log"
 grep -Fq 'BACKEND GATE GREEN' <<<"$output"
 
 # --- gate history: one tab-separated line per run, appended, on every exit path ---
-# Arguments: the line count expected now, then the ten expected fields; "*" skips a field, "~re" is a regex.
+# Arguments: the line count expected now, then fields 0-8 and the exit field (always the last of twelve);
+# "*" skips a field, "~re" is a regex. reason= and skips= are checked by assert_reason.
 # HISTORY_FILE overrides the log read (the real-git fixture keeps its own).
 assert_history() {
   local want_lines="$1" i want got file="${HISTORY_FILE:-$HISTORY}"; shift
@@ -312,14 +318,22 @@ assert_history() {
     || { echo "history has $(wc -l <"$file") lines, wanted $want_lines" >&2; cat "$file" >&2; exit 1; }
   local -a f
   IFS=$'\t' read -r -a f < <(tail -1 "$file")
-  [[ "$(tail -1 "$file" | awk -F'\t' '{print NF}')" -eq 10 ]] || { echo "history line is not 10 fields: $(tail -1 "$file")" >&2; exit 1; }
+  [[ "$(tail -1 "$file" | awk -F'\t' '{print NF}')" -eq 12 ]] || { echo "history line is not 12 fields: $(tail -1 "$file")" >&2; exit 1; }
   for ((i = 0; i < 10; i++)); do
     want="${*:i+1:1}"; got="${f[i]:-}"
+    (( i == 9 )) && got="${f[11]:-}"
     [[ "$want" == "*" ]] && continue
     if [[ "$want" == ~* ]]; then [[ "$got" =~ ${want#\~} ]] && continue
     elif [[ "$got" == "$want" ]]; then continue; fi
     echo "history field $i is '$got', wanted '$want': $(tail -1 "$file")" >&2; exit 1
   done
+}
+# The last line's reason= and skips= fields (10 and 11), exactly.
+assert_reason() {
+  local -a f
+  IFS=$'\t' read -r -a f < <(tail -1 "${HISTORY_FILE:-$HISTORY}")
+  [[ "${f[9]:-} ${f[10]:-}" == "reason=$1 skips=$2" ]] \
+    || { echo "history has '${f[9]:-} ${f[10]:-}', wanted 'reason=$1 skips=$2'" >&2; exit 1; }
 }
 history_lines() { if [[ -f "$HISTORY" ]]; then wc -l <"$HISTORY"; else echo 0; fi; }
 n="$(history_lines)"
@@ -329,21 +343,26 @@ run_gate history-green env
 # repository is not a git checkout, so the tip is "-"; NO_BUILD makes the scope no-build.
 assert_history $((n + 1)) '~^20[0-9]{2}-[0-9]{2}-[0-9]{2}T' "$FAKE_REAL" - Tests=7/0/0 Persistence=3/0/0 \
   Agent=3/0/0 Contracts=skipped scope=no-build '~^wall=[0-9]+$' exit=0
+assert_reason ok ''
 run_gate history-fail-fast env FAKE_ARCH_FAIL=1
 [[ "$status" -eq 1 ]]
 assert_history $((n + 2)) '*' "$FAKE_REAL" '*' Tests= Persistence= Agent= Contracts=skipped '*' '*' exit=1
+assert_reason fail-fast ''
 run_gate history-lock env FAKE_LOCK_EXIT=69
 [[ "$status" -eq 69 ]] || { echo "history-lock exited $status" >&2; exit 1; }
 assert_history $((n + 3)) '*' "$FAKE_REAL" '*' Tests= Persistence= Agent= Contracts= scope=no-build '*' exit=69
+assert_reason lock-timeout ''
 run_gate history-contract env FAKE_GIT_DIFF=$'scripts/dev-start.sh\n'
 assert_history $((n + 4)) '*' '*' '*' Tests=7/0/0 '*' '*' Contracts=5/0/0 '*' '*' exit=0
 run_gate history-void env XE_GATE_FAIL_FAST=0 FAKE_GUARD_EXIT=75
 [[ "$status" -eq 75 ]]
 assert_history $((n + 5)) '*' '*' '*' Tests=7/0/0 Persistence=3/0/0 Agent=3/0/0 '*' '*' '*' exit=75
+assert_reason contaminated ''
 # A wrapper that fails before it runs the gate (a usage error, exit 2) still leaves exactly one line.
 run_gate history-wrapper-usage env FAKE_LOCK_EXIT=2
 [[ "$status" -eq 2 ]] || { echo "history-wrapper-usage exited $status" >&2; exit 1; }
 assert_history $((n + 6)) '*' "$FAKE_REAL" '*' Tests= Persistence= Agent= Contracts= '*' '*' exit=2
+assert_reason setup ''
 # scope: full only for a run that built and ran every lane unsharded; otherwise the first that applies.
 run_gate history-scope-full env NO_BUILD=
 [[ "$status" -eq 0 ]] || { echo "history-scope-full exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
@@ -363,6 +382,7 @@ assert_history $((n + 12)) '*' '*' '*' '*' '*' '*' '*' scope=no-build '*' exit=0
 # A build that failed never ran: no-build, whatever was asked for.
 run_gate history-scope-build-red env NO_BUILD= FAKE_BUILD_EXIT=1
 assert_history $((n + 13)) '*' '*' '*' '*' '*' '*' '*' scope=no-build '*' exit=1
+assert_reason build ''
 # A contract lane the diff needed but an override or a runner suppressed is a bypass, not a full run;
 # Contracts= reads skipped either way, so only scope tells them apart.
 run_gate history-scope-contracts-skip env NO_BUILD= XE_GATE_CONTRACT_TESTS=skip FAKE_GIT_DIFF=$'scripts/dev-start.sh\n'
@@ -424,6 +444,7 @@ wait_status=$?
 set -e
 [[ "$wait_status" -eq 143 ]] || { echo "cancel while waiting exited $wait_status" >&2; cat "$TMP/lock-wait.out" >&2; exit 1; }
 assert_history $((n + 1)) '*' "$FAKE_REAL" '*' Tests= Persistence= Agent= Contracts= '*' '*' exit=143
+assert_reason killed ''
 
 # --- an inherited LANE_DIR is never the directory the exit trap deletes ---
 mkdir -p "$TMP/inherited-lane-dir"
@@ -457,6 +478,7 @@ run_gate flake-known env FAKE_FAILED_TEST='Flaky_Method(True)'
 grep -Fxq 'FAILED TEST: Flaky_Method(True) [KNOWN FLAKE: fixture flake note]' <<<"$output" \
   || { echo "known flake not annotated:" >&2; printf '%s\n' "$output" >&2; exit 1; }
 refute_grep -F 'BACKEND GATE GREEN' <<<"$output"
+assert_reason tests ''
 run_gate flake-unknown env FAKE_FAILED_TEST=Real_Failure
 [[ "$status" -eq 1 ]]
 grep -Fxq 'FAILED TEST: Real_Failure' <<<"$output"
@@ -807,6 +829,12 @@ run_gate all-skipped env FAKE_ALL_SKIPPED=1
 grep -Fq 'HOLLOW: all 3 tests skipped in XE-Local-AI-Engine.AI.Agent.Tests' <<<"$output"
 grep -Fq 'FAILED: XE-Local-AI-Engine.Client.Persistence.Tests(hollow)' <<<"$output"
 grep -Fq 'Skipped (all lanes): 6' <<<"$output"
+# A red lane is reason=tests; skips without a TRX reason are "unreported".
+assert_reason tests 'unreported:6'
+# With TUnit's TRX the reasons are slugged and grouped across lanes; the third skip of each lane has none.
+run_gate all-skipped-trx env FAKE_ALL_SKIPPED=1 FAKE_SKIP_TRX=1
+[[ "$status" -eq 1 ]] || { echo "all-skipped-trx run exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+assert_reason tests 'live-retrieval-eval-set:2,needs-a-gpu-amp-cuda:2,unreported:2'
 refute_grep -F 'BACKEND GATE GREEN' <<<"$output"
 
 # --- a failed Release build exits before any lane starts ---

@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
-/// <summary>What an integration trigger invokes. V1 has exactly one target kind (ADR 0008 Decision §2).</summary>
+/// <summary>What an integration trigger invokes (ADR 0008 Decision §2, amended 2026-10-15).</summary>
 public enum IntegrationTargetKind
 {
     /// <summary>A saved agent definition, run headless through the scheduler's <c>run-agent</c> shape.</summary>
-    Agent
+    Agent,
+
+    /// <summary>A saved graph workflow definition, started with origin <c>Integration</c>.</summary>
+    Graph
 }
 
 /// <summary>How a trigger maps incoming invocations onto <c>integration_sessions</c> rows.</summary>

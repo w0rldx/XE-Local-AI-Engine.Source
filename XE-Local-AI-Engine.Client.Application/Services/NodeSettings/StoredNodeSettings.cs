@@ -197,12 +197,6 @@ public sealed partial record StoredNodeSettings
 
     public const int MaxLlamaChatCacheRamMiB = 131072;
 
-    /// <summary>
-    ///     The request-only sentinel that resets <see cref="LlamaChatCacheRamMiB" /> to automatic (stored
-    ///     <see langword="null" />), because a <see langword="null" /> request member means "keep".
-    /// </summary>
-    public const int LlamaChatCacheRamMiBAuto = -1;
-
     /// <summary>Default CPU threads left free for the host; mirrors <c>LlamaServerLaunchPolicyOptions.CpuThreadReserve</c>.</summary>
     public const int DefaultLlamaCpuThreadReserve = 1;
 
@@ -259,6 +253,13 @@ public sealed partial record StoredNodeSettings
 
     public const int MaxWebFetchTimeoutSeconds = 120;
 
+    /// <summary>How old an intent utterance may be when it reaches the intent endpoint, in seconds.</summary>
+    public const int DefaultIntentMaxUtteranceAgeSeconds = 30;
+
+    public const int MinIntentMaxUtteranceAgeSeconds = 5;
+
+    public const int MaxIntentMaxUtteranceAgeSeconds = 600;
+
     /// <summary>Default cap on the text <c>web_fetch</c> returns, in characters (the former <c>WebFetchService.MaxContentChars</c>).</summary>
     public const int DefaultWebFetchMaxContentChars = 12_000;
 
@@ -271,12 +272,6 @@ public sealed partial record StoredNodeSettings
 
     /// <summary>Upper bound for each per-effort reasoning budget; the launched window narrows it further per turn.</summary>
     public const int MaxReasoningBudgetTokens = 131_072;
-
-    /// <summary>
-    ///     The request-only sentinel that resets a nullable numeric setting whose request member says "-1 resets to the
-    ///     default" (stored <see langword="null" />), because a <see langword="null" /> request member means "keep".
-    /// </summary>
-    public const int TokenSettingUnset = -1;
 
     /// <summary>Chat output-cap variant: cap the answer and say when it stopped at length (the shipped default).</summary>
     public const string ChatOutputCapModeCap = "cap";
@@ -1037,13 +1032,11 @@ public sealed partial record StoredNodeSettings
     public int? SpeculativeDraftGpuLayers { get; init; }
 
     /// <summary>
-    ///     Installed cross-encoder reranker model NAME for the knowledge-base search rerank stage
-    ///     (<c>KnowledgeBaseOptions.RerankerModelName</c>).
+    ///     Installed cross-encoder reranker model NAME for the knowledge-base search rerank stage.
     /// </summary>
     /// <remarks>
-    ///     <see langword="null" />/blank (default) leaves reranking OFF; a value enables it, resolved server-side to a
-    ///     rerank-role llama-server on the search path. Applies on the next node restart (seeded into the
-    ///     knowledge-base options at host build).
+    ///     <see langword="null" />/blank (default) falls back to <c>KnowledgeBase:RerankerModelName</c>, else reranking is
+    ///     OFF; a value enables it on a rerank-role llama-server. Read live per search, so a save applies on the next search.
     /// </remarks>
     public string? RerankerModelName { get; init; }
 
@@ -1244,6 +1237,12 @@ public sealed partial record StoredNodeSettings
 
     /// <summary>Time budget of one <c>web_fetch</c> or <c>web_search</c> call in seconds. Seed: 20. Read per call.</summary>
     public int? WebFetchTimeoutSeconds { get; init; }
+
+    /// <summary>The graph workflow the intent service asks when no alias matches; null routes on aliases alone. Read per request.</summary>
+    public Guid? IntentRouterDefinitionId { get; init; }
+
+    /// <summary>How old an intent utterance may be, in seconds; older ones are refused as replays. Seed: 30. Read per request.</summary>
+    public int? IntentMaxUtteranceAgeSeconds { get; init; }
 
     /// <summary>Cap on the readable text one <c>web_fetch</c> returns, in characters. Seed: 12000. Read per call.</summary>
     public int? WebFetchMaxContentChars { get; init; }

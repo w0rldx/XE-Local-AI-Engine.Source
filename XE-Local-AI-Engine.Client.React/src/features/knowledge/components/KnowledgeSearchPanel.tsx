@@ -1,12 +1,12 @@
-import { ActionIcon, Badge, Card, Group, Loader, Stack, Text, TextInput } from "@mantine/core";
-import { IconSearch } from "@tabler/icons-react";
+import { ActionIcon, Alert, Badge, Card, Group, Loader, Stack, Text, TextInput } from "@mantine/core";
+import { IconInfoCircle, IconSearch } from "@tabler/icons-react";
 import { type FormEvent, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { KnowledgeScoreBadge } from "@/core/ui/components/KnowledgeScoreBadge/KnowledgeScoreBadge";
 import { KnowledgeLastKnownGoodBadge } from "@/features/knowledge/components/KnowledgeLastKnownGoodBadge";
-import type { KnowledgeDocument } from "@/features/knowledge/models/KnowledgeModels";
+import type { KnowledgeDocument, KnowledgeSearchDegradation } from "@/features/knowledge/models/KnowledgeModels";
 import { knowledgeErrorMessage } from "@/features/knowledge/queries/KnowledgeErrorMessage";
 import type { UseKnowledgeSearchResult } from "@/features/knowledge/queries/useKnowledgeSearch";
 
@@ -14,6 +14,24 @@ interface KnowledgeSearchPanelProps {
 	readonly search: UseKnowledgeSearchResult;
 	readonly documents: readonly KnowledgeDocument[];
 }
+
+// One notice per degradation the last search ran under, so a cold reranker or a missing embedder never passes silently.
+interface DegradationNotice {
+	readonly key: string;
+	readonly fallback: string;
+}
+
+const DEGRADATION_NOTICES: Record<KnowledgeSearchDegradation, DegradationNotice> = {
+	LexicalOnly: {
+		key: "pages.knowledgeBase.search.degradation.lexicalOnly",
+		fallback: "The embedding model is unavailable, so these results come from keyword matching only.",
+	},
+	RerankerUnavailable: {
+		key: "pages.knowledgeBase.search.degradation.rerankerUnavailable",
+		fallback:
+			"The reranker is not ready yet, so results are in their unreranked order. It starts in the background; search again shortly.",
+	},
+};
 
 // Semantic-search probe: a query box + ranked hit list (title · section · score · snippet). Distinguishes the
 // three empty states — nothing searched yet, an in-flight search, and a resolved search with no hits. The parent
@@ -75,6 +93,24 @@ export function KnowledgeSearchPanel({ search, documents }: KnowledgeSearchPanel
 					)}
 				/>
 			) : null}
+
+			{!search.isSearching
+				? search.degradations.map((degradation) => {
+						// A value newer than this bundle has no notice text; skip it rather than throw while rendering.
+						const notice = (DEGRADATION_NOTICES as Partial<Record<string, DegradationNotice>>)[degradation];
+						return notice ? (
+							<Alert
+								key={degradation}
+								color="yellow"
+								variant="light"
+								icon={<IconInfoCircle size={16} />}
+								data-testid={`knowledge-search-degradation-${degradation}`}
+							>
+								{t(notice.key, notice.fallback)}
+							</Alert>
+						) : null;
+					})
+				: null}
 
 			{search.results.length > 0 ? (
 				<Stack gap="sm" data-testid="knowledge-search-results">

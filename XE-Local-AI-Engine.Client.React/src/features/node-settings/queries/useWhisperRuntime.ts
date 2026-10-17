@@ -10,7 +10,6 @@ import {
 	removeWhisperCppSourceBuildMutation,
 	startWhisperCppSourceBuildMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { sourceBuildPrerequisiteStaleTime, sourceBuildRequest } from "@/features/node-settings/models/SourceBuildModels";
 import {
 	toWhisperRuntimeStatus,
@@ -38,7 +37,7 @@ function invalidate(queryClient: ReturnType<typeof useQueryClient>, operationId:
 
 export function useWhisperRuntimeStatus(enabled = true) {
 	return useQuery({
-		...withResponseValidation(getTranscriptionRuntimeStatusOptions()),
+		...getTranscriptionRuntimeStatusOptions(),
 		select: toWhisperRuntimeStatus,
 		enabled,
 	});
@@ -46,7 +45,7 @@ export function useWhisperRuntimeStatus(enabled = true) {
 
 export function useWhisperSourceBuildPrerequisites(backend: WhisperSourceBackend, enabled = true) {
 	return useQuery({
-		...withResponseValidation(getWhisperCppSourceBuildPrerequisitesOptions({ query: { backend } })),
+		...getWhisperCppSourceBuildPrerequisitesOptions({ query: { backend } }),
 		select: toWhisperSourceBuildPrerequisites,
 		enabled,
 		staleTime: sourceBuildPrerequisiteStaleTime,
@@ -63,7 +62,7 @@ export function useWhisperSourceBuildPrerequisites(backend: WhisperSourceBackend
 export function useWhisperSourceBuildStatus(enabled = true) {
 	const queryClient = useQueryClient();
 	const query = useQuery({
-		...withResponseValidation(getWhisperCppSourceBuildStatusOptions()),
+		...getWhisperCppSourceBuildStatusOptions(),
 		select: toWhisperSourceBuildStatus,
 		enabled,
 		refetchInterval: (polled) => (polled.state.data?.isRunning === true ? 3_000 : false),
@@ -88,7 +87,7 @@ export function useStartWhisperSourceBuild() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async (draft: WhisperSourceBuildDraft) => {
-			const options = withResponseValidation(startWhisperCppSourceBuildMutation());
+			const options = startWhisperCppSourceBuildMutation();
 			return await options.mutationFn?.({ body: sourceBuildRequest(draft) }, undefined as never);
 		},
 		onSuccess: () =>
@@ -103,7 +102,7 @@ export function useCancelWhisperSourceBuild() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async () => {
-			const options = withResponseValidation(cancelWhisperCppSourceBuildMutation());
+			const options = cancelWhisperCppSourceBuildMutation();
 			// `accepted` is the contract's transport placeholder for an otherwise body-less POST; the server neither
 			// requires nor interprets it.
 			return await options.mutationFn?.({ body: { accepted: true } }, undefined as never);
@@ -116,7 +115,7 @@ export function useRemoveWhisperSourceBuild() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async () => {
-			const options = withResponseValidation(removeWhisperCppSourceBuildMutation());
+			const options = removeWhisperCppSourceBuildMutation();
 			return await options.mutationFn?.({ body: { accepted: true } }, undefined as never);
 		},
 		onSuccess: () =>
@@ -136,7 +135,7 @@ export function useEjectWhisperRuntime() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async () => {
-			const options = withResponseValidation(ejectTranscriptionRuntimeMutation());
+			const options = ejectTranscriptionRuntimeMutation();
 			return await options.mutationFn?.({ body: { accepted: true } }, undefined as never);
 		},
 		onSuccess: () => invalidate(queryClient, whisperRuntimeQueryIds.runtime),

@@ -1,7 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { deleteIntegrationSessionMutation, listIntegrationSessionsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toIntegrationSession } from "@/features/integrations/models/IntegrationMappers";
 import { type IntegrationSessionFilters, integrationPageSize } from "@/features/integrations/models/IntegrationModels";
 import { integrationInvalidationKey, integrationQueryIds } from "@/features/integrations/queries/useIntegrationTriggers";
@@ -16,16 +15,14 @@ export function useIntegrationSessions(
 	options: { readonly limit?: number; readonly offset?: number } = {},
 ) {
 	return useQuery({
-		...withResponseValidation(
-			listIntegrationSessionsOptions({
-				query: {
-					...(filters.triggerId === undefined ? {} : { triggerId: filters.triggerId }),
-					...(filters.status === undefined ? {} : { status: filters.status }),
-					limit: options.limit ?? integrationPageSize,
-					offset: options.offset ?? 0,
-				},
-			}),
-		),
+		...listIntegrationSessionsOptions({
+			query: {
+				...(filters.triggerId === undefined ? {} : { triggerId: filters.triggerId }),
+				...(filters.status === undefined ? {} : { status: filters.status }),
+				limit: options.limit ?? integrationPageSize,
+				offset: options.offset ?? 0,
+			},
+		}),
 		// The page bound is part of the query key, so page 2 starts empty; holding the previous page keeps `totalCount`
 		// non-zero and stops the pager's clamp from bouncing back to page 1 mid-request.
 		placeholderData: keepPreviousData,
@@ -41,7 +38,7 @@ export function useDeleteIntegrationSession() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(deleteIntegrationSessionMutation()),
+		...deleteIntegrationSessionMutation(),
 		onSuccess: async () => {
 			await queryClient.invalidateQueries({ queryKey: integrationInvalidationKey(integrationQueryIds.listSessions) });
 			// The executions the delete cascaded away are gone from that list too.

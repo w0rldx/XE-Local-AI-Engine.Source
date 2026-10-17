@@ -1,5 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import type { XeLocalAiEngineClientServicesTrainingDatasetsDatasetDefinitionBodyV1 as DatasetDefinitionBody } from "@/core/api/generated";
 import {
 	cancelTrainingDataset,
 	createTrainingDefinition,
@@ -15,9 +16,14 @@ import {
 	updateTrainingDefinition,
 	verifyToolMock,
 } from "@/core/api/generated";
-import type { XeLocalAiEngineClientServicesTrainingDatasetsDatasetDefinitionBodyV1 as DatasetDefinitionBody } from "@/core/api/generated";
-import { getToolCapableModelsOptions, listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { callWithResponseValidation, withResponseValidation } from "@/core/api/ResponseValidation";
+import {
+	getToolCapableModelsOptions,
+	listLocalModelsOptions,
+	listToolMocksQueryKey,
+	listTrainingDatasetsQueryKey,
+	listTrainingDefinitionsQueryKey,
+	listTrainingSamplesQueryKey,
+} from "@/core/api/generated/@tanstack/react-query.gen";
 import type {
 	SampleLabel,
 	SampleReviewState,
@@ -28,25 +34,17 @@ import type {
 } from "@/features/training/models/TrainingModels";
 import { toToolMock, toTrainingDataset, toTrainingDefinition, toTrainingSample } from "@/features/training/models/TrainingModels";
 
-// Server state for the training dataset surface. Calls the generated hey-api SDK directly through the shared
-// `callWithResponseValidation` bridge (the benchmarks pattern) so a hook can derive its poll cadence from the
-// already-mapped domain data.
-
-const trainingQueryKeys = {
-	definitions: ["training", "definitions"] as const,
-	datasets: ["training", "datasets"] as const,
-	samples: (datasetId: string, page: number, reviewState?: SampleReviewState) =>
-		["training", "datasets", datasetId, "samples", page, reviewState ?? "all"] as const,
-	mocks: ["training", "mocks"] as const,
-};
+// Server state for the training dataset surface. Calls the generated hey-api SDK directly (the benchmarks
+// pattern) so a hook can derive its poll cadence from the
+// already-mapped domain data. Cache keys are the generated `*QueryKey` ones.
 
 const generatingPollIntervalMs = 2_000;
 
 export function useTrainingDefinitions() {
 	return useQuery<TrainingDefinition[]>({
-		queryKey: trainingQueryKeys.definitions,
+		queryKey: listTrainingDefinitionsQueryKey(),
 		queryFn: async ({ signal }) => {
-			const { data } = await callWithResponseValidation(listTrainingDefinitions({ signal, throwOnError: true }));
+			const { data } = await listTrainingDefinitions({ signal });
 			return (data.items ?? []).map(toTrainingDefinition);
 		},
 	});
@@ -54,30 +52,24 @@ export function useTrainingDefinitions() {
 
 export function useTrainingDatasets() {
 	return useQuery<TrainingDataset[]>({
-		queryKey: trainingQueryKeys.datasets,
+		queryKey: listTrainingDatasetsQueryKey(),
 		// A generating dataset is the only reason to poll; the hub carries the fine-grained progress.
 		refetchInterval: (query) =>
 			query.state.data?.some((dataset) => dataset.status === "Generating") ? generatingPollIntervalMs : false,
 		queryFn: async ({ signal }) => {
-			const { data } = await callWithResponseValidation(listTrainingDatasets({ signal, throwOnError: true }));
+			const { data } = await listTrainingDatasets({ signal });
 			return (data.items ?? []).map(toTrainingDataset);
 		},
 	});
 }
 
 export function useTrainingSamples(datasetId: string | null, page: number, reviewState?: SampleReviewState) {
+	const request = { path: { datasetId: datasetId ?? "" }, query: { page, pageSize: 20, reviewState } };
 	return useQuery<{ items: TrainingSample[]; totalCount: number }>({
-		queryKey: trainingQueryKeys.samples(datasetId ?? "", page, reviewState),
+		queryKey: listTrainingSamplesQueryKey(request),
 		enabled: Boolean(datasetId),
 		queryFn: async ({ signal }) => {
-			const { data } = await callWithResponseValidation(
-				listTrainingSamples({
-					path: { datasetId: datasetId as string },
-					query: { page, pageSize: 20, reviewState },
-					signal,
-					throwOnError: true,
-				}),
-			);
+			const { data } = await listTrainingSamples({ ...request, signal });
 			return { items: (data.items ?? []).map(toTrainingSample), totalCount: data.totalCount ?? 0 };
 		},
 	});
@@ -85,29 +77,37 @@ export function useTrainingSamples(datasetId: string | null, page: number, revie
 
 export function useToolMocks() {
 	return useQuery<ToolMock[]>({
-		queryKey: trainingQueryKeys.mocks,
+		queryKey: listToolMocksQueryKey(),
 		queryFn: async ({ signal }) => {
-			const { data } = await callWithResponseValidation(listToolMocks({ signal, throwOnError: true }));
+			const { data } = await listToolMocks({ signal });
 			return (data.items ?? []).map(toToolMock);
 		},
 	});
+}
+
+/**
+ * The dataset list plus every dataset's sample pages (all pages and filters): the old `["training", "datasets"]` prefix
+ * scope. The sample review does not poll, so a cancel or generate that changes a dataset's samples must reach it here.
+ */
+function invalidateDatasets(queryClient: QueryClient): Promise<unknown> {
+	return Promise.all([
+		queryClient.invalidateQueries({ queryKey: listTrainingDatasetsQueryKey() }),
+		queryClient.invalidateQueries({ queryKey: [{ _id: "listTrainingSamples" }] }),
+	]);
 }
 
 export function useGenerateDataset() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async (input: { definitionId: string; expectedVersion: number; name: string }) => {
-			const { data } = await callWithResponseValidation(
-				generateTrainingDataset({
-					path: { definitionId: input.definitionId },
-					body: { expectedVersion: input.expectedVersion, name: input.name },
-					throwOnError: true,
-				}),
-			);
+			const { data } = await generateTrainingDataset({
+				path: { definitionId: input.definitionId },
+				body: { expectedVersion: input.expectedVersion, name: input.name },
+			});
 			return toTrainingDataset(data);
 		},
 		onSuccess: async () => {
-			await queryClient.invalidateQueries({ queryKey: trainingQueryKeys.datasets });
+			await invalidateDatasets(queryClient);
 		},
 	});
 }
@@ -129,8 +129,8 @@ const EXTERNAL_MODEL_ID_PREFIX = "ext:";
  * The same list feeds both the teacher and the critic picker (DefinitionEditorDialog), so one filter covers both.
  */
 export function useTeacherModelNames(): string[] {
-	const localModels = useQuery(withResponseValidation(listLocalModelsOptions()));
-	const toolCapable = useQuery(withResponseValidation(getToolCapableModelsOptions()));
+	const localModels = useQuery(listLocalModelsOptions());
+	const toolCapable = useQuery(getToolCapableModelsOptions());
 
 	const localNames = (localModels.data?.items ?? [])
 		.map((model) => model.modelName ?? "")
@@ -147,13 +147,11 @@ export function useCreateTrainingDefinition() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async (input: { name: string; body: DatasetDefinitionBody }) => {
-			const { data } = await callWithResponseValidation(
-				createTrainingDefinition({ body: { name: input.name, body: input.body }, throwOnError: true }),
-			);
+			const { data } = await createTrainingDefinition({ body: { name: input.name, body: input.body } });
 			return toTrainingDefinition(data);
 		},
 		onSuccess: async () => {
-			await queryClient.invalidateQueries({ queryKey: trainingQueryKeys.definitions });
+			await queryClient.invalidateQueries({ queryKey: listTrainingDefinitionsQueryKey() });
 		},
 	});
 }
@@ -162,17 +160,14 @@ export function useUpdateTrainingDefinition() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async (input: { definitionId: string; expectedVersion: number; name: string; body: DatasetDefinitionBody }) => {
-			const { data } = await callWithResponseValidation(
-				updateTrainingDefinition({
-					path: { definitionId: input.definitionId },
-					body: { expectedVersion: input.expectedVersion, name: input.name, body: input.body },
-					throwOnError: true,
-				}),
-			);
+			const { data } = await updateTrainingDefinition({
+				path: { definitionId: input.definitionId },
+				body: { expectedVersion: input.expectedVersion, name: input.name, body: input.body },
+			});
 			return toTrainingDefinition(data);
 		},
 		onSuccess: async () => {
-			await queryClient.invalidateQueries({ queryKey: trainingQueryKeys.definitions });
+			await queryClient.invalidateQueries({ queryKey: listTrainingDefinitionsQueryKey() });
 		},
 	});
 }
@@ -184,11 +179,10 @@ export function useDeleteTrainingDefinition() {
 			await deleteTrainingDefinition({
 				path: { definitionId: input.definitionId },
 				body: { expectedVersion: input.expectedVersion },
-				throwOnError: true,
 			});
 		},
 		onSuccess: async () => {
-			await queryClient.invalidateQueries({ queryKey: trainingQueryKeys.definitions });
+			await queryClient.invalidateQueries({ queryKey: listTrainingDefinitionsQueryKey() });
 		},
 	});
 }
@@ -200,11 +194,10 @@ export function useDeleteTrainingDataset() {
 			await deleteTrainingDataset({
 				path: { datasetId: input.datasetId },
 				body: { expectedVersion: input.expectedVersion },
-				throwOnError: true,
 			});
 		},
 		onSuccess: async () => {
-			await queryClient.invalidateQueries({ queryKey: trainingQueryKeys.datasets });
+			await invalidateDatasets(queryClient);
 		},
 	});
 }
@@ -214,10 +207,10 @@ export function useCancelTrainingDataset() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async (input: { datasetId: string }) => {
-			await cancelTrainingDataset({ path: { datasetId: input.datasetId }, throwOnError: true });
+			await cancelTrainingDataset({ path: { datasetId: input.datasetId } });
 		},
 		onSuccess: async () => {
-			await queryClient.invalidateQueries({ queryKey: trainingQueryKeys.datasets });
+			await invalidateDatasets(queryClient);
 		},
 	});
 }
@@ -232,20 +225,14 @@ export function useReviewTrainingSample() {
 			verb: "Approve" | "Reject" | "Relabel";
 			label?: SampleLabel;
 		}) => {
-			const { data } = await callWithResponseValidation(
-				reviewTrainingSample({
-					path: { datasetId: input.datasetId, sampleId: input.sampleId },
-					body: { verb: input.verb, label: input.label },
-					throwOnError: true,
-				}),
-			);
+			const { data } = await reviewTrainingSample({
+				path: { datasetId: input.datasetId, sampleId: input.sampleId },
+				body: { verb: input.verb, label: input.label },
+			});
 			return toTrainingSample(data);
 		},
-		onSuccess: async (_result, input) => {
-			await Promise.all([
-				queryClient.invalidateQueries({ queryKey: ["training", "datasets", input.datasetId, "samples"] }),
-				queryClient.invalidateQueries({ queryKey: trainingQueryKeys.datasets }),
-			]);
+		onSuccess: async () => {
+			await invalidateDatasets(queryClient);
 		},
 	});
 }
@@ -254,13 +241,11 @@ export function useVerifyToolMock() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async (input: { mockId: string; expectedVersion: number }) => {
-			const { data } = await callWithResponseValidation(
-				verifyToolMock({ path: { mockId: input.mockId }, body: { expectedVersion: input.expectedVersion }, throwOnError: true }),
-			);
+			const { data } = await verifyToolMock({ path: { mockId: input.mockId }, body: { expectedVersion: input.expectedVersion } });
 			return toToolMock(data);
 		},
 		onSuccess: async () => {
-			await queryClient.invalidateQueries({ queryKey: trainingQueryKeys.mocks });
+			await queryClient.invalidateQueries({ queryKey: listToolMocksQueryKey() });
 		},
 	});
 }
@@ -268,9 +253,7 @@ export function useVerifyToolMock() {
 export function useExportTrainingDataset() {
 	return useMutation({
 		mutationFn: async (input: { datasetId: string; format: "Jsonl" | "Hermes" }) => {
-			const { data } = await callWithResponseValidation(
-				exportTrainingDataset({ path: { datasetId: input.datasetId }, query: { format: input.format }, throwOnError: true }),
-			);
+			const { data } = await exportTrainingDataset({ path: { datasetId: input.datasetId }, query: { format: input.format } });
 			return { content: data.content ?? "", lineCount: data.lineCount ?? 0 };
 		},
 	});

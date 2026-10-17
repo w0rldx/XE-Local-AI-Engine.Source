@@ -53,6 +53,14 @@ public sealed class UpdateGraphWorkflowDefinitionRequestValidator : Validator<Up
         RuleFor(static request => request.Description)
             .MaximumLength(GraphWorkflowRequestLimits.MaxDescriptionLength)
             .WithMessage($"The description is longer than the {GraphWorkflowRequestLimits.MaxDescriptionLength}-character limit.");
+
+        // A present set names at least one source, each by its exact member name; an empty one would leave a workflow nothing can start.
+        RuleFor(static request => request.TriggerSources)
+            .NotEmpty()
+            .WithMessage("A workflow must accept at least one trigger source.")
+            .Must(static names => names!.All(static name => Enum.GetNames<GraphWorkflowTriggerSource>().Contains(name, StringComparer.Ordinal)))
+            .WithMessage($"Each trigger source must be one of: {string.Join(", ", Enum.GetNames<GraphWorkflowTriggerSource>())}.")
+            .When(static request => request.TriggerSources is not null);
     }
 }
 

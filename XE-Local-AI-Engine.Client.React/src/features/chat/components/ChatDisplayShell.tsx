@@ -53,6 +53,7 @@ export function ChatDisplayShell({
 	onToggleKnowledgeBase,
 	agentControlsAvailable = false,
 	agentModeEnabled = false,
+	conversationAgentBound = false,
 	selectedAgentId = "",
 	agentOptions = EMPTY_AGENT_OPTIONS,
 	commandOptions = EMPTY_COMMAND_OPTIONS,
@@ -293,6 +294,7 @@ export function ChatDisplayShell({
 					knowledgeBaseHasDocuments={knowledgeBaseHasDocuments}
 					agentControlsAvailable={agentControlsAvailable}
 					agentModeEnabled={agentModeEnabled}
+					conversationAgentBound={conversationAgentBound}
 					selectedAgentId={selectedAgentId}
 					agentOptions={agentOptions}
 					commandOptions={commandOptions}

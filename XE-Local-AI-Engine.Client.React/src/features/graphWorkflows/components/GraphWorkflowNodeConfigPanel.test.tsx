@@ -43,6 +43,8 @@ interface Handlers {
 	readonly onRename?: (to: string) => "ok" | "collision" | "invalid";
 	readonly onRemove?: () => void;
 	readonly graphSettings?: GraphWorkflowGraphSettings;
+	readonly tools?: typeof tools;
+	readonly allowsActions?: boolean;
 }
 
 function renderPanel(node: GraphWorkflowCanvasNodeData, handlers: Handlers = {}) {
@@ -54,7 +56,8 @@ function renderPanel(node: GraphWorkflowCanvasNodeData, handlers: Handlers = {})
 				onChange={handlers.onChange ?? vi.fn()}
 				onRename={handlers.onRename ?? (() => "ok")}
 				onRemove={handlers.onRemove ?? vi.fn()}
-				tools={tools}
+				tools={handlers.tools ?? tools}
+				allowsActions={handlers.allowsActions}
 				agentOptions={[
 					{ value: "agent-id", label: "Reviewer", requiresTools: true },
 					{ value: "plain-id", label: "Plain", requiresTools: false },
@@ -67,6 +70,24 @@ function renderPanel(node: GraphWorkflowCanvasNodeData, handlers: Handlers = {})
 				graphSettings={handlers.graphSettings}
 			/>
 		</ConfirmProvider>,
+	);
+}
+
+function StatefulStartPanel() {
+	const [node, setNode] = useState(() => defaultNodeData("Start", "start"));
+	return (
+		<ConfirmProvider>
+			<GraphWorkflowNodeConfigPanel
+				node={node}
+				issues={[]}
+				onChange={(patch) => setNode((current) => ({ ...current, ...patch }) as GraphWorkflowCanvasNodeData)}
+				onRename={() => "ok"}
+				onRemove={vi.fn()}
+				tools={tools}
+				agentOptions={[]}
+				modelOptions={[]}
+			/>
+		</ConfirmProvider>
 	);
 }
 
@@ -153,6 +174,21 @@ describe("GraphWorkflowNodeConfigPanel", () => {
 		expect(screen.getByTestId("gw-node-config-response-schema-error").textContent).toBe(
 			"Enter a JSON object schema, or leave it empty.",
 		);
+	});
+
+	it("adds a Start alias on Enter and names a duplicate that differs only in case and spacing", () => {
+		renderWithProviders(<StatefulStartPanel />);
+
+		// TagsInput commits on Enter only while its own combobox is open (Mantine 9.5.2), so open it first.
+		const aliases = screen.getByTestId("gw-node-config-aliases");
+		for (const alias of ["lights on", "Lights  ON"]) {
+			fireEvent.click(aliases);
+			fireEvent.change(aliases, { target: { value: alias } });
+			fireEvent.keyDown(aliases, { key: "Enter" });
+		}
+
+		expect(screen.getByText("lights on")).toBeTruthy();
+		expect(screen.getByText("An alias appears twice (case and spacing are ignored).")).toBeTruthy();
 	});
 
 	it("keeps LLM sampling overrides collapsed until requested", () => {
@@ -310,6 +346,62 @@ describe("GraphWorkflowNodeConfigPanel", () => {
 		fireEvent.click(screen.getByTestId("gw-node-config-binding-parameter-0"));
 
 		expect(await screen.findByRole("option", { name: "path", hidden: true })).toBeTruthy();
+	});
+
+	describe("an action tool (ADR 0021)", () => {
+		const config = en.pages.graphWorkflows.config;
+		const lights = {
+			name: "custom__lights",
+			description: "Turns the lights on.",
+			parameterSchema: '{"type":"object","properties":{}}',
+			requiresAllowedUrls: false,
+			isAction: true,
+		};
+		const withAction = [...tools, lights];
+		const actionNode = { ...defaultNodeData("Tool", "tool-1"), toolName: lights.name } as GraphWorkflowCanvasNodeData;
+
+		it("is offered disabled and labelled while the definition does not allow actions", async () => {
+			renderPanel(defaultNodeData("Tool", "tool-1"), { tools: withAction });
+
+			const input = screen.getByTestId("gw-node-config-tool");
+			fireEvent.click(input);
+			const dropdown = document.getElementById(input.getAttribute("aria-controls") ?? "");
+			const option = await within(dropdown as HTMLElement).findByRole("option", {
+				name: `${lights.name} · ${config.actionBadge}`,
+				hidden: true,
+			});
+
+			expect(option.hasAttribute("data-combobox-disabled")).toBe(true);
+			expect(screen.getByTestId("gw-node-config-tool-actions-disabled").textContent).toBe(config.actionsDisabledHint);
+		});
+
+		it("is pickable once the definition allows actions", async () => {
+			const onChange = vi.fn();
+			renderPanel(defaultNodeData("Tool", "tool-1"), { tools: withAction, allowsActions: true, onChange });
+
+			fireEvent.click(screen.getByTestId("gw-node-config-tool"));
+			fireEvent.click(await screen.findByRole("option", { name: `${lights.name} · ${config.actionBadge}`, hidden: true }));
+
+			expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ toolName: lights.name }));
+			expect(screen.queryByTestId("gw-node-config-tool-actions-disabled")).toBeNull();
+		});
+
+		it("on a node, shows the badge and the note, and the save gate's refusal while actions are not allowed", () => {
+			renderPanel(actionNode, { tools: withAction });
+
+			expect(screen.getByTestId("gw-node-config-tool-action-badge").textContent).toBe(config.actionBadge);
+			expect(screen.getByText(config.actionNote)).toBeTruthy();
+			expect(screen.getByTestId("gw-node-config-tool-action-refused").textContent).toBe(
+				`Tool '${lights.name}' is an action with a side effect, so this node needs 'Allow actions' on this definition.`,
+			);
+		});
+
+		it("on a node of a definition that allows actions, shows no refusal", () => {
+			renderPanel(actionNode, { tools: withAction, allowsActions: true });
+
+			expect(screen.getByTestId("gw-node-config-tool-action-badge")).toBeTruthy();
+			expect(screen.queryByTestId("gw-node-config-tool-action-refused")).toBeNull();
+		});
 	});
 
 	it("never offers Answer on a Pause: only a ChatInput takes it", () => {

@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     <see cref="KnowledgeCompanionReserve" /> tests: companions are summed at the gate's footprint, resident ones skipped only
@@ -204,9 +205,9 @@ public sealed class KnowledgeCompanionReserveTests
                 embeddingResolver,
                 Options.Create(new KnowledgeBaseOptions
                 {
-                    RerankerModelName = RerankerModelName,
                     EmbeddingProviderName = EmbeddingProviderName
                 }),
+                new StubNodeRuntimeSettings().WithRerankerModelName(RerankerModelName).Build(),
                 NullLogger<KnowledgeCompanionReserve>.Instance);
         }
 

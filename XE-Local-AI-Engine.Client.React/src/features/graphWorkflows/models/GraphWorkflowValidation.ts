@@ -653,12 +653,47 @@ export const nodeCommonSchema = z.object({
 		.optional(),
 });
 
+// Mirrors GraphWorkflowGraph.ParseAliases and GraphWorkflowIntentService.Normalize: whitespace collapsed, trailing
+// `.!? ` dropped, compared ignoring case.
+const MAX_ALIASES = 32;
+const MAX_ALIAS_LENGTH = 120;
+
+function normalizeAlias(alias: string): string {
+	return alias
+		.split(/\s+/)
+		.filter((word) => word.length > 0)
+		.join(" ")
+		.replace(/[.!? ]+$/, "");
+}
+
+const aliasesSchema = z.array(z.string()).superRefine((aliases, context) => {
+	if (aliases.length > MAX_ALIASES) {
+		context.addIssue({ code: "custom", message: messageKey("aliases", "tooMany") });
+		return;
+	}
+	const seen = new Set<string>();
+	for (const alias of aliases) {
+		const trimmed = alias.trim();
+		const normalized = normalizeAlias(trimmed).toLowerCase();
+		if (trimmed.length === 0 || trimmed.length > MAX_ALIAS_LENGTH || normalized.length === 0) {
+			context.addIssue({ code: "custom", message: messageKey("aliases", "invalid") });
+			return;
+		}
+		if (seen.has(normalized)) {
+			context.addIssue({ code: "custom", message: messageKey("aliases", "duplicate") });
+			return;
+		}
+		seen.add(normalized);
+	}
+});
+
 export const startConfigSchema = z.object({
 	inputSchema: jsonObjectText("inputSchema"),
 	defaultInput: z
 		.string()
 		.nullable()
 		.refine((value) => parsesTo("json", value), { message: messageKey("defaultInput", "invalidJson") }),
+	aliases: aliasesSchema,
 });
 
 export const agentConfigSchema = z.object({

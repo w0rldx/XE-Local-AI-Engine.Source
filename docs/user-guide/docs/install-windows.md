@@ -4,7 +4,7 @@
 what it needs.
 
 There is **no installer**. You download a ZIP file, unzip it, and run the program from the folder. To
-remove it later you delete that folder.
+remove it later, run the uninstall script it ships with. → [Removing it](#removing-it)
 
 ## Before you start — install .NET 10
 
@@ -299,7 +299,22 @@ menu.
 
 ## Removing it
 
-There is no uninstaller to run. Stop the app, then delete two folders:
+The app has no entry in Windows **Apps & features**. It ships an uninstall script instead:
+
+1. Open the folder you extracted, then its `current` folder.
+2. Right-click **`uninstall-xe-local-ai-engine.ps1`** → **Run with PowerShell**. Do not run it as administrator.
+3. The script stops the app and asks before it deletes your data folder. If the folder holds `node.key`, it asks a
+   second time: type `delete key` to confirm. Any other answer keeps everything. It deletes nothing, and says why,
+   when it cannot stop the app, when you extracted the app inside the data folder, or when the data folder is a link
+   to somewhere else.
+4. Delete the folder you extracted. The script tells you its path.
+
+To see what it would do without changing anything, run it from PowerShell with `-DryRun`. To stop the app but keep your
+data, use `-KeepData`.
+
+### Removing it by hand
+
+If the script will not run, stop the app, then delete two folders:
 
 1. **Stop the app** (**Quit XE** in the tray menu).
 2. **Delete the folder** you extracted, e.g. `C:\Apps\XE-Local-AI-Engine`.

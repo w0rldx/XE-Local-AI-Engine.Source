@@ -67,6 +67,8 @@ export interface NodeSettingsFieldsCardProps {
 	// All installed models offered as the knowledge-base reranker (reranker GGUFs are not a chat kind, so this list is
 	// not filtered to chat-capable models).
 	readonly rerankerModelOptions: readonly NodeSettingsModelOption[];
+	// Saved graph workflows offered as the intent router.
+	readonly intentRouterOptions: readonly NodeSettingsModelOption[];
 	// One-click download of the node's recommended reranker GGUF. The page owns the mutation + progress feed; this
 	// component only renders the button and reflects its pending / in-flight state.
 	readonly onDownloadRecommendedReranker: () => void;
@@ -205,7 +207,7 @@ export function NodeSettingsFieldsCard(props: NodeSettingsFieldsCardProps) {
 		case "workspaces":
 			return (
 				<>
-					<NodeSettingsWorkspaceLimitsCard {...tunable} />
+					<NodeSettingsWorkspaceLimitsCard {...tunable} intentRouterOptions={props.intentRouterOptions} />
 					{showDeveloperFields ? (
 						<NodeSettingsAgentWorkspacesCard form={form} bounds={bounds} errors={errors} onChange={onChange} />
 					) : (

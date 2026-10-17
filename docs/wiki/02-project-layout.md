@@ -24,15 +24,14 @@ The solution is an `.slnx` (XML-format) file, not a classic `.sln`. Source: `XE-
 
 | Solution folder | Contents |
 |---|---|
-| `/Src/` | The core product projects: AI agent, contracts, the Node Web Server (`Client`), its application layer (`Client.Application`), persistence, shared test fixtures, and the packaged Windows launcher. |
+| `/Src/` | The core product projects: AI agent, contracts, the Node Web Server (`Client`), its application layer (`Client.Application`), persistence, shared test fixtures, the packaged Windows launcher, the native desktop shell and the `xe` terminal client. |
 | `/Src/Aspire/` | `AppHost` (dev orchestration) and `ServiceDefaults` (shared telemetry/resilience). |
 | `/Src/Providers/` | All model/provider projects behind a shared abstraction. |
 | `/Tests/` | Unit + E2E test projects. |
 | `/Tests/Fixture/` | `Testing.FakeOllama`, `Testing.FakeDocker` and `Testing.FakeOpenAiGateway` test fixtures. |
 
-Two `.csproj` files on disk are intentionally **not** in `XE-Local-AI-Engine.slnx`:
+One `.csproj` file on disk is intentionally **not** in `XE-Local-AI-Engine.slnx`:
 
-- `XE-Local-AI-Engine.Client.Persistence.Tests/NegativeFence/...NegativeFence.csproj` — a compile-only "negative fence" guard project under the persistence tests folder (verified absent from `XE-Local-AI-Engine.slnx`).
 - `tools/AgentTemplateGenerator/AgentTemplateGenerator.csproj` — a standalone code/asset generator with its **own** `Directory.Build.props` so it escapes the repo-wide analyzer wall (`tools/AgentTemplateGenerator/Directory.Build.props`).
 
 One top-level folder holds source that is neither a project nor build tooling: `catalog/external-apps/` is the
@@ -56,6 +55,7 @@ Every project below is grounded in its `.csproj` (`Sdk=` / `OutputType` / `Proje
 | `XE-Local-AI-Engine.Client.Persistence` | `Microsoft.NET.Sdk` | EF Core + SQLite with selected per-column AEAD encryption. Owns the DbContexts, entities, every migration under `Client.Persistence/Migrations/` (that folder is the inventory — count it there; all but `InitialNodeChatSchema` and `AddNodeMessageLifecycleColumns` are timestamped), and the 2 model snapshots (`NodeIdentityDbContextModelSnapshot`, `NodeChatDbContextModelSnapshot`). References ASP.NET Identity EF Core + `Microsoft.EntityFrameworkCore.Sqlite` (design/tools `PrivateAssets`). References `Providers.Abstractions` (its only project reference). See [08-data-and-persistence.md](08-data-and-persistence.md). |
 | `XE-Local-AI-Engine.AI.Agent` | `Microsoft.NET.Sdk`, `net10.0` | Microsoft Agent Framework (MAF) + Microsoft.Extensions.AI (MEAI) wiring: agents, tools, playbooks, invocation and sessions. AgentHome itself is an application area (`Client.Application/Services/AgentHome/`), not part of this project. See [04-agent-mode.md](04-agent-mode.md). |
 | `XE-Local-AI-Engine.AI.Contracts` | `Microsoft.NET.Sdk` | Shared, dependency-free contract types — `Enums/`, `Events/` and `Telemetry/` (the pinned telemetry source names in `TelemetrySourceNames`). Referenced by both `Client` and `Client.Application` so transport DTOs/events are defined once. Note: despite the name this is an in-tree project, **not** a git submodule (no `.gitmodules` entry matches). |
+| `XE-Local-AI-Engine.Cli` | `Microsoft.NET.Sdk`, `Exe`, assembly `xe` | First-party terminal client. Attaches to a running node on the same host over the loopback REST API and the chat SignalR hub; it has no project references, so the hub records it reads are its own copies. Packages: `System.CommandLine`, `Spectre.Console`, `Microsoft.AspNetCore.SignalR.Client`. Published into the same payload directory as `Client` and `Desktop` (self-contained single file on Linux, framework-dependent apphost on Windows). See [Hosting & Deployment](11-hosting-and-deployment.md). |
 | `XE-Local-AI-Engine.WindowsLauncher` | `Microsoft.NET.Sdk`, `Exe` | Packaged Windows entry point. Runs `VelopackApp.Build().Run()` before application code, then launches the published `Client` host in desktop mode through `WindowsLauncherApplication`. It has no project references; the boundary is a child-process handoff rather than an assembly dependency. See [Hosting & Deployment](11-hosting-and-deployment.md). |
 
 ### Aspire (`/Src/Aspire/`)
@@ -92,12 +92,12 @@ Provider projects reference `Providers.Abstractions` and, for the two that speak
 | `XE-Local-AI-Engine.Tests` | `Exe`, MTP | Main unit suite. References `Client`, `WindowsLauncher`, `Desktop`, `Client.Application`, `Client.Testing`, `ServiceDefaults`, every concrete provider project (`Capabilities`, `CodexOAuth`, `HuggingFace`, `LlamaServer`, `Ollama`, `OpenAICompat`, `StableDiffusionCpp`, `Python`, `Training`, `WhisperCpp`), the leaf `OpenAICompatible.Core`, `Testing.FakeOllama`, `Testing.FakeDocker` and `Testing.FakeOpenAiGateway`. |
 | `XE-Local-AI-Engine.Tests.E2ETests` | `Exe`, MTP | End-to-end suite. References `Client`, `Client.Application`, `Client.Persistence`, `Providers.Abstractions`, `Providers.Ollama`, plus `Testing.FakeOllama` and `Client.Testing` fixtures. See [13-testing-and-validation.md](13-testing-and-validation.md). |
 | `XE-Local-AI-Engine.AI.Agent.Tests` | `Exe`, MTP | Unit suite scoped to `AI.Agent`. |
+| `XE-Local-AI-Engine.Cli.Tests` | `Exe`, MTP | Terminal client suite. References `Cli` and `Client.Testing`, so its integration tests drive a real in-process node through `TestServerWebAppFactory`. |
 | `XE-Local-AI-Engine.Client.Persistence.Tests` | `Exe`, MTP | Persistence/migration suite. References `Client.Application`, `Client.Persistence`, `Client`, `Providers.LlamaServer`. |
 | `XE-Local-AI-Engine.Client.Testing` | library | Reusable test fixtures/harness for `Client` + `Client.Application` (shared by E2E). |
 | `XE-Local-AI-Engine.Testing.FakeOllama` | library | In-memory fake Ollama server fixture so tests never hit a real model runtime. |
 | `XE-Local-AI-Engine.Testing.FakeDocker` | library | In-memory fake Docker Engine API server fixture (the subset of routes `DockerDotNetRuntimeClient` calls) so tests never need a real daemon for wire-shape coverage. |
 | `XE-Local-AI-Engine.Testing.FakeOpenAiGateway` | `Exe` | Loopback fake OpenAI-compatible gateway fixture (bearer and required-header checks, SSE, scripted tool calls, fault queue, request log); also runnable by hand with `dotnet run`. |
-| `...Client.Persistence.NegativeFence` | library, **not in slnx** | Compile-only negative-fence guard over `Client.Persistence`. |
 | `tools/AgentTemplateGenerator` | `Exe`, **not in slnx** | Standalone agent-template generator; own `Directory.Build.props`. |
 
 ## Dependency graph
@@ -126,6 +126,7 @@ Solid arrows are `ProjectReference` edges (verified from each `.csproj`).
 
 AppHost ──► Client            (orchestrates; not referenced back)
 WindowsLauncher ── child process ──► published Client executable
+Cli (xe) ── loopback REST + SignalR ──► a running Client node
 ```
 
 **Text fallback:** `Client` is the composition root. It references `Client.Application`, persistence,

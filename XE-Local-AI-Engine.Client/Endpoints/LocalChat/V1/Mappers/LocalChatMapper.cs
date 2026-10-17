@@ -21,6 +21,7 @@ internal static class LocalChatMapper
             Archived = conversation.Archived,
             BranchOfConversationId = conversation.BranchOfConversationId,
             SelectedPath = conversation.SelectedPath,
+            AgentDefinitionId = conversation.AgentDefinitionId,
             MemoryExcluded = conversation.MemoryExcluded,
             Messages = conversation.Messages.Select(static message => message.ToResponse()).ToArray()
         };
@@ -113,7 +114,8 @@ internal static class LocalChatMapper
             // Surface the persisted knowledge-base sources verbatim; null for legacy turns, non-knowledge turns, and
             // user messages. The DTO source records carry no transport-specific shape, so they pass through unchanged.
             Sources = message.Sources,
-            ContextWindow = message.ContextWindow is { } contextWindow ? ToResponse(contextWindow) : null
+            ContextWindow = message.ContextWindow is { } contextWindow ? ToResponse(contextWindow) : null,
+            FailureCategory = message.FailureCategory
         };
     }
 

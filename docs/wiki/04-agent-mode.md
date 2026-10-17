@@ -51,9 +51,14 @@ ToolInvocationObservabilityChatClient       // tool-call request/completion span
 provider client:
    ToolRelevanceChatClient                  // narrows the offered tools array, provider call only
       └─ ProviderCallBudgetChatClient       // per-round input budget + cumulative ceilings
-           └─ UseOpenTelemetry              // one gen_ai span per provider round
-                └─ base IChatClient
+           └─ SingleSystemMessageChatClient // folds ChatOptions.Instructions + leading system messages into one
+                └─ UseOpenTelemetry         // one gen_ai span per provider round
+                     └─ base IChatClient
 ```
+
+The fold exists because the OpenAI-shaped adapter sends `ChatOptions.Instructions` (the skill listing on
+the skills path) as a system message of its own ahead of the seed system prompt, and chat templates such
+as Qwen3.5's reject a second system message ("System message must be at the beginning").
 
 On the tool path the per-round hop order is unchanged. On the empty-offer path a turn skips FICC
 entirely: with nothing offered, FICC would otherwise answer a model's unsolicited function call with a
@@ -144,7 +149,7 @@ This covers the `ToolCategory` values the approval policy reads and what each on
 
 #### Custom Tools execution boundary
 
-This covers the operator-authored `HttpFetch` and `Command` tools: validation, secret masking, schema compilation and execution guards. See [the reference page](reference/04-ai-agent-runtime.md#custom-tools-execution-boundary).
+This covers the operator-authored `HttpFetch` and `Command` tools: validation, secret masking, schema compilation and execution guards, and the two unattended-use fields (`AllowUnattended` on a `Fixed` tool of either kind, the `privateHosts` LAN exception on `HttpFetch`). See [the reference page](reference/04-ai-agent-runtime.md#custom-tools-execution-boundary).
 
 ### 1.4 Single-agent invocation — `InvocationAgentFactory`
 
@@ -241,8 +246,8 @@ The service areas, their key types and responsibilities are tabled on the refere
 (`Services/Agents/Implementation/AgentDefinitionResolver.cs`) is the per-turn entry point:
 
 - **Unbound conversation ⇒ `null`** → the default persona (embedded prompt, full offer, version 1).
-- A binding to a **deleted** definition degrades to the default persona (logged) rather than failing
-  the turn — there is no FK on the conversation column by design.
+- A binding to a **deleted** definition degrades to the default persona (logged, and an `AgentUnavailable`
+  turn notice) rather than failing the turn — there is no FK on the conversation column by design.
 - The definition's **pinned `ModelProfile`** (when set) is the model the turn actually runs on, so the
   tool offer is gated by it, keeping capability-gating and runtime model consistent.
 
@@ -252,7 +257,9 @@ capability-gated offer. **Every other definition is intersected** down to its `A
 selected agent's offer is never widened beyond its allowed set, except by `ask_user` on an interactive turn
 and by the four work-session state tools inside a work-session step (§5.4). `spawn_subagent`, `run_python` and
 `run_in_agent_home` are opt-in only (they live in the *profile* pool, not the default offer), and a
-non-tool-capable model gets an **empty** offer before per-name gating. In chat that empty offer is not silent: a turn
+non-tool-capable model gets an **empty** offer before per-name gating. The composer's "Local tools" toggle gates only the
+node-wide offer (the Default Assistant and agents without a list), never an agent's own `AllowedToolNames`; the node-wide
+`EnableTools` setting and the model's tool support still gate everything. In chat that empty offer is not silent: a turn
 that asked for tools gets one `ToolsWithheld` notice naming the model ([Chat](05-chat.md)). `web_search` and `web_fetch` join the
 *default* offer only while the node's Web access setting is on, and for a model outside the trust boundary only while
 the `AllowCloudModelWebTools` Privacy switch is also on (MCP tools follow `AllowCloudModelMcpTools` the same way); a
@@ -359,6 +366,11 @@ The timeout ladder, the deliberate splits in it, context budgeting and `WithEffe
 `CoderWorkspaceReader` (`Services/Coder/Implementation/CoderWorkspaceReader.cs`) is the single read-only gateway behind
 `list_files`, `read_file` and `search_text`. All three are **provider** operations — `ISandboxRuntimeProvider.ListFilesAsync`,
 `ReadFileAsync` and `SearchTextAsync` — not argument vectors handed to `ExecuteAsync`.
+
+Inside a `CoderRepositoryScope` the three reads serve a Development repository instead of the AgentHome workspace. The
+work-session supervisor seeds that scope around a step of a development-workflow Agent node whose work item is bound to a
+project ([Dev Workflows, "Seeded templates"](25-dev-workflows.md)). The reads go through the same jail guards, applied with the repository root as the jail.
+`read_file` there also refuses everything the surveys suppress, `.git` included, and Agent Mode's switch does not gate them.
 
 Why provider operations replace argument vectors, the secret exclusions and the untrusted-content fencing are on the reference page. See [the reference page](reference/04-application-services.md#26-the-coder-reader).
 
@@ -521,11 +533,16 @@ The per-step event order, why stops never cancel the enumeration, and the per-sc
 `WorkerEventDispatcher` holds a `SemaphoreSlim(1, 1)` that *every* invocation takes, so a second
 admitted session buys queue depth, not parallelism — and **a running step delays the operator's own
 chat turn, every scheduled run and every benchmark until it finishes**. That is a node-wide behavioural
-consequence of shipping work sessions, not a page-local feature.
+consequence of shipping work sessions, not a page-local feature. A chat turn that queues behind a step says so
+with a `QueuedBehindWorkSession` turn notice (`WorkSessionSlotHolderNotice`), whose detail is the conversation
+that holds the slot.
 
-`MaxParkedSeconds` (default 300) is what bounds its worst case: a step that parks on an approval nobody
-answers is cancelled, the session is checkpointed and paused, and the unanswered prompt is recorded as
-an `OpenQuestion` finding so the next step re-asks it. The park itself is in-memory and survives neither
+A step parked on an approval or a question gives the slot back, like any parked turn (see
+[Chat](05-chat.md)), so a parked step no longer delays chat, scheduled runs or benchmarks.
+`MaxParkedSeconds` (default 300) bounds how long the session waits on the card, not how long the slot is
+held: a step that parks on an approval nobody answers is cancelled, the session is checkpointed and paused,
+and the unanswered prompt is recorded as an `OpenQuestion` finding so the next step re-asks it. A step
+whose card was answered and only waits to retake the slot is left running when the park clock fires. The park itself is in-memory and survives neither
 the timeout nor a restart; the finding is what makes the question durable. The checkpoint commits
 **before** the `Paused` status: a crash in that window reconciles to `Interrupted` off a valid
 checkpoint, where status-first would resume from a stale state block.

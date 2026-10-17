@@ -114,6 +114,40 @@ public sealed class UpdateCustomToolEndpointTests
         AssertEx.Equal(before, after.Version, "Toggling Enabled alone must not bump the version.");
     }
 
+    [Test]
+    public async Task Update_KeepsAllowUnattendedAndPrivateHostsAndDoesNotBumpVersionForTheFlag()
+    {
+        using var client = Factory.CreateClient();
+        var toolId = await CustomToolEndpointPayloads.CreateAsync(Factory, client, "update_unattended");
+        var before = await ReadVersionAsync(client, toolId);
+
+        using var response = await CustomToolEndpointPayloads.SendAsOperatorAsync(Factory,
+            client,
+            HttpMethod.Put,
+            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{toolId}",
+            CustomToolEndpointPayloads.HttpFetchDefinition("update_unattended", allowUnattended: true));
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var after = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<CustomToolView>(CustomToolEndpointPayloads.Json));
+        AssertEx.True(after.AllowUnattended, "An update must store the flag, not clear it.");
+        AssertEx.Equal(before, after.Version, "Toggling AllowUnattended alone must not bump the version.");
+
+        // A second, unrelated edit that carries the flag again keeps it set.
+        using var second = await CustomToolEndpointPayloads.SendAsOperatorAsync(Factory,
+            client,
+            HttpMethod.Put,
+            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{toolId}",
+            CustomToolEndpointPayloads.HttpFetchDefinition("update_unattended",
+                urlTemplate: "http://192.168.1.20/api",
+                allowUnattended: true,
+                privateHosts: ["192.168.1.20"]));
+
+        AssertEx.Equal(HttpStatusCode.OK, second.StatusCode);
+        var final = AssertEx.NotNull(await second.Content.ReadFromJsonAsync<CustomToolView>(CustomToolEndpointPayloads.Json));
+        AssertEx.True(final.AllowUnattended, "The flag survives a content edit.");
+        AssertEx.Equal("192.168.1.20", string.Join(",", AssertEx.NotNull(final.Http).PrivateHosts));
+    }
+
     private async Task<int> ReadVersionAsync(HttpClient client, Guid toolId)
     {
         using var response = await CustomToolEndpointPayloads.SendAsOperatorAsync(Factory,

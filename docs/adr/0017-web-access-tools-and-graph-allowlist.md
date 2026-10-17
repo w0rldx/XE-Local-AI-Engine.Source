@@ -20,7 +20,7 @@ the basis of ADR 0006's "nobody to ask" reasoning). Fetched web pages are the mo
 for exfiltration through a model-chosen URL (`docs/security/sandbox-threat-model.md` T5, AB4).
 
 A Python implementation (DDGS + Trafilatura in a uv environment) was considered and rejected: ADR 0005 scopes the uv runtime to
-Training, the `run_python` sandbox has no network, and the Python environments are Linux x86_64 only.
+Training, the `run_python` sandbox has no network, and the compute Python environment is Linux x64 and Windows x64 only (Training: Linux only).
 
 ## Decision
 
@@ -78,3 +78,13 @@ web tools", off by default). The same switch admits `HttpFetch` custom tools for
 stay withheld. The Web access setting, request consent and result review apply unchanged. Graph Tool nodes and their
 allowlist are unchanged. The operator took this decision on 2026-10-07 as part of the per-function cloud-model
 switches described in `docs/wiki/12-security-and-privacy.md`.
+
+## Amendment 2026-10-15: a second exception to the ReadLocal-only rule
+
+Decision item 6 calls the `web_fetch` allowlist "the single exception" to the `ReadLocal`-only Tool-node rule. Since
+[ADR 0021](0021-unattended-actions-in-graph-tool-nodes.md) it is one of two: a Tool node may also run a custom tool the
+operator flagged for unattended use, in a definition the operator flagged to allow actions, audited before the call
+and attempted once. That exception lives in ADR 0021. Nothing here changes: `web_fetch` stays GET-only, graph Agent
+nodes still get neither web tool, and private addresses stay blocked for `web_fetch` even when listed; the per-tool
+private-host list of ADR 0021 applies to flagged `HttpFetch` custom tools only. The operator took this decision on
+2026-10-15.

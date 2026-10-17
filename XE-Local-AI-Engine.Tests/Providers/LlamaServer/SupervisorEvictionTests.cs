@@ -9,9 +9,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Verifies that the shared idle-TTL evicts an unused process and a new distinct model is admitted by evicting the
-///     idle LRU; when the cap is full of <em>in-use</em> chat processes a new distinct model is rejected at start. An
-///     in-window but unleased POOLED (embedding/reranker) process, by contrast, yields its slot — otherwise the default
-///     cap (3 = the number of roles) plus background indexing hard-fails every chat model switch for a full TTL window.
+///     idle LRU; when the cap is full of <em>in-use</em> chat processes a new distinct model is rejected at start. Chat
+///     models and the companions (embedding/reranker) hold separate slots: each evicts only within its own class.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class SupervisorEvictionTests
@@ -217,31 +216,69 @@ public sealed class SupervisorEvictionTests
     }
 
     [Test]
-    public async Task EnsureRunning_CapFullOfInWindowRoles_ChatSpawnEvictsLruPooled_NotChat()
+    public async Task TwoResidentChatModels_ConsecutiveSearches_NeverEvictEitherCompanion()
+    {
+        // V-01: a 27B and a 9B chat model resident on the default cap of 3 used to leave one slot for the embedder and the reranker,
+        // so every knowledge search's embed and warm evicted the other companion and the reranker never stayed warm.
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        await using var supervisor = SupervisorFactory.Create(launcher, options: CapOf(cap: 3, TimeSpan.FromMinutes(15)), timeProvider: time);
+        await supervisor.EnsureRunningAsync("chat-27b", ModelRole.Chat, CancellationToken.None);
+        await supervisor.EnsureRunningAsync("chat-9b", ModelRole.Chat, CancellationToken.None);
+
+        // Each search embeds the query, then the background warm ensures the reranker.
+        for (var search = 0; search < 2; search++)
+        {
+            time.Advance(TimeSpan.FromSeconds(5));
+            await supervisor.EnsureRunningAsync("embed-model", ModelRole.Embedding, CancellationToken.None);
+            await supervisor.EnsureRunningAsync("rerank-model", ModelRole.Reranker, CancellationToken.None);
+        }
+
+        AssertEx.Equal(expected: 4, launcher.LaunchCount, "both companions launched once and were reused by the second search");
+        AssertEx.False(launcher.Handles.Any(handle => handle.WasTreeKilled), "no chat model or companion was evicted");
+    }
+
+    [Test]
+    public async Task ChatSpawnAtTheChatCap_NeverEvictsACompanion()
     {
         var launcher = new FakeProcessLauncher();
         var time = new AdvanceableTimeProvider();
-        var ttl = TimeSpan.FromMinutes(15);
-        await using var supervisor = SupervisorFactory.Create(launcher, options: CapOf(cap: 3, ttl), timeProvider: time);
-
-        // The default node shape: chat + embedding + reranker, all touched within the TTL window (background indexing
-        // keeps refreshing the pooled pair). Before pooled processes could yield, this made every chat model switch
-        // hard-fail with the cap error for up to a full TTL window.
-        await supervisor.EnsureRunningAsync("embed-model", ModelRole.Embedding, CancellationToken.None); // pooled LRU
-        time.Advance(TimeSpan.FromMinutes(1));
+        await using var supervisor = SupervisorFactory.Create(launcher, options: CapOf(cap: 1, TimeSpan.FromMinutes(15)), timeProvider: time);
+        await supervisor.EnsureRunningAsync("embed-model", ModelRole.Embedding, CancellationToken.None);
         await supervisor.EnsureRunningAsync("rerank-model", ModelRole.Reranker, CancellationToken.None);
-        time.Advance(TimeSpan.FromMinutes(1));
         await supervisor.EnsureRunningAsync("chat-a", ModelRole.Chat, CancellationToken.None);
         time.Advance(TimeSpan.FromMinutes(1));
 
-        // A chat model switch succeeds by evicting the least-recently-used pooled process.
-        await supervisor.EnsureRunningAsync("chat-b", ModelRole.Chat, CancellationToken.None);
+        // The only chat slot holds an in-window interactive chat process, which is never a victim; a companion frees no chat slot.
+        var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("chat-b", ModelRole.Chat, CancellationToken.None));
 
-        AssertEx.Equal(expected: 4, launcher.LaunchCount);
+        AssertEx.Contains(ex.Message, "maximum number of local models", StringComparison.OrdinalIgnoreCase);
+        AssertEx.Equal(expected: 3, launcher.LaunchCount);
+        AssertEx.False(launcher.Handles.Any(handle => handle.WasTreeKilled), "a chat load never evicts a companion");
+    }
+
+    [Test]
+    public async Task CompanionSpawnAtTheCompanionCap_EvictsTheLruCompanion_NeverAChatModel()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            options: CapOf(cap: 1, TimeSpan.FromMinutes(15), companionCap: 2),
+            timeProvider: time);
+        await supervisor.EnsureRunningAsync("chat-a", ModelRole.Chat, CancellationToken.None);
+        time.Advance(TimeSpan.FromMinutes(1));
+        await supervisor.EnsureRunningAsync("embed-model", ModelRole.Embedding, CancellationToken.None); // companion LRU
+        time.Advance(TimeSpan.FromMinutes(1));
+        await supervisor.EnsureRunningAsync("rerank-model", ModelRole.Reranker, CancellationToken.None);
+        time.Advance(TimeSpan.FromMinutes(1));
+
+        await supervisor.EnsureRunningAsync("embed-model-2", ModelRole.Embedding, CancellationToken.None);
+
         var handles = launcher.Handles.OrderBy(h => h.ProcessId).ToList();
-        AssertEx.True(handles[0].WasTreeKilled, "The LRU pooled (embedding) process yields its slot.");
-        AssertEx.False(handles[1].WasTreeKilled, "The newer pooled (reranker) process survives — LRU within the pooled rank.");
-        AssertEx.False(handles[2].WasTreeKilled, "An in-window chat process is never a capacity-eviction victim.");
+        AssertEx.Equal(expected: 4, handles.Count);
+        AssertEx.False(handles[0].WasTreeKilled, "the chat model holds its own slot");
+        AssertEx.True(handles[1].WasTreeKilled, "the least-recently-used companion yields");
+        AssertEx.False(handles[2].WasTreeKilled, "the newer companion survives");
     }
 
     [Test]
@@ -282,26 +319,33 @@ public sealed class SupervisorEvictionTests
     }
 
     [Test]
-    [Arguments(ModelResidencyIntent.Background, 1)]
-    [Arguments(ModelResidencyIntent.Interactive, 0)]
-    public async Task CapFullOfIdleChatAndInWindowPooled_OnlyABackgroundSpawnSparesTheChatProcess(ModelResidencyIntent intent, int victimIndex)
+    [Arguments(ModelResidencyIntent.Background, false)]
+    [Arguments(ModelResidencyIntent.Interactive, true)]
+    public async Task ChatCapFullOfAnIdleChat_OnlyAnInteractiveSpawnTakesIt_AndNeverTheEmbedder(ModelResidencyIntent intent, bool admitted)
     {
         var launcher = new FakeProcessLauncher();
         var time = new AdvanceableTimeProvider();
         var ttl = TimeSpan.FromMinutes(15);
-        await using var supervisor = SupervisorFactory.Create(launcher, options: CapOf(cap: 2, ttl), timeProvider: time);
+        await using var supervisor = SupervisorFactory.Create(launcher, options: CapOf(cap: 1, ttl), timeProvider: time);
 
-        // chat-a idles past its TTL (rank 0); the embedding process stays in-window (rank 1).
+        // chat-a idles past its TTL; the embedding process stays in-window in its own companion slot.
         await supervisor.EnsureRunningAsync("chat-a", ModelRole.Chat, CancellationToken.None);
         time.Advance(ttl + TimeSpan.FromMinutes(1));
         await supervisor.EnsureRunningAsync("embed-model", ModelRole.Embedding, CancellationToken.None);
 
-        await supervisor.EnsureRunningAsync("chat-b", ModelRole.Chat, intent, CancellationToken.None);
+        var spawn = supervisor.EnsureRunningAsync("chat-b", ModelRole.Chat, intent, CancellationToken.None);
+        if (admitted)
+        {
+            await spawn;
+        }
+        else
+        {
+            _ = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => spawn);
+        }
 
-        AssertEx.Equal(expected: 3, launcher.LaunchCount);
         var handles = launcher.Handles.OrderBy(h => h.ProcessId).ToList();
-        AssertEx.True(handles[victimIndex].WasTreeKilled, $"a {intent} spawn evicts process {victimIndex}");
-        AssertEx.False(handles[1 - victimIndex].WasTreeKilled, $"a {intent} spawn evicts exactly one process");
+        AssertEx.Equal(admitted, handles[0].WasTreeKilled, $"a {intent} spawn takes the idle chat model only when it is interactive");
+        AssertEx.False(handles[1].WasTreeKilled, "the embedder is never a chat spawn's victim");
     }
 
     // Chat model-a fills the only slot as a victim a user load would take: idle past its TTL, or in-window but transient.
@@ -318,28 +362,28 @@ public sealed class SupervisorEvictionTests
     }
 
     [Test]
-    public async Task EnsureRunning_CapFull_InWindowPooledButLeased_IsNotEvicted_UntilLeaseReleases()
+    public async Task EnsureRunning_CompanionCapFull_InWindowCompanionButLeased_IsNotEvicted_UntilLeaseReleases()
     {
         var launcher = new FakeProcessLauncher();
         var time = new AdvanceableTimeProvider();
         await using var supervisor = SupervisorFactory.Create(launcher,
-            options: CapOf(cap: 1, TimeSpan.FromMinutes(15)),
+            options: CapOf(cap: 1, TimeSpan.FromMinutes(15), companionCap: 1),
             timeProvider: time);
 
         await supervisor.EnsureRunningAsync("embed-model", ModelRole.Embedding, CancellationToken.None);
         var lease = supervisor.TryAcquireInferenceLease("embed-model", ModelRole.Embedding).Lease;
         AssertEx.NotNull(lease);
 
-        // A leased pooled process is mid-forward-pass — it must never be torn down to admit a newcomer.
-        var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("chat-b", ModelRole.Chat, CancellationToken.None));
+        // A leased companion is mid-forward-pass — it must never be torn down to admit another companion.
+        var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("rerank-model", ModelRole.Reranker, CancellationToken.None));
         AssertEx.Contains(ex.Message, "maximum number of local models", StringComparison.OrdinalIgnoreCase);
-        AssertEx.False(launcher.Handles.Single().WasTreeKilled, "A leased pooled process must never be a capacity-eviction victim.");
+        AssertEx.False(launcher.Handles.Single().WasTreeKilled, "A leased companion must never be a capacity-eviction victim.");
 
-        // Released but still in-window: the pooled process now yields (this is the new behavior under the role rank).
+        // Released but still in-window: the companion now yields to the other companion.
         lease!.Dispose();
-        await supervisor.EnsureRunningAsync("chat-b", ModelRole.Chat, CancellationToken.None);
+        await supervisor.EnsureRunningAsync("rerank-model", ModelRole.Reranker, CancellationToken.None);
         AssertEx.Equal(expected: 2, launcher.LaunchCount);
-        AssertEx.True(launcher.Handles.OrderBy(h => h.ProcessId).First().WasTreeKilled, "The unleased in-window pooled process yields once its lease releases.");
+        AssertEx.True(launcher.Handles.OrderBy(h => h.ProcessId).First().WasTreeKilled, "The unleased in-window companion yields once its lease releases.");
     }
 
     [Test]
@@ -594,11 +638,12 @@ public sealed class SupervisorEvictionTests
             "A crash must reach the header without waiting for the idle reaper's next pass.");
     }
 
-    private static LlamaServerSupervisorOptions CapOf(int cap, TimeSpan ttl)
+    private static LlamaServerSupervisorOptions CapOf(int cap, TimeSpan ttl, int companionCap = 2)
     {
         return new LlamaServerSupervisorOptions
         {
             MaxLoadedProcesses = cap,
+            MaxLoadedCompanionProcesses = companionCap,
             IdleTimeToLive = ttl,
             MaxRestartAttempts = 3
         };

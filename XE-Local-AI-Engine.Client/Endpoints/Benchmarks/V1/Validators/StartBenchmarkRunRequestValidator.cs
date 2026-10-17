@@ -14,5 +14,6 @@ public sealed class StartBenchmarkRunRequestValidator : Validator<StartBenchmark
     {
         this.AddFirstViolationRule(static request =>
             string.IsNullOrWhiteSpace(request.ModelName) ? "A primary model is required." : null);
+        ExpectedVersionRule.Require(this, static request => request.ExpectedProjectVersion, "expectedProjectVersion", "project");
     }
 }

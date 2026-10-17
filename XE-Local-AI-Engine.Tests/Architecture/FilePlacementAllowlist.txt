@@ -214,7 +214,6 @@ XE-Local-AI-Engine.Client/Endpoints/WorkSessions/V1/Validators/WorkSessionValida
 XE-Local-AI-Engine.Client/Hosting/DesktopBootstrap.cs|2
 XE-Local-AI-Engine.Client/Hosting/DesktopLaunch.cs|5
 XE-Local-AI-Engine.Client/Hubs/HubEventRelay.cs|4
-XE-Local-AI-Engine.Client/Program.cs|4
 XE-Local-AI-Engine.Client/Services/AppUpdate/IAppUpdateState.cs|4
 XE-Local-AI-Engine.Client/Services/AppUpdate/IVelopackUpdateManager.cs|5
 XE-Local-AI-Engine.Providers.Abstractions/Capabilities/IGpuModelLoadAdmission.cs|3

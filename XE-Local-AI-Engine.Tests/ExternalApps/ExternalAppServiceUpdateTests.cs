@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.ExternalApps;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -59,6 +60,30 @@ public sealed class ExternalAppServiceUpdateTests
         var after = AssertEx.NotNull(await harness.ReadAsync(row.Id));
         AssertEx.Equal(ExternalAppInstanceStatus.Running, after.Status);
         AssertEx.Equal(row.Version, after.Version);
+    }
+
+    /// <summary>
+    ///     Rc.3 decision D6: after an empty-catalog start a refresh that offers a newer version must not restart the
+    ///     instance into it. The preview says why and the update refuses with the same reason, before anything stops.
+    /// </summary>
+    [Test]
+    public async Task Update_AfterAnEmptyCatalogStart_IsRefusedWithTheRestartReasonAndStopsNothing()
+    {
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(Version2(),
+            startupSettings: new NodeStartupSettings
+            {
+                ExternalAppsAwaitingCatalog = true
+            });
+        var row = await harness.SeedAsync(Version1(), ExternalAppInstanceStatus.Running, ExternalAppDesiredState.Running);
+
+        var preview = await harness.Service.PreviewUpdateAsync(row.Id);
+        AssertEx.False(preview.CanUpdate);
+        AssertEx.Equal(ExternalAppBlockedReason.RestartRequired, preview.BlockedReason);
+
+        var refused = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => harness.Service.UpdateAsync(row.Id, row.Version, Command(Version2())));
+        AssertEx.Contains(refused.Message, nameof(ExternalAppBlockedReason.RestartRequired));
+        AssertEx.Equal(row.Version, AssertEx.NotNull(await harness.ReadAsync(row.Id)).Version, "A refused update writes nothing.");
+        AssertEx.Empty(harness.Runtime.StoppedGracePeriods, "Nothing was stopped.");
     }
 
     [Test]

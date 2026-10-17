@@ -13,14 +13,13 @@ import {
 	getTutorialStateQueryKey,
 	saveTutorialStateMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 
 const allowlistNoticeKey = "web-graph-allowlist-notice";
 
 function useAllowlistNotice() {
 	const queryClient = useQueryClient();
-	const state = useQuery(withResponseValidation(getTutorialStateOptions()));
-	const save = useMutation(withResponseValidation(saveTutorialStateMutation()));
+	const state = useQuery(getTutorialStateOptions());
+	const save = useMutation(saveTutorialStateMutation());
 	// Optimistic, so the list unlocks on the click; a failed save only means the notice shows once more next time.
 	const [acknowledgedHere, setAcknowledgedHere] = useState(false);
 	const stored = state.data?.entries?.some((entry) => entry.key === allowlistNoticeKey && entry.status === "completed") === true;

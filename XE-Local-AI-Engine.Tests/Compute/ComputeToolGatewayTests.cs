@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -383,6 +384,7 @@ public sealed class ComputeToolGatewayTests
 
         AssertEx.Contains(rendered, "run_python rejected");
         AssertEx.Contains(rendered, "isolate");
+        AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.TryGetCode(rendered), "a refusal must be logged as a failed call, not a success");
         AssertEx.False(environment.Requested, "a host without the boundary must not provision an interpreter it can never run");
         AssertEx.False(identity.Requested, "nothing about the node's identity is needed to refuse");
         AssertEx.Null(provider.CreateRequest, "a host that cannot isolate the filesystem must not get as far as creating a jail");
@@ -497,6 +499,193 @@ public sealed class ComputeToolGatewayTests
 
         AssertEx.Contains(rendered, "did not finish within 7s");
         AssertEx.Contains(rendered, "terminated");
+        AssertEx.Equal(ToolFailureText.TimeoutCode, ToolFailureText.TryGetCode(rendered), "a timed-out run must be logged as a timeout");
+    }
+
+    /// <summary>R7-06: a 2 GiB write came back as a bare exit 137 or 143 with no reason.</summary>
+    [Test]
+    [Arguments(137)]
+    [Arguments(143)]
+    public async Task ExecuteAsync_WhenTheSandboxKillsTheScript_NamesTheDiskOrMemoryLimit(int exitCode)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Skip.Test("Exit 137 is the POSIX SIGKILL convention; the Windows boundary reports kills differently.");
+        }
+
+        var provider = new RecordingSandboxProvider(Contained)
+        {
+            Result = Completed(exitCode, standardOutput: string.Empty, standardError: string.Empty)
+        };
+        var gateway = CreateGateway(provider);
+
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "open('big.bin','wb').write(b'0' * (1 << 31))"
+        });
+
+        AssertEx.Equal("resource_limit", ToolFailureText.TryGetCode(rendered));
+        AssertEx.Contains(rendered, "most likely at its disk or memory limit");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenTheDiskCeilingStopsTheScript_SaysDiskLimitNotTimeout()
+    {
+        var provider = new RecordingSandboxProvider(Contained)
+        {
+            Result = new SandboxCommandResult
+            {
+                ExecutionId = "x",
+                ExitCode = -1,
+                Completed = false,
+                StandardError = "Command exceeded the sandbox jail disk ceiling of 10 bytes and was terminated."
+            }
+        };
+        var gateway = CreateGateway(provider);
+
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "x"
+        });
+
+        AssertEx.Equal("resource_limit", ToolFailureText.TryGetCode(rendered));
+        AssertEx.Contains(rendered, "exceeded the sandbox disk limit");
+        AssertEx.False(rendered.Contains("did not finish within", StringComparison.Ordinal), "A disk-ceiling stop is not a timeout.");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenTheScriptExitsNonZero_IsStillAResultRatherThanAToolFailure()
+    {
+        var provider = new RecordingSandboxProvider(Contained)
+        {
+            Result = Completed(exitCode: 1, standardOutput: string.Empty, standardError: "Traceback\n")
+        };
+
+        var rendered = await CreateGateway(provider).ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "raise SystemExit(1)"
+        });
+
+        AssertEx.Null(ToolFailureText.TryGetCode(rendered), "the tool did its job; the script's own failure is the model's to read");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenThePreviewsSwitchIsTheMissingPiece_NamesItAndItsRemedy()
+    {
+        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy)
+        {
+            FilesystemIsolationUnavailableReason = SandboxContainment.ExecutionPreviewsDisabledReason
+        };
+
+        var rendered = await CreateGateway(provider).ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
+
+        AssertEx.Contains(rendered, "cannot isolate the compute sandbox filesystem (execution previews are disabled);");
+        AssertEx.Contains(rendered, "An operator can turn on execution previews in the Sandbox & isolation section of Node settings.");
+        AssertEx.False(rendered.Contains(SandboxBoundaryRemedy.ForThisHost(), StringComparison.Ordinal), "a known cause replaces the list of every possible one");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenAnotherCauseIsNamed_NamesItWithTheHostRemedy()
+    {
+        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy)
+        {
+            FilesystemIsolationUnavailableReason = "bwrap is not installed"
+        };
+
+        var rendered = await CreateGateway(provider).ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
+
+        AssertEx.Contains(rendered, "(bwrap is not installed);");
+        AssertEx.Contains(rendered, SandboxBoundaryRemedy.ForThisHost() + ".");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WithABaseInterpreter_RunsItWithTheVenvLauncherAsPyvenvLauncher()
+    {
+        var provider = new RecordingSandboxProvider(Contained);
+        var gateway = CreateGateway(provider, environment: new StubEnvironment("/venv/Scripts/python.exe", baseInterpreter: "/store/cpython/python.exe"));
+
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
+
+        var command = AssertEx.NotNull(provider.CommandRequest);
+        AssertEx.Equal("/store/cpython/python.exe", command.Executable, "the store interpreter, not uv's trampoline");
+        AssertEx.Equal("/venv/Scripts/python.exe", AssertEx.NotNull(command.Environment)["__PYVENV_LAUNCHER__"], "so sys.prefix stays the venv");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WithoutABaseInterpreter_SetsNoPyvenvLauncher()
+    {
+        var provider = new RecordingSandboxProvider(Contained);
+
+        _ = await CreateGateway(provider).ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
+
+        AssertEx.False(AssertEx.NotNull(AssertEx.NotNull(provider.CommandRequest).Environment).ContainsKey("__PYVENV_LAUNCHER__"));
+    }
+
+    [Test]
+    public async Task PreflightAsync_RefusesForEachNodeLevelGate_WithoutProvisioningOrCreatingAJail()
+    {
+        var environment = new StubEnvironment("/provisioned/python");
+        var disabled = new ComputeToolGateway(new RecordingSandboxProvider(Contained),
+            new StubIdentityProvider(),
+            environment,
+            Options.Create(new ComputeOptions()),
+            Options.Create(new LocalContainerOptions()),
+            Options.Create(new AgentToolPipelineOptions()),
+            SeededNodeRuntimeSettings.FromSeed("Compute:Enabled", value: false),
+            NullLogger<ComputeToolGateway>.Instance);
+        var uncontained = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy);
+        var unbounded = new RecordingSandboxProvider(Contained);
+
+        var disabledRefusal = await disabled.PreflightAsync();
+        var isolationRefusal = await CreateGateway(uncontained, environment: environment).PreflightAsync();
+        var profileRefusal = await CreateGateway(unbounded, environment: environment, runtimeSettings: HighProfileSettings()).PreflightAsync();
+
+        AssertEx.Equal(ComputeRefusalCodes.ComputeDisabled, AssertEx.NotNull(disabledRefusal).RefusalCode);
+        AssertEx.Equal(ComputeRefusalCodes.NoIsolation, AssertEx.NotNull(isolationRefusal).RefusalCode);
+        AssertEx.Equal(ComputeRefusalCodes.NoResourceLimits, AssertEx.NotNull(profileRefusal).RefusalCode);
+        AssertEx.False(environment.Requested, "a preflight never provisions");
+        AssertEx.Null(uncontained.CreateRequest, "a preflight never creates a jail");
+        AssertEx.Null(unbounded.CreateRequest);
+    }
+
+    [Test]
+    public void StripRealpathWarning_DropsOnlyTheLineNamingTheLaunchedInterpreter()
+    {
+        const string Interpreter = @"C:\store\pythons\cpython-3.13.15-windows-x86_64-none\python.exe";
+
+        AssertEx.Equal(string.Empty, ComputeToolGateway.StripRealpathWarning($"Failed to find real location of {Interpreter}\r\n", Interpreter),
+            "the CR/LF-terminated warning alone leaves stderr empty");
+        AssertEx.Equal("Traceback\nboom\n",
+            ComputeToolGateway.StripRealpathWarning($"failed to find real location of {Interpreter.ToUpperInvariant()}\nTraceback\nboom\n", Interpreter),
+            "matched ignoring case; every other line is kept");
+        AssertEx.Null(ComputeToolGateway.StripRealpathWarning(@"Failed to find real location of C:\other\python.exe" + "\n", Interpreter),
+            "a line naming a different path is the script's own output");
+        AssertEx.Null(ComputeToolGateway.StripRealpathWarning("Traceback\n", Interpreter));
+    }
+
+    [Test]
+    public async Task PreflightAsync_OnANodeThatCanRunTheTool_ReturnsNull_AndCreatesNothing()
+    {
+        var provider = new RecordingSandboxProvider(Contained);
+        var environment = new StubEnvironment("/provisioned/python");
+
+        var refusal = await CreateGateway(provider, environment: environment).PreflightAsync();
+
+        AssertEx.Null(refusal);
+        AssertEx.False(environment.Requested);
+        AssertEx.Null(provider.CreateRequest);
     }
 
     [Test]
@@ -694,14 +883,14 @@ public sealed class ComputeToolGatewayTests
     {
         var provider = new RecordingSandboxProvider(Contained);
         var gateway = CreateGateway(provider,
-            environment: new StubEnvironment(new ComputeEnvironmentException("The Python compute tool is available on Linux only.")));
+            environment: new StubEnvironment(new ComputeEnvironmentException("The Python compute tool is available on Linux x64 and Windows x64 only.")));
 
         var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
         {
             Code = "print(1)"
         });
 
-        AssertEx.Contains(rendered, "Linux only");
+        AssertEx.Contains(rendered, "Linux x64 and Windows x64 only");
         AssertEx.Null(provider.CreateRequest, "a failed provision must not create a jail");
     }
 
@@ -815,7 +1004,7 @@ public sealed class ComputeToolGatewayTests
 
         AssertEx.False(outcome.Ran, "a disabled node must not execute anything");
         AssertEx.Equal(ComputeRefusalCodes.ComputeDisabled, outcome.RefusalCode);
-        AssertEx.Contains(AssertEx.NotNull(outcome.RefusalMessage), "Compute:Enabled=false");
+        AssertEx.Contains(AssertEx.NotNull(outcome.RefusalMessage), "Turn on Compute tools in Node Settings");
         AssertEx.False(environment.Requested, "a disabled node must not provision an interpreter");
         AssertEx.Null(provider.CreateRequest, "and must not create a jail");
     }
@@ -956,7 +1145,7 @@ public sealed class ComputeToolGatewayTests
         // path and then drifting — which is the whole finding this boundary answers. Asserted against the source
         // rather than against behaviour: a duplicate read is invisible at runtime until the two disagree.
         //
-        // The allow-list is exactly two entries and both are stated. Anything else appearing here is a decision, not a
+        // The allow-list is short and every entry states why it is not an execution gate. Anything else appearing here is a decision, not a
         // tidy-up: it means some other code decided for itself whether this node may execute Python.
         var allowed = new HashSet<string>(StringComparer.Ordinal)
         {
@@ -971,7 +1160,12 @@ public sealed class ComputeToolGatewayTests
             Path.Combine("Services", "AgentHome", "Implementation", "AgentHomeService.cs"),
             // Not an execution gate: the Managed Python status reports a disabled node as Unsupported and refuses to
             // repair or remove its venv. Nothing it does runs a script; the gateway still decides that.
-            Path.Combine("Services", "ManagedPython", "ManagedPythonStatusService.cs")
+            Path.Combine("Services", "ManagedPython", "ManagedPythonStatusService.cs"),
+            // Not an execution gate: it withholds run_python from the model's offer while the switch is off, as the web
+            // and custom-tool switches withhold theirs (R4-05). A call that still arrives is refused by the gateway.
+            Path.Combine("Services", "Chat", "Implementation", "LocalToolOfferProvider.cs"),
+            // Not an execution gate: it flags a listed run_python withheld by the switch, for the turn notice.
+            Path.Combine("Services", "Agents", "Implementation", "AgentDefinitionResolver.cs")
         };
         var application = Path.Combine(RepositoryPaths.Root, "XE-Local-AI-Engine.Client.Application");
         var readers = new List<string>();
@@ -1060,11 +1254,12 @@ public sealed class ComputeToolGatewayTests
         private readonly ComputePythonRuntime _runtime;
         private int _leasesHeld;
 
-        public StubEnvironment(string interpreter, IReadOnlyList<string>? readOnlyTrees = null)
+        public StubEnvironment(string interpreter, IReadOnlyList<string>? readOnlyTrees = null, string? baseInterpreter = null)
         {
             _runtime = new ComputePythonRuntime
             {
                 InterpreterPath = interpreter,
+                BaseInterpreterPath = baseInterpreter,
                 ReadOnlyTrees = readOnlyTrees ?? ["/provisioned/compute-runtime/venv/.venv", "/provisioned/python/pythons"]
             };
         }
@@ -1184,6 +1379,8 @@ public sealed class ComputeToolGatewayTests
         public string ProviderName => "recording";
 
         public SandboxProviderCapabilities Capabilities { get; }
+
+        public string? FilesystemIsolationUnavailableReason { get; init; }
 
         public Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default)
         {

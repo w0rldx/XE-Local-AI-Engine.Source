@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Chat;
 
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1.Mappers;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -141,6 +142,16 @@ public sealed class LocalChatMapperPartsTests
         // Same property names on both sides: the serialized REST mirror equals the serialized DTO.
         AssertEx.Equal(JsonSerializer.Serialize(window, WebOptions), JsonSerializer.Serialize(response, WebOptions));
         AssertEx.Null(BuildMessage(null).ToResponse().ContextWindow);
+    }
+
+    [Test]
+    public void ToResponse_CarriesTheFailureCategory_AndLeavesItNullWhenAbsent()
+    {
+        AssertEx.Equal(FailureCategory.ModelLoadFailed, (BuildMessage(null) with
+        {
+            FailureCategory = FailureCategory.ModelLoadFailed
+        }).ToResponse().FailureCategory);
+        AssertEx.Null(BuildMessage(null).ToResponse().FailureCategory);
     }
 
     private static NodeChatPersistedMessageDto BuildMessage(IReadOnlyList<NodeChatMessagePart>? parts)

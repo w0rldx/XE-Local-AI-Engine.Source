@@ -1,9 +1,16 @@
-import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type Query, useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import type {
+	ListBenchmarkRunsResponse,
+	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyDraftDto as JudgePolicyDraft,
+	XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunBatchItem as StartBenchmarkRunBatchItem,
+	XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest as StartBenchmarkRunRequest,
+} from "@/core/api/generated";
 import {
 	cancelBenchmarkRun,
 	clearBenchmarkFidelityCache,
 	clearBenchmarkRunScore,
+	compareBenchmarkCells,
 	createBenchmarkProject,
 	createBenchmarkTaskItem,
 	deleteBenchmarkProject,
@@ -14,11 +21,9 @@ import {
 	getBenchmarkProject,
 	getBenchmarkRubricPresets,
 	getBenchmarkRun,
-	compareBenchmarkCells,
 	listBenchmarkCells,
 	listBenchmarkComparisons,
 	listBenchmarkProjects,
-	listBenchmarkRuns,
 	listBenchmarkTaskItems,
 	listEligibleBenchmarkModels,
 	rejudgeBenchmarkProject,
@@ -33,12 +38,20 @@ import {
 	updateBenchmarkProjectFidelity,
 	updateBenchmarkTaskItem,
 } from "@/core/api/generated";
-import type {
-	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyDraftDto as JudgePolicyDraft,
-	XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunBatchItem as StartBenchmarkRunBatchItem,
-	XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest as StartBenchmarkRunRequest,
-} from "@/core/api/generated";
-import { callWithResponseValidation } from "@/core/api/ResponseValidation";
+import {
+	compareBenchmarkCellsQueryKey,
+	getBenchmarkKldDiskEstimateQueryKey,
+	getBenchmarkPairwiseEstimateQueryKey,
+	getBenchmarkProjectQueryKey,
+	getBenchmarkRubricPresetsQueryKey,
+	getBenchmarkRunQueryKey,
+	listBenchmarkCellsQueryKey,
+	listBenchmarkComparisonsQueryKey,
+	listBenchmarkProjectsQueryKey,
+	listBenchmarkRunsInfiniteOptions,
+	listBenchmarkTaskItemsQueryKey,
+	listEligibleBenchmarkModelsQueryKey,
+} from "@/core/api/generated/@tanstack/react-query.gen";
 import type { BenchmarkCell, BenchmarkPairedDelta } from "@/features/benchmarks/models/BenchmarkCells";
 import { toBenchmarkCell, toBenchmarkPairedDelta } from "@/features/benchmarks/models/BenchmarkCells";
 import { isFidelityActive } from "@/features/benchmarks/models/BenchmarkFidelity";
@@ -55,15 +68,15 @@ import {
 } from "@/features/benchmarks/models/BenchmarkMappers";
 import type {
 	BenchmarkComparisonList,
-	BenchmarkProjectFidelityDraft,
 	BenchmarkEligibleModel,
-	BenchmarkPairwiseEstimate,
 	BenchmarkKvCacheType,
-	BenchmarkRepeatMode,
+	BenchmarkPairwiseEstimate,
 	BenchmarkProjectDetail,
 	BenchmarkProjectDraft,
+	BenchmarkProjectFidelityDraft,
 	BenchmarkProjectSummary,
 	BenchmarkRankCohort,
+	BenchmarkRepeatMode,
 	BenchmarkRubric,
 	BenchmarkRunDetail,
 	BenchmarkRunRef,
@@ -73,28 +86,15 @@ import { isJudgeActive } from "@/features/benchmarks/models/BenchmarkModels";
 import type { BenchmarkTaskItem, BenchmarkTaskItemDraft } from "@/features/benchmarks/models/BenchmarkTaskItems";
 import { pruneVerifierOverrides, toBenchmarkTaskItem } from "@/features/benchmarks/models/BenchmarkTaskItems";
 
-// Server state for the benchmarks surface. Calls the generated hey-api SDK fns DIRECTLY through the shared
-// `callWithResponseValidation` bridge (the same imperative pattern as useLoadedModels / the chat adapter) rather than
+// Server state for the benchmarks surface. Calls the generated hey-api SDK fns DIRECTLY (the same imperative
+// pattern as useLoadedModels / the chat adapter) rather than
 // the generated TanStack `*Options()` wrappers, because several hooks below derive their poll cadence from the
-// already-mapped domain data (`query.state.data`), which `select`-based options would not expose pre-mapping.
-
-const benchmarkQueryKeys = {
-	projects: ["benchmarks", "projects"] as const,
-	project: (id: string) => ["benchmarks", "projects", id] as const,
-	runs: (projectId: string) => ["benchmarks", "projects", projectId, "runs"] as const,
-	taskItems: (projectId: string) => ["benchmarks", "projects", projectId, "items"] as const,
-	cells: (projectId: string) => ["benchmarks", "projects", projectId, "cells"] as const,
-	cellComparison: (projectId: string, cellKeys: readonly string[]) =>
-		["benchmarks", "projects", projectId, "compare", [...cellKeys].sort().join("|")] as const,
-	run: (id: string) => ["benchmarks", "runs", id] as const,
-	/** The prefix every {@link benchmarkQueryKeys.run} entry sits under, for the rare change that touches runs it cannot name. */
-	runDetails: ["benchmarks", "runs"] as const,
-	models: (contextTokens?: number) => ["benchmarks", "eligible-models", contextTokens] as const,
-	kldEstimate: (projectId: string, chunks?: number) => ["benchmarks", "projects", projectId, "kld-estimate", chunks] as const,
-	comparisons: (projectId: string) => ["benchmarks", "projects", projectId, "comparisons"] as const,
-	pairwiseEstimate: (projectId: string) => ["benchmarks", "projects", projectId, "pairwise-estimate"] as const,
-	rubricPresets: ["benchmarks", "rubric-presets"] as const,
-};
+// already-mapped domain data (`query.state.data`), which `select`-based options would not expose pre-mapping. The
+// paged runs feed is the exception: it uses the generated `listBenchmarkRunsInfiniteOptions` and maps in `select`.
+//
+// Cache keys are the generated `*QueryKey` ones, so a partial key `[{ _id, path }]` matches every variant of one
+// endpoint. `projectScope` matches every query addressed to one project, whatever its endpoint.
+const projectScope = (projectId: string) => [{ tags: ["Benchmarks"], path: { projectId } }] as const;
 
 const activeRunPollIntervalMs = 2_000;
 /** The largest page the node serves: `ListBenchmarkRunsEndpoint` answers 400 above it, so this is a ceiling, not a taste. */
@@ -129,15 +129,19 @@ export const isRunActive = (run: Pick<BenchmarkRunSummary, "primaryStatus" | "ju
 	isJudgeActive(run.judge.state) ||
 	isFidelityActive(run.fidelity);
 
-function hasActiveRun(list: BenchmarkRunList | undefined): boolean {
-	return list?.items.some(isRunActive) ?? false;
+function toBenchmarkRunList(page: ListBenchmarkRunsResponse): BenchmarkRunList {
+	return {
+		items: (page.items ?? []).map(toBenchmarkRunSummary),
+		cohort: toBenchmarkRankCohort(page.rankCohort),
+		totalCount: page.totalCount ?? (page.items ?? []).length,
+	};
 }
 
 export function useBenchmarkProjects() {
 	return useQuery<BenchmarkProjectSummary[]>({
-		queryKey: benchmarkQueryKeys.projects,
+		queryKey: listBenchmarkProjectsQueryKey(),
 		queryFn: async ({ signal }) => {
-			const { data } = await callWithResponseValidation(listBenchmarkProjects({ signal, throwOnError: true }));
+			const { data } = await listBenchmarkProjects({ signal });
 			return (data.items ?? []).map(toBenchmarkProjectSummary);
 		},
 	});
@@ -145,12 +149,10 @@ export function useBenchmarkProjects() {
 
 export function useBenchmarkProject(projectId: string | null) {
 	return useQuery<BenchmarkProjectDetail>({
-		queryKey: benchmarkQueryKeys.project(projectId ?? ""),
+		queryKey: getBenchmarkProjectQueryKey({ path: { projectId: projectId ?? "" } }),
 		enabled: Boolean(projectId),
 		queryFn: async ({ signal }) => {
-			const { data } = await callWithResponseValidation(
-				getBenchmarkProject({ path: { projectId: projectId as string }, signal, throwOnError: true }),
-			);
+			const { data } = await getBenchmarkProject({ path: { projectId: projectId as string }, signal });
 			return toBenchmarkProjectDetail(data);
 		},
 	});
@@ -166,41 +168,36 @@ export function useBenchmarkProject(projectId: string | null) {
  * runs, and the alternative is showing the operator half of a 400-run matrix.
  */
 export function useBenchmarkRuns(projectId: string | null) {
+	// A numeric page param overrides `query.page`; the page size and `includeUnscored` come from the key.
+	const { queryKey, queryFn } = listBenchmarkRunsInfiniteOptions({
+		path: { projectId: projectId ?? "" },
+		query: { page: 1, pageSize: benchmarkRunsPageSize, includeUnscored: true },
+	});
 	const query = useInfiniteQuery({
-		queryKey: benchmarkQueryKeys.runs(projectId ?? ""),
+		queryKey,
+		queryFn,
 		enabled: Boolean(projectId),
 		initialPageParam: 1,
-		getNextPageParam: (lastPage: BenchmarkRunList, pages: BenchmarkRunList[]) => {
-			const loaded = pages.reduce((count, page) => count + page.items.length, 0);
+		getNextPageParam: (lastPage, pages) => {
+			const loaded = pages.reduce((count, page) => count + (page.items ?? []).length, 0);
 			// The empty-page guard is what stops a "load more" loop if the node ever reports a total it cannot serve.
-			return lastPage.items.length > 0 && loaded < lastPage.totalCount ? pages.length + 1 : undefined;
+			return (lastPage.items ?? []).length > 0 && loaded < toBenchmarkRunList(lastPage).totalCount ? pages.length + 1 : undefined;
 		},
-		refetchInterval: (query) => (query.state.data?.pages.some(hasActiveRun) ? activeRunPollIntervalMs : false),
-		queryFn: async ({ pageParam, signal }): Promise<BenchmarkRunList> => {
-			const { data } = await callWithResponseValidation(
-				listBenchmarkRuns({
-					path: { projectId: projectId as string },
-					query: { page: pageParam, pageSize: benchmarkRunsPageSize, includeUnscored: true },
-					signal,
-					throwOnError: true,
-				}),
-			);
-			return {
-				items: (data.items ?? []).map(toBenchmarkRunSummary),
-				cohort: toBenchmarkRankCohort(data.rankCohort),
-				totalCount: data.totalCount ?? (data.items ?? []).length,
-			};
-		},
+		refetchInterval: (query) =>
+			query.state.data?.pages.some((page) => toBenchmarkRunList(page).items.some(isRunActive)) ? activeRunPollIntervalMs : false,
 		// Flattened here so every consumer keeps seeing one ranked list and never the page machinery. Deduplicated by
 		// id, first occurrence winning: the store pages by OFFSET over a newest-first order, so a run started while two
 		// pages are loaded shifts every row down one and the next page re-serves the row that just left the previous
 		// one. Un-deduplicated that is a repeated React key and one real run hidden behind its own copy.
 		// simplified: keyset paging on (createdAtUtc, id) would remove the overlap itself rather than absorb it.
-		select: (data) => ({
-			items: [...new Map(data.pages.flatMap((page) => page.items).map((run) => [run.id, run])).values()],
-			cohort: (data.pages[0] as BenchmarkRunList).cohort,
-			totalCount: (data.pages[0] as BenchmarkRunList).totalCount,
-		}),
+		select: (data): BenchmarkRunList => {
+			const pages = data.pages.map(toBenchmarkRunList);
+			return {
+				items: [...new Map(pages.flatMap((page) => page.items).map((run) => [run.id, run])).values()],
+				cohort: (pages[0] as BenchmarkRunList).cohort,
+				totalCount: (pages[0] as BenchmarkRunList).totalCount,
+			};
+		},
 	});
 	// The promise is the caller's to ignore: a failed page read is already reported as the query's error state.
 	return { ...query, loadMore: query.fetchNextPage };
@@ -209,13 +206,13 @@ export function useBenchmarkRuns(projectId: string | null) {
 // Shared by the single-run hook and the N-run one so both read through ONE cache entry per run: the compare view, the
 // charts and the live pane all want the same run's detail, and three query keys for it would be three polls of it.
 const benchmarkRunDetailQuery = (runId: string) => ({
-	queryKey: benchmarkQueryKeys.run(runId),
+	queryKey: getBenchmarkRunQueryKey({ path: { runId } }),
 	// Case (c), active run only: the run hub streams into the live pane's overlay, never this cache, and the compare
 	// view and charts read it with no hub mounted; status, scores, judge and fidelity results land here by refetch alone.
 	refetchInterval: (query: { state: { data?: BenchmarkRunDetail } }) =>
 		query.state.data && isRunActive(query.state.data) ? activeRunPollIntervalMs : (false as const),
 	queryFn: async ({ signal }: { signal: AbortSignal }): Promise<BenchmarkRunDetail> => {
-		const { data } = await callWithResponseValidation(getBenchmarkRun({ path: { runId }, signal, throwOnError: true }));
+		const { data } = await getBenchmarkRun({ path: { runId }, signal });
 		return toBenchmarkRunDetail(data);
 	},
 });
@@ -240,11 +237,9 @@ export function useBenchmarkRunDetails(runIds: readonly string[]) {
 
 export function useEligibleBenchmarkModels(contextTokens?: number) {
 	return useQuery<BenchmarkEligibleModel[]>({
-		queryKey: benchmarkQueryKeys.models(contextTokens),
+		queryKey: listEligibleBenchmarkModelsQueryKey(contextTokens ? { query: { contextTokens } } : undefined),
 		queryFn: async ({ signal }) => {
-			const { data } = await callWithResponseValidation(
-				listEligibleBenchmarkModels({ query: contextTokens ? { contextTokens } : undefined, signal, throwOnError: true }),
-			);
+			const { data } = await listEligibleBenchmarkModels({ query: contextTokens ? { contextTokens } : undefined, signal });
 			return (data.items ?? []).map(toBenchmarkEligibleModel);
 		},
 	});
@@ -275,17 +270,17 @@ export interface BenchmarkKldDiskEstimate {
  */
 export function useBenchmarkKldDiskEstimate(projectId: string | null, chunks?: number, enabled = true) {
 	return useQuery<BenchmarkKldDiskEstimate>({
-		queryKey: benchmarkQueryKeys.kldEstimate(projectId ?? "", chunks),
+		queryKey: getBenchmarkKldDiskEstimateQueryKey({
+			path: { projectId: projectId ?? "" },
+			...(chunks === undefined ? {} : { query: { chunks } }),
+		}),
 		enabled: enabled && Boolean(projectId),
 		queryFn: async ({ signal }) => {
-			const { data } = await callWithResponseValidation(
-				getBenchmarkKldDiskEstimate({
-					path: { projectId: projectId as string },
-					...(chunks === undefined ? {} : { query: { chunks } }),
-					signal,
-					throwOnError: true,
-				}),
-			);
+			const { data } = await getBenchmarkKldDiskEstimate({
+				path: { projectId: projectId as string },
+				...(chunks === undefined ? {} : { query: { chunks } }),
+				signal,
+			});
 			return {
 				estimatedBytes: data.estimatedBytes ?? 0,
 				freeDiskBytes: data.freeDiskBytes ?? 0,
@@ -314,7 +309,7 @@ const pairwiseFitSignature = (list: BenchmarkComparisonList): string =>
  */
 export function useBenchmarkComparisons(projectId: string | null, enabled = true) {
 	const queryClient = useQueryClient();
-	const queryKey = benchmarkQueryKeys.comparisons(projectId ?? "");
+	const queryKey = listBenchmarkComparisonsQueryKey({ path: { projectId: projectId ?? "" } });
 	return useQuery<BenchmarkComparisonList>({
 		queryKey,
 		enabled: enabled && Boolean(projectId),
@@ -323,9 +318,7 @@ export function useBenchmarkComparisons(projectId: string | null, enabled = true
 				? activeRunPollIntervalMs
 				: false,
 		queryFn: async ({ signal }) => {
-			const { data } = await callWithResponseValidation(
-				listBenchmarkComparisons({ path: { projectId: projectId as string }, signal, throwOnError: true }),
-			);
+			const { data } = await listBenchmarkComparisons({ path: { projectId: projectId as string }, signal });
 			const list = toBenchmarkComparisonList(data);
 			// A pairwise project's scores and ranks are read out of the FIT, and this poll is the only thing watching for
 			// one: the runs list polls on run activity, which a pairwise judging leaves untouched, so it would keep showing
@@ -337,13 +330,11 @@ export function useBenchmarkComparisons(projectId: string | null, enabled = true
 			if (previous !== undefined && pairwiseFitSignature(previous) !== pairwiseFitSignature(list)) {
 				// Not awaited: the verdicts are already in hand and must not wait on a second round trip. A failed refresh
 				// is reported as that query's own error state, exactly as the paged `loadMore` above leaves it.
-				// `exact` on the project is load-bearing: its key is a PREFIX of this very query's key, so a prefix
-				// invalidation would refetch the comparisons too — and that refetch would see the same difference again
-				// and invalidate again, forever.
-				queryClient.invalidateQueries({ queryKey: benchmarkQueryKeys.runs(projectId as string) }).catch(() => undefined);
-				queryClient
-					.invalidateQueries({ queryKey: benchmarkQueryKeys.project(projectId as string), exact: true })
-					.catch(() => undefined);
+				// Never `projectScope` here: it matches this very query, whose refetch would see the same difference
+				// again and invalidate again, forever.
+				const path = { projectId: projectId as string };
+				queryClient.invalidateQueries({ queryKey: [{ _id: "listBenchmarkRuns", path }] }).catch(() => undefined);
+				queryClient.invalidateQueries({ queryKey: getBenchmarkProjectQueryKey({ path }) }).catch(() => undefined);
 			}
 			return list;
 		},
@@ -356,12 +347,10 @@ export function useBenchmarkComparisons(projectId: string | null, enabled = true
  */
 export function useBenchmarkPairwiseEstimate(projectId: string | null, enabled = true) {
 	return useQuery<BenchmarkPairwiseEstimate>({
-		queryKey: benchmarkQueryKeys.pairwiseEstimate(projectId ?? ""),
+		queryKey: getBenchmarkPairwiseEstimateQueryKey({ path: { projectId: projectId ?? "" } }),
 		enabled: enabled && Boolean(projectId),
 		queryFn: async ({ signal }) => {
-			const { data } = await callWithResponseValidation(
-				getBenchmarkPairwiseEstimate({ path: { projectId: projectId as string }, signal, throwOnError: true }),
-			);
+			const { data } = await getBenchmarkPairwiseEstimate({ path: { projectId: projectId as string }, signal });
 			return toBenchmarkPairwiseEstimate(data);
 		},
 	});
@@ -370,11 +359,11 @@ export function useBenchmarkPairwiseEstimate(projectId: string | null, enabled =
 /** The presets never change while the node runs, so they are read once and kept. */
 export function useBenchmarkRubricPresets(enabled: boolean) {
 	return useQuery<BenchmarkRubricPresets>({
-		queryKey: benchmarkQueryKeys.rubricPresets,
+		queryKey: getBenchmarkRubricPresetsQueryKey(),
 		enabled,
 		staleTime: Number.POSITIVE_INFINITY,
 		queryFn: async ({ signal }) => {
-			const { data } = await callWithResponseValidation(getBenchmarkRubricPresets({ signal, throwOnError: true }));
+			const { data } = await getBenchmarkRubricPresets({ signal });
 			return {
 				default: toBenchmarkRubric(data.default),
 				programming: toBenchmarkRubric(data.programming),
@@ -388,22 +377,22 @@ export function useBenchmarkRubricPresets(enabled: boolean) {
 
 // A run's DETAIL query polls only while that run is active, so a change made elsewhere (a project-wide judge change
 // or re-judge) can never be picked up by an open detail pane on its own: its cached copy says the run is finished, so
-// nothing schedules another read. Every mutation therefore names the runs it touched, not just the project.
+// nothing schedules another read. Every mutation therefore names the runs it touched.
+//
+// Everything else is the project list plus every project-addressed query of every project: details, runs, cells,
+// items (a freeze adds cells, an item edit unranks the answers to the old question), estimates and comparisons.
+const isProjectQuery = (query: Query): boolean => {
+	const key = query.queryKey[0] as { _id?: string; tags?: readonly string[]; path?: { projectId?: string } } | undefined;
+	return key?.tags?.includes("Benchmarks") === true && (key._id === "listBenchmarkProjects" || key.path?.projectId !== undefined);
+};
+
 function useBenchmarkInvalidation() {
 	const queryClient = useQueryClient();
-	return async (projectId?: string, ...runIds: readonly string[]): Promise<void> => {
-		await queryClient.invalidateQueries({ queryKey: benchmarkQueryKeys.projects });
-		if (projectId) {
-			await Promise.all([
-				queryClient.invalidateQueries({ queryKey: benchmarkQueryKeys.project(projectId) }),
-				queryClient.invalidateQueries({ queryKey: benchmarkQueryKeys.runs(projectId) }),
-				// The cell table and the item list are re-read for the same reason the runs are: a freeze adds cells, an
-				// item edit unranks the ones that answered the old question, and neither is visible in a run row alone.
-				queryClient.invalidateQueries({ queryKey: benchmarkQueryKeys.cells(projectId) }),
-				queryClient.invalidateQueries({ queryKey: benchmarkQueryKeys.taskItems(projectId) }),
-			]);
-		}
-		await Promise.all(runIds.map((runId) => queryClient.invalidateQueries({ queryKey: benchmarkQueryKeys.run(runId) })));
+	return async (...runIds: readonly string[]): Promise<void> => {
+		await queryClient.invalidateQueries({ predicate: isProjectQuery });
+		await Promise.all(
+			runIds.map((runId) => queryClient.invalidateQueries({ queryKey: getBenchmarkRunQueryKey({ path: { runId } }) })),
+		);
 	};
 }
 
@@ -440,12 +429,10 @@ export function useCreateBenchmarkProject() {
 	const invalidate = useBenchmarkInvalidation();
 	return useMutation({
 		mutationFn: async (draft: BenchmarkProjectDraft) => {
-			const { data } = await callWithResponseValidation(
-				createBenchmarkProject({ body: projectMutationBody(draft), throwOnError: true }),
-			);
+			const { data } = await createBenchmarkProject({ body: projectMutationBody(draft) });
 			return toBenchmarkProjectDetail(data);
 		},
-		onSuccess: (project) => invalidate(project.id),
+		onSuccess: () => invalidate(),
 	});
 }
 
@@ -461,16 +448,13 @@ export function useUpdateBenchmarkProject() {
 			expectedVersion: number;
 			draft: BenchmarkProjectDraft;
 		}) => {
-			const { data } = await callWithResponseValidation(
-				updateBenchmarkProject({
-					path: { projectId },
-					body: { ...projectMutationBody(draft), expectedVersion },
-					throwOnError: true,
-				}),
-			);
+			const { data } = await updateBenchmarkProject({
+				path: { projectId },
+				body: { ...projectMutationBody(draft), expectedVersion },
+			});
 			return toBenchmarkProjectDetail(data);
 		},
-		onSuccess: (project) => invalidate(project.id),
+		onSuccess: () => invalidate(),
 	});
 }
 
@@ -483,7 +467,7 @@ export function useUpdateBenchmarkProject() {
  * so this can never race the run queue. Nothing outside the benchmarks tables points at a project.
  *
  * The invalidation is deliberately `exact`, unlike every other mutation here: the shared {@link useBenchmarkInvalidation}
- * re-reads everything under `["benchmarks", "projects", id]`, and for a project that no longer exists that is a
+ * re-reads every project-addressed query, and for a project that no longer exists that is a
  * guaranteed 404 refetch of its own detail while the page still has it selected. Only the LIST is re-read; the page
  * controller then sees the project leave it and selects another one on its own. The deleted project's own entries are
  * dropped from the cache afterwards, once the refreshed list has already moved the selection off it.
@@ -492,17 +476,15 @@ export function useDeleteBenchmarkProject() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async ({ projectId, expectedVersion }: { projectId: string; expectedVersion: number }) => {
-			await callWithResponseValidation(
-				deleteBenchmarkProject({ path: { projectId }, body: { expectedVersion }, throwOnError: true }),
-			);
+			await deleteBenchmarkProject({ path: { projectId }, body: { expectedVersion } });
 		},
 		onSuccess: async (_, { projectId }) => {
-			await queryClient.invalidateQueries({ queryKey: benchmarkQueryKeys.projects, exact: true });
-			// Prefix removal: the project's detail, runs, task items, cells, comparisons and estimates all hang under
-			// this key. `inactive` only, because the page may not have re-rendered off the deleted project yet and
+			await queryClient.invalidateQueries({ queryKey: listBenchmarkProjectsQueryKey(), exact: true });
+			// Scope removal: the project's detail, runs, task items, cells, comparisons and estimates all carry its id
+			// in `path`. `inactive` only, because the page may not have re-rendered off the deleted project yet and
 			// removing a query that still has an observer makes it refetch — a guaranteed 404 for a project that is
 			// gone. What is still mounted becomes inactive on that re-render and is collected with the rest.
-			queryClient.removeQueries({ queryKey: benchmarkQueryKeys.project(projectId), type: "inactive" });
+			queryClient.removeQueries({ queryKey: projectScope(projectId), type: "inactive" });
 		},
 	});
 }
@@ -534,17 +516,14 @@ export function useUpdateBenchmarkJudgePolicy() {
 			policy: JudgePolicyDraft | null;
 			confirmRejudge: boolean;
 		}) => {
-			const { data } = await callWithResponseValidation(
-				updateBenchmarkJudgePolicy({
-					path: { projectId },
-					body: { policy, expectedVersion, confirmRejudge },
-					throwOnError: true,
-				}),
-			);
+			const { data } = await updateBenchmarkJudgePolicy({
+				path: { projectId },
+				body: { policy, expectedVersion, confirmRejudge },
+			});
 			const enqueuedRunIds = data.enqueuedRunIds ?? [];
 			return { project: toBenchmarkProjectDetail(data.project), enqueuedRunIds, enqueuedRunCount: enqueuedRunIds.length };
 		},
-		onSuccess: (change) => invalidate(change.project.id, ...change.enqueuedRunIds),
+		onSuccess: (change) => invalidate(...change.enqueuedRunIds),
 	});
 }
 
@@ -577,21 +556,18 @@ export function useUpdateBenchmarkProjectFidelity() {
 			draft: BenchmarkProjectFidelityDraft;
 			measureExisting: boolean;
 		}): Promise<BenchmarkFidelityChange> => {
-			const { data } = await callWithResponseValidation(
-				updateBenchmarkProjectFidelity({
-					path: { projectId },
-					body: {
-						expectedVersion,
-						fidelityEnabled: draft.fidelityEnabled,
-						fidelityKldEnabled: draft.fidelityKldEnabled,
-						// Omitted rather than null when unset, so an absent value means the node's default.
-						...(draft.fidelityChunks === null ? {} : { fidelityChunks: draft.fidelityChunks }),
-						fidelityKldBaseModelName: draft.fidelityKldBaseModelName,
-						measureExisting,
-					},
-					throwOnError: true,
-				}),
-			);
+			const { data } = await updateBenchmarkProjectFidelity({
+				path: { projectId },
+				body: {
+					expectedVersion,
+					fidelityEnabled: draft.fidelityEnabled,
+					fidelityKldEnabled: draft.fidelityKldEnabled,
+					// Omitted rather than null when unset, so an absent value means the node's default.
+					...(draft.fidelityChunks === null ? {} : { fidelityChunks: draft.fidelityChunks }),
+					fidelityKldBaseModelName: draft.fidelityKldBaseModelName,
+					measureExisting,
+				},
+			});
 			return { project: toBenchmarkProjectDetail(data.project), enqueuedCount: data.enqueuedCount ?? 0 };
 		},
 		// The refreshed runs carry their measurement as `queued`, which is what puts the list back on the two-second poll.
@@ -599,9 +575,9 @@ export function useUpdateBenchmarkProjectFidelity() {
 		// polling when the run went terminal — is reached by invalidating the run details as a family. Only when something
 		// was actually enqueued: a save that measured nothing must not sweep every open pane.
 		onSuccess: async (change) => {
-			await invalidate(change.project.id);
+			await invalidate();
 			if (change.enqueuedCount > 0) {
-				await queryClient.invalidateQueries({ queryKey: benchmarkQueryKeys.runDetails });
+				await queryClient.invalidateQueries({ queryKey: [{ _id: "getBenchmarkRun" }] });
 			}
 		},
 	});
@@ -611,13 +587,11 @@ export function useRejudgeBenchmarkProject() {
 	const invalidate = useBenchmarkInvalidation();
 	return useMutation({
 		mutationFn: async ({ projectId, expectedVersion }: { projectId: string; expectedVersion: number }) => {
-			const { data } = await callWithResponseValidation(
-				rejudgeBenchmarkProject({ path: { projectId }, body: { expectedVersion }, throwOnError: true }),
-			);
+			const { data } = await rejudgeBenchmarkProject({ path: { projectId }, body: { expectedVersion } });
 			const enqueuedRunIds = data.enqueuedRunIds ?? [];
 			return { project: toBenchmarkProjectDetail(data.project), enqueuedRunIds, enqueuedRunCount: enqueuedRunIds.length };
 		},
-		onSuccess: (change) => invalidate(change.project.id, ...change.enqueuedRunIds),
+		onSuccess: (change) => invalidate(...change.enqueuedRunIds),
 	});
 }
 
@@ -648,10 +622,10 @@ export function useStartBenchmarkRun() {
 				repeatMode,
 				...(repeatMode === "AnswerVariance" && answerVarianceTemperature !== null ? { answerVarianceTemperature } : {}),
 			};
-			const { data } = await callWithResponseValidation(startBenchmarkRun({ path: { projectId }, body, throwOnError: true }));
+			const { data } = await startBenchmarkRun({ path: { projectId }, body });
 			return toBenchmarkRunDetail(data);
 		},
-		onSuccess: (run) => invalidate(run.projectId, run.id),
+		onSuccess: (run) => invalidate(run.id),
 	});
 }
 
@@ -694,20 +668,17 @@ export function useStartBenchmarkRunBatch() {
 			repeatMode: BenchmarkRepeatMode;
 			answerVarianceTemperature: number | null;
 		}): Promise<BenchmarkBatchLaunch & { projectId: string }> => {
-			const { data } = await callWithResponseValidation(
-				startBenchmarkRunBatch({
-					path: { projectId },
-					body: {
-						expectedProjectVersion,
-						items,
-						repeatCount,
-						warmup,
-						repeatMode,
-						...(repeatMode === "AnswerVariance" && answerVarianceTemperature !== null ? { answerVarianceTemperature } : {}),
-					},
-					throwOnError: true,
-				}),
-			);
+			const { data } = await startBenchmarkRunBatch({
+				path: { projectId },
+				body: {
+					expectedProjectVersion,
+					items,
+					repeatCount,
+					warmup,
+					repeatMode,
+					...(repeatMode === "AnswerVariance" && answerVarianceTemperature !== null ? { answerVarianceTemperature } : {}),
+				},
+			});
 			return {
 				projectId,
 				startedRunIds: (data.started ?? []).flatMap((item) => item.runIds ?? []),
@@ -719,7 +690,7 @@ export function useStartBenchmarkRunBatch() {
 				})),
 			};
 		},
-		onSuccess: (result) => invalidate(result.projectId, ...result.startedRunIds),
+		onSuccess: (result) => invalidate(...result.startedRunIds),
 	});
 }
 
@@ -727,12 +698,10 @@ export function useCancelBenchmarkRun() {
 	const invalidate = useBenchmarkInvalidation();
 	return useMutation({
 		mutationFn: async ({ run, target }: { run: BenchmarkRunRef; target: "Primary" | "Judge" }) => {
-			const { data } = await callWithResponseValidation(
-				cancelBenchmarkRun({ path: { runId: run.id }, body: { target, expectedVersion: run.version }, throwOnError: true }),
-			);
+			const { data } = await cancelBenchmarkRun({ path: { runId: run.id }, body: { target, expectedVersion: run.version } });
 			return toBenchmarkRunDetail(data);
 		},
-		onSuccess: (run) => invalidate(run.projectId, run.id),
+		onSuccess: (run) => invalidate(run.id),
 	});
 }
 
@@ -740,12 +709,10 @@ export function useScoreBenchmarkRun() {
 	const invalidate = useBenchmarkInvalidation();
 	return useMutation({
 		mutationFn: async ({ run, score }: { run: BenchmarkRunRef; score: number }) => {
-			const { data } = await callWithResponseValidation(
-				scoreBenchmarkRun({ path: { runId: run.id }, body: { score, expectedVersion: run.version }, throwOnError: true }),
-			);
+			const { data } = await scoreBenchmarkRun({ path: { runId: run.id }, body: { score, expectedVersion: run.version } });
 			return toBenchmarkRunDetail(data);
 		},
-		onSuccess: (run) => invalidate(run.projectId, run.id),
+		onSuccess: (run) => invalidate(run.id),
 	});
 }
 
@@ -754,12 +721,10 @@ export function useClearBenchmarkRunScore() {
 	const invalidate = useBenchmarkInvalidation();
 	return useMutation({
 		mutationFn: async (run: BenchmarkRunRef) => {
-			const { data } = await callWithResponseValidation(
-				clearBenchmarkRunScore({ path: { runId: run.id }, body: { expectedVersion: run.version }, throwOnError: true }),
-			);
+			const { data } = await clearBenchmarkRunScore({ path: { runId: run.id }, body: { expectedVersion: run.version } });
 			return toBenchmarkRunDetail(data);
 		},
-		onSuccess: (run) => invalidate(run.projectId, run.id),
+		onSuccess: (run) => invalidate(run.id),
 	});
 }
 
@@ -767,12 +732,10 @@ export function useRejudgeBenchmarkRun() {
 	const invalidate = useBenchmarkInvalidation();
 	return useMutation({
 		mutationFn: async ({ run, force }: { run: BenchmarkRunRef; force: boolean }) => {
-			const { data } = await callWithResponseValidation(
-				rejudgeBenchmarkRun({ path: { runId: run.id }, body: { expectedVersion: run.version, force }, throwOnError: true }),
-			);
+			const { data } = await rejudgeBenchmarkRun({ path: { runId: run.id }, body: { expectedVersion: run.version, force } });
 			return toBenchmarkRunDetail(data);
 		},
-		onSuccess: (run) => invalidate(run.projectId, run.id),
+		onSuccess: (run) => invalidate(run.id),
 	});
 }
 
@@ -784,9 +747,9 @@ export function useStartBenchmarkRunFidelity() {
 	const invalidate = useBenchmarkInvalidation();
 	return useMutation({
 		mutationFn: async (run: BenchmarkRunRef) => {
-			await callWithResponseValidation(startBenchmarkRunFidelity({ path: { runId: run.id }, throwOnError: true }));
+			await startBenchmarkRunFidelity({ path: { runId: run.id } });
 		},
-		onSuccess: (_, run) => invalidate(run.projectId, run.id),
+		onSuccess: (_, run) => invalidate(run.id),
 	});
 }
 
@@ -798,9 +761,9 @@ export function useClearBenchmarkFidelityCache() {
 	const invalidate = useBenchmarkInvalidation();
 	return useMutation({
 		mutationFn: async (projectId: string) => {
-			await callWithResponseValidation(clearBenchmarkFidelityCache({ path: { projectId }, throwOnError: true }));
+			await clearBenchmarkFidelityCache({ path: { projectId } });
 		},
-		onSuccess: (_, projectId) => invalidate(projectId),
+		onSuccess: () => invalidate(),
 	});
 }
 
@@ -808,11 +771,9 @@ export function useDeleteBenchmarkRun() {
 	const invalidate = useBenchmarkInvalidation();
 	return useMutation({
 		mutationFn: async (run: BenchmarkRunRef) => {
-			await callWithResponseValidation(
-				deleteBenchmarkRun({ path: { runId: run.id }, body: { expectedVersion: run.version }, throwOnError: true }),
-			);
+			await deleteBenchmarkRun({ path: { runId: run.id }, body: { expectedVersion: run.version } });
 		},
-		onSuccess: (_, run) => invalidate(run.projectId, run.id),
+		onSuccess: (_, run) => invalidate(run.id),
 	});
 }
 
@@ -829,12 +790,10 @@ export interface BenchmarkTaskItemList {
 
 export function useBenchmarkTaskItems(projectId: string | null) {
 	return useQuery<BenchmarkTaskItemList>({
-		queryKey: benchmarkQueryKeys.taskItems(projectId ?? ""),
+		queryKey: listBenchmarkTaskItemsQueryKey({ path: { projectId: projectId ?? "" } }),
 		enabled: Boolean(projectId),
 		queryFn: async ({ signal }) => {
-			const { data } = await callWithResponseValidation(
-				listBenchmarkTaskItems({ path: { projectId: projectId as string }, signal, throwOnError: true }),
-			);
+			const { data } = await listBenchmarkTaskItems({ path: { projectId: projectId as string }, signal });
 			return {
 				items: (data.items ?? []).map(toBenchmarkTaskItem).sort((left, right) => left.index - right.index),
 				taskItemSetHash: data.taskItemSetHash ?? null,
@@ -869,16 +828,13 @@ export function useCreateBenchmarkTaskItem() {
 			expectedProjectVersion: number;
 			draft: BenchmarkTaskItemDraft;
 		}) => {
-			const { data } = await callWithResponseValidation(
-				createBenchmarkTaskItem({
-					path: { projectId },
-					body: { ...taskItemMutationBody(draft), expectedProjectVersion },
-					throwOnError: true,
-				}),
-			);
+			const { data } = await createBenchmarkTaskItem({
+				path: { projectId },
+				body: { ...taskItemMutationBody(draft), expectedProjectVersion },
+			});
 			return toBenchmarkTaskItem(data);
 		},
-		onSuccess: (_item, variables) => invalidate(variables.projectId),
+		onSuccess: () => invalidate(),
 	});
 }
 
@@ -895,16 +851,13 @@ export function useUpdateBenchmarkTaskItem() {
 			item: Pick<BenchmarkTaskItem, "id" | "version">;
 			draft: BenchmarkTaskItemDraft;
 		}) => {
-			const { data } = await callWithResponseValidation(
-				updateBenchmarkTaskItem({
-					path: { projectId, itemId: item.id },
-					body: { ...taskItemMutationBody(draft), expectedVersion: item.version },
-					throwOnError: true,
-				}),
-			);
+			const { data } = await updateBenchmarkTaskItem({
+				path: { projectId, itemId: item.id },
+				body: { ...taskItemMutationBody(draft), expectedVersion: item.version },
+			});
 			return toBenchmarkTaskItem(data);
 		},
-		onSuccess: (_item, variables) => invalidate(variables.projectId),
+		onSuccess: () => invalidate(),
 	});
 }
 
@@ -912,14 +865,11 @@ export function useDeleteBenchmarkTaskItem() {
 	const invalidate = useBenchmarkInvalidation();
 	return useMutation({
 		mutationFn: ({ projectId, item }: { projectId: string; item: Pick<BenchmarkTaskItem, "id" | "version"> }) =>
-			callWithResponseValidation(
-				deleteBenchmarkTaskItem({
-					path: { projectId, itemId: item.id },
-					body: { expectedVersion: item.version },
-					throwOnError: true,
-				}),
-			),
-		onSuccess: (_result, variables) => invalidate(variables.projectId),
+			deleteBenchmarkTaskItem({
+				path: { projectId, itemId: item.id },
+				body: { expectedVersion: item.version },
+			}),
+		onSuccess: () => invalidate(),
 	});
 }
 
@@ -931,12 +881,10 @@ export function useReorderBenchmarkTaskItems() {
 	const invalidate = useBenchmarkInvalidation();
 	return useMutation({
 		mutationFn: async ({ projectId, itemIds }: { projectId: string; itemIds: readonly string[] }) => {
-			const { data } = await callWithResponseValidation(
-				reorderBenchmarkTaskItems({ path: { projectId }, body: { itemIds: [...itemIds] }, throwOnError: true }),
-			);
+			const { data } = await reorderBenchmarkTaskItems({ path: { projectId }, body: { itemIds: [...itemIds] } });
 			return (data.items ?? []).map(toBenchmarkTaskItem).sort((left, right) => left.index - right.index);
 		},
-		onSuccess: (_items, variables) => invalidate(variables.projectId),
+		onSuccess: () => invalidate(),
 	});
 }
 
@@ -954,12 +902,10 @@ export interface BenchmarkCellList {
  */
 export function useBenchmarkCells(projectId: string | null, enabled: boolean) {
 	return useQuery<BenchmarkCellList>({
-		queryKey: benchmarkQueryKeys.cells(projectId ?? ""),
+		queryKey: listBenchmarkCellsQueryKey({ path: { projectId: projectId ?? "" } }),
 		enabled: enabled && Boolean(projectId),
 		queryFn: async ({ signal }) => {
-			const { data } = await callWithResponseValidation(
-				listBenchmarkCells({ path: { projectId: projectId as string }, signal, throwOnError: true }),
-			);
+			const { data } = await listBenchmarkCells({ path: { projectId: projectId as string }, signal });
 			return {
 				cells: (data.cells ?? []).map(toBenchmarkCell),
 				cohort: toBenchmarkRankCohort(data.rankCohort),
@@ -984,17 +930,18 @@ export interface BenchmarkCellComparison extends BenchmarkCellList {
  */
 export function useBenchmarkCellComparison(projectId: string | null, cellKeys: readonly string[]) {
 	return useQuery<BenchmarkCellComparison>({
-		queryKey: benchmarkQueryKeys.cellComparison(projectId ?? "", cellKeys),
+		// Keyed on the SORTED selection, so picking the same cells in another order reads the same entry.
+		queryKey: compareBenchmarkCellsQueryKey({
+			path: { projectId: projectId ?? "" },
+			query: { cellKeys: [...cellKeys].sort() },
+		}),
 		enabled: Boolean(projectId) && cellKeys.length >= 2,
 		queryFn: async ({ signal }) => {
-			const { data } = await callWithResponseValidation(
-				compareBenchmarkCells({
-					path: { projectId: projectId as string },
-					query: { cellKeys: [...cellKeys] },
-					signal,
-					throwOnError: true,
-				}),
-			);
+			const { data } = await compareBenchmarkCells({
+				path: { projectId: projectId as string },
+				query: { cellKeys: [...cellKeys] },
+				signal,
+			});
 			return {
 				cells: (data.cells ?? []).map(toBenchmarkCell),
 				cohort: toBenchmarkRankCohort(data.rankCohort),

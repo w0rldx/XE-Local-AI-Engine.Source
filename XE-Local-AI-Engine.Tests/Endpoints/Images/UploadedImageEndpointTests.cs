@@ -128,7 +128,7 @@ public sealed class UploadedImageEndpointTests
     }
 
     [Test]
-    public async Task Upload_PastTheSizeCap_Returns400()
+    public async Task Upload_PastTheSizeCap_Returns413NamingTheCap()
     {
         // A 1 MB cap for this host keeps the body small; the cap is enforced while the section is copied.
         await using var factory = new TestServerWebAppFactory
@@ -140,8 +140,9 @@ public sealed class UploadedImageEndpointTests
 
         using var response = await UploadAsync(factory, client, oversized);
 
-        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "The image is larger than the upload size limit.");
+        AssertEx.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+        await RequestBodyTooLargeAssert.DeclaredProblemShapeAsync(response, "the image upload");
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "The file exceeds the maximum upload size of 1 MB.");
         AssertEx.Equal(expected: 0, (await ListAsync(factory, client)).GetProperty("items").GetArrayLength());
     }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { CaptureError, type CaptureFrame } from "@/features/transcription/capture/CaptureSource";
+import { CaptureError, type CaptureFrame } from "@/core/audio/capture/CaptureSource";
 import { FakeCaptureSource } from "@/features/transcription/capture/FakeCaptureSource";
 
 /**

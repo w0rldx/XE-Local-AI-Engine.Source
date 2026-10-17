@@ -38,7 +38,8 @@ internal static class CustomToolConfigParser
             Method = raw.Method ?? string.Empty,
             UrlTemplate = raw.UrlTemplate ?? string.Empty,
             Headers = raw.Headers ?? [],
-            AllowedHosts = raw.AllowedHosts ?? []
+            AllowedHosts = raw.AllowedHosts ?? [],
+            PrivateHosts = raw.PrivateHosts ?? []
         };
     }
 

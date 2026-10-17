@@ -14,23 +14,33 @@ public sealed partial class WorkerEventDispatcher
         // (when the run terminates), so concurrent turns stay mutually exclusive; cancelling while still queued aborts the wait here.
         await _invocationQueue.WaitAsync(cancellationToken);
 
-        InvocationState snapshot;
+        InvocationState? snapshot = null;
 
         lock (_syncRoot)
         {
-            CurrentInvocation = CreateInvocationState(package);
-            snapshot = CurrentInvocation.Clone();
+            // A second assignment of a live id would let the first turn's lease pass the holder check and free the new holder's slot.
+            if (!_live.ContainsKey(package.InvocationId) && !_ended.ContainsKey(package.InvocationId))
+            {
+                CurrentInvocation = CreateInvocationState(package);
+                _live[package.InvocationId] = CurrentInvocation;
+                _slotHolderId = package.InvocationId;
+                snapshot = CurrentInvocation.Clone();
+            }
+        }
+
+        if (snapshot is null)
+        {
+            _ = _invocationQueue.Release();
+            throw new InvalidOperationException($"Invocation {package.InvocationId} is already live.");
         }
 
         PublishStateChanged(snapshot);
-        return new LocalInvocationLease(_invocationQueue);
+        return new LocalInvocationLease(this, package.InvocationId);
     }
 
     public Task DispatchApprovalResolvedAsync(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
     {
         ArgumentNullException.ThrowIfNull(evt);
-
-        var currentInvocation = GetCurrentInvocationSnapshot();
 
         _logger.LogInformation("Received approval resolution for request {RequestId}. Approved: {Approved} Scope: {Scope}",
             evt.RequestId,
@@ -39,39 +49,28 @@ public sealed partial class WorkerEventDispatcher
 
         _invocationRunner.ResolveApprovalResult(evt, scope);
 
-        if (currentInvocation is null)
-        {
-            _logger.LogWarning("Approval resolution arrived with no current invocation tracked. RequestId={RequestId}", evt.RequestId);
-        }
-        else if (currentInvocation.PendingApproval is null)
-        {
-            _logger.LogWarning("Approval resolution arrived with no pending approval tracked. RequestId={RequestId} CurrentInvocationId={CurrentInvocationId}",
-                evt.RequestId,
-                currentInvocation.InvocationId);
-        }
-        else if (!string.Equals(currentInvocation.PendingApproval.RequestId, evt.RequestId, StringComparison.Ordinal))
-        {
-            _logger.LogWarning("Approval resolution request id did not match pending approval. RequestId={RequestId} PendingRequestId={PendingRequestId} CurrentInvocationId={CurrentInvocationId}",
-                evt.RequestId,
-                currentInvocation.PendingApproval.RequestId,
-                currentInvocation.InvocationId);
-        }
-
-        UpdateCurrentInvocation(state =>
-        {
-            if (state.PendingApproval is not null
-                && string.Equals(state.PendingApproval.RequestId, evt.RequestId, StringComparison.Ordinal))
+        // The turn whose pending approval carries this request id, which need not be the last one assigned.
+        var target = UpdateMatching(state => string.Equals(state.PendingApproval?.RequestId, evt.RequestId, StringComparison.Ordinal),
+            state =>
             {
-                state.PendingApproval = null;
-            }
+                if (state.PendingApproval is not null
+                    && string.Equals(state.PendingApproval.RequestId, evt.RequestId, StringComparison.Ordinal))
+                {
+                    state.PendingApproval = null;
+                }
 
-            state.LastApprovalResolution = new InvocationApprovalResolutionState
-            {
-                RequestId = evt.RequestId,
-                Approved = evt.Approved,
-                ResolvedAt = _timeProvider.GetUtcNow()
-            };
-        });
+                state.LastApprovalResolution = new InvocationApprovalResolutionState
+                {
+                    RequestId = evt.RequestId,
+                    Approved = evt.Approved,
+                    ResolvedAt = _timeProvider.GetUtcNow()
+                };
+            });
+
+        if (target is null)
+        {
+            _logger.LogInformation("Approval resolution arrived for request {RequestId}, which no live invocation is waiting on; nothing was updated.", evt.RequestId);
+        }
 
         _logger.LogDebug("Approval resolution processing finished. RequestId={RequestId}", evt.RequestId);
 

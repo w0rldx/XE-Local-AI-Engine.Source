@@ -9,7 +9,6 @@ import {
 	entraAuthCodeStatusOptions,
 	entraAuthCodeStatusQueryKey,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 
 const POLL_INTERVAL_MS = 2_000;
 // Fallback stop for polling if the response's own expiry is ever missing.
@@ -28,7 +27,7 @@ export function useEntraAuthCodeStatus(options: UseEntraAuthCodeStatusOptions) {
 	const timedOut = polling && pollStartedAt !== undefined && Date.now() - pollStartedAt > MAX_POLL_MS;
 
 	return useQuery({
-		...withResponseValidation(entraAuthCodeStatusOptions()),
+		...entraAuthCodeStatusOptions(),
 		// Poll while pending and not yet timed out; stop once we know the final state.
 		refetchInterval: polling && !timedOut ? POLL_INTERVAL_MS : false,
 		// Status endpoint is always fresh — never serve a stale cached value during polling.
@@ -40,7 +39,7 @@ export function useEntraAuthCodeSignIn(onStarted: (authorizeUrl: string, expires
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(entraAuthCodeSignInMutation()),
+		...entraAuthCodeSignInMutation(),
 		onSuccess: async (data) => {
 			onStarted(data.authorizeUrl, data.expiresAtUtc);
 			// Force the first status poll to refetch rather than serving a pre-start cached "None" state.

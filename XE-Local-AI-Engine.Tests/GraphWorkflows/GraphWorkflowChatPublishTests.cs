@@ -161,9 +161,10 @@ public sealed class GraphWorkflowChatPublishTests
         };
         await using var scope = harness.Services.CreateAsyncScope();
         var runs = scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>();
-        _ = await runs.StartAsync(definitionId, Guid.NewGuid(), inputJson: null, definitionVersion: null, binding);
+        _ = await runs.StartAsync(definitionId, Guid.NewGuid(), inputJson: null, definitionVersion: null, GraphWorkflowRunOrigin.Chat, binding);
 
-        _ = await AssertEx.ThrowsAsync<GraphWorkflowRunBusyException>(() => runs.StartAsync(definitionId, Guid.NewGuid(), inputJson: null, definitionVersion: null, binding));
+        _ = await AssertEx.ThrowsAsync<GraphWorkflowRunBusyException>(() =>
+            runs.StartAsync(definitionId, Guid.NewGuid(), inputJson: null, definitionVersion: null, GraphWorkflowRunOrigin.Chat, binding));
 
         AssertEx.Equal(1, (await harness.ReadConversationRunsAsync(conversationId)).Count);
     }

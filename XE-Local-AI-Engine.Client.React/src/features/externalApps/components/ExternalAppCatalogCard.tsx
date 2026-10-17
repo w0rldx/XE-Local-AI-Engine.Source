@@ -1,6 +1,7 @@
 import { Anchor, Badge, Button, Card, Group, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
+import { DisabledReasonTooltip } from "@/core/ui/components/DisabledReasonTooltip/DisabledReasonTooltip";
 import { ExternalAppStatusBadge } from "@/features/externalApps/components/ExternalAppStatusBadge";
 import {
 	type ExternalAppPermissionName,
@@ -89,15 +90,22 @@ export function ExternalAppCatalogCard({
 							{t("pages.externalApps.catalog.details")}
 						</Button>
 					) : (
-						<Button
-							size="xs"
-							disabled={!runtimeReady}
-							title={runtimeReady ? undefined : t("pages.externalApps.catalog.runtimeNotReady")}
-							onClick={() => onInstall(application)}
-							data-testid={`external-app-card-install-${applicationId}`}
+						<DisabledReasonTooltip
+							label={t("pages.externalApps.catalog.runtimeNotReady")}
+							disabled={runtimeReady}
+							controlDisabled={!runtimeReady}
+							multiline={true}
+							w={260}
 						>
-							{t("pages.externalApps.catalog.install")}
-						</Button>
+							<Button
+								size="xs"
+								disabled={!runtimeReady}
+								onClick={() => onInstall(application)}
+								data-testid={`external-app-card-install-${applicationId}`}
+							>
+								{t("pages.externalApps.catalog.install")}
+							</Button>
+						</DisabledReasonTooltip>
 					)}
 				</Group>
 			</Stack>

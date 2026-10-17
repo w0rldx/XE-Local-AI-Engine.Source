@@ -127,7 +127,7 @@ public sealed class NodeChatTitleEncryptionBackfillQueryTests : IDisposable
 
     private static NodeChatPersistenceService CreateService(ServiceProvider provider)
     {
-        return new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        return new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
     }
 
     private string GetDatabasePath(string fileName)

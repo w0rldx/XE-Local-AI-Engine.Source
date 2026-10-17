@@ -31,6 +31,9 @@
 #   --snapshot       After settings: stop the host, save the node state to .tmp/lab/<profile>/snapshot, restart.
 #   --download       Install a missing model through the node from the profile's `modelSource`.
 #   --no-build       Pass --no-build to dev-start.sh.
+#   --cpu            Accept the node's managed llama.cpp runtime. Without this flag the caller must export the
+#                    bring-your-own CUDA llama-server (XE_LLAMACPP_SERVER_PATH), or the run is refused (exit 2):
+#                    on Linux the managed NVIDIA build is Vulkan, which has silently run the 27B on the CPU.
 #   --plan NAME      The plan that owns this lab (default: env XE_LAB_PLAN, else `unassigned`).
 #   --note TEXT      Free-text session note stored in the lab's OWNER file.
 #   --take-over      Re-assign a lab owned by another plan to --plan (keeps `created`, adds `taken_over`).
@@ -50,7 +53,7 @@
 # Exit codes:
 #   0   — the requested phases are in place; the manifest was written
 #   1   — an interaction failed (transport, auth, contract, settings not verified, download)
-#   2   — prerequisite missing / usage error (profile missing, model absent without --download, lab owned by
+#   2   — prerequisite missing / usage error (no XE_LLAMACPP_SERVER_PATH without --cpu, profile missing, model absent without --download, lab owned by
 #         another plan without --take-over, XE_ASPIRE_APPHOST
 #         naming another checkout's AppHost, XE_NODE_OPERATOR_SECRET_FILE outside this checkout's .data)
 #   3   — this checkout's host is running but not for this lab (its environment differs), or --fresh while it runs
@@ -102,6 +105,7 @@ FRESH="false"
 SNAPSHOT_REQ="false"
 DOWNLOAD="false"
 NO_BUILD="false"
+CPU="false"
 JSON="false"
 PLAN="${XE_LAB_PLAN:-unassigned}"
 NOTE=""
@@ -118,11 +122,14 @@ while [[ $# -gt 0 ]]; do
     --snapshot) SNAPSHOT_REQ="true"; shift ;;
     --download) DOWNLOAD="true"; shift ;;
     --no-build) NO_BUILD="true"; shift ;;
+    --cpu)      CPU="true"; shift ;;
     --json)     JSON="true"; shift ;;
     --help|-h)  usage; exit 0 ;;
     *)          echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+[[ -n "${XE_LLAMACPP_SERVER_PATH:-}" || "${CPU}" == "true" ]] \
+  || die 2 "REFUSED: XE_LLAMACPP_SERVER_PATH is not set, so the node would run its managed runtime (Vulkan or CPU, not CUDA); export the bring-your-own CUDA llama-server, or pass --cpu to accept the managed runtime."
 
 for tool in python3 curl; do
   command -v "${tool}" >/dev/null 2>&1 || die 2 "PREREQUISITE MISSING: ${tool} is not on PATH."

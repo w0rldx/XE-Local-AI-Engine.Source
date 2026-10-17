@@ -36,7 +36,7 @@ internal sealed class UsageProviderResolver : IUsageProviderResolver
 
     public async Task<string> ResolveAsync(string? modelName, CancellationToken cancellationToken = default)
     {
-        // No model to attribute (interrupted / no-model / platform-thin envelope) → unknown, WITHOUT consulting the
+        // No model to attribute (a turn that never named one, or a platform-thin envelope) → unknown, WITHOUT consulting the
         // factory (whose node-default selection would otherwise mislabel a model-less turn as the signed-in cloud provider).
         if (string.IsNullOrWhiteSpace(modelName))
         {

@@ -216,7 +216,8 @@ public sealed class AgentExecutionLogStore : IAgentExecutionLogStore
                                 CompletionTokens = group.Sum(log => (long)(log.CompletionTokens ?? 0)),
                                 ReasoningTokens = group.Sum(log => (long)(log.ReasoningTokens ?? 0)),
                                 ReasoningReported = group.Count(log => log.ReasoningTokens != null),
-                                TotalTokens = group.Sum(log => (long)(log.TotalTokens ?? 0))
+                                TotalTokens = group.Sum(log => (long)(log.TotalTokens ?? 0)),
+                                TokensReported = group.Count(log => log.TotalTokens != null)
                             })
                             .OrderByDescending(bucket => bucket.Day)
                             .ThenBy(bucket => bucket.Provider)
@@ -233,7 +234,8 @@ public sealed class AgentExecutionLogStore : IAgentExecutionLogStore
                    PromptTokens = bucket.PromptTokens,
                    CompletionTokens = bucket.CompletionTokens,
                    ReasoningTokens = bucket.ReasoningReported == 0 ? null : bucket.ReasoningTokens,
-                   TotalTokens = bucket.TotalTokens
+                   TotalTokens = bucket.TotalTokens,
+                   TokensReported = bucket.TokensReported
                })
                .ToArray();
     }

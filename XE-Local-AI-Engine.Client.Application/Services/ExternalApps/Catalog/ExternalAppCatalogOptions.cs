@@ -25,6 +25,15 @@ public sealed class ExternalAppCatalogOptions
     /// <summary>Default retry cadence after a failed refresh, when <see cref="FailureRetryInterval" /> is not overridden.</summary>
     public static readonly TimeSpan DefaultFailureRetryInterval = TimeSpan.FromMinutes(minutes: 1);
 
+    /// <summary>The only hosts a plain-<c>http</c> refresh URL may name (the local catalog server used in live validation).</summary>
+    private static readonly HashSet<string> LoopbackHosts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "127.0.0.1",
+        "::1",
+        "[::1]",
+        "localhost"
+    };
+
     /// <summary>Remote catalog URL to refresh from; ships <strong>empty</strong>, so the engine is bundled-only and makes no network call until an operator sets it.</summary>
     /// <remarks>
     ///     The curated catalog repository
@@ -49,4 +58,14 @@ public sealed class ExternalAppCatalogOptions
 
     /// <summary>Largest catalog document the provider will read; a longer response is a fetch failure.</summary>
     public int MaxDocumentBytes { get; set; } = DefaultMaxDocumentBytes;
+
+    /// <summary>Whether <paramref name="value" /> is a refresh URL the provider uses: an absolute <c>https</c> URL, or <c>http</c> to a loopback host.</summary>
+    /// <remarks>One rule for the provider, the startup probe and the API, so none of them can call a rejected URL configured.</remarks>
+    public static bool IsAcceptedRefreshUrl(string? value)
+    {
+        return !string.IsNullOrWhiteSpace(value)
+               && Uri.TryCreate(value, UriKind.Absolute, out var uri)
+               && (string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal)
+                   || (string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.Ordinal) && LoopbackHosts.Contains(uri.Host)));
+    }
 }

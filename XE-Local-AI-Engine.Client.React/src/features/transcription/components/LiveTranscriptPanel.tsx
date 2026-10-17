@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { useStickToBottomScroll } from "@/core/ui/hooks/useStickToBottomScroll";
 import { TranscriptSegmentRow } from "@/features/transcription/components/TranscriptSegmentList";
-import type { CaptureChannel } from "@/features/transcription/capture/CaptureSource";
+import type { CaptureChannel } from "@/core/audio/capture/CaptureSource";
 import type { LiveTranscriptView } from "@/features/transcription/hooks/useTranscriptionHub";
 import { toDisplayChannel } from "@/features/transcription/models/TranscriptionLiveModels";
 import { useTranscriptionCaptureStore } from "@/features/transcription/stores/TranscriptionCaptureStore";

@@ -1,15 +1,12 @@
 import { type QueryKey, useQuery } from "@tanstack/react-query";
 
 import { getRunningLocalModels } from "@/core/api/generated";
-import { callWithResponseValidation } from "@/core/api/ResponseValidation";
 import { toLoadedModelsSnapshot } from "@/features/loaded-models/models/LoadedModelsMappers";
 import type { LoadedModelsSnapshot } from "@/features/loaded-models/models/LoadedModelsModels";
 
 // Server state for the optional Ollama runtime's in-memory model list. The Loaded Models page no longer renders it
 // (that page shows the llama.cpp runtime only); the assist feature reads it to prefer an already-warm model. The hook
-// calls the generated hey-api SDK fn DIRECTLY through the shared `callWithResponseValidation` bridge — the same
-// imperative pattern the chat adapter uses — so a post-2xx zod response-shape failure surfaces as an ApiError, never a
-// raw ZodError.
+// calls the generated hey-api SDK fn DIRECTLY, the same imperative pattern the chat adapter uses.
 
 const loadedModelsQueryKey: QueryKey = ["loaded-models", "running"];
 
@@ -46,7 +43,7 @@ export function useLoadedModels() {
 	return useQuery<LoadedModelsSnapshot>({
 		queryKey: loadedModelsQueryKey,
 		queryFn: async ({ signal }) => {
-			const { data } = await callWithResponseValidation(getRunningLocalModels({ signal, throwOnError: true }));
+			const { data } = await getRunningLocalModels({ signal });
 			return toLoadedModelsSnapshot(data);
 		},
 		refetchInterval: (query) => resolveLoadedModelsPollIntervalMs(query.state.data),

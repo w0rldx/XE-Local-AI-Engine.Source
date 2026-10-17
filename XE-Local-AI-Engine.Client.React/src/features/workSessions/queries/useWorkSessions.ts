@@ -1,5 +1,5 @@
 // Server state for the work-session surface. Every call goes through the generated hey-api `*Options()` /
-// `*Mutation()` wrapped in withResponseValidation, exactly as `useDevelopment.ts` does — no hand-wired axios.
+// `*Mutation()`, exactly as `useDevelopment.ts` does — no hand-wired axios.
 //
 // The generated query keys are single-element arrays `[{ _id: "<operationId>", path, query, … }]`, and TanStack
 // matches them by PARTIAL DEEP equality. So `[{ _id, path: { sessionId } }]` invalidates every cached variant of one
@@ -26,7 +26,6 @@ import {
 	startWorkSessionMutation,
 	updateWorkSessionMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 
 /** Generated operationIds, which are also the generated SDK fn names and the `_id` of every generated query key. */
 export const workSessionQueryIds = {
@@ -82,14 +81,14 @@ function feedQuerySettings(sessionId: string | undefined, options: FeedOptions) 
  */
 export function useWorkSessionCapability() {
 	return useQuery({
-		...withResponseValidation(getWorkSessionCapabilityOptions()),
+		...getWorkSessionCapabilityOptions(),
 		staleTime: 30_000,
 	});
 }
 
 export function useWorkSessionList(options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(listWorkSessionsOptions()),
+		...listWorkSessionsOptions(),
 		enabled: options.enabled ?? true,
 		refetchInterval: options.pollIntervalMs ?? false,
 	});
@@ -97,53 +96,49 @@ export function useWorkSessionList(options: FeedOptions = {}) {
 
 export function useWorkSession(sessionId: string | undefined, options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(getWorkSessionOptions({ path: { sessionId: sessionId ?? "" } })),
+		...getWorkSessionOptions({ path: { sessionId: sessionId ?? "" } }),
 		...feedQuerySettings(sessionId, options),
 	});
 }
 
 export function useWorkSessionTasks(sessionId: string | undefined, options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(listWorkSessionTasksOptions({ path: { sessionId: sessionId ?? "" }, query: FULL_FEED })),
+		...listWorkSessionTasksOptions({ path: { sessionId: sessionId ?? "" }, query: FULL_FEED }),
 		...feedQuerySettings(sessionId, options),
 	});
 }
 
 export function useWorkSessionFindings(sessionId: string | undefined, options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(listWorkSessionFindingsOptions({ path: { sessionId: sessionId ?? "" }, query: FULL_FEED })),
+		...listWorkSessionFindingsOptions({ path: { sessionId: sessionId ?? "" }, query: FULL_FEED }),
 		...feedQuerySettings(sessionId, options),
 	});
 }
 
 export function useWorkSessionArtifacts(sessionId: string | undefined, options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(listWorkSessionArtifactsOptions({ path: { sessionId: sessionId ?? "" }, query: FULL_FEED })),
+		...listWorkSessionArtifactsOptions({ path: { sessionId: sessionId ?? "" }, query: FULL_FEED }),
 		...feedQuerySettings(sessionId, options),
 	});
 }
 
 export function useWorkSessionCheckpoints(sessionId: string | undefined, options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(listWorkSessionCheckpointsOptions({ path: { sessionId: sessionId ?? "" }, query: FULL_FEED })),
+		...listWorkSessionCheckpointsOptions({ path: { sessionId: sessionId ?? "" }, query: FULL_FEED }),
 		...feedQuerySettings(sessionId, options),
 	});
 }
 
 export function useWorkSessionEvents(sessionId: string | undefined, limit: number, options: FeedOptions = {}) {
 	return useQuery({
-		...withResponseValidation(
-			listWorkSessionEventsOptions({ path: { sessionId: sessionId ?? "" }, query: { sinceSeq: 0, limit } }),
-		),
+		...listWorkSessionEventsOptions({ path: { sessionId: sessionId ?? "" }, query: { sinceSeq: 0, limit } }),
 		...feedQuerySettings(sessionId, options),
 	});
 }
 
 export function useWorkSessionArtifactContent(sessionId: string | undefined, artifactId: string | undefined) {
 	return useQuery({
-		...withResponseValidation(
-			getWorkSessionArtifactContentOptions({ path: { sessionId: sessionId ?? "", artifactId: artifactId ?? "" } }),
-		),
+		...getWorkSessionArtifactContentOptions({ path: { sessionId: sessionId ?? "", artifactId: artifactId ?? "" } }),
 		enabled: Boolean(sessionId) && Boolean(artifactId),
 	});
 }
@@ -151,7 +146,7 @@ export function useWorkSessionArtifactContent(sessionId: string | undefined, art
 export function useCreateWorkSession() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(createWorkSessionMutation()),
+		...createWorkSessionMutation(),
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: workSessionInvalidationKey(workSessionQueryIds.list) }),
 	});
 }
@@ -159,7 +154,7 @@ export function useCreateWorkSession() {
 export function useUpdateWorkSession(sessionId: string) {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(updateWorkSessionMutation()),
+		...updateWorkSessionMutation(),
 		onSuccess: async () => {
 			await queryClient.invalidateQueries({ queryKey: workSessionInvalidationKey(workSessionQueryIds.get, sessionId) });
 			await queryClient.invalidateQueries({ queryKey: workSessionInvalidationKey(workSessionQueryIds.list) });
@@ -170,7 +165,7 @@ export function useUpdateWorkSession(sessionId: string) {
 export function useDeleteWorkSession() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...withResponseValidation(deleteWorkSessionMutation()),
+		...deleteWorkSessionMutation(),
 		// The delete also removes the owned conversation, so the caller must navigate away rather than keep a route
 		// open on it. Only the list is refreshed here.
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: workSessionInvalidationKey(workSessionQueryIds.list) }),
@@ -188,14 +183,14 @@ export function useWorkSessionLifecycle(sessionId: string) {
 		await queryClient.invalidateQueries({ queryKey: workSessionInvalidationKey(workSessionQueryIds.list) });
 	};
 
-	const start = useMutation({ ...withResponseValidation(startWorkSessionMutation()), onSuccess: refresh });
-	const pause = useMutation({ ...withResponseValidation(pauseWorkSessionMutation()), onSuccess: refresh });
-	const resume = useMutation({ ...withResponseValidation(resumeWorkSessionMutation()), onSuccess: refresh });
-	const cancel = useMutation({ ...withResponseValidation(cancelWorkSessionMutation()), onSuccess: refresh });
+	const start = useMutation({ ...startWorkSessionMutation(), onSuccess: refresh });
+	const pause = useMutation({ ...pauseWorkSessionMutation(), onSuccess: refresh });
+	const resume = useMutation({ ...resumeWorkSessionMutation(), onSuccess: refresh });
+	const cancel = useMutation({ ...cancelWorkSessionMutation(), onSuccess: refresh });
 
 	return { start, pause, resume, cancel };
 }
 
 export function usePostWorkSessionMessage() {
-	return useMutation(withResponseValidation(postWorkSessionMessageMutation()));
+	return useMutation(postWorkSessionMessageMutation());
 }

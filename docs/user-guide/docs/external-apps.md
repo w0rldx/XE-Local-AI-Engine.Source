@@ -23,20 +23,24 @@ The design decision behind it is [ADR 0010](../../adr/0010-external-apps-contain
 ## Where to find it
 
 External Apps sits in its own **External Apps** group in the navigation, with a **Catalog** and an **Installed**
-page. It shows only in the **Advanced** navigation mode (**Node Settings** lets you switch). It is on by default; the
-switch is **Node Settings → General → Features → External apps**.
+page. Its switch is **Node Settings → General → Features → External apps**, and it is on by default, but the feature
+stays off until the catalog lists at least one application: nothing can be installed from an empty catalog.
 
 ## What you see today
 
-The **Catalog** page has a **Container runtime** card at the top and the list of applications below it.
-
-- **The runtime card** says whether the app can reach Docker. "Ready" means it can. Otherwise it names the problem,
-  such as Docker not running or not installed, and **Check again** re-tests after you fix it.
-- **The list** says "No applications are available yet." That is expected: the app ships with an empty catalog, and
-  the online catalog it will update from does not exist yet.
+While the catalog is empty, the **Catalog** page shows only a card that says External Apps stay off until the
+catalog lists an application, and where applications come from. That is expected: the app ships with an empty
+catalog, and the online catalog it will update from does not exist yet.
 
 > **For operators:** a node can be pointed at a catalog document with the `ExternalApps:Catalog:RefreshUrl` setting
-> (https, or http to this computer only). It is empty by default, so the app makes no catalog request at all.
+> (https, or http to this computer only). It is empty by default, so the app makes no catalog request at all. Once
+> the catalog lists an application, restart the node: External Apps, and the container bridge applications use to
+> reach the app's models, only start when the catalog lists an application at startup. Until then the page says
+> **Restart the node to enable External Apps** and installing is refused.
+
+With at least one application, the page has a **Container runtime** card at the top and the list of applications
+below it. The runtime card says whether the app can reach Docker. "Ready" means it can. Otherwise it names the
+problem, such as Docker not running or not installed, and **Check again** re-tests after you fix it.
 
 ## Installing an application
 

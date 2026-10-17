@@ -1,11 +1,11 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
 import {
 	generateLocalModelProxyApiKeyMutation,
 	getLocalModelProxyApiKeyOptions,
 	getLocalModelProxyApiKeyQueryKey,
 	revokeLocalModelProxyApiKeyMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 // Server state for the INBOUND local-model-proxy credential — the key an external OpenAI-compatible tool (LiteLLM,
 // Continue, a local agent) presents to this node's OpenAI-compatible proxy endpoint so it can use the local model as
@@ -30,7 +30,7 @@ export interface LocalModelProxyApiKeyView {
 
 export function useLocalModelProxyApiKey() {
 	return useQuery({
-		...withResponseValidation(getLocalModelProxyApiKeyOptions()),
+		...getLocalModelProxyApiKeyOptions(),
 		select: (data): LocalModelProxyApiKeyView => ({
 			configured: data.configured ?? false,
 			prefix: data.apiKey?.prefix ?? null,
@@ -49,7 +49,7 @@ export function useGenerateLocalModelProxyApiKey() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(generateLocalModelProxyApiKeyMutation()),
+		...generateLocalModelProxyApiKeyMutation(),
 		onSuccess: () => invalidateApiKey(queryClient),
 	});
 }
@@ -58,7 +58,7 @@ export function useRevokeLocalModelProxyApiKey() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(revokeLocalModelProxyApiKeyMutation()),
+		...revokeLocalModelProxyApiKeyMutation(),
 		onSuccess: () => invalidateApiKey(queryClient),
 	});
 }

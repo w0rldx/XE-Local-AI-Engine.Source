@@ -55,6 +55,7 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 		saveConflict,
 		deleteError,
 		layoutIsUnsaved,
+		canEditMeta,
 		issues,
 		serverWarnings,
 		selectNode,
@@ -94,9 +95,11 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 	const toolbar = (
 		<GraphWorkflowEditorToolbar
 			definitionName={definition?.name ?? ""}
+			allowsActions={definition?.allowsActions ?? false}
 			hasDefinition={definition !== undefined}
 			isDirty={editor.isDirty}
 			layoutIsUnsaved={layoutIsUnsaved}
+			canEditMeta={canEditMeta}
 			isValidating={validateMutation.isPending}
 			isSaving={isSaving}
 			canSave={canSave}
@@ -198,6 +201,7 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 				selectNode(undefined);
 			}}
 			tools={toolsQuery.data?.tools ?? []}
+			allowsActions={definition?.allowsActions ?? false}
 			agentOptions={agentOptionsQuery.data ?? []}
 			modelOptions={modelOptionsQuery.data ?? []}
 			llmModelOptions={llmModelOptionsQuery.data ?? []}
@@ -271,9 +275,11 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 							: undefined
 				}
 				fetchesUnder={metaDialog === "import" && importEnvelope ? graphWorkflowAllowedUrls(importEnvelope.graph) : undefined}
+				allowsActions={metaDialog === "rename" ? (definition?.allowsActions ?? false) : undefined}
+				triggerSources={metaDialog === "rename" ? (definition?.triggerSources ?? ["Manual", "Chat"]) : undefined}
 				title={
 					metaDialog === "rename"
-						? t("pages.graphWorkflows.page.renameTitle", "Rename this workflow")
+						? t("pages.graphWorkflows.page.renameTitle", "Workflow settings")
 						: metaDialog === "saveAs"
 							? t("pages.graphWorkflows.page.saveAsTitle", "Save as a new workflow")
 							: metaDialog === "import"

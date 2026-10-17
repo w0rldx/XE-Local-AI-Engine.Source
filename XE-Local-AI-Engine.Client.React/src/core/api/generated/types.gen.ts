@@ -267,6 +267,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketRespons
 	completionTokens: number;
 	reasoningTokens: number | null;
 	totalTokens: number;
+	tokensReported: number;
 	estimatedCostUsd: number;
 	currency: string;
 };
@@ -646,6 +647,8 @@ export type XeLocalAiEngineClientEndpointsAppUpdateV1SetAppUpdateChannelRequest 
 export type XeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse = {
 	accessToken: string;
 	expiresAtUtc: string;
+	refreshToken?: string | null;
+	refreshTokenExpiresAtUtc?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse = {
@@ -668,6 +671,7 @@ export type XeLocalAiEngineClientEndpointsAuthV1NodeLoginLockedOutResponse = {
 export type XeLocalAiEngineClientEndpointsAuthV1NodeLoginRequest = {
 	email?: string | null;
 	password: string;
+	returnRefreshToken?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest = {
@@ -2376,6 +2380,9 @@ export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppCatalogRespon
 	fromBundledSeed: boolean;
 	refreshFailureMessage: string | null;
 	lastRefreshFailure: string | null;
+	restartRequired: boolean;
+	bridgeOpenUntilRestart: boolean;
+	refreshUrlConfigured: boolean;
 	applications: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppSummaryView>;
 };
 
@@ -2848,6 +2855,8 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitio
 	nodeCount: number;
 	schemaVersion: number;
 	kind: string;
+	allowsActions: boolean;
+	triggerSources: Array<string>;
 	version: number;
 	createdAtUtc: number;
 	updatedAtUtc: number;
@@ -2861,6 +2870,8 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitio
 	nodeCount: number;
 	schemaVersion: number;
 	kind: string;
+	allowsActions: boolean;
+	triggerSources: Array<string>;
 	version: number;
 	createdAtUtc: number;
 	updatedAtUtc: number;
@@ -2906,6 +2917,15 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraphNode
 	timeoutSeconds?: number | null;
 	joinPolicy?: string | null;
 	config?: unknown;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowIntentResponse = {
+	status: string;
+	matchedBy: string;
+	definitionId: string | null;
+	definitionName: string | null;
+	reason: string | null;
+	run: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunResponse | null;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodePosition = {
@@ -2987,6 +3007,8 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunSummar
 	graphHash: string;
 	status: string;
 	failureClass: string;
+	triggerSource: string;
+	principalId: string | null;
 	cancelRequestedAtUtc: number | null;
 	startedAtUtc: number | null;
 	completedAtUtc: number | null;
@@ -3010,6 +3032,7 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowToolRespo
 	description: string;
 	parameterSchema: string;
 	requiresAllowedUrls: boolean;
+	isAction: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse = {
@@ -3023,6 +3046,12 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1ImportGraphWorkflowDef
 	name: string;
 	description?: string | null;
 	graph: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1InvokeGraphWorkflowIntentRequest = {
+	utterance?: string;
+	requestId: string;
+	utteredAt?: string;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowConversationRunsRequest = {
@@ -3089,6 +3118,8 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1UpdateGraphWorkflowDef
 	name?: string | null;
 	description?: string | null;
 	graph?: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph | null;
+	allowsActions?: boolean | null;
+	triggerSources?: Array<string> | null;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflowDefinitionRequest = {
@@ -3164,7 +3195,7 @@ export type XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse = {
 	width: number;
 	height: number;
 	steps: number;
-	sampler: string;
+	sampler: string | null;
 	cfgScale: number;
 	status: string;
 	createdAtUtc: number;
@@ -3444,7 +3475,8 @@ export type XeLocalAiEngineClientEndpointsIntegrationsV1CreateIntegrationTrigger
 	description?: string | null;
 	enabled?: boolean;
 	targetKind?: XeLocalAiEngineClientPersistenceEntitiesIntegrationTargetKind;
-	targetAgentDefinitionId: string;
+	targetAgentDefinitionId?: string | null;
+	targetGraphWorkflowDefinitionId?: string | null;
 	sessionPolicy?: XeLocalAiEngineClientPersistenceEntitiesIntegrationSessionPolicy;
 	acceptedInputKinds: Array<string>;
 };
@@ -3477,6 +3509,7 @@ export type XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionDeta
 	keyPrefix: string;
 	requestId: string;
 	invocationId: string;
+	graphWorkflowRunId?: string | null;
 	outputBytes: number;
 	lastSequence: number;
 	version: number;
@@ -3509,7 +3542,7 @@ export type XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationSessionRespon
 	triggerId: string;
 	triggerName: string;
 	principalId: string;
-	agentDefinitionId: string;
+	agentDefinitionId?: string | null;
 	status: XeLocalAiEngineClientPersistenceEntitiesIntegrationSessionStatus;
 	createdAtUtc: number;
 	lastActivityUtc: number;
@@ -3523,7 +3556,8 @@ export type XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationTriggerView =
 	description?: string | null;
 	enabled: boolean;
 	targetKind: XeLocalAiEngineClientPersistenceEntitiesIntegrationTargetKind;
-	targetAgentDefinitionId: string;
+	targetAgentDefinitionId?: string | null;
+	targetGraphWorkflowDefinitionId?: string | null;
 	sessionPolicy: XeLocalAiEngineClientPersistenceEntitiesIntegrationSessionPolicy;
 	acceptedInputKinds: Array<string>;
 	createdAtUtc: number;
@@ -3569,7 +3603,9 @@ export type XeLocalAiEngineClientEndpointsIntegrationsV1UpdateIntegrationTrigger
 	displayName: string;
 	description?: string | null;
 	enabled?: boolean;
-	targetAgentDefinitionId: string;
+	targetKind?: XeLocalAiEngineClientPersistenceEntitiesIntegrationTargetKind;
+	targetAgentDefinitionId?: string | null;
+	targetGraphWorkflowDefinitionId?: string | null;
 	sessionPolicy?: XeLocalAiEngineClientPersistenceEntitiesIntegrationSessionPolicy;
 	acceptedInputKinds: Array<string>;
 	expectedVersion: number;
@@ -3610,6 +3646,7 @@ export type XeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse
 
 export type XeLocalAiEngineClientEndpointsInvocationsV1InvocationMonitorResponse = {
 	current: XeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse | null;
+	live: Array<XeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse>;
 	history: Array<XeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse>;
 	historyCapacity: number;
 };
@@ -3665,6 +3702,7 @@ export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentDetailResp
 	displayName: string;
 	status: XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus;
 	failureReason?: string | null;
+	failureReasonCode?: string | null;
 	chunkCount: number;
 	embeddingModel: string;
 	staleModel: boolean;
@@ -3682,6 +3720,7 @@ export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse =
 	displayName: string;
 	status: XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus;
 	failureReason?: string | null;
+	failureReasonCode?: string | null;
 	chunkCount: number;
 	embeddingModel: string;
 	staleModel: boolean;
@@ -3742,6 +3781,7 @@ export type XeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeRequest = {
 
 export type XeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeResponse = {
 	results: Array<XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse>;
+	degradations: Array<XeLocalAiEngineClientServicesKnowledgeKnowledgeSearchDegradation>;
 };
 
 export type XeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentRequest = {
@@ -3942,6 +3982,7 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationRespons
 		[key: string]: string;
 	} | null;
 	memoryExcluded: boolean;
+	agentDefinitionId?: string | null;
 	messages: Array<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse>;
 };
 
@@ -4002,6 +4043,7 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse = {
 	generationDurationMs?: number | null;
 	sources?: Array<XeLocalAiEngineClientServicesChatNodeChatMessageSource> | null;
 	contextWindow?: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowResponse | null;
+	failureCategory?: XeLocalAiEngineClientModelsEnumsFailureCategory | null;
 };
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse = {
@@ -5021,6 +5063,10 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	webFetchTimeoutSeconds?: number | null;
 	minWebFetchTimeoutSeconds?: number;
 	maxAllowedWebFetchTimeoutSeconds?: number;
+	intentRouterDefinitionId?: string | null;
+	intentMaxUtteranceAgeSeconds?: number | null;
+	minIntentMaxUtteranceAgeSeconds?: number;
+	maxAllowedIntentMaxUtteranceAgeSeconds?: number;
 	webFetchMaxContentChars?: number | null;
 	minWebFetchMaxContentChars?: number;
 	maxAllowedWebFetchMaxContentChars?: number;
@@ -5238,6 +5284,8 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	maxProviderCallsPerInvocation?: number | null;
 	customToolMaxTimeoutSeconds?: number | null;
 	webFetchTimeoutSeconds?: number | null;
+	intentRouterDefinitionId?: string | null;
+	intentMaxUtteranceAgeSeconds?: number | null;
 	webFetchMaxContentChars?: number | null;
 	knowledgeSearchDefaultResults?: number | null;
 	knowledgeSearchMaxResults?: number | null;
@@ -5351,6 +5399,7 @@ export type XeLocalAiEngineClientEndpointsPythonV1ManagedPythonEnvironmentRespon
 	profileId: string;
 	state: string;
 	reason?: string | null;
+	reasonCode?: string | null;
 	installed?: XeLocalAiEngineClientEndpointsPythonV1ManagedPythonEnvironmentIdentityResponse | null;
 	mismatches: Array<string>;
 };
@@ -6335,6 +6384,16 @@ export type XeLocalAiEngineClientEndpointsTranscriptionV1SelectTranscriptionMode
 	modelId?: string | null;
 };
 
+export type XeLocalAiEngineClientEndpointsTranscriptionV1StartDictationSessionRequest = {
+	language?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1StartDictationSessionResponse = {
+	sessionId: string;
+	startedAtUtc: number;
+	lastSeq: number;
+};
+
 export type XeLocalAiEngineClientEndpointsTranscriptionV1StartLiveTranscriptionSessionResponse = {
 	sessionId: string;
 	status: string;
@@ -6783,7 +6842,9 @@ export type XeLocalAiEngineClientModelsEnumsFailureCategory =
 	| "ModelNotInstalled"
 	| "ContextWindowExceeded"
 	| "ProviderAuthFailed"
-	| "ProviderRateLimited";
+	| "ProviderRateLimited"
+	| "CallBudgetReached"
+	| "InsufficientCapacity";
 
 export type XeLocalAiEngineClientPersistenceAgentDefinitionKind = "Single" | "Orchestrator";
 
@@ -6822,7 +6883,7 @@ export type XeLocalAiEngineClientPersistenceEntitiesIntegrationSessionPolicy = "
 
 export type XeLocalAiEngineClientPersistenceEntitiesIntegrationSessionStatus = "Active" | "Closed";
 
-export type XeLocalAiEngineClientPersistenceEntitiesIntegrationTargetKind = "Agent";
+export type XeLocalAiEngineClientPersistenceEntitiesIntegrationTargetKind = "Agent" | "Graph";
 
 export type XeLocalAiEngineClientPersistenceEntitiesToolMockVerificationState = "Unverified" | "Verified" | "Rejected";
 
@@ -6887,6 +6948,7 @@ export type XeLocalAiEngineClientServicesCustomToolsCommandDefinition = {
 	workingDirectory?: string | null;
 	timeoutSeconds?: number;
 	env?: Array<XeLocalAiEngineClientServicesCustomToolsCustomToolEnvironmentVariableModel>;
+	detach?: boolean;
 };
 
 export type XeLocalAiEngineClientServicesCustomToolsCustomToolDefinition = {
@@ -6896,6 +6958,7 @@ export type XeLocalAiEngineClientServicesCustomToolsCustomToolDefinition = {
 	mode?: XeLocalAiEngineClientPersistenceCustomToolMode;
 	enabled?: boolean;
 	acknowledged?: boolean;
+	allowUnattended?: boolean;
 	parameters?: Array<XeLocalAiEngineClientServicesCustomToolsCustomToolParameterModel>;
 	http?: XeLocalAiEngineClientServicesCustomToolsHttpFetchDefinition | null;
 	command?: XeLocalAiEngineClientServicesCustomToolsCommandDefinition | null;
@@ -6928,6 +6991,7 @@ export type XeLocalAiEngineClientServicesCustomToolsCustomToolView = {
 	mode: XeLocalAiEngineClientPersistenceCustomToolMode;
 	enabled: boolean;
 	acknowledged: boolean;
+	allowUnattended: boolean;
 	version: number;
 	createdAtUtc: number;
 	updatedAtUtc: number;
@@ -6948,6 +7012,7 @@ export type XeLocalAiEngineClientServicesCustomToolsHttpFetchDefinition = {
 	headers?: Array<XeLocalAiEngineClientServicesCustomToolsCustomToolHeaderModel>;
 	bodyTemplate?: string | null;
 	allowedHosts?: Array<string>;
+	privateHosts?: Array<string>;
 };
 
 export type XeLocalAiEngineClientServicesCustomToolsListCustomToolsResponse = {
@@ -6975,6 +7040,8 @@ export type XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus =
 	| "Failed";
 
 export type XeLocalAiEngineClientServicesKnowledgeKnowledgeScoreKind = "Fusion" | "Rerank";
+
+export type XeLocalAiEngineClientServicesKnowledgeKnowledgeSearchDegradation = "LexicalOnly" | "RerankerUnavailable";
 
 export type XeLocalAiEngineClientServicesMcpMcpConnectionFailureReason =
 	| "Unknown"
@@ -8815,6 +8882,10 @@ export type DeleteBenchmarkProjectData = {
 
 export type DeleteBenchmarkProjectErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -9499,6 +9570,10 @@ export type RejudgeBenchmarkProjectData = {
 
 export type RejudgeBenchmarkProjectErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -9687,6 +9762,10 @@ export type DeleteBenchmarkRunData = {
 
 export type DeleteBenchmarkRunErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -9757,6 +9836,10 @@ export type CancelBenchmarkRunData = {
 };
 
 export type CancelBenchmarkRunErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -9830,6 +9913,10 @@ export type RejudgeBenchmarkRunData = {
 
 export type RejudgeBenchmarkRunErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -9865,6 +9952,10 @@ export type ClearBenchmarkRunScoreData = {
 };
 
 export type ClearBenchmarkRunScoreErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -10610,6 +10701,7 @@ export type UploadConversationFileErrors = {
 	 */
 	403: unknown;
 	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+	413: MicrosoftAspNetCoreMvcProblemDetails;
 };
 
 export type UploadConversationFileError = UploadConversationFileErrors[keyof UploadConversationFileErrors];
@@ -14352,6 +14444,40 @@ export type StartGraphWorkflowRunResponses = {
 
 export type StartGraphWorkflowRunResponse = StartGraphWorkflowRunResponses[keyof StartGraphWorkflowRunResponses];
 
+export type InvokeGraphWorkflowIntentData = {
+	body: XeLocalAiEngineClientEndpointsGraphWorkflowsV1InvokeGraphWorkflowIntentRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/graph-workflows/intents/invoke";
+};
+
+export type InvokeGraphWorkflowIntentErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type InvokeGraphWorkflowIntentError = InvokeGraphWorkflowIntentErrors[keyof InvokeGraphWorkflowIntentErrors];
+
+export type InvokeGraphWorkflowIntentResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowIntentResponse;
+};
+
+export type InvokeGraphWorkflowIntentResponse = InvokeGraphWorkflowIntentResponses[keyof InvokeGraphWorkflowIntentResponses];
+
 export type ListGraphWorkflowRunsData = {
 	body?: never;
 	path?: never;
@@ -15401,6 +15527,7 @@ export type UploadImageErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	413: MicrosoftAspNetCoreMvcProblemDetails;
 };
 
 export type UploadImageError = UploadImageErrors[keyof UploadImageErrors];
@@ -15471,9 +15598,9 @@ export type RetrieveImageErrors = {
 
 export type RetrieveImageResponses = {
 	/**
-	 * No Content
+	 * Success
 	 */
-	204: void;
+	200: Blob | File;
 };
 
 export type RetrieveImageResponse = RetrieveImageResponses[keyof RetrieveImageResponses];
@@ -16031,7 +16158,10 @@ export type UploadKnowledgeDocumentErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	413: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type UploadKnowledgeDocumentError = UploadKnowledgeDocumentErrors[keyof UploadKnowledgeDocumentErrors];
 
 export type UploadKnowledgeDocumentResponses = {
 	/**
@@ -19107,6 +19237,10 @@ export type DeleteTrainingArtifactData = {
 
 export type DeleteTrainingArtifactErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -19116,6 +19250,8 @@ export type DeleteTrainingArtifactErrors = {
 	403: unknown;
 	409: unknown;
 };
+
+export type DeleteTrainingArtifactError = DeleteTrainingArtifactErrors[keyof DeleteTrainingArtifactErrors];
 
 export type DeleteTrainingArtifactResponses = {
 	/**
@@ -19669,6 +19805,10 @@ export type DeleteComparisonData = {
 
 export type DeleteComparisonErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -19757,6 +19897,10 @@ export type DeleteTrainingDatasetData = {
 
 export type DeleteTrainingDatasetErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -19765,6 +19909,8 @@ export type DeleteTrainingDatasetErrors = {
 	 */
 	403: unknown;
 };
+
+export type DeleteTrainingDatasetError = DeleteTrainingDatasetErrors[keyof DeleteTrainingDatasetErrors];
 
 export type DeleteTrainingDatasetResponses = {
 	/**
@@ -19994,6 +20140,10 @@ export type DeleteTrainingDefinitionData = {
 
 export type DeleteTrainingDefinitionErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -20002,6 +20152,8 @@ export type DeleteTrainingDefinitionErrors = {
 	 */
 	403: unknown;
 };
+
+export type DeleteTrainingDefinitionError = DeleteTrainingDefinitionErrors[keyof DeleteTrainingDefinitionErrors];
 
 export type DeleteTrainingDefinitionResponses = {
 	/**
@@ -20052,6 +20204,10 @@ export type UpdateTrainingDefinitionData = {
 
 export type UpdateTrainingDefinitionErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -20060,6 +20216,8 @@ export type UpdateTrainingDefinitionErrors = {
 	 */
 	403: unknown;
 };
+
+export type UpdateTrainingDefinitionError = UpdateTrainingDefinitionErrors[keyof UpdateTrainingDefinitionErrors];
 
 export type UpdateTrainingDefinitionResponses = {
 	/**
@@ -20081,6 +20239,10 @@ export type GenerateTrainingDatasetData = {
 
 export type GenerateTrainingDatasetErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -20089,6 +20251,8 @@ export type GenerateTrainingDatasetErrors = {
 	 */
 	403: unknown;
 };
+
+export type GenerateTrainingDatasetError = GenerateTrainingDatasetErrors[keyof GenerateTrainingDatasetErrors];
 
 export type GenerateTrainingDatasetResponses = {
 	/**
@@ -20171,6 +20335,10 @@ export type DeleteEvaluationData = {
 };
 
 export type DeleteEvaluationErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -20347,6 +20515,10 @@ export type VerifyToolMockData = {
 
 export type VerifyToolMockErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -20355,6 +20527,8 @@ export type VerifyToolMockErrors = {
 	 */
 	403: unknown;
 };
+
+export type VerifyToolMockError = VerifyToolMockErrors[keyof VerifyToolMockErrors];
 
 export type VerifyToolMockResponses = {
 	/**
@@ -20731,6 +20905,39 @@ export type ListCaptureProcessesResponses = {
 };
 
 export type ListCaptureProcessesResponse = ListCaptureProcessesResponses[keyof ListCaptureProcessesResponses];
+
+export type StartDictationSessionData = {
+	body: XeLocalAiEngineClientEndpointsTranscriptionV1StartDictationSessionRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/transcription/dictation-sessions";
+};
+
+export type StartDictationSessionErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type StartDictationSessionError = StartDictationSessionErrors[keyof StartDictationSessionErrors];
+
+export type StartDictationSessionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTranscriptionV1StartDictationSessionResponse;
+};
+
+export type StartDictationSessionResponse = StartDictationSessionResponses[keyof StartDictationSessionResponses];
 
 export type ListTranscriptionModelsData = {
 	body?: never;
@@ -21373,6 +21580,7 @@ export type UploadTranscriptionAudioErrors = {
 	 */
 	404: unknown;
 	409: FastEndpointsProblemDetails;
+	413: MicrosoftAspNetCoreMvcProblemDetails;
 	415: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionUnsupportedContainerResponse;
 };
 

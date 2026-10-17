@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { DisabledReasonTooltip } from "@/core/ui/components/DisabledReasonTooltip/DisabledReasonTooltip";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import {
@@ -73,6 +74,7 @@ export function InstanceActions({ instance, onUpdate, compact = false, "data-tes
 	// The single open target: the ONE published port the server composed a URL for. Never the first port — a sidecar
 	// listed first commonly has no address at all.
 	const openTarget = (instance.publishedPorts ?? []).find((port) => Boolean(port.url));
+	const openDisabled = status !== "Running" || !openTarget?.url;
 
 	const onError = (error: unknown): void => {
 		const conflict = readExternalAppConflict(error);
@@ -130,16 +132,23 @@ export function InstanceActions({ instance, onUpdate, compact = false, "data-tes
 
 	return (
 		<Group gap="xs" data-testid={testId ?? "external-app-instance-actions"}>
-			<Button
-				variant="filled"
-				disabled={status !== "Running" || !openTarget?.url}
-				aria-label={t(`${keyPrefix}.open`)}
-				title={openTarget?.url ? undefined : t(`${keyPrefix}.openDisabled`)}
-				onClick={() => window.open(openTarget?.url ?? "", "_blank", "noopener")}
-				data-testid="external-app-action-open"
+			<DisabledReasonTooltip
+				label={t(`${keyPrefix}.openDisabled`)}
+				disabled={!openDisabled}
+				controlDisabled={openDisabled}
+				multiline={true}
+				w={260}
 			>
-				{t(`${keyPrefix}.open`)}
-			</Button>
+				<Button
+					variant="filled"
+					disabled={openDisabled}
+					aria-label={t(`${keyPrefix}.open`)}
+					onClick={() => window.open(openTarget?.url ?? "", "_blank", "noopener")}
+					data-testid="external-app-action-open"
+				>
+					{t(`${keyPrefix}.open`)}
+				</Button>
+			</DisabledReasonTooltip>
 
 			{status === "Stopped" || status === "StoppedUnexpectedly" || status === "Failed" ? (
 				<Button

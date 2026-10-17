@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import de from "@/locales/de.json";
 import en from "@/locales/en.json";
 import { domainErrorRoute, jsonRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
@@ -10,8 +11,8 @@ import { renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
 
 // The Managed Python card: the shared toolchain, one row per feature environment in the server's own state and
-// reason, Compute's confirmed repair/remove with the node's typed 409 refusal surfaced verbatim, and a status poll
-// that runs only while something is provisioning.
+// reason (translated by its reason code), Compute's confirmed repair/remove with the node's typed 409 refusal surfaced
+// verbatim, and a status poll that runs while mounted and faster while something is provisioning.
 
 const { toastMock } = vi.hoisted(() => ({
 	toastMock: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn(), progress: vi.fn() },
@@ -26,6 +27,7 @@ const copy = en.pages.nodeSettings.managedPython;
 interface EnvironmentOverrides {
 	readonly state?: string;
 	readonly reason?: string | null;
+	readonly reasonCode?: string | null;
 	readonly installed?: boolean;
 	readonly mismatches?: readonly string[];
 }
@@ -35,6 +37,7 @@ function environment(profileId: string, overrides: EnvironmentOverrides = {}) {
 		profileId,
 		state: overrides.state ?? "Ready",
 		reason: overrides.reason ?? null,
+		reasonCode: overrides.reasonCode ?? null,
 		installed:
 			overrides.installed === false
 				? null
@@ -117,8 +120,12 @@ describe("ManagedPythonCard", () => {
 				statusPath,
 				status(
 					[
-						environment("training", { state: "Unsupported", installed: false }),
-						environment("compute", { state: "Unsupported", installed: false }),
+						environment("training", {
+							state: "Unsupported",
+							reasonCode: "TrainingPlatformUnsupported",
+							installed: false,
+						}),
+						environment("compute", { state: "Unsupported", reasonCode: "PlatformUnsupported", installed: false }),
 					],
 					{ uvPresent: false, pythonInstalls: [] },
 				),
@@ -132,7 +139,8 @@ describe("ManagedPythonCard", () => {
 		expect(within(screen.getByTestId("managed-python-environment-compute")).queryByRole("button")).toBeNull();
 	});
 
-	it("translates the node's platform reasons and keeps an unknown reason raw", async () => {
+	it("translates a known reason code and keeps the raw reason for a detail-carrying or unknown code", async () => {
+		const isolation = "This node cannot isolate the compute sandbox filesystem (no AppContainer). Remedy text.";
 		const unknown = "Some newer node reason.";
 		server.use(
 			jsonRoute(
@@ -142,25 +150,39 @@ describe("ManagedPythonCard", () => {
 					environment("training", {
 						state: "Unsupported",
 						reason: "Training is available on Linux x64 only.",
+						reasonCode: "TrainingPlatformUnsupported",
 						installed: false,
 					}),
 					environment("compute", {
 						state: "Unsupported",
-						reason: "The Python compute tool is available on Linux x64 only.",
+						reason: isolation,
+						reasonCode: "IsolationUnavailable",
 						installed: false,
 					}),
-					environment("profile-other", { state: "Unsupported", reason: unknown, installed: false }),
+					environment("profile-other", {
+						state: "RepairRequired",
+						reason: unknown,
+						reasonCode: "SomeNewerCode",
+						installed: false,
+					}),
+					environment("profile-uncoded", { state: "RepairRequired", reason: unknown, installed: false }),
 				]),
 			),
 		);
 		renderWithProviders(<ManagedPythonCard />, { withRouter: true });
 
 		const training = await screen.findByTestId("managed-python-environment-training");
-		expect(within(training).getByText(copy.unsupportedReasons.trainingLinuxX64Only)).toBeTruthy();
-		expect(
-			within(screen.getByTestId("managed-python-environment-compute")).getByText(copy.unsupportedReasons.computeLinuxX64Only),
-		).toBeTruthy();
+		expect(within(training).getByText(copy.reasons.TrainingPlatformUnsupported)).toBeTruthy();
+		expect(within(screen.getByTestId("managed-python-environment-compute")).getByText(isolation)).toBeTruthy();
 		expect(within(screen.getByTestId("managed-python-environment-profile-other")).getByText(unknown)).toBeTruthy();
+		expect(within(screen.getByTestId("managed-python-environment-profile-uncoded")).getByText(unknown)).toBeTruthy();
+	});
+
+	it("has a string in every locale for every translated reason code", () => {
+		expect(Object.keys(copy.reasons).sort()).toEqual(Object.keys(de.pages.nodeSettings.managedPython.reasons).sort());
+		for (const text of Object.values(de.pages.nodeSettings.managedPython.reasons)) {
+			expect(text.length).toBeGreaterThan(0);
+		}
 	});
 
 	it("keeps saying uv is not downloaded yet while one environment is supported", async () => {
@@ -208,18 +230,34 @@ describe("ManagedPythonCard", () => {
 		expect(screen.getByText(copy.mismatchesTitle)).toBeTruthy();
 	});
 
-	it("shows the reason and disables both Compute actions while Compute is unsupported", async () => {
-		const reason = "Compute is disabled on this node (Compute:Enabled=false).";
+	// N-66: Compute switched off on a platform that supports it is not "Not available on this platform".
+	it("shows the translated reason, keeps uv not downloaded yet and disables both Compute actions while Compute is off", async () => {
 		server.use(
 			jsonRoute(
 				"get",
 				statusPath,
-				status([environment("training"), environment("compute", { state: "Unsupported", reason, installed: false })]),
+				status(
+					[
+						environment("training", {
+							state: "Unsupported",
+							reasonCode: "TrainingPlatformUnsupported",
+							installed: false,
+						}),
+						environment("compute", {
+							state: "Unsupported",
+							reason: "The Python compute tool is turned off on this node. Turn on Compute tools in Node Settings, Features.",
+							reasonCode: "ComputeDisabled",
+							installed: false,
+						}),
+					],
+					{ uvPresent: false, pythonInstalls: [] },
+				),
 			),
 		);
 		renderWithProviders(<ManagedPythonCard />, { withRouter: true });
 
-		expect(await screen.findByText(reason)).toBeTruthy();
+		expect(await screen.findByText(copy.reasons.ComputeDisabled)).toBeTruthy();
+		expect(screen.getByTestId("managed-python-uv-badge").textContent).toBe(copy.uvMissing);
 		expect((screen.getByRole("button", { name: copy.repair }) as HTMLButtonElement).disabled).toBe(true);
 		expect((screen.getByRole("button", { name: copy.remove }) as HTMLButtonElement).disabled).toBe(true);
 	});
@@ -253,6 +291,37 @@ describe("ManagedPythonCard", () => {
 		expect(screen.queryByText(copy.states.Ready)).toBeNull();
 		expect(reads.count()).toBe(readsBefore);
 		expect(toastMock.error).not.toHaveBeenCalled();
+	});
+
+	it("labels a removal as Removing although the wire state stays Provisioning", async () => {
+		server.use(
+			jsonRoute(
+				"get",
+				statusPath,
+				status([
+					environment("compute", {
+						state: "Provisioning",
+						reason: "The compute runtime is being removed.",
+						reasonCode: "Removing",
+					}),
+				]),
+			),
+		);
+		renderWithProviders(<ManagedPythonCard />, { withRouter: true });
+
+		const row = await screen.findByTestId("managed-python-environment-compute");
+		expect(await within(row).findByText(copy.removing)).toBeTruthy();
+		expect(within(row).queryByText(copy.states.Provisioning)).toBeNull();
+		expect(within(row).getByText(copy.reasons.Removing)).toBeTruthy();
+	});
+
+	it("offers Repair but not Remove while Compute is not provisioned", async () => {
+		server.use(jsonRoute("get", statusPath, status([environment("compute", { state: "NotProvisioned", installed: false })])));
+		renderWithProviders(<ManagedPythonCard />, { withRouter: true });
+
+		const repair = await screen.findByRole("button", { name: copy.repair });
+		expect((repair as HTMLButtonElement).disabled).toBe(false);
+		expect(screen.queryByRole("button", { name: copy.remove })).toBeNull();
 	});
 
 	it("falls back to the raw name for a state, profile or mismatch it does not know, even an inherited one", async () => {
@@ -313,7 +382,8 @@ describe("ManagedPythonCard", () => {
 		await waitFor(() => expect(reads.count()).toBeGreaterThan(first));
 	});
 
-	it("does not poll once every environment has settled", async () => {
+	// N-65: a chat call provisions Compute behind the card's back, so a settled card still polls, only more slowly.
+	it("keeps polling every 10 seconds once every environment has settled", async () => {
 		vi.useFakeTimers({ shouldAdvanceTime: true });
 		server.use(jsonRoute("get", statusPath, status([environment("compute")])));
 		const reads = countStatusReads();
@@ -321,7 +391,9 @@ describe("ManagedPythonCard", () => {
 
 		expect(await screen.findByText(copy.states.Ready)).toBeTruthy();
 		const first = reads.count();
-		await vi.advanceTimersByTimeAsync(15_000);
+		await vi.advanceTimersByTimeAsync(5_100);
 		expect(reads.count()).toBe(first);
+		await vi.advanceTimersByTimeAsync(5_000);
+		await waitFor(() => expect(reads.count()).toBeGreaterThan(first));
 	});
 });

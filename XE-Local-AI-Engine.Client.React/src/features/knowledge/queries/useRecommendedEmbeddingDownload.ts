@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { downloadRecommendedEmbeddingMutation, listLocalModelsQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toast } from "@/core/ui/notifications/Toast";
 import { knowledgeInvalidationKey, knowledgeQueryIds } from "@/features/knowledge/queries/useKnowledgeDocuments";
 
@@ -25,7 +24,7 @@ export function useRecommendedEmbeddingDownload() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		...withResponseValidation(downloadRecommendedEmbeddingMutation()),
+		...downloadRecommendedEmbeddingMutation(),
 		onSuccess: async (response) => {
 			await Promise.all([
 				queryClient.invalidateQueries({ queryKey: listLocalModelsQueryKey() }),

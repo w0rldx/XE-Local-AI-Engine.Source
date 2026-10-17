@@ -28,6 +28,18 @@ internal sealed class GraphWorkflowDefinitionConfiguration : IEntityTypeConfigur
                .HasMaxLength(32)
                .HasDefaultValue(GraphWorkflowDefinitionKind.Standard);
 
+        // Plaintext and defaulted like the kind: a definition saved before unattended actions reads as not allowing them.
+        builder.Property(entity => entity.AllowsActions)
+               .HasColumnName("allows_actions")
+               .HasDefaultValue(false);
+
+        // An int, as [Flags] enums are here; a definition saved before the column accepts what it always did: Manual and Chat.
+        // The sentinel is that same default, so only it defers to the column default and an empty set is written as 0, never silently widened.
+        builder.Property(entity => entity.TriggerSources)
+               .HasColumnName("trigger_sources")
+               .HasDefaultValue(GraphWorkflowTriggerSource.Manual | GraphWorkflowTriggerSource.Chat)
+               .HasSentinel(GraphWorkflowTriggerSource.Manual | GraphWorkflowTriggerSource.Chat);
+
         // A concurrency token, exactly as the run row is: the store's read-then-check is a fast answer for the common stale PUT, but two edits that both read the
         // same version pass it together, and without the token the later one would silently overwrite the earlier instead of being told it lost.
         builder.Property(entity => entity.Version).HasColumnName("version").IsConcurrencyToken();

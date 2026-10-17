@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+
 import { formatDurationSeconds } from "@/core/formatting/TimeFormatting";
 
 /**
@@ -19,4 +21,12 @@ export function formatIntegrationDuration(startedAtUtc: number | null, endedAtUt
 		return "—";
 	}
 	return formatDurationSeconds(endedAtUtc - startedAtUtc);
+}
+
+/**
+ * The operator-facing label of an execution failure category. A category this client does not know renders as the raw
+ * wire value, so a newer server's category stays readable instead of disappearing.
+ */
+export function formatFailureCategory(t: TFunction, category: string): string {
+	return t(`pages.integrations.executions.failureCategories.${category}`, category);
 }

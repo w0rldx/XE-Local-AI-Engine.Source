@@ -2,11 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { getDevelopmentCapabilityOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { AppUpdateChannelSelector } from "@/features/app-update/components/AppUpdateChannelSelector";
 import { SandboxIsolationPanel } from "@/features/development/components/SandboxIsolationPanel";
-import { NodeSettings } from "@/features/node-settings/pages/NodeSettings";
 import { nodeSettingsSearchSchema } from "@/features/node-settings/models/NodeSettingsSections";
+import { NodeSettings } from "@/features/node-settings/pages/NodeSettings";
 
 // `?section=` makes each settings section linkable. The update-channel picker and the isolation table belong to other
 // features, so the route wires them in rather than the page importing across features. The capability behind the
@@ -15,7 +14,7 @@ function NodeSettingsRoute() {
 	const { section } = Route.useSearch();
 	const navigate = Route.useNavigate();
 	const capability = useQuery({
-		...withResponseValidation(getDevelopmentCapabilityOptions()),
+		...getDevelopmentCapabilityOptions(),
 		enabled: section === "sandbox",
 	});
 	return (

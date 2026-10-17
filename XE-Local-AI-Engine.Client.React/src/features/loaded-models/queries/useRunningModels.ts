@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ejectRunningModelMutation, listRunningModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useRuntimeResidencyHub } from "@/core/api/signalr/useRuntimeResidencyHub";
 import {
 	type EjectRunningModelResult,
@@ -11,8 +10,7 @@ import {
 
 // Server state for the llama.cpp running-models section on the Loaded Models page (relocated from the model-fit
 // advisor): it lists llama.cpp server processes. Reads use the generated hey-api `*Options()` (which wire the shared axios instance + TanStack Query
-// AbortSignal automatically) wrapped in withResponseValidation so a zod response-shape failure surfaces as an
-// ApiError. The eject mutation invalidates the running-models list so the ejected entry disappears.
+// AbortSignal automatically). The eject mutation invalidates the running-models list so the ejected entry disappears.
 
 // Generated keys are object arrays; TanStack partial matching on `_id` invalidates every endpoint variant.
 const runningModelsOperationId = "listRunningModels";
@@ -41,7 +39,7 @@ export const runningModelsPushFloorMs = 60_000;
 export function useRunningModels(enabled = true) {
 	const { isLive } = useRuntimeResidencyHub(enabled, runningModelsInvalidationKey());
 	return useQuery({
-		...withResponseValidation(listRunningModelsOptions()),
+		...listRunningModelsOptions(),
 		select: (data) => (data.items ?? []).map(toRunningModel),
 		enabled,
 		// Hub live: the push floor only. Otherwise (b): the fallback cadence while the hub is degraded or not started.
@@ -65,7 +63,7 @@ export function useEjectRunningModel() {
 
 	return useMutation<EjectRunningModelResult, Error, EjectRunningModelVariables>({
 		mutationFn: async (variables: EjectRunningModelVariables) => {
-			const options = withResponseValidation(ejectRunningModelMutation());
+			const options = ejectRunningModelMutation();
 			const response = await options.mutationFn?.({ body: { ...variables } }, undefined as never);
 			return toEjectRunningModelResult(response);
 		},

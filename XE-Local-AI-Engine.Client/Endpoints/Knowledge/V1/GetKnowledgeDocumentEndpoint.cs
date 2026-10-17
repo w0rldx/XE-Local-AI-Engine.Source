@@ -45,6 +45,7 @@ public sealed class GetKnowledgeDocumentEndpoint : Endpoint<KnowledgeDocumentRou
             DisplayName = detail.DisplayName,
             Status = detail.Status,
             FailureReason = detail.FailureReason,
+            FailureReasonCode = KnowledgeFailureReasonCodes.CodeOf(detail.FailureReason),
             ChunkCount = detail.ChunkCount,
             EmbeddingModel = detail.EmbeddingModel,
             StaleModel = detail.StaleModel,

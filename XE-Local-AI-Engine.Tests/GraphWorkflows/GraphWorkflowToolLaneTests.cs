@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.GraphWorkflows;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
@@ -46,6 +47,53 @@ public sealed class GraphWorkflowToolLaneTests
 
         AssertEx.Equal(expected: 0, await ReDispatchAsync(harness, runId, "call"), "a row already being driven has nothing to write.");
         AssertEx.Equal(expected: 1, harness.Tools.CallCountFor(tool), "and nothing to invoke a second time.");
+    }
+
+    /// <summary>
+    ///     The call does not start until its row reads <c>Running</c> (ADR 0021): a restart collapses a <c>Queued</c>
+    ///     row back to <c>Pending</c> without spending an attempt, so a call fired from one would fire twice.
+    /// </summary>
+    [Test]
+    public async Task ACall_StartsOnlyOnceItsRunningWriteHasCommitted()
+    {
+        const string tool = "probe_admitted";
+        await using var harness = GraphWorkflowHarness.PrivateToolHost();
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool
+        {
+            Parks = true
+        });
+        var runId = await harness.StartRunAsync(Graph(tool));
+        var callsWhenRunningWritten = -1;
+
+        _ = await DispatchHookedAsync(harness, runId, () => callsWhenRunningWritten = harness.Tools.CallCountFor(tool));
+        await harness.Tools.WhenRunningAsync(tool).WaitAsync(TestBudgets.Contended);
+
+        AssertEx.Equal(expected: 0, callsWhenRunningWritten, "the call must not have started before Running was written.");
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "call")).Status, "the row reads Running while the call runs.");
+    }
+
+    /// <summary>
+    ///     A <c>Running</c> write that throws leaves the call unstarted: the parked call faults, and the poll fails the
+    ///     row on its one attempt instead of re-running it.
+    /// </summary>
+    [Test]
+    public async Task ARunningWriteThatThrows_StartsNoCall_AndFailsTheRowOnItsOneAttempt()
+    {
+        const string tool = "probe_unadmitted";
+        await using var harness = GraphWorkflowHarness.PrivateToolHost();
+        harness.Tools.Declare(tool);
+        var runId = await harness.StartRunAsync(Graph(tool, """, "maxAttempts": 1"""));
+
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
+            DispatchHookedAsync(harness, runId, static () => throw new InvalidOperationException("the Running write was lost")));
+        await harness.AdvanceUntilAsync(runId,
+            async () => (await harness.ReadNodeRunAsync(runId, "call")).Status == GraphWorkflowNodeRunStatus.Failed,
+            "the row whose Running write was lost never failed.");
+
+        var call = await harness.ReadNodeRunAsync(runId, "call");
+        AssertEx.Equal(expected: 0, harness.Tools.CallCountFor(tool), "a call whose Running write was lost must never start.");
+        AssertEx.Equal(expected: 1, call.Attempt, "the failed write spends no second attempt.");
+        AssertEx.Equal(GraphWorkflowFailureClass.AttemptsExhausted, call.FailureClass, "with one attempt the row is not re-attempted.");
     }
 
     /// <summary>
@@ -320,13 +368,13 @@ public sealed class GraphWorkflowToolLaneTests
     }
 
     /// <summary>A linear <c>Start → Tool → End</c> graph over one named tool.</summary>
-    private static string Graph(string toolName) =>
+    private static string Graph(string toolName, string? nodeExtras = null) =>
         $$"""
           {
             "schemaVersion": 1,
             "nodes": [
               { "key": "start", "kind": "Start" },
-              { "key": "call", "kind": "Tool", "config": { "toolName": "{{toolName}}" } },
+              { "key": "call", "kind": "Tool"{{nodeExtras}}, "config": { "toolName": "{{toolName}}" } },
               { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
             ],
             "edges": [
@@ -360,6 +408,36 @@ public sealed class GraphWorkflowToolLaneTests
         var nodeRun = (await store.ListNodeRunsAsync(runId))
             .Single(candidate => string.Equals(candidate.NodeKey, nodeKey, StringComparison.Ordinal));
         return await Executor(harness).DispatchAsync(store, run, graph, graph.Nodes[nodeKey], nodeRun, CancellationToken.None);
+    }
+
+    /// <summary>
+    ///     Dispatches the still-<c>Pending</c> call row through the real store, with <paramref name="onRunning" /> run
+    ///     just before the <c>Running</c> write is forwarded.
+    /// </summary>
+    private static async Task<int> DispatchHookedAsync(GraphWorkflowHarness harness, Guid runId, Action onRunning)
+    {
+        await using var scope = harness.Services.CreateAsyncScope();
+        var inner = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
+        var store = Substitute.For<IGraphWorkflowStore>();
+        _ = store.ListNodeRunsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                 .Returns(call => inner.ListNodeRunsAsync(call.Arg<Guid>(), call.Arg<CancellationToken>()));
+        _ = store.TransitionNodeRunAsync(Arg.Any<TransitionGraphWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>())
+                 .Returns(call =>
+                 {
+                     var command = call.Arg<TransitionGraphWorkflowNodeRunCommand>();
+                     if (command.TargetStatus == GraphWorkflowNodeRunStatus.Running)
+                     {
+                         onRunning();
+                     }
+
+                     return inner.TransitionNodeRunAsync(command, call.Arg<CancellationToken>());
+                 });
+
+        var run = await inner.GetRunAsync(runId);
+        var graph = GraphWorkflowGraph.Parse(run.GraphJson);
+        var nodeRun = (await inner.ListNodeRunsAsync(runId)).Single(static candidate => string.Equals(candidate.NodeKey, "call", StringComparison.Ordinal));
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Pending, nodeRun.Status, "the dispatch under test starts from a Pending row.");
+        return await Executor(harness).DispatchAsync(store, run, graph, graph.Nodes["call"], nodeRun, CancellationToken.None);
     }
 
     /// <summary>

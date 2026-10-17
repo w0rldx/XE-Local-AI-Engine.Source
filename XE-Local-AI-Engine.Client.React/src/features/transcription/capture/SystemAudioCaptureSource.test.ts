@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { CaptureError } from "@/features/transcription/capture/CaptureSource";
+import { CaptureError } from "@/core/audio/capture/CaptureSource";
 import { SystemAudioCaptureSource } from "@/features/transcription/capture/SystemAudioCaptureSource";
 
 interface StubTrack {

@@ -229,6 +229,14 @@ public sealed class SampleValidationPipeline : ISampleValidationPipeline
                 ScoredBy = "tool-name",
                 Reason = $"The definition's tool snapshot does not contain '{toolName}'."
             });
+
+            // The call the reason names stays in the stored sample, or a reviewer reads a Bad label with no call behind it.
+            parts.Add(new TrainingSamplePartV1("tool",
+                parts.Count,
+                ToolCallId: $"generated-{parts.Count}",
+                ToolName: toolName,
+                Arguments: record.ToolArgumentsJson,
+                IsError: true));
             return false;
         }
 

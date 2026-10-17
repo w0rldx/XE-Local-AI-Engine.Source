@@ -62,16 +62,19 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     }
 
     /// <summary>
-    ///     Reserves a slot under the loaded-cap (evicting an idle LRU process to make room when possible) and allocates
-    ///     a free localhost port. The admission gate serializes the cap decision so it can never be raced past.
+    ///     Reserves a slot under the role's loaded-cap (evicting an idle LRU process of the same class to make room when
+    ///     possible) and allocates a free localhost port. The admission gate serializes the cap decision so it can never be raced past.
     /// </summary>
     /// <remarks>
-    ///     The cap is measured by the <em>reserved-port</em> count, not the registered-process count, so it already
-    ///     includes in-flight spawns — see wiki 03, "Eviction &amp; reaper". A <see cref="ModelResidencyIntent.Background" />
-    ///     spawn never evicts a live chat process; with no other victim it is refused like any spawn at the cap.
+    ///     Chat processes count against <see cref="LlamaServerSupervisorOptions.MaxLoadedProcesses" />, companions (embedding,
+    ///     reranker) against <see cref="LlamaServerSupervisorOptions.MaxLoadedCompanionProcesses" />, each by its
+    ///     <em>reserved-port</em> count, so in-flight spawns are included — see wiki 03, "Eviction &amp; reaper". A
+    ///     <see cref="ModelResidencyIntent.Background" /> spawn never evicts a live chat process.
     /// </remarks>
-    internal async Task<int> AdmitAndAllocatePortAsync(ModelResidencyIntent intent, CancellationToken ct)
+    internal async Task<int> AdmitAndAllocatePortAsync(ModelRole role, ModelResidencyIntent intent, CancellationToken ct)
     {
+        var companion = IsCompanion(role);
+        var cap = companion ? _options.MaxLoadedCompanionProcesses : _options.MaxLoadedProcesses;
         // Processes detached from the table under the gate, tree-killed after it is released (see KillDetachedProcesses).
         var detached = new List<RunningProcess>();
         await _admissionGate.WaitAsync(ct).ConfigureAwait(false);
@@ -80,12 +83,12 @@ internal sealed class LlamaServerIdleReaper : IDisposable
             // Drop any process that has already exited so its slot/port is reclaimed before the cap check.
             PruneExitedProcesses(detached);
 
-            if (_ports.ReservedCount >= _options.MaxLoadedProcesses && !TryEvictIdleLeastRecentlyUsed(intent, detached))
+            if (_ports.ReservedCountOf(companion) >= cap && !TryEvictIdleLeastRecentlyUsed(intent, companion, cap, detached))
             {
                 throw CapReached();
             }
 
-            return _ports.Allocate();
+            return _ports.Allocate(companion);
         }
         finally
         {
@@ -169,7 +172,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     ///     and appended to <paramref name="detached" /> for the caller to tree-kill once the gate is released. The
     ///     ranking it applies is in wiki 03, "Eviction &amp; reaper".
     /// </remarks>
-    private bool TryEvictIdleLeastRecentlyUsed(ModelResidencyIntent intent, List<RunningProcess> detached)
+    private bool TryEvictIdleLeastRecentlyUsed(ModelResidencyIntent intent, bool companion, int cap, List<RunningProcess> detached)
     {
         var now = _timeProvider.GetUtcNow();
         ProcessKey? victimKey = null;
@@ -177,6 +180,12 @@ internal sealed class LlamaServerIdleReaper : IDisposable
         var victimRank = int.MaxValue;
         foreach (var (key, running) in _processes)
         {
+            // Each class has its own slots, so only a process of the admitting class frees one: companions never evict a chat model or the reverse.
+            if (IsCompanion(key.Role) != companion)
+            {
+                continue;
+            }
+
             // A live profiling process is reserved for its benchmark and is never a cap-admission victim; an EXITED one is a dead handle and stays eligible so its
             // slot and port are reclaimed. IsProfilingOwned covers the registration-to-Pin() window, where a pooled-role profiling process would be LRU-eligible.
             if ((running.IsProfilingPinned || running.IsProfilingOwned) && !running.Handle.HasExited)
@@ -197,10 +206,10 @@ internal sealed class LlamaServerIdleReaper : IDisposable
                 continue;
             }
 
-            // Victim preference, best first: rank 0 is exited or idle past its TTL in any role, rank 1 an in-window but unleased POOLED role or TRANSIENT
-            // process. An in-window interactive CHAT process is never a victim. Why the pooled roles yield and the chat role does not: wiki 03, "Eviction and reaper".
+            // Victim preference, best first: rank 0 is exited or idle past its TTL, rank 1 an in-window but unleased companion or TRANSIENT process.
+            // An in-window interactive CHAT process is never a victim. Ranking and the per-class caps: wiki 03, "Eviction and reaper".
             var isIdlePastTtl = running.Handle.HasExited || now - running.LastUsedUtc >= IdleTimeToLiveFor(running);
-            var yieldsInWindow = key.Role is ModelRole.Embedding or ModelRole.Reranker || running.IsTransient;
+            var yieldsInWindow = companion || running.IsTransient;
             if (!isIdlePastTtl && !yieldsInWindow)
             {
                 continue; // An in-window interactive chat process is never a victim.
@@ -225,7 +234,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
         }
 
         _logger.LogWarning("Loaded-model cap ({Cap}) reached; evicting {Idleness} llama-server for model {ModelName} role {Role} to admit a new one.",
-            _options.MaxLoadedProcesses, victimRank == 0 ? "idle" : "in-window pooled or transient", victimKey.Value.ModelName, victimKey.Value.Role);
+            cap, victimRank == 0 ? "idle" : "in-window pooled or transient", victimKey.Value.ModelName, victimKey.Value.Role);
         return true;
     }
 
@@ -448,6 +457,9 @@ internal sealed class LlamaServerIdleReaper : IDisposable
             _admissionGate.Release();
         }
     }
+
+    private static bool IsCompanion(ModelRole role) =>
+        role is ModelRole.Embedding or ModelRole.Reranker;
 
     private static LlamaRuntimeException CapReached()
     {

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -254,6 +255,65 @@ public sealed class DevWorkflowRunServiceTests
     }
 
     /// <summary>
+    ///     The decision route answers with where its answer took the run, as the graph route does: an Approve on the last
+    ///     gate reads Succeeded and Completed, not the WaitingForApproval it was recorded against.
+    /// </summary>
+    [Test]
+    public async Task DecidingAGateOverHttp_AnswersWithThePostDecisionStatus()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid()))).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var nodeRunId = (await harness.ReadNodeRunAsync(runId, "approve")).Id;
+
+        using var client = Host.Factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/local/v1/development-workflows/runs/{runId}/nodes/{nodeRunId}/decision")
+        {
+            Content = new StringContent($$"""{"operationId":"{{Guid.NewGuid()}}","decision":"Approve"}""", Encoding.UTF8, "application/json")
+        };
+        Host.Factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal("Succeeded", document.RootElement.GetProperty("nodeRunStatus").GetString(), "the gate the answer settled, not the wait it answered.");
+        AssertEx.Equal("Completed", document.RootElement.GetProperty("runStatus").GetString(), "approving the only gate ends the run, and the answer says so.");
+    }
+
+    /// <summary>
+    ///     A decision whose inline tick cannot take its turn, or is cancelled, still answers 200 with the status it was recorded
+    ///     against: the decision is durable and the sweep settles it, so a busy dispatcher must not turn it into a 500.
+    /// </summary>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task DecidingAGateWhileTheTickCannotRun_AnswersWithTheRecordedStatus(bool cancelled)
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid()))).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var nodeRunId = (await harness.ReadNodeRunAsync(runId, "approve")).Id;
+
+        await using var scope = harness.Services.CreateAsyncScope();
+        var service = new DevWorkflowRunService(scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>(),
+            new StalledDispatcherSignal(cancelled),
+            scope.ServiceProvider.GetRequiredService<IWorkflowOwnedWorkSessionLifecycle>(),
+            scope.ServiceProvider.GetRequiredService<IDevWorkflowArtifactBlobStore>(),
+            Options.Create(new DevWorkflowOptions()),
+            NullLogger<DevWorkflowRunService>.Instance);
+
+        var decided = await service.DecideAsync(runId, nodeRunId, Guid.NewGuid(), DevWorkflowDecisionKind.Approve, comment: null, payloadJson: null, "operator@localhost.test");
+
+        AssertEx.Equal(DevWorkflowDecisionKind.Approve, decided.Decision.Decision, "the decision is recorded whatever happened to the tick.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.WaitingForApproval, decided.Detail.NodeRuns.Single(row => row.Id == nodeRunId).Status);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status, "and the next tick settles it.");
+    }
+
+    /// <summary>
     ///     A NEW operation id at an answered gate is not the idempotent replay a repeated one is: it is a second human
     ///     act on a closed gate. The refusal carries what already stands, so the operator is told what happened rather
     ///     than only that their click failed.
@@ -391,7 +451,8 @@ public sealed class DevWorkflowRunServiceTests
             payloadJson: null,
             "operator@localhost.test"));
 
-        AssertEx.Equal(expected: 1, detail.Detail.PendingDecisionCount, "the answer is recorded; the runtime has not acted on it yet.");
+        AssertEx.Equal(expected: 0, detail.Detail.PendingDecisionCount, "the decide call settles its answer in one tick, so nothing is left pending on it.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Skipped, detail.Detail.NodeRuns.Single(row => row.Id == nodeRunId).Status, "the answer reports where it took the row.");
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
         AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId)).Status);
     }
@@ -939,5 +1000,27 @@ public sealed class DevWorkflowRunServiceTests
         {
             // The delete path signals nothing; this exists only to fill the constructor.
         }
+
+        public Task<bool> TryAdvanceAsync(Guid runId, TimeSpan gateWait, CancellationToken cancellationToken) =>
+            Task.FromResult(true);
+    }
+
+    /// <summary>A dispatcher whose inline tick never gets its turn, or is cancelled under the caller.</summary>
+    private sealed class StalledDispatcherSignal : IDevWorkflowDispatcherSignal
+    {
+        private readonly bool _cancelled;
+
+        public StalledDispatcherSignal(bool cancelled)
+        {
+            _cancelled = cancelled;
+        }
+
+        public void Signal(Guid runId)
+        {
+            // The sweep would settle it; nothing to record here.
+        }
+
+        public Task<bool> TryAdvanceAsync(Guid runId, TimeSpan gateWait, CancellationToken cancellationToken) =>
+            _cancelled ? Task.FromCanceled<bool>(new CancellationToken(canceled: true)) : Task.FromResult(false);
     }
 }

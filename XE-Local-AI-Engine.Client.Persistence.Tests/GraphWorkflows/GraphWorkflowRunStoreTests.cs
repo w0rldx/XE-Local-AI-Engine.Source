@@ -32,6 +32,49 @@ public sealed class GraphWorkflowRunStoreTests
         AssertEx.Equal(expected: 1, await fixture.RawTableCountAsync("graph_workflow_runs"));
     }
 
+    /// <summary>The run's origin is written at start and reads back through a fresh context; a Manual start carries no principal.</summary>
+    [Test]
+    public async Task StartRun_PersistsTheOrigin()
+    {
+        using var fixture = new GraphWorkflowTestFixture();
+        var principalId = Guid.NewGuid();
+        Guid integrationRunId;
+        Guid manualRunId;
+
+        await using (var context = await fixture.CreateSchemaAsync())
+        {
+            var store = GraphWorkflowTestFixture.StoreFor(context);
+            var definition = await GraphWorkflowTestFixture.SeedDefinitionAsync(store);
+            var start = StartCommand(definition, Guid.NewGuid());
+            integrationRunId = (await store.StartRunAsync(new StartGraphWorkflowRunCommand
+            {
+                RunId = start.RunId,
+                RequestId = start.RequestId,
+                DefinitionId = start.DefinitionId,
+                DefinitionVersion = start.DefinitionVersion,
+                GraphHash = start.GraphHash,
+                GraphJson = start.GraphJson,
+                InputJson = null,
+                NodeRuns = start.NodeRuns,
+                TriggerSource = GraphWorkflowTriggerSource.Integration,
+                PrincipalId = principalId,
+                KeyPrefix = "xek_abc123"
+            })).Id;
+            manualRunId = (await store.StartRunAsync(StartCommand(definition, Guid.NewGuid()))).Id;
+        }
+
+        await using var readContext = fixture.CreateContext();
+        var readStore = GraphWorkflowTestFixture.StoreFor(readContext);
+        var integration = await readStore.GetRunAsync(integrationRunId);
+        AssertEx.Equal(GraphWorkflowTriggerSource.Integration, integration.TriggerSource);
+        AssertEx.Equal(principalId, integration.PrincipalId);
+        AssertEx.Equal("xek_abc123", integration.KeyPrefix);
+        var manual = await readStore.GetRunAsync(manualRunId);
+        AssertEx.Equal(GraphWorkflowTriggerSource.Manual, manual.TriggerSource);
+        AssertEx.Null(manual.PrincipalId, "a run nobody's key started names no principal.");
+        AssertEx.Null(manual.KeyPrefix);
+    }
+
     /// <summary>
     ///     One commit: the run row, a Pending node run per seed, and the run.created event. A run that committed without
     ///     its node runs would be a durable workflow running a request nobody can reconstruct.
@@ -250,7 +293,15 @@ public sealed class GraphWorkflowRunStoreTests
         var store = GraphWorkflowTestFixture.StoreFor(context);
         var run = await StartAsync(store, GraphWorkflowTestFixture.FourNodeGraph, ["queued", "running", "waiting", "pending"]);
         await MoveAsync(store, run.Id, "queued", GraphWorkflowNodeRunStatus.Queued);
-        await MoveAsync(store, run.Id, "running", GraphWorkflowNodeRunStatus.Running);
+        var invocationId = Guid.NewGuid();
+        _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = (await store.GetNodeRunAsync(run.Id, "running")).Id,
+            ExpectedVersion = GraphWorkflowVersions.Any,
+            TargetStatus = GraphWorkflowNodeRunStatus.Running,
+            InvocationId = invocationId
+        });
         await MoveAsync(store, run.Id, "waiting", GraphWorkflowNodeRunStatus.Running);
         await MoveAsync(store, run.Id, "waiting", GraphWorkflowNodeRunStatus.WaitingForApproval);
 
@@ -297,6 +348,10 @@ public sealed class GraphWorkflowRunStoreTests
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, failed.Status, "the verdict is applied in the same commit as the collapse it repairs.");
         AssertEx.Equal(GraphWorkflowFailureClass.Interrupted, failed.FailureClass);
         AssertEx.Equal(expected: 1, failed.Attempt, "an interruption costs no attempt: the retry stage decides that later.");
+        AssertEx.True(running.StartedAtUtc.HasValue, "the Running move stamps the start this test expects to survive.");
+        AssertEx.Equal(running.StartedAtUtc, failed.StartedAtUtc, "a row the restart cut short keeps the start of that attempt, or the run view has no start and no duration.");
+        AssertEx.Null((await store.GetNodeRunAsync(run.Id, "queued")).StartedAtUtc, "a row collapsed for re-dispatch starts clean.");
+        AssertEx.Equal(invocationId, failed.InvocationId, "and the invocation that was in flight, so the settled row still points at it.");
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.WaitingForApproval,
             (await store.GetNodeRunAsync(run.Id, "waiting")).Status,
@@ -329,6 +384,7 @@ public sealed class GraphWorkflowRunStoreTests
 
         var settled = await store.GetNodeRunAsync(run.Id, "start");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, settled.Status);
+        AssertEx.True(settled.StartedAtUtc.HasValue, "a settled row keeps the start of the attempt the restart cut short.");
         AssertEx.Equal(GraphWorkflowFailureClass.Interrupted, settled.FailureClass);
         AssertEx.Equal(expected: 1, settled.Attempt, "costing no attempt, which is the only honest price for a row nobody could judge.");
     }
@@ -814,6 +870,7 @@ public sealed class GraphWorkflowRunStoreTests
             GraphHash = definition.GraphHash,
             GraphJson = definition.GraphJson,
             InputJson = null,
+            TriggerSource = GraphWorkflowTriggerSource.Manual,
             NodeRuns =
             [
                 .. (nodeKeys ?? ["start", "done"]).Select(static key => new GraphWorkflowNodeRunSeed

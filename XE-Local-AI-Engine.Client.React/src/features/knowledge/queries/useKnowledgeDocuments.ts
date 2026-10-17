@@ -8,12 +8,10 @@ import {
 	reindexCorpusMutation,
 	reindexKnowledgeDocumentMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import type { KnowledgeDocument, KnowledgeDocumentDetail } from "@/features/knowledge/models/KnowledgeModels";
 
 // Server state for the knowledge-base surface. Reads run through the generated hey-api `*Options()` (which wire the
-// shared axios instance + TanStack Query AbortSignal automatically) wrapped in withResponseValidation so a zod
-// response-shape failure surfaces as an ApiError (never a raw ZodError). Mutations invalidate by the generated
+// shared axios instance + TanStack Query AbortSignal automatically). Mutations invalidate by the generated
 // query key's `_id` discriminator (partial-object match), so every cached variant of an endpoint refetches. The
 // SignalR hub (useKnowledgeBaseHub) layers live invalidation on top for server-pushed indexing transitions —
 // TanStack Query stays the authoritative source. Upload lives in useKnowledgeUpload (raw multipart) and search in
@@ -38,7 +36,7 @@ export function knowledgeInvalidationKey(operationId: string): readonly [{ _id: 
  */
 export function useKnowledgeDocuments(enabled = true, collectionId?: string) {
 	return useQuery({
-		...withResponseValidation(listKnowledgeDocumentsOptions({ query: collectionId ? { collectionId } : undefined })),
+		...listKnowledgeDocumentsOptions({ query: collectionId ? { collectionId } : undefined }),
 		select: (data): readonly KnowledgeDocument[] => data.items ?? [],
 		enabled,
 	});
@@ -52,7 +50,7 @@ export function useKnowledgeDocuments(enabled = true, collectionId?: string) {
  */
 export function useKnowledgeEmbeddingAvailability(collectionId?: string) {
 	return useQuery({
-		...withResponseValidation(listKnowledgeDocumentsOptions({ query: collectionId ? { collectionId } : undefined })),
+		...listKnowledgeDocumentsOptions({ query: collectionId ? { collectionId } : undefined }),
 		select: (data): boolean => data.embeddingModelAvailable,
 		refetchInterval: (query) => (query.state.data?.embeddingModelAvailable === false ? 10_000 : false),
 	});
@@ -61,7 +59,7 @@ export function useKnowledgeEmbeddingAvailability(collectionId?: string) {
 /** One document's detail + chunks. Disabled until a document id is supplied and the drawer is open. */
 export function useKnowledgeDocumentDetail(documentId: string, enabled: boolean) {
 	return useQuery({
-		...withResponseValidation(getKnowledgeDocumentOptions({ path: { documentId: documentId || "" } })),
+		...getKnowledgeDocumentOptions({ path: { documentId: documentId || "" } }),
 		select: (data): KnowledgeDocumentDetail => data,
 		enabled: enabled && documentId.length > 0,
 	});
@@ -90,7 +88,7 @@ function useInvalidateKnowledge(): () => Promise<void> {
 export function useDeleteKnowledgeDocument(callbacks: KnowledgeMutationCallbacks = {}) {
 	const invalidate = useInvalidateKnowledge();
 	return useMutation({
-		...withResponseValidation(deleteKnowledgeDocumentMutation()),
+		...deleteKnowledgeDocumentMutation(),
 		onSuccess: async () => {
 			await invalidate();
 			callbacks.onSuccess?.();
@@ -103,7 +101,7 @@ export function useDeleteKnowledgeDocument(callbacks: KnowledgeMutationCallbacks
 export function useReindexKnowledgeDocument(callbacks: KnowledgeMutationCallbacks = {}) {
 	const invalidate = useInvalidateKnowledge();
 	return useMutation({
-		...withResponseValidation(reindexKnowledgeDocumentMutation()),
+		...reindexKnowledgeDocumentMutation(),
 		onSuccess: async () => {
 			await invalidate();
 			callbacks.onSuccess?.();
@@ -121,7 +119,7 @@ export interface ReindexCorpusCallbacks {
 export function useReindexKnowledgeCorpus(callbacks: ReindexCorpusCallbacks = {}) {
 	const invalidate = useInvalidateKnowledge();
 	return useMutation({
-		...withResponseValidation(reindexCorpusMutation()),
+		...reindexCorpusMutation(),
 		onSuccess: async (response) => {
 			await invalidate();
 			callbacks.onSuccess?.(response.enqueuedCount);

@@ -29,6 +29,7 @@ public sealed class SqliteFileProbeConnectionStringGuardTests
         "XE-Local-AI-Engine.Tests",
         "XE-Local-AI-Engine.Client.Persistence.Tests",
         "XE-Local-AI-Engine.AI.Agent.Tests",
+        "XE-Local-AI-Engine.Cli.Tests",
         "XE-Local-AI-Engine.Client.Testing"
     ];
 

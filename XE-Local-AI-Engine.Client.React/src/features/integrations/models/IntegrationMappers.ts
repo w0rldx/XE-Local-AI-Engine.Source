@@ -49,7 +49,9 @@ export function toIntegrationTrigger(
 		displayName: dto.displayName,
 		description: dto.description ?? "",
 		enabled: dto.enabled,
-		targetAgentDefinitionId: dto.targetAgentDefinitionId,
+		targetKind: dto.targetKind,
+		targetAgentDefinitionId: dto.targetAgentDefinitionId ?? null,
+		targetGraphWorkflowDefinitionId: dto.targetGraphWorkflowDefinitionId ?? null,
 		sessionPolicy: dto.sessionPolicy ?? DEFAULT_SESSION_POLICY,
 		acceptedInputKinds: toInputKinds(dto.acceptedInputKinds),
 		createdAtUtc: dto.createdAtUtc,
@@ -73,6 +75,21 @@ export function toIntegrationApiKey(dto: XeLocalAiEngineClientEndpointsIntegrati
 	};
 }
 
+// Exactly the id the kind names, and null for the other: the backend refuses a body that sets both (400).
+function toWireTarget(values: IntegrationTriggerFormValues) {
+	return values.targetKind === "Graph"
+		? {
+				targetKind: values.targetKind,
+				targetAgentDefinitionId: null,
+				targetGraphWorkflowDefinitionId: values.targetGraphWorkflowDefinitionId,
+			}
+		: {
+				targetKind: values.targetKind,
+				targetAgentDefinitionId: values.targetAgentDefinitionId,
+				targetGraphWorkflowDefinitionId: null,
+			};
+}
+
 function toWireInputKinds(values: IntegrationTriggerFormValues): string[] {
 	const kinds: string[] = [];
 	if (values.acceptsText) {
@@ -92,8 +109,7 @@ export function toCreateIntegrationTriggerRequest(
 		displayName: values.displayName.trim(),
 		description: values.description.trim() === "" ? null : values.description.trim(),
 		enabled: values.enabled,
-		targetKind: "Agent",
-		targetAgentDefinitionId: values.targetAgentDefinitionId,
+		...toWireTarget(values),
 		sessionPolicy: values.sessionPolicy,
 		acceptedInputKinds: toWireInputKinds(values),
 	};
@@ -108,7 +124,7 @@ export function toUpdateIntegrationTriggerRequest(
 		displayName: values.displayName.trim(),
 		description: values.description.trim() === "" ? null : values.description.trim(),
 		enabled: values.enabled,
-		targetAgentDefinitionId: values.targetAgentDefinitionId,
+		...toWireTarget(values),
 		sessionPolicy: values.sessionPolicy,
 		acceptedInputKinds: toWireInputKinds(values),
 		expectedVersion,
@@ -121,7 +137,9 @@ export function toIntegrationTriggerFormValues(trigger: IntegrationTrigger): Int
 		displayName: trigger.displayName,
 		description: trigger.description,
 		enabled: trigger.enabled,
-		targetAgentDefinitionId: trigger.targetAgentDefinitionId,
+		targetKind: trigger.targetKind,
+		targetAgentDefinitionId: trigger.targetAgentDefinitionId ?? "",
+		targetGraphWorkflowDefinitionId: trigger.targetGraphWorkflowDefinitionId ?? "",
 		sessionPolicy: trigger.sessionPolicy,
 		acceptsText: trigger.acceptedInputKinds.includes("text"),
 		acceptsJson: trigger.acceptedInputKinds.includes("json"),
@@ -174,6 +192,7 @@ export function toIntegrationExecutionDetail(
 		keyPrefix: dto.keyPrefix,
 		requestId: dto.requestId,
 		invocationId: dto.invocationId,
+		graphWorkflowRunId: dto.graphWorkflowRunId ?? null,
 		outputBytes: dto.outputBytes,
 		stopRequestedAtUtc: dto.stopRequestedAtUtc ?? null,
 	};
@@ -198,7 +217,7 @@ export function toIntegrationSession(
 		triggerId: dto.triggerId,
 		triggerName: dto.triggerName,
 		principalId: dto.principalId,
-		agentDefinitionId: dto.agentDefinitionId,
+		agentDefinitionId: dto.agentDefinitionId ?? null,
 		status: dto.status,
 		createdAtUtc: dto.createdAtUtc,
 		lastActivityUtc: dto.lastActivityUtc,

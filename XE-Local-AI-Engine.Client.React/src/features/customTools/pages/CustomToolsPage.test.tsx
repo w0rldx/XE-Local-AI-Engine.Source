@@ -34,6 +34,7 @@ const listRoute = jsonRoute("get", "custom-tools", {
 			mode: "Fixed",
 			enabled: true,
 			acknowledged: true,
+			allowUnattended: false,
 			version: 3,
 			createdAtUtc: 1,
 			updatedAtUtc: 2,

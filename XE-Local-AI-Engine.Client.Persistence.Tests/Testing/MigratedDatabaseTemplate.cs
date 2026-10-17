@@ -45,22 +45,21 @@ internal static class MigratedDatabaseTemplate
     private static readonly string TemplateDirectory = Path.Combine(AppContext.BaseDirectory, "sqlite-templates");
 
     private static readonly Lazy<Task<string>> ChatHead =
-        new(() => BuildAsync("chat-head", path => MigrationSchemaProbe.ApplyChatAsync(path, targetMigration: null)),
+        new(() => BuildAsync(TemplateDirectory, "chat-head", path => MigrationSchemaProbe.ApplyChatAsync(path, targetMigration: null)),
             LazyThreadSafetyMode.ExecutionAndPublication);
 
     private static readonly Lazy<Task<string>> IdentityHead =
-        new(() => BuildAsync("identity-head", MigrationSchemaProbe.ApplyIdentityAsync), LazyThreadSafetyMode.ExecutionAndPublication);
+        new(() => BuildAsync(TemplateDirectory, "identity-head", MigrationSchemaProbe.ApplyIdentityAsync), LazyThreadSafetyMode.ExecutionAndPublication);
 
     private static readonly ConcurrentDictionary<string, Lazy<Task<string>>> ChatAtTargets = new(StringComparer.Ordinal);
 
     /// <summary>
-    ///     The declared chat migration ids, read once off the migrations assembly. <see cref="CopyChatAtAsync" /> checks
-    ///     its target against this set: every distinct target costs one full chain replay to build, so a caller that
-    ///     keys a template on something variable — a file name, a GUID — would silently reintroduce exactly the cost the
-    ///     templates remove. An undeclared id is that mistake, and it is caught on the first call instead of after
-    ///     dozens of replays. It also bounds the number of templates by the chain length by construction.
+    ///     The declared chat migration ids in chain order, read once off the migrations assembly. A target's predecessor
+    ///     is the id before it, and <see cref="CopyChatAtAsync" /> rejects an id that is not here: a template keyed on
+    ///     something variable — a file name, a GUID — has no place in the chain. It also bounds the number of templates
+    ///     by the chain length by construction.
     /// </summary>
-    private static readonly Lazy<IReadOnlySet<string>> DeclaredChatMigrations =
+    private static readonly Lazy<string[]> DeclaredChatMigrations =
         new(ReadDeclaredChatMigrations, LazyThreadSafetyMode.ExecutionAndPublication);
 
     /// <summary>Writes a <see cref="NodeChatDbContext" /> database migrated to head at <paramref name="databasePath" />.</summary>
@@ -85,11 +84,26 @@ internal static class MigratedDatabaseTemplate
     {
         EnsureDeclaredChatMigration(targetMigrationId);
 
-        var template = ChatAtTargets.GetOrAdd(targetMigrationId,
-            static id => new Lazy<Task<string>>(() => BuildAsync($"chat-at-{id}", path => MigrationSchemaProbe.ApplyChatAsync(path, id)),
-                LazyThreadSafetyMode.ExecutionAndPublication));
+        Publish(await ChatAtPathAsync(targetMigrationId), databasePath);
+    }
 
-        Publish(await template.Value, databasePath);
+    /// <summary>The published template stopped at <paramref name="targetMigrationId" />, built on first use.</summary>
+    internal static Task<string> ChatAtPathAsync(string targetMigrationId)
+    {
+        return ChatAtPathAsync(TemplateDirectory, ChatAtTargets, targetMigrationId);
+    }
+
+    /// <summary>
+    ///     The same chained build in <paramref name="templateDirectory" /> with its own cache, so a test can watch a cold
+    ///     chain build its predecessors instead of reading the shared, possibly warm, directory.
+    /// </summary>
+    internal static Task<string> ChatAtPathAsync(string templateDirectory, ConcurrentDictionary<string, Lazy<Task<string>>> templates,
+        string targetMigrationId)
+    {
+        return templates.GetOrAdd(targetMigrationId,
+                            id => new Lazy<Task<string>>(() => BuildChatAtAsync(templateDirectory, templates, id),
+                                LazyThreadSafetyMode.ExecutionAndPublication))
+                        .Value;
     }
 
     /// <summary>
@@ -100,11 +114,11 @@ internal static class MigratedDatabaseTemplate
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(targetMigrationId);
 
-        if (!DeclaredChatMigrations.Value.Contains(targetMigrationId))
+        if (!DeclaredChatMigrations.Value.Contains(targetMigrationId, StringComparer.Ordinal))
         {
             throw new InvalidOperationException($"'{targetMigrationId}' is not a declared chat migration id, so there is no chain state to build a template for. "
-                                                + "Pass the id of a declared migration: a target derived from anything else — a file name, a GUID — costs a full "
-                                                + "chain replay per caller and reintroduces exactly the cost these templates exist to remove.");
+                                                + "Pass the id of a declared migration: a target derived from anything else — a file name, a GUID — has no "
+                                                + "predecessor template to chain onto and no place in the chain.");
         }
     }
 
@@ -115,6 +129,26 @@ internal static class MigratedDatabaseTemplate
     internal static Task<string> ChatHeadPathAsync()
     {
         return ChatHead.Value;
+    }
+
+    // Template k is a copy of template k-1 plus exactly one migration, so a cold run pays for the chain once instead of
+    // once per target. The predecessor is built on demand; only the first declared migration replays from empty.
+    private static Task<string> BuildChatAtAsync(string templateDirectory, ConcurrentDictionary<string, Lazy<Task<string>>> templates,
+        string targetMigrationId)
+    {
+        var declared = DeclaredChatMigrations.Value;
+        var index = Array.IndexOf(declared, targetMigrationId);
+        var predecessor = index > 0 ? declared[index - 1] : null;
+
+        return BuildAsync(templateDirectory, $"chat-at-{targetMigrationId}", async scratchDatabase =>
+        {
+            if (predecessor is not null)
+            {
+                File.Copy(await ChatAtPathAsync(templateDirectory, templates, predecessor), scratchDatabase);
+            }
+
+            await MigrationSchemaProbe.ApplyChatAsync(scratchDatabase, targetMigrationId);
+        });
     }
 
     // Builds one template and publishes it under its key-derived name.
@@ -131,11 +165,11 @@ internal static class MigratedDatabaseTemplate
     //
     // The publish is a same-filesystem rename, i.e. atomic; a losing racer (another test process on the same build)
     // simply keeps the winner's equivalent template.
-    private static async Task<string> BuildAsync(string key, Func<string, Task> applyAsync)
+    private static async Task<string> BuildAsync(string templateDirectory, string key, Func<string, Task> applyAsync)
     {
-        SweepStaleTemplates(TemplateDirectory, MigrationsAssemblyKey);
+        SweepStaleTemplates(templateDirectory, MigrationsAssemblyKey);
 
-        var templatePath = Path.Combine(TemplateDirectory, $"{MigrationsAssemblyKey}-{key}.sqlite");
+        var templatePath = Path.Combine(templateDirectory, $"{MigrationsAssemblyKey}-{key}.sqlite");
         if (File.Exists(templatePath))
         {
             return templatePath;
@@ -143,7 +177,7 @@ internal static class MigratedDatabaseTemplate
 
         // A directory, so one recursive delete takes any sidecars with it; inside the template directory, so the publish
         // stays a same-filesystem rename. The sweep only touches files, so it leaves this alone.
-        var scratchDirectory = Path.Combine(TemplateDirectory, $"build-{Guid.NewGuid():N}");
+        var scratchDirectory = Path.Combine(templateDirectory, $"build-{Guid.NewGuid():N}");
         _ = Directory.CreateDirectory(scratchDirectory);
         try
         {
@@ -202,7 +236,7 @@ internal static class MigratedDatabaseTemplate
         }
     }
 
-    private static IReadOnlySet<string> ReadDeclaredChatMigrations()
+    private static string[] ReadDeclaredChatMigrations()
     {
         var probeDirectory = Path.Combine(Path.GetTempPath(), $"xe-local-ai-engine-persistence-declared-{Guid.NewGuid():N}");
         _ = Directory.CreateDirectory(probeDirectory);
@@ -213,7 +247,8 @@ internal static class MigratedDatabaseTemplate
             // Reading the declared set touches no database file; the context is only the route to the migrations
             // assembly. CreateForMigration creates the parent directory, which is why this owns a throwaway one.
             using var context = AgentDefinitionTestContextFactory.CreateForMigration(Path.Combine(probeDirectory, "declared.sqlite"), keyHolder);
-            return context.Database.GetService<IMigrationsAssembly>().Migrations.Keys.ToHashSet(StringComparer.Ordinal);
+            // EF orders migrations by id, and so does the chain; sorted here so the predecessor never rests on that.
+            return [.. context.Database.GetService<IMigrationsAssembly>().Migrations.Keys.Order(StringComparer.Ordinal)];
         }
         finally
         {

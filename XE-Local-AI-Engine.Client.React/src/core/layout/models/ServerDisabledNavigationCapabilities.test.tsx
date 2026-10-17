@@ -21,10 +21,6 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal)
 	};
 });
 
-vi.mock("@/core/api/ResponseValidation", () => ({
-	withResponseValidation: <T,>(options: T): T => options,
-}));
-
 import { useServerDisabledNavigationCapabilities } from "@/core/layout/models/NavigationMenuData";
 
 function wrapper({ children }: { children: ReactNode }) {

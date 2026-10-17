@@ -80,7 +80,8 @@ internal static class ChatStreamEventMapper
             ReasoningTokens = reasoningTokens ?? message.ReasoningCount,
             InvocationTimeoutSeconds = invocationTimeoutSeconds,
             // Terminal events only: the snapshot describes a finished turn, and lifecycle frames stay lean.
-            ContextWindow = IsTerminalEventType(type) ? message.ContextWindow : null
+            ContextWindow = IsTerminalEventType(type) ? message.ContextWindow : null,
+            FailureCategory = IsTerminalEventType(type) ? message.FailureCategory?.ToString() : null
         };
     }
 

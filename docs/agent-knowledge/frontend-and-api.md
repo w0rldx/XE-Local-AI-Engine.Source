@@ -7,6 +7,18 @@ regenerating `openapi/v1.json`. Conventions: `XE-Local-AI-Engine.Client.React/AG
 
 ## Chat and UI contracts
 
+### Mantine 9.6's default colour-scheme storage key is `mantine-color-scheme-value`
+
+**Rule:** never rely on Mantine's default `localStorageColorSchemeManager` key; it is `mantine-color-scheme-value`, not the documented `mantine-color-scheme`. The provider builds one explicit manager on the shared `colorSchemeStorageKey` constant, and any code or test that reads or seeds the stored scheme uses that constant. **Prevents:** a stored or seeded scheme written under a key the provider never reads. **Authority:** `ThemeProvider` (`colorSchemeManager`); `ThemeStore.colorSchemeStorageKey`.
+
+### A gated `ColorInput` keeps its own draft state, never a `key` reset
+
+**Rule:** a Mantine `ColorInput` that stores only a complete hex holds a controlled local draft for the text being typed. Resetting it by changing its `key` remounts it mid-edit and drops focus and the open picker, so pin its DOM identity in the test (see the input-remount entry below). **Prevents:** the accent colour field losing focus while the user types or drags. **Authority:** `NodeSettingsAuxiliaryPanels` (`accentDraft`).
+
+### Edit `de.json` by key: "Knoten" and "Node" are different words
+
+**Rule:** in German, "Knoten" is correct for a graph node (`pages.graphWorkflows`, `pages.devWorkflows` and a few `pages.chat.workflow.*` strings); only the engine instance is "Node", so never search and replace. Several Vitest files pin German sentences verbatim (for example `NodeSettingsFieldsCard.test.tsx`, `AppUpdateChannelSelector.test.tsx`), so grep the tests for the old string before changing one. With parallel locale work only one writer edits the file; others hand over key-to-value change lists. **Prevents:** a bulk replace that corrupts graph terminology and reds unrelated tests. **Authority:** `src/locales/de.json`; `src/I18n.test.ts` (key parity).
+
 ### Chat rendering contract
 
 **Rule:** render one ordered `parts[]` sequence built by the shared `buildMessageParts()` for live and reloaded
@@ -104,9 +116,17 @@ flashes, stuck 401s, fields that look right live and persist null. **Authority:*
 
 **Rule:** beyond wiki 24: verify on the emitted asset, since tsc, biome and `vite build` stay green and no gate
 instantiates a worklet: `grep -c "import" dist/assets/*Worklet*.js` must be 0, so the file's own comments avoid that
-word. **Authority:** `capture/Pcm16DownsamplerWorklet.js`; `capture/Downsample.test.ts`.
+word. **Authority:** `core/audio/capture/Pcm16DownsamplerWorklet.js`; `core/audio/capture/Downsample.test.ts`.
 
 ## OpenAPI and the generated client
+
+### Regenerating the committed OpenAPI document needs the live host
+
+**Rule:** `pnpm run openapi:generate` only re-emits the hey-api client from the `openapi/v1.json` already on disk; it never refreshes `v1.json`. After a DTO or endpoint change run `OPENAPI_LIVE_SCRIPT=openapi scripts/openapi-live-check.sh` (regenerate mode) and commit both the document and the client; the default mode only compares. **Prevents:** a "regenerated" client that still carries the old contract, caught only by `openapi:check` in CI. **Authority:** `scripts/openapi-live-check.sh` header; the `openapi:*` scripts in `XE-Local-AI-Engine.Client.React/package.json`.
+
+### `openapi:check` and `licenses:check` diff the working tree against the INDEX
+
+**Rule:** both scripts end in `git diff --exit-code` over their generated paths, which compares the working tree with the index, not `HEAD`: an unstaged regeneration fails and a staged or committed one passes. `licenses:check` also lists backend NuGet package versions, so every NuGet bump needs `licenses:generate` and the regenerated file in the same commit. **Prevents:** a correct regeneration reported as a failure until it is staged, and a NuGet bump red on `licenses:check` because its inventory was never regenerated. **Authority:** the `openapi:check` and `licenses:check` scripts in `package.json`; `scripts/GenerateLicenses.mjs`.
 
 ### OpenAPI → hey-api is the sole REST data layer for React
 
@@ -168,9 +188,17 @@ with no interceptors: no auth header, no ProblemDetails mapping. A lazy `import(
 
 ### A FluentValidation range rule is published as OpenAPI min/max even under `.When`
 
-**Rule:** a request field that accepts a sentinel outside its range (`-1` = unset) validates with `Must(...)`, not `InclusiveBetween(...).When(...)`: FastEndpoints publishes the range as `minimum`/`maximum` whatever the condition, and the generated zod schema then refuses the sentinel in the browser before the request is sent. Check the regenerated `zod.gen.ts` for the field, and keep the SPA's range check on the bounds the response carries. **Prevents:** a reset the API accepts and the SPA cannot send. **Authority:** `NodeSettingsEndpointValidators` (`IsUnsetOrBetween`), `StoredNodeSettings.TokenSettingUnset`; model-matrix follow-ups V3, 2026-10-05.
+**Rule:** FastEndpoints publishes `InclusiveBetween(...)` as OpenAPI `minimum`/`maximum` whatever its `.When(...)` condition, and the generated zod schema then refuses an out-of-range value in the browser before the request is sent. A request field that must accept a value outside its range, or whose 400 must name another way out, validates with `Must(...)`; range rules on a clearable node-settings knob stay `Must(...)` (`NullOrBetween`). Check the regenerated `zod.gen.ts` for the field, and keep the SPA's range check on the bounds the response carries. **Prevents:** a value the API accepts and the SPA cannot send. **Authority:** `NodeSettingsEndpointValidators` (`IsNullOrBetween`); model-matrix follow-ups V3, 2026-10-05.
+
+### PUT node-settings: null clears, an omitted member keeps, `-1` and `""` are refused
+
+**Rule:** on `PUT node-settings` an omitted member keeps, an explicit `null` clears back to the effective default, and a value sets. `-1` and `""` are a 400 that says to send null. Null on `externalAccessProfile`, `uiMode` or `sandboxSecurityProfile` is a 400; null on `maxMessageRequestTimeoutSeconds` resets it. A .NET client serializes the typed request with `WhenWritingNull`, or every unset member clears. **Prevents:** a client wiping settings with nulls, or sending `-1`/`""` and getting a 400. **Authority:** `SaveNodeSettingsRequest.ExplicitNullTracking`, `NodeSettingsEndpointValidators` (`NotBlank`, `NotClearable`); live QA follow-ups D2, 2026-10-17.
 
 ## Endpoint error shapes
+
+### Count `CreatedAtAsync` Location targets and hand-written axios calls as callers before deleting an endpoint
+
+**Rule:** an endpoint with no generated-client consumer can still be the `Send.CreatedAtAsync<TGet>` target of a create endpoint (the 201 `Location` header) or be called through a hand-written axios client such as `NodeAuthApi`. Grep for the endpoint type and its route in both places before calling it dead. **Prevents:** a deletion justified by generated-client usage alone that breaks a create route's `Location` or an authentication call. **Authority:** `Create*Endpoint` classes (`CreateAgentDefinitionEndpoint` targets `GetAgentDefinitionEndpoint`); `NodeAuthApi`.
 
 ### Endpoint exception handling is mature — don't mass-remove catches
 
@@ -238,6 +266,14 @@ payload enum lists, never hub method signatures; a signature change needs its ow
 
 ## Frontend tests and tooling
 
+### SignalR wraps a negotiate failure, so a start error carries no `statusCode`
+
+**Rule:** `@microsoft/signalr` rejects a failed negotiate as `FailedToNegotiateWithServerError` whose status appears only inside `message` (`Status code '404'`); `statusCode` is absent. Classify a hub start failure on both shapes, probe the installed package before asserting an error shape, and never let a test mock only the unwrapped error. **Prevents:** a status check on start failures that never fires, so a feature-off hub is treated as a transient failure. **Authority:** `SharedHubConnection.isFeatureOffStart` and its wrapped-404 test case.
+
+### pnpm's release-age gate decides which patch a bump installs
+
+**Rule:** `pnpm-workspace.yaml` sets `minimumReleaseAge` (seven days) with `minimumReleaseAgeStrict: false`, so an update resolves to the newest version old enough, which can be an older patch than the one a registry page or a PR names. Check the lockfile for the installed version and state it in the commit body. **Prevents:** a fix assumed present in a bump that resolved below it. **Authority:** `XE-Local-AI-Engine.Client.React/pnpm-workspace.yaml`.
+
 ### Frontend lint
 
 **Rule:** lint runs `biome format src scripts` as a gate; generated files are excluded and Biome's CSS formatter is
@@ -303,6 +339,7 @@ Superseded claims; the entries above are the active rules.
 
 | Stale belief | Current correction |
 |---|---|
+| JSON null keeps a node setting; `-1` or `""` clears it. | Null clears; an omitted member keeps; `-1` and `""` are a 400 that says to send null (live QA follow-ups D2, 2026-10-17). |
 | `nodeCapabilities.preview` gates a route. | The flag, the route and the feature are gone; `graphWorkflows` is the successor and is on by default (§5). |
 | Desktop-only ThemeConfigurator/Open Canvas are outside the mobile-responsive scope. | Both are gone; no surface is excluded from the mobile-responsive scope (§6). Theme is Mantine-native, with scheme and accent in the node-settings "This browser" card. |
 | A capped route's 413 comes in FastEndpoints' `errors[]` shape when the endpoint refuses it itself. | Both the host's and the endpoint's refusal write the same ASP.NET `ProblemDetails` body via `RequestBodyTooLargeProblem` (§5). |

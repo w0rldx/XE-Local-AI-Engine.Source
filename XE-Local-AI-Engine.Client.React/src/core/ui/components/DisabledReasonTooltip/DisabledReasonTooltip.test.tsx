@@ -36,7 +36,10 @@ describe("DisabledReasonTooltip", () => {
 		const wrapper = wrapperOf("export");
 		expect(wrapper.getAttribute("tabindex")).toBe("0");
 		fireEvent.focus(wrapper);
-		expect(await screen.findByRole("tooltip")).toHaveProperty("textContent", "Save first");
+		const tooltip = await screen.findByRole("tooltip");
+		expect(tooltip).toHaveProperty("textContent", "Save first");
+		// The reason is the focused wrapper's description, so a screen reader announces it on focus.
+		expect(wrapper.getAttribute("aria-describedby")).toBe(tooltip.id);
 	});
 
 	it("leaves the tab stop to an enabled control", () => {

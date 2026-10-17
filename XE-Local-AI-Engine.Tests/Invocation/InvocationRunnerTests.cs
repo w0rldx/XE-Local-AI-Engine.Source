@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Invocation;
 
 using System.ClientModel.Primitives;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
 using System.Diagnostics;
@@ -14,6 +15,7 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -36,6 +38,7 @@ using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
+using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -64,6 +67,7 @@ using XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
+using XE_Local_AI_Engine.Tests.Transcription;
 using ChatFinishReason = Microsoft.Extensions.AI.ChatFinishReason;
 using ChatMessage = Microsoft.Extensions.AI.ChatMessage;
 
@@ -753,17 +757,19 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
-    public async Task RunAsync_WhenAlreadyBusy_ThrowsInvalidOperationException()
+    public async Task RunAsync_WhenTheSameInvocationIsAlreadyActive_ThrowsInvalidOperationException()
     {
+        // The dispatcher's slot, not the runner, serializes turns; the runner refuses only a duplicate invocation id.
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var runner = CreateRunner(agentUpdates: BlockingUpdates(gate.Task, started));
+        var invocationId = Guid.NewGuid();
 
-        var firstTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build());
+        var firstTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(invocationId).Build());
         await started.Task;
 
-        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() => RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build()));
-        AssertEx.Contains(exception.Message, "Worker is busy");
+        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() => RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(invocationId).Build()));
+        AssertEx.Contains(exception.Message, "already registered");
 
         gate.SetResult();
         await firstTask;
@@ -890,6 +896,22 @@ public sealed class InvocationRunnerTests
 
         await RunAsync(runner, package);
 
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), FailureCategory.Timeout);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenAToolApprovalExpires_LogsAWarningNotAnErrorAndStillReportsATimeoutFailure()
+    {
+        // V-05: an unanswered approval is an expected, typed outcome, so it must not print an ERR line with a stack trace.
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var logger = new RecordingLogger<InvocationRunner>();
+        var package = RuntimePackageBuilder.Valid().WithTimeout().Build();
+        var runner = CreateRunner(CreateFactory(ApprovalExpiredUpdates()), eventDispatcher: dispatcher, logger: logger);
+
+        await RunAsync(runner, package);
+
+        AssertEx.Equal(expected: 1, logger.CountContaining("The approval for tool 'run_python' expired", LogLevel.Warning));
+        AssertEx.Equal(expected: 0, logger.CountContaining("failed", LogLevel.Error));
         await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), FailureCategory.Timeout);
     }
 
@@ -1562,6 +1584,139 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenAnApprovalIsDenied_GivesTheSlotBackWhileParked_AndRetakesItBeforeTheModelRunsAgain()
+    {
+        // A deny still calls the model (it is told the call was refused), so the turn must hold the slot again first.
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        dispatcher.ReleaseSlotForPark(Arg.Any<Guid>()).Returns(true);
+        var segment = 0;
+        var factory = CreateFactory(_ =>
+        {
+            segment++;
+            return segment == 1 ? ApprovalRequestUpdates() : CreateUpdates("done");
+        });
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+        var invocationId = Guid.NewGuid();
+
+        var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithAllowedTool("run_in_agent_home", requiresApproval: true).Build());
+        var requestId = await ReportedApprovalRequestIdAsync(dispatcher);
+
+        dispatcher.Received(1).ReleaseSlotForPark(invocationId);
+        await dispatcher.DidNotReceive().ReacquireSlotAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = requestId,
+            Approved = false
+        });
+        await runTask;
+
+        AssertEx.Equal(expected: 2, segment, "the denied call resumes the turn");
+        Received.InOrder(() =>
+        {
+            dispatcher.ReleaseSlotForPark(invocationId);
+            dispatcher.ReacquireSlotAsync(invocationId, Arg.Any<CancellationToken>());
+        });
+    }
+
+    [Test]
+    public async Task RunAsync_WhenAnApprovalExpires_FailsTheTurnWithoutRetakingTheSlot()
+    {
+        var time = new ManualTimeProvider();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        dispatcher.ReleaseSlotForPark(Arg.Any<Guid>()).Returns(true);
+        var runner = CreateRunner(CreateFactory(_ => ApprovalRequestUpdates()), eventDispatcher: dispatcher, coordinatorTimeProvider: time);
+        var invocationId = Guid.NewGuid();
+
+        var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithAllowedTool("run_in_agent_home", requiresApproval: true).Build());
+        _ = await ReportedApprovalRequestIdAsync(dispatcher);
+        await AssertEx.EventuallyAsync(() => time.ArmedTimerCount > 0, TimeSpan.FromSeconds(5));
+        time.Advance(TimeSpan.FromMinutes(5) + TimeSpan.FromSeconds(1));
+        await runTask;
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(invocationId, Arg.Any<string>(), FailureCategory.Timeout);
+        await dispatcher.DidNotReceive().ReacquireSlotAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task RunAsync_WhenAnAskUserQuestionTimesOut_RetakesTheSlotAndContinuesUnanswered()
+    {
+        var time = new ManualTimeProvider();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        dispatcher.ReleaseSlotForPark(Arg.Any<Guid>()).Returns(true);
+        UserQuestionLifecyclePayload? question = null;
+        dispatcher.ReportUserQuestionAsync(Arg.Do<UserQuestionLifecyclePayload>(payload => question = payload)).Returns(Task.CompletedTask);
+        var segment = 0;
+        var factory = CreateFactory(_ =>
+        {
+            segment++;
+            return segment == 1 ? AskUserRequestUpdates(ValidAskUserArguments()) : CreateUpdates("done");
+        });
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher, coordinatorTimeProvider: time);
+        var invocationId = Guid.NewGuid();
+
+        var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithAllowedTool(AskUserTool.ToolName).Build());
+        await AssertEx.EventuallyAsync(() => question is not null && time.ArmedTimerCount > 0, TimeSpan.FromSeconds(5));
+        time.Advance(TimeSpan.FromMinutes(5) + TimeSpan.FromSeconds(1));
+        await runTask;
+
+        AssertEx.Equal(expected: 2, segment, "an unanswered question still resumes the turn");
+        Received.InOrder(() =>
+        {
+            dispatcher.ReleaseSlotForPark(invocationId);
+            dispatcher.ReacquireSlotAsync(invocationId, Arg.Any<CancellationToken>());
+        });
+    }
+
+    [Test]
+    public async Task RunAsync_WhenAnAnsweredTurnWaitsForTheSlotPastItsParkedDeadline_FailsAsATimeout()
+    {
+        // Pinned, not a fix (review D1 phase 3-4, finding 1): the resume wait is bounded by the parked deadline, which stays
+        // armed until the turn holds the slot again, so a late answer behind a long holder ends the reply as a timeout.
+        var time = new ManualTimeProvider();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        dispatcher.ReleaseSlotForPark(Arg.Any<Guid>()).Returns(true);
+        dispatcher.ReacquireSlotAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                  .Returns(call => Task.Delay(Timeout.InfiniteTimeSpan, call.Arg<CancellationToken>()));
+        var runner = CreateRunner(CreateFactory(_ => ApprovalRequestUpdates()), eventDispatcher: dispatcher, timeProvider: time);
+        var invocationId = Guid.NewGuid();
+
+        var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithTimeout(invocationSeconds: 300)
+                                                            .WithAllowedTool("run_in_agent_home", requiresApproval: true).Build());
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = await ReportedApprovalRequestIdAsync(dispatcher),
+            Approved = true
+        });
+        await AssertEx.EventuallyAsync(() => dispatcher.ReceivedCalls().Any(call => string.Equals(call.GetMethodInfo().Name,
+                nameof(IWorkerEventDispatcher.ReacquireSlotAsync),
+                StringComparison.Ordinal)),
+            TimeSpan.FromSeconds(5));
+
+        // The parked backstop: the five-minute pending age plus the 300 s turn budget.
+        time.Advance(TimeSpan.FromSeconds(601));
+        await runTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(invocationId,
+            Arg.Is<string>(message => message.StartsWith("Timed out", StringComparison.Ordinal)),
+            FailureCategory.Timeout);
+    }
+
+    private static async Task<string> ReportedApprovalRequestIdAsync(IWorkerEventDispatcher dispatcher)
+    {
+        string? requestId = null;
+        await AssertEx.EventuallyAsync(() =>
+        {
+            requestId = dispatcher.ReceivedCalls()
+                                  .Where(call => string.Equals(call.GetMethodInfo().Name, nameof(IWorkerEventDispatcher.ReportApprovalRequestedAsync), StringComparison.Ordinal))
+                                  .Select(call => ((ApprovalRequestPayload)call.GetArguments()[0]!).RequestId)
+                                  .FirstOrDefault();
+            return requestId is not null;
+        }, TimeSpan.FromSeconds(5));
+        return requestId!;
+    }
+
+    [Test]
     public async Task RunAsync_WhenAClientLocalToolRequiresApproval_StillFoldsTheSegmentAndResumes()
     {
         // Companion to the test above (whose offer is ApiSide, i.e. carries no approval metadata to the tool resolver
@@ -1748,6 +1903,37 @@ public sealed class InvocationRunnerTests
                                Arg.Any<string>(),
                                Arg.Any<long>(),
                                Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task RunAsync_SkillOnlyAgent_LoadSkillDecision_ResumesThroughTheRealApprovalValidator(bool approved)
+    {
+        // R4-02: a skill-only agent offers load_skill outside AllowedTools; its resume replayed the response without the
+        // request, and ApprovalResponseValidatingAgent failed the turn whichever way the card was answered.
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
+        using var model = new LoadSkillScriptedChatClient();
+        var runner = CreateRunner(RealSkillPipelineFactory(model), eventDispatcher: dispatcher);
+        var package = RuntimePackageBuilder.Valid()
+                                           .WithConversationId(Guid.NewGuid())
+                                           .WithSkills(new ResolvedSkill(SkillId, SkillName, "A skill.", LoadSkillScriptedChatClient.SkillBody, 1, false))
+                                           .Build();
+        AssertEx.Empty(package.AllowedTools, "the scenario is a skill-only agent; an offered tool would mask the defect");
+
+        var run = RunAsync(runner, package);
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(10));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals.Single().RequestId,
+            Approved = approved
+        });
+        await run.WaitAsync(TimeSpan.FromSeconds(10));
+
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<FailureCategory>());
+        AssertEx.Equal("all done", model.FinalText);
+        AssertEx.Equal(approved, AssertEx.NotNull(model.LoadSkillResult).Contains(LoadSkillScriptedChatClient.SkillBody, StringComparison.Ordinal),
+            "an approved load_skill returns the skill body to the model, a denied one does not");
     }
 
     [Test]
@@ -5389,6 +5575,43 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenJinjaTextArrivesWithoutAProvider400_IsNotRewordedAsATemplateFailure()
+    {
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new InvalidOperationException("Jinja Exception: quoted by a local component.")));
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), FailureCategory.ModelCapabilityUnsupported);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheChatTemplateRejectsTheConversation_MapsAFixedReasonInsteadOfTheRawJinjaText()
+    {
+        // R4-06: llama-server's 400 for a template that raised carries the Jinja source and exception text, which the
+        // user saw verbatim. A wrapped status-400 ClientResultException is the shape the OpenAI adapter produces.
+        const string ProviderMessage = "HTTP 400 (invalid_request_error: ) Unable to generate parser for this template. Automatic parser generation failed: "
+                                       + "While executing CallExpression at line 85 ... Error: Jinja Exception: System message must be at the beginning.";
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new InvalidOperationException("The chat client failed.",
+                   new HttpRequestException(ProviderMessage, inner: null, HttpStatusCode.BadRequest))));
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(),
+            Arg.Is<string>(message => message == "The model's chat template could not render this conversation. Select a different model, or retry without the agent's skills or tools."),
+            FailureCategory.ModelCapabilityUnsupported);
+    }
+
+    [Test]
     public async Task RunAsync_WhenToolGrammarFailureIsWrapped_MapsModelCapabilityUnsupportedFailureCategory()
     {
         // The agent framework wraps the transport exception, so the signature is only visible on an inner exception.
@@ -5522,7 +5745,7 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
-    public async Task RunAsync_WhenCapacityRefusesTheModelLaunch_MapsModelLoadFailed_AndSurfacesTheRefusalVerbatim()
+    public async Task RunAsync_WhenCapacityRefusesTheModelLaunch_MapsInsufficientCapacity_AndSurfacesTheRefusalVerbatim()
     {
         const string refusal = "Insufficient capacity for 'big/model-GGUF:Q4_K_M' (Chat): not enough free memory for another model. "
                                + "Loaded now: 'small/model-GGUF:Q4_K_M' (Chat). Eject one of them or pick a loaded model.";
@@ -5534,7 +5757,7 @@ public sealed class InvocationRunnerTests
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
-        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), refusal, FailureCategory.ModelLoadFailed);
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), refusal, FailureCategory.InsufficientCapacity);
     }
 
     [Test]
@@ -5789,10 +6012,12 @@ public sealed class InvocationRunnerTests
 
         var run = RunAsync(runner, package);
         await AssertEx.CompletesAsync(textYielded.Task, TestBudgets.Contended, "the provider never pulled past the second round's text");
+        var stallStartedAt = clock.GetUtcNow();
         await AdvanceIdleWindowsUntilCompleteAsync(clock, run);
         await AssertEx.CompletesAsync(run, TestBudgets.Contended, "the second round's stall never hit the idle deadline");
 
         await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(static message => IsStreamIdleMessage(message)), FailureCategory.Timeout);
+        AssertEx.Equal(TimeSpan.FromSeconds(61), clock.GetUtcNow() - stallStartedAt, "the stall took more than one idle window");
     }
 
     /// <summary>
@@ -5845,10 +6070,12 @@ public sealed class InvocationRunnerTests
 
         var run = RunAsync(runner, package);
         await AssertEx.CompletesAsync(textYielded.Task, TestBudgets.Contended, "the provider never pulled past its text");
+        var stallStartedAt = clock.GetUtcNow();
         await AdvanceIdleWindowsUntilCompleteAsync(clock, run);
         await AssertEx.CompletesAsync(run, TestBudgets.Contended, "the silent provider never hit the idle deadline");
 
         await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(static message => IsStreamIdleMessage(message)), FailureCategory.Timeout);
+        AssertEx.Equal(TimeSpan.FromSeconds(61), clock.GetUtcNow() - stallStartedAt, "the stall took more than one idle window");
     }
 
     /// <summary>
@@ -5920,10 +6147,12 @@ public sealed class InvocationRunnerTests
             Approved = true
         });
         await AssertEx.CompletesAsync(resumeTextYielded.Task, TestBudgets.Contended, "the resume segment never pulled past its text");
+        var stallStartedAt = clock.GetUtcNow();
         await AdvanceIdleWindowsUntilCompleteAsync(clock, run);
         await AssertEx.CompletesAsync(run, TestBudgets.Contended, "the resume stall never hit the idle deadline");
 
         await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(static message => IsStreamIdleMessage(message)), FailureCategory.Timeout);
+        AssertEx.Equal(TimeSpan.FromSeconds(61), clock.GetUtcNow() - stallStartedAt, "the stall took more than one idle window");
     }
 
     /// <summary>
@@ -5933,14 +6162,14 @@ public sealed class InvocationRunnerTests
     private static Task WaitForIdleAndTurnDeadlineAsync(ManualTimeProvider clock, string message) =>
         AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == IdleAndTurnDeadline, TestBudgets.Contended, message);
 
-    // Steps the clock one idle window at a time until the run completes: the idle timer is armed after the stream's signal, so one advance can miss it.
-    // Each miss still walks the turn deadline forward, so a test that wants the idle failure runs with IdleOnlyTurnSeconds, which these steps cannot reach.
+    // Steps the clock one idle window at a time until the run completes, each step only once the idle timer is armed: it arms after the stream's
+    // signal, so an ungated step could land first and walk only the turn deadline (the 2026-10-08 CI red ended on the 300 s turn deadline that way).
     private static async Task AdvanceIdleWindowsUntilCompleteAsync(ManualTimeProvider clock, Task run)
     {
         var budget = Stopwatch.StartNew();
         while (!run.IsCompleted && budget.Elapsed < TestBudgets.Contended)
         {
-            await AssertEx.SettleAsync();
+            await AssertEx.EventuallyAsync(() => run.IsCompleted || clock.ArmedTimerCount == IdleAndTurnDeadline, TestBudgets.Contended, "the idle deadline was never armed");
             if (!run.IsCompleted)
             {
                 clock.Advance(TimeSpan.FromSeconds(61));
@@ -6417,7 +6646,9 @@ public sealed class InvocationRunnerTests
         IKnowledgeModelPrewarmer? knowledgeModelPrewarmer = null,
         bool knowledgeToolsEnabled = true,
         Action<INodeRuntimeSettings>? configureRuntimeSettings = null,
-        InvocationReasoningControl? reasoningControl = null)
+        InvocationReasoningControl? reasoningControl = null,
+        ILogger<InvocationRunner>? logger = null,
+        TimeProvider? coordinatorTimeProvider = null)
     {
         var resolvedContextBudgetOptions = contextBudgetOptions ?? new ConversationContextBudgetOptions();
         var resolvedFactory = invocationAgentFactory ?? CreateFactory(agentUpdates ?? CreateUpdates("ok"));
@@ -6500,7 +6731,7 @@ public sealed class InvocationRunnerTests
             resolvedValidator,
             resolvedCapabilityReporter,
             resolvedProviderResolver,
-            new LocalRuntimeWarmer(resolvedProviderResolver, resolvedActiveCloudFactory, new FakeModelTrustResolver(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System),
+            new LocalRuntimeWarmer(resolvedProviderResolver, resolvedActiveCloudFactory, new FakeModelTrustResolver(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System, new GpuWorkGate()),
             resolvedProviderStreamResilience,
             contextBudgeter ?? new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(resolvedContextBudgetOptions), runtimeSettings),
             Options.Create(resolvedContextBudgetOptions),
@@ -6518,7 +6749,7 @@ public sealed class InvocationRunnerTests
                 webReviewRetriever ?? WebReviewTestServer.IdleRetriever,
                 runtimeSettings,
                 NullLogger<ToolApprovalCoordinator>.Instance,
-                TimeProvider.System),
+                coordinatorTimeProvider ?? TimeProvider.System),
             new ApiToolCallBridge(resolvedPendingToolCallRegistry, TimeProvider.System),
             new InvocationLifecycleTracker(attachmentTracker ?? CreateAttachmentTracker(), resolvedPendingToolCallRegistry, runtimeSettings, resolvedTimeProvider),
             externalProviderRegistry ?? new FakeExternalProviderRegistry(),
@@ -6527,7 +6758,7 @@ public sealed class InvocationRunnerTests
             CreateScopeFactory(reasoningEffortDispatcherFactory),
             knowledgeModelPrewarmer ?? Substitute.For<IKnowledgeModelPrewarmer>(),
             reasoningControl ?? new InvocationReasoningControl(Substitute.For<ILlamaServerNativeClient>(), NullLogger<InvocationReasoningControl>.Instance),
-            NullLogger<InvocationRunner>.Instance,
+            logger ?? NullLogger<InvocationRunner>.Instance,
             resolvedTimeProvider);
     }
 
@@ -6571,13 +6802,13 @@ public sealed class InvocationRunnerTests
         return new InvocationAttachmentTracker(new Lazy<IWorkerEventDispatcher>(() => dispatcher), TimeProvider.System);
     }
 
-    // The active turn's linked source now lives on InvocationLifecycleTracker; reach it through the runner's own
-    // tracker instance so these tests still observe the source the turn under test armed.
+    // The single registered turn's linked source on the runner's own InvocationLifecycleTracker, or null when no turn is registered.
     private static CancellationTokenSource? GetActiveInvocationCancellationTokenSource(InvocationRunner runner)
     {
         var tracker = GetPrivateField(runner, "_lifecycleTracker");
-        var field = AssertEx.NotNull(tracker.GetType().GetField("_invocationCancellationTokenSource", BindingFlags.Instance | BindingFlags.NonPublic));
-        return (CancellationTokenSource?)field.GetValue(tracker);
+        var turns = (IDictionary)GetPrivateField(tracker, "_turns");
+        var turn = turns.Values.Cast<object>().SingleOrDefault();
+        return turn is null ? null : (CancellationTokenSource?)AssertEx.NotNull(turn.GetType().GetProperty("Source")).GetValue(turn);
     }
 
     private static object GetPrivateField(object target, string name)
@@ -7101,6 +7332,80 @@ public sealed class InvocationRunnerTests
         return factory;
     }
 
+    // The production approval boundary over a real ChatClientAgent and FunctionInvokingChatClient, carrying the definition's
+    // skills through the real MAF skills provider and no other tool.
+    private static IInvocationAgentFactory RealSkillPipelineFactory(IChatClient model)
+    {
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(callInfo =>
+               {
+                   var definition = callInfo.Arg<InvocationAgentDefinition>();
+                   var chatClient = model.AsBuilder().UseFunctionInvocation(NullLoggerFactory.Instance).Build();
+                   return Task.FromResult(new InvocationAgentContext
+                   {
+                       Agent = InvocationAgentFactory.BuildApprovalValidatedAgent(chatClient,
+                           "skill-approval",
+                           "Skill approval end to end.",
+                           [],
+                           NullLoggerFactory.Instance,
+                           new ServiceCollection().BuildServiceProvider(),
+                           skillsProvider: InvocationSkillsProvider.Create(AssertEx.NotNull(definition.Skills))),
+                       Session = null,
+                       SeedMessages = definition.ConversationContext.Prepend(new ChatMessage(ChatRole.System, definition.Instructions)).ToList()
+                   });
+               });
+
+        return factory;
+    }
+
+    // The model: round one calls load_skill; once the result (or the rejection) is back it records it and answers.
+    private sealed class LoadSkillScriptedChatClient : IChatClient
+    {
+        public const string SkillBody = "The codeword is heron.";
+
+        public string? LoadSkillResult { get; private set; }
+
+        public string? FinalText { get; private set; }
+
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            if (messages.SelectMany(static message => message.Contents).OfType<FunctionResultContent>().FirstOrDefault() is { } result)
+            {
+                LoadSkillResult = result.Result?.ToString() ?? string.Empty;
+                FinalText = "all done";
+                return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, FinalText)));
+            }
+
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant,
+            [
+                new FunctionCallContent("call-load-skill", LoadSkillToolName, new Dictionary<string, object?>(StringComparer.Ordinal)
+                {
+                    ["skillName"] = SkillName
+                })
+            ])));
+        }
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
+        {
+            var response = await GetResponseAsync(messages, options, cancellationToken);
+            foreach (var message in response.Messages)
+            {
+                yield return new ChatResponseUpdate(message.Role, message.Contents);
+            }
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null) =>
+            serviceType == typeof(IChatClient) ? this : null;
+
+        public void Dispose()
+        {
+        }
+    }
+
     // The model: round one calls web_fetch, web_search and ask_user in parallel; once all three have results it records them and answers.
     private sealed class WebReviewScriptedChatClient : IChatClient
     {
@@ -7426,6 +7731,12 @@ public sealed class InvocationRunnerTests
     {
         await Task.Yield();
         yield return await Task.FromException<AgentResponseUpdate>(new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout elapsing."));
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> ApprovalExpiredUpdates()
+    {
+        await Task.Yield();
+        yield return await Task.FromException<AgentResponseUpdate>(new ApprovalExpiredException("run_python"));
     }
 
     private static IOrchestrationAgentFactory CreateOrchestrationFactory(IAsyncEnumerable<OrchestrationUpdate> updates, out Ref<FakeOrchestrationRunSession> sessionRef)

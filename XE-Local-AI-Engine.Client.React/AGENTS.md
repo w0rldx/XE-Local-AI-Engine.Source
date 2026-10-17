@@ -51,6 +51,10 @@ pnpm audit --prod --audit-level=high
   wrapper or not — resolves `t()` against the shipped `en` bundle. Assert the bundle string the operator sees, never the
   in-code `defaultValue`; `scripts/CheckI18nDefaults.mjs` fails lint on a drifted or missing default.
   The `"New conversation"` literal in `Chat.tsx` stays untranslated (persisted, compared by exact string).
+- `src/locales/*.json` are kept sorted by key (`pnpm run locales:sort`, `scripts/SortLocales.mjs`); its `--check`
+  runs in `lint`, so `acceptance` fails on an unsorted file. On a merge conflict in a locale file, take either side,
+  re-add the missing keys, and re-run the sort; never hand-merge. Both bundles are lazy chunks: `src/i18n.ts` exports
+  `i18nReady`, `Main.tsx` holds the first render on it and the vitest setup awaits it.
 - Dependency decisions that look like dead weight but are not: `recharts` is a required peer of `@mantine/charts`.
   The exact `@types/node` and `jsdom` versions in `package.json` are deliberate: the first sits behind pnpm's
   trust-downgrade gate, the second waits for vitest-dev/vitest#11336 (a newer jsdom hides the Blob impl symbol, so

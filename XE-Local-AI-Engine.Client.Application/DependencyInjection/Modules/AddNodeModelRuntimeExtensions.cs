@@ -143,6 +143,7 @@ internal static class AddNodeModelRuntimeExtensions
 
         builder.Services.AddSingleton(sp => BuildSeededLlamaServerSupervisorOptions(sp));
         builder.Services.AddSingleton(sp => BuildSeededLlamaServerLaunchPolicyOptions(sp));
+        builder.Services.AddSingleton<ILlamaCppImplicitAcquisitionPolicy, OfflineProfileLlamaCppAcquisitionPolicy>();
         builder.Services.AddLlamaServerLocalModelProvider();
         builder.Services.AddSingleton<ILlamaCppRuntimeAdministrationService, LlamaCppRuntimeAdministrationService>();
 

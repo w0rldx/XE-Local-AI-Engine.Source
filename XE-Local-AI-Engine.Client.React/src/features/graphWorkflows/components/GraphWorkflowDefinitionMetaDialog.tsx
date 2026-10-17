@@ -2,12 +2,13 @@
 // a workflow and to rename one ("Save as" reuses it with a different title and submit label), so it owns no mutation
 // and no query: the page decides which of the two a submit means.
 
-import { Button, Group, Select, Stack, Text, Textarea, TextInput } from "@mantine/core";
+import { Alert, Button, Checkbox, Group, Select, Stack, Switch, Text, Textarea, TextInput } from "@mantine/core";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { z } from "zod";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { graphWorkflowTriggerSources } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import { GRAPH_WORKFLOW_SAMPLES } from "@/features/graphWorkflows/samples/GraphWorkflowSamples";
 
 /** `GraphWorkflowRequestLimits.MaxNameLength`, verbatim; the message is a full i18n key, like the graph schemas'. */
@@ -33,7 +34,17 @@ export interface GraphWorkflowDefinitionMetaDialogProps {
 	readonly offerSamples?: boolean;
 	/** An imported graph's web_fetch allowlist, named before create so the operator sees what it will fetch. */
 	readonly fetchesUnder?: readonly string[];
-	readonly onSubmit: (values: { name: string; description: string | null; sampleId: string | null }) => void;
+	/** The stored `allowsActions` of the definition being edited; undefined hides the switch (create, save as and import never set it). */
+	readonly allowsActions?: boolean;
+	/** The stored `triggerSources` of the definition being edited; undefined hides the checkboxes, like the switch. */
+	readonly triggerSources?: readonly string[];
+	readonly onSubmit: (values: {
+		name: string;
+		description: string | null;
+		sampleId: string | null;
+		allowsActions: boolean | null;
+		triggerSources: string[] | null;
+	}) => void;
 	readonly onClose: () => void;
 }
 
@@ -45,6 +56,8 @@ export function GraphWorkflowDefinitionMetaDialog({
 	isSubmitting = false,
 	offerSamples = false,
 	fetchesUnder = [],
+	allowsActions,
+	triggerSources,
 	onSubmit,
 	onClose,
 }: GraphWorkflowDefinitionMetaDialogProps) {
@@ -53,6 +66,9 @@ export function GraphWorkflowDefinitionMetaDialog({
 	const [description, setDescription] = useState(initial?.description ?? "");
 	const [error, setError] = useState<string | undefined>(undefined);
 	const [sampleId, setSampleId] = useState<string | null>(null);
+	const [actions, setActions] = useState(allowsActions ?? false);
+	const [sources, setSources] = useState<string[]>([...(triggerSources ?? [])]);
+	const [sourcesError, setSourcesError] = useState<string | undefined>(undefined);
 	// What the last pick wrote into the two fields. A field still holding that value (or nothing) is the sample's to
 	// replace; anything else is the operator's typing and is left alone.
 	const [prefilled, setPrefilled] = useState({ name: "", description: "" });
@@ -66,6 +82,9 @@ export function GraphWorkflowDefinitionMetaDialog({
 			setDescription(initial?.description ?? "");
 			setError(undefined);
 			setSampleId(null);
+			setActions(allowsActions ?? false);
+			setSources([...(triggerSources ?? [])]);
+			setSourcesError(undefined);
 			setPrefilled({ name: "", description: "" });
 		}
 	}, [opened]);
@@ -94,8 +113,26 @@ export function GraphWorkflowDefinitionMetaDialog({
 			return;
 		}
 		setError(undefined);
+		if (triggerSources !== undefined && sources.length === 0) {
+			setSourcesError(t("pages.graphWorkflows.definitions.triggerSourcesRequired", "Choose at least one source."));
+			return;
+		}
+		setSourcesError(undefined);
+		// Declaration order, so "unchanged" is a plain comparison and the request reads like the response.
+		const ordered = graphWorkflowTriggerSources.filter((source) => sources.includes(source));
+		const sourcesChanged =
+			triggerSources !== undefined &&
+			(ordered.length !== triggerSources.length || ordered.some((source) => !triggerSources.includes(source)));
 		const trimmed = result.data.description.trim();
-		onSubmit({ name: result.data.name, description: trimmed.length > 0 ? trimmed : null, sampleId });
+		onSubmit({
+			name: result.data.name,
+			description: trimmed.length > 0 ? trimmed : null,
+			sampleId,
+			// Null unless the switch is shown and moved, so a plain rename never writes the flag.
+			allowsActions: allowsActions === undefined || actions === allowsActions ? null : actions,
+			// Null unless the checkboxes are shown and changed, for the same reason.
+			triggerSources: sourcesChanged ? ordered : null,
+		});
 	};
 
 	return (
@@ -157,6 +194,52 @@ export function GraphWorkflowDefinitionMetaDialog({
 					onChange={(event) => setDescription(event.currentTarget.value)}
 					data-testid="gw-definition-meta-description"
 				/>
+				{allowsActions === undefined ? null : (
+					<Stack gap="xs">
+						<Switch
+							label={t("pages.graphWorkflows.definitions.allowActionsLabel", "Allow actions")}
+							description={t(
+								"pages.graphWorkflows.definitions.allowActionsDescription",
+								"Tool nodes may run custom tools flagged for unattended use.",
+							)}
+							checked={actions}
+							onChange={(event) => setActions(event.currentTarget.checked)}
+							data-testid="gw-definition-meta-allow-actions"
+						/>
+						{actions ? (
+							<Alert color="orange" variant="light" data-testid="gw-definition-meta-allow-actions-warning">
+								{t(
+									"pages.graphWorkflows.definitions.allowActionsWarning",
+									"An action changes something outside this app, such as switching a light or starting a program, with nobody asked first. Each one runs once per run and is audited before it runs. Only allow this for workflows you trust.",
+								)}
+							</Alert>
+						) : null}
+					</Stack>
+				)}
+				{triggerSources === undefined ? null : (
+					<Checkbox.Group
+						label={t("pages.graphWorkflows.definitions.triggerSourcesLabel", "Who may start a run")}
+						description={t(
+							"pages.graphWorkflows.definitions.triggerSourcesDescription",
+							"Each start names its source; a source left out here is refused.",
+						)}
+						value={sources}
+						onChange={setSources}
+						error={sourcesError}
+						data-testid="gw-definition-meta-trigger-sources"
+					>
+						<Group gap="md" mt="xs">
+							{graphWorkflowTriggerSources.map((source) => (
+								<Checkbox
+									key={source}
+									value={source}
+									label={t(`pages.graphWorkflows.triggerSource.${source}`, source)}
+									data-testid={`gw-definition-meta-trigger-source-${source}`}
+								/>
+							))}
+						</Group>
+					</Checkbox.Group>
+				)}
 				{fetchesUnder.length > 0 ? (
 					<Text size="xs" c="dimmed" style={{ overflowWrap: "anywhere" }} data-testid="gw-definition-meta-fetches-under">
 						{t("pages.graphWorkflows.importFile.fetchesUnder", "This workflow fetches pages under: {{urls}}", {

@@ -271,6 +271,10 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketRespo
 	completionTokens: z.int(),
 	reasoningTokens: z.int().nullable(),
 	totalTokens: z.int(),
+	tokensReported: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	estimatedCostUsd: z.number(),
 	currency: z.string(),
 });
@@ -599,6 +603,8 @@ export const zXeLocalAiEngineClientEndpointsAppUpdateV1SetAppUpdateChannelReques
 export const zXeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse = z.object({
 	accessToken: z.string(),
 	expiresAtUtc: z.iso.datetime({ offset: true }),
+	refreshToken: z.string().nullish(),
+	refreshTokenExpiresAtUtc: z.iso.datetime({ offset: true }).nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse = z.object({
@@ -629,6 +635,7 @@ export const zXeLocalAiEngineClientEndpointsAuthV1NodeLoginRequest = z.object({
 		.regex(/^[^@]+@[^@]+$/)
 		.nullish(),
 	password: z.string().min(0).max(256),
+	returnRefreshToken: z.boolean().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest = z.object({
@@ -1299,7 +1306,7 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectFidelity
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1ClearBenchmarkRunScoreRequest = z.object({
-	expectedVersion: z.int().optional(),
+	expectedVersion: z.int().gt(0).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1CompareBenchmarkCellsRequest = z.record(z.string(), z.never());
@@ -1318,20 +1325,20 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1CompareBenchmarkCellsRes
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkTaskItemRequest =
 	zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemMutationRequest.and(
 		z.object({
-			expectedProjectVersion: z.int().optional(),
+			expectedProjectVersion: z.int().gt(0).optional(),
 		}),
 	);
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1DeleteBenchmarkProjectRequest = z.object({
-	expectedVersion: z.int().optional(),
+	expectedVersion: z.int().gt(0).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1DeleteBenchmarkRunRequest = z.object({
-	expectedVersion: z.int().optional(),
+	expectedVersion: z.int().gt(0).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1DeleteBenchmarkTaskItemRequest = z.object({
-	expectedVersion: z.int().optional(),
+	expectedVersion: z.int().gt(0).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1EligibleBenchmarkAgentResponse = z.object({
@@ -1459,11 +1466,11 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1RejectedBenchmarkRunBatc
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1RejudgeBenchmarkProjectRequest = z.object({
-	expectedVersion: z.int().optional(),
+	expectedVersion: z.int().gt(0).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1RejudgeBenchmarkRunRequest = z.object({
-	expectedVersion: z.int().optional(),
+	expectedVersion: z.int().gt(0).optional(),
 	force: z.boolean().optional(),
 });
 
@@ -1477,7 +1484,7 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1ScoreBenchmarkRunRequest
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
-	expectedVersion: z.int().optional(),
+	expectedVersion: z.int().gt(0).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunBatchItem = z.object({
@@ -1501,12 +1508,12 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunBatchRe
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkJudgePolicyRequest = z.object({
 	policy: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyDraftDto.nullish(),
-	expectedVersion: z.int().optional(),
+	expectedVersion: z.int().gt(0).optional(),
 	confirmRejudge: z.boolean().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkProjectFidelityRequest = z.object({
-	expectedVersion: z.int().optional(),
+	expectedVersion: z.int().gt(0).optional(),
 	fidelityEnabled: z.boolean().optional(),
 	fidelityKldEnabled: z.boolean().optional(),
 	fidelityChunks: z
@@ -1521,14 +1528,14 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkProjectFi
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkProjectRequest =
 	zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectMutationRequest.and(
 		z.object({
-			expectedVersion: z.int().optional(),
+			expectedVersion: z.int().gt(0).optional(),
 		}),
 	);
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkTaskItemRequest =
 	zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemMutationRequest.and(
 		z.object({
-			expectedVersion: z.int().optional(),
+			expectedVersion: z.int().gt(0).optional(),
 		}),
 	);
 
@@ -2835,6 +2842,9 @@ export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppCatalogResp
 	fromBundledSeed: z.boolean(),
 	refreshFailureMessage: z.string().nullable(),
 	lastRefreshFailure: z.string().nullable(),
+	restartRequired: z.boolean(),
+	bridgeOpenUntilRestart: z.boolean(),
+	refreshUrlConfigured: z.boolean(),
 	applications: z.array(zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppSummaryView),
 });
 
@@ -3169,6 +3179,8 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinit
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	kind: z.string(),
+	allowsActions: z.boolean(),
+	triggerSources: z.array(z.string()),
 	version: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -3249,6 +3261,8 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinit
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	kind: z.string(),
+	allowsActions: z.boolean(),
+	triggerSources: z.array(z.string()),
 	version: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -3316,6 +3330,8 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunSumm
 	graphHash: z.string(),
 	status: z.string(),
 	failureClass: z.string(),
+	triggerSource: z.string(),
+	principalId: z.guid().nullable(),
 	cancelRequestedAtUtc: z.int().nullable(),
 	startedAtUtc: z.int().nullable(),
 	completedAtUtc: z.int().nullable(),
@@ -3327,6 +3343,15 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunResp
 	nodeRuns: z.array(zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunSummaryResponse),
 	output: z.unknown(),
 	graph: zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph,
+});
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowIntentResponse = z.object({
+	status: z.string(),
+	matchedBy: z.string(),
+	definitionId: z.guid().nullable(),
+	definitionName: z.string().nullable(),
+	reason: z.string().nullable(),
+	run: zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunResponse.nullable(),
 });
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowSteerableNodeResponse = z.object({
@@ -3380,6 +3405,7 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowToolRes
 	description: z.string(),
 	parameterSchema: z.string(),
 	requiresAllowedUrls: z.boolean(),
+	isAction: z.boolean(),
 });
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse = z.object({
@@ -3396,6 +3422,12 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ImportGraphWorkflowD
 	name: z.string().min(0).max(200),
 	description: z.string().min(0).max(1024).nullish(),
 	graph: zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph,
+});
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1InvokeGraphWorkflowIntentRequest = z.object({
+	utterance: z.string().min(0).max(2000).optional(),
+	requestId: z.guid().min(1),
+	utteredAt: z.iso.datetime({ offset: true }).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowConversationRunsRequest = z.record(
@@ -3461,6 +3493,8 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1UpdateGraphWorkflowD
 	name: z.string().min(0).max(200).nullish(),
 	description: z.string().min(0).max(1024).nullish(),
 	graph: zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph.nullish(),
+	allowsActions: z.boolean().nullish(),
+	triggerSources: z.array(z.string()).nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflowDefinitionRequest = z.object({
@@ -3540,7 +3574,7 @@ export const zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse = z.object(
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	sampler: z.string(),
+	sampler: z.string().nullable(),
 	cfgScale: z.number(),
 	status: z.string(),
 	createdAtUtc: z.int(),
@@ -5062,6 +5096,7 @@ export const zXeLocalAiEngineClientEndpointsPythonV1ManagedPythonEnvironmentResp
 	profileId: z.string(),
 	state: z.string(),
 	reason: z.string().nullish(),
+	reasonCode: z.string().nullish(),
 	installed: zXeLocalAiEngineClientEndpointsPythonV1ManagedPythonEnvironmentIdentityResponse.nullish(),
 	mismatches: z.array(z.string()),
 });
@@ -5497,7 +5532,7 @@ export const zXeLocalAiEngineClientEndpointsTrainingComparisonsV1CreateCompariso
 });
 
 export const zXeLocalAiEngineClientEndpointsTrainingComparisonsV1DeleteComparisonRequest = z.object({
-	expectedVersion: z.int().optional(),
+	expectedVersion: z.int().gt(0).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsTrainingComparisonsV1ListComparisonsResponse = z.object({
@@ -5507,7 +5542,7 @@ export const zXeLocalAiEngineClientEndpointsTrainingComparisonsV1ListComparisons
 export const zXeLocalAiEngineClientEndpointsTrainingComparisonsV1SuggestComparisonRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsTrainingEvaluationsV1DeleteEvaluationRequest = z.object({
-	expectedVersion: z.int().optional(),
+	expectedVersion: z.int().gt(0).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsTrainingEvaluationsV1EvaluationByIdRequest = z.record(z.string(), z.never());
@@ -5584,7 +5619,7 @@ export const zXeLocalAiEngineClientEndpointsTrainingExportsV1DecideArtifactQuali
 });
 
 export const zXeLocalAiEngineClientEndpointsTrainingExportsV1DeleteTrainingArtifactRequest = z.object({
-	expectedVersion: z.int().optional(),
+	expectedVersion: z.int().gt(0).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsTrainingExportsV1DiscardArtifactQualityRequest = z.object({
@@ -5835,17 +5870,17 @@ export const zXeLocalAiEngineClientEndpointsTrainingRuntimeV1StartTrainingRuntim
 export const zXeLocalAiEngineClientEndpointsTrainingV1CancelTrainingDatasetRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsTrainingV1DeleteTrainingDatasetRequest = z.object({
-	expectedVersion: z.int().optional(),
+	expectedVersion: z.int().gt(0).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsTrainingV1DeleteTrainingDefinitionRequest = z.object({
-	expectedVersion: z.int().optional(),
+	expectedVersion: z.int().gt(0).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsTrainingV1ExportTrainingDatasetRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsTrainingV1GenerateTrainingDatasetRequest = z.object({
-	expectedVersion: z.int().optional(),
+	expectedVersion: z.int().gt(0).optional(),
 	name: z.string().optional(),
 });
 
@@ -5874,7 +5909,7 @@ export const zXeLocalAiEngineClientEndpointsTrainingV1TrainingErrorResponse = z.
 });
 
 export const zXeLocalAiEngineClientEndpointsTrainingV1VerifyToolMockRequest = z.object({
-	expectedVersion: z.int().optional(),
+	expectedVersion: z.int().gt(0).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsTranscriptionV1CaptureProcessResponse = z.object({
@@ -5921,6 +5956,16 @@ export const zXeLocalAiEngineClientEndpointsTranscriptionV1ProcessCaptureStatusR
 
 export const zXeLocalAiEngineClientEndpointsTranscriptionV1SelectTranscriptionModelRequest = z.object({
 	modelId: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1StartDictationSessionRequest = z.object({
+	language: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1StartDictationSessionResponse = z.object({
+	sessionId: z.guid(),
+	startedAtUtc: z.int(),
+	lastSeq: z.int(),
 });
 
 export const zXeLocalAiEngineClientEndpointsTranscriptionV1StartLiveTranscriptionSessionResponse = z.object({
@@ -6448,6 +6493,8 @@ export const zXeLocalAiEngineClientModelsEnumsFailureCategory = z.enum([
 	"ContextWindowExceeded",
 	"ProviderAuthFailed",
 	"ProviderRateLimited",
+	"CallBudgetReached",
+	"InsufficientCapacity",
 ]);
 
 export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse = z.object({
@@ -6500,6 +6547,7 @@ export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryRespon
 
 export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationMonitorResponse = z.object({
 	current: zXeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse.nullable(),
+	live: z.array(zXeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse),
 	history: z.array(zXeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse),
 	historyCapacity: z
 		.int()
@@ -6563,7 +6611,7 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportRepeatGro
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunBatchRequest = z.object({
-	expectedProjectVersion: z.int().optional(),
+	expectedProjectVersion: z.int().gt(0).optional(),
 	items: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunBatchItem).optional(),
 	repeatCount: z
 		.int()
@@ -6577,7 +6625,7 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunBatchRe
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest = z.object({
 	modelName: z.string().optional(),
-	expectedProjectVersion: z.int().optional(),
+	expectedProjectVersion: z.int().gt(0).optional(),
 	kvCacheType: z.string().nullish(),
 	repeatCount: z
 		.int()
@@ -6628,6 +6676,7 @@ export const zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionDe
 	keyPrefix: z.string(),
 	requestId: z.guid(),
 	invocationId: z.guid(),
+	graphWorkflowRunId: z.guid().nullish(),
 	outputBytes: z.int(),
 	lastSequence: z.int(),
 	version: z.int(),
@@ -6644,16 +6693,6 @@ export const zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecuti
 
 export const zXeLocalAiEngineClientPersistenceEntitiesIntegrationSessionPolicy = z.enum(["PerInvocation", "CallerManaged"]);
 
-export const zXeLocalAiEngineClientEndpointsIntegrationsV1UpdateIntegrationTriggerRequest = z.object({
-	displayName: z.string(),
-	description: z.string().nullish(),
-	enabled: z.boolean().optional(),
-	targetAgentDefinitionId: z.guid().min(1),
-	sessionPolicy: zXeLocalAiEngineClientPersistenceEntitiesIntegrationSessionPolicy.optional(),
-	acceptedInputKinds: z.array(z.string()),
-	expectedVersion: z.int().gt(0),
-});
-
 export const zXeLocalAiEngineClientPersistenceEntitiesIntegrationSessionStatus = z.enum(["Active", "Closed"]);
 
 export const zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationSessionResponse = z.object({
@@ -6661,7 +6700,7 @@ export const zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationSessionResp
 	triggerId: z.guid(),
 	triggerName: z.string(),
 	principalId: z.guid(),
-	agentDefinitionId: z.guid(),
+	agentDefinitionId: z.guid().nullish(),
 	status: zXeLocalAiEngineClientPersistenceEntitiesIntegrationSessionStatus,
 	createdAtUtc: z.int(),
 	lastActivityUtc: z.int(),
@@ -6679,7 +6718,7 @@ export const zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationSession
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
-export const zXeLocalAiEngineClientPersistenceEntitiesIntegrationTargetKind = z.enum(["Agent"]);
+export const zXeLocalAiEngineClientPersistenceEntitiesIntegrationTargetKind = z.enum(["Agent", "Graph"]);
 
 export const zXeLocalAiEngineClientEndpointsIntegrationsV1CreateIntegrationTriggerRequest = z.object({
 	name: z
@@ -6690,7 +6729,8 @@ export const zXeLocalAiEngineClientEndpointsIntegrationsV1CreateIntegrationTrigg
 	description: z.string().nullish(),
 	enabled: z.boolean().optional(),
 	targetKind: zXeLocalAiEngineClientPersistenceEntitiesIntegrationTargetKind.optional(),
-	targetAgentDefinitionId: z.guid().min(1),
+	targetAgentDefinitionId: z.guid().nullish(),
+	targetGraphWorkflowDefinitionId: z.guid().nullish(),
 	sessionPolicy: zXeLocalAiEngineClientPersistenceEntitiesIntegrationSessionPolicy.optional(),
 	acceptedInputKinds: z.array(z.string()),
 });
@@ -6702,7 +6742,8 @@ export const zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationTriggerView
 	description: z.string().nullish(),
 	enabled: z.boolean(),
 	targetKind: zXeLocalAiEngineClientPersistenceEntitiesIntegrationTargetKind,
-	targetAgentDefinitionId: z.guid(),
+	targetAgentDefinitionId: z.guid().nullish(),
+	targetGraphWorkflowDefinitionId: z.guid().nullish(),
 	sessionPolicy: zXeLocalAiEngineClientPersistenceEntitiesIntegrationSessionPolicy,
 	acceptedInputKinds: z.array(z.string()),
 	createdAtUtc: z.int(),
@@ -6712,6 +6753,18 @@ export const zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationTriggerView
 
 export const zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationTriggersResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationTriggerView),
+});
+
+export const zXeLocalAiEngineClientEndpointsIntegrationsV1UpdateIntegrationTriggerRequest = z.object({
+	displayName: z.string(),
+	description: z.string().nullish(),
+	enabled: z.boolean().optional(),
+	targetKind: zXeLocalAiEngineClientPersistenceEntitiesIntegrationTargetKind.optional(),
+	targetAgentDefinitionId: z.guid().nullish(),
+	targetGraphWorkflowDefinitionId: z.guid().nullish(),
+	sessionPolicy: zXeLocalAiEngineClientPersistenceEntitiesIntegrationSessionPolicy.optional(),
+	acceptedInputKinds: z.array(z.string()),
+	expectedVersion: z.int().gt(0),
 });
 
 export const zXeLocalAiEngineClientPersistenceEntitiesToolMockVerificationState = z.enum(["Unverified", "Verified", "Rejected"]);
@@ -6930,7 +6983,7 @@ export const zXeLocalAiEngineClientServicesBenchmarksBenchmarkCancellationTarget
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1CancelBenchmarkRunRequest = z.object({
 	target: zXeLocalAiEngineClientServicesBenchmarksBenchmarkCancellationTarget.optional(),
-	expectedVersion: z.int().optional(),
+	expectedVersion: z.int().gt(0).optional(),
 });
 
 export const zXeLocalAiEngineClientServicesChatNodeChatContextWindowKind = z.enum(["LastRound", "PreSendEstimate"]);
@@ -7010,6 +7063,7 @@ export const zXeLocalAiEngineClientServicesCustomToolsCommandDefinition = z.obje
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
 	env: z.array(zXeLocalAiEngineClientServicesCustomToolsCustomToolEnvironmentVariableModel).optional(),
+	detach: z.boolean().optional(),
 });
 
 export const zXeLocalAiEngineClientServicesCustomToolsCustomToolHeaderModel = z.object({
@@ -7037,6 +7091,7 @@ export const zXeLocalAiEngineClientServicesCustomToolsHttpFetchDefinition = z.ob
 	headers: z.array(zXeLocalAiEngineClientServicesCustomToolsCustomToolHeaderModel).optional(),
 	bodyTemplate: z.string().nullish(),
 	allowedHosts: z.array(z.string()).optional(),
+	privateHosts: z.array(z.string()).optional(),
 });
 
 export const zXeLocalAiEngineClientServicesCustomToolsCustomToolDefinition = z.object({
@@ -7046,6 +7101,7 @@ export const zXeLocalAiEngineClientServicesCustomToolsCustomToolDefinition = z.o
 	mode: zXeLocalAiEngineClientPersistenceCustomToolMode.optional(),
 	enabled: z.boolean().optional(),
 	acknowledged: z.boolean().optional(),
+	allowUnattended: z.boolean().optional(),
 	parameters: z.array(zXeLocalAiEngineClientServicesCustomToolsCustomToolParameterModel).optional(),
 	http: zXeLocalAiEngineClientServicesCustomToolsHttpFetchDefinition.nullish(),
 	command: zXeLocalAiEngineClientServicesCustomToolsCommandDefinition.nullish(),
@@ -7059,6 +7115,7 @@ export const zXeLocalAiEngineClientServicesCustomToolsCustomToolView = z.object(
 	mode: zXeLocalAiEngineClientPersistenceCustomToolMode,
 	enabled: z.boolean(),
 	acknowledged: z.boolean(),
+	allowUnattended: z.boolean(),
 	version: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -7299,6 +7356,7 @@ export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentDetailRe
 	displayName: z.string(),
 	status: zXeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus,
 	failureReason: z.string().nullish(),
+	failureReasonCode: z.string().nullish(),
 	chunkCount: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -7319,6 +7377,7 @@ export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse
 	displayName: z.string(),
 	status: zXeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus,
 	failureReason: z.string().nullish(),
+	failureReasonCode: z.string().nullish(),
 	chunkCount: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -7381,10 +7440,6 @@ export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitRespons
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
-export const zXeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeResponse = z.object({
-	results: z.array(zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse),
-});
-
 export const zXeLocalAiEngineClientServicesChatNodeChatMessageSource = z.object({
 	documentId: z.guid().optional(),
 	chunkId: z.guid().optional(),
@@ -7442,6 +7497,7 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse =
 	generationDurationMs: z.int().nullish(),
 	sources: z.array(zXeLocalAiEngineClientServicesChatNodeChatMessageSource).nullish(),
 	contextWindow: zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowResponse.nullish(),
+	failureCategory: zXeLocalAiEngineClientModelsEnumsFailureCategory.nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse = z.object({
@@ -7457,6 +7513,7 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationRespo
 	branchOfConversationId: z.guid().nullish(),
 	selectedPath: z.record(z.string(), z.guid()).nullish(),
 	memoryExcluded: z.boolean(),
+	agentDefinitionId: z.guid().nullish(),
 	messages: z.array(zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse),
 });
 
@@ -7464,6 +7521,13 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsR
 	messageId: z.guid(),
 	variantGroupId: z.guid().nullish(),
 	variants: z.array(zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse),
+});
+
+export const zXeLocalAiEngineClientServicesKnowledgeKnowledgeSearchDegradation = z.enum(["LexicalOnly", "RerankerUnavailable"]);
+
+export const zXeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeResponse = z.object({
+	results: z.array(zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse),
+	degradations: z.array(zXeLocalAiEngineClientServicesKnowledgeKnowledgeSearchDegradation),
 });
 
 export const zXeLocalAiEngineClientServicesMcpMcpConnectionFailureReason = z.enum([
@@ -7958,6 +8022,22 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
 	maxAllowedWebFetchTimeoutSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	intentRouterDefinitionId: z.guid().nullish(),
+	intentMaxUtteranceAgeSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minIntentMaxUtteranceAgeSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedIntentMaxUtteranceAgeSeconds: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
@@ -8654,7 +8734,11 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
-	speculativeDraftGpuLayers: z.int().gte(0).lte(1000).nullish(),
+	speculativeDraftGpuLayers: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
 	rerankerModelName: z.string().nullish(),
 	autoEffortFastModelName: z.string().nullish(),
 	huggingFaceDiskMarginBytes: z.int().nullish(),
@@ -8708,7 +8792,11 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
-	llamaChatCacheRamMiB: z.int().gte(-1).lte(131072).nullish(),
+	llamaChatCacheRamMiB: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
 	llamaCpuThreadReserve: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -8745,6 +8833,12 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
 	webFetchTimeoutSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	intentRouterDefinitionId: z.string().nullish(),
+	intentMaxUtteranceAgeSeconds: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
@@ -9099,7 +9193,7 @@ export const zXeLocalAiEngineClientEndpointsTrainingV1ListTrainingDefinitionsRes
 });
 
 export const zXeLocalAiEngineClientEndpointsTrainingV1UpdateTrainingDefinitionRequest = z.object({
-	expectedVersion: z.int().optional(),
+	expectedVersion: z.int().gt(0).optional(),
 	name: z.string().optional(),
 	body: zXeLocalAiEngineClientServicesTrainingDatasetsDatasetDefinitionBodyV1.optional(),
 });
@@ -11538,6 +11632,13 @@ export const zStartGraphWorkflowRunPath = z.object({
  */
 export const zStartGraphWorkflowRunResponse = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1StartGraphWorkflowRunResponse;
 
+export const zInvokeGraphWorkflowIntentBody = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1InvokeGraphWorkflowIntentRequest;
+
+/**
+ * Success
+ */
+export const zInvokeGraphWorkflowIntentResponse = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowIntentResponse;
+
 export const zListGraphWorkflowRunsQuery = z.object({
 	status: z.string().nullish(),
 	limit: z
@@ -11845,9 +11946,9 @@ export const zRetrieveImagePath = z.object({
 });
 
 /**
- * No Content
+ * Success
  */
-export const zRetrieveImageResponse = z.void();
+export const zRetrieveImageResponse = z.string();
 
 export const zListIntegrationExecutionsQuery = z.object({
 	triggerId: z.guid().nullish(),
@@ -13264,6 +13365,13 @@ export const zGetTrainingRuntimeStatusResponse = zXeLocalAiEngineClientEndpoints
  * Success
  */
 export const zListCaptureProcessesResponse = zXeLocalAiEngineClientEndpointsTranscriptionV1CaptureProcessListResponse;
+
+export const zStartDictationSessionBody = zXeLocalAiEngineClientEndpointsTranscriptionV1StartDictationSessionRequest;
+
+/**
+ * Success
+ */
+export const zStartDictationSessionResponse = zXeLocalAiEngineClientEndpointsTranscriptionV1StartDictationSessionResponse;
 
 /**
  * Success

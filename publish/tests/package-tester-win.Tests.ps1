@@ -1058,8 +1058,33 @@ Describe 'Windows native payload routing' {
     It 'publishes the shell and keeps the Velopack launcher as the entry point' {
         $source = Get-Content $script:ScriptPath -Raw
         $source | Should -Match 'dotnet publish XE-Local-AI-Engine.Desktop'
+        $source | Should -Match 'dotnet publish XE-Local-AI-Engine.Cli\\XE-Local-AI-Engine.Cli.csproj'
         $source | Should -Match 'dotnet publish XE-Local-AI-Engine.WindowsLauncher'
         $source | Should -Match '--mainExe XE-Local-AI-Engine.WindowsLauncher.exe'
         $source | Should -Not -Match '--mainExe XE-Local-AI-Engine.Client.exe'
+    }
+
+    It 'stages the uninstall script at the root of the packed directory, byte for byte' {
+        . ([scriptblock]::Create((Get-ScriptFunctionText -Name 'Copy-UninstallScript')))
+        $publish = Join-Path $TestDrive 'publish'
+        New-Item -ItemType Directory -Path $publish | Out-Null
+        $publishRoot = Join-Path $script:RepoRoot 'publish'
+
+        $staged = Copy-UninstallScript -PublishRoot $publishRoot -PublishDirectory $publish
+
+        $staged | Should -Be (Join-Path $publish 'uninstall-xe-local-ai-engine.ps1')
+        (Get-FileHash -LiteralPath $staged).Hash |
+            Should -Be (Get-FileHash -LiteralPath (Join-Path $publishRoot 'windows/uninstall-xe-local-ai-engine.ps1')).Hash
+        @(Get-ChildItem -LiteralPath $publish -Recurse -File).Count | Should -Be 1
+    }
+
+    It 'stages it into the directory vpk packs' {
+        $calls = @($script:ScriptAst.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.CommandAst] -and
+                    $node.GetCommandName() -eq 'Copy-UninstallScript'
+                }, $true))
+        $calls.Count | Should -Be 1
+        $calls[0].Extent.Text | Should -Match '-PublishDirectory \$publishDir\b'
     }
 }

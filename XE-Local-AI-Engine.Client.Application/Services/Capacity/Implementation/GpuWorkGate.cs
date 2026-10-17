@@ -19,6 +19,17 @@ public sealed class GpuWorkGate : IGpuWorkGate
         }
     }
 
+    public IReadOnlyList<GpuWorkKind> Holders
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _exclusive is { } exclusive ? [exclusive, .. _shared] : [.. _shared];
+            }
+        }
+    }
+
     public IDisposable? TryBeginExclusive(GpuWorkKind kind)
     {
         lock (_gate)

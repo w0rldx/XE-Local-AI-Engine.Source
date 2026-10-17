@@ -58,4 +58,13 @@ internal sealed class GraphWorkflowRun
 
     /// <summary>The user message that started a chat-bound run. Loose reference, no foreign key.</summary>
     public Guid? TriggerMessageId { get; set; }
+
+    /// <summary>Who started the run. Plaintext, one member of <see cref="GraphWorkflowTriggerSource" />; default <c>Manual</c>.</summary>
+    public GraphWorkflowTriggerSource TriggerSource { get; set; } = GraphWorkflowTriggerSource.Manual;
+
+    /// <summary>The integration principal that started the run, when one did. Audit metadata only, never authority.</summary>
+    public Guid? PrincipalId { get; set; }
+
+    /// <summary>The prefix of the API key that started the run, when one did. Audit metadata only.</summary>
+    public string? KeyPrefix { get; set; }
 }

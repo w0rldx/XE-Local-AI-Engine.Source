@@ -4,7 +4,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The inference-profile mutation hooks dispatch their domain variables to the generated mutationFn's `{ body }`
-// envelope (wrapped in withResponseValidation) and invalidate the profiles list on success. Mock the generated
+// envelope and invalidate the profiles list on success. Mock the generated
 // TanStack module so the test owns each mutationFn and can assert the wire envelope + the invalidation, offline.
 const { exploreMock, benchmarkMock, freezeMock, invalidateMock } = vi.hoisted(() => ({
 	exploreMock: { mutationFn: vi.fn() },

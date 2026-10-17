@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Models;
 
 public interface IDatasetDefinitionService
 {
@@ -35,20 +36,24 @@ public sealed class DatasetDefinitionService : IDatasetDefinitionService
 
     private readonly IToolApprovalPolicy _approvalPolicy;
     private readonly IModelCapabilityResolver _capabilityResolver;
+    private readonly IModelClassificationStore _classifications;
     private readonly ILocalToolOfferProvider _offerProvider;
     private readonly ITrainingDatasetStore _store;
 
     public DatasetDefinitionService(ITrainingDatasetStore store,
         ILocalToolOfferProvider offerProvider,
         IToolApprovalPolicy approvalPolicy,
-        IModelCapabilityResolver capabilityResolver)
+        IModelCapabilityResolver capabilityResolver,
+        IModelClassificationStore classifications)
     {
         ArgumentNullException.ThrowIfNull(approvalPolicy);
         ArgumentNullException.ThrowIfNull(capabilityResolver);
+        ArgumentNullException.ThrowIfNull(classifications);
         ArgumentNullException.ThrowIfNull(offerProvider);
         ArgumentNullException.ThrowIfNull(store);
         _approvalPolicy = approvalPolicy;
         _capabilityResolver = capabilityResolver;
+        _classifications = classifications;
         _offerProvider = offerProvider;
         _store = store;
     }
@@ -118,6 +123,11 @@ public sealed class DatasetDefinitionService : IDatasetDefinitionService
         }
 
         Validate(draft.Body);
+        await EnsureTextGenerationModelAsync(draft.Body.TeacherModelName, "teacher", cancellationToken);
+        if (draft.Body.CriticEnabled && draft.Body.CriticModelName is { } criticModelName)
+        {
+            await EnsureTextGenerationModelAsync(criticModelName, "critic", cancellationToken);
+        }
 
         // The generation run refuses this pairing; refusing it here keeps a definition that can never generate from being saved.
         if (draft.Body.TeacherOutputMode == TeacherOutputMode.Constrained
@@ -138,6 +148,16 @@ public sealed class DatasetDefinitionService : IDatasetDefinitionService
             Kind = TrainingDatasetKind.ToolCalling,
             DefinitionJson = JsonSerializer.SerializeToUtf8Bytes(body, TrainingJson.Options)
         };
+    }
+
+    /// <summary>A reranker or embedder can only fail at generation, so it is refused at save, as the benchmark side does.</summary>
+    private async Task EnsureTextGenerationModelAsync(string modelName, string role, CancellationToken cancellationToken)
+    {
+        var classification = await _classifications.GetByNameAsync(modelName, cancellationToken);
+        if (!LocalGgufModelKindClassifier.IsChatModel(modelName, classification))
+        {
+            throw new TrainingValidationException($"'{modelName}' is not a text-generation model (a reranker, embedder or draft model cannot be the {role}).");
+        }
     }
 
     private static void Validate(DatasetDefinitionBodyV1 body)

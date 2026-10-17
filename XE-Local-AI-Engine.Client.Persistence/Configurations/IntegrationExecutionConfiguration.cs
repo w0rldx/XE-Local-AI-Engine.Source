@@ -18,6 +18,7 @@ internal sealed class IntegrationExecutionConfiguration : IEntityTypeConfigurati
         builder.Property(entity => entity.RequestFingerprint).HasColumnName("request_fingerprint").HasMaxLength(32).IsRequired();
         builder.Property(entity => entity.KeyPrefix).HasColumnName("key_prefix").HasMaxLength(32).IsRequired();
         builder.Property(entity => entity.InvocationId).HasColumnName("invocation_id");
+        builder.Property(entity => entity.GraphWorkflowRunId).HasColumnName("graph_workflow_run_id");
         builder.Property(entity => entity.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(32);
         builder.Property(entity => entity.ReceivedAtUtc).HasColumnName("received_at_utc");
         builder.Property(entity => entity.StartedAtUtc).HasColumnName("started_at_utc");

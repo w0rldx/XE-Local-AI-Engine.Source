@@ -674,7 +674,7 @@ public sealed class SubAgentSpawnServiceTests
         using var harness = new Harness();
         harness.AllowLocal();
         var events = new List<string>();
-        var audit = Substitute.For<IMcpAgenticApprovalAuditRecorder>();
+        var audit = Substitute.For<IUnattendedApprovalAuditRecorder>();
         audit.RecordAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<ToolCategory>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
              .Returns(_ =>
              {
@@ -724,7 +724,7 @@ public sealed class SubAgentSpawnServiceTests
         await audit.Received(1).RecordAsync(requestId,
             "custom__weather",
             ToolCategory.WriteExecute,
-            "xemcp_abc123",
+            "mcp-agentic:xemcp_abc123",
             Arg.Any<CancellationToken>());
     }
 

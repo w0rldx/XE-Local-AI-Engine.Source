@@ -134,6 +134,10 @@ export const graphWorkflowPauseDecisionKinds = ["Approve", "Reject"] as const sa
 export const graphWorkflowDefinitionKinds = ["Standard", "Chat"] as const;
 export type GraphWorkflowDefinitionKind = (typeof graphWorkflowDefinitionKinds)[number];
 
+/** `GraphWorkflowTriggerSource` names in declaration order: who may start a run, and who started one. */
+export const graphWorkflowTriggerSources = ["Manual", "Chat", "Schedule", "Integration", "Intent"] as const;
+export type GraphWorkflowTriggerSource = (typeof graphWorkflowTriggerSources)[number];
+
 /** `GraphWorkflowGraph.DecisionProviders`: the closed set a DecisionModel node may name. Absent means `llm`. */
 export const graphWorkflowDecisionProviders = ["llm"] as const;
 
@@ -234,6 +238,11 @@ export function narrowGraphWorkflowRunStatus(value: string | undefined | null): 
 /** An unknown node-run status reads as `Pending`: the state with no controls and no motion. */
 export function narrowGraphWorkflowNodeRunStatus(value: string | undefined | null): GraphWorkflowNodeRunStatus {
 	return narrow(graphWorkflowNodeRunStatuses, value, "Pending");
+}
+
+/** An unknown source reads as `Manual`, the column's own default for a run from before it existed. */
+export function narrowGraphWorkflowTriggerSource(value: string | undefined | null): GraphWorkflowTriggerSource {
+	return narrow(graphWorkflowTriggerSources, value, "Manual");
 }
 
 /** A failure always has to render SOMETHING, so this narrows rather than dropping. */

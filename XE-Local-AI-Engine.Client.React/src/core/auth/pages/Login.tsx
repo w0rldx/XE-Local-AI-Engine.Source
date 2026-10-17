@@ -7,7 +7,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { XeLocalAiEngineClientEndpointsAuthV1NodeLoginLockedOutResponse } from "@/core/api/generated";
-import { loginNodeAuth } from "@/core/auth/api/NodeAuthApi";
+import { loginNodeAuth, refreshRateLimitedForSeconds } from "@/core/auth/api/NodeAuthApi";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { getSafeRedirectPath } from "@/core/auth/utils/RedirectPath";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
@@ -33,6 +33,11 @@ function getErrorMessage(error: unknown, t: (key: string, options?: Record<strin
 			return t("auth.login.errorIncorrectPassword");
 		}
 
+		if (error.response?.status === 429) {
+			const seconds = Number(error.response.headers["retry-after"]);
+			return t("auth.login.errorRateLimited", { seconds: Number.isFinite(seconds) && seconds > 0 ? seconds : 60 });
+		}
+
 		if (!error.response) {
 			return t("auth.login.errorNodeUnreachable");
 		}
@@ -47,7 +52,11 @@ export function Login() {
 	const { redirect } = useSearch({ from: "/login" });
 	const setToken = useNodeAuthStore((state) => state.actions.setToken);
 	const [password, setPassword] = useState("");
-	const [error, setError] = useState<string | undefined>();
+	// A session restore that stayed rate limited lands here instead of the crash screen: say when signing in works again.
+	const [error, setError] = useState<string | undefined>(() => {
+		const seconds = refreshRateLimitedForSeconds();
+		return seconds > 0 ? t("auth.login.errorRateLimited", { seconds }) : undefined;
+	});
 	const [submitting, setSubmitting] = useState(false);
 	const safeRedirect = getSafeRedirectPath(redirect);
 

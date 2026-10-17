@@ -17,4 +17,10 @@ internal sealed record ChatToolOffer
     ///     one case that earns a <c>ToolsWithheld</c> notice rather than a silent tool-less turn.
     /// </summary>
     public bool WithheldForCapability { get; init; }
+
+    /// <summary>
+    ///     Tools are offered, but only the non-capable set, because the model is not on the tool-capable model allow-list;
+    ///     earns a <c>ToolsWithheld</c> notice naming the setting.
+    /// </summary>
+    public bool TrimmedByAllowList { get; init; }
 }

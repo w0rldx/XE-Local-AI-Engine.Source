@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
+using XE_Local_AI_Engine.Providers.Python;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -243,9 +244,9 @@ public sealed class LocalToolOfferProviderTests
     [Test]
     public void GetOfferedToolsForProfile_WhenModelIsToolCapable_IncludesRunPythonInProfilePool()
     {
-        if (!OperatingSystem.IsLinux())
+        if (!ManagedPythonPins.IsCurrentPlatformSupported)
         {
-            Skip.Test("run_python is offered only on Linux; the off-Linux half is GetOfferedToolsForProfile_OffLinux_NeverOffersRunPython.");
+            Skip.Test("run_python is offered only on Linux x64 and Windows x64; the other half is GetOfferedToolsForProfile_OffThePinnedPlatforms_NeverOffersRunPython.");
         }
 
         var provider = CreateProvider("qwen3:8b");
@@ -257,13 +258,49 @@ public sealed class LocalToolOfferProviderTests
         AssertEx.Equal(ToolCategory.WriteExecute, compute.Category);
     }
 
-    /// <summary>The managed Python runtime exists only on Linux, so elsewhere the tool would fail every call (4.7).</summary>
     [Test]
-    public void GetOfferedToolsForProfile_OffLinux_NeverOffersRunPython()
+    public void GetOfferedToolsForProfile_WhenComputeIsTurnedOff_WithholdsRunPython()
     {
-        if (OperatingSystem.IsLinux())
+        // R4-05: with the node switch off run_python was still offered, called and only then refused.
+        RequireComputePlatform();
+
+        AssertEx.False(ComputeOffProvider().GetOfferedToolsForProfile("qwen3:8b").Any(static tool => tool.Name == ComputeToolDefinition.ToolName),
+            "the synchronous profile pool must not offer run_python while compute is off");
+    }
+
+    [Test]
+    public async Task GetOfferedToolsForProfileAsync_WhenComputeIsTurnedOff_WithholdsRunPython()
+    {
+        RequireComputePlatform();
+
+        AssertEx.False((await ComputeOffProvider().GetOfferedToolsForProfileAsync("qwen3:8b", isCloudModel: false)).Any(static tool => tool.Name == ComputeToolDefinition.ToolName),
+            "the async profile pool must not offer run_python while compute is off");
+    }
+
+    private static void RequireComputePlatform()
+    {
+        if (!ManagedPythonPins.IsCurrentPlatformSupported)
         {
-            Skip.Test("This host runs Linux, where run_python is offered; the assertion applies to Windows and macOS nodes.");
+            Skip.Test("run_python is offered only on Linux x64 and Windows x64, so the switch has nothing to withhold here.");
+        }
+    }
+
+    private static LocalToolOfferProvider ComputeOffProvider()
+    {
+        return new LocalToolOfferProvider(new FakeAgentToolRegistry([]),
+            new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
+            StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").WithComputeEnabled(false).Build(),
+            NullCustomToolScopeFactory.Instance,
+            new FakeModelTrustResolver());
+    }
+
+    /// <summary>The managed Python runtime exists only on Linux x64 and Windows x64, so elsewhere the tool would fail every call (4.7).</summary>
+    [Test]
+    public void GetOfferedToolsForProfile_OffThePinnedPlatforms_NeverOffersRunPython()
+    {
+        if (ManagedPythonPins.IsCurrentPlatformSupported)
+        {
+            Skip.Test("This host is Linux x64 or Windows x64, where run_python is offered; the assertion applies to arm64 and macOS nodes.");
         }
 
         var provider = CreateProvider("qwen3:8b");
@@ -281,6 +318,100 @@ public sealed class LocalToolOfferProviderTests
 
         AssertEx.False(pool.Any(tool => tool.Name == ComputeToolDefinition.ToolName),
             "run_python must be withheld from a model that is not tool-capable, even in the profile pool");
+    }
+
+    [Test]
+    public async Task GetOfferedToolsAsync_WhenAnUnlistedModelIsRegisteredByTheRegistrar_OffersTheCapableTools()
+    {
+        // A GGUF copied into the store while the host runs is missed by the startup backfill and the download path. The
+        // offer heals the miss at the point of use: the registrar adds it from its template facts and the turn is capable.
+        List<string> listed = [];
+        var runtimeSettings = CreateSettingsReadingListLive(listed);
+        var registrar = Substitute.For<IToolCapableModelRegistrar>();
+        registrar.RegisterIfToolCapableAsync("org/model-GGUF:Q4_K_M", Arg.Any<CancellationToken>())
+                 .Returns(_ =>
+                 {
+                     listed.Add("org/model-GGUF:Q4_K_M");
+                     return true;
+                 });
+        var provider = CreateProviderWithRegistrar(runtimeSettings, registrar);
+
+        var offered = await provider.GetOfferedToolsAsync("org/model-GGUF:Q4_K_M", isCloudModel: false);
+        var profileOffered = await provider.GetOfferedToolsForProfileAsync("org/model-GGUF:Q4_K_M", isCloudModel: false);
+
+        AssertEx.Contains(offered, static tool => tool.Name == AskUserTool.ToolName);
+        AssertEx.Contains(profileOffered, static tool => tool.Name == AskUserTool.ToolName);
+        await registrar.Received(1).RegisterIfToolCapableAsync("org/model-GGUF:Q4_K_M", Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetOfferedToolsAsync_WhenAnotherPathListedTheModelMeanwhile_OffersTheCapableToolsAlthoughTheRegistrarAddedNothing()
+    {
+        // The startup backfill or a concurrent turn can list the model between the first gate read and the registrar
+        // call; the registrar then adds nothing and answers false, but the model IS listed, so the turn must be capable.
+        List<string> listed = [];
+        var runtimeSettings = CreateSettingsReadingListLive(listed);
+        var registrar = Substitute.For<IToolCapableModelRegistrar>();
+        registrar.RegisterIfToolCapableAsync("org/model-GGUF:Q4_K_M", Arg.Any<CancellationToken>())
+                 .Returns(_ =>
+                 {
+                     listed.Add("org/model-GGUF:Q4_K_M"); // the other path's write, visible on the next gate read
+                     return false;
+                 });
+        var provider = CreateProviderWithRegistrar(runtimeSettings, registrar);
+
+        var offered = await provider.GetOfferedToolsAsync("org/model-GGUF:Q4_K_M", isCloudModel: false);
+
+        AssertEx.Contains(offered, static tool => tool.Name == AskUserTool.ToolName);
+    }
+
+    [Test]
+    public async Task GetOfferedToolsAsync_WhenTheRegistrarDeclinesTheModel_KeepsTheNonCapableOffer()
+    {
+        // A model whose template facts are not tool-capable (or that is not an installed GGUF) is not added, so the gate
+        // still withholds the capability-gated tools.
+        var runtimeSettings = StubNodeRuntimeSettings.Create().Build();
+        var registrar = Substitute.For<IToolCapableModelRegistrar>();
+        registrar.RegisterIfToolCapableAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(false);
+        var provider = CreateProviderWithRegistrar(runtimeSettings, registrar);
+
+        var offered = await provider.GetOfferedToolsAsync("org/plain-GGUF:Q4_K_M", isCloudModel: false);
+
+        AssertEx.False(offered.Any(static tool => tool.Name == AskUserTool.ToolName),
+            "a model the registrar declines must keep the non-capable offer");
+        await registrar.Received(1).RegisterIfToolCapableAsync("org/plain-GGUF:Q4_K_M", Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetOfferedToolsAsync_WhenTheRegistrarThrows_KeepsTheNonCapableOfferInsteadOfFailingTheTurn()
+    {
+        var runtimeSettings = StubNodeRuntimeSettings.Create().Build();
+        var registrar = Substitute.For<IToolCapableModelRegistrar>();
+        registrar.RegisterIfToolCapableAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromException<bool>(new IOException("settings file locked")));
+        var provider = CreateProviderWithRegistrar(runtimeSettings, registrar);
+
+        var offered = await provider.GetOfferedToolsAsync("org/model-GGUF:Q4_K_M", isCloudModel: false);
+
+        AssertEx.False(offered.Any(static tool => tool.Name == AskUserTool.ToolName),
+            "a failed registration must leave the non-capable offer");
+    }
+
+    [Test]
+    [Arguments(true, false)]
+    [Arguments(false, true)]
+    public async Task GetOfferedToolsAsync_WhenTheModelIsListedOrLeavesTheNode_NeverConsultsTheRegistrar(bool listed, bool isCloudModel)
+    {
+        // A listed model returns on the cached allow-list read, and a model that leaves the node cannot be an installed
+        // GGUF, so neither pays the registrar's store listing.
+        var builder = StubNodeRuntimeSettings.Create();
+        var runtimeSettings = (listed ? builder.WithToolCapableModels("org/model-GGUF:Q4_K_M") : builder).Build();
+        var registrar = Substitute.For<IToolCapableModelRegistrar>();
+        var provider = CreateProviderWithRegistrar(runtimeSettings, registrar);
+
+        _ = await provider.GetOfferedToolsAsync("org/model-GGUF:Q4_K_M", isCloudModel);
+
+        await registrar.DidNotReceiveWithAnyArgs().RegisterIfToolCapableAsync(default!, default);
     }
 
     [Test]
@@ -425,9 +556,11 @@ public sealed class LocalToolOfferProviderTests
 
         AssertEx.Contains(provider.GetKnownToolNames(), ComputeToolDefinition.ToolName);
         var catalogEntry = provider.GetKnownTools().Single(static entry => entry.Name == ComputeToolDefinition.ToolName);
-        // The picker is the one place an operator learns the tool is unavailable on this node; on Linux no caveat is owed.
-        AssertEx.Equal(!OperatingSystem.IsLinux(), catalogEntry.Description.Contains("Linux only", StringComparison.Ordinal),
-            "The Linux-only caveat is shown exactly where the tool is withheld.");
+        // The picker is the one place an operator learns the tool is unavailable on this node; on a pinned platform no caveat is owed.
+        AssertEx.Equal(!ManagedPythonPins.IsCurrentPlatformSupported,
+            catalogEntry.Description.EndsWith(" (not available on this node's platform: Linux x64 and Windows x64 only; an agent selecting it gets no tool)",
+                StringComparison.Ordinal),
+            "The platform caveat is shown exactly where the tool is withheld.");
     }
 
     [Test]
@@ -1178,6 +1311,25 @@ public sealed class LocalToolOfferProviderTests
     private static bool IsWebTool(AllowedToolDto tool) =>
         string.Equals(tool.Name, WebFetchToolDefinition.ToolName, StringComparison.Ordinal)
         || string.Equals(tool.Name, WebSearchToolDefinition.ToolName, StringComparison.Ordinal);
+
+    // The allow-list read follows the given list, so a registrar fake that appends to it is visible to the next gate read.
+    private static INodeRuntimeSettings CreateSettingsReadingListLive(List<string> listed)
+    {
+        var runtimeSettings = StubNodeRuntimeSettings.Create().Build();
+        runtimeSettings.GetToolCapableModels().Returns(_ => listed.ToArray());
+        return runtimeSettings;
+    }
+
+    private static LocalToolOfferProvider CreateProviderWithRegistrar(INodeRuntimeSettings runtimeSettings, IToolCapableModelRegistrar registrar)
+    {
+        return new LocalToolOfferProvider(new FakeAgentToolRegistry([]),
+            new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
+            runtimeSettings,
+            NullCustomToolScopeFactory.Instance,
+            new FakeModelTrustResolver(),
+            NullLogger<LocalToolOfferProvider>.Instance,
+            registrar);
+    }
 
     private static LocalToolOfferProvider CreateProviderWithWebAccess(bool webAccessEnabled)
     {

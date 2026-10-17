@@ -91,6 +91,8 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
             NodeCount = command.NodeCount,
             SchemaVersion = command.SchemaVersion,
             Kind = command.Kind,
+            AllowsActions = command.AllowsActions,
+            TriggerSources = command.TriggerSources,
             Version = 1,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
@@ -167,6 +169,16 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
             definition.Description = command.Description;
         }
 
+        if (command.AllowsActions is { } allowsActions)
+        {
+            definition.AllowsActions = allowsActions;
+        }
+
+        if (command.TriggerSources is { } triggerSources)
+        {
+            definition.TriggerSources = triggerSources;
+        }
+
         if (graph is not null)
         {
             // Hash, node count and schema version are written together with the graph, every time: that is what lets
@@ -213,6 +225,8 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
                             NodeCount = entity.NodeCount,
                             SchemaVersion = entity.SchemaVersion,
                             Kind = entity.Kind,
+                            AllowsActions = entity.AllowsActions,
+                            TriggerSources = entity.TriggerSources,
                             Version = entity.Version,
                             CreatedAtUtc = entity.CreatedAtUtc,
                             UpdatedAtUtc = entity.UpdatedAtUtc
@@ -300,6 +314,9 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
                 PreviousJson = Utf8OrNull(command.PreviousJson),
                 ConversationId = command.ConversationId,
                 TriggerMessageId = command.TriggerMessageId,
+                TriggerSource = command.TriggerSource,
+                PrincipalId = command.PrincipalId,
+                KeyPrefix = command.KeyPrefix,
                 Seq = 0,
                 Version = 1,
                 CreatedAtUtc = now
@@ -843,6 +860,8 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
             var judged = verdicts.ToDictionary(static verdict => verdict.NodeRunId);
             var reconciled = new List<GraphWorkflowReconciledNodeRun>(stranded.Count);
             var repairs = new List<NodeRunRepair>();
+            var startedBefore = new Dictionary<Guid, long?>();
+            var invocationBefore = new Dictionary<Guid, Guid?>();
             foreach (var nodeRun in stranded)
             {
                 if (!runs.TryGetValue(nodeRun.RunId, out var run))
@@ -874,6 +893,8 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
 
                 // Re-dispatchable means clean: a row sitting at Pending must not carry a terminal reason, or a reader
                 // takes "the engine restarted" for this attempt's outcome. The reason is on the node.interrupted event.
+                startedBefore[nodeRun.Id] = nodeRun.StartedAtUtc;
+                invocationBefore[nodeRun.Id] = nodeRun.InvocationId;
                 ResetToPending(nodeRun);
                 _ = AddEvent(run, GraphWorkflowEventTypes.NodeInterrupted, nodeRun.NodeKey, ReasonDetail(sanitizedReason));
                 run.Version++;
@@ -894,6 +915,13 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
                 }
 
                 run.Version++;
+            }
+
+            // The reset clears the start and invocation for a re-dispatch; a row its repair settled instead keeps those of the attempt the restart cut short.
+            foreach (var nodeRun in stranded.Where(row => IsTerminal(row.Status) && startedBefore.ContainsKey(row.Id)))
+            {
+                nodeRun.StartedAtUtc = startedBefore[nodeRun.Id];
+                nodeRun.InvocationId ??= invocationBefore[nodeRun.Id];
             }
 
             _ = await _dbContext.SaveChangesAsync(cancellationToken);
@@ -1212,7 +1240,10 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
             CompletedAtUtc = run.CompletedAtUtc,
             CreatedAtUtc = run.CreatedAtUtc,
             ConversationId = run.ConversationId,
-            TriggerMessageId = run.TriggerMessageId
+            TriggerMessageId = run.TriggerMessageId,
+            TriggerSource = run.TriggerSource,
+            PrincipalId = run.PrincipalId,
+            KeyPrefix = run.KeyPrefix
         };
 
     private static GraphWorkflowNodeRunSnapshot NodeRunSnapshot(GraphWorkflowNodeRun nodeRun) =>
@@ -1331,6 +1362,8 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
             NodeCount = definition.NodeCount,
             SchemaVersion = definition.SchemaVersion,
             Kind = definition.Kind,
+            AllowsActions = definition.AllowsActions,
+            TriggerSources = definition.TriggerSources,
             Version = definition.Version,
             CreatedAtUtc = definition.CreatedAtUtc,
             UpdatedAtUtc = definition.UpdatedAtUtc

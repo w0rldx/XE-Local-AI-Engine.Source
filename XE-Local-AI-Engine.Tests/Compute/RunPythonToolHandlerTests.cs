@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Compute;
 
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -54,6 +55,7 @@ public sealed class RunPythonToolHandlerTests
         var result = await handler.ExecuteAsync("{not json");
 
         AssertEx.Contains(result, "valid JSON", StringComparison.OrdinalIgnoreCase);
+        AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.TryGetCode(result), "telemetry must record a failure, not a success");
         AssertEx.False(gateway.WasCalled, "there is no request to hand on");
     }
 
@@ -66,7 +68,21 @@ public sealed class RunPythonToolHandlerTests
         var result = await handler.ExecuteAsync("null");
 
         AssertEx.Contains(result, "empty", StringComparison.OrdinalIgnoreCase);
+        AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.TryGetCode(result));
         AssertEx.False(gateway.WasCalled);
+    }
+
+    [Test]
+    public async Task PreflightAsync_ReturnsTheGatewaysRefusal_AndNullWhenACallCouldRun()
+    {
+        var refusing = new RunPythonToolHandler(new StubGateway("unused")
+        {
+            Preflight = ComputeExecutionOutcome.Refused(ComputeRefusalCodes.ComputeDisabled, "compute is off")
+        });
+        var open = new RunPythonToolHandler(new StubGateway("unused"));
+
+        AssertEx.Equal("compute is off", await refusing.PreflightAsync());
+        AssertEx.Null(await open.PreflightAsync());
     }
 
     [Test]
@@ -122,11 +138,16 @@ public sealed class RunPythonToolHandlerTests
             return Task.FromResult(_result);
         }
 
+        public ComputeExecutionOutcome? Preflight { get; init; }
+
         public Task<ComputeExecutionOutcome> ExecuteDetailedAsync(ComputeRunToolRequest request,
             bool requireResourceLimits,
             CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException("the handler renders through ExecuteAsync");
         }
+
+        public Task<ComputeExecutionOutcome?> PreflightAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(Preflight);
     }
 }

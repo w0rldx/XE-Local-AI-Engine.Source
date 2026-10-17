@@ -21,9 +21,6 @@ using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 public sealed class UploadImageEndpoint : Endpoint<UploadImageRequest, UploadedImageResponse>
 {
     // Room for the multipart boundary and part headers around the file, so a file right at the cap is not refused for its envelope.
-    private const long MultipartEnvelopeBytes = 64 * 1024;
-
-    private const string TooLargeMessage = "The image is larger than the upload size limit.";
 
     private readonly UploadedImageService _uploads;
     private readonly long _maxUploadBytes;
@@ -39,20 +36,21 @@ public sealed class UploadImageEndpoint : Endpoint<UploadImageRequest, UploadedI
     {
         Post(LocalApiRoutes.Images.Uploads);
         AllowFileUploads(dontAutoBindFormData: true);
-        Options(builder => builder.WithMetadata(new RequestSizeLimitAttribute(_maxUploadBytes + MultipartEnvelopeBytes)));
+        Options(builder => builder.WithMetadata(new RequestSizeLimitAttribute(_maxUploadBytes + MultipartUploadLimits.EnvelopeBytes)));
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Accepts<UploadImageRequest>("multipart/form-data")
                                .Produces<UploadedImageResponse>(StatusCodes.Status200OK)
                                // No validator declares the 400 for this endpoint: no file, two files, a body past the cap, or bytes that are not an accepted image.
-                               .ProducesProblemDetails(StatusCodes.Status400BadRequest));
+                               .ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                               .ProducesProblem(StatusCodes.Status413PayloadTooLarge));
     }
 
     public override async Task HandleAsync(UploadImageRequest req, CancellationToken ct)
     {
-        if (HttpContext.Request.ContentLength > _maxUploadBytes + MultipartEnvelopeBytes)
+        if (HttpContext.Request.ContentLength > _maxUploadBytes + MultipartUploadLimits.EnvelopeBytes)
         {
-            await SendErrorAsync(TooLargeMessage, ct);
+            await Send.ResultAsync(MultipartUploadLimits.TooLarge(_maxUploadBytes));
             return;
         }
 
@@ -73,7 +71,7 @@ public sealed class UploadImageEndpoint : Endpoint<UploadImageRequest, UploadedI
                 bytes = await ReadCappedAsync(section.FileStream ?? section.Section.Body, _maxUploadBytes, ct);
                 if (bytes is null)
                 {
-                    await SendErrorAsync(TooLargeMessage, ct);
+                    await Send.ResultAsync(MultipartUploadLimits.TooLarge(_maxUploadBytes));
                     return;
                 }
 

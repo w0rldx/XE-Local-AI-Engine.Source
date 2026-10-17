@@ -4,7 +4,11 @@ import { useTranslation } from "react-i18next";
 
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
-import { isNodeChatReadOnlyConflict, isNodeChatWorkflowRunLiveConflict } from "@/features/chat/api/NodeChatConflict";
+import {
+	isNodeChatReadOnlyConflict,
+	isNodeChatTurnParkedConflict,
+	isNodeChatWorkflowRunLiveConflict,
+} from "@/features/chat/api/NodeChatConflict";
 import {
 	clientWatchdogFailureCategory,
 	StreamWatchdogError,
@@ -389,6 +393,11 @@ export function useChatStreamController({
 							"pages.chat.workflowRunLive",
 							"This conversation is running a workflow; answer through it or stop it first.",
 						);
+					} else if (isNodeChatTurnParkedConflict(error)) {
+						message = t(
+							"pages.chat.turnParked",
+							"A reply in this conversation is waiting for your answer. Answer the waiting card, then send again.",
+						);
 					} else if (watchdogNotice) {
 						message = t(watchdogNotice.key, watchdogNotice.fallback);
 					} else {
@@ -551,6 +560,13 @@ export function useChatStreamController({
 						setStreamError(
 							t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node."),
 						);
+					} else if (isNodeChatTurnParkedConflict(error)) {
+						setStreamError(
+							t(
+								"pages.chat.turnParked",
+								"A reply in this conversation is waiting for your answer. Answer the waiting card, then send again.",
+							),
+						);
 					} else {
 						setStreamError(errorMessage(error));
 					}
@@ -666,7 +682,9 @@ export function useChatStreamController({
 				// Nothing attached ⇒ nothing was resumed, so there is no turn to fail: opening an idle conversation must
 				// never raise a banner. A failure AFTER attaching interrupted a turn the operator can see, so surface it.
 				if (attachedMessageId && !abortController.signal.aborted && !deletedConversationIds.current.has(conversationId)) {
-					setStreamError(errorMessage(error));
+					// The browser's own watchdog says so in words, as on the send path, never as its raw category message.
+					const watchdogNotice = error instanceof StreamWatchdogError ? streamWatchdogNotice(error.category) : undefined;
+					setStreamError(watchdogNotice ? t(watchdogNotice.key, watchdogNotice.fallback) : errorMessage(error));
 				}
 			} finally {
 				// Only the attached path owns state to release; the idle path must leave everything untouched.
@@ -681,7 +699,7 @@ export function useChatStreamController({
 				}
 			}
 		},
-		[onVoiceAnswerProgress, queryClient, refreshConversation, setStreamError, streamScheduler],
+		[onVoiceAnswerProgress, queryClient, refreshConversation, setStreamError, streamScheduler, t],
 	);
 
 	// Read through a ref so the effect below can key on the conversation alone (mirrors useStreamCommitScheduler's

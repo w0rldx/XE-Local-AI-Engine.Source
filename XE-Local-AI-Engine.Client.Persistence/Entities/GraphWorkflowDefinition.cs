@@ -34,6 +34,15 @@ internal sealed class GraphWorkflowDefinition
     /// <summary>The graph document's top-level <c>kind</c>, denormalized so the chat picker lists chat workflows without decrypting a blob.</summary>
     public GraphWorkflowDefinitionKind Kind { get; set; }
 
+    /// <summary>
+    ///     The operator's permission for this graph's Tool nodes to run custom tools flagged for unattended use.
+    ///     Plaintext, so the gate reads it without decrypting the graph. Default <c>false</c>.
+    /// </summary>
+    public bool AllowsActions { get; set; }
+
+    /// <summary>Which sources may start a run. Plaintext flags, set only by the operator; default <c>Manual | Chat</c>.</summary>
+    public GraphWorkflowTriggerSource TriggerSources { get; set; } = GraphWorkflowTriggerSource.Manual | GraphWorkflowTriggerSource.Chat;
+
     public int Version { get; set; }
     public long CreatedAtUtc { get; set; }
     public long UpdatedAtUtc { get; set; }

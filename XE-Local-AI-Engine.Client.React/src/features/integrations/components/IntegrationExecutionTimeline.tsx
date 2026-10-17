@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { formatFailureCategory } from "@/features/integrations/components/IntegrationFormatters";
 import type { EventDetail, IntegrationExecutionEvent } from "@/features/integrations/models/IntegrationModels";
 
 interface IntegrationExecutionTimelineProps {
@@ -95,9 +96,9 @@ function detailLine(eventType: string, detail: EventDetail | null, t: TFunction)
 			return [duration, tokens].filter((part) => part !== null).join(" · ") || null;
 		}
 		case "execution.failed": {
-			// Both parts render verbatim. The category is a closed backend set and the summary is content-free by
-			// construction, so neither is translated and neither needs redacting.
-			const category = detail.category ?? detail.failureCategory ?? null;
+			// The summary is content-free by construction, so it renders verbatim and needs no redacting.
+			const rawCategory = detail.category ?? detail.failureCategory ?? null;
+			const category = rawCategory === null ? null : formatFailureCategory(t, rawCategory);
 			const summary = detail.summary ?? detail.failureSummary ?? null;
 			return [category, summary].filter((part) => part !== null).join(" — ") || null;
 		}

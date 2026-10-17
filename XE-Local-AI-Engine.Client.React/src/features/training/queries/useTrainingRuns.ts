@@ -7,7 +7,6 @@ import {
 	getTrainingRunDefaultsOptions,
 	listTrainingRunsOptions,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toTrainingRunDefaultsView, toTrainingRunView } from "@/features/training/models/TrainingModels";
 
 // Server-state for training runs. Live status, phase and step counters arrive over the run SignalR hub
@@ -30,7 +29,7 @@ function invalidate(queryClient: ReturnType<typeof useQueryClient>, operationId:
 /** The run list. Polls only while a run is in flight, as a floor under the hub. */
 export function useTrainingRuns(pollWhileActive = false) {
 	return useQuery({
-		...withResponseValidation(listTrainingRunsOptions({ query: { page: 1, pageSize: 25 } })),
+		...listTrainingRunsOptions({ query: { page: 1, pageSize: 25 } }),
 		select: (data) => (data.items ?? []).map(toTrainingRunView),
 		staleTime: 0,
 		refetchInterval: pollWhileActive ? 5_000 : false,
@@ -43,7 +42,7 @@ export function useTrainingRuns(pollWhileActive = false) {
  */
 export function useTrainingRunDefaults(baseArtifactId: string | null) {
 	return useQuery({
-		...withResponseValidation(getTrainingRunDefaultsOptions({ query: { baseArtifactId: baseArtifactId ?? "" } })),
+		...getTrainingRunDefaultsOptions({ query: { baseArtifactId: baseArtifactId ?? "" } }),
 		select: toTrainingRunDefaultsView,
 		enabled: baseArtifactId != null,
 		staleTime: 10_000,

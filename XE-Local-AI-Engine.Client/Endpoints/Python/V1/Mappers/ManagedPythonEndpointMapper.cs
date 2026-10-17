@@ -27,6 +27,7 @@ internal static class ManagedPythonEndpointMapper
             ProfileId = environment.ProfileId,
             State = environment.State.ToString(),
             Reason = environment.Reason,
+            ReasonCode = environment.ReasonCode == ManagedPythonReasonCode.None ? null : environment.ReasonCode.ToString(),
             Installed = environment.Installed is { } identity
                 ? new ManagedPythonEnvironmentIdentityResponse
                 {

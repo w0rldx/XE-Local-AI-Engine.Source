@@ -39,14 +39,13 @@ public sealed class KnowledgeBaseOptions
     public KnowledgeEmbeddingVectorMode EmbeddingVectorMode { get; set; } = KnowledgeEmbeddingVectorMode.Matryoshka512;
 
     /// <summary>
-    ///     Node-local cross-encoder reranker model that rescores the fused candidate pool at search time.
+    ///     Config-only binding of <c>KnowledgeBase:RerankerModelName</c>; no production code reads this property.
     /// </summary>
     /// <remarks>
-    ///     Empty (default) turns reranking OFF and the search returns the Reciprocal-Rank-Fusion order unchanged. An installed
-    ///     reranker name (for example <c>bge-reranker-v2-m3</c>) makes the search hydrate the fused pool, score each candidate
-    ///     against the query on the local rerank-role llama-server (<c>/v1/rerank</c>), and reorder by descending relevance
-    ///     before the top-k cut; like the embedding model, this keeps retrieval on-device. A missing model or unavailable
-    ///     runtime degrades silently to fusion order. Seeded from the node settings store: stored value, config value, off.
+    ///     <c>NodeRuntimeSettings</c> reads the same key as the seed under the stored node setting, and search, the
+    ///     prewarmer and the companion reserve read the effective name per call through
+    ///     <c>INodeRuntimeSettings.GetRerankerModelNameAsync</c>. Kept so the section binds as documented and retrieval tests
+    ///     can size one options object. A cold or failed reranker degrades to fusion order, named in the search result.
     /// </remarks>
     public string RerankerModelName { get; set; } = string.Empty;
 

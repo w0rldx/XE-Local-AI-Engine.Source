@@ -4,6 +4,7 @@ import type {
 	XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse,
 	XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse,
 	XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus,
+	XeLocalAiEngineClientServicesKnowledgeKnowledgeSearchDegradation,
 } from "@/core/api/generated";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 
@@ -13,6 +14,7 @@ export type KnowledgeDocumentStatus = XeLocalAiEngineClientServicesKnowledgeKnow
 export type KnowledgeDocument = XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse;
 export type KnowledgeDocumentDetail = XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentDetailResponse;
 export type KnowledgeSearchHit = XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse;
+export type KnowledgeSearchDegradation = XeLocalAiEngineClientServicesKnowledgeKnowledgeSearchDegradation;
 export type KnowledgeRepositoryImportResult = XeLocalAiEngineClientEndpointsKnowledgeV1ImportKnowledgeRepositoryResponse;
 
 export const KNOWLEDGE_DEFAULT_COLLECTION_ID = "DEFAULT";
@@ -129,6 +131,11 @@ const STATUS_DESCRIPTORS: Record<KnowledgeDocumentStatus, KnowledgeStatusDescrip
 	Indexed: { status: "Indexed", color: "green", labelKey: "pages.knowledgeBase.status.indexed", inProgress: false },
 	Failed: { status: "Failed", color: "red", labelKey: "pages.knowledgeBase.status.failed", inProgress: false },
 };
+
+/** i18n key for a failure-reason code the server derives from its fixed reason text; the stored text is the fallback. */
+export function knowledgeFailureReasonKey(code: string): string {
+	return `pages.knowledgeBase.failureReason.${code}`;
+}
 
 export function knowledgeStatusDescriptor(status: KnowledgeDocumentStatus): KnowledgeStatusDescriptor {
 	return STATUS_DESCRIPTORS[status];

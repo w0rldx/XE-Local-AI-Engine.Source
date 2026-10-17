@@ -11,7 +11,6 @@ import {
 	getModelLaunchArgumentsQueryKey,
 	putModelLaunchArgumentsMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { toast } from "@/core/ui/notifications/Toast";
 
@@ -26,7 +25,7 @@ interface ModelLaunchArgumentsPanelProps {
 export function ModelLaunchArgumentsPanel({ modelName }: ModelLaunchArgumentsPanelProps) {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
-	const query = useQuery(withResponseValidation(getModelLaunchArgumentsOptions({ path: { modelName } })));
+	const query = useQuery(getModelLaunchArgumentsOptions({ path: { modelName } }));
 	const serverValue = query.data?.rawArguments ?? "";
 	const [value, setValue] = useState(serverValue);
 
@@ -38,7 +37,7 @@ export function ModelLaunchArgumentsPanel({ modelName }: ModelLaunchArgumentsPan
 	const invalidate = () => queryClient.invalidateQueries({ queryKey: getModelLaunchArgumentsQueryKey({ path: { modelName } }) });
 
 	const saveMutation = useMutation({
-		...withResponseValidation(putModelLaunchArgumentsMutation()),
+		...putModelLaunchArgumentsMutation(),
 		onSuccess: async (response) => {
 			setValue(response.rawArguments);
 			toast.success(t("pages.models.launchArgs.saved", "Launch arguments saved. They apply the next time this model loads."));
@@ -48,7 +47,7 @@ export function ModelLaunchArgumentsPanel({ modelName }: ModelLaunchArgumentsPan
 	});
 
 	const clearMutation = useMutation({
-		...withResponseValidation(deleteModelLaunchArgumentsMutation()),
+		...deleteModelLaunchArgumentsMutation(),
 		onSuccess: async () => {
 			setValue("");
 			toast.success(t("pages.models.launchArgs.resetSuccess", "Launch arguments reset to defaults."));

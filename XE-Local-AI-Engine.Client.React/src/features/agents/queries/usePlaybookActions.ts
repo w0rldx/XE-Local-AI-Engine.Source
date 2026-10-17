@@ -11,7 +11,6 @@ import {
 	updatePlaybookActionMutation,
 	updateSuggestedPlaybookActionMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toPlaybookAction, toPlaybookActionRequestBody, toPromoteError } from "@/features/agents/models/PlaybookActionMappers";
 import type {
 	MemoryScope,
@@ -21,8 +20,8 @@ import type {
 } from "@/features/agents/models/PlaybookActionModels";
 
 // Server state for an agent's playbook. The read uses the generated hey-api `*Options()` (which wires the shared
-// axios instance + TanStack Query AbortSignal automatically), wrapped in withResponseValidation so a zod
-// response-shape failure surfaces as an ApiError; a TanStack `select` maps the optional-field generated response
+// axios instance + TanStack Query AbortSignal automatically); a TanStack
+// `select` maps the optional-field generated response
 // into the stricter domain view-model. Mutations dispatch the domain-friendly call signature into the generated
 // `*Mutation()`'s mutationFn and invalidate the per-agent action list on success (onSettled where a 409 is
 // expected). The query is disabled when no agent is selected so the panel never fetches with an empty id.
@@ -52,12 +51,10 @@ function invalidateActions(queryClient: ReturnType<typeof useQueryClient>): Prom
 // The scope is part of the generated query key, so switching the filter fetches+caches per scope independently.
 export function usePlaybookActions(agentDefinitionId: string | null, scope: MemoryScope | null = null) {
 	return useQuery({
-		...withResponseValidation(
-			listAgentPlaybookActionsOptions({
-				path: { agentDefinitionId: agentDefinitionId ?? "" },
-				query: scope !== null ? { scope } : undefined,
-			}),
-		),
+		...listAgentPlaybookActionsOptions({
+			path: { agentDefinitionId: agentDefinitionId ?? "" },
+			query: scope !== null ? { scope } : undefined,
+		}),
 		enabled: agentDefinitionId !== null && agentDefinitionId.length > 0,
 		select: (data) => (data.items ?? []).map(toPlaybookAction),
 	});
@@ -68,7 +65,7 @@ export function useCreatePlaybookAction(agentDefinitionId: string) {
 
 	return useMutation({
 		mutationFn: async (request: SavePlaybookActionRequestDto): Promise<PlaybookAction> => {
-			const options = withResponseValidation(createPlaybookActionMutation());
+			const options = createPlaybookActionMutation();
 			const data = await options.mutationFn?.(
 				{ path: { agentDefinitionId }, body: toPlaybookActionRequestBody(request) },
 				undefined as never,
@@ -92,7 +89,7 @@ export function useUpdatePlaybookAction(agentDefinitionId: string) {
 
 	return useMutation({
 		mutationFn: async ({ actionId, request }: UpdatePlaybookActionVariables): Promise<PlaybookAction> => {
-			const options = withResponseValidation(updatePlaybookActionMutation());
+			const options = updatePlaybookActionMutation();
 			const data = await options.mutationFn?.(
 				{ path: { agentDefinitionId, actionId }, body: toPlaybookActionRequestBody(request) },
 				undefined as never,
@@ -111,7 +108,7 @@ export function useDeletePlaybookAction(agentDefinitionId: string) {
 
 	return useMutation({
 		mutationFn: async (actionId: string): Promise<void> => {
-			const options = withResponseValidation(deletePlaybookActionMutation());
+			const options = deletePlaybookActionMutation();
 			await options.mutationFn?.({ path: { agentDefinitionId, actionId } }, undefined as never);
 		},
 		onSuccess: () => invalidateActions(queryClient),
@@ -127,7 +124,7 @@ export function useAnalyzePlaybook(agentDefinitionId: string) {
 
 	return useMutation<PlaybookAction[], unknown, void>({
 		mutationFn: async (): Promise<PlaybookAction[]> => {
-			const options = withResponseValidation(analyzePlaybookMutation());
+			const options = analyzePlaybookMutation();
 			const data = await options.mutationFn?.({ path: { agentDefinitionId } }, undefined as never);
 			return (data?.items ?? []).map(toPlaybookAction);
 		},
@@ -147,7 +144,7 @@ export function usePromoteSuggestedAction(agentDefinitionId: string) {
 	return useMutation({
 		mutationFn: async (actionId: string): Promise<PlaybookAction> => {
 			try {
-				const options = withResponseValidation(promoteSuggestedPlaybookActionMutation());
+				const options = promoteSuggestedPlaybookActionMutation();
 				const data = await options.mutationFn?.({ path: { agentDefinitionId, actionId } }, undefined as never);
 				if (!data) {
 					throw new Error("Playbook action request returned an empty response.");
@@ -169,7 +166,7 @@ export function useRunEval(agentDefinitionId: string) {
 
 	return useMutation({
 		mutationFn: async (actionId: string): Promise<PlaybookAction> => {
-			const options = withResponseValidation(runPlaybookActionEvalMutation());
+			const options = runPlaybookActionEvalMutation();
 			const data = await options.mutationFn?.({ path: { agentDefinitionId, actionId } }, undefined as never);
 			if (!data) {
 				throw new Error("Playbook action request returned an empty response.");
@@ -185,7 +182,7 @@ export function useRejectSuggestedAction(agentDefinitionId: string) {
 
 	return useMutation({
 		mutationFn: async (actionId: string): Promise<PlaybookAction> => {
-			const options = withResponseValidation(rejectSuggestedPlaybookActionMutation());
+			const options = rejectSuggestedPlaybookActionMutation();
 			const data = await options.mutationFn?.({ path: { agentDefinitionId, actionId } }, undefined as never);
 			if (!data) {
 				throw new Error("Playbook action request returned an empty response.");
@@ -208,7 +205,7 @@ export function useUpdateSuggestedAction(agentDefinitionId: string) {
 
 	return useMutation({
 		mutationFn: async ({ actionId, request }: UpdateSuggestedActionVariables): Promise<PlaybookAction> => {
-			const options = withResponseValidation(updateSuggestedPlaybookActionMutation());
+			const options = updateSuggestedPlaybookActionMutation();
 			const data = await options.mutationFn?.({ path: { agentDefinitionId, actionId }, body: request }, undefined as never);
 			if (!data) {
 				throw new Error("Playbook action request returned an empty response.");

@@ -223,6 +223,44 @@ public sealed class CustomToolCatalogTests
         AssertEx.Equal(expected: 1, descriptors.Count(descriptor => descriptor.Category == ToolCategory.Network));
     }
 
+    /// <summary>
+    ///     The graph action feed (ADR 0021): only an enabled, acknowledged, <c>Fixed</c> tool flagged for unattended use,
+    ///     of either kind, handed out with its kind's executor rather than an approval-wrapped executable.
+    /// </summary>
+    [Test]
+    public async Task ListUnattendedAsync_ListsOnlyFlaggedFixedOfferableTools_WithTheirExecutorAndCategory()
+    {
+        var store = BuildStore([
+            Record("custom__lights", allowUnattended: true),
+            Record("custom__launch", allowUnattended: true, kind: CustomToolKind.Command),
+            Record("custom__unflagged"),
+            Record("custom__disabled", enabled: false, allowUnattended: true),
+            Record("custom__unacknowledged", acknowledged: false, allowUnattended: true),
+            Record("custom__parameterized", allowUnattended: true, mode: CustomToolMode.Parameterized)
+        ]);
+        var catalog = CreateCatalog(store, new ReadCounter(), Settings(customToolsEnabled: true));
+
+        var actions = await catalog.ListUnattendedAsync();
+
+        AssertEx.Equal("custom__launch,custom__lights", string.Join(',', actions.Select(static action => action.Record.Name).Order(StringComparer.Ordinal)));
+        var lights = actions.Single(static action => action.Record.Name == "custom__lights");
+        AssertEx.Equal(CustomToolKind.HttpFetch, lights.Executor.Kind);
+        AssertEx.Equal(ToolCategory.Network, lights.Category);
+        AssertEx.Equal(ToolCategory.WriteExecute, actions.Single(static action => action.Record.Name == "custom__launch").Category);
+        AssertEx.Contains(lights.ParameterSchema, "\"object\"", message: "a Fixed tool compiles to a closed empty object schema.");
+    }
+
+    [Test]
+    public async Task ListUnattendedAsync_WithCustomToolsOff_IsEmptyWithoutReadingTheStore()
+    {
+        var store = BuildStore([Record("custom__lights", allowUnattended: true)]);
+        var storeResolutions = new ReadCounter();
+        var catalog = CreateCatalog(store, storeResolutions, Settings(customToolsEnabled: false));
+
+        AssertEx.Empty(await catalog.ListUnattendedAsync());
+        AssertEx.Equal(expected: 0, storeResolutions.Value);
+    }
+
     private static CustomToolCatalog CreateCatalog(ICustomToolStore store,
         ReadCounter storeResolutions,
         INodeRuntimeSettings settings)
@@ -259,7 +297,9 @@ public sealed class CustomToolCatalogTests
         bool enabled = true,
         bool acknowledged = true,
         string parametersJson = "[]",
-        CustomToolKind kind = CustomToolKind.HttpFetch)
+        CustomToolKind kind = CustomToolKind.HttpFetch,
+        bool allowUnattended = false,
+        CustomToolMode mode = CustomToolMode.Fixed)
     {
         return new CustomToolRecord
         {
@@ -267,11 +307,12 @@ public sealed class CustomToolCatalogTests
             Name = name,
             Description = $"Description of {name}",
             Kind = kind,
-            Mode = CustomToolMode.Fixed,
+            Mode = mode,
             ParametersJson = parametersJson,
             ConfigJson = "{}",
             Enabled = enabled,
             Acknowledged = acknowledged,
+            AllowUnattended = allowUnattended,
             Version = 1,
             CreatedAtUtc = 10,
             UpdatedAtUtc = 10
@@ -284,9 +325,9 @@ public sealed class CustomToolCatalogTests
     {
         public CustomToolKind Kind => CustomToolKind.Command;
 
-        public Task<string> ExecuteAsync(CustomToolRecord tool, string jsonArguments, CancellationToken cancellationToken)
+        public Task<CustomToolExecution> ExecuteAsync(CustomToolRecord tool, string jsonArguments, CancellationToken cancellationToken)
         {
-            return Task.FromResult("never invoked by these tests");
+            return Task.FromResult(CustomToolExecution.Success("never invoked by these tests"));
         }
     }
 
@@ -294,9 +335,9 @@ public sealed class CustomToolCatalogTests
     {
         public CustomToolKind Kind => CustomToolKind.HttpFetch;
 
-        public Task<string> ExecuteAsync(CustomToolRecord tool, string jsonArguments, CancellationToken cancellationToken)
+        public Task<CustomToolExecution> ExecuteAsync(CustomToolRecord tool, string jsonArguments, CancellationToken cancellationToken)
         {
-            return Task.FromResult("never invoked by these tests");
+            return Task.FromResult(CustomToolExecution.Success("never invoked by these tests"));
         }
     }
 

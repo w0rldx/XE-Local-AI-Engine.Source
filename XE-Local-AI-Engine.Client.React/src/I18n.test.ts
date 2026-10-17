@@ -77,6 +77,15 @@ describe("i18n locale parity", () => {
 // index.html ships a static lang="en", so before this a German session was announced to screen readers — and
 // hyphenated, and offered to translation tooling — as English. src/i18n.ts is the app's own instance and is
 // imported by vitest setup, so asserting through it exercises the real wiring, not a stand-in.
+// `en` is a lazy chunk like every other locale; src/test/AwaitI18n.ts holds the suite until it has landed, as Main.tsx
+// holds the first render. Without that wait the first synchronous `t()` of a file reads the raw key.
+describe("i18n lazy fallback bundle", () => {
+	it("has the en bundle loaded before the first test runs", () => {
+		expect(i18next.hasResourceBundle("en", "translation")).toBe(true);
+		expect(i18next.t("basicFormatOption")).toBe(en.basicFormatOption);
+	});
+});
+
 describe("i18n document language", () => {
 	afterAll(async () => {
 		await i18next.changeLanguage("en");

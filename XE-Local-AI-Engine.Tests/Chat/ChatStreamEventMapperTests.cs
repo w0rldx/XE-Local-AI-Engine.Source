@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -527,6 +528,28 @@ public sealed class ChatStreamEventMapperTests
         {
             AssertEx.Null(ChatStreamEventMapper.MessageEvent(lifecycle, correlation, message, Timestamp, sequence: 1).ContextWindow);
         }
+    }
+
+    [Test]
+    public void MessageEvent_CarriesTheFailureCategoryNameOnTerminalEventsOnly()
+    {
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
+        var message = NewMessage(correlation, string.Empty, reasoning: null, NodeChatMessageStatusValues.Failed, "m", inputCount: null, outputCount: null) with
+        {
+            FailureCategory = FailureCategory.InsufficientCapacity
+        };
+
+        AssertEx.Equal("InsufficientCapacity", ChatStreamEventMapper.MessageEvent(ChatStreamEventTypes.AssistantFailed, correlation, message, Timestamp, sequence: 1).FailureCategory);
+        AssertEx.Null(ChatStreamEventMapper.MessageEvent(ChatStreamEventTypes.AssistantQueued, correlation, message, Timestamp, sequence: 1).FailureCategory);
+        AssertEx.Null(ChatStreamEventMapper.MessageEvent(ChatStreamEventTypes.AssistantFailed, correlation, message with
+        {
+            FailureCategory = null
+        }, Timestamp, sequence: 1).FailureCategory);
     }
 
     private static NodeChatPersistedMessageDto NewMessage(NodeChatMessageCorrelation correlation,

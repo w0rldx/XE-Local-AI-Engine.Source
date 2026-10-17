@@ -380,7 +380,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             InputTokens = inputTokens,
             OutputTokens = outputTokens,
             TotalTokens = totalTokens,
-            ReasoningTokens = reasoningTokens
+            ReasoningTokens = reasoningTokens,
+            FailureCategory = state.Status == InvocationStatus.Failed ? state.FailureCategory?.ToString() : null
         };
     }
 

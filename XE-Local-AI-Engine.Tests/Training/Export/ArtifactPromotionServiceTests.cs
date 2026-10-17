@@ -133,6 +133,18 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
         AssertEx.Contains(failure.Message, "already registered", StringComparison.Ordinal);
     }
 
+    /// <summary>R7-08: an unlinked run can never get a quality decision, so promote names the link, not the decision.</summary>
+    [Test]
+    public async Task Promote_WithoutQualityDecisionOnAnUnlinkedRun_NamesTheMissingLink()
+    {
+        var harness = Harness.Create(this, TrainingArtifactKind.MergedGguf, TrainingArtifactSmokeState.Passed, linkedModel: null,
+            qualityOutcome: null);
+
+        var failure = await AssertEx.ThrowsAsync<TrainingExportRejectedException>(() => harness.PromoteAsync());
+
+        AssertEx.Equal(ArtifactQualityService.UnlinkedRunMessage, failure.Message);
+    }
+
     [Test]
     public async Task Promote_WithoutQualityDecision_DoesNotPrepareAnImport()
     {

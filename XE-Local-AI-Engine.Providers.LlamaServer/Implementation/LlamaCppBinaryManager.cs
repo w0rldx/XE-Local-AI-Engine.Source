@@ -67,6 +67,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         "Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime.";
 
     private readonly IRuntimeAcquisitionStatusRegistry? _acquisitionStatus;
+    private readonly ILlamaCppImplicitAcquisitionPolicy? _implicitAcquisitionPolicy;
     private readonly string _activeTag;
     private readonly Architecture _arch;
     private readonly string _cacheRoot;
@@ -110,7 +111,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         LlamaServerRuntimeOverrideOptions? overrideOptions = null,
         ICudaManagedBuildSignal? managedCudaSignal = null,
         IRuntimeAcquisitionStatusRegistry? acquisitionStatus = null,
-        ILogger<LlamaCppBinaryManager>? logger = null)
+        ILogger<LlamaCppBinaryManager>? logger = null,
+        ILlamaCppImplicitAcquisitionPolicy? implicitAcquisitionPolicy = null)
         : this(httpClient,
             cacheRoot ?? RuntimeCacheDirectory.Resolve(),
             activeTag ?? LlamaCppReleasePins.PinnedTag,
@@ -122,7 +124,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             overrideOptions,
             managedCudaSignal,
             acquisitionStatus,
-            logger: logger)
+            logger: logger,
+            implicitAcquisitionPolicy: implicitAcquisitionPolicy)
     {
     }
 
@@ -142,8 +145,10 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         ICudaManagedBuildSignal? managedCudaSignal = null,
         IRuntimeAcquisitionStatusRegistry? acquisitionStatus = null,
         Func<OSPlatform, Architecture, GpuVariant, LlamaCppAssetPin?>? pinResolver = null,
-        ILogger<LlamaCppBinaryManager>? logger = null)
+        ILogger<LlamaCppBinaryManager>? logger = null,
+        ILlamaCppImplicitAcquisitionPolicy? implicitAcquisitionPolicy = null)
     {
+        _implicitAcquisitionPolicy = implicitAcquisitionPolicy;
         _logger = logger ?? NullLogger<LlamaCppBinaryManager>.Instance;
         _pinResolver = pinResolver ?? LlamaCppReleasePins.ResolveForAcquisition;
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
@@ -162,7 +167,18 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     }
 
     /// <inheritdoc />
-    public async Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct)
+    public Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct)
+    {
+        return EnsureCoreAsync(variant, operatorRequested: false, ct);
+    }
+
+    /// <inheritdoc />
+    public Task<LlamaBinary> AcquireBinaryAsync(GpuVariant variant, CancellationToken ct)
+    {
+        return EnsureCoreAsync(variant, operatorRequested: true, ct);
+    }
+
+    private async Task<LlamaBinary> EnsureCoreAsync(GpuVariant variant, bool operatorRequested, CancellationToken ct)
     {
         // An active operator bring-your-own override short-circuits ALL acquisition and is served as the override's OWN variant, never the caller's; broken, it
         // throws rather than run silently on CPU. It precedes the pinned-floor resolve, which would throw for a (Linux, X64, Cuda) request that has no prebuilt.
@@ -197,7 +213,14 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             throw new LlamaRuntimeException(ManagedSourceBuildUnavailableMessage);
         }
 
-        var resolvedTag = await ResolveActiveTagAsync(variant, installed, ct).ConfigureAwait(false);
+        // A launch may download only when the policy (the Offline profile) allows it; an explicit operator install skips the question. A refused
+        // launch serves a runtime already on disk, installed tag first, and never consults the live catalog: an Offline node makes no request.
+        var refusal = operatorRequested || _implicitAcquisitionPolicy is null
+            ? null
+            : await _implicitAcquisitionPolicy.GetRefusalAsync(ct).ConfigureAwait(false);
+        var resolvedTag = refusal is null
+            ? await ResolveActiveTagAsync(variant, installed, ct).ConfigureAwait(false)
+            : ResolveTagOnDisk(variant, installed) ?? throw new LlamaRuntimeNotInstalledException(refusal);
 
         // A GPU variant MUST resolve a GENUINE (os, arch, variant) asset via TryResolveExact: Resolve() would substitute the CPU floor where no GPU prebuilt exists
         // — Linux CUDA has none upstream — and the supervisor would emit GPU placement flags against a CPU build. CPU keeps the plain Resolve, its exact pin BEING the floor.
@@ -218,7 +241,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         await acquisitionLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            return await EnsureVariantDirAsync(variant, resolvedTag, pin, isPinnedFallback, variantDir, reporter, ct).ConfigureAwait(false);
+            return await EnsureVariantDirAsync(variant, resolvedTag, pin, isPinnedFallback, variantDir, reporter, refusal, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -231,9 +254,12 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         return _acquisitionLocks.GetOrAdd(variantDir, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
     }
 
-    /// <summary>The acquisition body of <see cref="EnsureBinaryAsync(GpuVariant, CancellationToken)" />, run under that variant dir's single-flight lock.</summary>
+    /// <summary>
+    ///     The acquisition body of <see cref="EnsureBinaryAsync(GpuVariant, CancellationToken)" />, run under that variant dir's single-flight lock. A non-null
+    ///     <paramref name="refusal" /> (the implicit-acquisition policy said no) makes it request nothing: no build download and no companion repair.
+    /// </summary>
     private async Task<LlamaBinary> EnsureVariantDirAsync(GpuVariant variant, string resolvedTag, LlamaCppAssetPin pin, bool isPinnedFallback, string variantDir,
-        AcquisitionReporter reporter, CancellationToken ct)
+        AcquisitionReporter reporter, string? refusal, CancellationToken ct)
     {
         try
         {
@@ -241,9 +267,11 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             var cachedServer = ResolveServerPath(variantDir, pin);
             if (cachedServer is not null)
             {
-                // A published Windows-CUDA dir missing part of its companion set is repaired best-effort; a failed or impossible repair serves it as it is, as before.
-                var repairFailed = variant == GpuVariant.Cuda && _os == OSPlatform.Windows && !CudartRuntimePresent(Path.GetDirectoryName(cachedServer)!)
-                                   && !await TryRepairCudaCompanionSetAsync(resolvedTag, pin, isPinnedFallback, cachedServer, reporter, ct).ConfigureAwait(false);
+                // A published Windows-CUDA dir missing part of its companion set is repaired best-effort; a failed, impossible or refused repair serves it as it is.
+                var repairFailed = IsIncompleteWindowsCudaDir(variant, cachedServer)
+                                   && (refusal is not null
+                                       ? RefuseCudaCompanionRepair(resolvedTag, reporter)
+                                       : !await TryRepairCudaCompanionSetAsync(resolvedTag, pin, isPinnedFallback, cachedServer, reporter, ct).ConfigureAwait(false));
                 await RecordResolvedRuntimeAsync(resolvedTag, pin, variant, ct).ConfigureAwait(false);
 
                 // Silent on a pure cache hit — this runs on every model spawn, so a Completed here would flood the hub. A failed repair keeps its Failed; a set
@@ -265,6 +293,12 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                     Variant = variant,
                     IsPinnedFallback = isPinnedFallback
                 };
+            }
+
+            // Only reachable when the dir resolved on disk vanished before the lock; a refused launch still must not download.
+            if (refusal is not null)
+            {
+                throw new LlamaRuntimeNotInstalledException(refusal);
             }
 
             // The pinned path has no catalog-reported size — pass "unknown" (0) so only the absolute ceiling is enforced.
@@ -478,6 +512,15 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         {
             _sourceMutationGate.Release();
         }
+    }
+
+    // The installed tag, then the pinned floor, whichever has a server on disk for the variant; null when neither does.
+    private string? ResolveTagOnDisk(GpuVariant variant, InstalledRuntimeState? installed)
+    {
+        var pin = ResolveAcquirablePin(variant);
+        string?[] candidates = [installed?.Tag, _activeTag];
+        return candidates.FirstOrDefault(tag => tag is { Length: > 0 } && IsValidTag(tag)
+                                                                       && ResolveServerPath(Path.Combine(_cacheRoot, "llama.cpp", tag, VariantSlug(variant)), pin) is not null);
     }
 
     /// <summary>
@@ -869,6 +912,22 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             }
         }
     }
+
+    /// <summary>
+    ///     The refused counterpart of <see cref="TryRepairCudaCompanionSetAsync" />: the policy forbids an implicit download, so nothing is requested and the
+    ///     banner says why the runtime runs without CUDA. Always true (the repair did not happen), for the caller's <c>repairFailed</c>.
+    /// </summary>
+    private bool RefuseCudaCompanionRepair(string tag, AcquisitionReporter reporter)
+    {
+        _logger.LogWarning("The CUDA runtime libraries of llama.cpp {Tag} are incomplete and the acquisition policy refuses an automatic download, so it runs without CUDA.",
+            tag);
+        reporter.Refuse($"{CudaRepairFailurePrefix} {CudaRepairRefusedReason}");
+        return true;
+    }
+
+    /// <summary>The UI reason of a repair the implicit-acquisition policy refused.</summary>
+    private const string CudaRepairRefusedReason =
+        "The external access profile does not download them automatically; installing the runtime in Node Settings under the llama.cpp runtime repairs them.";
 
     /// <summary>The sanitized failure for a companion set missing <paramref name="missingFamily" />, listing the DLL names (never paths) in <paramref name="dir" />.</summary>
     internal static string IncompleteCompanionSetMessage(string missingFamily, string dir)

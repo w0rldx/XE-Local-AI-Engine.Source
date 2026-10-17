@@ -1,15 +1,17 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, screen } from "@testing-library/react";
+import i18next from "i18next";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ChatInputArea } from "@/features/chat/components/ChatInputArea";
 import type { ChatCommandOption } from "@/features/chat/models/SlashCommandModels";
+import de from "@/locales/de.json";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const commandOptions: ChatCommandOption[] = [
-	{ id: null, name: "ping", description: "Test the current chat agent.", prompt: "Respond with exactly PONG" },
-	{ id: "review-id", name: "review", description: "Review current work", prompt: "Review the current work" },
+	{ id: null, name: "ping", description: "Test the current chat agent.", prompt: "Respond with exactly PONG", source: "builtIn" },
+	{ id: "review-id", name: "review", description: "Review current work", prompt: "Review the current work", source: "custom" },
 ];
 
 function renderComposer(overrides: Record<string, unknown> = {}) {
@@ -33,7 +35,19 @@ function renderComposer(overrides: Record<string, unknown> = {}) {
 }
 
 describe("ChatInputArea slash commands", () => {
-	afterEach(cleanup);
+	afterEach(async () => {
+		cleanup();
+		await i18next.changeLanguage("en");
+	});
+
+	it("labels a built-in command's description in German and keeps a custom one as written", async () => {
+		i18next.addResourceBundle("de", "translation", de, true, true);
+		await i18next.changeLanguage("de");
+		const { input } = renderComposer();
+		fireEvent.change(input, { target: { value: "/", selectionStart: 1, selectionEnd: 1 } });
+		expect(screen.getByTestId("slash-command-option-ping").textContent).toContain("Den aktuellen Chat-Agenten testen.");
+		expect(screen.getByTestId("slash-command-option-review").textContent).toContain("Review current work");
+	});
 
 	it("uses Enter first to select and a second Enter to expand and send exactly once", () => {
 		const { input, onSend } = renderComposer();

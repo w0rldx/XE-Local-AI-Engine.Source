@@ -20,7 +20,6 @@ import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { getInvocationMonitorOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
@@ -33,7 +32,8 @@ import {
 	formatInvocationDuration,
 	formatInvocationText,
 	formatInvocationTimestamp,
-	getInvocationStatusColor,
+	getInvocationErrorText,
+	getInvocationStatusBadge,
 	isInvocationActive,
 	sortInvocationHistory,
 } from "@/features/invocations/models/InvocationMonitorModel";
@@ -86,8 +86,9 @@ function TraceIdLine({ traceId }: { readonly traceId: string | null }) {
 	);
 }
 
-function CurrentInvocation({ current }: { readonly current: InvocationCurrentDto | null }) {
+function CurrentInvocation({ current, title }: { readonly current: InvocationCurrentDto | null; readonly title?: string }) {
 	const { t } = useTranslation();
+	const heading = title ?? t("pages.invocations.monitor.current.title", "Current invocation");
 	if (!current) {
 		return (
 			<SectionCard
@@ -105,14 +106,14 @@ function CurrentInvocation({ current }: { readonly current: InvocationCurrentDto
 			<Group justify="space-between" align="flex-start">
 				<Stack gap={4}>
 					<Title order={2} size="h3">
-						{t("pages.invocations.monitor.current.title", "Current invocation")}
+						{heading}
 					</Title>
 					<Text size="sm" c="dimmed" style={{ wordBreak: "break-all" }}>
 						{current.invocationId}
 					</Text>
 					<TraceIdLine traceId={current.traceId} />
 				</Stack>
-				<Badge color={getInvocationStatusColor(current.status)}>{current.status}</Badge>
+				<InvocationStatusBadge run={current} />
 			</Group>
 			<Text fw={500} data-testid="invocation-summary">
 				{buildInvocationSummary(current, t)}
@@ -164,7 +165,7 @@ function CurrentInvocation({ current }: { readonly current: InvocationCurrentDto
 					})}
 				</Text>
 			</SimpleGrid>
-			{current.error ? <InlineErrorAlert message={current.error} /> : null}
+			{current.error ? <InlineErrorAlert message={getInvocationErrorText(current, t) ?? current.error} /> : null}
 		</SectionCard>
 	);
 }
@@ -190,16 +191,22 @@ function HistoryRows({ history }: { readonly history: InvocationHistoryDto[] }) 
 				<TraceIdLine traceId={entry.traceId} />
 			</Table.Td>
 			<Table.Td>
-				<Badge color={getInvocationStatusColor(entry.status)}>{entry.status}</Badge>
+				<InvocationStatusBadge run={entry} />
 			</Table.Td>
 			<Table.Td>{formatInvocationText(entry.modelUsed)}</Table.Td>
 			<Table.Td>{formatInvocationTimestamp(entry.completedAt)}</Table.Td>
 			<Table.Td>{formatInvocationDuration(entry.durationMs)}</Table.Td>
 			<Table.Td>{entry.streamedChunkCount}</Table.Td>
 			<Table.Td>{entry.streamedThinkingChunkCount}</Table.Td>
-			<Table.Td>{formatInvocationText(entry.error ?? entry.failureCategory)}</Table.Td>
+			<Table.Td>{formatInvocationText(getInvocationErrorText(entry, t))}</Table.Td>
 		</Table.Tr>
 	));
+}
+
+function InvocationStatusBadge({ run }: { run: InvocationCurrentDto | InvocationHistoryDto }) {
+	const { t } = useTranslation();
+	const badge = getInvocationStatusBadge(run, t);
+	return <Badge color={badge.color}>{badge.label}</Badge>;
 }
 
 export function Invocations() {
@@ -211,7 +218,7 @@ export function Invocations() {
 		refetch: monitorRefetch,
 		isFetching: monitorIsFetching,
 	} = useQuery({
-		...withResponseValidation(getInvocationMonitorOptions()),
+		...getInvocationMonitorOptions(),
 		// Case (d): chat in another tab, the scheduler, integrations and agents start invocations outside this page, and
 		// no hub announces them, so an idle monitor cannot tell that nothing will start.
 		refetchInterval: 5000,
@@ -219,6 +226,8 @@ export function Invocations() {
 	});
 	const history = useMemo(() => sortInvocationHistory(monitor?.history ?? []), [monitor]);
 	const active = isInvocationActive(monitor?.current?.status);
+	// Live turns besides the current one, such as a turn parked on an approval or a question.
+	const otherLive = (monitor?.live ?? []).filter((row) => row.invocationId !== monitor?.current?.invocationId);
 
 	return (
 		<PageShell>
@@ -256,6 +265,13 @@ export function Invocations() {
 			{monitorError ? <InlineErrorAlert message={errorMessage(monitorError, t)} /> : null}
 
 			<CurrentInvocation current={monitor?.current ?? null} />
+			{otherLive.map((row) => (
+				<CurrentInvocation
+					key={row.invocationId}
+					current={row}
+					title={t("pages.invocations.monitor.live.title", "Other live invocation")}
+				/>
+			))}
 
 			<SectionCard
 				title={t("pages.invocations.monitor.history.title", "Invocation history")}

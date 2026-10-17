@@ -5,7 +5,6 @@ import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
 import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
 import { toExternalModelOptions } from "@/features/chat/pages/ChatModelOptions";
 import { isInstalledLocalModel } from "@/features/models/models/LocalModelMappers";
@@ -21,7 +20,7 @@ import { isInstalledLocalModel } from "@/features/models/models/LocalModelMapper
  */
 export function Home() {
 	const { t } = useTranslation();
-	const { data, isLoading } = useQuery(withResponseValidation(listLocalModelsOptions()));
+	const { data, isLoading } = useQuery(listLocalModelsOptions());
 	const items = data?.items ?? [];
 	// External-provider registrations ride the same list but are not installed on this node, and the /models route this
 	// card points at does not list them — counting them as installed would promise models that page cannot show.

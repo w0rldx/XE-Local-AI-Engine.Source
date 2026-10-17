@@ -342,7 +342,7 @@ public sealed class IntegrationSessionStoreTests
         return new SeedState
         {
             TriggerId = trigger.Id,
-            AgentDefinitionId = trigger.TargetAgentDefinitionId,
+            AgentDefinitionId = trigger.TargetAgentDefinitionId.GetValueOrDefault(),
             PrincipalId = key.PrincipalId,
             KeyPrefix = key.KeyPrefix
         };

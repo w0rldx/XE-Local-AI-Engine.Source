@@ -6,7 +6,7 @@
  * demand". It lives beside the interface it fakes rather than in `src/test/`.
  */
 
-import type { CaptureChannel, CaptureError, CaptureFrame, CaptureSource } from "@/features/transcription/capture/CaptureSource";
+import type { CaptureChannel, CaptureError, CaptureFrame, CaptureSource } from "@/core/audio/capture/CaptureSource";
 
 export interface FakeCaptureSourceOptions {
 	/** When set, `start` rejects with this error instead of succeeding — the `no-audio-track` and `permission-denied` paths. */

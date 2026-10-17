@@ -10,13 +10,16 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 /// </summary>
 /// <remarks>
 ///     Deliberately NOT self-synchronized: every member is called by <see cref="LlamaServerProcessSupervisor" /> under
-///     its admission gate. That is what makes <see cref="ReservedCount" /> a race-free measure of the loaded-model cap —
+///     its admission gate. That is what makes <see cref="ReservedCountOf" /> a race-free measure of the loaded-model cap —
 ///     a port is reserved before the process registers and released when it fails or is evicted, so the count already
 ///     includes in-flight spawns. A second lock here would only invite a caller to read the count outside the gate.
 /// </remarks>
 internal sealed class LlamaServerPortAllocator
 {
     private readonly HashSet<int> _allocatedPorts = [];
+
+    // The subset held by companion (embedding/reranker) processes, which are capped apart from the chat-model slots.
+    private readonly HashSet<int> _companionPorts = [];
     private readonly LlamaServerSupervisorOptions _options;
 
     public LlamaServerPortAllocator(LlamaServerSupervisorOptions options)
@@ -25,11 +28,15 @@ internal sealed class LlamaServerPortAllocator
         _options = options;
     }
 
-    /// <summary>Reserved ports — the count the loaded-model cap is measured against (caller holds the admission gate).</summary>
+    /// <summary>Every reserved port, chat and companion alike (caller holds the admission gate).</summary>
     public int ReservedCount => _allocatedPorts.Count;
 
-    /// <summary>Allocates a free port from the configured range (caller holds the admission gate).</summary>
-    public int Allocate()
+    /// <summary>Reserved ports of one class — the count that class's loaded-model cap is measured against (caller holds the admission gate).</summary>
+    public int ReservedCountOf(bool companion) =>
+        companion ? _companionPorts.Count : _allocatedPorts.Count - _companionPorts.Count;
+
+    /// <summary>Allocates a free port from the configured range for a chat or companion process (caller holds the admission gate).</summary>
+    public int Allocate(bool companion = false)
     {
         for (var port = _options.PortRangeStart; port <= _options.PortRangeEnd; port++)
         {
@@ -39,6 +46,11 @@ internal sealed class LlamaServerPortAllocator
             }
 
             _allocatedPorts.Add(port);
+            if (companion)
+            {
+                _companionPorts.Add(port);
+            }
+
             return port;
         }
 
@@ -49,6 +61,7 @@ internal sealed class LlamaServerPortAllocator
     public void Release(int port)
     {
         _allocatedPorts.Remove(port);
+        _companionPorts.Remove(port);
     }
 
     private static bool IsPortFree(int port)

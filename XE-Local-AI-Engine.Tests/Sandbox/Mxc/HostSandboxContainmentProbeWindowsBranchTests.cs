@@ -49,7 +49,22 @@ public sealed class HostSandboxContainmentProbeWindowsBranchTests
 
         AssertEx.Contains(logger.AllText,
             "MXC UI facts: CanBlockClipboardRead true, CanBlockClipboardWrite true, CanBlockInputInjection true, CanBlockExternalUiObjects true, CanBlockGlobalUiNamespace true, CanBlockDesktopSwitching false;");
-        AssertEx.Contains(logger.AllText, $"OS {RuntimeInformation.OSDescription};");
+        // A real Windows host appends " (UBR n)" before the semicolon; the UBR read is Windows-only, its format is pinned below.
+        AssertEx.Contains(logger.AllText, $"OS {RuntimeInformation.OSDescription}");
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task DescribeOs_AppendsTheUpdateBuildRevision_TheMxcFloorIsDefinedBy()
+    {
+        AssertEx.Equal("Microsoft Windows 10.0.26200 (UBR 9457)", HostSandboxContainmentProbe.DescribeOs("Microsoft Windows 10.0.26200", 9457));
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task DescribeOs_KeepsThePlainDescription_WhenTheRevisionIsUnknown()
+    {
+        AssertEx.Equal("Microsoft Windows 10.0.26200", HostSandboxContainmentProbe.DescribeOs("Microsoft Windows 10.0.26200", null));
         await Task.CompletedTask;
     }
 

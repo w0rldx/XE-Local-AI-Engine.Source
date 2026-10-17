@@ -571,6 +571,29 @@ agentic-scope root inbound run is the deliberate exception: it may invoke an app
 only through ADR 0006's strict metadata-only audit-before-auto-approval path. Spawned children do not
 inherit that elevation.
 
+Two operator fields prepare a tool for unattended graph use ([ADR 0021](../../adr/0021-unattended-actions-in-graph-tool-nodes.md)).
+`AllowUnattended` (both kinds, a plaintext column beside `Enabled` and `Acknowledged`, never a version bump) states
+that a graph workflow may run this exact invocation with nobody present. `CustomToolService.ValidateAndBuildInputAsync`
+accepts it only on an acknowledged `Fixed` tool, so no model or utterance reaches the URL, body, headers or argv; every
+other guard on both kinds still applies, and an update carries the flag through instead of clearing it. `privateHosts`
+(`HttpFetch` only, inside the encrypted config) lists exact host names or canonical IP literals this tool may reach
+inside the private LAN ranges: no scheme, port, path, userinfo or wildcard, each entry also in `allowedHosts`, and
+never an always-denied address (`CustomToolSsrfGuard.IsAlwaysDeniedAddress`). A fixed template host that is a private
+literal saves only when it is listed. The graph-side admission of a flagged tool is described in
+[Graph Workflows](../21-graph-workflows.md).
+
+A `Command` tool's `detach` (default `false`, inside the encrypted config, read as `false` on a stored row without it)
+launches a program that stays open, such as a GUI program. `HostProcessExecutor` keeps every guard (executable check,
+argv list, cleared environment, working directory, concurrency slot) and does not wait: it reports
+`started <executable> (process <id>)`, or a failed call with the exit code when the program exits non-zero within
+`HostProcessExecutor.DetachGrace` (500 ms, on the injected `TimeProvider`). Returning never kills the program. The
+program never inherits the engine's own streams, which the redactor cannot see: on Unix the system shell replaces
+itself with the program after pointing all three standard streams at the OS null device
+(`HostProcessExecutor.NullSinkLaunch`; the executable and every argument travel as positional parameters of a fixed
+script, so nothing is re-parsed, and the program survives an engine restart); on Windows the streams are pipes drained
+to nothing for as long as the program runs, and the handle is released only after the launch check and the drain end.
+The service refuses `detach` with a non-zero `timeoutSeconds`, because nothing waits for it.
+
 The node setting `ToolRelevanceEnabled` (default `false`, read live per turn) narrows a large tool offer to an
 always-on core plus a relevance-ranked fill, and the model recovers anything held back by calling `list_tools`; the
 per-agent `DisableToolRelevanceFilter` opts a single agent out even when the node switch is on. It is a context

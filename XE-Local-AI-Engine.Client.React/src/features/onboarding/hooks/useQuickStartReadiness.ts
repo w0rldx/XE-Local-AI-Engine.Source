@@ -3,7 +3,6 @@ import { useCallback } from "react";
 
 import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse as LocalModelResponse } from "@/core/api/generated/types.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { hasChatCapableDefault, hasInstalledChatModel } from "@/features/onboarding/data/TourAdvanceSignals";
 import {
 	getQuickStartStepIds,
@@ -25,7 +24,7 @@ export interface QuickStartReadinessState {
  * auto-advance effects watch. Only the quick-start tour varies with readiness; every other tour keeps its full list.
  */
 export function useQuickStartReadiness(isAuthenticated: boolean): QuickStartReadinessState {
-	const modelsQuery = useQuery(withResponseValidation({ ...listLocalModelsOptions(), enabled: isAuthenticated }));
+	const modelsQuery = useQuery({ ...listLocalModelsOptions(), enabled: isAuthenticated });
 
 	const classifyQuickStartReadiness = useCallback((): QuickStartReadiness => {
 		const modelItems = modelsQuery.data?.items;

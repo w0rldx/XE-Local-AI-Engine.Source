@@ -56,7 +56,7 @@ public sealed class StartGraphWorkflowRunEndpoint : Endpoint<StartGraphWorkflowR
             // Re-serialized rather than passed as the raw body slice: what the run stores has to be the value of the
             // `input` member, not the request that carried it.
             var input = req.Input is { } payload ? JsonSerializer.Serialize(payload) : null;
-            var detail = await _runs.StartAsync(req.DefinitionId, req.RequestId, input, req.DefinitionVersion, ct);
+            var detail = await _runs.StartAsync(req.DefinitionId, req.RequestId, input, req.DefinitionVersion, GraphWorkflowRunOrigin.Manual, ct);
             await Send.ResultAsync(Results.Accepted(value: new StartGraphWorkflowRunResponse
             {
                 RunId = detail.Run.Id

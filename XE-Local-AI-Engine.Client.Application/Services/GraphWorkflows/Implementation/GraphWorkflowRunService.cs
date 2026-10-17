@@ -52,16 +52,19 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         Guid requestId,
         string? inputJson,
         int? definitionVersion,
+        GraphWorkflowRunOrigin origin,
         CancellationToken cancellationToken = default) =>
-        StartAsync(definitionId, requestId, inputJson, definitionVersion, binding: null, cancellationToken);
+        StartAsync(definitionId, requestId, inputJson, definitionVersion, origin, binding: null, cancellationToken);
 
     public async Task<GraphWorkflowRunDetail> StartAsync(Guid definitionId,
         Guid requestId,
         string? inputJson,
         int? definitionVersion,
+        GraphWorkflowRunOrigin origin,
         GraphWorkflowRunBinding? binding,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(origin);
         if (requestId == Guid.Empty)
         {
             throw new GraphWorkflowValidationException("A graph workflow run needs a caller-minted request id.");
@@ -81,6 +84,15 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         }
 
         var definition = await _store.GetDefinitionAsync(definitionId, cancellationToken);
+
+        // The operator's accepted set is the gate, checked before anything else about the start: a source it leaves out
+        // never reaches the graph (ADR 0021). A replay above was admitted when it first ran.
+        if (!definition.TriggerSources.HasFlag(origin.Source))
+        {
+            throw new GraphWorkflowRunConflictException($"Graph workflow definition '{definition.Name}' does not accept runs started by {origin.Source}. "
+                                                        + "The operator can add the source in the workflow settings.");
+        }
+
         if (definitionVersion is { } expected && expected != definition.Version)
         {
             throw new GraphWorkflowRunConflictException($"Graph workflow definition '{definition.Name}' is at version {definition.Version}, "
@@ -100,7 +112,7 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
             throw new GraphWorkflowValidationException($"The run input is larger than the {_options.MaxRunInputBytes} bytes one run may carry.");
         }
 
-        await EnsureToolNodesAreRunnableAsync(graph, cancellationToken);
+        await EnsureToolNodesAreRunnableAsync(graph, definition.AllowsActions, cancellationToken);
 
         if (graph.Nodes.Count > _options.MaxNodeRunsPerRun)
         {
@@ -136,7 +148,10 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
                     })
                 ],
                 ConversationId = binding?.ConversationId,
-                TriggerMessageId = binding?.TriggerMessageId
+                TriggerMessageId = binding?.TriggerMessageId,
+                TriggerSource = origin.Source,
+                PrincipalId = origin.PrincipalId,
+                KeyPrefix = origin.KeyPrefix
             },
             cancellationToken);
 
@@ -690,9 +705,9 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
     ///     — the operator learns immediately instead of three nodes in — so this runs BEFORE the run row is written
     ///     and a refusal leaves nothing behind.
     /// </remarks>
-    private async Task EnsureToolNodesAreRunnableAsync(GraphWorkflowGraph graph, CancellationToken cancellationToken)
+    private async Task EnsureToolNodesAreRunnableAsync(GraphWorkflowGraph graph, bool allowsActions, CancellationToken cancellationToken)
     {
-        var errors = await GraphWorkflowToolGate.ErrorsAsync(graph, _tools, _runtimeSettings, cancellationToken);
+        var errors = await GraphWorkflowToolGate.ErrorsAsync(graph, allowsActions, _tools, _runtimeSettings, cancellationToken);
         if (errors.Count > 0)
         {
             throw new GraphWorkflowValidationException(GraphWorkflowValidationResult.Invalid(errors));
