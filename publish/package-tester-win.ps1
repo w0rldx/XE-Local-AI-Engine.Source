@@ -6,7 +6,7 @@
 #
 # The versioned form of the manual tester-build flow: builds the SPA, publishes the
 # single-file self-contained win-x64 host (tester update flavor), generates release
-# notes with a pinned git-cliff, packs with vpk 1.2.0 and uploads to the tester repo.
+# notes with a pinned git-cliff, packs with vpk 1.2.161 and uploads to the tester repo.
 #
 # Prerequisites:
 #   - $env:VPK_TOKEN  GitHub PAT with release access to the tester repo (never commit it)
@@ -23,7 +23,7 @@
 #   - .env is gitignored: a fresh checkout builds the SPA without VITE_ values. The env
 #     schema check runs at APP STARTUP in the browser (not during `vite build`), so a
 #     missing value used to surface only as a blank page. Seed .env from .env.template.
-#   - vpk 1.2.0 `pack` has NO --pre flag; prerelease state rides the SemVer suffix.
+#   - vpk 1.2.161 `pack` has NO --pre flag; prerelease state rides the SemVer suffix.
 #     --pre IS valid on `vpk upload github`.
 #   - If HEAD is already tagged, git-cliff --unreleased is EMPTY (commits-after-latest-tag)
 #     and you ship notes with only a date. Mirror scripts/generate-release-notes.sh:
@@ -420,7 +420,7 @@ function Invoke-VelopackPreviousReleaseDownload {
         [Parameter(Mandatory)][string]$Token
     )
 
-    dnx vpk@1.2.0 download github `
+    dnx vpk@1.2.161 download github `
         --repoUrl $RepositoryUrl `
         --outputDir $OutputDirectory `
         --channel win `
@@ -944,7 +944,7 @@ $previousFullPackage = Get-ChildItem -Path $velopackSeedDir -Recurse -File -Filt
 Copy-Item -Path $previousFullPackage.FullName -Destination $velopackOutputDir
 $previousFullPackageName = $previousFullPackage.Name
 
-dnx vpk@1.2.0 pack `
+dnx vpk@1.2.161 pack `
     --outputDir $velopackOutputDir `
     --packId XE-Local-AI-Engine `
     --packVersion $Version `
@@ -999,7 +999,7 @@ if ($null -ne $existingRelease -and -not $existingRelease.isDraft) {
 # Merge into the existing draft's own tag when there is one; otherwise create the v-prefixed tag.
 $uploadTag = if ($null -ne $existingRelease) { $existingRelease.tagName } else { $tag }
 
-dnx vpk@1.2.0 upload github `
+dnx vpk@1.2.161 upload github `
     --outputDir $velopackOutputDir `
     --repoUrl $TesterRepo `
     --token $env:VPK_TOKEN `

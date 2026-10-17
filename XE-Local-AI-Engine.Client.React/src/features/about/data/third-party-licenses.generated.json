@@ -2658,17 +2658,17 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Identity.Client@4.90.1",
+			"id": "backend:Microsoft.Identity.Client@4.91.0",
 			"name": "Microsoft.Identity.Client",
-			"version": "4.90.1",
+			"version": "4.91.0",
 			"license": "MIT",
 			"homepageUrl": "https://go.microsoft.com/fwlink/?linkid=844761",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Identity.Client.Extensions.Msal@4.90.1",
+			"id": "backend:Microsoft.Identity.Client.Extensions.Msal@4.91.0",
 			"name": "Microsoft.Identity.Client.Extensions.Msal",
-			"version": "4.90.1",
+			"version": "4.91.0",
 			"license": "MIT",
 			"homepageUrl": "https://go.microsoft.com/fwlink/?linkid=844761",
 			"source": "backend"
@@ -3170,57 +3170,57 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:Quartz@3.22.0",
+			"id": "backend:Quartz@3.22.4",
 			"name": "Quartz",
-			"version": "3.22.0",
+			"version": "3.22.4",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Extensions.DependencyInjection@3.22.0",
+			"id": "backend:Quartz.Extensions.DependencyInjection@3.22.4",
 			"name": "Quartz.Extensions.DependencyInjection",
-			"version": "3.22.0",
+			"version": "3.22.4",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Extensions.Hosting@3.22.0",
+			"id": "backend:Quartz.Extensions.Hosting@3.22.4",
 			"name": "Quartz.Extensions.Hosting",
-			"version": "3.22.0",
+			"version": "3.22.4",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Jobs@3.22.0",
+			"id": "backend:Quartz.Jobs@3.22.4",
 			"name": "Quartz.Jobs",
-			"version": "3.22.0",
+			"version": "3.22.4",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Plugins@3.22.0",
+			"id": "backend:Quartz.Plugins@3.22.4",
 			"name": "Quartz.Plugins",
-			"version": "3.22.0",
+			"version": "3.22.4",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Plugins.TimeZoneConverter@3.22.0",
+			"id": "backend:Quartz.Plugins.TimeZoneConverter@3.22.4",
 			"name": "Quartz.Plugins.TimeZoneConverter",
-			"version": "3.22.0",
+			"version": "3.22.4",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Serialization.SystemTextJson@3.22.0",
+			"id": "backend:Quartz.Serialization.SystemTextJson@3.22.4",
 			"name": "Quartz.Serialization.SystemTextJson",
-			"version": "3.22.0",
+			"version": "3.22.4",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
@@ -3474,9 +3474,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:Scalar.AspNetCore@2.17.14",
+			"id": "backend:Scalar.AspNetCore@2.18.0",
 			"name": "Scalar.AspNetCore",
-			"version": "2.17.14",
+			"version": "2.18.0",
 			"license": "MIT",
 			"homepageUrl": "https://scalar.com/",
 			"source": "backend"
@@ -4114,9 +4114,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Velopack@1.2.0",
+			"id": "backend:Velopack@1.2.161",
 			"name": "Velopack",
-			"version": "1.2.0",
+			"version": "1.2.161",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/velopack/velopack",
 			"source": "backend"
