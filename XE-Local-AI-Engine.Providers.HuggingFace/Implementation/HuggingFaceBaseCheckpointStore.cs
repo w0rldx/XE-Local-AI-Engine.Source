@@ -252,46 +252,4 @@ internal sealed class HuggingFaceBaseCheckpointStore : IBaseCheckpointStore
             return false;
         }
     }
-
-    /// <summary>
-    ///     Re-frames one file's byte counts as progress through the whole checkpoint, so a sharded model shows one
-    ///     monotonic bar instead of a bar that fills and snaps back to zero once per shard.
-    /// </summary>
-    private sealed class SetProgressAdapter : IProgress<PullProgress>
-    {
-        private readonly IProgress<PullProgress> _inner;
-        private readonly string _modelName;
-        private readonly long _completedInPriorFiles;
-        private readonly long? _setTotalBytes;
-        private readonly int _partIndex;
-        private readonly int _partCount;
-
-        public SetProgressAdapter(IProgress<PullProgress> inner,
-            string modelName,
-            long completedInPriorFiles,
-            long? setTotalBytes,
-            int partIndex,
-            int partCount)
-        {
-            _inner = inner;
-            _modelName = modelName;
-            _completedInPriorFiles = completedInPriorFiles;
-            _setTotalBytes = setTotalBytes;
-            _partIndex = partIndex;
-            _partCount = partCount;
-        }
-
-        public void Report(PullProgress value)
-        {
-            _inner.Report(new PullProgress
-            {
-                ModelName = _modelName,
-                Status = value.Status,
-                TotalBytes = _setTotalBytes ?? value.TotalBytes,
-                CompletedBytes = _completedInPriorFiles + (value.CompletedBytes ?? 0),
-                PartIndex = _partIndex,
-                PartCount = _partCount
-            });
-        }
-    }
 }

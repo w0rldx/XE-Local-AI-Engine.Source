@@ -202,7 +202,13 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
     public IReadOnlyList<GgufDownloadStatus> ListStatuses()
     {
         _ = _interruptedRecorded.Value;
-        return _operations.List(AcquisitionKind.Download).Select(MapStatus).OfType<GgufDownloadStatus>().ToArray();
+        // Newest row per model only (the registry lists newest first): a resumed or retried download supersedes the
+        // Interrupted or failed row it continues, which would otherwise stay listed beside it until terminal pruning.
+        return _operations.List(AcquisitionKind.Download)
+                          .DistinctBy(static status => status.ModelName, StringComparer.OrdinalIgnoreCase)
+                          .Select(MapStatus)
+                          .OfType<GgufDownloadStatus>()
+                          .ToArray();
     }
 
     private static GgufAcquisitionIntent ToIntent(ResolvedGgufDownload source) =>

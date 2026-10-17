@@ -23,8 +23,7 @@ public sealed class SingleSystemMessageChatClientTests
     [Test]
     public void Fold_TwoLeadingSystemMessagesWithoutInstructions_BecomeOne()
     {
-        var folded = SingleSystemMessageChatClient.Fold(
-            [new ChatMessage(ChatRole.System, "Persona."), new ChatMessage(ChatRole.System, "Rules."), new ChatMessage(ChatRole.User, "Hi.")],
+        var folded = SingleSystemMessageChatClient.Fold([new ChatMessage(ChatRole.System, "Persona."), new ChatMessage(ChatRole.System, "Rules."), new ChatMessage(ChatRole.User, "Hi.")],
             options: null);
 
         AssertEx.Equal(expected: 2, folded.Messages.Count);

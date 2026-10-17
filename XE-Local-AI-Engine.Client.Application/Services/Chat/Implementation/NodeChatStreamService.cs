@@ -469,7 +469,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         try
         {
             var queueStartedTimestamp = Stopwatch.GetTimestamp();
-            lease = await InvocationSlotAdmission.AcquireAsync(_eventDispatcher, package, requestId, _logger, cancellationToken);
+            lease = await InvocationSlotAdmission.AcquireAsync(_eventDispatcher, package, cancellationToken);
             var queueDurationMs = Stopwatch.GetElapsedTime(queueStartedTimestamp).TotalMilliseconds;
 
             // The lease is held => the invocation is actually starting. Transition Queued -> Streaming and emit
@@ -640,12 +640,13 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             throw new NodeChatWorkflowRunLiveException(request.ConversationId);
         }
 
+        InvocationSlotAdmission.EnsureNoParkedTurn(_eventDispatcher, request.ConversationId);
+
         // A file of another conversation was dropped silently and the model answered as if nothing was attached. The ownership
         // check stays (no cross-conversation read); the send is refused by name before anything is persisted.
         if (await _turnContextBuilder.ListForeignAttachmentIdsAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken) is { Count: > 0 } foreign)
         {
-            throw new NodeChatInvalidRequestException(
-                $"These attachments are not files of this conversation: {string.Join(", ", foreign)}. Upload them to this conversation and send again.");
+            throw new NodeChatInvalidRequestException($"These attachments are not files of this conversation: {string.Join(", ", foreign)}. Upload them to this conversation and send again.");
         }
 
         var persistedSelectedPath = request.SelectedPath is not null

@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Coder;
+using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
@@ -204,7 +205,12 @@ public sealed class WorkSessionStepLoopTests
         });
 
         var supervisor = factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>();
-        AssertEx.True(supervisor.TryStart(first, new WorkSessionRuntimeOverride { ModelProfile = null, ReasoningEffort = null, RepositoryRoot = "/repositories/calc" }));
+        AssertEx.True(supervisor.TryStart(first, new WorkSessionRuntimeOverride
+        {
+            ModelProfile = null,
+            ReasoningEffort = null,
+            RepositoryRoot = "/repositories/calc"
+        }));
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, first, AgentWorkSessionStatus.Completed);
         AssertEx.True(supervisor.TryStart(second));
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, second, AgentWorkSessionStatus.Completed);
@@ -502,7 +508,9 @@ public sealed class WorkSessionStepLoopTests
 
         var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId);
         AssertEx.Contains(events, entry => entry.EventType == WorkSessionEventTypes.ParkTimedOut, "The park outlived MaxParkedSeconds and was stopped.");
-        AssertEx.False(events.Any(entry => entry.EventType == "SessionStatusChanged" && entry.Outcome == nameof(AgentWorkSessionStatus.Running) && entry.Sequence > events.First(parked => parked.Outcome == nameof(AgentWorkSessionStatus.WaitingForApproval)).Sequence),
+        AssertEx.False(
+            events.Any(entry => entry.EventType == "SessionStatusChanged" && entry.Outcome == nameof(AgentWorkSessionStatus.Running) &&
+                                entry.Sequence > events.First(parked => parked.Outcome == nameof(AgentWorkSessionStatus.WaitingForApproval)).Sequence),
             "A reasoning-only delta must not move the session back to Running.");
     }
 
@@ -549,6 +557,49 @@ public sealed class WorkSessionStepLoopTests
         AssertEx.Empty(await WorkSessionTestSupport.ReadFindingsAsync(factory.Services, sessionId),
             "An answered park records no open question — that finding exists only because a timeout loses the prompt.");
         AssertEx.False(events.Any(entry => entry.EventType == WorkSessionEventTypes.ParkTimedOut), "The park clock was disarmed, not fired.");
+    }
+
+    [Test]
+    public async Task Loop_WhenAnAnsweredParkWaitsForTheSlotPastMaxParkedSeconds_TheStepCarriesOnUnpaused()
+    {
+        // R4-03: an answered turn sends nothing until it retakes the invocation slot, so the park clock checks at fire time.
+        var sessionId = Guid.NewGuid();
+        var time = new ManualTimeProvider(TimeProvider.System.GetUtcNow());
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var harness = await StartDispatcherParkAsync(sessionId, time, gate, answer: true);
+        var dispatcher = harness.Factory.Services.GetRequiredService<IWorkerEventDispatcher>();
+
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(harness.Factory.Services, sessionId, AgentWorkSessionStatus.WaitingForApproval);
+        await AssertEx.EventuallyAsync(() => dispatcher.GetLiveInvocations().Any(static state => state.PendingApproval is null), TimeSpan.FromSeconds(10));
+        time.Advance(TimeSpan.FromSeconds(31));
+        gate.SetResult();
+
+        var settled = await WorkSessionTestSupport.WaitForStatusAsync(harness.Factory.Services, sessionId, AgentWorkSessionStatus.Paused);
+        AssertEx.Equal(expected: 1, settled.StepCount, "the answered step finished");
+        var events = await WorkSessionTestSupport.ReadEventsAsync(harness.Factory.Services, sessionId);
+        AssertEx.False(events.Any(entry => entry.EventType == WorkSessionEventTypes.ParkTimedOut), "the park clock left the answered step running");
+        AssertEx.Empty(await WorkSessionTestSupport.ReadFindingsAsync(harness.Factory.Services, sessionId), "an answered park records no open question");
+    }
+
+    [Test]
+    public async Task Loop_WhenAParkStaysUnanswered_AChatTurnRunsMeanwhile_AndTheStepPausesAtMaxParkedSeconds()
+    {
+        var sessionId = Guid.NewGuid();
+        var time = new ManualTimeProvider(TimeProvider.System.GetUtcNow());
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var harness = await StartDispatcherParkAsync(sessionId, time, gate, answer: false);
+        var dispatcher = harness.Factory.Services.GetRequiredService<IWorkerEventDispatcher>();
+
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(harness.Factory.Services, sessionId, AgentWorkSessionStatus.WaitingForApproval);
+        var chatTurn = dispatcher.ReportInvocationAssignedAsync(RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).WithConversationId(Guid.NewGuid()).Build());
+        AssertEx.True(chatTurn.IsCompleted, "the parked step gave the slot back, so a chat turn is admitted at once");
+        await (await chatTurn).DisposeAsync();
+
+        time.Advance(TimeSpan.FromSeconds(31));
+
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(harness.Factory.Services, sessionId, AgentWorkSessionStatus.Paused);
+        var events = await WorkSessionTestSupport.ReadEventsAsync(harness.Factory.Services, sessionId);
+        AssertEx.Contains(events, entry => entry.EventType == WorkSessionEventTypes.ParkTimedOut);
     }
 
     [Test]
@@ -606,6 +657,7 @@ public sealed class WorkSessionStepLoopTests
             time,
             factory.Services.GetRequiredService<PendingToolCallRegistry>(),
             approvalCoordinator,
+            factory.Services.GetRequiredService<IWorkerEventDispatcher>(),
             NullLogger<WorkSessionExecutionSupervisor>.Instance);
 
         AssertEx.True(supervisor.TryStart(sessionId));
@@ -1534,6 +1586,80 @@ public sealed class WorkSessionStepLoopTests
 
                 yield return streamEvent;
             }
+        }
+    }
+
+    // A supervisor on the manual clock over a fake send whose one step parks where the real dispatcher sees it.
+    private static async Task<DispatcherParkHarness> StartDispatcherParkAsync(Guid sessionId, ManualTimeProvider time, TaskCompletionSource gate, bool answer)
+    {
+        var harness = new DispatcherParkHarness(sessionId);
+        try
+        {
+            _ = await WorkSessionTestSupport.SeedSessionAsync(harness.Factory.Services, sessionId);
+            harness.Stream.Enqueue(new StepScript
+            {
+                EventTypes = [ChatStreamEventTypes.AssistantDelta, ChatStreamEventTypes.AssistantCompleted],
+                ParkToolName = RunCommandToolName,
+                DispatcherParkGate = gate,
+                AnswerDispatcherPark = answer
+            });
+            AssertEx.True(harness.Start(time).TryStart(sessionId));
+            return harness;
+        }
+        catch
+        {
+            await harness.DisposeAsync();
+            throw;
+        }
+    }
+
+    // Owns the host and the supervisor, and disposes the supervisor first, so a run still draining never outlives the services it reads.
+    private sealed class DispatcherParkHarness : IAsyncDisposable
+    {
+        private FakeNodeChatStreamService? _stream;
+        private WorkSessionExecutionSupervisor? _supervisor;
+
+        public DispatcherParkHarness(Guid sessionId)
+        {
+            var configuration = WorkSessionTestSupport.Configuration();
+            configuration["WorkSessions:MaxStepsPerRun"] = "1";
+            configuration["WorkSessions:MaxParkedSeconds"] = "30";
+            Factory = new TestServerWebAppFactory
+            {
+                AdditionalConfiguration = configuration,
+                ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                    services => _stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                    new RecordingWorkSessionEventPublisher())
+            };
+        }
+
+        public TestServerWebAppFactory Factory { get; }
+
+        public FakeNodeChatStreamService Stream => ResolveStream(Factory, ref _stream);
+
+        public WorkSessionExecutionSupervisor Start(TimeProvider time)
+        {
+            _supervisor = new WorkSessionExecutionSupervisor(Factory.Services.GetRequiredService<IServiceScopeFactory>(),
+                Factory.Services.GetRequiredService<INodeChatStreamCancellationRegistry>(),
+                Factory.Services.GetRequiredService<IWorkSessionEventPublisher>(),
+                Factory.Services.GetRequiredService<IOptions<WorkSessionOptions>>(),
+                Factory.Services.GetRequiredService<INodeRuntimeSettings>(),
+                time,
+                Factory.Services.GetRequiredService<PendingToolCallRegistry>(),
+                Factory.Services.GetRequiredService<ToolApprovalCoordinator>(),
+                Factory.Services.GetRequiredService<IWorkerEventDispatcher>(),
+                NullLogger<WorkSessionExecutionSupervisor>.Instance);
+            return _supervisor;
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (_supervisor is not null)
+            {
+                await _supervisor.DisposeAsync();
+            }
+
+            await Factory.DisposeAsync();
         }
     }
 

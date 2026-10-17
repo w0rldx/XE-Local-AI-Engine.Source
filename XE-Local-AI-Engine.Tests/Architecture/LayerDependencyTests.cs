@@ -150,6 +150,8 @@ public sealed class LayerDependencyTests
             ],
             ["XE-Local-AI-Engine.WindowsLauncher"] = [],
             ["XE-Local-AI-Engine.Desktop"] = [],
+            // The terminal client reaches the node over loopback REST and SignalR only; its hub records are copies.
+            ["XE-Local-AI-Engine.Cli"] = [],
             ["XE-Local-AI-Engine.AppHost"] = ["XE-Local-AI-Engine.Client"],
             ["XE-Local-AI-Engine.ServiceDefaults"] = ["XE-Local-AI-Engine.AI.Contracts"],
             ["XE-Local-AI-Engine.Providers.Abstractions"] = [],
@@ -229,6 +231,7 @@ public sealed class LayerDependencyTests
                 "Scrutor"
             ],
             ["XE-Local-AI-Engine.AI.Contracts"] = [],
+            ["XE-Local-AI-Engine.Cli"] = ["Microsoft.AspNetCore.SignalR.Client", "Spectre.Console", "System.CommandLine"],
             ["XE-Local-AI-Engine.Desktop"] = ["Avalonia.Desktop", "Avalonia.Controls.WebView", "Avalonia.Themes.Fluent", "Velopack"],
             ["XE-Local-AI-Engine.AppHost"] =
             [
@@ -403,6 +406,11 @@ public sealed class LayerDependencyTests
             [
                 "XE-Local-AI-Engine.AI.Agent",
                 "XE-Local-AI-Engine.Providers.Abstractions"
+            ],
+            ["XE-Local-AI-Engine.Cli.Tests/XE-Local-AI-Engine.Cli.Tests.csproj"] =
+            [
+                "XE-Local-AI-Engine.Cli",
+                "XE-Local-AI-Engine.Client.Testing"
             ],
             ["XE-Local-AI-Engine.Client.Persistence.Tests/XE-Local-AI-Engine.Client.Persistence.Tests.csproj"] =
             [

@@ -1058,6 +1058,7 @@ Describe 'Windows native payload routing' {
     It 'publishes the shell and keeps the Velopack launcher as the entry point' {
         $source = Get-Content $script:ScriptPath -Raw
         $source | Should -Match 'dotnet publish XE-Local-AI-Engine.Desktop'
+        $source | Should -Match 'dotnet publish XE-Local-AI-Engine.Cli\\XE-Local-AI-Engine.Cli.csproj'
         $source | Should -Match 'dotnet publish XE-Local-AI-Engine.WindowsLauncher'
         $source | Should -Match '--mainExe XE-Local-AI-Engine.WindowsLauncher.exe'
         $source | Should -Not -Match '--mainExe XE-Local-AI-Engine.Client.exe'

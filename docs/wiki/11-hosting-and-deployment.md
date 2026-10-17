@@ -512,6 +512,84 @@ For deprecated manually unzipped self-contained builds, the old scripts remain u
 
 Both scripts carry an explicit **single-instance caveat**: only one instance per user-data dir (the auto-port avoids a listener collision but not SQLite contention — a second instance can corrupt the DB).
 
+### Terminal client (`xe`)
+
+`xe` (project `XE-Local-AI-Engine.Cli`) is a thin terminal client for a node that is **already running on the same
+machine**, including from an SSH session on that machine. It has no project references: it speaks the loopback REST
+API and `LocalChatHub` like the SPA does, and starts, stops or hosts nothing. It is published into the same payload as
+the engine: a self-contained single-file `xe` on Linux, a framework-dependent `xe.exe` with its apphost on Windows. It
+is its own executable, not routed through the Velopack stub, so its standard output and exit code reach the shell.
+Operator steps: [xe terminal client runbook](../runbooks/xe-terminal-client-runbook.md).
+
+Commands: `xe status`, `xe models`, `xe agents`, `xe ask "<prompt>"` (one turn) and `xe chat` (interactive, with
+`/new`, `/agent`, `/model`, `/conversations`, `/resume`, `/cancel`, `/quit`). Global options: `--url`, `--json`,
+`--password-stdin`, `--insecure-dev-cert`, `--no-token-file`, `--token-file`. `ask` and `chat` take `--agent <id|name>`,
+`--model <id>`, `--conversation <id>` and `--show-reasoning`; `ask` also takes `--new-conversation-title`.
+
+**Discovery order.** `--url`, then `XE_URL`, then the engine's `ready.json` in `XE_DATA_DIR` or the per-user
+`XE-Local-AI-Engine` application-data folder (`NodeLocator`). `ready.json` must pass the engine's own rules (http on a
+loopback IP literal, canonical `mcpUrl`, matching data directory) and name a live process. An explicit URL may be https
+and may name `localhost`; the development host's self-signed certificate is accepted only with `--insecure-dev-cert`,
+and only for a loopback origin.
+
+**Sign-in (body mode).** Every command first reads `auth/status`. Setup required: `xe` prints the `--setup`
+instruction and exits 4. Vault locked: it unlocks with `auth/vault/unlock` and the admin password, then waits for the
+unlocked host on the same origin. It then signs in with `auth/login` and `returnRefreshToken: true`, so both tokens come
+back in the body and no `node_rt` cookie is written. Before expiry, or after a 401, it refreshes through the
+`X-XE-Refresh-Token` header ([Security & Privacy](12-security-and-privacy.md)); when no live refresh token is left it
+signs in again. The password comes from `XE_ADMIN_PASSWORD`, else one standard-input line with `--password-stdin`,
+else a hidden prompt on standard error when standard input is a terminal; it is never read from argv. No source means
+exit 4.
+
+**Token file.** `$XDG_CONFIG_HOME/xe/tokens.json` (`~/.config/xe/tokens.json` when unset) on Linux,
+`%APPDATA%\xe\tokens.json` on Windows (`TokenFileStore`). On Unix the file is 0600 and its directory 0700; on Windows
+the profile ACL protects it. A pair issued by another origin is ignored, so a node on a new port forces a fresh
+sign-in. `--token-file <path>` moves it; `--no-token-file` keeps the tokens in memory for the one run. Several `xe`
+processes may share the file: when the node rejects this process's refresh token because another process rotated it,
+the client re-reads the file once and adopts the newer pair before it asks for a password.
+
+**Approvals and questions are never decided by the client.** On a terminal, `xe chat` and `xe ask` prompt: approve
+once, deny, and approve for the session only when the event marks the call `sessionScopeEligible`; a question offers its
+options (single or multi-select) plus a free-text "Other" row. Without a terminal, or with `--json`, an approval is
+**denied** with a client notice and a question **cancels the turn** with a notice; the command then exits 6. A parked
+turn the client never answers times out on the node after 10 minutes. The stream is still read while a prompt is
+open: a terminal that arrives first (that timeout, or a cancel from another client) dismisses the prompt and no answer
+is sent.
+
+**Ctrl-C.** During a reply it posts `chat/cancel` and waits up to 15 seconds, request included, for the cancelled
+terminal (an unanswered cancel shows a `cancelFailed` notice); `ask` then exits 5 and `chat` returns to its prompt. Outside a reply `ask`, `status`, `models` and `agents` exit 130; at the chat
+prompt it leaves with 0. `xe chat --conversation <id>` and `/resume` re-attach through `ResumeConversation`, parked
+prompts included, after a closed terminal or a dropped connection.
+
+**Output.** Tables go to standard output. `ask` streams only the answer to standard output and writes thinking, tool
+activity, notices and prompts to standard error, so `xe ask "…" > answer.txt` captures the answer alone. With `--json`,
+`status` writes one object, `models` and `agents` one array, and `ask` one JSON object per line:
+
+| `type` | When | Members |
+|---|---|---|
+| `event` | each stream event | `kind` (`status`, `delta`, `snapshot`, `toolActivity`, `approvalRequested`, `questionRequested`, `notice`, `completed`, `cancelled`, `failed`, `interrupted`), `frameType`, `conversationId`, `messageId`, `requestId`, `status`, `text`, `reasoning`, `toolCallId`, `toolName`, `arguments`, `result`, `isError`, `approvalRequestId`, `questionRequestId`, `questions`, `sessionScopeEligible`, `noticeKind`, `error`, `model`, `inputTokens`, `outputTokens` |
+| `notice` | the client acted alone | `kind` (`approvalDenied`, `questionRefused`, `questionUnreadable`, `approvalUnresolvable`, `resolveFailed`, `cancelFailed`) and the `event` members, with `text` as the message |
+| `summary` | last line | `outcome` (`completed`, `cancelled`, `failed`, `interrupted`, `none`), `exitCode`, `userCancelled`, `interactionRequired`, `conversationId`, `messageId`, `requestId`, `text`, `reasoning`, `error`, `model` |
+| `error` | the command failed before or instead of its result | `exitCode`, `message` |
+
+Every member is always written, `null` when absent. `delta` carries only the new text; `snapshot` and the terminal
+kinds carry all text so far. Without `--json` a failure is one `xe: …` line on standard error; with `--json` it is the
+`error` line on standard output.
+
+| Exit code | Meaning |
+|---:|---|
+| 0 | Success (for `ask`: the turn completed) |
+| 1 | Failure: the node refused a request, the turn failed or was interrupted, the stream went silent |
+| 2 | Usage: a parse error, an invalid `--url`, an unknown agent, conflicting options, `chat --json` (chat has no JSON mode) |
+| 3 | The node is not running or does not answer |
+| 4 | Setup required, no admin password, wrong password, vault still locked |
+| 5 | Ctrl-C cancelled the turn |
+| 6 | Interaction required: an approval or question without a terminal, or `xe chat` without one |
+| 130 | Ctrl-C outside a turn |
+
+**Out of scope.** Remote nodes (the API is loopback-only), graph-workflow chats, attachments, regenerate, a full-screen
+TUI, starting or stopping the engine, and `dotnet tool` packaging.
+
 ### RC bundle packaging
 
 `publish/package-tester-win.ps1` was the Windows tester RC path from `0.1.0-rc.4.0` through `0.1.0-rc.5.1` and is now

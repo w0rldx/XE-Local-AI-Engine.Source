@@ -51,6 +51,9 @@ public sealed class AgentUsageSummaryBucketResponse
     /// <summary>Summed total tokens reported by the model (a run reporting no usage contributes 0).</summary>
     public required long TotalTokens { get; init; }
 
+    /// <summary>Runs in the bucket that reported token usage; fewer than <see cref="RunCount" /> means some runs were stopped before reporting.</summary>
+    public required int TokensReported { get; init; }
+
     /// <summary>
     ///     Server-computed estimated cost of the bucket in <see cref="Currency" />, rounded to 4 decimals.
     /// </summary>

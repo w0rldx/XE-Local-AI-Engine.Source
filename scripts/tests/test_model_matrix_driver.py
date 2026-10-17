@@ -323,6 +323,53 @@ class ThinkingOffCheckTests(unittest.TestCase):
         self.assertEqual(self.verdict(StubSession(None, 0, self.BARE)), "n/a")
 
 
+class MemoryJobRestoreTests(unittest.TestCase):
+    """The probe sets the memory extraction model and must restore what was there, clearing it with null when unset."""
+
+    @staticmethod
+    def restore_puts(previous: str | None) -> list[dict]:
+        """The node-settings PUT bodies check_memory_job sends when the node held `previous` (the first turn aborts)."""
+        puts: list[dict] = []
+
+        class Client:
+            def get(self, _path: str) -> dict:
+                return {"memoryExtractionModelName": previous}
+
+            def put(self, _path: str, body: dict) -> None:
+                puts.append(body)
+
+            def post(self, _path: str, _body: dict) -> tuple[int, dict]:
+                return 201, {"id": "agent-1"}
+
+            def delete(self, _path: str) -> None:
+                pass
+
+        class Session:
+            entry = {"thinkingOff": "template"}
+            model = "probe-model"
+            client = Client()
+
+            def turn(self, *_args: object, **_kwargs: object) -> dict:
+                raise RuntimeError("stop after the setup")
+
+        try:
+            driver.check_memory_job(Session())
+        except RuntimeError:
+            return puts
+        raise AssertionError("check_memory_job did not reach the first turn")
+
+    def test_an_unset_memory_model_is_restored_with_null(self) -> None:
+        for previous in (None, ""):
+            with self.subTest(previous=previous):
+                self.assertEqual(
+                    self.restore_puts(previous),
+                    [{"memoryExtractionModelName": "probe-model"}, {"memoryExtractionModelName": None}],
+                )
+
+    def test_a_set_memory_model_is_restored_as_it_was(self) -> None:
+        self.assertEqual(self.restore_puts("qwen3:8b")[-1], {"memoryExtractionModelName": "qwen3:8b"})
+
+
 class OwnedServerTests(unittest.TestCase):
     HOST = "/work/checkout/XE-Local-AI-Engine.Client/"
     OTHER = "/work/checkout/.tmp/worktrees/other/XE-Local-AI-Engine.Client/"

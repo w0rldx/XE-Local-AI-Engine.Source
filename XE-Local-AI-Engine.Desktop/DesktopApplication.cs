@@ -147,10 +147,19 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             }
 
             var startupWindow = _window!;
-            _menuOverlay = new MenuItem { Header = DesktopText.CommandOverlay };
+            _menuOverlay = new MenuItem
+            {
+                Header = DesktopText.CommandOverlay
+            };
             _menuOverlay.Click += (_, _) => ShowOverlay(toggle: false);
             var mainWindow = new DesktopWindow(new DesktopLaunchOptions(_engine.Origin, _options.ProfileDirectory), _options.Debug,
-                top: new Menu { Items = { _menuOverlay } });
+                top: new Menu
+                {
+                    Items =
+                    {
+                        _menuOverlay
+                    }
+                });
             mainWindow.Closing += OnClosing;
             // A tray click deactivates the window first, so the flyout it opens already carries the SPA's language.
             mainWindow.Deactivated += (_, _) => _ = RefreshLanguageAsync();
@@ -243,7 +252,10 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         _tray.Menu = menu;
         _tray.Clicked += (_, _) => ShowWindow();
         // Avalonia 12.1.4 creates the platform icon (and NativeMenuExporter) only when the icon is attached to the application.
-        TrayIcon.SetIcons(this, new TrayIcons { _tray });
+        TrayIcon.SetIcons(this, new TrayIcons
+        {
+            _tray
+        });
     }
 
     /// <summary>Registers the overlay chord on the main window; a taken chord is recorded and noticed once, never fatal.</summary>

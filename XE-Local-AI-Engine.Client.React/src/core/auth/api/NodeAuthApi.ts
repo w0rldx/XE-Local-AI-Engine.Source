@@ -90,6 +90,16 @@ export function refreshRateLimitedForSeconds(): number {
 	return remainingMs > 0 ? Math.ceil(remainingMs / 1000) : 0;
 }
 
+// The deadline of the Retry-After wait a refresh is sitting out right now, read by the boot's loading screen so the
+// operator sees why it waits instead of a bare "Loading..." for a minute.
+let refreshWaitUntil: number | undefined;
+
+/** Seconds left on the Retry-After wait a refresh is sitting out right now, rounded up; 0 when none is running. */
+export function refreshRetryWaitSeconds(): number {
+	const remainingMs = refreshWaitUntil === undefined ? 0 : refreshWaitUntil - Date.now();
+	return remainingMs > 0 ? Math.ceil(remainingMs / 1000) : 0;
+}
+
 async function refreshOnce(): Promise<NodeAccessTokenResponse> {
 	const { data } = await nodeRefresh({ client: nodeAuthClient });
 	return data;
@@ -113,7 +123,13 @@ export async function refreshNodeAuthToken(): Promise<NodeAccessTokenResponse> {
 				throw error;
 			}
 
-			await new Promise((resolve) => setTimeout(resolve, waitMs));
+			refreshWaitUntil = Date.now() + waitMs;
+			try {
+				await new Promise((resolve) => setTimeout(resolve, waitMs));
+			} finally {
+				refreshWaitUntil = undefined;
+			}
+
 			return refreshOnce();
 		})
 		.catch((error: unknown) => {

@@ -86,8 +86,9 @@ function TraceIdLine({ traceId }: { readonly traceId: string | null }) {
 	);
 }
 
-function CurrentInvocation({ current }: { readonly current: InvocationCurrentDto | null }) {
+function CurrentInvocation({ current, title }: { readonly current: InvocationCurrentDto | null; readonly title?: string }) {
 	const { t } = useTranslation();
+	const heading = title ?? t("pages.invocations.monitor.current.title", "Current invocation");
 	if (!current) {
 		return (
 			<SectionCard
@@ -105,7 +106,7 @@ function CurrentInvocation({ current }: { readonly current: InvocationCurrentDto
 			<Group justify="space-between" align="flex-start">
 				<Stack gap={4}>
 					<Title order={2} size="h3">
-						{t("pages.invocations.monitor.current.title", "Current invocation")}
+						{heading}
 					</Title>
 					<Text size="sm" c="dimmed" style={{ wordBreak: "break-all" }}>
 						{current.invocationId}
@@ -225,6 +226,8 @@ export function Invocations() {
 	});
 	const history = useMemo(() => sortInvocationHistory(monitor?.history ?? []), [monitor]);
 	const active = isInvocationActive(monitor?.current?.status);
+	// Live turns besides the current one, such as a turn parked on an approval or a question.
+	const otherLive = (monitor?.live ?? []).filter((row) => row.invocationId !== monitor?.current?.invocationId);
 
 	return (
 		<PageShell>
@@ -262,6 +265,13 @@ export function Invocations() {
 			{monitorError ? <InlineErrorAlert message={errorMessage(monitorError, t)} /> : null}
 
 			<CurrentInvocation current={monitor?.current ?? null} />
+			{otherLive.map((row) => (
+				<CurrentInvocation
+					key={row.invocationId}
+					current={row}
+					title={t("pages.invocations.monitor.live.title", "Other live invocation")}
+				/>
+			))}
 
 			<SectionCard
 				title={t("pages.invocations.monitor.history.title", "Invocation history")}

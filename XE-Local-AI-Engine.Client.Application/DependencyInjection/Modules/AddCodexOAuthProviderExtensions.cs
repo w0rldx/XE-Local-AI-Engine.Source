@@ -102,6 +102,8 @@ internal static class AddCodexOAuthProviderExtensions
         // Attributes a terminalized turn's tokens to the fine-grained provider (local/ollama/codex/azure/unknown) for the
         // usage ledger; composed from the cloud selector above + the local model→provider resolver.
         builder.Services.AddSingleton<IUsageProviderResolver, UsageProviderResolver>();
+        // Lazy for the chat persistence service, which startup resolves before the cloud graph behind the resolver is needed.
+        builder.Services.AddSingleton(static serviceProvider => new Lazy<IUsageProviderResolver>(serviceProvider.GetRequiredService<IUsageProviderResolver>));
 
         return builder;
     }

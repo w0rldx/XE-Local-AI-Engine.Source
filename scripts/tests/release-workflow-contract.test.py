@@ -115,6 +115,27 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
         )
         self.assertIn('--output "${{ matrix.publish-dir }}/desktop-bundle-inputs.json"', self.package_source)
 
+    def test_terminal_client_is_published_with_separate_compliance_evidence(self) -> None:
+        shell = self.package_source.index("name: Publish native shell (${{ matrix.rid }})")
+        cli = self.package_source.index("name: Publish terminal client (${{ matrix.rid }})")
+        compliance = self.package_source.index("name: Generate exact backend NuGet legal corpus")
+        self.assertLess(shell, cli)
+        self.assertLess(cli, compliance)
+        self.assertIn("XE-Local-AI-Engine.Cli/XE-Local-AI-Engine.Cli.csproj", self.package_source)
+        self.assertEqual(
+            2,
+            self.package_source.count(
+                '--additional-deps-json "XE-Local-AI-Engine.Cli/bin/Release/net10.0/${{ matrix.rid }}/xe.deps.json"'
+            ),
+        )
+        self.assertEqual(
+            2,
+            self.package_source.count(
+                '--additional-bundle-input-manifest "${{ matrix.publish-dir }}/cli-bundle-inputs.json"'
+            ),
+        )
+        self.assertIn('--output "${{ matrix.publish-dir }}/cli-bundle-inputs.json"', self.package_source)
+
     def test_windows_payload_does_not_claim_the_dotnet_library_license(self) -> None:
         self.assertNotIn("--dotnet-library-license", self.packaging)
         self.assertNotIn("DOTNET-LIBRARY-LICENSE.html", self.packaging)

@@ -206,11 +206,11 @@ describe("buildNodeSettingsRequest", () => {
 		expect(body).toEqual({ toolRelevanceEnabled: true });
 	});
 
-	it("sends a cleared Ollama endpoint as an empty string, the explicit clear back to the default", () => {
+	it("sends a cleared Ollama endpoint as null, the clear back to the default", () => {
 		const configured = { ...baseline, ollamaEndpoint: "http://127.0.0.1:11500" };
 		const { body, errors } = buildNodeSettingsRequest({ ...configured, ollamaEndpoint: "  " }, configured, bounds, false);
 		expect(errors).toEqual({});
-		expect(body).toEqual({ ollamaEndpoint: "" });
+		expect(body).toEqual({ ollamaEndpoint: null });
 	});
 
 	it("sends the web-access switch only when toggled, and never restart-gates it", () => {
@@ -236,11 +236,11 @@ describe("buildNodeSettingsRequest", () => {
 		expect(relative.body.webSearchSearxngUrl).toBeUndefined();
 	});
 
-	it("sends an empty string to clear the SearXNG URL, because null would keep the stored one", () => {
+	it("sends null to clear the SearXNG URL, because omitting it would keep the stored one", () => {
 		const stored = { ...baseline, webSearchSearxngUrl: "https://searx.example" };
 		const { body, errors } = buildNodeSettingsRequest({ ...stored, webSearchSearxngUrl: "  " }, stored, bounds, false);
 		expect(errors).toEqual({});
-		expect(body).toEqual({ webSearchSearxngUrl: "" });
+		expect(body).toEqual({ webSearchSearxngUrl: null });
 	});
 
 	it("omits the tool-relevance switch when it is unchanged", () => {
@@ -320,7 +320,7 @@ describe("buildNodeSettingsRequest", () => {
 		expect(body).toEqual({ keepModelWarmEnabled: false });
 	});
 
-	it("uses an empty string to explicitly clear the selected keep-warm model while disabled", () => {
+	it("sends null to clear the selected keep-warm model while disabled", () => {
 		const enabledBaseline = {
 			...baseline,
 			keepModelWarmEnabled: false,
@@ -335,7 +335,7 @@ describe("buildNodeSettingsRequest", () => {
 		);
 
 		expect(errors).toEqual({});
-		expect(body.keepModelWarmModelName).toBe("");
+		expect(body.keepModelWarmModelName).toBeNull();
 	});
 
 	it("rejects an out-of-range keep-warm interval", () => {
@@ -500,15 +500,15 @@ describe("buildNodeSettingsRequest", () => {
 		expect(body.rerankerModelName).toBe("bge-reranker-v2-m3");
 	});
 
-	it("sends an empty string when the reranker is switched Off", () => {
+	it("sends null when the reranker is switched Off", () => {
 		const withModel = { ...baseline, rerankerModelName: "bge-reranker-v2-m3" };
 		const off = { ...withModel, rerankerModelName: "" };
 		const { body, errors } = buildNodeSettingsRequest(off, withModel, bounds, false);
 		expect(errors).toEqual({});
-		expect(body.rerankerModelName).toBe("");
+		expect(body.rerankerModelName).toBeNull();
 	});
 
-	it("sends a changed fast model for automatic reasoning effort, and an empty string for Off", () => {
+	it("sends a changed fast model for automatic reasoning effort, and null for Off", () => {
 		const form = { ...baseline, autoEffortFastModelName: "  qwen3-1.7b  " };
 		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
 		expect(errors).toEqual({});
@@ -516,7 +516,7 @@ describe("buildNodeSettingsRequest", () => {
 
 		const withModel = { ...baseline, autoEffortFastModelName: "qwen3-1.7b" };
 		const off = { ...withModel, autoEffortFastModelName: "" };
-		expect(buildNodeSettingsRequest(off, withModel, bounds, false).body.autoEffortFastModelName).toBe("");
+		expect(buildNodeSettingsRequest(off, withModel, bounds, false).body.autoEffortFastModelName).toBeNull();
 	});
 
 	it("does not restart-gate the fast model for automatic reasoning effort", () => {
@@ -924,7 +924,7 @@ describe("unified node fields and the pending-change summary", () => {
 describe("curated tunables", () => {
 	const bounds = toNodeSettingsFieldBounds(undefined);
 
-	it("maps the prompt-cache RAM to Automatic / Off / Custom and back, resetting to automatic with -1", () => {
+	it("maps the prompt-cache RAM to Automatic / Off / Custom and back, resetting to automatic with null", () => {
 		const auto = toNodeSettingsFieldsForm({ llamaChatCacheRamMiB: null });
 		const off = toNodeSettingsFieldsForm({ llamaChatCacheRamMiB: 0 });
 		const custom = toNodeSettingsFieldsForm({ llamaChatCacheRamMiB: 2048 });
@@ -932,9 +932,9 @@ describe("curated tunables", () => {
 		expect(off.llamaChatCacheRamMode).toBe("off");
 		expect(custom).toMatchObject({ llamaChatCacheRamMode: "custom", llamaChatCacheRamMiB: 2048 });
 
-		// null on the wire means "keep", so returning to automatic must send the -1 reset sentinel.
+		// An omitted key keeps the stored size, so returning to automatic must send null, which clears it.
 		expect(buildNodeSettingsRequest({ ...custom, llamaChatCacheRamMode: "auto" }, custom, bounds, false).body).toEqual({
-			llamaChatCacheRamMiB: -1,
+			llamaChatCacheRamMiB: null,
 		});
 		expect(buildNodeSettingsRequest({ ...auto, llamaChatCacheRamMode: "off" }, auto, bounds, false).body).toEqual({
 			llamaChatCacheRamMiB: 0,
@@ -944,7 +944,7 @@ describe("curated tunables", () => {
 		).toEqual({ llamaChatCacheRamMiB: 4096 });
 		// Touching the mode and returning to the same meaning sends nothing.
 		expect(buildNodeSettingsRequest({ ...custom }, custom, bounds, false).body).toEqual({});
-		expect(touchesRestartGatedField({ llamaChatCacheRamMiB: -1 })).toBe(true);
+		expect(touchesRestartGatedField({ llamaChatCacheRamMiB: null })).toBe(true);
 	});
 
 	it("refuses a custom prompt-cache size that is blank or zero", () => {
@@ -1099,7 +1099,7 @@ describe("curated tunables", () => {
 		expect(restartGatedNodeSettingsFields.has("chatOutputCapMaxTokens")).toBe(false);
 	});
 
-	it("resets stored thinking budgets and output-cap fields to the default with the sentinels, and leaves unset ones alone", () => {
+	it("resets stored thinking budgets and output-cap fields to the default with null, and leaves unset ones alone", () => {
 		const stored = toNodeSettingsFieldsForm({
 			reasoningBudgetMinimalTokens: 512,
 			reasoningBudgetLowTokens: 1024,
@@ -1122,13 +1122,13 @@ describe("curated tunables", () => {
 
 		expect(buildNodeSettingsRequest(reset, stored, bounds, false)).toEqual({
 			body: {
-				reasoningBudgetMinimalTokens: -1,
-				reasoningBudgetLowTokens: -1,
-				reasoningBudgetMediumTokens: -1,
-				reasoningBudgetHighTokens: -1,
-				defaultReasoningEffort: "",
-				chatOutputCapMode: "",
-				chatOutputCapMaxTokens: -1,
+				reasoningBudgetMinimalTokens: null,
+				reasoningBudgetLowTokens: null,
+				reasoningBudgetMediumTokens: null,
+				reasoningBudgetHighTokens: null,
+				defaultReasoningEffort: null,
+				chatOutputCapMode: null,
+				chatOutputCapMaxTokens: null,
 			},
 			errors: {},
 		});
@@ -1370,7 +1370,7 @@ describe("knowledge, privacy and usage knobs", () => {
 		expect(form.agentExecutionLogRetentionEnabled).toBe(true);
 	});
 
-	it("sends changed knobs in wire units, explicit false switches, and a cleared model as an empty string", () => {
+	it("sends changed knobs in wire units, explicit false switches, and a cleared model as null", () => {
 		const stored = toNodeSettingsFieldsForm({ playbookEvalModelName: "qwen3:8b" });
 		const form = {
 			...stored,
@@ -1393,7 +1393,7 @@ describe("knowledge, privacy and usage knobs", () => {
 			chatRetentionDays: 90,
 			benchmarkKldCacheMaxBytes: 2 * 1024 ** 3,
 			playbookAnalysisModelName: "repo/model:Q4_K_M",
-			playbookEvalModelName: "",
+			playbookEvalModelName: null,
 		});
 	});
 
@@ -1816,7 +1816,7 @@ describe("intent settings", () => {
 		expect(shippedDefaults.intentMaxUtteranceAgeSeconds).toBe(30);
 	});
 
-	it("sends the router id, and the empty string to clear it", () => {
+	it("sends the router id, and null to clear it", () => {
 		const baseline = toNodeSettingsFieldsForm(undefined);
 		expect(buildNodeSettingsRequest({ ...baseline, intentRouterDefinitionId: routerId }, baseline, bounds, false).body).toEqual({
 			intentRouterDefinitionId: routerId,
@@ -1824,11 +1824,11 @@ describe("intent settings", () => {
 
 		const stored = { ...baseline, intentRouterDefinitionId: routerId };
 		expect(buildNodeSettingsRequest({ ...stored, intentRouterDefinitionId: "" }, stored, bounds, false).body).toEqual({
-			intentRouterDefinitionId: "",
+			intentRouterDefinitionId: null,
 		});
 	});
 
-	it("sends a bounded age, -1 to reset a stored one, and refuses one out of range", () => {
+	it("sends a bounded age, null to reset a stored one, and refuses one out of range", () => {
 		const baseline = toNodeSettingsFieldsForm(undefined);
 		expect(buildNodeSettingsRequest({ ...baseline, intentMaxUtteranceAgeSeconds: 120 }, baseline, bounds, false).body).toEqual({
 			intentMaxUtteranceAgeSeconds: 120,
@@ -1836,7 +1836,7 @@ describe("intent settings", () => {
 
 		const stored = { ...baseline, intentMaxUtteranceAgeSeconds: 120 };
 		expect(buildNodeSettingsRequest({ ...stored, intentMaxUtteranceAgeSeconds: "" }, stored, bounds, false).body).toEqual({
-			intentMaxUtteranceAgeSeconds: -1,
+			intentMaxUtteranceAgeSeconds: null,
 		});
 
 		const tooLong = buildNodeSettingsRequest({ ...baseline, intentMaxUtteranceAgeSeconds: 601 }, baseline, bounds, false);

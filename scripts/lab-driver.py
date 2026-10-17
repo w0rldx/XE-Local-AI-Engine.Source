@@ -8,7 +8,8 @@ when an interaction failed (transport, auth, a response off-contract): 1 for tha
 
 Subcommands:
   snapshot-key     sha256 over the sorted EF migration file names; the lab snapshot is valid only for an equal key
-  settings-ensure  GET node-settings, PUT only the desired keys that differ, re-GET and verify
+  settings-ensure  GET node-settings, PUT only the desired keys that differ, re-GET and verify; a desired null (or the
+                   retired "") clears a setting, because the PUT refuses "" and keeps an omitted key
   model-ensure     installed?, select as the node default, optionally eject other chat servers, resident?
   download         install a GGUF through the node's own model-fit/download and poll it to a terminal phase
   first-turn       one canned chat turn over the chat hub; wire events and the answer land in the evidence dir
@@ -179,7 +180,7 @@ def load_desired(text: str) -> dict:
 
 def command_settings_ensure(args: argparse.Namespace) -> int:
     """The PUT is a partial merge (SaveNodeSettingsEndpoint), so only the differing keys are sent."""
-    desired = load_desired(args.desired)
+    desired = {k: None if v == "" else v for k, v in load_desired(args.desired).items()}
     client = client_for(args)
     current = client.get("/node-settings")
     changed = {k: v for k, v in desired.items() if not same(current.get(k), v)}

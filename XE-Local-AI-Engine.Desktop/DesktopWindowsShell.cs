@@ -16,7 +16,8 @@ internal static partial class DesktopWindowsShell
 
     /// <summary>Sets the explicit AppUserModelID; must run before any window or tray icon exists. A failure is ignored.</summary>
     [SupportedOSPlatform("windows")]
-    internal static void NameProcess() => _ = SetCurrentProcessExplicitAppUserModelID(AppUserModelId);
+    internal static void NameProcess() =>
+        _ = SetCurrentProcessExplicitAppUserModelID(AppUserModelId);
 
     /// <summary>Registers a system-wide chord posting <see cref="HotkeyMessage" /> to the window; the Win32 error on failure.</summary>
     [SupportedOSPlatform("windows")]
@@ -25,7 +26,8 @@ internal static partial class DesktopWindowsShell
 
     /// <summary>Claims a bare Escape while the overlay shows: the native WebView keeps key events from the shell.</summary>
     [SupportedOSPlatform("windows")]
-    internal static bool RegisterEscape(nint window, int id) => RegisterHotKey(window, id, NoRepeat, EscapeKey);
+    internal static bool RegisterEscape(nint window, int id) =>
+        RegisterHotKey(window, id, NoRepeat, EscapeKey);
 
     /// <summary>Releases a chord; a window that never got a handle registered nothing.</summary>
     [SupportedOSPlatform("windows")]

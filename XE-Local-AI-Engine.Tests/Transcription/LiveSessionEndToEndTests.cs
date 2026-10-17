@@ -198,7 +198,9 @@ public sealed class LiveSessionEndToEndTests
 
         Guid sessionId;
         using var start = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/dictation-sessions");
-        start.Content = JsonContent.Create(new { });
+        start.Content = JsonContent.Create(new
+        {
+        });
         using (var started = await client.SendAsync(start))
         {
             AssertEx.Equal(HttpStatusCode.OK, started.StatusCode, await started.Content.ReadAsStringAsync());

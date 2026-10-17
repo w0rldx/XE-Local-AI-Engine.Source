@@ -307,7 +307,7 @@ export interface NodeSettingsFieldsForm {
 	knowledgeSearchMaxResults: number | string;
 	// llama.cpp thinking budget per reasoning effort, and whose budget a turn with no effort gets (section "chat"). These
 	// four and the two output-cap fields are blank while the node uses the shipped default (see shippedDefaults); a save
-	// that blanks a stored value sends the reset sentinel.
+	// that blanks a stored value sends null, which clears it.
 	reasoningBudgetMinimalTokens: number | string;
 	reasoningBudgetLowTokens: number | string;
 	reasoningBudgetMediumTokens: number | string;
@@ -320,10 +320,11 @@ export interface NodeSettingsFieldsForm {
 	transcriptionIdleTimeoutMinutes: number | string;
 	transcriptionInferenceTimeoutMinutes: number | string;
 	// Prompt-cache RAM: the stored value is null (automatic), 0 (off) or a size, so the form splits it into a mode and a
-	// size. Only the size key exists on the wire; a save that returns to automatic sends the -1 reset sentinel.
+	// size. Only the size key exists on the wire; a save that returns to automatic sends null.
 	llamaChatCacheRamMode: ChatCacheRamMode;
 	llamaChatCacheRamMiB: number | string;
-	// Blank = never set (the runtime default); the wire has no way to clear it again, so a blank edit is refused.
+	// Blank = never set (the runtime default). The wire could clear it with null, but this form has no "Use default" for
+	// it, so a blank edit is refused.
 	speculativeDraftGpuLayers: number | string;
 	huggingFaceDiskMarginBytes: number | string;
 	containerRuntimeSelection: string;
@@ -378,9 +379,9 @@ export interface NodeSettingsFieldsForm {
 	imageTextEncoderOnGpu: boolean;
 	graphWorkflowMaxConcurrentRuns: number | string;
 	graphWorkflowDefaultNodeTimeoutSeconds: number | string;
-	// The intent router graph workflow id; "" routes on aliases alone (the save sends "" to clear it). Read per request.
+	// The intent router graph workflow id; "" routes on aliases alone (the save sends null to clear it). Read per request.
 	intentRouterDefinitionId: string;
-	// Blank = the node's shipped default (shippedDefaults); the save sends -1 to reset. Read per request.
+	// Blank = the node's shipped default (shippedDefaults); the save sends null to reset. Read per request.
 	intentMaxUtteranceAgeSeconds: number | string;
 	workSessionMaxStepsPerRun: number | string;
 	workSessionMaxConcurrentSessions: number | string;
@@ -423,9 +424,6 @@ export const featureSwitchFields = [
 
 export type ChatCacheRamMode = "auto" | "off" | "custom";
 
-// The request-only value that resets the prompt-cache RAM to automatic (StoredNodeSettings.LlamaChatCacheRamMiBAuto).
-const CHAT_CACHE_RAM_AUTO = -1;
-
 export const containerRuntimeSelectValues = ["auto", "docker"] as const;
 
 // The efforts with a reasoning budget, the choices for the effort an unspecified turn takes (mirrors
@@ -448,9 +446,12 @@ export const shippedDefaults = {
 	chatOutputCapMode: "cap",
 } as const;
 
-// The request-only value that resets a blank-able field above to its shipped default (StoredNodeSettings.TokenSettingUnset);
-// a select clears with the empty string instead.
-const TOKEN_SETTING_UNSET = -1;
+// The PUT keeps an omitted key and CLEARS a null one back to the node's default; null is the only clear signal (the
+// server refuses -1 and ""). A blank text field is therefore sent as null.
+function textOrNull(value: string): string | null {
+	const trimmed = value.trim();
+	return trimmed.length > 0 ? trimmed : null;
+}
 
 const unsettableTunableFields: ReadonlySet<string> = new Set([
 	"intentMaxUtteranceAgeSeconds",
@@ -1219,9 +1220,9 @@ export function buildNodeSettingsRequest(
 	const body: SaveNodeSettingsRequest = {};
 	const errors: Record<string, string> = {};
 
-	// defaultModelName — free text; empty string clears it (sent as empty string -> backend treats as unset/seed).
+	// defaultModelName — free text; blank clears it back to the seed.
 	if (form.defaultModelName !== baseline.defaultModelName) {
-		body.defaultModelName = form.defaultModelName.trim().length > 0 ? form.defaultModelName.trim() : null;
+		body.defaultModelName = textOrNull(form.defaultModelName);
 	}
 
 	if (form.enableTools !== baseline.enableTools) {
@@ -1253,8 +1254,8 @@ export function buildNodeSettingsRequest(
 		if (searxngUrl.error) {
 			errors["webSearchSearxngUrl"] = searxngUrl.error;
 		} else {
-			// The PUT is null-preserving, so a blank field is sent as "" — the explicit clear back to DuckDuckGo.
-			body.webSearchSearxngUrl = searxngUrl.value ?? "";
+			// A blank field is sent as null — the clear back to DuckDuckGo.
+			body.webSearchSearxngUrl = searxngUrl.value ?? null;
 		}
 	}
 
@@ -1263,14 +1264,14 @@ export function buildNodeSettingsRequest(
 		if (endpoint.error) {
 			errors["ollamaEndpoint"] = endpoint.error;
 		} else {
-			// Null-preserving PUT, as for the SearXNG URL: a blank field is sent as "", which the node stores as unset and
-			// resolves to its default endpoint. Null would keep the old value.
-			body.ollamaEndpoint = endpoint.value ?? "";
+			// As for the SearXNG URL: a blank field is sent as null, which the node stores as unset and resolves to its
+			// default endpoint.
+			body.ollamaEndpoint = endpoint.value ?? null;
 		}
 	}
 
 	if (form.huggingFaceDefaultQuant !== baseline.huggingFaceDefaultQuant) {
-		body.huggingFaceDefaultQuant = form.huggingFaceDefaultQuant.trim().length > 0 ? form.huggingFaceDefaultQuant.trim() : null;
+		body.huggingFaceDefaultQuant = textOrNull(form.huggingFaceDefaultQuant);
 	}
 
 	collectBoundedInt(
@@ -1306,8 +1307,7 @@ export function buildNodeSettingsRequest(
 	if (form.keepModelWarmEnabled && keepWarmModelName.length === 0) {
 		errors["keepModelWarmModelName"] = "requiredKeepWarmModel";
 	} else if (form.keepModelWarmModelName !== baseline.keepModelWarmModelName) {
-		// The PUT is null-preserving (null/omitted = keep current), so an empty string is the explicit clear signal.
-		body.keepModelWarmModelName = keepWarmModelName;
+		body.keepModelWarmModelName = textOrNull(keepWarmModelName);
 	}
 
 	if (form.keepModelWarmEnabled) {
@@ -1379,7 +1379,7 @@ export function buildNodeSettingsRequest(
 		errors["speculativeDraftModelName"] = "required";
 	} else if (form.speculativeDraftModelName !== baseline.speculativeDraftModelName) {
 		// Empty clears the stored name (sent as null); a non-empty value is the installed model name to resolve.
-		body.speculativeDraftModelName = draftModelName.length > 0 ? draftModelName : null;
+		body.speculativeDraftModelName = textOrNull(draftModelName);
 	}
 
 	collectBoundedInt(
@@ -1397,22 +1397,21 @@ export function buildNodeSettingsRequest(
 		body.chatCacheReuse = v;
 	});
 
-	// Knowledge-base reranker model — free model name; empty string is the "Off" signal (backend Normalize maps blank to
-	// null = reranking disabled). Sent whenever it differs from the baseline, including a switch back to "Off".
+	// Knowledge-base reranker model — free model name; "Off" is sent as null (reranking disabled). Sent whenever it
+	// differs from the baseline, including a switch back to "Off".
 	if (form.rerankerModelName !== baseline.rerankerModelName) {
-		body.rerankerModelName = form.rerankerModelName.trim();
+		body.rerankerModelName = textOrNull(form.rerankerModelName);
 	}
 
-	// Fast model for automatic reasoning effort — same shape as the reranker: empty string is the "Off" signal the
-	// backend Normalize maps to null. Deliberately NOT restart-gated: the dispatcher reads it per send, so a save
-	// applies to the very next turn.
+	// Fast model for automatic reasoning effort — same shape as the reranker: "Off" is sent as null. Deliberately NOT
+	// restart-gated: the dispatcher reads it per send, so a save applies to the very next turn.
 	if (form.autoEffortFastModelName !== baseline.autoEffortFastModelName) {
-		body.autoEffortFastModelName = form.autoEffortFastModelName.trim();
+		body.autoEffortFastModelName = textOrNull(form.autoEffortFastModelName);
 	}
 
 	// Usage rates — an editable per-model rate map. Validated to non-negative numbers with non-empty names; an invalid
-	// row is a hard error. Sent (as the map, or null when emptied) only when it differs from the loaded baseline; the
-	// backend field is null-preserving so omitting it keeps the current table.
+	// row is a hard error. Sent (as the map, or null when emptied, which clears the override) only when it differs from
+	// the loaded baseline; omitting it keeps the current table.
 	const rates = validateUsageRates(form.usageRates);
 	if (rates.hasInvalid) {
 		errors["usageRates"] = "rate";
@@ -1509,11 +1508,11 @@ export function buildNodeSettingsRequest(
 		errors[baseline.agentHomeEnabled ? "toolCapableModels" : "agentHomeEnabled"] ??= "requiresToolCapableModels";
 	}
 
-	// The background models: the empty string is the "inherit the default model" signal (the server stores null).
+	// The background models: null is the "inherit the default model" signal.
 	const backgroundModelFields = ["playbookAnalysisModelName", "playbookEvalModelName", "memoryExtractionModelName"] as const;
 	for (const field of backgroundModelFields) {
 		if (form[field] !== baseline[field]) {
-			body[field] = form[field].trim();
+			body[field] = textOrNull(form[field]);
 		}
 	}
 
@@ -1530,7 +1529,7 @@ export function buildNodeSettingsRequest(
 	for (const field of tunableFields) {
 		if (unsettableTunableFields.has(field) && String(form[field]).trim() === "") {
 			if (String(baseline[field]).trim() !== "") {
-				body[field] = TOKEN_SETTING_UNSET;
+				body[field] = null;
 			}
 			continue;
 		}
@@ -1593,17 +1592,18 @@ export function buildNodeSettingsRequest(
 		body.containerRuntimeSelection = form.containerRuntimeSelection;
 	}
 
+	// The empty "default" option clears the effort back to the shipped default.
 	if (form.defaultReasoningEffort !== baseline.defaultReasoningEffort) {
-		body.defaultReasoningEffort = form.defaultReasoningEffort;
+		body.defaultReasoningEffort = textOrNull(form.defaultReasoningEffort);
 	}
 
-	// A GUID sets the router, "" clears it (alias-only routing); the picker offers only saved definitions and "none".
+	// A GUID sets the router, null clears it (alias-only routing); the picker offers only saved definitions and "none".
 	if (form.intentRouterDefinitionId !== baseline.intentRouterDefinitionId) {
-		body.intentRouterDefinitionId = form.intentRouterDefinitionId;
+		body.intentRouterDefinitionId = textOrNull(form.intentRouterDefinitionId);
 	}
 
 	if (form.chatOutputCapMode !== baseline.chatOutputCapMode) {
-		body.chatOutputCapMode = form.chatOutputCapMode;
+		body.chatOutputCapMode = textOrNull(form.chatOutputCapMode);
 	}
 
 	if (includeDeveloperFields) {
@@ -1775,7 +1775,7 @@ export function buildNodeSettingsRequest(
 }
 
 // Prompt-cache RAM: compares what each side MEANS (auto / off / a size), so switching Custom on and back off without a
-// net change sends nothing. Automatic is sent as the -1 reset sentinel, because null on the wire means "keep".
+// net change sends nothing. Automatic is sent as null, which clears the stored size.
 function collectChatCacheRam(
 	form: NodeSettingsFieldsForm,
 	baseline: NodeSettingsFieldsForm,
@@ -1783,10 +1783,10 @@ function collectChatCacheRam(
 	body: SaveNodeSettingsRequest,
 	errors: Record<string, string>,
 ): void {
-	const wireOf = (draft: NodeSettingsFieldsForm): number | string => {
+	const wireOf = (draft: NodeSettingsFieldsForm): number | string | null => {
 		switch (draft.llamaChatCacheRamMode) {
 			case "auto":
-				return CHAT_CACHE_RAM_AUTO;
+				return null;
 			case "off":
 				return 0;
 			default:
@@ -1798,11 +1798,11 @@ function collectChatCacheRam(
 		return;
 	}
 	if (form.llamaChatCacheRamMode !== "custom") {
-		body.llamaChatCacheRamMiB = wire as number;
+		body.llamaChatCacheRamMiB = wire as number | null;
 		return;
 	}
 	// A custom size is at least 1 MiB; 0 is the Off mode.
-	const parsed = toValidBoundedInt(wire, { min: Math.max(1, bounds.min), max: bounds.max });
+	const parsed = toValidBoundedInt(form.llamaChatCacheRamMiB, { min: Math.max(1, bounds.min), max: bounds.max });
 	if (parsed === undefined) {
 		errors["llamaChatCacheRamMiB"] = "range";
 		return;

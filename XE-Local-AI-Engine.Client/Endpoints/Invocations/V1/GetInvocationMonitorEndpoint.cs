@@ -28,7 +28,9 @@ public sealed class GetInvocationMonitorEndpoint : EndpointWithoutRequest<Invoca
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var response = InvocationMonitorResponseMapper.ToResponse(_eventDispatcher.CurrentInvocation,
+        var live = _eventDispatcher.GetLiveSnapshot();
+        var response = InvocationMonitorResponseMapper.ToResponse(live.Current,
+            live.Live,
             _invocationHistory.Snapshot(),
             _invocationHistory.Capacity);
 

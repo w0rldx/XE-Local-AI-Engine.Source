@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
+
 /// <summary>
 ///     What an operator does when a workload that REQUIRES the filesystem boundary is refused, worded for the mechanism this host would
 ///     use: bubblewrap on Linux, the MXC AppContainer boundary (Preview) on Windows (ADR 0019).
@@ -22,7 +24,7 @@ public static class SandboxBoundaryRemedy
 
     /// <summary>True when <paramref name="cause" /> says only the execution-previews switch is missing.</summary>
     public static bool IsExecutionPreviewsDisabled(string? cause) =>
-        string.Equals(cause, Implementation.Launch.SandboxContainment.ExecutionPreviewsDisabledReason, StringComparison.Ordinal);
+        string.Equals(cause, SandboxContainment.ExecutionPreviewsDisabledReason, StringComparison.Ordinal);
 
     // The platform is a parameter so both wordings are asserted on every host.
     internal static string ForHost(bool windowsHost) =>

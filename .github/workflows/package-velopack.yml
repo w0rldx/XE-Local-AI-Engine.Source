@@ -178,6 +178,23 @@ jobs:
             --raw "$RAW_DESKTOP_INPUTS" \
             --output "${{ matrix.publish-dir }}/desktop-bundle-inputs.json"
 
+      # The `xe` terminal client joins the same tree for the same reason, with its own compliance evidence.
+      - name: Publish terminal client (${{ matrix.rid }})
+        shell: bash
+        run: |
+          set -euo pipefail
+          RAW_CLI_INPUTS="$RUNNER_TEMP/cli-bundle-inputs-${{ matrix.rid }}.raw"
+          dotnet publish XE-Local-AI-Engine.Cli/XE-Local-AI-Engine.Cli.csproj \
+            --configuration Release \
+            -p:PublishProfile=${{ matrix.rid }} \
+            -p:CustomAfterMicrosoftCommonTargets="$GITHUB_WORKSPACE/scripts/compliance/capture_bundle_inputs.targets" \
+            -p:XeBundleInputEvidenceRaw="$RAW_CLI_INPUTS" \
+            --output '${{ matrix.publish-dir }}'
+          python scripts/compliance/create_bundle_input_manifest.py \
+            --rid "${{ matrix.rid }}" \
+            --raw "$RAW_CLI_INPUTS" \
+            --output "${{ matrix.publish-dir }}/cli-bundle-inputs.json"
+
       - name: Build and test Windows framework launcher
         if: matrix.rid == 'win-x64'
         shell: pwsh
@@ -272,6 +289,8 @@ jobs:
           DESKTOP_INPUT_ARGS=(
             --additional-deps-json "XE-Local-AI-Engine.Desktop/bin/Release/net10.0/${{ matrix.rid }}/XE-Local-AI-Engine.Desktop.deps.json"
             --additional-bundle-input-manifest "${{ matrix.publish-dir }}/desktop-bundle-inputs.json"
+            --additional-deps-json "XE-Local-AI-Engine.Cli/bin/Release/net10.0/${{ matrix.rid }}/xe.deps.json"
+            --additional-bundle-input-manifest "${{ matrix.publish-dir }}/cli-bundle-inputs.json"
           )
           python scripts/compliance/generate_backend_license_corpus.py \
             --rid "${{ matrix.rid }}" \
@@ -288,6 +307,8 @@ jobs:
           DESKTOP_INPUT_ARGS=(
             --additional-deps-json "XE-Local-AI-Engine.Desktop/bin/Release/net10.0/${{ matrix.rid }}/XE-Local-AI-Engine.Desktop.deps.json"
             --additional-bundle-input-manifest "${{ matrix.publish-dir }}/desktop-bundle-inputs.json"
+            --additional-deps-json "XE-Local-AI-Engine.Cli/bin/Release/net10.0/${{ matrix.rid }}/xe.deps.json"
+            --additional-bundle-input-manifest "${{ matrix.publish-dir }}/cli-bundle-inputs.json"
           )
           WINDOWS_APPHOST_ARGS=()
           if [[ "${{ matrix.rid }}" == "win-x64" ]]; then

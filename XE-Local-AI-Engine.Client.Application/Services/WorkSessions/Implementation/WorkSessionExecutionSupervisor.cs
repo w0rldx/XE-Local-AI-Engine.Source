@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Coder;
+using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
@@ -78,6 +79,9 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     /// </summary>
     private readonly PendingToolCallRegistry _pendingToolCalls;
 
+    // Read only by the park clock's fire-time check: an answered step waiting for the invocation slot is not stuck.
+    private readonly IWorkerEventDispatcher _eventDispatcher;
+
     private readonly ConcurrentDictionary<Guid, SessionRun> _runs = new();
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly CancellationTokenSource _shutdown = new();
@@ -92,8 +96,10 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         TimeProvider timeProvider,
         PendingToolCallRegistry pendingToolCalls,
         ToolApprovalCoordinator approvalCoordinator,
+        IWorkerEventDispatcher eventDispatcher,
         ILogger<WorkSessionExecutionSupervisor> logger)
     {
+        _eventDispatcher = eventDispatcher ?? throw new ArgumentNullException(nameof(eventDispatcher));
         ArgumentNullException.ThrowIfNull(options);
         _pendingToolCalls = pendingToolCalls ?? throw new ArgumentNullException(nameof(pendingToolCalls));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
@@ -385,7 +391,13 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             MessageId = Guid.NewGuid(),
             RequestId = Guid.NewGuid()
         };
-        using var guard = new StepCancellationGuard(_cancellationRegistry, correlation, _timeProvider);
+        using var guard = new StepCancellationGuard(_cancellationRegistry,
+            correlation,
+            _timeProvider,
+            () => IsAnsweredAndWaiting(correlation.RequestId),
+            () => _logger.LogInformation("Work session {SessionId} step {Step} reached its park budget after its card was answered; it waits for the invocation slot, so it was left running.",
+                sessionId,
+                step));
         run.Correlation = correlation;
         if (_options.StepTimeoutSeconds > 0)
         {
@@ -449,6 +461,11 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
 
         return await SettleStepAsync(run, guard, sessionId, step, attempt, stepsThisRun, terminal, callBudget);
     }
+
+    // Questions have no registry row, so the dispatcher's live state is what tells an answered park from an open one.
+    private bool IsAnsweredAndWaiting(Guid invocationId) =>
+        _eventDispatcher.GetLiveInvocations()
+                        .Any(state => state.InvocationId == invocationId && state.PendingApproval is null && state.PendingQuestion is null);
 
     private void ArmPark(StepCancellationGuard guard, Guid invocationId, string? toolName, long occurredAtUtc = 0)
     {

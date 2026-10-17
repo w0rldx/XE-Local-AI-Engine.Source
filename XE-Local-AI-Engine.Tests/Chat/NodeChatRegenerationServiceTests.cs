@@ -50,7 +50,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     public async Task RegenerateAsync_ProducesCompletedSiblingVariantInSameGroupAndStreamsEvents()
     {
         await using var provider = await BuildProviderAsync("regeneration.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -154,7 +154,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // that called an approval-gated tool parked with no Approve/Deny card ever reaching the browser — the run then
         // sat until its timeout. Same defect the ask_user subscription in this file was added to fix, sibling event.
         await using var provider = await BuildProviderAsync("regeneration-approval.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence);
 
         var dispatcher = new RegenRecordingDispatcher();
@@ -208,7 +208,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     public async Task RegenerateAsync_QueuedBehindABenchmarkMeasurement_SaysSo()
     {
         await using var provider = await BuildProviderAsync("regeneration-gpu-holder.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence);
         var gate = new GpuWorkGate();
         using var benchmark = AssertEx.NotNull(gate.TryBeginShared(GpuWorkKind.Benchmark));
@@ -234,7 +234,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     {
         // The regenerate path queues on the same node slot as a send, so it names a work-session holder the same way.
         await using var provider = await BuildProviderAsync("regeneration-work-session-holder.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence);
         var holder = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -266,7 +266,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // client disconnect during GetEnableToolsAsync, a settings failure) must still reach the finally. Leaving them
         // attached leaks a handler on the singleton dispatcher for the whole process lifetime.
         await using var provider = await BuildProviderAsync("regeneration-approval-throw.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence);
 
         var dispatcher = new RegenRecordingDispatcher();
@@ -288,12 +288,42 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     }
 
     [Test]
+    public async Task RegenerateAsync_IntoAConversationWhoseTurnIsParked_IsRefusedAsAParkedTurnConflict()
+    {
+        // A parked turn gives the slot back, so a regenerate here would run beside it; it is refused before anything is written.
+        await using var provider = await BuildProviderAsync("regeneration-parked-turn.sqlite");
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
+        var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence);
+        var dispatcher = new RegenRecordingDispatcher();
+        await using var parkedLease = await dispatcher.ReportInvocationAssignedAsync(RuntimePackageBuilder.Valid().WithConversationId(conversationId).Build());
+        var parked = AssertEx.NotNull(dispatcher.CurrentInvocation);
+        parked.PendingApproval = new InvocationApprovalState
+        {
+            RequestId = "approval-1",
+            Description = "A tool call requires approval.",
+            RequestedAt = DateTimeOffset.UnixEpoch
+        };
+        AssertEx.True(dispatcher.ReleaseSlotForPark(parked.InvocationId));
+        var service = CreateService(persistence, dispatcher, new RegenCompletingRunner(dispatcher));
+
+        var exception = await AssertEx.ThrowsAsync<NodeChatTurnParkedException>(async () =>
+        {
+            await foreach (var _ in service.RegenerateAsync(conversationId, originalId))
+            {
+                // The refusal lands before the first event.
+            }
+        });
+
+        AssertEx.Equal(conversationId, exception.ConversationId);
+    }
+
+    [Test]
     public async Task RegenerateAsync_WhenVariantTerminalAfterLease_ReportsTerminalAndClearsResume()
     {
         // The variant is finalized between the lease grant and the streaming mark. The Assigned state the lease
         // published must still reach a terminal, or a reload keeps resuming into a stream that never ends.
         await using var provider = await BuildProviderAsync("regeneration-terminal-after-lease.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence);
         var events = new List<ChatStreamEvent>();
         var dispatcher = new RegenRecordingDispatcher
@@ -411,7 +441,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // Parity with the send path (NodeChatStreamServiceTests): an opt-in regenerate retrieves KB hits,
         // inlines them as ONE fenced untrusted context block, and records their provenance as the variant's sources.
         await using var provider = await BuildProviderAsync("regeneration-kb-grounds.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence);
 
         var dispatcher = new RegenRecordingDispatcher();
@@ -448,7 +478,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // Degrade gracefully (mirrors the send path): no matching chunks means no KB context and no sources on the
         // regenerated variant, but the rerun still completes.
         await using var provider = await BuildProviderAsync("regeneration-kb-empty.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence);
 
         var dispatcher = new RegenRecordingDispatcher();
@@ -518,7 +548,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         List<ChatStreamEvent> events)
     {
         await using var provider = await BuildProviderAsync(databaseName);
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -577,7 +607,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // NO installed GGUF chat model must fail with FailureCategory.ModelNotInstalled — mirroring the send path — not
         // the generic Unexpected/ProviderUnreachable. The regenerate path is guarded too.
         await using var provider = await BuildProviderAsync("regeneration-no-chat-model.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 
         // Seed a completed local-default original turn: the placeholder + terminal carry NO model (request.Model null).
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
@@ -662,7 +692,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // persistence (GetConversationAsync selects the column), the resolver is consulted with that id, and the bound
         // projection reaches the regenerate runtime package. This guards the second hydration site against divergence.
         await using var provider = await BuildProviderAsync("regeneration-bound.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var agentDefinitionId = Guid.NewGuid();
 
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
@@ -768,7 +798,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // ModelProfile so `resolved?.ModelProfile ?? activeModel` yields the original model.
         const string originalModel = "model-x";
         await using var provider = await BuildProviderAsync("regeneration-effective-model.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var agentDefinitionId = Guid.NewGuid();
 
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
@@ -870,7 +900,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // The resolver must be consulted with the original's agent id, and the variant must be stamped with the
         // re-resolved agent's name.
         await using var provider = await BuildProviderAsync("regeneration-reuses-original-agent.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var conversationAgentId = Guid.NewGuid();
         var originalTurnAgentId = Guid.NewGuid();
 
@@ -971,7 +1001,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // Orchestrator hydration symmetry: a regenerated turn on a conversation bound to a Kind=Orchestrator definition must
         // carry the SAME orchestration spec a fresh send would — a missed hydration here would make reruns diverge.
         await using var provider = await BuildProviderAsync("regeneration-orchestrator.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var agentDefinitionId = Guid.NewGuid();
 
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
@@ -1077,7 +1107,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     {
         // Send/regenerate parity for the orchestration case: participants' list, not the orchestrator's, and no tool request needed.
         await using var provider = await BuildProviderAsync("regeneration-orchestration-cloud-tools-withheld.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var agentDefinitionId = Guid.NewGuid();
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -1197,7 +1227,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // Send/regenerate parity: a rerun whose orchestration does not compile must tell the operator why, exactly as
         // the send path does — otherwise the same silent degrade reappears on every regenerate.
         await using var provider = await BuildProviderAsync("regeneration-orchestrator-degraded.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var agentDefinitionId = Guid.NewGuid();
 
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
@@ -1292,7 +1322,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // Send/regenerate parity: a rerun that withholds playbook memory from a cloud model says so, exactly as the send
         // path does. A DEGRADED orchestrator runs its own persona, so its own flag is the one reported.
         await using var provider = await BuildProviderAsync("regeneration-playbook-withheld.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var agentDefinitionId = Guid.NewGuid();
 
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
@@ -1386,7 +1416,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     {
         // R4-01 send/regenerate parity: a rerun of a conversation whose bound agent was deleted says so.
         await using var provider = await BuildProviderAsync("regeneration-agent-unavailable.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var agentDefinitionId = Guid.NewGuid();
 
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
@@ -1478,7 +1508,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // regenerate with today's literals — the embedded LoadResolvedSystemPrompt and AgentDefinitionVersion 1 — and
         // the resolver must be consulted with a NULL binding (the default-persona contract).
         await using var provider = await BuildProviderAsync("regeneration-unbound.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -1566,7 +1596,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     {
         // Send/regenerate parity for ToolsWithheld: the notice fires only when the client asked AND the node engine is on.
         await using var provider = await BuildProviderAsync($"regeneration-tools-withheld-{useLocalTools}-{nodeToolsEnabled}.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
             Title = "Tools withheld regen",
@@ -1656,7 +1686,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     {
         // Send/regenerate parity for CloudToolsWithheld: the same notice, from the same ChatTurnResolution helper.
         await using var provider = await BuildProviderAsync($"regeneration-cloud-tools-withheld-{providerReportsWithheld}.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
             Title = "Cloud tools withheld regen",
@@ -1768,7 +1798,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     public async Task RegenerateAsync_WhenToolLifecycleReported_StreamsToolCallEvents()
     {
         await using var provider = await BuildProviderAsync("regeneration-tool-lifecycle.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -1868,7 +1898,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // cut long reruns off with FailureCategory=Timeout. 900 is deliberately NOT the default, so this still fails
         // if the wiring is dropped. Tool-call/stream-idle keep their defaults.
         await using var provider = await BuildProviderAsync("regeneration-node-timeout.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -1958,7 +1988,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     public async Task RegenerateAsync_WhenLocalToolsEnabled_OffersCatalogToolsInRuntimePackage()
     {
         await using var provider = await BuildProviderAsync("regeneration-offer-tools.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -2050,7 +2080,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     public async Task RegenerateAsync_WhenLocalToolsDisabled_OffersNoTools()
     {
         await using var provider = await BuildProviderAsync("regeneration-no-offer-tools.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -2135,7 +2165,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     public async Task RegenerateAsync_OfVariant_ExcludesAllSiblingAssistantAnswersFromContext()
     {
         await using var provider = await BuildProviderAsync("regeneration-variant-context.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -2239,7 +2269,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // A failed turn's user request stays in the history, and unmarked the model answers IT instead of the
         // message after it. Marked in every rerun that sits after it; never in the rerun OF that failed turn.
         await using var provider = await BuildProviderAsync("regeneration-failed-turn-context.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var agentDefinitionId = Guid.NewGuid();
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -2358,7 +2388,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     public async Task RegenerateAsync_WhenALateMintedSiblingOfAnEarlyTurnIsSelected_KeepsItInContextAtTheEarlyPosition()
     {
         await using var provider = await BuildProviderAsync("regeneration-late-sibling-anchor.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -2477,7 +2507,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // Parity with the send path: the developer-gated per-turn sampling overrides were dropped on the floor by the
         // regenerate hub path, so a rerun silently ignored the temperature/seed the original send used.
         await using var provider = await BuildProviderAsync("regeneration-sampling.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence);
 
         var dispatcher = new RegenRecordingDispatcher();
@@ -2506,7 +2536,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     public async Task RegenerateAsync_ThreadsTheWebReviewModeIntoRuntimePackage()
     {
         await using var provider = await BuildProviderAsync("regeneration-web-auto.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence);
         var dispatcher = new RegenRecordingDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
@@ -2523,7 +2553,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // The no-override path must stay byte-identical to before the threading landed (the package's config hash
         // feeds runtime reuse).
         await using var provider = await BuildProviderAsync("regeneration-sampling-default.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence);
 
         var dispatcher = new RegenRecordingDispatcher();
@@ -2547,7 +2577,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // message verbatim — the exact context the synopsis exists to replace, and a context-window blow-up on a
         // conversation that was compacted precisely because it no longer fit.
         await using var provider = await BuildProviderAsync("regeneration-compaction.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -2660,7 +2690,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // The state block rides inside the synopsis message; distillation may have advanced it through the very answer
         // being regenerated, so it is rendered as of the regeneration cutoff like the synopsis watermark is checked.
         await using var provider = await BuildProviderAsync("regeneration-state-cutoff.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -2795,7 +2825,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // spliced the now-deleted synopsis in and dropped the very messages it claimed to cover — the branch switch
         // silently rewrote the model's view of the conversation.
         await using var provider = await BuildProviderAsync("regeneration-compaction-path-switch.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -2903,7 +2933,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // Guard on the splice: a synopsis that reaches the very user turn the rerun is answering would leave the model
         // with a summary and no question, so that case keeps the pre-cutoff history verbatim and sends no synopsis.
         await using var provider = await BuildProviderAsync("regeneration-compaction-covers-cutoff.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -2975,7 +3005,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     public async Task RegenerateAsync_ThreadsReasoningEffortIntoRuntimePackage()
     {
         await using var provider = await BuildProviderAsync("regeneration-reasoning.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -3055,7 +3085,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     public async Task RegenerateAsync_WhenReasoningEffortOmitted_LeavesRuntimePackageReasoningNull()
     {
         await using var provider = await BuildProviderAsync("regeneration-reasoning-default.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -3136,7 +3166,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     public async Task RegenerateAsync_WhenOriginRemote_ThrowsReadOnly()
     {
         await using var provider = await BuildProviderAsync("regeneration-remote.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 
         var conversationId = Guid.NewGuid();
         await persistence.EnsureConversationAsync(new NodeChatEnsureConversationRequest
@@ -3192,7 +3222,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // The type is the contract: LocalChatHub matches on it to forward a legible sentence, where a bare
         // InvalidOperationException reaches the browser as SignalR's generic "An unexpected error occurred".
         await using var provider = await BuildProviderAsync("regeneration-missing-conversation.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var service = CreateMinimalRegenerationService(persistence);
 
         _ = await AssertEx.ThrowsAsync<NodeChatConversationNotFoundException>(async () =>
@@ -3208,7 +3238,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     public async Task RegenerateAsync_WhenTheOriginalMessageIsUnknown_ThrowsTheTypedNotFound()
     {
         await using var provider = await BuildProviderAsync("regeneration-missing-message.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
             Title = "Regen",
@@ -3265,7 +3295,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // tools per V0=true), NOT the Ollama /api/show classification — so the classifier is never consulted for the
         // Codex id, and the requested local tool offer IS honored (regression guard for the regen-path Codex gate).
         await using var provider = await BuildProviderAsync("regeneration-codex-capabilities.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 
         const string CodexModel = "gpt-5.5";
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
@@ -3364,7 +3394,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // never Cancelled/Interrupted from the client connection dropping. This is the send-path shape the regenerate
         // path previously lacked (it linked the run CTS to the client token and cancelled it unconditionally).
         await using var provider = await BuildProviderAsync("regeneration-client-cancel.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence);
 
         var dispatcher = new RegenRecordingDispatcher();
@@ -3410,7 +3440,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // frame but before the pump/runner exist) must terminalize the variant Interrupted via the shared
         // PreOwnershipTerminalizationGuard — not leave it stranded Pending/Queued until the restart reaper.
         await using var provider = await BuildProviderAsync("regeneration-preownership.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence);
 
         var dispatcher = new RegenRecordingDispatcher();
@@ -3442,7 +3472,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // Regression guard: a genuine user Stop (routed through the cancellation registry) must still cancel
         // the run — the fix preserves user-cancel while decoupling the run from the client connection.
         await using var provider = await BuildProviderAsync("regeneration-user-cancel.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence);
 
         var dispatcher = new RegenRecordingDispatcher();
@@ -4185,7 +4215,41 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // keeps firing into a stream nobody reads. Tests assert this is false on every exit path.
         public bool HasApprovalSubscribers => ApprovalRequestedChanged is not null;
 
+        private Guid? _slotHolderId;
+
         public InvocationState? CurrentInvocation { get; private set; }
+
+        public InvocationState? SlotHolder => CurrentInvocation is { } current && current.InvocationId == _slotHolderId && !NodeChatInvocationPump.IsTerminal(current.Status) ? current : null;
+
+        public IReadOnlyList<InvocationState> GetLiveInvocations() =>
+            CurrentInvocation is { } current && !NodeChatInvocationPump.IsTerminal(current.Status) ? [current] : [];
+
+        public InvocationLiveSnapshot GetLiveSnapshot() =>
+            new()
+            {
+                Current = SlotHolder,
+                Live = GetLiveInvocations()
+            };
+
+        public bool ReleaseSlotForPark(Guid invocationId)
+        {
+            if (_slotHolderId != invocationId)
+            {
+                return false;
+            }
+
+            _slotHolderId = null;
+            return true;
+        }
+
+        public Task ReportPromptTimedOutAsync(Guid invocationId, string requestId) =>
+            Task.CompletedTask;
+
+        public Task ReacquireSlotAsync(Guid invocationId, CancellationToken cancellationToken)
+        {
+            _slotHolderId = invocationId;
+            return Task.CompletedTask;
+        }
 
         /// <summary>Runs once the lease is granted, before the service marks the row streaming: the race window under test.</summary>
         public Func<Task>? OnAssigned { get; init; }
@@ -4197,6 +4261,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         public async Task<IAsyncDisposable> ReportInvocationAssignedAsync(RuntimePackage package, CancellationToken cancellationToken = default)
         {
+            _slotHolderId = package.InvocationId;
             CurrentInvocation = new InvocationState
             {
                 InvocationId = package.InvocationId,

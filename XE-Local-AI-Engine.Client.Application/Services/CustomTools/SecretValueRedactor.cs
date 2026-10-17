@@ -51,14 +51,18 @@ internal sealed partial class SecretValueRedactor
     {
         ArgumentNullException.ThrowIfNull(arguments);
         return WithParts(secretValues, minLength)
-            .Concat(arguments.SelectMany(static argument => Path.IsPathFullyQualified(argument) || IsFlagName(argument) ? CredentialLikeParts(argument) : CredentialLikeParts(argument).Prepend(argument))
+            .Concat(arguments.SelectMany(static argument =>
+                                 Path.IsPathFullyQualified(argument) || IsFlagName(argument) ? CredentialLikeParts(argument) : CredentialLikeParts(argument).Prepend(argument))
                              .SelectMany(WithAssignedValueOfAToken)
                              .Where(value => value.Length >= minLength));
     }
 
     // PowerShell host switches a stdio MCP registration commonly carries; any other single-dash argument may glue a value ("-pMyPassword").
-    private static readonly string[] PowerShellSwitches = ["-NoProfile", "-NonInteractive", "-NoLogo", "-NoExit", "-ExecutionPolicy", "-Command", "-File", "-Sta", "-Mta", "-EncodedCommand",
-        "-WindowStyle", "-Version", "-InputFormat", "-OutputFormat", "-ConfigurationName"];
+    private static readonly string[] PowerShellSwitches =
+    [
+        "-NoProfile", "-NonInteractive", "-NoLogo", "-NoExit", "-ExecutionPolicy", "-Command", "-File", "-Sta", "-Mta", "-EncodedCommand",
+        "-WindowStyle", "-Version", "-InputFormat", "-OutputFormat", "-ConfigurationName"
+    ];
 
     // A bare "--" flag name or a listed PowerShell switch is not a secret; its value is a separate argument and still redacted.
     // A digit, '=' or ':' means a glued value ("--token=x"), so the whole argument stays a secret.
@@ -68,7 +72,8 @@ internal sealed partial class SecretValueRedactor
 
     // A multi-word script keeps its whole-argument entry only: splitting it at its first '=' would turn the rest of the
     // script into one "secret"; its own `--key=value` parts are handled by CredentialLikeParts.
-    private static string[] WithAssignedValueOfAToken(string value) => value.Any(char.IsWhiteSpace) ? [value] : WithAssignedValue(value);
+    private static string[] WithAssignedValueOfAToken(string value) =>
+        value.Any(char.IsWhiteSpace) ? [value] : WithAssignedValue(value);
 
     private static readonly string[] CredentialSchemes = ["Bearer", "Basic", "Token"];
 

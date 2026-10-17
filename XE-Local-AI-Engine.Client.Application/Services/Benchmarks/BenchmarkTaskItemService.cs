@@ -104,6 +104,25 @@ public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
     public static string DecodePrompt(ReadOnlySpan<byte> payload) =>
         BenchmarkProjectService.DecodeCoreTask(payload);
 
+    /// <summary>
+    ///     The task item a run answered, or <see langword="null" /> for a single-task run or a deleted item. Pointwise
+    ///     and pairwise judging both read it here, so they judge against the same reference answer.
+    /// </summary>
+    internal static async Task<BenchmarkTaskItemRecord?> FindTaskItemAsync(IBenchmarkStore store, BenchmarkRunRecord run, CancellationToken cancellationToken)
+    {
+        if (run.TaskItemId is not { } itemId)
+        {
+            return null;
+        }
+
+        var items = await store.ListTaskItemsAsync(run.ProjectId, cancellationToken);
+        return items.FirstOrDefault(entry => entry.Id == itemId);
+    }
+
+    /// <summary>The item's own reference answer, falling back to the policy's when the item has none (or is gone).</summary>
+    internal static string? ResolveReferenceAnswer(BenchmarkJudgePolicyV1 policy, BenchmarkTaskItemRecord? item) =>
+        item is null ? policy.ReferenceAnswer : DecodeOptional(item.ReferenceAnswerJson) ?? policy.ReferenceAnswer;
+
     /// <summary>An optional stored string payload, or null when the item carries none.</summary>
     public static string? DecodeOptional(ReadOnlyMemory<byte>? payload) =>
         payload is { } value && !value.IsEmpty ? BenchmarkProjectService.DecodeCoreTask(value.Span) : null;

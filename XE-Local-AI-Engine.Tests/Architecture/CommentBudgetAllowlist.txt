@@ -831,7 +831,6 @@ XE-Local-AI-Engine.Tests/DocumentIngestion/DocumentTextExtractorTests.cs|run|7
 XE-Local-AI-Engine.Tests/DocumentIngestion/DocumentTextExtractorTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Drafting/DefaultConfigDraftServiceTests.cs|run|2
 XE-Local-AI-Engine.Tests/Drafting/DefaultConfigDraftServiceTests.cs|summary|2
-XE-Local-AI-Engine.Tests/Drafting/DraftAdmissionGateTests.cs|run|1
 XE-Local-AI-Engine.Tests/Endpoints/Agents/AdaptiveMemoryEndpointTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Endpoints/Agents/AnalyzePlaybookEndpointTests.cs|run|1
 XE-Local-AI-Engine.Tests/Endpoints/Agents/CreateAgentDefinitionEndpointTests.cs|summary|1

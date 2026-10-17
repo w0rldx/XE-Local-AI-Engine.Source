@@ -1,7 +1,10 @@
 namespace XE_Local_AI_Engine.Tests.Hosting;
 
+using System.Buffers.Binary;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
@@ -165,8 +168,8 @@ public sealed class SpaStaticFileOptionsTests
     public async Task UpgradedClient_HoldingTheOldBuilds1980Date_AndNoETag_GetsTheNewShell()
     {
         // Precondition: the new shell's content date folds below the 1980 date the old build sent, the case a date compare gets wrong.
-        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(ShellHashedBefore1980));
-        var contentDate = DateTimeOffset.UnixEpoch.AddSeconds(System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(hash) & int.MaxValue);
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(ShellHashedBefore1980));
+        var contentDate = DateTimeOffset.UnixEpoch.AddSeconds(BinaryPrimitives.ReadUInt32BigEndian(hash) & int.MaxValue);
         AssertEx.True(contentDate < new DateTimeOffset(DosEpoch), $"The fixture shell must hash below 1980, got {contentDate:O}.");
 
         using var root = new TempWebRoot(ShellHashedBefore1980);

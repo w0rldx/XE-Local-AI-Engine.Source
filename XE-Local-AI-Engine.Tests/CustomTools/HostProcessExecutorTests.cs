@@ -221,7 +221,8 @@ public sealed class HostProcessExecutorTests : IDisposable
         // The targets are read into variables first: a redirected command would report its own redirection instead.
         var script = await CreateScriptAsync("#!/bin/sh\nout=$(readlink /proc/$$/fd/1)\nerr=$(readlink /proc/$$/fd/2)\nprintf '%s\\n%s\\n' \"$out\" \"$err\" > \"" + marker + "\"\n"
                                              + "i=0\nwhile [ $i -lt 4000 ]; do echo \"$SECRET_1d6f $SECRET_1d6f $SECRET_1d6f $SECRET_1d6f $SECRET_1d6f\"; echo \"$SECRET_1d6f\" 1>&2; i=$((i+1)); done\n");
-        var config = $$"""{"executable":"{{script}}","argsTemplate":[],"timeoutSeconds":0,"env":[{"name":"SECRET_1d6f","value":"hunter2-7f3a9c5e1b2d4e6f8a0b1c2d3e4f5a6b","isSecret":true}],"detach":true}""";
+        var config =
+            $$"""{"executable":"{{script}}","argsTemplate":[],"timeoutSeconds":0,"env":[{"name":"SECRET_1d6f","value":"hunter2-7f3a9c5e1b2d4e6f8a0b1c2d3e4f5a6b","isSecret":true}],"detach":true}""";
         var executor = CreateExecutor(new GraceClock(graceElapses: false));
         try
         {

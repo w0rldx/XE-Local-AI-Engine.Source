@@ -28,6 +28,7 @@ internal static class UsageSummaryMapper
             CompletionTokens = record.CompletionTokens,
             ReasoningTokens = record.ReasoningTokens,
             TotalTokens = record.TotalTokens,
+            TokensReported = record.TokensReported,
             EstimatedCostUsd = Round(RawCost(record, rateResolver)),
             Currency = CurrencyUsd
         };

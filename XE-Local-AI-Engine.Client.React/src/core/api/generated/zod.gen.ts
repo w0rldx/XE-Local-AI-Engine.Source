@@ -271,6 +271,10 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketRespo
 	completionTokens: z.int(),
 	reasoningTokens: z.int().nullable(),
 	totalTokens: z.int(),
+	tokensReported: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	estimatedCostUsd: z.number(),
 	currency: z.string(),
 });
@@ -599,6 +603,8 @@ export const zXeLocalAiEngineClientEndpointsAppUpdateV1SetAppUpdateChannelReques
 export const zXeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse = z.object({
 	accessToken: z.string(),
 	expiresAtUtc: z.iso.datetime({ offset: true }),
+	refreshToken: z.string().nullish(),
+	refreshTokenExpiresAtUtc: z.iso.datetime({ offset: true }).nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse = z.object({
@@ -629,6 +635,7 @@ export const zXeLocalAiEngineClientEndpointsAuthV1NodeLoginRequest = z.object({
 		.regex(/^[^@]+@[^@]+$/)
 		.nullish(),
 	password: z.string().min(0).max(256),
+	returnRefreshToken: z.boolean().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest = z.object({
@@ -6487,6 +6494,7 @@ export const zXeLocalAiEngineClientModelsEnumsFailureCategory = z.enum([
 	"ProviderAuthFailed",
 	"ProviderRateLimited",
 	"CallBudgetReached",
+	"InsufficientCapacity",
 ]);
 
 export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse = z.object({
@@ -6539,6 +6547,7 @@ export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryRespon
 
 export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationMonitorResponse = z.object({
 	current: zXeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse.nullable(),
+	live: z.array(zXeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse),
 	history: z.array(zXeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse),
 	historyCapacity: z
 		.int()
@@ -7488,6 +7497,7 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse =
 	generationDurationMs: z.int().nullish(),
 	sources: z.array(zXeLocalAiEngineClientServicesChatNodeChatMessageSource).nullish(),
 	contextWindow: zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowResponse.nullish(),
+	failureCategory: zXeLocalAiEngineClientModelsEnumsFailureCategory.nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse = z.object({
@@ -8724,7 +8734,11 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
-	speculativeDraftGpuLayers: z.int().gte(0).lte(1000).nullish(),
+	speculativeDraftGpuLayers: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
 	rerankerModelName: z.string().nullish(),
 	autoEffortFastModelName: z.string().nullish(),
 	huggingFaceDiskMarginBytes: z.int().nullish(),
@@ -8778,7 +8792,11 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
-	llamaChatCacheRamMiB: z.int().gte(-1).lte(131072).nullish(),
+	llamaChatCacheRamMiB: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
 	llamaCpuThreadReserve: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })

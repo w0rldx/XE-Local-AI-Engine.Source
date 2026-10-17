@@ -188,7 +188,11 @@ with no interceptors: no auth header, no ProblemDetails mapping. A lazy `import(
 
 ### A FluentValidation range rule is published as OpenAPI min/max even under `.When`
 
-**Rule:** a request field that accepts a sentinel outside its range (`-1` = unset) validates with `Must(...)`, not `InclusiveBetween(...).When(...)`: FastEndpoints publishes the range as `minimum`/`maximum` whatever the condition, and the generated zod schema then refuses the sentinel in the browser before the request is sent. Check the regenerated `zod.gen.ts` for the field, and keep the SPA's range check on the bounds the response carries. **Prevents:** a reset the API accepts and the SPA cannot send. **Authority:** `NodeSettingsEndpointValidators` (`IsUnsetOrBetween`), `StoredNodeSettings.TokenSettingUnset`; model-matrix follow-ups V3, 2026-10-05.
+**Rule:** FastEndpoints publishes `InclusiveBetween(...)` as OpenAPI `minimum`/`maximum` whatever its `.When(...)` condition, and the generated zod schema then refuses an out-of-range value in the browser before the request is sent. A request field that must accept a value outside its range, or whose 400 must name another way out, validates with `Must(...)`; range rules on a clearable node-settings knob stay `Must(...)` (`NullOrBetween`). Check the regenerated `zod.gen.ts` for the field, and keep the SPA's range check on the bounds the response carries. **Prevents:** a value the API accepts and the SPA cannot send. **Authority:** `NodeSettingsEndpointValidators` (`IsNullOrBetween`); model-matrix follow-ups V3, 2026-10-05.
+
+### PUT node-settings: null clears, an omitted member keeps, `-1` and `""` are refused
+
+**Rule:** on `PUT node-settings` an omitted member keeps, an explicit `null` clears back to the effective default, and a value sets. `-1` and `""` are a 400 that says to send null. Null on `externalAccessProfile`, `uiMode` or `sandboxSecurityProfile` is a 400; null on `maxMessageRequestTimeoutSeconds` resets it. A .NET client serializes the typed request with `WhenWritingNull`, or every unset member clears. **Prevents:** a client wiping settings with nulls, or sending `-1`/`""` and getting a 400. **Authority:** `SaveNodeSettingsRequest.ExplicitNullTracking`, `NodeSettingsEndpointValidators` (`NotBlank`, `NotClearable`); live QA follow-ups D2, 2026-10-17.
 
 ## Endpoint error shapes
 
@@ -335,6 +339,7 @@ Superseded claims; the entries above are the active rules.
 
 | Stale belief | Current correction |
 |---|---|
+| JSON null keeps a node setting; `-1` or `""` clears it. | Null clears; an omitted member keeps; `-1` and `""` are a 400 that says to send null (live QA follow-ups D2, 2026-10-17). |
 | `nodeCapabilities.preview` gates a route. | The flag, the route and the feature are gone; `graphWorkflows` is the successor and is on by default (§5). |
 | Desktop-only ThemeConfigurator/Open Canvas are outside the mobile-responsive scope. | Both are gone; no surface is excluded from the mobile-responsive scope (§6). Theme is Mantine-native, with scheme and accent in the node-settings "This browser" card. |
 | A capped route's 413 comes in FastEndpoints' `errors[]` shape when the endpoint refuses it itself. | Both the host's and the endpoint's refusal write the same ASP.NET `ProblemDetails` body via `RequestBodyTooLargeProblem` (§5). |

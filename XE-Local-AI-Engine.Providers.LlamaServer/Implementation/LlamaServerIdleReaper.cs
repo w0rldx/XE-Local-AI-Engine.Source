@@ -458,7 +458,8 @@ internal sealed class LlamaServerIdleReaper : IDisposable
         }
     }
 
-    private static bool IsCompanion(ModelRole role) => role is ModelRole.Embedding or ModelRole.Reranker;
+    private static bool IsCompanion(ModelRole role) =>
+        role is ModelRole.Embedding or ModelRole.Reranker;
 
     private static LlamaRuntimeException CapReached()
     {

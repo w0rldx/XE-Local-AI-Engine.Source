@@ -100,12 +100,13 @@ public static class MxcProbe
         return string.Create(CultureInfo.InvariantCulture,
             $"CanBlockClipboardRead {Fact(ui?.CanBlockClipboardRead)}, CanBlockClipboardWrite {Fact(ui?.CanBlockClipboardWrite)}, CanBlockInputInjection {Fact(ui?.CanBlockInputInjection)}, CanBlockExternalUiObjects {Fact(ui?.CanBlockExternalUiObjects)}, CanBlockGlobalUiNamespace {Fact(ui?.CanBlockGlobalUiNamespace)}, CanBlockDesktopSwitching {Fact(ui?.CanBlockDesktopSwitching)}");
 
-        static string Fact(bool? value) => value switch
-        {
-            true => "true",
-            false => "false",
-            null => "not reported"
-        };
+        static string Fact(bool? value) =>
+            value switch
+            {
+                true => "true",
+                false => "false",
+                null => "not reported"
+            };
     }
 
     /// <summary>UI isolation MXC cannot enforce on this host: weaker containment worth naming, not a reason to refuse the boundary.</summary>

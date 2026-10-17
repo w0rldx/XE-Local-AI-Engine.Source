@@ -71,8 +71,7 @@ public sealed class InstalledBaseModelLinker : IInstalledBaseModelLinker
                         ?? throw new TrainingRunRejectedException($"'{explicitModelName}' is not an installed model.");
             if (entry.Origin == LocalModelOrigin.Trained)
             {
-                throw new TrainingRunRejectedException(
-                    $"'{explicitModelName}' is a tuned model this node trained, not a base checkpoint; link the installed GGUF of the run's base model instead.");
+                throw new TrainingRunRejectedException($"'{explicitModelName}' is a tuned model this node trained, not a base checkpoint; link the installed GGUF of the run's base model instead.");
             }
 
             return new InstalledBaseModelLink

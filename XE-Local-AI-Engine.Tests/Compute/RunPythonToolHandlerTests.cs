@@ -147,6 +147,7 @@ public sealed class RunPythonToolHandlerTests
             throw new NotSupportedException("the handler renders through ExecuteAsync");
         }
 
-        public Task<ComputeExecutionOutcome?> PreflightAsync(CancellationToken cancellationToken = default) => Task.FromResult(Preflight);
+        public Task<ComputeExecutionOutcome?> PreflightAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(Preflight);
     }
 }

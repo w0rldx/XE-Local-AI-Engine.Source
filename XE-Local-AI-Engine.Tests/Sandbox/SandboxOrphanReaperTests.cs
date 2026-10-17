@@ -374,8 +374,16 @@ public sealed class SandboxOrphanReaperTests : IDisposable
     {
         var containerRoot = CreateScratchContainerRoot();
         var started = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        var deadOwner = SessionRoot(containerRoot, new SandboxSessionOwner { ProcessId = 111, ProcessStartTimeUtc = started });
-        var liveOwner = SessionRoot(containerRoot, new SandboxSessionOwner { ProcessId = 222, ProcessStartTimeUtc = started });
+        var deadOwner = SessionRoot(containerRoot, new SandboxSessionOwner
+        {
+            ProcessId = 111,
+            ProcessStartTimeUtc = started
+        });
+        var liveOwner = SessionRoot(containerRoot, new SandboxSessionOwner
+        {
+            ProcessId = 222,
+            ProcessStartTimeUtc = started
+        });
         var oldUnowned = SessionRoot(containerRoot, owner: null);
         AgeTree(oldUnowned, TimeSpan.FromDays(30));
         var asked = new List<int>();
@@ -403,7 +411,11 @@ public sealed class SandboxOrphanReaperTests : IDisposable
     public async Task SessionSweep_NeverDeletesARootHoldingALiveMarkersJail_EvenWhenItsOwnerRecordIsDead()
     {
         var containerRoot = CreateScratchContainerRoot();
-        var root = SessionRoot(containerRoot, new SandboxSessionOwner { ProcessId = 111, ProcessStartTimeUtc = DateTime.UnixEpoch });
+        var root = SessionRoot(containerRoot, new SandboxSessionOwner
+        {
+            ProcessId = 111,
+            ProcessStartTimeUtc = DateTime.UnixEpoch
+        });
         var jail = Path.Combine(root, "process-jail");
         var killer = new FakeKiller();
         killer.Alive.Add(4321);

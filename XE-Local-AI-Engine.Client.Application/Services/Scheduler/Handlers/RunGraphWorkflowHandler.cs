@@ -47,7 +47,10 @@ public sealed class RunGraphWorkflowHandler : IScheduledJobHandler
     // Fixed poll interval; subscribe to run events instead if a service-side seam ever exists.
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(1);
 
-    private static readonly GraphWorkflowRunOrigin ScheduleOrigin = new() { Source = GraphWorkflowTriggerSource.Schedule };
+    private static readonly GraphWorkflowRunOrigin ScheduleOrigin = new()
+    {
+        Source = GraphWorkflowTriggerSource.Schedule
+    };
 
     private static readonly JsonSerializerOptions ParameterSerializerOptions = new()
     {

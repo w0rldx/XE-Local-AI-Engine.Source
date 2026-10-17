@@ -209,8 +209,7 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
 
             if (first == exited && process.ExitCode != 0)
             {
-                return CustomToolExecution.Failure(redactor.Redact(
-                    string.Create(CultureInfo.InvariantCulture, $"{name} (process {processId}) exited at launch.\nexit_code: {process.ExitCode}\n")));
+                return CustomToolExecution.Failure(redactor.Redact(string.Create(CultureInfo.InvariantCulture, $"{name} (process {processId}) exited at launch.\nexit_code: {process.ExitCode}\n")));
             }
 
             return CustomToolExecution.Success(redactor.Redact(string.Create(CultureInfo.InvariantCulture, $"started {name} (process {processId})\n")));

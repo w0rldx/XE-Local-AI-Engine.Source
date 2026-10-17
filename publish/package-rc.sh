@@ -340,6 +340,8 @@ package_rid() {
 
   dotnet publish "${REPO_ROOT}/XE-Local-AI-Engine.Desktop/XE-Local-AI-Engine.Desktop.csproj" \
     -c Release -p:PublishProfile="${rid}" --output "${pub}" --nologo
+  dotnet publish "${REPO_ROOT}/XE-Local-AI-Engine.Cli/XE-Local-AI-Engine.Cli.csproj" \
+    -c Release -p:PublishProfile="${rid}" --output "${pub}" --nologo
   if [[ "${rid}" == "win-x64" ]]; then
     dotnet publish "${REPO_ROOT}/XE-Local-AI-Engine.WindowsLauncher/XE-Local-AI-Engine.WindowsLauncher.csproj" \
       -c Release -p:PublishProfile=win-x64 --output "${pub}" --nologo
@@ -383,7 +385,7 @@ package_rid() {
   else
     cp "${SCRIPT_DIR}/linux/run-xe-local-ai-engine.sh" "${stage}/start-xe-local-ai-engine.sh"
     cp "${SCRIPT_DIR}/linux/uninstall-xe-local-ai-engine.sh" "${stage}/uninstall-xe-local-ai-engine.sh"
-    chmod +x "${stage}/start-xe-local-ai-engine.sh" "${stage}/uninstall-xe-local-ai-engine.sh" "${stage}/${exe}"
+    chmod +x "${stage}/start-xe-local-ai-engine.sh" "${stage}/uninstall-xe-local-ai-engine.sh" "${stage}/${exe}" "${stage}/xe"
   fi
   write_readme "${os}" "${stage}/READ-ME-FIRST.txt"
 

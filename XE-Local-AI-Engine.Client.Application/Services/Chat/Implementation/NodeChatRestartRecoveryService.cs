@@ -1,7 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 public sealed class NodeChatRestartRecoveryService
@@ -12,14 +16,17 @@ public sealed class NodeChatRestartRecoveryService
     private const long MillisecondsPerDay = 86_400_000L;
 
     private readonly INodeSettingsStore _settingsStore;
+    private readonly Lazy<IUsageProviderResolver> _usageProviderResolver;
     private readonly NodeChatPersistenceWriter _writer;
 
-    public NodeChatRestartRecoveryService(NodeChatPersistenceWriter writer, INodeSettingsStore settingsStore)
+    public NodeChatRestartRecoveryService(NodeChatPersistenceWriter writer, INodeSettingsStore settingsStore, Lazy<IUsageProviderResolver> usageProviderResolver)
     {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(settingsStore);
+        ArgumentNullException.ThrowIfNull(usageProviderResolver);
         _writer = writer;
         _settingsStore = settingsStore;
+        _usageProviderResolver = usageProviderResolver;
     }
 
     public async Task<int> RecoverInterruptedMessagesAsync(long recoveredAtUtc, CancellationToken cancellationToken = default)
@@ -36,6 +43,7 @@ public sealed class NodeChatRestartRecoveryService
         return await _writer.ExecuteConversationExclusiveAsync(Guid.Empty,
             async (dbContext, token) =>
             {
+                Dictionary<string, string> providers = new(StringComparer.Ordinal);
                 await using var transaction = await dbContext.Database.BeginTransactionAsync(token);
 
                 // Terminalize every non-terminal assistant row whatever its Origin, since a restart orphans local and
@@ -59,40 +67,106 @@ public sealed class NodeChatRestartRecoveryService
                     ],
                     token);
 
-                // Durable run-envelope reconcile: a crash after a terminal commit can leave a row envelope-less, so one
-                // is backfilled FROM the persisted row, in this transaction, idempotently through the NOT EXISTS guard.
-                _ = await dbContext.Database.ExecuteSqlRawAsync(sql: """
-                                                                     INSERT INTO agent_execution_logs
-                                                                         (id, record_kind, schema_version, agent_definition_id, conversation_id, message_id, request_id,
-                                                                          model_name, config_hash, terminal_status, latency_ms, success, created_at_utc)
-                                                                     SELECT
-                                                                         m.message_id, {0}, {1}, COALESCE(m.agent_definition_id, {2}), m.conversation_id, m.message_id, m.request_id,
-                                                                         '', '', m.status, 0, CASE WHEN m.status = {3} THEN 1 ELSE 0 END, {4}
-                                                                     FROM messages m
-                                                                     WHERE m.role = {5}
-                                                                       AND m.status IN ({3}, {6}, {7}, {8})
-                                                                       AND m.updated_at_utc >= {9}
-                                                                       AND NOT EXISTS (
-                                                                           SELECT 1 FROM agent_execution_logs e
-                                                                           WHERE e.record_kind = {0} AND e.message_id = m.message_id);
-                                                                     """,
-                    [
-                        (int)AgentExecutionLogRecordKind.ChatRunEnvelope,
-                        AgentRunEnvelope.CurrentSchemaVersion,
-                        Guid.Empty,
-                        NodeChatMessageStatusValues.Completed,
+                // Durable run-envelope reconcile: a crash after a terminal commit can leave a row envelope-less, so one is
+                // backfilled FROM the persisted row, in this transaction. The model sits in the encrypted metadata, so it is read here, not in SQL.
+                foreach (var row in await ReadEnvelopelessRowsAsync(dbContext, transaction.GetDbTransaction(), backfillSinceUtc, token))
+                {
+                    if (!providers.TryGetValue(row.Model ?? string.Empty, out var provider))
+                    {
+                        provider = await _usageProviderResolver.Value.ResolveAsync(row.Model, token);
+                        providers[row.Model ?? string.Empty] = provider;
+                    }
+
+                    await NodeChatMessageCommands.WriteRunEnvelopeRowAsync(dbContext,
+                        transaction.GetDbTransaction(),
+                        row.ConversationId,
+                        row.MessageId,
+                        row.RequestId,
+                        row.AgentDefinitionId,
+                        row.Status,
+                        row.Model,
+                        promptTokens: null,
+                        completionTokens: null,
+                        reasoningTokens: null,
+                        totalTokens: null,
+                        new AgentRunEnvelopeMetadata
+                        {
+                            InvocationId = null,
+                            DurationMs = 0L
+                        },
+                        provider,
                         recoveredAtUtc,
-                        AssistantRole,
-                        NodeChatMessageStatusValues.Failed,
-                        NodeChatMessageStatusValues.Cancelled,
-                        NodeChatMessageStatusValues.Interrupted,
-                        backfillSinceUtc
-                    ],
-                    token);
+                        NodeChatMessageCommands.RunEnvelopeWriteMode.InsertIfAbsent,
+                        token);
+                }
 
                 await transaction.CommitAsync(token);
                 return recoveredCount;
             },
             cancellationToken);
+    }
+
+    // Terminal assistant rows inside the retention window that have no run envelope yet, with the model decrypted from their metadata.
+    private static async Task<IReadOnlyList<EnvelopelessRow>> ReadEnvelopelessRowsAsync(NodeChatDbContext dbContext,
+        DbTransaction transaction,
+        long backfillSinceUtc,
+        CancellationToken cancellationToken)
+    {
+        await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+                              SELECT m.message_id, m.conversation_id, m.request_id, m.agent_definition_id, m.status, m.metadata_json
+                              FROM messages m
+                              WHERE m.role = $role
+                                AND m.status IN ($completed, $failed, $cancelled, $interrupted)
+                                AND m.updated_at_utc >= $since
+                                AND NOT EXISTS (
+                                    SELECT 1 FROM agent_execution_logs e
+                                    WHERE e.record_kind = $record_kind AND e.message_id = m.message_id);
+                              """;
+        NodeChatPersistenceSql.AddParameter(command, "$role", AssistantRole);
+        NodeChatPersistenceSql.AddParameter(command, "$completed", NodeChatMessageStatusValues.Completed);
+        NodeChatPersistenceSql.AddParameter(command, "$failed", NodeChatMessageStatusValues.Failed);
+        NodeChatPersistenceSql.AddParameter(command, "$cancelled", NodeChatMessageStatusValues.Cancelled);
+        NodeChatPersistenceSql.AddParameter(command, "$interrupted", NodeChatMessageStatusValues.Interrupted);
+        NodeChatPersistenceSql.AddParameter(command, "$since", backfillSinceUtc);
+        NodeChatPersistenceSql.AddParameter(command, "$record_kind", (int)AgentExecutionLogRecordKind.ChatRunEnvelope);
+        await NodeChatPersistenceSql.OpenIfNeededAsync(command.Connection, cancellationToken);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var rows = new List<EnvelopelessRow>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var messageId = Guid.Parse(reader.GetString(0));
+            var conversationId = Guid.Parse(reader.GetString(1));
+            var metadataJson = await reader.IsDBNullAsync(ordinal: 5, cancellationToken)
+                ? null
+                : dbContext.DecryptMessageMetadata(await reader.GetFieldValueAsync<byte[]>(ordinal: 5, cancellationToken), conversationId, messageId);
+            rows.Add(new EnvelopelessRow
+            {
+                MessageId = messageId,
+                ConversationId = conversationId,
+                RequestId = await reader.IsDBNullAsync(ordinal: 2, cancellationToken) ? null : Guid.Parse(reader.GetString(2)),
+                AgentDefinitionId = await reader.IsDBNullAsync(ordinal: 3, cancellationToken) ? null : Guid.Parse(reader.GetString(3)),
+                Status = reader.GetString(4),
+                Model = NodeChatMetadataSerializer.DeserializeMetadata(metadataJson).Model
+            });
+        }
+
+        return rows;
+    }
+
+    private sealed class EnvelopelessRow
+    {
+        public required Guid MessageId { get; init; }
+
+        public required Guid ConversationId { get; init; }
+
+        public required Guid? RequestId { get; init; }
+
+        public required Guid? AgentDefinitionId { get; init; }
+
+        public required string Status { get; init; }
+
+        public required string? Model { get; init; }
     }
 }

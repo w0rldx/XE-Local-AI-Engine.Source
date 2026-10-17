@@ -1201,7 +1201,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 
 		await waitFor(() =>
 			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
-				body: { webAccessEnabled: true, webSearchSearxngUrl: "", maxMessageRequestTimeoutSeconds: 600 },
+				body: { webAccessEnabled: true, webSearchSearxngUrl: null, maxMessageRequestTimeoutSeconds: 600 },
 			}),
 		);
 	});
@@ -1345,7 +1345,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		expect(generatedMock.saveFn).not.toHaveBeenCalled();
 	});
 
-	it("saves a return to automatic prompt-cache memory as the -1 reset", async () => {
+	it("saves a return to automatic prompt-cache memory as a null clear", async () => {
 		generatedMock.getNodeSettingsOptions.mockReturnValue({
 			queryKey: ["getNodeSettings"],
 			queryFn: async () => ({ ...settingsResponse, llamaChatCacheRamMiB: 2048 }),
@@ -1360,7 +1360,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 
 		await waitFor(() =>
 			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
-				body: { llamaChatCacheRamMiB: -1, maxMessageRequestTimeoutSeconds: 600 },
+				body: { llamaChatCacheRamMiB: null, maxMessageRequestTimeoutSeconds: 600 },
 			}),
 		);
 	});

@@ -105,6 +105,8 @@ export interface NodeChatStreamEventDto {
 	reasoningTokens?: number | null;
 	// Last-round context-window snapshot, present on the terminal assistant event only.
 	contextWindow?: ContextWindowSnapshot | null;
+	// The server `FailureCategory` name of a failed turn, present on the terminal assistant event only.
+	failureCategory?: string | null;
 	// Tool lifecycle fields: present on `tool-call-requested` / `tool-call-completed` events only.
 	toolCallId?: string | null;
 	toolName?: string | null;

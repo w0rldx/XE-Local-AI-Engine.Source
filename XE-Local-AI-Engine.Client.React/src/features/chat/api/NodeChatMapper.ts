@@ -213,6 +213,7 @@ function mapMessage(dto: NodeChatMessageResponseDto): ChatMessageModel {
 		sortOrder: dto.sequence ?? 0,
 		model: dto.model ?? undefined,
 		error: dto.error ?? undefined,
+		failureCategory: dto.failureCategory ?? undefined,
 		origin: toOrigin(dto.origin),
 		inputTokens: dto.inputTokens ?? undefined,
 		outputTokens: dto.outputTokens ?? undefined,

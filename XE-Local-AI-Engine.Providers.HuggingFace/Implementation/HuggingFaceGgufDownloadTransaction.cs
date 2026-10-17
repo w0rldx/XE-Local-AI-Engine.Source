@@ -133,13 +133,16 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
         var weightVerified = false;
         var projectorVerified = false;
         var intentPath = IntentPathFor(finalWeightPath);
+        // ONE total for the whole set (weight + projector): the intent file, so an interrupted row, and both legs' live progress report against it.
+        var setTotalBytes = checked(source.SourceSizeBytes + (source.Projector?.SourceSizeBytes ?? 0));
+        var partCount = source.Projector is null ? 1 : 2;
         try
         {
             await File.WriteAllTextAsync(intentPath,
                 JsonSerializer.Serialize(new InterruptedGgufDownload
                 {
                     ModelName = destination.CanonicalModelName,
-                    TotalBytes = checked(source.SourceSizeBytes + (source.Projector?.SourceSizeBytes ?? 0))
+                    TotalBytes = setTotalBytes
                 }),
                 cancellationToken).ConfigureAwait(false);
             var weightResult = await _downloadClient.DownloadAsync(source.RepoId,
@@ -150,7 +153,7 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
                 weightPartPath,
                 source.SourceSizeBytes,
                 source.SourceSha256,
-                progress,
+                progress is null ? null : new SetProgressAdapter(progress, destination.CanonicalModelName, completedInPriorParts: 0, setTotalBytes, partIndex: 1, partCount),
                 cancellationToken).ConfigureAwait(false);
             var weightHash = await VerifyStagedAsync(temporaryWeightPath,
                 source.SourceSizeBytes,
@@ -174,7 +177,9 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
                     projectorPartPath!,
                     source.Projector.SourceSizeBytes,
                     source.Projector.SourceSha256,
-                    progress: null,
+                    progress is null
+                        ? null
+                        : new SetProgressAdapter(progress, destination.CanonicalModelName, completedInPriorParts: source.SourceSizeBytes, setTotalBytes, partIndex: 2, partCount),
                     cancellationToken).ConfigureAwait(false);
                 projectorHash = await VerifyStagedAsync(temporaryProjectorPath!,
                     source.Projector.SourceSizeBytes,

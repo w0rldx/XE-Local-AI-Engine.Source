@@ -930,7 +930,8 @@ def check_memory_job(s: Session) -> dict:
         )
         return {"memory-job": hard(ok, detail)}
     finally:
-        s.client.put("/node-settings", {"memoryExtractionModelName": previous or ""})
+        # Null clears a model the probe set on a node that had none; "" is refused by the PUT.
+        s.client.put("/node-settings", {"memoryExtractionModelName": previous or None})
         if agent_id:
             s.client.delete(f"/agents/{agent_id}")
 

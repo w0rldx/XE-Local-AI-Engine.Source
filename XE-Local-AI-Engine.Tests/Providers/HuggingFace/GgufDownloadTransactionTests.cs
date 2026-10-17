@@ -6,6 +6,7 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text.Json;
 using NSubstitute;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
@@ -141,6 +142,47 @@ public sealed class GgufDownloadTransactionTests
         AssertEx.Equal(expected: 1, weightRequests);
         AssertEx.Equal(Sha(WeightBytes), Sha(await File.ReadAllBytesAsync(receipt.FinalGgufPath)));
         AssertEx.Empty(Directory.EnumerateFiles(dir.Path, "*.part"));
+    }
+
+    [Test]
+    public async Task Prepare_ProjectorPair_ReportsLiveProgressAgainstTheSameTotalAnInterruptedRowCarries()
+    {
+        // V-03: the live row showed the weight alone while the interrupted row showed weight + projector. Both now report the set.
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        var projectorFails = true;
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((request, _) =>
+        {
+            if (!request.RequestUri!.AbsolutePath.Contains("mmproj", StringComparison.Ordinal))
+            {
+                return Download(WeightBytes);
+            }
+
+            return projectorFails ? new HttpResponseMessage(HttpStatusCode.NotFound) : Download(ProjectorBytes);
+        });
+        using var http = new HttpClient(handler);
+        using var registry = Infra.Registry(options);
+        var transaction = Transaction(http, Discovery(includeProjector: true), registry, options);
+        var source = await transaction.ResolveAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId,
+            Quant = Infra.Quant
+        }, CancellationToken.None);
+        var destination = Destination(withProjector: true);
+        long setTotal = WeightBytes.Length + ProjectorBytes.Length;
+        var reports = new List<PullProgress>();
+        var progress = new RecordingProgress(reports);
+
+        _ = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => transaction.PrepareAsync(source, destination, progress, CancellationToken.None));
+        AssertEx.Equal(setTotal, transaction.ListInterrupted().Single().TotalBytes);
+
+        projectorFails = false;
+        _ = await transaction.PrepareAsync(source, destination, progress, CancellationToken.None);
+
+        AssertEx.NotEmpty(reports);
+        AssertEx.True(reports.All(report => report.TotalBytes == setTotal), "every report, on either leg, carries the weight + projector total.");
+        AssertEx.True(reports.Any(static report => report.PartIndex == 2), "the projector leg reports progress.");
+        AssertEx.Equal(setTotal, reports[^1].CompletedBytes);
     }
 
     [Test]
@@ -570,5 +612,23 @@ public sealed class GgufDownloadTransactionTests
 
         public override void Write(byte[] buffer, int offset, int count) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class RecordingProgress : IProgress<PullProgress>
+    {
+        private readonly List<PullProgress> _reports;
+
+        public RecordingProgress(List<PullProgress> reports)
+        {
+            _reports = reports;
+        }
+
+        public void Report(PullProgress value)
+        {
+            lock (_reports)
+            {
+                _reports.Add(value);
+            }
+        }
     }
 }

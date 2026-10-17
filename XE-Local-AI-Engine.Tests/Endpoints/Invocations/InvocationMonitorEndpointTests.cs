@@ -30,7 +30,7 @@ public sealed class InvocationMonitorEndpointTests
         var currentInvocationId = Guid.Parse("11111111-1111-1111-1111-111111111111");
         var historyInvocationId = Guid.Parse("22222222-2222-2222-2222-222222222222");
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        dispatcher.CurrentInvocation.Returns(new InvocationState
+        var currentState = new InvocationState
         {
             InvocationId = currentInvocationId,
             ConversationId = Guid.Parse("33333333-3333-3333-3333-333333333333"),
@@ -46,6 +46,11 @@ public sealed class InvocationMonitorEndpointTests
                 Description = "Approve tool call",
                 RequestedAt = FrozenNow
             }
+        };
+        dispatcher.GetLiveSnapshot().Returns(new InvocationLiveSnapshot
+        {
+            Current = currentState,
+            Live = []
         });
         var history = Substitute.For<IInvocationHistory>();
         history.Capacity.Returns(50);
@@ -94,12 +99,17 @@ public sealed class InvocationMonitorEndpointTests
     [Arguments(FailureCategory.ModelNotInstalled, "The selected model is not installed or not reachable. Install it or choose another model.")]
     [Arguments(FailureCategory.ModelLoadFailed, "The model could not be loaded or run on the provider.")]
     [Arguments(FailureCategory.Timeout, "The operation timed out.")]
+    [Arguments(FailureCategory.InsufficientCapacity, "Not enough free memory to load the model next to the models already loaded or loading.")]
     [Arguments(FailureCategory.CallBudgetReached, "Stopped at the provider-call budget; a work session continues on its next step.")]
     [Arguments(FailureCategory.ProviderUnreachable, "Invocation ended with a failure. See local logs for details.")]
     public async Task GetInvocations_WhenAnEntryFailed_ShowsTheFixedSentenceForItsCategory(FailureCategory category, string expectedError)
     {
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        dispatcher.CurrentInvocation.Returns((InvocationState?)null);
+        dispatcher.GetLiveSnapshot().Returns(new InvocationLiveSnapshot
+        {
+            Current = null,
+            Live = []
+        });
         var history = Substitute.For<IInvocationHistory>();
         history.Capacity.Returns(50);
         history.Snapshot().Returns([
@@ -137,7 +147,7 @@ public sealed class InvocationMonitorEndpointTests
     public async Task GetInvocations_WhenParkedOnQuestion_ReportsPendingQuestionWithoutItsContent()
     {
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        dispatcher.CurrentInvocation.Returns(new InvocationState
+        var currentState = new InvocationState
         {
             InvocationId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
             ConversationId = Guid.Parse("33333333-3333-3333-3333-333333333333"),
@@ -175,6 +185,11 @@ public sealed class InvocationMonitorEndpointTests
                 ],
                 RequestedAt = FrozenNow
             }
+        };
+        dispatcher.GetLiveSnapshot().Returns(new InvocationLiveSnapshot
+        {
+            Current = currentState,
+            Live = []
         });
         var history = Substitute.For<IInvocationHistory>();
         history.Capacity.Returns(50);
@@ -198,7 +213,11 @@ public sealed class InvocationMonitorEndpointTests
     public async Task GetInvocations_WhenIdle_ReturnsEmptyCurrentAndHistory()
     {
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        dispatcher.CurrentInvocation.Returns((InvocationState?)null);
+        dispatcher.GetLiveSnapshot().Returns(new InvocationLiveSnapshot
+        {
+            Current = null,
+            Live = []
+        });
         var history = Substitute.For<IInvocationHistory>();
         history.Capacity.Returns(50);
         history.Snapshot().Returns([]);
@@ -212,6 +231,54 @@ public sealed class InvocationMonitorEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Null(monitor.Current);
         AssertEx.Empty(monitor.History);
+    }
+
+    [Test]
+    public async Task GetInvocations_WithAParkedAndARunningTurn_ListsBothLive_AndMapsTheSnapshotsCurrent()
+    {
+        var parkedInvocationId = Guid.Parse("55555555-5555-5555-5555-555555555555");
+        var runningInvocationId = Guid.Parse("66666666-6666-6666-6666-666666666666");
+        var parked = LiveState(parkedInvocationId);
+        parked.PendingApproval = new InvocationApprovalState
+        {
+            RequestId = "approval-1",
+            Description = "Approve tool call",
+            RequestedAt = FrozenNow
+        };
+        var running = LiveState(runningInvocationId);
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        dispatcher.GetLiveSnapshot().Returns(new InvocationLiveSnapshot
+        {
+            Current = running,
+            Live = [parked, running]
+        });
+        var history = Substitute.For<IInvocationHistory>();
+        history.Capacity.Returns(50);
+        history.Snapshot().Returns([]);
+        await using var factory = CreateFactory(dispatcher, history);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/invocations");
+        using var response = await client.SendAsync(request);
+        var monitor = await ReadJsonAsync<InvocationMonitorResponse>(response);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(runningInvocationId, AssertEx.NotNull(monitor.Current).InvocationId);
+        AssertEx.Equal(expected: 2, monitor.Live.Count);
+        AssertEx.ContainsSingle(monitor.Live, row => row.InvocationId == parkedInvocationId && row.HasPendingApproval);
+        AssertEx.ContainsSingle(monitor.Live, row => row.InvocationId == runningInvocationId && !row.HasPendingApproval);
+    }
+
+    private static InvocationState LiveState(Guid invocationId)
+    {
+        return new InvocationState
+        {
+            InvocationId = invocationId,
+            ConversationId = Guid.NewGuid(),
+            Status = InvocationStatus.Running,
+            StartedAt = FrozenNow.AddSeconds(-10),
+            LastUpdatedAt = FrozenNow
+        };
     }
 
     [Test]

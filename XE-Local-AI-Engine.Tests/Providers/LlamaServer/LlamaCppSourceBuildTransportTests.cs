@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
@@ -193,7 +194,7 @@ public sealed class LlamaCppSourceBuildTransportTests
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/model-fit/llamacpp/source-build")
         {
-            Content = new StringContent("{\"backend\":\"cpu\",\"source\":\"official\"}", System.Text.Encoding.UTF8, "application/json")
+            Content = new StringContent("{\"backend\":\"cpu\",\"source\":\"official\"}", Encoding.UTF8, "application/json")
         };
         factory.AddNodeBearerToken(request);
 

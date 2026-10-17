@@ -56,12 +56,19 @@ public sealed class GgufDownloadCoordinatorRoutingTests
     }
 
     [Test]
-    public async Task Restart_ListsADownloadItInterruptedAsFailedWithAReason_AndAStartResumesIt()
+    public async Task Restart_ListsADownloadItInterruptedAsFailedWithAReason_AndAStartResumesItInPlaceOfThatRow()
     {
         var canonical = GgufModelName.Format(Repo, Quant);
         var store = new ProvisioningDownloadTransaction
         {
-            Interrupted = [new InterruptedGgufDownload { ModelName = canonical, TotalBytes = 42 }]
+            Interrupted =
+            [
+                new InterruptedGgufDownload
+                {
+                    ModelName = canonical,
+                    TotalBytes = 42
+                }
+            ]
         };
         var coordinator = BuildCoordinator(store, new InMemoryCoordinatedModelProviderMapStore());
 
@@ -81,6 +88,10 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         await WaitForPhaseAsync(coordinator, ticket.ModelName, GgufDownloadPhase.Completed);
 
         AssertEx.Equal(GgufDownloadPhase.Completed, coordinator.GetStatus(canonical)!.Phase);
+        // V-03: the resumed download supersedes the Interrupted row instead of being listed beside it.
+        var rows = coordinator.ListStatuses();
+        AssertEx.Equal(expected: 1, rows.Count);
+        AssertEx.Equal(GgufDownloadPhase.Completed, rows[0].Phase);
     }
 
     [Test]

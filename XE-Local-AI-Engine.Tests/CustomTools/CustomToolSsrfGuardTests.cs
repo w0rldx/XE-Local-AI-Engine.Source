@@ -96,7 +96,8 @@ public sealed class CustomToolSsrfGuardTests
     [Test]
     public async Task ValidateRequestUrl_HostNotInAllowlist_Rejects()
     {
-        AssertEx.Throws<CustomToolExecutionException>(() => CustomToolSsrfGuard.ValidateRequestUrl(new Uri("https://evil.example.com/"), ["good.example.com"], hostIsParameterized: true, privateHosts: []));
+        AssertEx.Throws<CustomToolExecutionException>(() =>
+            CustomToolSsrfGuard.ValidateRequestUrl(new Uri("https://evil.example.com/"), ["good.example.com"], hostIsParameterized: true, privateHosts: []));
         await Task.CompletedTask;
     }
 

@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -47,6 +48,8 @@ public sealed class NodeChatServiceRegistrationTests : IDisposable
         AssertEx.NotNull(persistence);
         AssertEx.NotNull(restartRecovery);
         AssertEx.NotNull(timeProvider);
+        // Registered, or a thin run envelope silently stays booked under "unknown" (R5-07); lazy, so resolving it builds nothing yet.
+        AssertEx.NotNull(provider.GetService<Lazy<IUsageProviderResolver>>());
         AssertEx.NotEqual(firstContextId, secondContextId, "Registered writer should resolve a fresh NodeChatDbContext for each persistence operation.");
     }
 

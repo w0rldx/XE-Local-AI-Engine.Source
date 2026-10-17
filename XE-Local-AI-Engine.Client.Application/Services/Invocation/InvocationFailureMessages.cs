@@ -17,6 +17,9 @@ public static class InvocationFailureMessages
     /// <summary>The sentence for <see cref="FailureCategory.ModelLoadFailed" />.</summary>
     public const string ModelLoadFailed = "The model could not be loaded or run on the provider.";
 
+    /// <summary>The sentence for <see cref="FailureCategory.InsufficientCapacity" />.</summary>
+    public const string InsufficientCapacity = "Not enough free memory to load the model next to the models already loaded or loading.";
+
     /// <summary>The sentence for a generic <see cref="FailureCategory.Timeout" />.</summary>
     public const string TimedOut = "The operation timed out.";
 

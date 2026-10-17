@@ -65,7 +65,12 @@ public sealed class MxcProbeTests
         {
             Tier = IsolationTier.AppContainerDacl,
             Warnings = [],
-            Probes = absent == "ProbesMissing" ? null! : new ProbeFacts { UiCapabilities = null! },
+            Probes = absent == "ProbesMissing"
+                ? null!
+                : new ProbeFacts
+                {
+                    UiCapabilities = null!
+                },
         };
 
         var result = MxcProbe.Measure(Runtime(probe));
@@ -106,7 +111,12 @@ public sealed class MxcProbeTests
             nameof(UiCapabilitySupport.CanBlockGlobalUiNamespace), nameof(UiCapabilitySupport.CanBlockDesktopSwitching)
         ];
         var produced = flags.Select(flag => MxcProbe.Measure(Runtime(Probe(IsolationTier.AppContainerDacl, ui: UiBlockingExcept(flag)))))
-                            .Append(MxcProbe.Measure(Runtime(new ProbeOutput { Tier = IsolationTier.AppContainerDacl, Warnings = [], Probes = null! })))
+                            .Append(MxcProbe.Measure(Runtime(new ProbeOutput
+                            {
+                                Tier = IsolationTier.AppContainerDacl,
+                                Warnings = [],
+                                Probes = null!
+                            })))
                             .SelectMany(static result => result.Warnings.Append(result.Reason ?? string.Empty));
         var constants = typeof(MxcProbe).GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
                                         .Where(static field => field.FieldType == typeof(string))

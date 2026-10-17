@@ -143,6 +143,7 @@ export function ChatMessageRow({
 			feedbackPending={pendingFeedbackMessageId === message.id}
 			onSubmitFeedback={onSubmitFeedback}
 			reasoningEffort={reasoningEffort}
+			failureCategory={(isStreamingTarget ? scopedStreamingMessage?.failureCategory : undefined) ?? message.failureCategory}
 			isWorkSessionConversation={isWorkSessionConversation}
 			bubbleStatus={isStreamingTarget && isStatusInBubble ? streamingIndicator : undefined}
 			footer={isStreamingTarget && !isStatusInBubble ? streamingIndicator : undefined}

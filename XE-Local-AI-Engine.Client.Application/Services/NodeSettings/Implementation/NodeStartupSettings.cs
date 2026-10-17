@@ -73,8 +73,8 @@ public sealed class NodeStartupSettings
 
         // The catalog cache lives under the data directory proper, never under the legacy content-root fallback above.
         var catalogListsApplications = externalAppsSwitch
-                                        && ExternalAppStartupCatalog.ListsApplications(dataRoot,
-                                            configuration[$"{ExternalAppCatalogOptions.SectionName}:{nameof(ExternalAppCatalogOptions.RefreshUrl)}"]);
+                                       && ExternalAppStartupCatalog.ListsApplications(dataRoot,
+                                           configuration[$"{ExternalAppCatalogOptions.SectionName}:{nameof(ExternalAppCatalogOptions.RefreshUrl)}"]);
 
         return new NodeStartupSettings
         {

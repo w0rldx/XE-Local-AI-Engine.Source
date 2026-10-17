@@ -52,7 +52,14 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
         else
         {
             DockPanel.SetDock(top, Dock.Top);
-            Content = new DockPanel { Children = { top, _webView } };
+            Content = new DockPanel
+            {
+                Children =
+                {
+                    top,
+                    _webView
+                }
+            };
         }
 
         _webView.Source = new Uri(options.Origin, path);

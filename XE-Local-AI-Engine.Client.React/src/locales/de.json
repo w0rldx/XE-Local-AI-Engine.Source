@@ -188,6 +188,8 @@
 			"queuedBehindTrainingRunText": "Diese Nachricht wartete auf einen laufenden Trainingslauf.",
 			"queuedBehindWorkSession": "Wartet auf eine Arbeitssitzung",
 			"queuedBehindWorkSessionText": "Diese Nachricht wurde hinter einem laufenden Schritt einer Arbeitssitzung eingereiht.",
+			"resumeQueuedBehindTurn": "Wartet auf eine andere Antwort",
+			"resumeQueuedBehindTurnText": "Nach Ihrer Antwort wurde diese Antwort hinter einer anderen laufenden Antwort eingereiht.",
 			"stoppedWhileThinkingText": "Das Modell hat beim Nachdenken aufgehört, bevor es antworten konnte; seine Gedanken bleiben oben erhalten.",
 			"toolCallAsTextText": "Das Modell hat einen Tool-Aufruf als Text geschrieben, statt das Tool aufzurufen. Der Aufruf wurde daher nicht ausgeführt, und es gibt keine Antwort.",
 			"toolCallInReasoningText": "Das Modell hat versucht, ein Tool innerhalb seiner Überlegungen aufzurufen, wo der Aufruf nicht ausgeführt werden kann, und hat ohne Antwort aufgehört.",
@@ -303,6 +305,7 @@
 		"hide": "Ausblenden",
 		"keepEditing": "Weiter bearbeiten",
 		"loading": "Lädt...",
+		"loadingRateLimited": "Zu viele Anfragen an den Knoten. Neuer Versuch in {{seconds}} s.",
 		"noData": "Keine Einträge gefunden",
 		"ok": "Ok",
 		"pagination": {
@@ -2125,10 +2128,27 @@
 				"lockedTitle": "Verschlüsselter Chat gesperrt"
 			},
 			"error": {
+				"categories": {
+					"InsufficientCapacity": "Derzeit ist nicht genug freier Speicher vorhanden, um dieses Modell zu laden.",
+					"ModelLoadFailed": "Das Modell konnte nicht geladen werden.",
+					"ModelUnavailable": "Das ausgewählte Modell ist nicht installiert oder nicht erreichbar.",
+					"Timeout": "Die Antwort hat das Zeitlimit überschritten."
+				},
+				"categoryLabels": {
+					"InsufficientCapacity": "Kapazität nicht ausreichend",
+					"ModelLoadFailed": "Laden des Modells fehlgeschlagen",
+					"ModelNotInstalled": "Modell nicht installiert",
+					"ModelUnavailable": "Modell nicht verfügbar",
+					"ProviderAuthFailed": "Anmeldung beim Anbieter fehlgeschlagen",
+					"ProviderRateLimited": "Ratenlimit des Anbieters",
+					"ProviderUnreachable": "Anbieter nicht erreichbar",
+					"Timeout": "Zeitüberschreitung"
+				},
 				"clientWatchdogNoFirstChunk": "Verbindungsüberwachung: In diesem Browser ist nie eine Antwort eingetroffen.",
 				"clientWatchdogStall": "Verbindungsüberwachung: In diesem Browser treffen keine Antwortdaten mehr ein.",
 				"goToModels": "Zu den Modellen",
 				"modelNotInstalled": "Kein Chat-Modell installiert. Laden Sie ein GGUF-Modell herunter, um zu chatten.",
+				"providerError": "Der Modellanbieter hat die Anfrage abgelehnt oder nicht beantwortet.",
 				"title": "Antwort fehlgeschlagen"
 			},
 			"feedback": {
@@ -2350,6 +2370,7 @@
 				"reject": "Ablehnen",
 				"title": "Tool-Freigabe erforderlich"
 			},
+			"turnParked": "Eine Antwort in dieser Unterhaltung wartet auf Ihre Eingabe. Beantworten Sie die wartende Karte und senden Sie dann erneut.",
 			"unknownError": "Unbekannter Fehler",
 			"waitingForResponse": "Warten auf Antwort",
 			"waitingForStreamedResponse": "Warten auf gestreamte Antwort",
@@ -5335,6 +5356,9 @@
 					"title": "Aufrufverlauf"
 				},
 				"idle": "Inaktiv",
+				"live": {
+					"title": "Weiterer laufender Aufruf"
+				},
 				"loadError": "Die Daten der Aufrufüberwachung konnten nicht geladen werden.",
 				"loading": "Aufrufüberwachung wird geladen…",
 				"status": {
@@ -8112,6 +8136,9 @@
 					"total": "Gesamt"
 				},
 				"empty": "Für diesen Zeitraum wurde keine Modellnutzung erfasst.",
+				"notReported": "Nicht gemeldet",
+				"runsNotReported_one": "{{count}} Lauf ohne Angabe",
+				"runsNotReported_other": "{{count}} Läufe ohne Angabe",
 				"title": "Nutzung nach Modell"
 			},
 			"providers": {

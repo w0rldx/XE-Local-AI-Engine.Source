@@ -2672,6 +2672,11 @@ export const nodeChangePasswordMutation = (
 	return mutationOptions;
 };
 
+/**
+ * Signs the operator in and issues an access token.
+ *
+ * Cookie mode (default) sets the HttpOnly node_rt refresh cookie. With returnRefreshToken: true (non-browser clients) the body also carries refreshToken and refreshTokenExpiresAtUtc and no cookie is written; refresh it through auth/refresh with the X-XE-Refresh-Token header.
+ */
 export const nodeLoginMutation = (
 	options?: Partial<Options<NodeLoginData>>,
 ): UseMutationOptions<NodeLoginResponse, AxiosError<NodeLoginError>, Options<NodeLoginData>> => {
@@ -2704,6 +2709,11 @@ export const nodeLogoutMutation = (
 	return mutationOptions;
 };
 
+/**
+ * Rotates the refresh token and issues a new access token.
+ *
+ * Reads the node_rt cookie. Only when no cookie is sent, a non-browser client may send its refresh token in the X-XE-Refresh-Token header; that answer carries the rotated refreshToken and refreshTokenExpiresAtUtc in the body and never sets or clears a cookie.
+ */
 export const nodeRefreshMutation = (
 	options?: Partial<Options<NodeRefreshData>>,
 ): UseMutationOptions<NodeRefreshResponse, AxiosError<DefaultError>, Options<NodeRefreshData>> => {

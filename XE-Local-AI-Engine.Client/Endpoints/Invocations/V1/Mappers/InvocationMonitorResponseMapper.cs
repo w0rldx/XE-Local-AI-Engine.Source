@@ -10,14 +10,17 @@ internal static class InvocationMonitorResponseMapper
     private const string FailedOperatorMessage = "Invocation ended with a failure. See local logs for details.";
 
     public static InvocationMonitorResponse ToResponse(InvocationState? current,
+        IReadOnlyList<InvocationState> live,
         IReadOnlyList<InvocationHistoryEntry> history,
         int historyCapacity)
     {
+        ArgumentNullException.ThrowIfNull(live);
         ArgumentNullException.ThrowIfNull(history);
 
         return new InvocationMonitorResponse
         {
             Current = current?.ToResponse(),
+            Live = live.Select(ToResponse).ToArray(),
             History = history.Select(ToResponse).ToArray(),
             HistoryCapacity = historyCapacity
         };
@@ -82,6 +85,7 @@ internal static class InvocationMonitorResponseMapper
             FailureCategory.ModelUnavailable or FailureCategory.ModelNotInstalled => InvocationFailureMessages.ModelUnavailable,
             FailureCategory.ModelLoadFailed => InvocationFailureMessages.ModelLoadFailed,
             FailureCategory.Timeout => InvocationFailureMessages.TimedOut,
+            FailureCategory.InsufficientCapacity => InvocationFailureMessages.InsufficientCapacity,
             FailureCategory.CallBudgetReached => InvocationFailureMessages.CallBudgetReached,
             _ => FailedOperatorMessage
         };

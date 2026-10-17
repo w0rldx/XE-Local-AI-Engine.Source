@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests.GraphWorkflows;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
@@ -27,6 +28,6 @@ public sealed class NodeChatModelValidationTests
 
         var model = context.Model;
 
-        AssertEx.NotNull(model.FindEntityType(typeof(Entities.GraphWorkflowRun)), "the run entity must be in the model this test validated.");
+        AssertEx.NotNull(model.FindEntityType(typeof(GraphWorkflowRun)), "the run entity must be in the model this test validated.");
     }
 }

@@ -272,11 +272,11 @@ public sealed partial class WorkerEventDispatcher
         {
             lock (_syncRoot)
             {
-                if (CurrentInvocation?.InvocationId == payload.InvocationId)
+                if (FindState(payload.InvocationId) is { } state)
                 {
                     payload = payload with
                     {
-                        ContentOffset = CurrentInvocation.ContentAccumulator.Length
+                        ContentOffset = state.ContentAccumulator.Length
                     };
                 }
             }
@@ -350,6 +350,31 @@ public sealed partial class WorkerEventDispatcher
         return Task.CompletedTask;
     }
 
+    public Task ReportPromptTimedOutAsync(Guid invocationId, string requestId)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(requestId);
+
+        // A timed-out card resumes the turn, so its pending state must go now, not at the terminal: the parked-turn guard
+        // and the monitor read it as "waiting for your answer".
+        UpdateInvocation(invocationId,
+            state =>
+            {
+                if (string.Equals(state.PendingApproval?.RequestId, requestId, StringComparison.Ordinal))
+                {
+                    state.PendingApproval = null;
+                }
+
+                if (string.Equals(state.PendingQuestion?.RequestId, requestId, StringComparison.Ordinal))
+                {
+                    state.PendingQuestion = null;
+                }
+
+                return state;
+            });
+
+        return Task.CompletedTask;
+    }
+
     public Task DispatchUserQuestionAnsweredAsync(UserQuestionAnsweredEvent evt)
     {
         ArgumentNullException.ThrowIfNull(evt);
@@ -359,14 +384,20 @@ public sealed partial class WorkerEventDispatcher
 
         _invocationRunner.ResolveUserQuestionResult(evt);
 
-        UpdateCurrentInvocation(state =>
-        {
-            if (state.PendingQuestion is not null
-                && string.Equals(state.PendingQuestion.RequestId, evt.RequestId, StringComparison.Ordinal))
+        var target = UpdateMatching(state => string.Equals(state.PendingQuestion?.RequestId, evt.RequestId, StringComparison.Ordinal),
+            state =>
             {
-                state.PendingQuestion = null;
-            }
-        });
+                if (state.PendingQuestion is not null
+                    && string.Equals(state.PendingQuestion.RequestId, evt.RequestId, StringComparison.Ordinal))
+                {
+                    state.PendingQuestion = null;
+                }
+            });
+
+        if (target is null)
+        {
+            _logger.LogInformation("User-question answers arrived for request {RequestId}, which no live invocation is waiting on; nothing was updated.", evt.RequestId);
+        }
 
         return Task.CompletedTask;
     }

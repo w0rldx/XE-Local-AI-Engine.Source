@@ -7,6 +7,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -183,6 +184,48 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         AssertEx.Equal("thinking after", loadedParts[2].Text);
         // The flattened Reasoning is still persisted for backward-compat + token counts.
         AssertEx.Equal("thinking before\nthinking after", assistant.Reasoning);
+    }
+
+    [Test]
+    public async Task TerminalizeAssistantMessageAsync_WithAFailureCategory_RoundTripsItThroughTheEncryptedBlob()
+    {
+        await using var provider = await BuildProviderAsync("failure-category-roundtrip.sqlite");
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Failure",
+            UserId = "node",
+            CreatedAtUtc = 2000
+        });
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = correlation.MessageId,
+            RequestId = correlation.RequestId,
+            CreatedAtUtc = 2001
+        });
+
+        var returned = await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = correlation,
+            Status = NodeChatMessageStatusValues.Failed,
+            UpdatedAtUtc = 2002,
+            Error = "Insufficient capacity for 'big' (Chat).",
+            FailureCategory = FailureCategory.InsufficientCapacity
+        });
+
+        // The returned row is what the pump builds the LIVE terminal event from, so it must carry the category too.
+        AssertEx.Equal(FailureCategory.InsufficientCapacity, returned.FailureCategory);
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId));
+        var assistant = loaded.Messages.Single(message => message.MessageId == correlation.MessageId);
+        AssertEx.Equal(FailureCategory.InsufficientCapacity, assistant.FailureCategory);
+        AssertEx.Equal("Insufficient capacity for 'big' (Chat).", assistant.Error);
     }
 
     [Test]
@@ -702,6 +745,41 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
             Trimmed = null
         });
         AssertEx.Null(NodeChatMetadataSerializer.DeserializeMetadata("""{"model":"llama","inputCount":5}""").ContextWindow);
+    }
+
+    [Test]
+    public void Metadata_FailureCategory_RoundTripsByName_AndALegacyOrUnknownValueLoadsAsNull()
+    {
+        var json = NodeChatMetadataSerializer.Decode(AssertEx.NotNull(NodeChatMetadataSerializer.SerializeMetadata(null, null, null, null, null, null, null,
+            failureCategory: FailureCategory.InsufficientCapacity)));
+
+        AssertEx.Contains(json, "\"failureCategory\":\"InsufficientCapacity\"");
+        AssertEx.Equal(FailureCategory.InsufficientCapacity, NodeChatMetadataSerializer.ParseFailureCategory(NodeChatMetadataSerializer.DeserializeMetadata(json).FailureCategory));
+        AssertEx.Null(NodeChatMetadataSerializer.DeserializeMetadata("""{"model":"llama","inputCount":5}""").FailureCategory);
+        foreach (var stored in new[]
+                 {
+                     "\"SomeFutureCategory\"",
+                     "\"15\"",
+                     "\"Timeout, Cancelled\"",
+                     "\" Timeout\"",
+                     "\"timeout\""
+                 })
+        {
+            var parsed = NodeChatMetadataSerializer.DeserializeMetadata($$"""{"model":"llama","failureCategory":{{stored}}}""");
+            AssertEx.Null(NodeChatMetadataSerializer.ParseFailureCategory(parsed.FailureCategory), stored);
+        }
+    }
+
+    // A JSON number in the blob must not fail the whole message read: the other fields survive and the category is null.
+    [Test]
+    public void Metadata_FailureCategoryStoredAsANumber_ReadsAsNullAndKeepsTheOtherFields()
+    {
+        var metadata = NodeChatMetadataSerializer.DeserializeMetadata("""{"model":"llama","inputCount":5,"reasoning":"why","failureCategory":15}""");
+
+        AssertEx.Equal("llama", metadata.Model);
+        AssertEx.Equal(expected: 5, metadata.InputCount);
+        AssertEx.Equal("why", metadata.Reasoning);
+        AssertEx.Null(NodeChatMetadataSerializer.ParseFailureCategory(metadata.FailureCategory));
     }
 
     [Test]
@@ -1691,7 +1769,10 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         });
 
         var summary = (await service.ListConversationsAsync(new NodeChatListConversationsRequest())).Single();
-        var withArchived = (await service.ListConversationsAsync(new NodeChatListConversationsRequest { IncludeArchived = true })).Single();
+        var withArchived = (await service.ListConversationsAsync(new NodeChatListConversationsRequest
+        {
+            IncludeArchived = true
+        })).Single();
 
         AssertEx.Equal(NodeChatMessageStatusValues.Failed, failed.Status);
         AssertEx.Equal("what is the weather", summary.LastMessagePreview);
@@ -3785,7 +3866,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
 
     private static NodeChatPersistenceService CreateService(ServiceProvider provider)
     {
-        return new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        return new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
     }
 
     private static async Task<IReadOnlyList<AgentRunEnvelopeRecord>> ReadRunEnvelopesAsync(ServiceProvider provider, Guid conversationId)

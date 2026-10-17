@@ -102,8 +102,7 @@ public sealed class ManagedPythonStatusService
 
         // The cause, when the provider knows it, replaces the list of every possible one (N-62).
         var cause = _sandbox.FilesystemIsolationUnavailableReason;
-        return ComputeUnsupported(
-            SandboxBoundaryRemedy.IsExecutionPreviewsDisabled(cause) ? ManagedPythonReasonCode.ExecutionPreviewsDisabled : ManagedPythonReasonCode.IsolationUnavailable,
+        return ComputeUnsupported(SandboxBoundaryRemedy.IsExecutionPreviewsDisabled(cause) ? ManagedPythonReasonCode.ExecutionPreviewsDisabled : ManagedPythonReasonCode.IsolationUnavailable,
             $"This node cannot isolate the compute sandbox filesystem{(cause is null ? "" : $" ({cause})")}. {SandboxBoundaryRemedy.ForFilesystemIsolationCause(cause)}");
     }
 

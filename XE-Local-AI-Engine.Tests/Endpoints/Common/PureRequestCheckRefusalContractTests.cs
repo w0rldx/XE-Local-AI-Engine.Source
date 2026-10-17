@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Endpoints.Common;
 
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -391,15 +392,17 @@ public sealed class PureRequestCheckRefusalContractTests
 
         using var request = Authorized(factory,
             new HttpMethod(method),
-            ApiPrefix + string.Format(System.Globalization.CultureInfo.InvariantCulture, route, Guid.NewGuid()),
-            new { });
+            ApiPrefix + string.Format(CultureInfo.InvariantCulture, route, Guid.NewGuid()),
+            new
+            {
+            });
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var errors = document.RootElement.GetProperty("errors");
         AssertEx.True(errors.EnumerateArray().Any(error => string.Equals(error.GetProperty("name").GetString(), field, StringComparison.Ordinal)
-                                                          && error.GetProperty("reason").GetString()!.StartsWith(field + " is required", StringComparison.Ordinal)),
+                                                           && error.GetProperty("reason").GetString()!.StartsWith(field + " is required", StringComparison.Ordinal)),
             $"The refusal names {field}: {errors}");
     }
 

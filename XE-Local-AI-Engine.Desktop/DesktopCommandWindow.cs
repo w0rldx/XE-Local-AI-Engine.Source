@@ -25,7 +25,12 @@ internal sealed class DesktopCommandWindow : IAsyncDisposable
         _shown = shown;
         _hidden = hidden;
         // A borderless window has no title bar, so this strip is the only place to drag it from.
-        var grip = new Border { Height = 8, Background = Brushes.Gray, Cursor = new Cursor(StandardCursorType.SizeAll) };
+        var grip = new Border
+        {
+            Height = 8,
+            Background = Brushes.Gray,
+            Cursor = new Cursor(StandardCursorType.SizeAll)
+        };
         _window = new DesktopWindow(options, devTools, Route, grip)
         {
             Topmost = true,
@@ -66,7 +71,8 @@ internal sealed class DesktopCommandWindow : IAsyncDisposable
     }
 
     /// <summary>The pure show/hide decision: the hotkey toggles, a menu entry always shows.</summary>
-    internal static bool ShouldShow(bool visible, bool toggle) => !(visible && toggle);
+    internal static bool ShouldShow(bool visible, bool toggle) =>
+        !(visible && toggle);
 
     internal void Show(bool toggle)
     {

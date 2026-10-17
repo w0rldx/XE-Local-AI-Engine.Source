@@ -38,5 +38,6 @@ internal sealed class DesktopOverlayBounds
             : null;
     }
 
-    public override string ToString() => string.Create(CultureInfo.InvariantCulture, $"{X},{Y},{Width},{Height}");
+    public override string ToString() =>
+        string.Create(CultureInfo.InvariantCulture, $"{X},{Y},{Width},{Height}");
 }

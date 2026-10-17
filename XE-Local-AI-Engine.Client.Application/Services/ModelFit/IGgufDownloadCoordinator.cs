@@ -40,7 +40,7 @@ public interface IGgufDownloadCoordinator
     GgufDownloadStatus? GetStatus(Guid operationId) =>
         null;
 
-    /// <summary>Returns a snapshot of all tracked download statuses (in-flight and recently finished).</summary>
+    /// <summary>Returns a snapshot of the newest tracked download status per model (in-flight or recently finished).</summary>
     IReadOnlyList<GgufDownloadStatus> ListStatuses();
 }
 

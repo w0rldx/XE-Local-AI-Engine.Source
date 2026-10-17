@@ -69,7 +69,7 @@ public sealed class BenchmarkPairwiseFitter : IBenchmarkPairwiseFitter
         // Only the planned pairs are fitted: a comparison the current plan no longer forms (one paired across task
         // items before pairing respected them) answered two different questions and must not move a score.
         var planned = plan.Slots.ToDictionary(static slot => new UnorderedPair(slot.RunAId, slot.RunBId),
-                                                  static slot => new TaskCase(slot.TaskCaseId, slot.TaskInputHash));
+            static slot => new TaskCase(slot.TaskCaseId, slot.TaskInputHash));
         var succeeded = cohort.Comparisons.Where(comparison => comparison.Status == BenchmarkJudgeAttemptStatus.Succeeded
                                                                && comparison.Verdict is not null
                                                                && planned.ContainsKey(new UnorderedPair(comparison.RunAId, comparison.RunBId)))

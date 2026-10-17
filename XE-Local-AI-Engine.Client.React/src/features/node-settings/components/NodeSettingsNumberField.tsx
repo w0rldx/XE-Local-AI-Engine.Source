@@ -33,7 +33,7 @@ interface Props {
 	readonly disabled?: boolean;
 	readonly testId: string;
 	// For a field the node may leave unset: what it uses then. Blank shows it as the placeholder, and a set value gets a
-	// "Use default" action that blanks the field (the save sends the reset sentinel).
+	// "Use default" action that blanks the field (the save sends null, which clears it).
 	readonly shippedDefault?: number;
 }
 

@@ -149,7 +149,14 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
             {
                 throw new BenchmarkExecutionException(CrossCaseMessage);
             }
+
             var snapshot = _snapshots.Deserialize(runA.RuntimeSnapshotJson.Span);
+
+            // The item's own reference answer, exactly as pointwise judging resolves it; only the reference, because a verifier override has no meaning for a pairwise verdict.
+            policy = policy with
+            {
+                ReferenceAnswer = BenchmarkTaskItemService.ResolveReferenceAnswer(policy, await BenchmarkTaskItemService.FindTaskItemAsync(_store, runA, token))
+            };
 
             // HALF the judge window each, because both answers plus the task, the reference answer and the verdict have to fit one context.
             // A long answer is therefore cut harder here than it is pointwise — itself a bias, so the cut is RECORDED and a cohort too full of them refuses to aggregate.

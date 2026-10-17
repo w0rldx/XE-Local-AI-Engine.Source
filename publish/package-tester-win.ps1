@@ -735,6 +735,12 @@ dotnet publish XE-Local-AI-Engine.Desktop\XE-Local-AI-Engine.Desktop.csproj `
     --output $publishDir
 Assert-LastExitCode "dotnet publish desktop"
 
+dotnet publish XE-Local-AI-Engine.Cli\XE-Local-AI-Engine.Cli.csproj `
+    --configuration Release `
+    -p:PublishProfile=win-x64 `
+    --output $publishDir
+Assert-LastExitCode "dotnet publish terminal client"
+
 dotnet publish XE-Local-AI-Engine.WindowsLauncher\XE-Local-AI-Engine.WindowsLauncher.csproj `
     --configuration Release `
     -p:PublishProfile=win-x64 `

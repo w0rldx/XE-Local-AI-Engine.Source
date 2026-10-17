@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Implementation;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
@@ -63,7 +64,7 @@ public sealed class KnowledgeUploadEndpointTests
         var dispatcher = new RecordingDispatcher(KnowledgeIngestionEnqueueResult.Accepted);
         await using var factory = new TestServerWebAppFactory
         {
-            ConfigureAdditionalTestServices = services => services.Configure<XE_Local_AI_Engine.Client.Configuration.SecurityOptions>(options => options.MaxUploadFileSizeMb = 1)
+            ConfigureAdditionalTestServices = services => services.Configure<SecurityOptions>(options => options.MaxUploadFileSizeMb = 1)
         };
         using var client = factory.CreateClient();
 

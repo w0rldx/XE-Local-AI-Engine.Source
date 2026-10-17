@@ -42,7 +42,10 @@ public sealed class GraphWorkflowActionTests
     {
         const string tool = "custom__probe_create";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Tools.Script(tool, new GraphWorkflowScriptedTool { IsAction = true });
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool
+        {
+            IsAction = true
+        });
         await using var scope = harness.Services.CreateAsyncScope();
 
         var refusal = await AssertEx.ThrowsAsync<GraphWorkflowValidationException>(() =>
@@ -58,7 +61,10 @@ public sealed class GraphWorkflowActionTests
     {
         const string tool = "custom__probe_run";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Tools.Script(tool, new GraphWorkflowScriptedTool { IsAction = true });
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool
+        {
+            IsAction = true
+        });
         var definitionId = await FlaggedDefinitionAsync(harness, tool);
 
         var runId = await harness.StartRunOfAsync(definitionId);
@@ -78,7 +84,10 @@ public sealed class GraphWorkflowActionTests
     {
         const string tool = "custom__probe_import";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Tools.Script(tool, new GraphWorkflowScriptedTool { IsAction = true });
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool
+        {
+            IsAction = true
+        });
         using var client = harness.Factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/graph-workflows/definitions/import")
         {
@@ -119,7 +128,10 @@ public sealed class GraphWorkflowActionTests
     {
         const string tool = "custom__probe_revoked";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Tools.Script(tool, new GraphWorkflowScriptedTool { IsAction = true });
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool
+        {
+            IsAction = true
+        });
         var definitionId = await FlaggedDefinitionAsync(harness, tool);
         await using (var scope = harness.Services.CreateAsyncScope())
         {
@@ -141,7 +153,12 @@ public sealed class GraphWorkflowActionTests
     public async Task AFailedAction_IsNeverRetried(ToolInvocationOutcomeKind kind, string tool)
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Tools.Script(tool, new GraphWorkflowScriptedTool { IsAction = true, Kind = kind, Reason = "action-failed" });
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool
+        {
+            IsAction = true,
+            Kind = kind,
+            Reason = "action-failed"
+        });
         var runId = await harness.StartRunOfAsync(await FlaggedDefinitionAsync(harness, tool, """, "maxAttempts": 3"""));
 
         await AdvanceUntilRunEndsAsync(harness, runId);
@@ -162,7 +179,13 @@ public sealed class GraphWorkflowActionTests
         const string tool = "custom__probe_failed_text";
         const string text = "the lamp answered 503";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Tools.Script(tool, new GraphWorkflowScriptedTool { IsAction = true, Kind = ToolInvocationOutcomeKind.Faulted, Reason = "action-failed", FailedResult = text });
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool
+        {
+            IsAction = true,
+            Kind = ToolInvocationOutcomeKind.Faulted,
+            Reason = "action-failed",
+            FailedResult = text
+        });
         var runId = await harness.StartRunOfAsync(await FlaggedDefinitionAsync(harness, tool));
 
         await AdvanceUntilRunEndsAsync(harness, runId);
@@ -182,7 +205,13 @@ public sealed class GraphWorkflowActionTests
         const string tool = "custom__probe_failed_long";
         await using var harness = new GraphWorkflowHarness(Host);
         var overTheCap = new string('a', harness.CurrentOptions().MaxOutputJsonBytes + 1);
-        harness.Tools.Script(tool, new GraphWorkflowScriptedTool { IsAction = true, Kind = ToolInvocationOutcomeKind.Faulted, Reason = "action-failed", FailedResult = overTheCap });
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool
+        {
+            IsAction = true,
+            Kind = ToolInvocationOutcomeKind.Faulted,
+            Reason = "action-failed",
+            FailedResult = overTheCap
+        });
         var runId = await harness.StartRunOfAsync(await FlaggedDefinitionAsync(harness, tool));
 
         await AdvanceUntilRunEndsAsync(harness, runId);
@@ -205,7 +234,10 @@ public sealed class GraphWorkflowActionTests
     {
         const string tool = "custom__probe_restart";
         await using var harness = GraphWorkflowHarness.PrivateToolHost();
-        harness.Tools.Script(tool, new GraphWorkflowScriptedTool { IsAction = true });
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool
+        {
+            IsAction = true
+        });
         var runId = await harness.StartRunOfAsync(await FlaggedDefinitionAsync(harness, tool, """, "maxAttempts": 3"""));
 
         // Out of Pending, then Start; the action is then Pending and stood Running through the store, as a crash would leave it.

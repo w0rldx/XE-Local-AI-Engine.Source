@@ -10,10 +10,16 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 public sealed class GraphWorkflowRunOrigin
 {
     /// <summary>The operator, from the Graph Workflows page.</summary>
-    public static GraphWorkflowRunOrigin Manual { get; } = new() { Source = GraphWorkflowTriggerSource.Manual };
+    public static GraphWorkflowRunOrigin Manual { get; } = new()
+    {
+        Source = GraphWorkflowTriggerSource.Manual
+    };
 
     /// <summary>A chat conversation.</summary>
-    public static GraphWorkflowRunOrigin Chat { get; } = new() { Source = GraphWorkflowTriggerSource.Chat };
+    public static GraphWorkflowRunOrigin Chat { get; } = new()
+    {
+        Source = GraphWorkflowTriggerSource.Chat
+    };
 
     /// <summary>Exactly one member of <see cref="GraphWorkflowTriggerSource" />.</summary>
     public required GraphWorkflowTriggerSource Source { get; init; }

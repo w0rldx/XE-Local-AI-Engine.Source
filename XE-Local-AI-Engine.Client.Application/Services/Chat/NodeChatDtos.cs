@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
@@ -193,6 +194,10 @@ public sealed record NodeChatPersistedMessageDto : ISelectedPathMessage
     // Content-free context-window snapshot of this assistant turn's last provider round, surfaced from the metadata
     // blob (no DB column). Null for legacy turns, user messages and turns that never reached a provider round.
     public NodeChatContextWindowDto? ContextWindow { get; init; }
+
+    // The category of a failed assistant turn, surfaced from the metadata blob (no DB column). Null for a legacy turn,
+    // a turn that did not fail, and a stored name this build does not know.
+    public FailureCategory? FailureCategory { get; init; }
 }
 
 /// <summary>

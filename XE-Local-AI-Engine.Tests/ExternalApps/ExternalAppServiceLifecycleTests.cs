@@ -545,7 +545,10 @@ public sealed class ExternalAppServiceLifecycleTests
         var manifest = needsBridge ? BridgeNeedingManifest() : SingleServiceManifest();
         await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest,
             withBridge: false,
-            startupSettings: new NodeStartupSettings { ExternalAppsAwaitingCatalog = true });
+            startupSettings: new NodeStartupSettings
+            {
+                ExternalAppsAwaitingCatalog = true
+            });
         var stopped = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Stopped);
         var running = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Running, ExternalAppDesiredState.Running);
 

@@ -10,8 +10,8 @@ using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
-using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
+using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>The agent lane: one work session per agent node-run attempt, driven by the run that owns it.</summary>
 /// <remarks>

@@ -110,8 +110,7 @@ public sealed class WhisperServerTranscriberTests
     public async Task Transcribe_WithOnlyEmptyTextSegments_ReportsNoDetectedCode()
     {
         // A VAD blip on room noise yields a segment with no words; whisper still says "english", and nothing was heard.
-        await using var harness = new TranscriberHarness(
-            """{"text":"","duration":1.0,"language":"english","segments":[{"start":0,"end":0.4,"text":"  "}]}""");
+        await using var harness = new TranscriberHarness("""{"text":"","duration":1.0,"language":"english","segments":[{"start":0,"end":0.4,"text":"  "}]}""");
 
         var result = await harness.TranscribeAsync();
 

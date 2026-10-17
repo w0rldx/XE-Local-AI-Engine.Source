@@ -67,6 +67,7 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
         }
 
         var maxResults = ClampCap(request.MaxResults, _options.MaxListResults);
+
         SandboxListFilesRequest Survey(string directoryPath) =>
             new()
             {
@@ -215,6 +216,7 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
         }
 
         var maxMatches = ClampCap(request.MaxMatches, _options.MaxSearchMatches);
+
         SandboxSearchTextRequest Search(string directoryPath) =>
             new()
             {

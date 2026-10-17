@@ -71,6 +71,7 @@ function noticeIcon(noticeKind: string) {
 			return IconUserOff;
 		case "QueuedBehindParkedTurn":
 		case "QueuedBehindGpuWork":
+		case "ResumeQueuedBehindTurn":
 			return IconHourglass;
 		default:
 			return IconInfoCircle;
@@ -122,6 +123,8 @@ function noticeLabelKey(noticeKind: string): string | undefined {
 			return "chat.notices.queuedBehindParkedTurn";
 		case "QueuedBehindGpuWork":
 			return "chat.notices.queuedBehindGpuWork";
+		case "ResumeQueuedBehindTurn":
+			return "chat.notices.resumeQueuedBehindTurn";
 		default:
 			return undefined;
 	}
@@ -131,8 +134,9 @@ function noticeLabelKey(noticeKind: string): string | undefined {
 // StoppedWhileThinkingNoticeMessage, OutputLimitReachedNoticeMessage, ToolCallInReasoningNoticeMessage,
 // ToolCallAsTextNoticeMessage, and KnowledgeUnavailableNotice.Message and AttachmentShortenedNoticeMessage, and
 // NodeChatStreamService's AttachmentsNotSentNoticeMessage and AttachmentsTruncatedNoticeMessage, ChatTurnResolution's
-// AgentUnavailableNoticeMessage, InvocationSlotAdmission's QueuedBehindParkedTurnMessage, WorkSessionSlotHolderNotice.Message
-// and GpuWorkHolderNotice's four messages — change both together). Any other text renders verbatim.
+// AgentUnavailableNoticeMessage, the retired QueuedBehindParkedTurn text kept for persisted replies, HumanPark's
+// ResumeQueuedMessage, WorkSessionSlotHolderNotice.Message and GpuWorkHolderNotice's four messages — change both together).
+// Any other text renders verbatim.
 const localizedNoticeKeys: Readonly<Record<string, string>> = {
 	"This message was queued behind a running work session step.": "chat.notices.queuedBehindWorkSessionText",
 	"This message was queued behind a running benchmark.": "chat.notices.queuedBehindBenchmarkText",
@@ -161,6 +165,7 @@ const localizedNoticeKeys: Readonly<Record<string, string>> = {
 	"The agent this conversation uses no longer exists, so the default assistant answered.": "chat.notices.agentUnavailableText",
 	"This message is waiting for an approval or a question in another conversation. Answer it there to continue.":
 		"chat.notices.queuedBehindParkedTurnText",
+	"After your answer, this reply was queued behind another running reply.": "chat.notices.resumeQueuedBehindTurnText",
 };
 
 // A bare id (an agent or conversation id) is not a reason a reader can use, so it is never printed as the detail line.

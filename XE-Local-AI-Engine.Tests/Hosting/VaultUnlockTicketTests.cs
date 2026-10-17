@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Hosting;
 
+using System.Buffers.Text;
 using XE_Local_AI_Engine.Client.Hosting.Vault;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -42,7 +43,7 @@ public sealed class VaultUnlockTicketTests
     {
         var first = VaultUnlockTicket.NewValue();
 
-        AssertEx.Equal(32, System.Buffers.Text.Base64Url.DecodeFromChars(first).Length);
+        AssertEx.Equal(32, Base64Url.DecodeFromChars(first).Length);
         AssertEx.NotEqual(first, VaultUnlockTicket.NewValue());
     }
 }

@@ -212,8 +212,7 @@ internal sealed partial class IntegrationExecutionCoordinator
                         await AppendDurableAsync(context, appended, CancellationToken.None);
                     }
                 }
-            }
-            while (page.Events.Count > 0);
+            } while (page.Events.Count > 0);
 
             if (GraphWorkflowStateMachine.IsTerminal(detail.Run.Status))
             {

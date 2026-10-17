@@ -158,7 +158,10 @@ public sealed class GraphWorkflowIntentService
         var candidates = new List<IntentCandidate>();
         foreach (var summary in summaries.Where(summary => summary.TriggerSources.HasFlag(GraphWorkflowTriggerSource.Intent) && summary.Id != routerId))
         {
-            var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Normalize(summary.Name) };
+            var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                Normalize(summary.Name)
+            };
             try
             {
                 var definition = await _definitions.GetAsync(summary.Id, cancellationToken);
@@ -261,7 +264,10 @@ public sealed class GraphWorkflowIntentService
         }
 
         return ReadChoice(detail.Run.OutputJson) is { } choice
-            ? new RouterAnswer { Choice = choice }
+            ? new RouterAnswer
+            {
+                Choice = choice
+            }
             : RouterAnswer.Failed("The intent router's result carries no choice.");
     }
 

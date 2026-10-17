@@ -51,6 +51,7 @@ export interface InvocationHistoryDto {
 
 export interface InvocationMonitorDto {
 	current: InvocationCurrentDto | null;
+	live: InvocationCurrentDto[];
 	history: InvocationHistoryDto[];
 	historyCapacity: number;
 }

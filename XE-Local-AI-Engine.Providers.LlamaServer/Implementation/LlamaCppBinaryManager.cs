@@ -270,8 +270,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                 // A published Windows-CUDA dir missing part of its companion set is repaired best-effort; a failed, impossible or refused repair serves it as it is.
                 var repairFailed = IsIncompleteWindowsCudaDir(variant, cachedServer)
                                    && (refusal is not null
-                                           ? RefuseCudaCompanionRepair(resolvedTag, reporter)
-                                           : !await TryRepairCudaCompanionSetAsync(resolvedTag, pin, isPinnedFallback, cachedServer, reporter, ct).ConfigureAwait(false));
+                                       ? RefuseCudaCompanionRepair(resolvedTag, reporter)
+                                       : !await TryRepairCudaCompanionSetAsync(resolvedTag, pin, isPinnedFallback, cachedServer, reporter, ct).ConfigureAwait(false));
                 await RecordResolvedRuntimeAsync(resolvedTag, pin, variant, ct).ConfigureAwait(false);
 
                 // Silent on a pure cache hit — this runs on every model spawn, so a Completed here would flood the hub. A failed repair keeps its Failed; a set
@@ -520,7 +520,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         var pin = ResolveAcquirablePin(variant);
         string?[] candidates = [installed?.Tag, _activeTag];
         return candidates.FirstOrDefault(tag => tag is { Length: > 0 } && IsValidTag(tag)
-                                                && ResolveServerPath(Path.Combine(_cacheRoot, "llama.cpp", tag, VariantSlug(variant)), pin) is not null);
+                                                                       && ResolveServerPath(Path.Combine(_cacheRoot, "llama.cpp", tag, VariantSlug(variant)), pin) is not null);
     }
 
     /// <summary>

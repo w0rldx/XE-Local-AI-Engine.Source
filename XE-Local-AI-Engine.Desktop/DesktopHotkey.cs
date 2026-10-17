@@ -25,7 +25,8 @@ internal sealed class DesktopHotkey
 
     internal static DesktopHotkey Default { get; } = Parse(DefaultChord)!;
 
-    internal static DesktopHotkey ParseOrDefault(string? text) => Parse(text) ?? Default;
+    internal static DesktopHotkey ParseOrDefault(string? text) =>
+        Parse(text) ?? Default;
 
     /// <summary>Accepts Ctrl, Alt, Shift and Win plus one key (A-Z, 0-9, F1-F24 or Space), case-insensitive; null for
     ///     anything else, including a chord without a modifier or with a repeated part.</summary>

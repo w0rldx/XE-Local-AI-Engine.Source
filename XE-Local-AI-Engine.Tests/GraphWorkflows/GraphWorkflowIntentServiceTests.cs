@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.GraphWorkflows;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using NSubstitute.Core;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
@@ -308,7 +309,8 @@ public sealed class GraphWorkflowIntentServiceTests
         AssertEx.Empty(harness.Runs.ReceivedCalls());
     }
 
-    private static bool IsStart(NSubstitute.Core.ICall call) => call.GetMethodInfo().Name == nameof(IGraphWorkflowRunService.StartAsync);
+    private static bool IsStart(ICall call) =>
+        call.GetMethodInfo().Name == nameof(IGraphWorkflowRunService.StartAsync);
 
     private static GraphWorkflowIntentRequest Request(string utterance, DateTimeOffset? utteredAt = null, Guid? requestId = null, Guid? principalId = null) =>
         new()
@@ -362,7 +364,8 @@ public sealed class GraphWorkflowIntentServiceTests
     {
         private long _nowTicks = Now.UtcTicks;
 
-        public override DateTimeOffset GetUtcNow() => new(Interlocked.Read(ref _nowTicks), TimeSpan.Zero);
+        public override DateTimeOffset GetUtcNow() =>
+            new(Interlocked.Read(ref _nowTicks), TimeSpan.Zero);
 
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
         {
@@ -373,13 +376,15 @@ public sealed class GraphWorkflowIntentServiceTests
 
         private sealed class InertTimer : ITimer
         {
-            public bool Change(TimeSpan dueTime, TimeSpan period) => true;
+            public bool Change(TimeSpan dueTime, TimeSpan period) =>
+                true;
 
             public void Dispose()
             {
             }
 
-            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+            public ValueTask DisposeAsync() =>
+                ValueTask.CompletedTask;
         }
     }
 
@@ -397,7 +402,10 @@ public sealed class GraphWorkflowIntentServiceTests
             Service = new GraphWorkflowIntentService(Definitions,
                 Runs,
                 settings,
-                Options.Create(new GraphWorkflowOptions { IntentRouterTimeoutSeconds = routerTimeoutSeconds }),
+                Options.Create(new GraphWorkflowOptions
+                {
+                    IntentRouterTimeoutSeconds = routerTimeoutSeconds
+                }),
                 new SteppingClock());
         }
 

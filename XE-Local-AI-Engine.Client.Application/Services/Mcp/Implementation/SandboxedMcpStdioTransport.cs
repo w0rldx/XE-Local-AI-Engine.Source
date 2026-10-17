@@ -208,7 +208,12 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         foreach (var relative in SensitiveHomeSubdirectories)
         {
             // Each AppData store also at the profile folder's real location, so a redirected AppData keeps its stores denied.
-            foreach (var store in new[] { Path.Combine(home, relative), Redirected(relative, RoamingProfile, roaming), Redirected(relative, LocalProfile, local) }.OfType<string>())
+            foreach (var store in new[]
+                     {
+                         Path.Combine(home, relative),
+                         Redirected(relative, RoamingProfile, roaming),
+                         Redirected(relative, LocalProfile, local)
+                     }.OfType<string>())
             {
                 AddRoot(roots, store, deniesSubtree: true, string.Equals(relative, LocalMicrosoftStore, StringComparison.Ordinal) ? Path.Combine(store, "WindowsApps") : null);
             }
@@ -351,11 +356,10 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
             // starts a server without its files. A malformed or missing path contributes no tree, and the server fails to start.
             if (TryLexical(path) is { } lexical && (Directory.Exists(lexical) || File.Exists(lexical)))
             {
-                throw new SandboxCapabilityNotSupportedException(
-                    $"The MCP server '{serverName}' is registered at the Sandboxed trust tier and would bind '{lexical}' into its sandbox, which is "
-                    + (OperatingSystem.IsWindows()
-                        ? "a network share or a folder whose real name cannot be read. The Sandboxed tier binds only local NTFS folders: point the server at a local folder holding its own files."
-                        : "a link chain too deep to resolve or a folder whose real name cannot be read. The Sandboxed tier binds only folders it can resolve: point the server at a plain folder holding its own files."));
+                throw new SandboxCapabilityNotSupportedException($"The MCP server '{serverName}' is registered at the Sandboxed trust tier and would bind '{lexical}' into its sandbox, which is "
+                                                                 + (OperatingSystem.IsWindows()
+                                                                     ? "a network share or a folder whose real name cannot be read. The Sandboxed tier binds only local NTFS folders: point the server at a local folder holding its own files."
+                                                                     : "a link chain too deep to resolve or a folder whose real name cannot be read. The Sandboxed tier binds only folders it can resolve: point the server at a plain folder holding its own files."));
             }
 
             return;
@@ -403,7 +407,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         if (exposed.FirstOrDefault(root => root.DeniesSubtree && IsAtOrBeneath(canonical, root.HostPath)) is { } store)
         {
             return prefix + $"is, contains or lies inside the sensitive host path '{store.HostPath}'. "
-                   + $"That path is a credential store or the engine's own state, protected with everything beneath it: {remedy}.";
+                          + $"That path is a credential store or the engine's own state, protected with everything beneath it: {remedy}.";
         }
 
         if (exposed.FirstOrDefault(root => !root.DeniesSubtree) is { } home)
@@ -415,7 +419,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         return count == 1
             ? prefix + $"contains the protected folder '{exposed[0].HostPath}'. That is a credential store or the engine's own state: {remedy}."
             : prefix + $"contains {count.ToString(CultureInfo.InvariantCulture)} protected folders (first: '{exposed[0].HostPath}'). "
-              + $"Those are credential stores or the engine's own state: {remedy}.";
+                     + $"Those are credential stores or the engine's own state: {remedy}.";
     }
 
     /// <summary>A volume root (<c>/</c>, <c>D:\</c>): binding one exposes the whole drive. Checked on the canonical path, so a subst drive is its target.</summary>
@@ -578,7 +582,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     {
         // A carve-out that is itself a link (a junction from WindowsApps into Credentials) would move the exception onto its target.
         var allowed = allowedBeneath is not null && TryLexical(allowedBeneath) is { } lexical
-                      && string.Equals(Canonicalize(allowedBeneath), lexical, PathComparison)
+                                                 && string.Equals(Canonicalize(allowedBeneath), lexical, PathComparison)
             ? lexical
             : null;
         foreach (var candidate in new[]
@@ -588,7 +592,12 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
                  })
         {
             // Equality covers the class too, so a path on the list twice keeps its subtree-denied entry (home = /root on a root account).
-            if (candidate is { } value && new SensitiveHostRoot { HostPath = value, DeniesSubtree = deniesSubtree, AllowedBeneath = allowed } is var root && !roots.Contains(root))
+            if (candidate is { } value && new SensitiveHostRoot
+                {
+                    HostPath = value,
+                    DeniesSubtree = deniesSubtree,
+                    AllowedBeneath = allowed
+                } is var root && !roots.Contains(root))
             {
                 roots.Add(root);
             }
@@ -975,7 +984,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
             var exit = exitCode is { } code ? string.Create(CultureInfo.InvariantCulture, $"0x{unchecked((uint)code):X8}") : null;
 
             var message = new StringBuilder("The MCP server '").Append(_owner._record.Name).Append("' ").Append(what)
-                                                              .Append(exit is null ? "." : " (exit code " + exit + ").");
+                                                               .Append(exit is null ? "." : " (exit code " + exit + ").");
             if (exitCode is { } failed && ExitCodeHints.TryGetValue(unchecked((uint)failed), out var hint))
             {
                 _ = message.Append(' ').Append(hint);

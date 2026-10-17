@@ -44,6 +44,25 @@ public sealed class RuntimeLicensePackagingTests
     }
 
     [Test]
+    public void TerminalClientProfiles_MatchThePayloadTheyAreLayeredInto()
+    {
+        var windows = XDocument.Load(RepositoryPaths.Combine("XE-Local-AI-Engine.Cli", "Properties", "PublishProfiles", "win-x64.pubxml"));
+        AssertEx.Equal("false", Property(windows, "SelfContained"));
+        AssertEx.Equal("false", Property(windows, "PublishSingleFile"));
+        AssertEx.Equal("true", Property(windows, "UseAppHost"));
+        AssertEx.Equal("false", Property(windows, "PublishTrimmed"));
+        AssertEx.Equal("LatestPatch", Property(windows, "RollForward"));
+        AssertEx.Equal("$(DotNetRuntimeVersion)", Property(windows, "RuntimeFrameworkVersion"));
+
+        var linux = XDocument.Load(RepositoryPaths.Combine("XE-Local-AI-Engine.Cli", "Properties", "PublishProfiles", "linux-x64.pubxml"));
+        AssertEx.Equal("true", Property(linux, "SelfContained"));
+        AssertEx.Equal("true", Property(linux, "PublishSingleFile"));
+        AssertEx.Equal("true", Property(linux, "IncludeNativeLibrariesForSelfExtract"));
+        AssertEx.Equal("false", Property(linux, "PublishTrimmed"));
+        AssertEx.Equal("$(DotNetRuntimeVersion)", Property(linux, "RuntimeFrameworkVersion"));
+    }
+
+    [Test]
     public void ClientPublish_CarriesThePerRidDotNetLicenseAndThirdPartyNotices()
     {
         var project = XDocument.Load(RepositoryPaths.ClientProject("XE-Local-AI-Engine.Client.csproj"));

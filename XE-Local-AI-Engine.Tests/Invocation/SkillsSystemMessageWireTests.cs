@@ -35,8 +35,7 @@ public sealed class SkillsSystemMessageWireTests
             [],
             NullLoggerFactory.Instance,
             services,
-            skillsProvider: InvocationSkillsProvider.Create(
-            [
+            skillsProvider: InvocationSkillsProvider.Create([
                 new InvocationSkill
                 {
                     Name = "demo",

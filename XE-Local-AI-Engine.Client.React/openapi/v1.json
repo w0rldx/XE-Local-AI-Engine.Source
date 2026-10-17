@@ -2090,6 +2090,8 @@
         "tags": [
           "Auth"
         ],
+        "summary": "Signs the operator in and issues an access token.",
+        "description": "Cookie mode (default) sets the HttpOnly node_rt refresh cookie. With returnRefreshToken: true (non-browser clients) the body also carries refreshToken and refreshTokenExpiresAtUtc and no cookie is written; refresh it through auth/refresh with the X-XE-Refresh-Token header.",
         "operationId": "nodeLogin",
         "requestBody": {
           "x-name": "NodeLoginRequest",
@@ -2173,6 +2175,8 @@
         "tags": [
           "Auth"
         ],
+        "summary": "Rotates the refresh token and issues a new access token.",
+        "description": "Reads the node_rt cookie. Only when no cookie is sent, a non-browser client may send its refresh token in the X-XE-Refresh-Token header; that answer carries the rotated refreshToken and refreshTokenExpiresAtUtc in the body and never sets or clears a cookie.",
         "operationId": "nodeRefresh",
         "responses": {
           "200": {
@@ -26663,6 +26667,7 @@
           "completionTokens",
           "reasoningTokens",
           "totalTokens",
+          "tokensReported",
           "estimatedCostUsd",
           "currency"
         ],
@@ -26692,6 +26697,10 @@
           },
           "totalTokens": {
             "type": "integer"
+          },
+          "tokensReported": {
+            "type": "integer",
+            "format": "int32"
           },
           "estimatedCostUsd": {
             "type": "number",
@@ -27926,6 +27935,15 @@
           "expiresAtUtc": {
             "type": "string",
             "format": "date-time"
+          },
+          "refreshToken": {
+            "type": "string",
+            "nullable": true
+          },
+          "refreshTokenExpiresAtUtc": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         }
       },
@@ -28011,6 +28029,9 @@
             "maxLength": 256,
             "minLength": 0,
             "nullable": false
+          },
+          "returnRefreshToken": {
+            "type": "boolean"
           }
         }
       },
@@ -39012,6 +39033,7 @@
         "additionalProperties": false,
         "required": [
           "current",
+          "live",
           "history",
           "historyCapacity"
         ],
@@ -39023,6 +39045,12 @@
                 "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsInvocationsV1InvocationCurrentResponse"
               }
             ]
+          },
+          "live": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsInvocationsV1InvocationCurrentResponse"
+            }
           },
           "history": {
             "type": "array",
@@ -40444,6 +40472,14 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatContextWindowResponse"
+              }
+            ]
+          },
+          "failureCategory": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientModelsEnumsFailureCategory"
               }
             ]
           }
@@ -44853,8 +44889,6 @@
           "speculativeDraftGpuLayers": {
             "type": "integer",
             "format": "int32",
-            "maximum": 1000,
-            "minimum": 0,
             "nullable": true
           },
           "rerankerModelName": {
@@ -44940,8 +44974,6 @@
           "llamaChatCacheRamMiB": {
             "type": "integer",
             "format": "int32",
-            "maximum": 131072,
-            "minimum": -1,
             "nullable": true
           },
           "llamaCpuThreadReserve": {
@@ -50580,7 +50612,8 @@
           "ContextWindowExceeded",
           "ProviderAuthFailed",
           "ProviderRateLimited",
-          "CallBudgetReached"
+          "CallBudgetReached",
+          "InsufficientCapacity"
         ],
         "enum": [
           "Cancelled",
@@ -50597,7 +50630,8 @@
           "ContextWindowExceeded",
           "ProviderAuthFailed",
           "ProviderRateLimited",
-          "CallBudgetReached"
+          "CallBudgetReached",
+          "InsufficientCapacity"
         ]
       },
       "XE_Local_AI_EngineClientPersistenceAgentDefinitionKind": {

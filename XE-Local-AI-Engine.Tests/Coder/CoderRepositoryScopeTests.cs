@@ -66,8 +66,14 @@ public sealed class CoderRepositoryScopeTests : IDisposable
         using var scope = CoderRepositoryScope.Begin(_repository);
         var reader = CreateReader();
 
-        AssertEx.Contains(await reader.ReadFileAsync(new ReadFileToolRequest { Path = "calc.py" }), "return a + b");
-        AssertEx.Contains(await reader.SearchTextAsync(new SearchTextToolRequest { Pattern = "def add" }), "calc.py:1");
+        AssertEx.Contains(await reader.ReadFileAsync(new ReadFileToolRequest
+        {
+            Path = "calc.py"
+        }), "return a + b");
+        AssertEx.Contains(await reader.SearchTextAsync(new SearchTextToolRequest
+        {
+            Pattern = "def add"
+        }), "calc.py:1");
     }
 
     [Test]
@@ -76,9 +82,18 @@ public sealed class CoderRepositoryScopeTests : IDisposable
         using var scope = CoderRepositoryScope.Begin(_repository);
         var reader = CreateReader();
 
-        var git = await reader.ReadFileAsync(new ReadFileToolRequest { Path = ".git/config" });
-        var secret = await reader.ReadFileAsync(new ReadFileToolRequest { Path = ".env" });
-        var traversal = await reader.ReadFileAsync(new ReadFileToolRequest { Path = "../" + Path.GetFileName(_outside) + "/secret.txt" });
+        var git = await reader.ReadFileAsync(new ReadFileToolRequest
+        {
+            Path = ".git/config"
+        });
+        var secret = await reader.ReadFileAsync(new ReadFileToolRequest
+        {
+            Path = ".env"
+        });
+        var traversal = await reader.ReadFileAsync(new ReadFileToolRequest
+        {
+            Path = "../" + Path.GetFileName(_outside) + "/secret.txt"
+        });
 
         AssertEx.False(git.Contains("token@", StringComparison.Ordinal), "a remote URL in .git/config can carry a token.");
         AssertEx.False(secret.Contains("coderscopesentinel", StringComparison.Ordinal));
@@ -92,12 +107,31 @@ public sealed class CoderRepositoryScopeTests : IDisposable
         using var scope = CoderRepositoryScope.Begin(_repository);
         var reader = CreateReader();
 
-        var git = await reader.ListFilesAsync(new ListFilesToolRequest { Path = ".git" });
-        var refs = await reader.ListFilesAsync(new ListFilesToolRequest { Path = ".git/refs" });
-        var secret = await reader.ListFilesAsync(new ListFilesToolRequest { Path = ".ssh" });
-        var search = await reader.SearchTextAsync(new SearchTextToolRequest { Pattern = "0000", Path = ".git" });
+        var git = await reader.ListFilesAsync(new ListFilesToolRequest
+        {
+            Path = ".git"
+        });
+        var refs = await reader.ListFilesAsync(new ListFilesToolRequest
+        {
+            Path = ".git/refs"
+        });
+        var secret = await reader.ListFilesAsync(new ListFilesToolRequest
+        {
+            Path = ".ssh"
+        });
+        var search = await reader.SearchTextAsync(new SearchTextToolRequest
+        {
+            Pattern = "0000",
+            Path = ".git"
+        });
 
-        foreach (var result in new[] { git, refs, secret, search })
+        foreach (var result in new[]
+                 {
+                     git,
+                     refs,
+                     secret,
+                     search
+                 })
         {
             AssertEx.Contains(result, "rejected");
             AssertEx.False(result.Contains("coderscopebranch", StringComparison.Ordinal), "a branch name under .git is not part of the repository view.");
@@ -125,7 +159,10 @@ public sealed class CoderRepositoryScopeTests : IDisposable
         File.CreateSymbolicLink(Path.Combine(_repository, "escape"), _outside);
         using var scope = CoderRepositoryScope.Begin(_repository);
 
-        var result = await CreateReader().ReadFileAsync(new ReadFileToolRequest { Path = "escape/secret.txt" });
+        var result = await CreateReader().ReadFileAsync(new ReadFileToolRequest
+        {
+            Path = "escape/secret.txt"
+        });
 
         AssertEx.Contains(result, "read_file rejected");
         AssertEx.False(result.Contains("outsidesentinel", StringComparison.Ordinal));

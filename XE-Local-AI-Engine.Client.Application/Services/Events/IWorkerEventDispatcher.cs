@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 /// </summary>
 public interface IWorkerEventDispatcher
 {
-    /// <summary>The live in-flight invocation, or null.</summary>
+    /// <summary>The last assigned invocation, live or terminal, or null. Not the slot holder: see <see cref="SlotHolder" />.</summary>
     /// <remarks>
     ///     This exposes the dispatcher's mutable instance, which the streaming path keeps updating under its internal lock. Its
     ///     <see cref="InvocationState.StreamedContent" /> and <see cref="InvocationState.StreamedThinkingContent" /> getters materialize from
@@ -18,6 +18,24 @@ public interface IWorkerEventDispatcher
     ///     <see cref="InvocationStateChanged" /> (whose args are an immutable clone); the scalar members are fine to read directly.
     /// </remarks>
     InvocationState? CurrentInvocation { get; }
+
+    /// <summary>A clone of the invocation whose lease holds the node's invocation slot, or null while the slot is free.</summary>
+    InvocationState? SlotHolder { get; }
+
+    /// <summary>Clones of every invocation assigned and not yet terminal, the slot holder among them.</summary>
+    IReadOnlyList<InvocationState> GetLiveInvocations();
+
+    /// <summary>The monitor's view read under one lock: the slot holder, else the last assigned turn when it is not live, plus every live turn.</summary>
+    InvocationLiveSnapshot GetLiveSnapshot();
+
+    /// <summary>Closes a timed-out card: clears the turn's pending approval or question carrying <paramref name="requestId" />.</summary>
+    Task ReportPromptTimedOutAsync(Guid invocationId, string requestId);
+
+    /// <summary>Frees the invocation slot for a turn parked on a human, only while that turn holds it; true when it did.</summary>
+    bool ReleaseSlotForPark(Guid invocationId);
+
+    /// <summary>Waits for the invocation slot again for a parked turn that is resuming, and makes it the holder.</summary>
+    Task ReacquireSlotAsync(Guid invocationId, CancellationToken cancellationToken);
 
     event EventHandler<InvocationStateChangedEventArgs>? InvocationStateChanged;
 

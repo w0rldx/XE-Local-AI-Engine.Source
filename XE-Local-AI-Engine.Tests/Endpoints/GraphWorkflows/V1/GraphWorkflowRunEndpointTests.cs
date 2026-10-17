@@ -173,7 +173,10 @@ public sealed class GraphWorkflowRunEndpointTests
                            .UpdateAsync(definitionId, current.Version, name: null, description: null, graphJson: null, triggerSources: GraphWorkflowTriggerSource.Chat);
         }
 
-        using var response = await SendAsync("POST", $"{Root}/definitions/{definitionId}/runs", JsonSerializer.Serialize(new { requestId = Guid.NewGuid() }));
+        using var response = await SendAsync("POST", $"{Root}/definitions/{definitionId}/runs", JsonSerializer.Serialize(new
+        {
+            requestId = Guid.NewGuid()
+        }));
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Equal("GraphWorkflowRunConflict", await ConflictTypeAsync(response));

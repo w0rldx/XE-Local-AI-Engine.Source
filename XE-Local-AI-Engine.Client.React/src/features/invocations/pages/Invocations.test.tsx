@@ -84,13 +84,24 @@ describe("Invocations (generated hey-api data layer)", () => {
 	});
 
 	it("renders idle and empty history states", async () => {
-		generatedMock.monitorFn.mockResolvedValue({ current: null, history: [], historyCapacity: 50 });
+		generatedMock.monitorFn.mockResolvedValue({ current: null, live: [], history: [], historyCapacity: 50 });
 
 		renderWithProviders(<Invocations />);
 
 		expect(await screen.findByText("No invocation is currently assigned or running.")).toBeTruthy();
 		expect(screen.getByText("No completed invocations recorded yet.")).toBeTruthy();
 		expect(screen.getByText("Idle")).toBeTruthy();
+	});
+
+	it("lists a live invocation besides the current one, such as a parked turn", async () => {
+		const parked = { ...createCurrent(), invocationId: "55555555-5555-5555-5555-555555555555", hasPendingQuestion: false };
+		generatedMock.monitorFn.mockResolvedValue({ ...createMonitor(), live: [createCurrent(), parked] });
+
+		renderWithProviders(<Invocations />);
+
+		expect(await screen.findByRole("heading", { name: "Other live invocation", level: 2 })).toBeTruthy();
+		expect(screen.getByText(parked.invocationId)).toBeTruthy();
+		expect(screen.getAllByRole("heading", { name: "Current invocation", level: 2 })).toHaveLength(1);
 	});
 
 	// The monitor's error Alert used to read `error.message` directly. A request that never reached the node arrives as
@@ -116,24 +127,30 @@ describe("Invocations (generated hey-api data layer)", () => {
 	});
 });
 
-function createMonitor(): GetInvocationMonitorResponse {
+function createCurrent(): GetInvocationMonitorResponse["live"][number] {
 	return {
-		current: {
-			invocationId: "11111111-1111-1111-1111-111111111111",
-			conversationId: "33333333-3333-3333-3333-333333333333",
-			status: "Running",
-			modelUsed: "qwen3:8b",
-			startedAt: "2026-05-25T09:59:50Z",
-			lastUpdatedAt: "2026-05-25T10:00:00Z",
-			completedAt: null,
-			error: null,
-			failureCategory: null,
-			streamedChunkCount: 2,
-			streamedThinkingChunkCount: 1,
-			pendingToolCallCount: 1,
-			hasPendingApproval: true,
-			hasPendingQuestion: true,
-		},
+		invocationId: "11111111-1111-1111-1111-111111111111",
+		conversationId: "33333333-3333-3333-3333-333333333333",
+		status: "Running",
+		modelUsed: "qwen3:8b",
+		startedAt: "2026-05-25T09:59:50Z",
+		lastUpdatedAt: "2026-05-25T10:00:00Z",
+		completedAt: null,
+		error: null,
+		failureCategory: null,
+		streamedChunkCount: 2,
+		streamedThinkingChunkCount: 1,
+		pendingToolCallCount: 1,
+		hasPendingApproval: true,
+		hasPendingQuestion: true,
+	};
+}
+
+function createMonitor(): GetInvocationMonitorResponse {
+	const current = createCurrent();
+	return {
+		current,
+		live: [current],
 		history: [
 			{
 				invocationId: "22222222-2222-2222-2222-222222222222",

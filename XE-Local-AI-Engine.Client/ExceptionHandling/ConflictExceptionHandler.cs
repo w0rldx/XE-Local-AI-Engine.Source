@@ -45,6 +45,7 @@ public class ConflictExceptionHandler : IExceptionHandler
         {
             NodeChatReadOnlyConversationException => NodeConflictProblemType.ReadOnlyConversation,
             NodeChatWorkflowRunLiveException => NodeConflictProblemType.GraphWorkflowRunLiveInConversation,
+            NodeChatTurnParkedException => NodeConflictProblemType.ConversationTurnParked,
             ImageModelInUseException => NodeConflictProblemType.ImageModelInUse,
             WorkspaceRevocationBusyException => NodeConflictProblemType.WorkspaceRevocationBusy,
             InstalledModelDependentAdaptersException => NodeConflictProblemType.InstalledModelHasDependentAdapters,

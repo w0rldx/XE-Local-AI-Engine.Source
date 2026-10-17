@@ -28,7 +28,10 @@ public sealed class FeatureSwitchMiddlewareTests
     [Arguments("/api/local/v1/scheduler/hub/negotiate")]
     public async Task EachFamily_AnswersNotFound_WhileItsSwitchIsOff(string path)
     {
-        var (status, nextCalled) = await InvokeAsync(path, AllOff().Build(), startup: new NodeStartupSettings { SchedulerEnabled = false });
+        var (status, nextCalled) = await InvokeAsync(path, AllOff().Build(), startup: new NodeStartupSettings
+        {
+            SchedulerEnabled = false
+        });
 
         AssertEx.Equal(StatusCodes.Status404NotFound, status, path);
         AssertEx.False(nextCalled, "a switched-off feature must not reach security, routing or the endpoint");
@@ -116,7 +119,10 @@ public sealed class FeatureSwitchMiddlewareTests
         // The scheduler engine is registered at start, so a saved change must not hide running jobs before the restart.
         var (_, stillOpen) = await InvokeAsync("/api/local/v1/scheduler/jobs", AllOff().Build());
         var (status, _) = await InvokeAsync("/api/local/v1/scheduler/jobs", StubNodeRuntimeSettings.Create().Build(),
-            startup: new NodeStartupSettings { SchedulerEnabled = false });
+            startup: new NodeStartupSettings
+            {
+                SchedulerEnabled = false
+            });
 
         AssertEx.True(stillOpen, "the saved switch alone must not close the scheduler family");
         AssertEx.Equal(StatusCodes.Status404NotFound, status, "the startup value closes it");

@@ -8,8 +8,8 @@ using XE_Local_AI_Engine.Client.Services.Events;
 ///     <see cref="TurnNoticeKind.QueuedBehindWorkSession" /> notice.
 /// </summary>
 /// <remarks>
-///     A step keeps the slot for its whole turn, so an operator's chat turn waits for the next step boundary. A holder
-///     parked on an approval or a question is left to <c>QueuedBehindParkedTurn</c>, so one queued notice fires, not two.
+///     A step keeps the slot for its whole turn, so an operator's chat turn waits for the next step boundary. A step
+///     parked on an approval or a question gives the slot back, so it is never the holder this reads.
 /// </remarks>
 internal static class WorkSessionSlotHolderNotice
 {
@@ -23,11 +23,9 @@ internal static class WorkSessionSlotHolderNotice
         Guid requestId,
         CancellationToken cancellationToken)
     {
-        if (dispatcher.CurrentInvocation is not { } holder
+        if (dispatcher.SlotHolder is not { } holder
             || holder.ConversationId == conversationId
             || NodeChatInvocationPump.IsTerminal(holder.Status)
-            || holder.PendingApproval is not null
-            || holder.PendingQuestion is not null
             || !string.Equals(await persistence.GetConversationKindAsync(holder.ConversationId, cancellationToken),
                 NodeConversationKind.WorkSession,
                 StringComparison.Ordinal))

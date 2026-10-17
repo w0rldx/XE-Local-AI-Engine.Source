@@ -3,11 +3,10 @@ namespace XE_Local_AI_Engine.Tests.Drafting;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Drafting.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
-using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The draft slot itself: one draft at a time, none while an invocation is in flight, and a lease that releases the
+///     The draft slot itself: one draft at a time, none while an invocation holds the slot, and a lease that releases the
 ///     slot exactly once no matter how often it is disposed (a double release would hand out two concurrent slots).
 /// </summary>
 [Category(TestCategories.Unit)]
@@ -16,7 +15,7 @@ public sealed class DraftAdmissionGateTests
     [Test]
     public void TryAcquire_WhenIdle_AdmitsOneDraftAtATime()
     {
-        using var gate = CreateGate(out _, out _);
+        using var gate = CreateGate(out _);
 
 #pragma warning disable CA2000 // Holding the lease across the refusal IS the assertion; every lease is disposed below.
         AssertEx.True(gate.TryAcquire(out var first), "An idle node must admit the first draft.");
@@ -32,7 +31,7 @@ public sealed class DraftAdmissionGateTests
     [Test]
     public void TryAcquire_WhenDisposedTwice_ReleasesSlotOnce()
     {
-        using var gate = CreateGate(out _, out _);
+        using var gate = CreateGate(out _);
 
         AssertEx.True(gate.TryAcquire(out var lease));
         lease?.Dispose();
@@ -45,48 +44,42 @@ public sealed class DraftAdmissionGateTests
 
     [Test]
     [Arguments(InvocationStatus.Completed)]
-    [Arguments(InvocationStatus.Failed)]
-    [Arguments(InvocationStatus.Cancelled)]
-    public void TryAcquire_WhenCurrentInvocationIsTerminal_Admits(InvocationStatus status)
+    [Arguments(InvocationStatus.Running)]
+    public void TryAcquire_WhenNoInvocationHoldsTheSlot_AdmitsWhateverTheLastInvocationShows(InvocationStatus status)
     {
-        // The dispatcher keeps the LAST invocation around after it finishes (live-verified: Status=Completed minutes
-        // after the chat turn ended). A terminal leftover must not read as busy, or drafting is refused 409 forever
-        // after the first chat turn of the process lifetime.
-        using var gate = CreateGate(out var dispatcher, out _);
+        // CurrentInvocation is the LAST invocation, kept after it finishes; only the slot holder means busy, or drafting would 409 forever
+        // after the first turn.
+        using var gate = CreateGate(out var dispatcher);
         dispatcher.CurrentInvocation.Returns(new InvocationState
         {
             Status = status
         });
+        dispatcher.SlotHolder.Returns((InvocationState?)null);
 
-        AssertEx.True(gate.TryAcquire(out var lease), "A terminal leftover invocation must not refuse the draft.");
+        AssertEx.True(gate.TryAcquire(out var lease), "No slot holder must admit the draft.");
         lease?.Dispose();
     }
 
     [Test]
-    public void TryAcquire_WhenInvocationInFlight_RefusesAndKeepsSlotFree()
+    public void TryAcquire_WhileAnInvocationHoldsTheSlot_RefusesAndKeepsTheDraftSlotFree()
     {
-        using var gate = CreateGate(out var dispatcher, out var runner);
-        dispatcher.CurrentInvocation.Returns(new InvocationState
+        using var gate = CreateGate(out var dispatcher);
+        dispatcher.SlotHolder.Returns(new InvocationState
         {
             Status = InvocationStatus.Running
         });
 
-        AssertEx.False(gate.TryAcquire(out _), "A live invocation must refuse the draft.");
+        AssertEx.False(gate.TryAcquire(out _), "A slot holder must refuse the draft.");
 
-        dispatcher.CurrentInvocation.Returns((InvocationState?)null);
-        runner.ActiveInvocationCount.Returns(1);
-        AssertEx.False(gate.TryAcquire(out _), "A non-zero active invocation count must refuse the draft.");
-
-        // The refusals must have handed the semaphore back, or the gate would be wedged once the node goes idle.
-        runner.ActiveInvocationCount.Returns(0);
+        // The refusal must have handed the semaphore back, or the gate would be wedged once the node goes idle.
+        dispatcher.SlotHolder.Returns((InvocationState?)null);
         AssertEx.True(gate.TryAcquire(out var lease), "A refusal must not leak the slot.");
         lease?.Dispose();
     }
 
-    private static DraftAdmissionGate CreateGate(out IWorkerEventDispatcher dispatcher, out IInvocationRunner runner)
+    private static DraftAdmissionGate CreateGate(out IWorkerEventDispatcher dispatcher)
     {
         dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        runner = Substitute.For<IInvocationRunner>();
-        return new DraftAdmissionGate(dispatcher, runner);
+        return new DraftAdmissionGate(dispatcher);
     }
 }

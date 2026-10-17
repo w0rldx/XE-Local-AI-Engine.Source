@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Hosting;
 
 using System.Diagnostics;
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -117,7 +118,7 @@ public sealed class VaultUnlockHostTests : IDisposable
         AssertEx.Contains(attributes, static attribute => attribute.Equals($"path={NodeAuthCookie.RefreshCookiePath}", StringComparison.OrdinalIgnoreCase));
         var ticket = AssertEx.NotNull(outcome.UnlockTicket);
         var expires = DateTimeOffset.Parse(attributes.Single(static attribute => attribute.StartsWith("expires=", StringComparison.OrdinalIgnoreCase))["expires=".Length..],
-            System.Globalization.CultureInfo.InvariantCulture);
+            CultureInfo.InvariantCulture);
         AssertEx.Equal(ticket.ExpiresAt.ToUnixTimeSeconds(), expires.ToUnixTimeSeconds());
         AssertEx.True(ticket.ExpiresAt - TimeProvider.System.GetUtcNow() <= VaultUnlockTicket.Lifetime, "The ticket must live at most its lifetime.");
         var value = attributes[0][(NodeAuthCookie.UnlockTicketCookieName.Length + 1)..];

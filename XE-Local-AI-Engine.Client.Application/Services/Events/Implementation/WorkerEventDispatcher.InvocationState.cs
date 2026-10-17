@@ -26,71 +26,151 @@ public sealed partial class WorkerEventDispatcher
         };
     }
 
-    private InvocationState? GetCurrentInvocationSnapshot()
+    // Caller must hold _syncRoot. A live turn by id, else an ended one whose lease is still out, else the last assigned one when it is that id.
+    private InvocationState? FindState(Guid invocationId)
     {
-        lock (_syncRoot)
+        if (_live.TryGetValue(invocationId, out var state) || _ended.TryGetValue(invocationId, out state))
         {
-            return CurrentInvocation?.Clone();
+            return state;
         }
+
+        return CurrentInvocation?.InvocationId == invocationId ? CurrentInvocation : null;
     }
 
-    private void UpdateCurrentInvocation(Action<InvocationState> update)
+    // Applies to the live turn the predicate picks, else to CurrentInvocation only when it matches too; returns the target's pre-update clone, or null.
+    private InvocationState? UpdateMatching(Func<InvocationState, bool> match, Action<InvocationState> update)
     {
-        ArgumentNullException.ThrowIfNull(update);
-
+        InvocationState? before;
         InvocationState? snapshot;
 
         lock (_syncRoot)
         {
-            if (CurrentInvocation is null)
+            var target = _live.Values.FirstOrDefault(match) ?? (CurrentInvocation is { } last && match(last) ? last : null);
+            if (target is null)
             {
-                return;
+                return null;
             }
 
-            update(CurrentInvocation);
-            CurrentInvocation.LastUpdatedAt = _timeProvider.GetUtcNow();
-            snapshot = CurrentInvocation.Clone();
+            before = target.Clone();
+            update(target);
+            target.LastUpdatedAt = _timeProvider.GetUtcNow();
+            snapshot = target.Clone();
         }
 
-        if (snapshot is not null)
-        {
-            PublishStateChanged(snapshot);
-        }
+        PublishStateChanged(snapshot);
+        return before;
     }
 
     private void UpdateInvocation(Guid invocationId, Func<InvocationState, InvocationState> update)
     {
         ArgumentNullException.ThrowIfNull(update);
 
-        InvocationState? snapshot = null;
+        InvocationState snapshot;
 
         lock (_syncRoot)
         {
-            if (CurrentInvocation?.InvocationId != invocationId)
+            if (FindState(invocationId) is not { } state)
             {
-                // The current slot was replaced (or cleared) before this update arrived. An update applies against the matching id only, and a
-                // dropped terminal would silently leave the message non-terminal — so probe the dropped status here to surface it.
+                // Neither live nor the last assigned turn. An update applies against the matching id only, and a dropped terminal
+                // would silently leave the message non-terminal, so probe the dropped status here to surface it.
                 var dropped = update(new InvocationState
                 {
                     InvocationId = invocationId,
-                    ConversationId = CurrentInvocation?.ConversationId ?? Guid.Empty
+                    ConversationId = Guid.Empty
                 });
 
                 if (NodeChatInvocationPump.IsTerminal(dropped.Status))
                 {
-                    _logger.LogWarning(
-                        "Dropped a terminal {Status} update for invocation {InvocationId} because the current invocation is {CurrentInvocationId}. The terminal will not be persisted via this slot.",
+                    _logger.LogWarning("Dropped a terminal {Status} update for invocation {InvocationId} because it is not live. The terminal will not be persisted via this slot.",
                         dropped.Status,
-                        invocationId,
-                        CurrentInvocation?.InvocationId);
+                        invocationId);
                 }
 
                 return;
             }
 
-            CurrentInvocation = update(CurrentInvocation);
-            CurrentInvocation.LastUpdatedAt = _timeProvider.GetUtcNow();
-            snapshot = CurrentInvocation.Clone();
+            var updated = update(state);
+            updated.LastUpdatedAt = _timeProvider.GetUtcNow();
+            if (CurrentInvocation?.InvocationId == invocationId)
+            {
+                CurrentInvocation = updated;
+            }
+
+            if (NodeChatInvocationPump.IsTerminal(updated.Status) && _live.Remove(invocationId))
+            {
+                // Kept until its lease is released, so a holder that just ended still reads as the holder and late updates still land.
+                _ended[invocationId] = updated;
+            }
+            else if (_live.ContainsKey(invocationId))
+            {
+                _live[invocationId] = updated;
+            }
+            else if (_ended.ContainsKey(invocationId))
+            {
+                _ended[invocationId] = updated;
+            }
+
+            snapshot = updated.Clone();
+        }
+
+        PublishStateChanged(snapshot);
+    }
+
+    // Called once by a lease's dispose: frees the slot only while that lease's invocation holds it, and drops a turn that never reported a terminal.
+    private void ReleaseLease(Guid invocationId)
+    {
+        var release = false;
+        lock (_syncRoot)
+        {
+            if (_slotHolderId == invocationId)
+            {
+                _slotHolderId = null;
+                release = true;
+            }
+
+            _ = _live.Remove(invocationId);
+            _ = _ended.Remove(invocationId);
+        }
+
+        if (release)
+        {
+            _ = _invocationQueue.Release();
+        }
+    }
+
+    public bool ReleaseSlotForPark(Guid invocationId)
+    {
+        InvocationState? snapshot;
+        lock (_syncRoot)
+        {
+            if (_slotHolderId != invocationId)
+            {
+                return false;
+            }
+
+            _slotHolderId = null;
+            snapshot = FindState(invocationId)?.Clone();
+        }
+
+        _ = _invocationQueue.Release();
+        if (snapshot is not null)
+        {
+            PublishStateChanged(snapshot);
+        }
+
+        return true;
+    }
+
+    public async Task ReacquireSlotAsync(Guid invocationId, CancellationToken cancellationToken)
+    {
+        await _invocationQueue.WaitAsync(cancellationToken);
+
+        // Nothing that can throw sits between the wait and this assignment, or a cancel in the gap would leak the permit.
+        InvocationState? snapshot;
+        lock (_syncRoot)
+        {
+            _slotHolderId = invocationId;
+            snapshot = FindState(invocationId)?.Clone();
         }
 
         if (snapshot is not null)
@@ -108,24 +188,26 @@ public sealed partial class WorkerEventDispatcher
     }
 
     /// <summary>
-    ///     Holds the shared invocation slot for the duration of a local run. Disposing it releases the slot so the
-    ///     next queued invocation (local or remote) can proceed. Release is idempotent.
+    ///     A local run's claim on the shared invocation slot. Disposing it releases the slot only while its invocation is the slot
+    ///     holder, so the next queued invocation can proceed. Dispose is idempotent.
     /// </summary>
     private sealed class LocalInvocationLease : IAsyncDisposable
     {
-        private readonly SemaphoreSlim _queue;
+        private readonly Guid _invocationId;
+        private readonly WorkerEventDispatcher _owner;
         private int _disposed;
 
-        public LocalInvocationLease(SemaphoreSlim queue)
+        public LocalInvocationLease(WorkerEventDispatcher owner, Guid invocationId)
         {
-            _queue = queue;
+            _owner = owner;
+            _invocationId = invocationId;
         }
 
         public ValueTask DisposeAsync()
         {
             if (Interlocked.Exchange(ref _disposed, value: 1) == 0)
             {
-                _ = _queue.Release();
+                _owner.ReleaseLease(_invocationId);
             }
 
             return ValueTask.CompletedTask;
