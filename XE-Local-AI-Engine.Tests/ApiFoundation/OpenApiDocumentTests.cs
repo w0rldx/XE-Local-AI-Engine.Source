@@ -936,6 +936,25 @@ public sealed class OpenApiDocumentTests
             $"auth/refresh must declare its 200, the 401 a failed refresh sends and the middleware's 403. Declared: [{string.Join(", ", declared)}].");
     }
 
+    // Body mode is opt-in: the SPA's login body and its token response must not be made to carry the new members.
+    [Test]
+    public async Task AuthTokenContracts_DeclareTheBodyModeMembersAsOptional()
+    {
+        using var client = Factory.CreateClient();
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+
+        AssertSchemaProperties(schemas, "AuthV1NodeLoginRequest", ["password", "returnRefreshToken"]);
+        AssertRequired(schemas, "AuthV1NodeLoginRequest", required: ["password"], optional: ["email", "returnRefreshToken"]);
+        AssertSchemaProperties(schemas, "AuthV1NodeAccessTokenResponse", ["accessToken", "expiresAtUtc", "refreshToken", "refreshTokenExpiresAtUtc"]);
+        AssertRequired(schemas, "AuthV1NodeAccessTokenResponse", required: ["accessToken", "expiresAtUtc"],
+            optional: ["refreshToken", "refreshTokenExpiresAtUtc"]);
+    }
+
     private static void AssertRequired(JsonElement schemas, string schemaSuffix, IReadOnlyList<string> required, IReadOnlyList<string> optional)
     {
         var schema = FindSchema(schemas, schemaSuffix);

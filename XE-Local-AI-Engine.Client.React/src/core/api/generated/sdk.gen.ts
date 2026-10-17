@@ -2799,6 +2799,11 @@ export const nodeChangePassword = <ThrowOnError extends boolean = true>(
 		},
 	});
 
+/**
+ * Signs the operator in and issues an access token.
+ *
+ * Cookie mode (default) sets the HttpOnly node_rt refresh cookie. With returnRefreshToken: true (non-browser clients) the body also carries refreshToken and refreshTokenExpiresAtUtc and no cookie is written; refresh it through auth/refresh with the X-XE-Refresh-Token header.
+ */
 export const nodeLogin = <ThrowOnError extends boolean = true>(
 	options: Options<NodeLoginData, ThrowOnError>,
 ): RequestResult<NodeLoginResponses, NodeLoginErrors, ThrowOnError> =>
@@ -2834,6 +2839,11 @@ export const nodeLogout = <ThrowOnError extends boolean = true>(
 		...options,
 	});
 
+/**
+ * Rotates the refresh token and issues a new access token.
+ *
+ * Reads the node_rt cookie. Only when no cookie is sent, a non-browser client may send its refresh token in the X-XE-Refresh-Token header; that answer carries the rotated refreshToken and refreshTokenExpiresAtUtc in the body and never sets or clears a cookie.
+ */
 export const nodeRefresh = <ThrowOnError extends boolean = true>(
 	options?: Options<NodeRefreshData, ThrowOnError>,
 ): RequestResult<NodeRefreshResponses, NodeRefreshErrors, ThrowOnError> =>

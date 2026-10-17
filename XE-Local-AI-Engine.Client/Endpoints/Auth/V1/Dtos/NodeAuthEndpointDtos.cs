@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Auth.V1;
 
+using System.Text.Json.Serialization;
+
 public sealed record NodeAuthStatusResponse
 {
     public required bool SetupRequired { get; init; }
@@ -63,6 +65,12 @@ public sealed record NodeLoginRequest
     public string? Email { get; init; }
 
     public string Password { get; init; } = string.Empty;
+
+    /// <summary>
+    ///     Body mode for a non-browser client: the refresh token comes back in the response body and no
+    ///     <c>node_rt</c> cookie is written. Defaults to <c>false</c> (cookie mode).
+    /// </summary>
+    public bool ReturnRefreshToken { get; init; }
 }
 
 public sealed record NodeChangePasswordRequest
@@ -77,6 +85,14 @@ public sealed record NodeAccessTokenResponse
     public required string AccessToken { get; init; }
 
     public required DateTime ExpiresAtUtc { get; init; }
+
+    /// <summary>Body mode only (login with <c>returnRefreshToken</c>, or refresh by header); omitted in cookie mode.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? RefreshToken { get; init; }
+
+    /// <summary>When <see cref="RefreshToken" /> expires; present exactly when it is.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTime? RefreshTokenExpiresAtUtc { get; init; }
 }
 
 /// <summary>

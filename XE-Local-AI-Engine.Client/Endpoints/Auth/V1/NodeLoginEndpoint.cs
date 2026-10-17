@@ -24,11 +24,18 @@ public sealed class NodeLoginEndpoint : Endpoint<NodeLoginRequest, NodeAccessTok
         // without it the generated client types the 401 as empty and the SPA has to hand-write the shape it reads.
         Description(static descriptor => descriptor.Produces<NodeLoginLockedOutResponse>(StatusCodes.Status401Unauthorized)
                                                    .AutoTagOverride("Auth"));
+        Summary(static summary =>
+        {
+            summary.Summary = "Signs the operator in and issues an access token.";
+            summary.Description = "Cookie mode (default) sets the HttpOnly node_rt refresh cookie. With returnRefreshToken: true "
+                                  + "(non-browser clients) the body also carries refreshToken and refreshTokenExpiresAtUtc and no "
+                                  + "cookie is written; refresh it through auth/refresh with the X-XE-Refresh-Token header.";
+        });
     }
 
     public override async Task HandleAsync(NodeLoginRequest req, CancellationToken ct)
     {
         var result = await _authService.LoginAsync(req.Email, req.Password, ct);
-        await NodeAuthEndpointSupport.SendTokenResultAsync(Send, result, ct);
+        await NodeAuthEndpointSupport.SendTokenResultAsync(Send, result, req.ReturnRefreshToken, ct);
     }
 }

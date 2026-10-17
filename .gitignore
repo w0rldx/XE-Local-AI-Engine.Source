@@ -430,6 +430,7 @@ CLAUDE.local.md
 !/publish/
 !/XE-Local-AI-Engine.Client/Properties/PublishProfiles/*.pubxml
 !/XE-Local-AI-Engine.WindowsLauncher/Properties/PublishProfiles/*.pubxml
+!/XE-Local-AI-Engine.Cli/Properties/PublishProfiles/*.pubxml
 
 # Packaged RC bundles (build output, not source)
 /publish/dist/

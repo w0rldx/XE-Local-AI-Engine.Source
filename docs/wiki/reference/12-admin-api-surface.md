@@ -60,6 +60,14 @@ revoked and linked to its successor inside one serializable transaction; other s
 (`RevokeRefreshTokensAsync`), `ChangePasswordAsync` and `ResetAdminPasswordAsync` still revoke **every** session of
 the user. A failed refresh (missing, expired or revoked cookie) answers a bodyless 401 and clears the cookie.
 
+A non-browser loopback client (the `xe` terminal client) uses **body mode** instead of the cookie: `auth/login` with
+`returnRefreshToken: true` returns `refreshToken` and `refreshTokenExpiresAtUtc` in the body and writes no cookie, and
+`auth/refresh` reads the `X-XE-Refresh-Token` header **only when no `node_rt` cookie is sent** (the cookie always
+wins). A header refresh runs the same `RefreshAsync`, so rotation, the grace, logout, the password change and the
+auth rate limit apply unchanged; it answers in body mode and never sets or clears a cookie, and its failure is the
+same bodyless 401. The header is not gated on `Origin`; the loopback peer and `Host` checks above still apply.
+`NodeAuthEndpointTests` pins the header and cookie combinations.
+
 Rotation carries a **10-second reuse grace for rotation alone**: a token that rotation replaced still buys a
 pair until the window closes, because a reload racing its own in-flight refresh (or a second tab sharing the cookie)
 otherwise loses, and the loser's 401 clears the cookie and signs a blameless operator out. The grace never re-opens a

@@ -4,6 +4,26 @@ Pending rules awaiting operator approval. Not required reading: nothing here is 
 Add an entry in the normal format (`### <heading>`, then `**Rule:** … **Prevents:** … **Authority:** …`).
 Once the operator approves it, move the entry to its topic file and delete it here; a rejected entry is deleted.
 
+### A new project's publish profile is ignored until `.gitignore` un-ignores its folder
+
+**Rule:** after adding `Properties/PublishProfiles/*.pubxml` to a new project, add
+`!/<project>/Properties/PublishProfiles/*.pubxml` beside the existing un-ignore lines in `.gitignore` and confirm with
+`git ls-files <project>/Properties` before any packaging step or test names the profile. **Prevents:** a profile that
+exists in the worktree, passes `RuntimeLicensePackagingTests` and local publishes, but is in no commit, so CI and a
+clean checkout publish without the RID, self-contained and single-file settings (the `xe` client, 2026-10-17; caught by
+review, not by a gate). **Authority:** the `*.pubxml` rule and its per-project exceptions in `.gitignore`.
+
+### A `Directory.Packages.props` addition also runs `pnpm run licenses:check`
+
+**Rule:** after adding or bumping any `<PackageVersion>`, run `( cd XE-Local-AI-Engine.Client.React && pnpm run
+licenses:generate )` and commit `src/features/about/data/third-party-licenses.generated.json` in the same commit;
+`pnpm run acceptance` does not include `licenses:check`, and the routing table sends a `Directory.Packages.props`
+change to build-and-analyzers, where the license rule (frontend-and-api, "`openapi:check` and `licenses:check` diff
+the working tree against the INDEX") is never read. **Prevents:** a backend-only package addition that passes the
+backend gate and the frontend acceptance locally and turns the CI `licenses:check` step red (the `xe` client's two
+packages, 2026-10-17; caught by review). **Authority:** `licenses:check` in `XE-Local-AI-Engine.Client.React/package.json`;
+`.github/workflows/build-and-test.yml`.
+
 ### A worker never rewrites a shared ledger file; rows are edited in place
 
 **Rule:** a findings or status ledger that several agents update (`FINDINGS.md`, a plan's checklist) is edited row by row with targeted replacements; no agent writes the whole file, and a coordinator re-reads the row count after every worker hand-off. **Prevents:** one worker's full-file write silently discarding every other lane's rows (the 2026-10-16 live-QA ledger lost 36 of 40 rows once and was rebuilt from the round files). **Authority:** `AGENTS.md` "never let two tasks claim the same file"; `Plans/live-qa-deep-dive-2026-10-16/FINDINGS.md` header rule.

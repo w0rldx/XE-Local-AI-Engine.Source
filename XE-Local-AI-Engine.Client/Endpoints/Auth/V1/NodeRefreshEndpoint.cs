@@ -8,6 +8,9 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 
 public sealed class NodeRefreshEndpoint : EndpointWithoutRequest<NodeAccessTokenResponse>
 {
+    /// <summary>The refresh token of a body-mode (non-browser) client; read only when no <c>node_rt</c> cookie is sent.</summary>
+    public const string RefreshTokenHeaderName = "X-XE-Refresh-Token";
+
     private readonly INodeAuthService _authService;
     private readonly TimeProvider _timeProvider;
 
@@ -27,11 +30,23 @@ public sealed class NodeRefreshEndpoint : EndpointWithoutRequest<NodeAccessToken
         // auto-401 for an anonymous verb, so the contract states it here or the generated client never learns it exists.
         Description(static descriptor => descriptor.Produces(StatusCodes.Status401Unauthorized)
                                                    .AutoTagOverride("Auth"));
+        Summary(static summary =>
+        {
+            summary.Summary = "Rotates the refresh token and issues a new access token.";
+            summary.Description = "Reads the node_rt cookie. Only when no cookie is sent, a non-browser client may send its refresh "
+                                  + "token in the X-XE-Refresh-Token header; that answer carries the rotated refreshToken and "
+                                  + "refreshTokenExpiresAtUtc in the body and never sets or clears a cookie.";
+        });
     }
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var refreshToken = HttpContext.Request.Cookies[NodeAuthCookie.RefreshCookieName];
+        // The cookie wins whenever it is sent, so a browser never reaches the header path; neither sent stays cookie mode.
+        var bodyMode = !HttpContext.Request.Cookies.ContainsKey(NodeAuthCookie.RefreshCookieName)
+                       && HttpContext.Request.Headers.ContainsKey(RefreshTokenHeaderName);
+        var refreshToken = bodyMode
+            ? HttpContext.Request.Headers[RefreshTokenHeaderName].ToString()
+            : HttpContext.Request.Cookies[NodeAuthCookie.RefreshCookieName];
         var result = await _authService.RefreshAsync(refreshToken, ct);
 
         // A vault unlock's ticket (VaultUnlockHost) is spent by the first refresh that carries it, and trades for a
@@ -52,6 +67,6 @@ public sealed class NodeRefreshEndpoint : EndpointWithoutRequest<NodeAccessToken
             }
         }
 
-        await NodeAuthEndpointSupport.SendTokenResultAsync(Send, result, ct);
+        await NodeAuthEndpointSupport.SendTokenResultAsync(Send, result, bodyMode, ct);
     }
 }

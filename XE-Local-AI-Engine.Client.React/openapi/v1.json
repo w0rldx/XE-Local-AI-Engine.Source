@@ -2090,6 +2090,8 @@
         "tags": [
           "Auth"
         ],
+        "summary": "Signs the operator in and issues an access token.",
+        "description": "Cookie mode (default) sets the HttpOnly node_rt refresh cookie. With returnRefreshToken: true (non-browser clients) the body also carries refreshToken and refreshTokenExpiresAtUtc and no cookie is written; refresh it through auth/refresh with the X-XE-Refresh-Token header.",
         "operationId": "nodeLogin",
         "requestBody": {
           "x-name": "NodeLoginRequest",
@@ -2173,6 +2175,8 @@
         "tags": [
           "Auth"
         ],
+        "summary": "Rotates the refresh token and issues a new access token.",
+        "description": "Reads the node_rt cookie. Only when no cookie is sent, a non-browser client may send its refresh token in the X-XE-Refresh-Token header; that answer carries the rotated refreshToken and refreshTokenExpiresAtUtc in the body and never sets or clears a cookie.",
         "operationId": "nodeRefresh",
         "responses": {
           "200": {
@@ -27931,6 +27935,15 @@
           "expiresAtUtc": {
             "type": "string",
             "format": "date-time"
+          },
+          "refreshToken": {
+            "type": "string",
+            "nullable": true
+          },
+          "refreshTokenExpiresAtUtc": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         }
       },
@@ -28016,6 +28029,9 @@
             "maxLength": 256,
             "minLength": 0,
             "nullable": false
+          },
+          "returnRefreshToken": {
+            "type": "boolean"
           }
         }
       },

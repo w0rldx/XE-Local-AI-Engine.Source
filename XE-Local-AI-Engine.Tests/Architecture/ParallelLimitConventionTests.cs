@@ -5,13 +5,13 @@ using XE_Local_AI_Engine.Tests.Architecture.Support;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Keeps the parallel cap of eight on both heavy test assemblies, and nothing overriding it: a class-level limiter
+///     Keeps the parallel cap of eight on the in-process host test assemblies, and nothing overriding it: a class-level limiter
 ///     or <c>ClearParallelLimiter</c> takes precedence and reopens TUnit's 4 × cores default.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed partial class ParallelLimitConventionTests
 {
-    private static readonly string[] CappedProjects = ["XE-Local-AI-Engine.Tests", "XE-Local-AI-Engine.Client.Persistence.Tests"];
+    private static readonly string[] CappedProjects = ["XE-Local-AI-Engine.Tests", "XE-Local-AI-Engine.Client.Persistence.Tests", "XE-Local-AI-Engine.Cli.Tests"];
 
     [GeneratedRegex(@"\[assembly:\s*ParallelLimiter<[A-Za-z_.]*AssemblyParallelLimit>\]")]
     private static partial Regex AssemblyCap();
@@ -25,6 +25,7 @@ public sealed partial class ParallelLimitConventionTests
     [Test]
     [Arguments("XE-Local-AI-Engine.Tests")]
     [Arguments("XE-Local-AI-Engine.Client.Persistence.Tests")]
+    [Arguments("XE-Local-AI-Engine.Cli.Tests")]
     public void TheAssembly_CapsParallelTestsAtEight(string project)
     {
         var source = SourceCommentStripper.StripComments(File.ReadAllText(RepositoryPaths.Combine(project, "AssemblyParallelLimit.cs")));

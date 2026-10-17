@@ -647,6 +647,8 @@ export type XeLocalAiEngineClientEndpointsAppUpdateV1SetAppUpdateChannelRequest 
 export type XeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse = {
 	accessToken: string;
 	expiresAtUtc: string;
+	refreshToken?: string | null;
+	refreshTokenExpiresAtUtc?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse = {
@@ -669,6 +671,7 @@ export type XeLocalAiEngineClientEndpointsAuthV1NodeLoginLockedOutResponse = {
 export type XeLocalAiEngineClientEndpointsAuthV1NodeLoginRequest = {
 	email?: string | null;
 	password: string;
+	returnRefreshToken?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest = {

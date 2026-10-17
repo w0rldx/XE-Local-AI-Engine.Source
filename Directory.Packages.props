@@ -167,6 +167,10 @@
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.35.0.4138" />
+    <!-- Terminal client (XE-Local-AI-Engine.Cli) only: argument parsing and console rendering. Spectre.Console is the
+         core package alone; its ImageSharp add-on is deliberately not referenced. -->
+    <PackageVersion Include="Spectre.Console" Version="0.57.2" />
+    <PackageVersion Include="System.CommandLine" Version="2.0.13" />
     <PackageVersion Include="System.Numerics.Tensors" Version="10.0.12" />
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
     <PackageVersion Include="TUnit" Version="1.74.0" />

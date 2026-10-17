@@ -11,6 +11,7 @@
         <Project Path="XE-Local-AI-Engine.Desktop/XE-Local-AI-Engine.Desktop.csproj"/>
         <Project Path="XE-Local-AI-Engine.AI.Contracts/XE-Local-AI-Engine.AI.Contracts.csproj"/>
         <Project Path="XE-Local-AI-Engine.AI.Agent/XE-Local-AI-Engine.AI.Agent.csproj"/>
+        <Project Path="XE-Local-AI-Engine.Cli/XE-Local-AI-Engine.Cli.csproj"/>
         <Project Path="XE-Local-AI-Engine.Client.Testing/XE-Local-AI-Engine.Client.Testing.csproj"/>
         <Project Path="XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj"/>
         <Project Path="XE-Local-AI-Engine.Client.Application\XE-Local-AI-Engine.Client.Application.csproj"/>
@@ -38,6 +39,7 @@
     </Folder>
     <Folder Name="/Tests/">
         <Project Path="XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj"/>
+        <Project Path="XE-Local-AI-Engine.Cli.Tests/XE-Local-AI-Engine.Cli.Tests.csproj"/>
         <Project Path="XE-Local-AI-Engine.Client.Persistence.Tests/XE-Local-AI-Engine.Client.Persistence.Tests.csproj"/>
         <Project Path="XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj"/>
         <Project Path="XE-Local-AI-Engine.Tests.E2ETests/XE-Local-AI-Engine.Tests.E2ETests.csproj"/>

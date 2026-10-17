@@ -603,6 +603,8 @@ export const zXeLocalAiEngineClientEndpointsAppUpdateV1SetAppUpdateChannelReques
 export const zXeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse = z.object({
 	accessToken: z.string(),
 	expiresAtUtc: z.iso.datetime({ offset: true }),
+	refreshToken: z.string().nullish(),
+	refreshTokenExpiresAtUtc: z.iso.datetime({ offset: true }).nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse = z.object({
@@ -633,6 +635,7 @@ export const zXeLocalAiEngineClientEndpointsAuthV1NodeLoginRequest = z.object({
 		.regex(/^[^@]+@[^@]+$/)
 		.nullish(),
 	password: z.string().min(0).max(256),
+	returnRefreshToken: z.boolean().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest = z.object({
