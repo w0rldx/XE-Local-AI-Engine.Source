@@ -36,29 +36,32 @@ class MultiplePublishInputsTests(unittest.TestCase):
         self.engine = self.write_pair("engine", {"Shared": "1", "Engine": "1"})
         self.desktop = self.write_pair("desktop", {"Shared": "1", "Desktop": "2"})
 
-    def write_pair(self, name: str, packages: dict[str, str]) -> tuple[Path, Path]:
+    def write_pair(
+        self, name: str, packages: dict[str, str], disposition: str = "loose", relative_path: str | None = None
+    ) -> tuple[Path, Path]:
+        rid = "linux-x64" if relative_path else "win-x64"
         deps = self.root / f"{name}.deps.json"
         evidence = self.root / f"{name}.inputs.json"
         libraries = {
             f"{package}/{version}": {"type": "package", "path": f"{package.lower()}/{version}"}
             for package, version in packages.items()
         }
-        deps.write_text(json.dumps({"targets": {"net10.0/win-x64": {}}, "libraries": libraries}))
+        deps.write_text(json.dumps({"targets": {f"net10.0/{rid}": {}}, "libraries": libraries}))
         evidence.write_text(
             json.dumps(
                 {
                     "schemaVersion": 2,
-                    "runtimeIdentifier": "win-x64",
-                    "publishSingleFile": False,
-                    "selfContained": False,
+                    "runtimeIdentifier": rid,
+                    "publishSingleFile": rid == "linux-x64",
+                    "selfContained": rid == "linux-x64",
                     "inputs": [
                         {
                             "packageId": package,
                             "packageVersion": version,
                             "origin": "nuget",
-                            "disposition": "loose",
-                            "relativePath": f"{package}.dll",
-                            "sha256": "a" * 64,
+                            "disposition": disposition,
+                            "relativePath": relative_path or f"{package}.dll",
+                            "sha256": (package[0].lower() * 64) if relative_path else "a" * 64,
                         }
                         for package, version in packages.items()
                     ],
@@ -103,6 +106,22 @@ class MultiplePublishInputsTests(unittest.TestCase):
         path.write_text(json.dumps(document))
         with self.assertRaisesRegex(ValueError, "conflicting deps.json package evidence"):
             self.selected()
+
+    def same_path(self, engine: str, desktop: str):
+        self.engine = self.write_pair("engine", {"Engine": "1"}, engine, "Shared.dll")
+        self.desktop = self.write_pair("desktop", {"Desktop": "2"}, desktop, "Shared.dll")
+        return CORPUS.shipped_packages("linux-x64", *self.engine, (self.desktop[0],), (self.desktop[1],))
+
+    def test_same_path_in_two_single_file_bundles_keeps_both_packages(self) -> None:
+        self.assertEqual({("engine", "1"), ("desktop", "2")}, set(self.same_path("bundle", "bundle")))
+
+    def test_same_path_with_a_loose_input_still_conflicts(self) -> None:
+        for engine, desktop in (("loose", "loose"), ("bundle", "loose"), ("loose", "bundle")):
+            with (
+                self.subTest(engine=engine, desktop=desktop),
+                self.assertRaisesRegex(ValueError, "conflicting publish input evidence for Shared.dll"),
+            ):
+                self.same_path(engine, desktop)
 
     def test_rejects_wrong_rid_in_either_additional_input(self) -> None:
         for position in (0, 1):

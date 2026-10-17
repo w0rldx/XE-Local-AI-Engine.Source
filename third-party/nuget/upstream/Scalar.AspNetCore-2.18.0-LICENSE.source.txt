@@ -1,0 +1,3 @@
+Source: https://raw.githubusercontent.com/scalar/scalar/2c929a36187661a8a3fb27863029ad47db1c5835/LICENSE
+Retrieved: 2026-10-18
+SHA-256: 380cd0a6ad700e1f821f2a509f0dd9ff835041cee2d43daf5dedc1adb2bcc620

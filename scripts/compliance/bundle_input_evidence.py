@@ -96,14 +96,23 @@ def shipment_evidence_hash(paths: list[Path]) -> str:
 def load_publish_evidence(
     documents: Sequence[object], paths: list[Path], runtime_identifier: str
 ) -> tuple[dict[tuple[str, str], dict], dict[tuple[str, str], dict]]:
-    """Validate each executable's evidence before combining its shipped package inputs."""
+    """Validate each executable's evidence before combining its shipped package inputs.
+
+    Several executables publish into one directory. A loose input lands in that shared directory, so its
+    relative path must carry one (package, sha256) identity across every manifest, bundled inputs included:
+    a loose file beside a single-file bundle that embeds a different file at the same path is a conflict.
+    A bundled input lives inside its own executable's single-file bundle, so the same path inside two
+    bundles may carry different packages. One package key must hash the same at one path in every case.
+    """
     if not documents or len(documents) != len(paths):
         raise ValueError("each deps.json requires its own bundle-input evidence manifest")
     libraries: dict[tuple[str, str], dict] = {}
     packages: dict[tuple[str, str], dict] = {}
     versions: dict[str, str] = {}
-    outputs: dict[str, tuple[tuple[str, str], str]] = {}
-    for document, path in zip(documents, paths, strict=True):
+    loose: dict[str, tuple[tuple[str, str], str]] = {}
+    bundled: dict[str, dict[int, tuple[tuple[str, str], str]]] = {}
+    hashes: dict[tuple[str, tuple[str, str]], str] = {}
+    for index, (document, path) in enumerate(zip(documents, paths, strict=True)):
         if not isinstance(document, dict):
             raise ValueError("deps.json must contain a JSON object")
         targets = document.get("targets")
@@ -146,9 +155,17 @@ def load_publish_evidence(
                 relative = entry["relativePath"].replace("\\", "/")
                 output = relative.casefold() if runtime_identifier == "win-x64" else relative
                 identity = (key, entry["sha256"])
-                if output in outputs and outputs[output] != identity:
+                inside = bundled.setdefault(output, {})
+                if entry["disposition"] == "loose":
+                    clashes = [loose.get(output), *inside.values()]
+                    loose[output] = identity
+                else:
+                    clashes = [loose.get(output), inside.get(index)]
+                    inside[index] = identity
+                if hashes.setdefault((output, key), entry["sha256"]) != entry["sha256"] or any(
+                    clash not in (None, identity) for clash in clashes
+                ):
                     raise ValueError(f"conflicting publish input evidence for {relative}")
-                outputs[output] = identity
                 if entry not in combined["inputs"]:
                     combined["inputs"].append(entry)
     for package in packages.values():
