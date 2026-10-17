@@ -48,7 +48,12 @@ internal sealed class TestCli : IDisposable
             Out = new AnsiConsoleOutput(writer),
             Ansi = AnsiSupport.No,
             ColorSystem = ColorSystemSupport.NoColors,
-            Interactive = InteractionSupport.No
+            Interactive = InteractionSupport.No,
+            // Spectre's built-in CI enrichers (GITHUB_ACTIONS and friends) override these settings, e.g. Ansi=true on a runner.
+            Enrichment = new ProfileEnrichment
+            {
+                UseDefaultEnrichers = false
+            }
         });
 
     public Task<int> RunAsync(params string[] args) =>

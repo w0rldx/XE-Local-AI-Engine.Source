@@ -515,7 +515,13 @@ public sealed class TurnRunnerTests
             Out = new AnsiConsoleOutput(TextWriter.Null),
             Ansi = AnsiSupport.Yes,
             ColorSystem = ColorSystemSupport.NoColors,
-            Interactive = InteractionSupport.Yes
+            Interactive = InteractionSupport.Yes,
+            // Spectre's built-in CI enrichers (GITHUB_ACTIONS and friends) force Interactive=false after these settings,
+            // which makes every prompt refuse to read and leaves the gated turn waiting forever on a CI runner.
+            Enrichment = new ProfileEnrichment
+            {
+                UseDefaultEnrichers = false
+            }
         });
 
         public TaskCompletionSource<ConsoleKeyInfo> Key { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
