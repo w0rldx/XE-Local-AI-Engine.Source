@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Hosting;
 
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Services.Diagnostics;
@@ -106,7 +107,8 @@ public sealed class NativeDesktopContractTests
     public void TrayIcon_IsAttachedToTheApplication_SoThePlatformIconExists()
     {
         // Avalonia 12.1.4 creates the platform tray only on attach; an unattached icon left the tray preference unusable.
-        var source = File.ReadAllText(RepositoryPaths.Combine("XE-Local-AI-Engine.Desktop", "DesktopApplication.cs"));
+        // Whitespace is collapsed so the formatter may break the initializer across lines.
+        var source = Regex.Replace(File.ReadAllText(RepositoryPaths.Combine("XE-Local-AI-Engine.Desktop", "DesktopApplication.cs")), @"\s+", " ");
 
         AssertEx.Contains(source, "_tray = new TrayIcon");
         AssertEx.Contains(source, "TrayIcon.SetIcons(this, new TrayIcons { _tray });");
