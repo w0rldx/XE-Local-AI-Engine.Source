@@ -23,7 +23,7 @@ concurrency:
 env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
-  VPK_VERSION: "1.2.0"
+  VPK_VERSION: "1.2.161"
 
 jobs:
   # A reusable-workflow call cannot carry `timeout-minutes` — the timeouts (and the

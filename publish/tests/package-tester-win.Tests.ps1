@@ -997,7 +997,7 @@ Describe 'Velopack previous-release seeding' {
     It 'uses the documented GitHub download flags for the prerelease win channel' {
         $downloadFunction = Get-ScriptFunctionText -Name 'Invoke-VelopackPreviousReleaseDownload'
 
-        $downloadFunction | Should -Match 'vpk@1\.2\.0'
+        $downloadFunction | Should -Match 'vpk@1\.2\.161'
         $downloadFunction | Should -Match 'download\s+github'
         $downloadFunction | Should -Match '--repoUrl'
         $downloadFunction | Should -Match '--outputDir'
@@ -1037,7 +1037,7 @@ Describe 'Velopack previous-release seeding' {
                     param($node)
                     $node -is [System.Management.Automation.Language.CommandAst] -and
                     $node.GetCommandName() -eq 'dnx' -and
-                    $node.Extent.Text -match 'vpk@1\.2\.0 pack'
+                    $node.Extent.Text -match 'vpk@1\.2\.161 pack'
                 }, $true))
 
         $seedCalls.Count | Should -Be 1

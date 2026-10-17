@@ -18,10 +18,10 @@
     <!-- MSAL ConfidentialClientApplication for the Entra ID authorization-code sign-in flow (Postman-parity delegated
          token via a confidential client + PKCE). Not pulled in transitively by Azure.Identity 1.21.0 (which depends
          only on Azure.Core), so both packages are direct references, version-locked to the same MSAL release. -->
-    <PackageVersion Include="Microsoft.Identity.Client" Version="4.90.1" />
+    <PackageVersion Include="Microsoft.Identity.Client" Version="4.91.0" />
     <!-- OS-native encrypted MSAL token-cache persistence (DPAPI/Keychain/libsecret), mirroring the
          TokenCachePersistenceOptions Azure.Identity provides for its own credential types. -->
-    <PackageVersion Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.90.1" />
+    <PackageVersion Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.91.0" />
     <!-- Pure-.NET document text extraction for chat file-upload attachments (single-file-publish safe; no Python/Docker/native deps). -->
     <PackageVersion Include="Microsoft.Extensions.DataIngestion.Abstractions" Version="10.10.0-preview.1.26459.2" />
     <!-- Genuine PdfPig (Apache-2.0, github.com/UglyToad/PdfPig). NOTE: the package id is `PdfPig`, NOT `UglyToad.PdfPig`
@@ -79,12 +79,12 @@
     <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.12.0" />
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.1" />
     <PackageVersion Include="Microsoft.Testing.Platform" Version="2.5.1" />
-    <PackageVersion Include="Microsoft.Playwright" Version="1.62.0" />
+    <PackageVersion Include="Microsoft.Playwright" Version="1.63.0" />
     <PackageVersion Include="OllamaSharp" Version="5.5.0" />
     <!-- Coupled to the Microsoft.Playwright pin above: TUnit.Playwright's nuspec sets the Microsoft.Playwright
          floor (1.68.4 requires >= 1.62.0), so check that floor before moving either package. A Microsoft.Playwright
          bump additionally needs `playwright.ps1 install` to refresh ~/.cache/ms-playwright and CI's browser layer. -->
-    <PackageVersion Include="TUnit.Playwright" Version="1.68.4" />
+    <PackageVersion Include="TUnit.Playwright" Version="1.74.0" />
     <PackageVersion Include="Microsoft.Extensions.AI" Version="10.10.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.10.1" />
     <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.10.0" />
@@ -150,13 +150,13 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.19.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.19.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.19.0" />
-    <PackageVersion Include="Quartz" Version="3.22.0" />
-    <PackageVersion Include="Quartz.Extensions.Hosting" Version="3.22.0" />
-    <PackageVersion Include="Quartz.Plugins" Version="3.22.0" />
-    <PackageVersion Include="Quartz.Plugins.TimeZoneConverter" Version="3.22.0" />
-    <PackageVersion Include="Quartz.Serialization.SystemTextJson" Version="3.22.0" />
+    <PackageVersion Include="Quartz" Version="3.22.4" />
+    <PackageVersion Include="Quartz.Extensions.Hosting" Version="3.22.4" />
+    <PackageVersion Include="Quartz.Plugins" Version="3.22.4" />
+    <PackageVersion Include="Quartz.Plugins.TimeZoneConverter" Version="3.22.4" />
+    <PackageVersion Include="Quartz.Serialization.SystemTextJson" Version="3.22.4" />
     <PackageVersion Include="Serilog" Version="4.4.0" />
-    <PackageVersion Include="Scalar.AspNetCore" Version="2.17.14" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.18.0" />
     <PackageVersion Include="Scrutor" Version="7.0.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="Serilog.Enrichers.Environment" Version="3.0.1" />
@@ -174,7 +174,7 @@
     <PackageVersion Include="System.Numerics.Tensors" Version="10.0.12" />
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
     <PackageVersion Include="TUnit" Version="1.74.0" />
-    <PackageVersion Include="Velopack" Version="1.2.0" />
+    <PackageVersion Include="Velopack" Version="1.2.161" />
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
 </Project>

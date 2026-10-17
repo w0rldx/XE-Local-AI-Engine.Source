@@ -10,7 +10,7 @@
 #   - .NET 10 SDK (matching global.json), pnpm, Node 22
 #   - To actually RUN the packaged app: ASP.NET Core Runtime 10.0.12+ (x64). The build is
 #     framework-dependent and does NOT bundle the runtime — that is by design.
-#   - vpk (Velopack CLI) 1.2.0 — this script installs it if missing.
+#   - vpk (Velopack CLI) 1.2.161 — this script installs it if missing.
 
 #Requires -Version 7.0
 $ErrorActionPreference = "Stop"
@@ -55,9 +55,9 @@ Assert-Ok "dotnet publish (WindowsLauncher)"
 & scripts\tests\windows-framework-launcher-smoke.ps1 -PublishDirectory $publishDir
 Assert-Ok "launcher smoke"
 
-# 5. Ensure vpk 1.2.0, then pack the portable artifact
+# 5. Ensure vpk 1.2.161, then pack the portable artifact
 if (-not (Get-Command vpk -ErrorAction SilentlyContinue)) {
-    dotnet tool install -g vpk --version 1.2.0; Assert-Ok "install vpk"
+    dotnet tool install -g vpk --version 1.2.161; Assert-Ok "install vpk"
     $env:PATH = $env:PATH + [IO.Path]::PathSeparator + (Join-Path $HOME ".dotnet\tools")
 }
 "Local rehearsal build of $version." | Set-Content RELEASE_NOTES.md -Encoding utf8

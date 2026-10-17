@@ -39,7 +39,7 @@ on:
         # workflow-level VPK_VERSION for their publish jobs, and a contract test ties all of them together.
         required: false
         type: string
-        default: "1.2.0"
+        default: "1.2.161"
 
 permissions:
   contents: read
