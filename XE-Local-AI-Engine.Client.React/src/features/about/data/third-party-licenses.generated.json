@@ -186,17 +186,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tabler/icons@3.48.0",
+			"id": "frontend:@tabler/icons@3.49.0",
 			"name": "@tabler/icons",
-			"version": "3.48.0",
+			"version": "3.49.0",
 			"license": "MIT",
 			"homepageUrl": "https://tabler.io/icons",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tabler/icons-react@3.48.0",
+			"id": "frontend:@tabler/icons-react@3.49.0",
 			"name": "@tabler/icons-react",
-			"version": "3.48.0",
+			"version": "3.49.0",
 			"license": "MIT",
 			"homepageUrl": "https://tabler.io/icons",
 			"source": "frontend"
@@ -1514,9 +1514,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:idb@8.0.3",
+			"id": "frontend:idb@8.0.4",
 			"name": "idb",
-			"version": "8.0.3",
+			"version": "8.0.4",
 			"license": "ISC",
 			"homepageUrl": "https://github.com/jakearchibald/idb#readme",
 			"source": "frontend"
@@ -2794,9 +2794,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:monaco-editor@0.56.0",
+			"id": "frontend:monaco-editor@0.57.0",
 			"name": "monaco-editor",
-			"version": "0.56.0",
+			"version": "0.57.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/microsoft/monaco-editor",
 			"source": "frontend"
