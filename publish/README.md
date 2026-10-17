@@ -14,7 +14,7 @@ require a maintainer PAT.
 | Windows x64 | Velopack `Portable.zip` | Install ASP.NET Core Runtime 10.0.12+ (x64) and WebView2 Evergreen Runtime, extract to a writable directory, and run the top-level launcher | Yes |
 | Linux x64 | Velopack `.AppImage` | Mark executable and run the AppImage | Yes; Velopack replaces the AppImage in place |
 
-Windows packing passes `--noInst` to Velopack 1.2.0, so the release must contain exactly one Windows
+Windows packing passes `--noInst` to Velopack 1.2.161, so the release must contain exactly one Windows
 `Portable.zip` and no `Setup.exe`. Linux packing produces an AppImage, not a ZIP.
 
 The Windows payload is framework-dependent. `XE-Local-AI-Engine.Client` publishes as DLL/deps/runtimeconfig files with
@@ -64,7 +64,7 @@ The release workflow runs these stages in order:
 2. **Bind version and source** — verify SemVer, exact tag spelling, and source commit; generate release notes with a
    checksum-pinned `git-cliff`.
 3. **Build and pack** — matrix jobs build Windows and Linux assets only. They run a frozen frontend install, license
-   validation, the production build, `dotnet publish`, payload SPDX generation/validation, Velopack 1.2.0 packing,
+   validation, the production build, `dotnet publish`, payload SPDX generation/validation, Velopack 1.2.161 packing,
    final artifact-content validation, and retained-artifact hashing.
 4. **Prepare the draft serially (protected)** — `prepare-release-draft`, guarded by the externally configured
    `open-source-release` environment, verifies retained hashes, creates one
