@@ -140,7 +140,7 @@ public sealed class NodeChatConcurrencyTests : IDisposable
     {
         await using var provider = await BuildProviderAsync("bounded-locks.sqlite");
         var writer = provider.GetRequiredService<NodeChatPersistenceWriter>();
-        var service = new NodeChatPersistenceService(writer);
+        var service = new NodeChatPersistenceService(writer, UnknownUsageProviderResolver.Instance);
 
         // Touch many distinct conversations and messages; the refcounted gate map must drop every gate once idle rather
         // than growing with history.
@@ -191,7 +191,7 @@ public sealed class NodeChatConcurrencyTests : IDisposable
 
     private static NodeChatPersistenceService CreateService(ServiceProvider provider)
     {
-        return new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        return new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
     }
 
     private static async Task<long> CountMessagesAsync(ServiceProvider provider, Guid conversationId)

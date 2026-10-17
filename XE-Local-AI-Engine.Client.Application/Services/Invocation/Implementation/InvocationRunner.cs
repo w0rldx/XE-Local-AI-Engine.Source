@@ -280,11 +280,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
             await ExecuteTurnAsync(turn, package, turnPolicy);
             invocationOutcome = "completed";
         }
-        catch (OperationCanceledException) when (_lifecycleTracker.IsCurrentInvocation(package.InvocationId))
+        catch (OperationCanceledException) when (_lifecycleTracker.IsActive(package.InvocationId))
         {
             invocationOutcome = "cancelled";
             _lifecycleTracker.CancelPendingToolCalls(package.InvocationId);
-            var cancellationOrigin = _lifecycleTracker.ResolveCancellationOrigin();
+            var cancellationOrigin = _lifecycleTracker.ResolveCancellationOrigin(package.InvocationId);
             var failureCategory = InvocationLifecycleTracker.ClassifyCancellation(cancellationOrigin);
             // One fixed, path-free sentence per cancellation cause. A single shared string would leave the node's message-request ceiling, an operator
             // stop and a detached-run reaper collection indistinguishable in the persisted failure, and a cancelled turn unattributable after the fact.
@@ -307,6 +307,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
             {
                 // A designed bound: the budget already logged its own warning with the round count, so no stack trace here.
                 _logger.LogInformation("Invocation {InvocationId} stopped at its provider-call budget.", package.InvocationId);
+            }
+            else if (exception is ApprovalExpiredException)
+            {
+                // An expected, typed outcome: nobody answered the approval in time. No stack trace; the message names the tool.
+                _logger.LogWarning("Invocation {InvocationId} failed: {Reason}", package.InvocationId, exception.Message);
             }
             else
             {
@@ -387,12 +392,16 @@ public sealed partial class InvocationRunner : IInvocationRunner
         }
     }
 
+    // One human park of this turn: the slot goes back while the card waits and is taken again before the model runs.
+    private HumanPark ParkFor(RuntimePackage package) =>
+        new(_lifecycleTracker, _eventDispatcher.Value, package.InvocationId, _logger);
+
     // RunAsync's try body, part one: the tool-relevance scope and the model the turn runs on. Every scope opened here stays open
     // until RunSelectedModelTurnAsync returns, so each is disposed where RunAsync's try used to end.
     private async Task ExecuteTurnAsync(TurnExecution turn, RuntimePackage package, TurnPolicy turnPolicy)
     {
         var dispatcher = turn.Dispatcher;
-        var invocationToken = _lifecycleTracker.GetInvocationCancellationToken();
+        var invocationToken = _lifecycleTracker.GetInvocationCancellationToken(package.InvocationId);
         // Read LIVE per turn, never captured in a field, INSIDE the try (a throw above it would fail the turn with no failure reported) and on
         // invocationToken, which is what an operator Cancel or the turn watchdog cancels. See docs/wiki/04-agent-mode.md §1.3 for the scope's placement.
         var toolRelevanceActive = await _runtimeSettings.GetToolRelevanceEnabledAsync(invocationToken)
@@ -902,7 +911,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
             // Tool calls requested (or approved) and not yet resulted: while one is open the pull is server-side tool execution, which neither the idle watchdog
             // nor the model's turn budget is charged for. Cleared per segment and at the next round's provider output, so a stale id cannot keep them off.
-            OpenToolCalls = new OpenToolCalls(_lifecycleTracker),
+            OpenToolCalls = new OpenToolCalls(_lifecycleTracker, package.InvocationId),
 
             // Surrogate ids for a provider that streams a BLANK CallId (Microsoft.Extensions.AI rejects a null one, so the empty string is the id-less shape): the FIRST
             // call to a tool keys on the tool NAME, the id the approval card resolves, and later id-less calls take "<name>#2". Holds the one still awaiting a result.
@@ -1066,7 +1075,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     // superstep. The description names the tool rather than the opaque id, so the card matches the single-agent UX.
                     var pendingApproval = ToApprovalRequest(update);
                     var approvalDescription = $"Tool '{ApprovalToolName(update)}' requires approval before it runs.";
-                    var approved = await _toolApprovalCoordinator.RequestToolApprovalAsync(package, pendingApproval, _lifecycleTracker.SetInvocationDeadline, invocationToken, approvalDescription);
+                    var approved = await _toolApprovalCoordinator.RequestToolApprovalAsync(package, pendingApproval, ParkFor(package), invocationToken, approvalDescription);
                     await session.RespondToApprovalAsync(requestId,
                         approved,
                         approved ? "Approved by user." : "Rejected by user.",

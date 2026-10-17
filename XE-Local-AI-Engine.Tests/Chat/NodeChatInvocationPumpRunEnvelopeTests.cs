@@ -731,6 +731,34 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         AssertEx.Null(request.ContextWindow);
     }
 
+    [Test]
+    [Arguments(InvocationStatus.Failed, FailureCategory.InsufficientCapacity, FailureCategory.InsufficientCapacity)]
+    [Arguments(InvocationStatus.Cancelled, FailureCategory.Cancelled, null)]
+    public async Task TerminalizeAsync_PersistsTheFailureCategoryOfAFailedTurnOnly(InvocationStatus status, FailureCategory category, FailureCategory? expected)
+    {
+        var persistence = CreatePersistence();
+        var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            Status = status,
+            FailureCategory = category
+        };
+
+        _ = await pump.TerminalizeAsync(new NodeChatMessageCorrelation
+            {
+                ConversationId = state.ConversationId,
+                MessageId = Guid.NewGuid(),
+                RequestId = Guid.NewGuid()
+            },
+            state,
+            "requested-model");
+
+        var request = (NodeChatTerminalizeMessageRequest)persistence.ReceivedCalls().Single().GetArguments()[0]!;
+        AssertEx.Equal(expected, request.FailureCategory);
+    }
+
     private static INodeChatPersistenceService CreatePersistence()
     {
         var persistence = Substitute.For<INodeChatPersistenceService>();

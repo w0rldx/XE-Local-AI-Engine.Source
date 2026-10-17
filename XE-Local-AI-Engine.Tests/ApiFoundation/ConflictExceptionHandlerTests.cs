@@ -131,6 +131,16 @@ public sealed class ConflictExceptionHandlerTests
         AssertEx.Equal(expected: 409, body.Status);
     }
 
+    /// <summary>A send into a conversation whose reply is parked on a card reaches the client under its own discriminator.</summary>
+    [Test]
+    public async Task TryHandleAsync_ForAParkedTurnRefusal_WritesConversationTurnParked()
+    {
+        var body = await HandleAsync(new NodeChatTurnParkedException(Guid.NewGuid()));
+
+        AssertEx.Equal("ConversationTurnParked", body.ConflictType);
+        AssertEx.Equal(expected: 409, body.Status);
+    }
+
     /// <summary>
     ///     An exception the switch does not name must be left alone, or every unmapped failure in the node would answer
     ///     409 instead of the 500 that says something is actually broken.

@@ -420,4 +420,10 @@ public sealed class TokenUsageAggregateRecord
 
     /// <summary>Summed total tokens reported by the model (missing values counted as 0).</summary>
     public required long TotalTokens { get; init; }
+
+    /// <summary>
+    ///     Runs in the bucket that reported a total token count. A run stopped before the model reported usage carries
+    ///     none, so the token sums cover only these runs, never the whole <see cref="RunCount" />.
+    /// </summary>
+    public required int TokensReported { get; init; }
 }

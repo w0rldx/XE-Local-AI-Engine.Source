@@ -68,17 +68,34 @@ export function UsageModelTable({
 											</Group>
 										</Table.Td>
 										<Table.Td>{formatCount(row.runCount)}</Table.Td>
-										<Table.Td>
-											<Text aria-label={formatCount(row.promptTokens)}>{formatTokensCompact(row.promptTokens)}</Text>
-										</Table.Td>
-										<Table.Td>
-											<Text aria-label={formatCount(row.completionTokens)}>{formatTokensCompact(row.completionTokens)}</Text>
-										</Table.Td>
-										<Table.Td>
-											<Text fw={600} aria-label={formatCount(row.totalTokens)}>
-												{formatTokensCompact(row.totalTokens)}
-											</Text>
-										</Table.Td>
+										{row.tokensReported === 0 ? (
+											<Table.Td colSpan={3}>
+												<Text c="dimmed" data-testid={`usage-model-not-reported-${row.modelName}`}>
+													{t("pages.usage.models.notReported", "Not reported")}
+												</Text>
+											</Table.Td>
+										) : (
+											<>
+												<Table.Td>
+													<Text aria-label={formatCount(row.promptTokens)}>{formatTokensCompact(row.promptTokens)}</Text>
+												</Table.Td>
+												<Table.Td>
+													<Text aria-label={formatCount(row.completionTokens)}>{formatTokensCompact(row.completionTokens)}</Text>
+												</Table.Td>
+												<Table.Td>
+													<Text fw={600} aria-label={formatCount(row.totalTokens)}>
+														{formatTokensCompact(row.totalTokens)}
+													</Text>
+													{row.tokensReported < row.runCount ? (
+														<Text size="xs" c="dimmed" data-testid={`usage-model-partly-reported-${row.modelName}`}>
+															{t("pages.usage.models.runsNotReported", "{{count}} runs not reported", {
+																count: row.runCount - row.tokensReported,
+															})}
+														</Text>
+													) : null}
+												</Table.Td>
+											</>
+										)}
 										<Table.Td>
 											<Text data-testid={`usage-model-cost-${row.modelName}`}>{formatCostUsd(row.estimatedCostUsd)}</Text>
 										</Table.Td>

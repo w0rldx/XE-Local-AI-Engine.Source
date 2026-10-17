@@ -185,10 +185,9 @@ public enum TurnNoticeKind
     AgentUnavailable = 19,
 
     /// <summary>
-    ///     The turn is queued behind a turn in another conversation that waits on an approval or a question, which holds
-    ///     the node's one invocation slot until it is answered or expires.
+    ///     Obsolete: no longer emitted. A turn parked on an approval or a question now gives the slot back, so nothing queues behind it.
     /// </summary>
-    /// <remarks><see cref="TurnNoticePayload.Detail" /> carries the conversation id that holds the slot.</remarks>
+    /// <remarks>Kept so persisted replies that carry it still render. <see cref="TurnNoticePayload.Detail" /> was the holder's conversation id.</remarks>
     QueuedBehindParkedTurn = 20,
 
     /// <summary>
@@ -202,5 +201,12 @@ public enum TurnNoticeKind
     ///     work (a training run holds the node until it ends).
     /// </summary>
     /// <remarks><see cref="TurnNoticePayload.Message" /> names the holder; there is no detail line.</remarks>
-    QueuedBehindGpuWork = 22
+    QueuedBehindGpuWork = 22,
+
+    /// <summary>
+    ///     The turn's card was answered, and it waits for the node's one invocation slot, which another turn holds, before it
+    ///     continues. Emitted only when the slot is not free at once.
+    /// </summary>
+    /// <remarks><see cref="TurnNoticePayload.Detail" /> carries the conversation id that holds the slot.</remarks>
+    ResumeQueuedBehindTurn = 23
 }

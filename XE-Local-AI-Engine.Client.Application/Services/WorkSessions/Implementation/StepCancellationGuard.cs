@@ -9,8 +9,8 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 /// <remarks>
 ///     Both stop the step the way the operator's stop button does, through <see cref="INodeChatStreamCancellationRegistry" />, which
 ///     cancels the runner so the pump persists a real <c>Cancelled</c> terminal. Cancelling the supervisor's own enumeration instead
-///     would only stop it watching: the run would continue, holding the node's one invocation slot, which is the exact failure the
-///     park clock exists to prevent.
+///     would only stop it watching: the run would continue unbounded. A parked turn gives the invocation slot back, so the park clock
+///     bounds how long the session waits, not how long the slot is held; an answered park waiting to retake the slot is left alone.
 /// </remarks>
 internal sealed class StepCancellationGuard : IDisposable
 {
@@ -18,13 +18,23 @@ internal sealed class StepCancellationGuard : IDisposable
     private readonly ITimer _deadlineTimer;
     private readonly ITimer _parkTimer;
     private readonly INodeChatStreamCancellationRegistry _registry;
+    private readonly Func<bool> _parkAnswered;
+    private readonly Action _onAnsweredPark;
     private int _deadlineExpired;
     private int _parkExpired;
     private string? _parkedToolName;
 
-    public StepCancellationGuard(INodeChatStreamCancellationRegistry registry, NodeChatMessageCorrelation correlation, TimeProvider timeProvider)
+    /// <param name="parkAnswered">True when the step's card was answered and the turn only waits for the invocation slot.</param>
+    /// <param name="onAnsweredPark">Runs instead of the cancel when the park clock fires on an answered park.</param>
+    public StepCancellationGuard(INodeChatStreamCancellationRegistry registry,
+        NodeChatMessageCorrelation correlation,
+        TimeProvider timeProvider,
+        Func<bool> parkAnswered,
+        Action onAnsweredPark)
     {
         ArgumentNullException.ThrowIfNull(timeProvider);
+        _parkAnswered = parkAnswered ?? throw new ArgumentNullException(nameof(parkAnswered));
+        _onAnsweredPark = onAnsweredPark ?? throw new ArgumentNullException(nameof(onAnsweredPark));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _correlation = correlation ?? throw new ArgumentNullException(nameof(correlation));
         _parkTimer = timeProvider.CreateTimer(static state => ((StepCancellationGuard)state!).OnParkExpired(), this, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
@@ -61,6 +71,13 @@ internal sealed class StepCancellationGuard : IDisposable
 
     private void OnParkExpired()
     {
+        // An answered park sends no delta until the turn retakes the slot, so the disarm signals cannot cover it: check at fire time.
+        if (_parkAnswered())
+        {
+            _onAnsweredPark();
+            return;
+        }
+
         Volatile.Write(ref _parkExpired, value: 1);
         _ = _registry.TryCancel(_correlation);
     }

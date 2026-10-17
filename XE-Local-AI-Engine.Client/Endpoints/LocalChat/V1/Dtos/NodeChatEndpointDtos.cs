@@ -510,6 +510,12 @@ public sealed class NodeChatMessageResponse
     ///     legacy turns, user messages and turns that never reached a provider round. Names and counts only.
     /// </summary>
     public NodeChatContextWindowResponse? ContextWindow { get; init; }
+
+    /// <summary>
+    ///     The category of a failed assistant turn, so a client can show a localized headline above <c>Error</c>. Null
+    ///     for a turn that did not fail, a legacy turn and every user message.
+    /// </summary>
+    public FailureCategory? FailureCategory { get; init; }
 }
 
 /// <summary>

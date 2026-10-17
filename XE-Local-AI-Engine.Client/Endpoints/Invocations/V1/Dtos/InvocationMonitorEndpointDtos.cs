@@ -6,6 +6,9 @@ public sealed class InvocationMonitorResponse
 {
     public required InvocationCurrentResponse? Current { get; init; }
 
+    /// <summary>Every invocation assigned and not yet terminal; a parked one shows a pending approval or question.</summary>
+    public required IReadOnlyList<InvocationCurrentResponse> Live { get; init; }
+
     public required IReadOnlyList<InvocationHistoryResponse> History { get; init; }
 
     public required int HistoryCapacity { get; init; }

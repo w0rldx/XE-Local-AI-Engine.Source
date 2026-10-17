@@ -2,11 +2,10 @@ namespace XE_Local_AI_Engine.Client.Services.Drafting.Implementation;
 
 using System.Diagnostics.CodeAnalysis;
 using XE_Local_AI_Engine.Client.Services.Events;
-using XE_Local_AI_Engine.Client.Services.Invocation;
 
 /// <summary>
-///     Non-queueing admission gate for AI-assisted drafting: one draft at a time, and none at all while an
-///     invocation is in flight, refused as a 409 rather than queued.
+///     Non-queueing admission gate for AI-assisted drafting: one draft at a time, and none while an invocation holds
+///     the node's invocation slot (a turn parked on a human does not), refused as a 409 rather than queued.
 /// </summary>
 /// <remarks>
 ///     A draft is a foreground generation on the same single local runtime an invocation uses, so it refuses rather
@@ -16,26 +15,18 @@ using XE_Local_AI_Engine.Client.Services.Invocation;
 /// </remarks>
 internal sealed class DraftAdmissionGate : IDisposable
 {
-    private readonly IInvocationRunner _invocationRunner;
     private readonly SemaphoreSlim _slot = new(initialCount: 1, maxCount: 1);
     private readonly IWorkerEventDispatcher _workerEventDispatcher;
 
-    public DraftAdmissionGate(IWorkerEventDispatcher workerEventDispatcher, IInvocationRunner invocationRunner)
+    public DraftAdmissionGate(IWorkerEventDispatcher workerEventDispatcher)
     {
         _workerEventDispatcher = workerEventDispatcher ?? throw new ArgumentNullException(nameof(workerEventDispatcher));
-        _invocationRunner = invocationRunner ?? throw new ArgumentNullException(nameof(invocationRunner));
     }
 
     /// <summary>
-    ///     Admits at most one draft, and only when the node is otherwise idle. Take the slot FIRST so two simultaneous
-    ///     drafts cannot both observe an idle node, then check the invocation signals and hand the slot straight back
-    ///     when the node is busy.
+    ///     Admits at most one draft, and only while no invocation holds the node's invocation slot. Take the draft slot FIRST so two
+    ///     simultaneous drafts cannot both observe an idle node, then hand it straight back when the invocation slot is held.
     /// </summary>
-    /// <remarks>
-    ///     Both <see cref="IWorkerEventDispatcher.CurrentInvocation" /> and
-    ///     <see cref="IInvocationRunner.ActiveInvocationCount" /> are consulted, because they terminalize at slightly
-    ///     different points.
-    /// </remarks>
     public bool TryAcquire([NotNullWhen(true)] out IDisposable? lease)
     {
         lease = null;
@@ -46,10 +37,7 @@ internal sealed class DraftAdmissionGate : IDisposable
             return false;
         }
 
-        // CurrentInvocation is the dispatcher's LAST invocation, not only a live one, since it keeps the completed
-        // state for the status surface. Only a non-terminal status means busy, or drafting 409s forever after turn one.
-        if (_workerEventDispatcher.CurrentInvocation is { Status: InvocationStatus.Pending or InvocationStatus.Assigned or InvocationStatus.Running }
-            || _invocationRunner.ActiveInvocationCount > 0)
+        if (_workerEventDispatcher.SlotHolder is not null)
         {
             _ = _slot.Release();
             return false;

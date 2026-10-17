@@ -267,6 +267,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketRespons
 	completionTokens: number;
 	reasoningTokens: number | null;
 	totalTokens: number;
+	tokensReported: number;
 	estimatedCostUsd: number;
 	currency: string;
 };
@@ -3642,6 +3643,7 @@ export type XeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse
 
 export type XeLocalAiEngineClientEndpointsInvocationsV1InvocationMonitorResponse = {
 	current: XeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse | null;
+	live: Array<XeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse>;
 	history: Array<XeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse>;
 	historyCapacity: number;
 };
@@ -4038,6 +4040,7 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse = {
 	generationDurationMs?: number | null;
 	sources?: Array<XeLocalAiEngineClientServicesChatNodeChatMessageSource> | null;
 	contextWindow?: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowResponse | null;
+	failureCategory?: XeLocalAiEngineClientModelsEnumsFailureCategory | null;
 };
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse = {
@@ -6837,7 +6840,8 @@ export type XeLocalAiEngineClientModelsEnumsFailureCategory =
 	| "ContextWindowExceeded"
 	| "ProviderAuthFailed"
 	| "ProviderRateLimited"
-	| "CallBudgetReached";
+	| "CallBudgetReached"
+	| "InsufficientCapacity";
 
 export type XeLocalAiEngineClientPersistenceAgentDefinitionKind = "Single" | "Orchestrator";
 

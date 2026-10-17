@@ -862,6 +862,7 @@ export function applyNodeChatStreamEvent(
 		agentDefinitionId: existing?.agentDefinitionId,
 		reasoningEffort: existing?.reasoningEffort,
 		error: event.error ?? undefined,
+		failureCategory: event.failureCategory ?? undefined,
 		inputTokens: event.inputTokens ?? existing?.inputTokens,
 		outputTokens: event.outputTokens ?? existing?.outputTokens,
 		totalTokens: event.totalTokens ?? existing?.totalTokens,
@@ -897,6 +898,7 @@ export function applyNodeChatStreamEvent(
 			// Queued turns are live (isActive) but not yet streaming; clear once the streaming event arrives.
 			isQueued: status === "queued",
 			error: event.error ?? undefined,
+			failureCategory: event.failureCategory ?? undefined,
 			inputTokens: assistantMessage.inputTokens,
 			outputTokens: assistantMessage.outputTokens,
 			totalTokens: assistantMessage.totalTokens,
@@ -936,6 +938,7 @@ export function markNodeChatStreamTerminated(
 		agentDefinitionId: existing?.agentDefinitionId,
 		reasoningEffort: existing?.reasoningEffort,
 		error,
+		failureCategory,
 		inputTokens: existing?.inputTokens,
 		outputTokens: existing?.outputTokens,
 		totalTokens: existing?.totalTokens,

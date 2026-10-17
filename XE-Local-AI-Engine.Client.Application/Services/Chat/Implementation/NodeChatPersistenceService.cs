@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
@@ -25,9 +26,10 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
     private readonly NodeChatReadModel _readModel;
     private readonly NodeChatVariantBranchService _variants;
 
-    // All optional: production injects the blob stores (a delete tears down on-disk bytes) and the deletion observers (a
-    // feature winds down work bound to the conversation first); a test construction without them skips that work.
+    // The usage-provider resolver attributes a thin run envelope from the row's model. The rest are optional: production injects
+    // the blob stores and the deletion observers (bound work winds down first); a test construction without them skips that work.
     public NodeChatPersistenceService(NodeChatPersistenceWriter writer,
+        Lazy<IUsageProviderResolver> usageProviderResolver,
         IConversationUploadedFileStore? uploadedFileStore = null,
         IWorkSessionArtifactBlobStore? workSessionArtifactBlobStore = null,
         IEnumerable<IConversationDeletionObserver>? deletionObservers = null)
@@ -36,7 +38,7 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
 
         _conversations = new NodeChatConversationCommands(writer, uploadedFileStore, workSessionArtifactBlobStore, deletionObservers);
         _readModel = new NodeChatReadModel(writer);
-        _messages = new NodeChatMessageCommands(writer);
+        _messages = new NodeChatMessageCommands(writer, usageProviderResolver);
         _variants = new NodeChatVariantBranchService(writer, _readModel);
         _feedback = new NodeChatFeedbackStore(writer);
         _mutationGuard = new NodeChatMutationGuard(this);

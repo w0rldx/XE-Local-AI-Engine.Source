@@ -11,7 +11,6 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Drafting;
 using XE_Local_AI_Engine.Client.Services.Drafting.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
-using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -221,7 +220,7 @@ public sealed class DefaultConfigDraftServiceTests
     public async Task DraftImagePrompt_ActiveInvocation_Returns409_NoModelCall()
     {
         var harness = new Harness();
-        harness.InvocationRunner.ActiveInvocationCount.Returns(1);
+        harness.WorkerEventDispatcher.SlotHolder.Returns(new InvocationState());
 
         var result = await harness.Service.DraftImagePromptAsync(Request("A fox in a forest."));
 
@@ -456,19 +455,7 @@ public sealed class DefaultConfigDraftServiceTests
     public async Task DraftGate_ActiveInvocation_Returns409_NoModelCall()
     {
         var harness = new Harness();
-        harness.WorkerEventDispatcher.CurrentInvocation.Returns(new InvocationState());
-
-        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent."));
-
-        AssertEx.Equal<DraftFailureKind?>(DraftFailureKind.NodeBusy, result.Failure);
-        harness.Provider.DidNotReceive().CreateChatClient(Arg.Any<LocalModelSelection>());
-    }
-
-    [Test]
-    public async Task DraftGate_ActiveInvocationCount_Returns409_NoModelCall()
-    {
-        var harness = new Harness();
-        harness.InvocationRunner.ActiveInvocationCount.Returns(1);
+        harness.WorkerEventDispatcher.SlotHolder.Returns(new InvocationState());
 
         var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent."));
 
@@ -597,8 +584,6 @@ public sealed class DefaultConfigDraftServiceTests
 
         public IWorkerEventDispatcher WorkerEventDispatcher { get; } = Substitute.For<IWorkerEventDispatcher>();
 
-        public IInvocationRunner InvocationRunner { get; } = Substitute.For<IInvocationRunner>();
-
         public ILocalModelProviderResolver Resolver { get; } = Substitute.For<ILocalModelProviderResolver>();
 
         public ILocalModelProvider Provider { get; } = Substitute.For<ILocalModelProvider>();
@@ -660,7 +645,7 @@ public sealed class DefaultConfigDraftServiceTests
                 Resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(Provider));
             }
 
-            Gate = new DraftAdmissionGate(WorkerEventDispatcher, InvocationRunner);
+            Gate = new DraftAdmissionGate(WorkerEventDispatcher);
 
             var nodeSettings = Substitute.For<INodeSettingsStore>();
             nodeSettings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings

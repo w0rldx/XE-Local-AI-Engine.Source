@@ -537,9 +537,12 @@ consequence of shipping work sessions, not a page-local feature. A chat turn tha
 with a `QueuedBehindWorkSession` turn notice (`WorkSessionSlotHolderNotice`), whose detail is the conversation
 that holds the slot.
 
-`MaxParkedSeconds` (default 300) is what bounds its worst case: a step that parks on an approval nobody
-answers is cancelled, the session is checkpointed and paused, and the unanswered prompt is recorded as
-an `OpenQuestion` finding so the next step re-asks it. The park itself is in-memory and survives neither
+A step parked on an approval or a question gives the slot back, like any parked turn (see
+[Chat](05-chat.md)), so a parked step no longer delays chat, scheduled runs or benchmarks.
+`MaxParkedSeconds` (default 300) bounds how long the session waits on the card, not how long the slot is
+held: a step that parks on an approval nobody answers is cancelled, the session is checkpointed and paused,
+and the unanswered prompt is recorded as an `OpenQuestion` finding so the next step re-asks it. A step
+whose card was answered and only waits to retake the slot is left running when the park clock fires. The park itself is in-memory and survives neither
 the timeout nor a restart; the finding is what makes the question durable. The checkpoint commits
 **before** the `Paused` status: a crash in that window reconciles to `Interrupted` off a valid
 checkpoint, where status-first would resume from a stale state block.

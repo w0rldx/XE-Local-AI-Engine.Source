@@ -211,8 +211,8 @@ thinking budget"). Beside it the **Answer length** card (`NodeSettingsOutputCapC
 variant (`chatOutputCapModeSelectValues`: cap, notice, off) and the cap's ceiling, both read per turn; semantics:
 [Chat](05-chat.md) ("Output cap and the "stopped at length" notice"). The four budgets, the default effort, the cap
 variant and the ceiling may be unset: a blank number field shows the shipped default as its placeholder and a set one
-offers **Use default**; the two selects carry a "Default (…)" option. The save sends `-1` for a blanked number and an
-empty string for a default option, which the node stores as unset.
+offers **Use default**; the two selects carry a "Default (…)" option. The save sends `null` for both a blanked number and a
+default option, which the node stores as unset (`-1` and `""` are refused).
 
 **Sandbox & isolation holds the profile** (`sandbox`, an advanced section). It has three parts. The **profile card**
 (`NodeSettingsSandboxProfileCard`) is two `Radio.Card`s, `low` and `high`, with the effective profile and the workloads

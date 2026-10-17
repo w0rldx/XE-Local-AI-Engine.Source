@@ -343,21 +343,15 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
     /// </remarks>
     private async Task<BenchmarkJudgePolicyV1> ApplyItemOverridesAsync(BenchmarkJudgePolicyV1 policy, BenchmarkRunRecord run, CancellationToken cancellationToken)
     {
-        if (run.TaskItemId is not { } itemId)
-        {
-            return policy;
-        }
-
-        var items = await _store.ListTaskItemsAsync(run.ProjectId, cancellationToken);
-        var item = items.FirstOrDefault(entry => entry.Id == itemId);
+        var item = await BenchmarkTaskItemService.FindTaskItemAsync(_store, run, cancellationToken);
         if (item is null)
         {
-            // The item was deleted after the run was frozen. The ranking read already excludes such a run as item-set-revised,
+            // No item, or it was deleted after the run was frozen. The ranking read already excludes such a run as item-set-revised,
             // so judging it under the policy's own configuration costs nothing, while refusing would turn a stale row into a failed attempt.
             return policy;
         }
 
-        var referenceAnswer = BenchmarkTaskItemService.DecodeOptional(item.ReferenceAnswerJson) ?? policy.ReferenceAnswer;
+        var referenceAnswer = BenchmarkTaskItemService.ResolveReferenceAnswer(policy, item);
         var overrides = ReadVerifierOverrides(item);
 
         // An override that matches no criterion is not a no-op: applying nothing measures this item against the POLICY's expected answer — another item's question — and the score

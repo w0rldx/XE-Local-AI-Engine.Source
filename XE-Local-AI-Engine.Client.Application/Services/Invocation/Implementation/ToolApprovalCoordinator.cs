@@ -153,13 +153,13 @@ public sealed class ToolApprovalCoordinator
     /// </remarks>
     public async Task<bool> RequestToolApprovalAsync(RuntimePackage package,
         ToolApprovalRequestContent approvalRequest,
-        Action<bool> setInvocationDeadline,
+        HumanPark park,
         CancellationToken cancellationToken,
         string? descriptionOverride = null)
     {
         ArgumentNullException.ThrowIfNull(package);
         ArgumentNullException.ThrowIfNull(approvalRequest);
-        ArgumentNullException.ThrowIfNull(setInvocationDeadline);
+        ArgumentNullException.ThrowIfNull(park);
 
         // Approval-decision audit: the tool name drives both the category lookup and the audit row, and the request-to-decision stopwatch times it. Both are
         // needed in the guards and in the timeout catch as well, so they live outside the try; the row and metric the decision records are content-free.
@@ -199,7 +199,8 @@ public sealed class ToolApprovalCoordinator
                 descriptionOverride ?? $"A tool call ({approvalRequest.ToolCall.CallId}) requires approval before it runs.",
                 sessionApprovalKey,
                 webReview: null,
-                setInvocationDeadline,
+                park,
+                resumeOnTimeout: false,
                 cancellationToken);
 
             await RecordApprovalDecisionAuditAsync(package,
@@ -232,12 +233,12 @@ public sealed class ToolApprovalCoordinator
     /// </remarks>
     internal async Task<WebReviewRetrieval?> RequestWebConsentAsync(RuntimePackage package,
         ToolApprovalRequestContent approvalRequest,
-        Action<bool> setInvocationDeadline,
+        HumanPark park,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(package);
         ArgumentNullException.ThrowIfNull(approvalRequest);
-        ArgumentNullException.ThrowIfNull(setInvocationDeadline);
+        ArgumentNullException.ThrowIfNull(park);
 
         if (package.IsUnattended
             || package.AutoAcceptWebContent
@@ -257,7 +258,8 @@ public sealed class ToolApprovalCoordinator
                 $"Allow {call.Name} to send this request?",
                 sessionApprovalKey: null,
                 preview,
-                setInvocationDeadline,
+                park,
+                resumeOnTimeout: true,
                 cancellationToken);
 
             await RecordApprovalDecisionAuditAsync(package,
@@ -314,13 +316,13 @@ public sealed class ToolApprovalCoordinator
     internal async Task<string> RequestWebReviewAsync(RuntimePackage package,
         ToolApprovalRequestContent approvalRequest,
         WebReviewRetrieval retrieval,
-        Action<bool> setInvocationDeadline,
+        HumanPark park,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(package);
         ArgumentNullException.ThrowIfNull(approvalRequest);
         ArgumentNullException.ThrowIfNull(retrieval);
-        ArgumentNullException.ThrowIfNull(setInvocationDeadline);
+        ArgumentNullException.ThrowIfNull(park);
 
         var toolName = (approvalRequest.ToolCall as FunctionCallContent)?.Name;
         var callId = approvalRequest.ToolCall.CallId;
@@ -355,7 +357,8 @@ public sealed class ToolApprovalCoordinator
                 $"Review the content {toolName} retrieved before it is added to the conversation.",
                 sessionApprovalKey: null,
                 preview,
-                setInvocationDeadline,
+                park,
+                resumeOnTimeout: true,
                 cancellationToken);
 
             WebReviewResultScope.Stash(callId, accepted
@@ -396,12 +399,12 @@ public sealed class ToolApprovalCoordinator
     /// </remarks>
     public async Task<string> RequestUserAnswerAsync(RuntimePackage package,
         ToolApprovalRequestContent approvalRequest,
-        Action<bool> setInvocationDeadline,
+        HumanPark park,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(package);
         ArgumentNullException.ThrowIfNull(approvalRequest);
-        ArgumentNullException.ThrowIfNull(setInvocationDeadline);
+        ArgumentNullException.ThrowIfNull(park);
 
         // The SAME id-derivation the streaming tool-call lifecycle uses, so the browser attaches the question card to the tool-call card the
         // model is waiting on, and the handler's CurrentContext.CallContent.CallId lookup finds what is stashed here.
@@ -453,19 +456,32 @@ public sealed class ToolApprovalCoordinator
             });
 
             // The hard cap on any human wait, linked to the invocation token so a user cancel or shutdown still ends the wait promptly.
-            // SetInvocationDeadline below is what stops the invocation's own, shorter budget from pre-empting this cap.
-            using var questionTimeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            questionTimeoutCancellationTokenSource.CancelAfter(_maxPendingToolCallAge);
+            // The park below is what stops the invocation's own, shorter budget from pre-empting this cap.
+            using var questionAgeCancellationTokenSource = new CancellationTokenSource(_maxPendingToolCallAge, _timeProvider);
+            using var questionTimeoutCancellationTokenSource =
+                CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, questionAgeCancellationTokenSource.Token);
 
             IReadOnlyList<UserQuestionAnswer> answers;
-            setInvocationDeadline(true);
             try
             {
-                answers = await questionCompletion.Task.WaitAsync(questionTimeoutCancellationTokenSource.Token);
+                park.Park();
+                try
+                {
+                    answers = await questionCompletion.Task.WaitAsync(questionTimeoutCancellationTokenSource.Token);
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    // No answer in time: the card closes and the turn continues with an "unanswered" result, so it takes the slot back first.
+                    await _eventDispatcher.Value.ReportPromptTimedOutAsync(package.InvocationId, requestId);
+                    await park.ResumeAsync(cancellationToken);
+                    throw;
+                }
+
+                await park.ResumeAsync(cancellationToken);
             }
             finally
             {
-                setInvocationDeadline(false);
+                park.End();
             }
 
             _userQuestionAnswerStash.Stash(stashKey, UserQuestionResults.Answered(answers));
@@ -526,7 +542,8 @@ public sealed class ToolApprovalCoordinator
         string description,
         ApprovalMemoKey? sessionApprovalKey,
         WebReviewPreview? webReview,
-        Action<bool> setInvocationDeadline,
+        HumanPark park,
+        bool resumeOnTimeout,
         CancellationToken cancellationToken)
     {
         var requestId = Guid.NewGuid().ToString("N");
@@ -594,14 +611,28 @@ public sealed class ToolApprovalCoordinator
                 webReview is null ? "approval" : "web-" + webReview.Stage,
                 toolName);
 
-            setInvocationDeadline(true);
             try
             {
-                return await approvalCompletion.Task.WaitAsync(approvalTimeoutCancellationTokenSource.Token);
+                park.Park();
+                bool decision;
+                try
+                {
+                    decision = await approvalCompletion.Task.WaitAsync(approvalTimeoutCancellationTokenSource.Token);
+                }
+                catch (OperationCanceledException) when (resumeOnTimeout && !cancellationToken.IsCancellationRequested)
+                {
+                    // A web card that timed out still hands the model a result: its card closes, then the turn takes the slot back.
+                    await dispatcher.ReportPromptTimedOutAsync(package.InvocationId, requestId);
+                    await park.ResumeAsync(cancellationToken);
+                    throw;
+                }
+
+                await park.ResumeAsync(cancellationToken);
+                return decision;
             }
             finally
             {
-                setInvocationDeadline(false);
+                park.End();
             }
         }
         finally

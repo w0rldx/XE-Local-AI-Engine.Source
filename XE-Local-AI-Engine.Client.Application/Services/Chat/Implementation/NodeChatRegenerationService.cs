@@ -386,6 +386,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         // Reject regeneration on a remote-origin (view-only) conversation before any persistence. The guard is
         // authoritative; throwing here propagates to the hub caller.
         await _mutationGuard.EnsureMutableAsync(conversationId, cancellationToken);
+        InvocationSlotAdmission.EnsureNoParkedTurn(_eventDispatcher, conversationId);
 
         // A request-supplied selection is persisted BEFORE the read, because that write also CLEARS the stored
         // compaction synopsis: reading first would splice a stale summary in and drop the messages it claims to cover.
@@ -539,7 +540,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
 
         try
         {
-            lease = await InvocationSlotAdmission.AcquireAsync(_eventDispatcher, package, requestId, _logger, cancellationToken);
+            lease = await InvocationSlotAdmission.AcquireAsync(_eventDispatcher, package, cancellationToken);
 
             var streamingMessage = await _persistence.MarkAssistantStreamingAsync(correlation, NowUnixMilliseconds(), cancellationToken);
             if (!string.Equals(streamingMessage.Status, NodeChatMessageStatusValues.Streaming, StringComparison.Ordinal))

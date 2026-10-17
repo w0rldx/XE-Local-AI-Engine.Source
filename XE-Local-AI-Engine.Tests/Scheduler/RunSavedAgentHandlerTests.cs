@@ -325,7 +325,7 @@ public sealed class RunSavedAgentHandlerTests
         AssertEx.Equal(expected: 0, harness.RunCount);
         AssertEx.False(harness.ReservationDisposed, "a reject carries no reservation to dispose.");
         // A capacity refusal is not a missing model: it carries the category the chat path gives a refused model launch.
-        await harness.Dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), exception.Message, FailureCategory.ModelLoadFailed);
+        await harness.Dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), exception.Message, FailureCategory.InsufficientCapacity);
     }
 
     // Capacity is decided with the node-wide invocation slot HELD. Deciding first let a second fire for the same cold

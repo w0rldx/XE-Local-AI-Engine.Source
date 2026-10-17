@@ -121,7 +121,8 @@ Security and runtime invariants:
 - **Shared admission and cancellation.** The run takes the node-wide invocation slot first and decides
   capacity while holding it, so a second fire for a model the first is still warming queues instead of
   being refused; it observes Quartz cancellation/timeout and releases any footprint reservation, before
-  the slot, on every terminal path.
+  the slot, on every terminal path. A scheduled run is unattended, so it never parks on a human (approvals
+  fail and `ask_user` is skipped) and keeps the slot until it ends.
 
 `RunBenchmarkBatchHandler` (`Handlers/RunBenchmarkBatchHandler.cs`), template id `run-benchmark-batch`,
 freezes a whole model x KV-cache matrix against one benchmark project, so an overnight matrix is a

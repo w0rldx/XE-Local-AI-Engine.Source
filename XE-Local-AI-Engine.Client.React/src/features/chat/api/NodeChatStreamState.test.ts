@@ -152,6 +152,32 @@ describe("node chat stream state", () => {
 		);
 	});
 
+	it("carries the failed terminal event's failure category onto the message and the streaming state", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"hello",
+			"2026-05-24T00:00:01.000Z",
+			"local-default",
+		);
+		const failed = applyNodeChatStreamEvent(
+			optimistic,
+			streamEvent({
+				type: nodeChatStreamEventTypes.assistantFailed,
+				status: "failed",
+				content: "",
+				delta: null,
+				error: "Insufficient capacity for 'big' (Chat).",
+				failureCategory: "InsufficientCapacity",
+			}),
+		);
+
+		expect(failed.conversation.messages.find((message) => message.id === "assistant-1")?.failureCategory).toBe(
+			"InsufficientCapacity",
+		);
+		expect(failed.streamingMessage?.failureCategory).toBe("InsufficientCapacity");
+	});
+
 	it("appends the delta and ignores a stale content field on an assistant-delta", () => {
 		const optimistic = appendOptimisticNodeChatSend(
 			conversation,

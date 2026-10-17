@@ -4,8 +4,10 @@ using System.Data.Common;
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using static NodeChatMetadataSerializer;
 using static NodeChatPersistenceSql;
 
@@ -25,15 +27,17 @@ internal sealed class NodeChatMessageCommands
     // NodeChatMessageTransitions. A smaller set repeats a real member, so the IN clause stays a fixed constant.
     private const int MaxSourceStatusSlots = 4;
 
-    public NodeChatMessageCommands(NodeChatPersistenceWriter writer)
+    public NodeChatMessageCommands(NodeChatPersistenceWriter writer, Lazy<IUsageProviderResolver> usageProviderResolver)
     {
         ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(usageProviderResolver);
         _writer = writer;
+        _usageProviderResolver = usageProviderResolver;
     }
 
     // How a run-envelope write reconciles with one the message may already have: InsertIfAbsent keeps the first write,
     // Upsert lets the pump's terminalize enrich a thin cancel envelope so its status and tokens match the row.
-    private enum RunEnvelopeWriteMode
+    internal enum RunEnvelopeWriteMode
     {
         InsertIfAbsent,
         Upsert
@@ -122,6 +126,7 @@ internal sealed class NodeChatMessageCommands
                                               """;
 
     private readonly NodeChatPersistenceWriter _writer;
+    private readonly Lazy<IUsageProviderResolver> _usageProviderResolver;
 
     public Task<NodeChatPersistedMessageDto> PersistUserMessageAsync(NodeChatPersistUserMessageRequest request, CancellationToken cancellationToken = default)
     {
@@ -352,7 +357,8 @@ internal sealed class NodeChatMessageCommands
             // KB sources that grounded this turn; null on paths that retrieved nothing preserves any
             // existing persisted sources, just like Parts.
             sources: request.Sources,
-            contextWindow: request.ContextWindow);
+            contextWindow: request.ContextWindow,
+            failureCategory: request.FailureCategory);
     }
 
     public async Task<NodeChatCancelResultDto> CancelMessageAsync(NodeChatCancelRequest request, CancellationToken cancellationToken = default)
@@ -442,6 +448,7 @@ internal sealed class NodeChatMessageCommands
     {
         var metadata = SerializeMetadata(metadataJson, reasoning, model, inputTokens: null, outputTokens: null, totalTokens: null, reasoningTokens: null, parts: null, agentDefinitionId,
             agentName, reasoningEffort);
+        var envelopeProvider = await ResolveEnvelopeProviderAsync(envelope, model, correlation: null, cancellationToken);
 
         // Conversation-exclusive: the sequence allocation and insert must not interleave with another insert or delete
         // on this conversation, and they share ONE transaction so a failed insert rolls the allocation back.
@@ -496,7 +503,7 @@ internal sealed class NodeChatMessageCommands
                         if (envelope is not null)
                         {
                             await WriteRunEnvelopeRowAsync(dbContext, dbTransaction, conversationId, messageId, requestId, agentDefinitionId, status, model,
-                                promptTokens: null, completionTokens: null, reasoningTokens: null, totalTokens: null, envelope, createdAtUtc, RunEnvelopeWriteMode.InsertIfAbsent, token);
+                                promptTokens: null, completionTokens: null, reasoningTokens: null, totalTokens: null, envelope, envelopeProvider, createdAtUtc, RunEnvelopeWriteMode.InsertIfAbsent, token);
                         }
 
                         await TouchConversationAsync(dbContext, conversationId, updatedAtUtc, token);
@@ -559,13 +566,16 @@ internal sealed class NodeChatMessageCommands
         AgentRunEnvelopeMetadata? envelope = null,
         RunEnvelopeWriteMode envelopeWriteMode = RunEnvelopeWriteMode.InsertIfAbsent,
         IReadOnlyList<NodeChatMessageSource>? sources = null,
-        NodeChatContextWindowDto? contextWindow = null)
+        NodeChatContextWindowDto? contextWindow = null,
+        FailureCategory? failureCategory = null)
     {
         ValidateCorrelation(correlation);
         if (requiredCurrentStatuses is { Count: 0 or > MaxSourceStatusSlots })
         {
             throw new ArgumentException($"A transition guard must name between 1 and {MaxSourceStatusSlots} source statuses.", nameof(requiredCurrentStatuses));
         }
+
+        var envelopeProvider = await ResolveEnvelopeProviderAsync(envelope, model, correlation, cancellationToken);
 
         // Message-payload update to an already-allocated row: parallel with updates to OTHER messages, serialized per
         // message, and excluded against a conversation delete via the shared/exclusive hierarchy.
@@ -607,10 +617,12 @@ internal sealed class NodeChatMessageCommands
                 var nextSources = sources ?? current.Sources;
                 // The context snapshot is reported once at terminalize; a null arg preserves any existing value.
                 var nextContextWindow = contextWindow ?? current.ContextWindow;
+                var nextFailureCategory = failureCategory ?? current.FailureCategory;
                 // Agent attribution and the reasoning effort are stamped once at mint and never updated here, so they
                 // are always preserved from current, or a later flush would re-serialize the blob without them.
                 var metadata = SerializeMetadata(current.MetadataJson, nextReasoning, nextModel, nextInputTokens, nextOutputTokens, nextTotalTokens, nextReasoningTokens, nextParts,
-                    current.AgentDefinitionId, current.AgentName, current.ReasoningEffort, nextGenerationDurationMs, nextSources, nextContextWindow);
+                    current.AgentDefinitionId, current.AgentName, current.ReasoningEffort, nextGenerationDurationMs, nextSources, nextContextWindow,
+                    nextFailureCategory);
 
                 // With an envelope to write, the message UPDATE, the envelope insert and the conversation touch share
                 // ONE transaction; a non-terminal update keeps the single-statement autocommit path of the hot path.
@@ -681,6 +693,7 @@ internal sealed class NodeChatMessageCommands
                         nextReasoningTokens,
                         nextTotalTokens,
                         envelope!,
+                        envelopeProvider,
                         updatedAtUtc,
                         envelopeWriteMode,
                         token);
@@ -709,15 +722,39 @@ internal sealed class NodeChatMessageCommands
                     TotalCount = nextTotalTokens,
                     ReasoningCount = nextReasoningTokens,
                     Parts = nextParts,
-                    GenerationDurationMs = nextGenerationDurationMs
+                    GenerationDurationMs = nextGenerationDurationMs,
+                    FailureCategory = nextFailureCategory
                 };
             },
             cancellationToken);
     }
 
+    // A thin envelope (no invocation: a cancel, a pre-run refusal, a pre-ownership teardown, a finished-assistant insert) is
+    // attributed from the row's model. Resolved before any lock is taken, because the resolver may take up to its 2 s bound.
+    private async Task<string> ResolveEnvelopeProviderAsync(AgentRunEnvelopeMetadata? envelope,
+        string? model,
+        NodeChatMessageCorrelation? correlation,
+        CancellationToken cancellationToken)
+    {
+        if (envelope is not { InvocationId: null } || !string.Equals(envelope.Provider, AgentUsageProviders.Unknown, StringComparison.Ordinal))
+        {
+            return envelope?.Provider ?? AgentUsageProviders.Unknown;
+        }
+
+        if (model is null && correlation is not null)
+        {
+            var current = await _writer.ExecuteConversationSharedAsync(correlation.ConversationId,
+                (dbContext, token) => ReadMessageAsync(dbContext, correlation.ConversationId, correlation.MessageId, token),
+                cancellationToken);
+            model = current?.Model;
+        }
+
+        return await _usageProviderResolver.Value.ResolveAsync(model, cancellationToken);
+    }
+
     // Writes the content-free run-envelope row on the caller's raw connection, enlisted in the terminalize transaction.
     // Metadata ONLY: no prompt, completion or tool-argument content. See docs/wiki/05-chat.md, "The run envelope".
-    private static async Task WriteRunEnvelopeRowAsync(NodeChatDbContext dbContext,
+    internal static async Task WriteRunEnvelopeRowAsync(NodeChatDbContext dbContext,
         DbTransaction? transaction,
         Guid conversationId,
         Guid messageId,
@@ -730,6 +767,7 @@ internal sealed class NodeChatMessageCommands
         int? reasoningTokens,
         int? totalTokens,
         AgentRunEnvelopeMetadata envelope,
+        string provider,
         long createdAtUtc,
         RunEnvelopeWriteMode writeMode,
         CancellationToken cancellationToken)
@@ -758,7 +796,7 @@ internal sealed class NodeChatMessageCommands
         AddParameter(command, "$invocation_id", envelope.InvocationId);
         AddParameter(command, "$request_id", requestId);
         AddParameter(command, "$model_name", model ?? string.Empty);
-        AddParameter(command, "$provider", envelope.Provider);
+        AddParameter(command, "$provider", provider);
         AddParameter(command, "$config_hash", string.Empty);
         AddParameter(command, "$terminal_status", terminalStatus);
         AddParameter(command, "$latency_ms", envelope.DurationMs);

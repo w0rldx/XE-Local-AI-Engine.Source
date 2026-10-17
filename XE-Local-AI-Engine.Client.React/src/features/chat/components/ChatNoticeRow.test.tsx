@@ -117,6 +117,20 @@ describe("ChatNoticeRow", () => {
 		).toBeTruthy();
 	});
 
+	it("localizes the resume-queued sentence in de", async () => {
+		const text = "After your answer, this reply was queued behind another running reply.";
+		i18next.addResourceBundle("de", "translation", de, true, true);
+		await i18next.changeLanguage("de");
+		renderWithProviders(
+			<ChatNoticeRow part={noticePart({ noticeKind: "ResumeQueuedBehindTurn", text, detail: "conversation-id" })} />,
+		);
+
+		expect(screen.getByTestId("chat-notice-row").getAttribute("data-notice-kind")).toBe("ResumeQueuedBehindTurn");
+		expect(
+			screen.getByText("Nach Ihrer Antwort wurde diese Antwort hinter einer anderen laufenden Antwort eingereiht."),
+		).toBeTruthy();
+	});
+
 	it("localizes the queued-behind-a-parked-turn sentence in de", async () => {
 		const text = "This message is waiting for an approval or a question in another conversation. Answer it there to continue.";
 		i18next.addResourceBundle("de", "translation", de, true, true);

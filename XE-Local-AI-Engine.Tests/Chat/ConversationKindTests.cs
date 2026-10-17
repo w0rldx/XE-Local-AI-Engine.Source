@@ -235,5 +235,5 @@ public sealed class ConversationKindTests : IDisposable
     }
 
     private static NodeChatPersistenceService CreateService(ServiceProvider provider) =>
-        new(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        new(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 }

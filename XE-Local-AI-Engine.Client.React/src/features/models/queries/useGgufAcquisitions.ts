@@ -130,6 +130,24 @@ export function pruneCompletedHandled(completed: ReadonlyMap<string, number>, no
 	);
 }
 
+// Mirrors the server's newest-row-per-model list: a newer operation for a model replaces that model's held terminal
+// row (an Interrupted download its resume continues), which would otherwise stay on an open page beside it.
+function dropSupersededTerminals(held: Map<string, GgufAcquisitionStatus>, incoming: GgufAcquisitionStatus): void {
+	const incomingStarted = Date.parse(incoming.startedAtUtc ?? "");
+	for (const [operationId, status] of held) {
+		const heldStarted = Date.parse(status.startedAtUtc ?? "");
+		if (
+			operationId !== incoming.operationId &&
+			status.operationKind === incoming.operationKind &&
+			status.modelName.toLowerCase() === incoming.modelName.toLowerCase() &&
+			isTerminalAcquisitionPhase(status.phase) &&
+			!(heldStarted > incomingStarted)
+		) {
+			held.delete(operationId);
+		}
+	}
+}
+
 export function mergeStatuses(
 	previous: ReadonlyMap<string, GgufAcquisitionStatus>,
 	rawItems: readonly object[],
@@ -144,6 +162,7 @@ export function mergeStatuses(
 			// an older/unstamped payload cannot roll the phase or byte count backward. Two unstamped legacy download
 			// payloads remain compatible, while terminal state still wins their otherwise ambiguous ordering.
 			if (shouldAcceptAcquisitionStatus(current, status)) {
+				dropSupersededTerminals(next, status);
 				next.set(status.operationId, status);
 			}
 		}

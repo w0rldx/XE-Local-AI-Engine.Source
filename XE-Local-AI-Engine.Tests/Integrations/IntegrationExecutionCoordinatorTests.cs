@@ -424,6 +424,9 @@ public sealed class IntegrationExecutionCoordinatorTests
         var row = harness.Row(executionId);
         AssertEx.Equal(IntegrationFailureCategories.InternalFailure, row.FailureCategory, "Only the ten closed categories may reach the column.");
         AssertEx.Contains(row.FailureSummary ?? string.Empty, nameof(FailureCategory.ProviderUnreachable), StringComparison.Ordinal);
+        // The chat row of the run keeps the typed category, so the conversation shows the localized headline.
+        var request = harness.TerminalizeRequest ?? throw new AssertionException("The assistant turn was never terminalized.");
+        AssertEx.Equal(FailureCategory.ProviderUnreachable, request.FailureCategory);
     }
 
     [Test]
@@ -440,6 +443,7 @@ public sealed class IntegrationExecutionCoordinatorTests
         AssertEx.NotNull(request.Envelope,
             "Without the kind-1 envelope an integration run is the one path invisible to the token-usage view — the kind-3 audit row carries no token columns.");
         AssertEx.Null(request.Parts, "Nothing persists tool events for a plain context, so leaving Parts untouched is the honest answer.");
+        AssertEx.Null(request.FailureCategory, "A completed run carries no failure category.");
     }
 
     [Test]

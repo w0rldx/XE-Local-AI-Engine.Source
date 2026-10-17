@@ -53,7 +53,7 @@ public sealed class ConversationUploadedFileStoreTests : IAsyncDisposable
 
         await using var provider = await BuildProviderAsync(databasePath, keyHolder);
         var store = CreateStore(provider, uploadRoot, keyHolder);
-        var service = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), store);
+        var service = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance, store);
 
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -116,7 +116,7 @@ public sealed class ConversationUploadedFileStoreTests : IAsyncDisposable
 
         await using var provider = await BuildProviderAsync(databasePath, keyHolder);
         var store = CreateStore(provider, uploadRoot, keyHolder);
-        var service = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), store);
+        var service = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance, store);
 
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -185,7 +185,7 @@ public sealed class ConversationUploadedFileStoreTests : IAsyncDisposable
 
         await using var provider = await BuildProviderAsync(databasePath, keyHolder);
         var store = CreateStore(provider, uploadRoot, keyHolder);
-        var service = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), store);
+        var service = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance, store);
 
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -220,7 +220,7 @@ public sealed class ConversationUploadedFileStoreTests : IAsyncDisposable
 
         await using var provider = await BuildProviderAsync(databasePath, keyHolder);
         var store = CreateStore(provider, uploadRoot, keyHolder);
-        var service = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), store);
+        var service = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance, store);
 
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -267,7 +267,7 @@ public sealed class ConversationUploadedFileStoreTests : IAsyncDisposable
 
         await using var provider = await BuildProviderAsync(databasePath, keyHolder);
         var store = CreateStore(provider, uploadRoot, keyHolder);
-        var service = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), store);
+        var service = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance, store);
 
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -397,7 +397,7 @@ public sealed class ConversationUploadedFileStoreTests : IAsyncDisposable
         var provider = await BuildProviderAsync(GetDatabasePath(name + ".sqlite"), keyHolder);
         _owned.Add((provider, keyHolder));
         var store = CreateStore(provider, uploadRoot, keyHolder);
-        var service = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), store);
+        var service = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance, store);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
             Title = "Title",

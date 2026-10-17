@@ -69,6 +69,28 @@ public sealed class LocalChatHubDomainRejectionTests
     }
 
     [Test]
+    public async Task SendMessage_WhenTheConversationsTurnIsParked_SurfacesAHubExceptionCarryingItsConflictToken()
+    {
+        var conversationId = Guid.NewGuid();
+        var rejection = new NodeChatTurnParkedException(conversationId);
+        var streamService = Substitute.For<INodeChatStreamService>();
+        streamService.SendMessageAsync(Arg.Any<NodeChatStreamRequest>(), Arg.Any<CancellationToken>())
+                     .Returns(_ => ThrowsAsync(rejection));
+
+        using var hub = CreateHub(streamService, Substitute.For<INodeChatRegenerationService>());
+
+        var exception = await AssertEx.ThrowsAsync<HubException>(async () =>
+        {
+            await foreach (var _ in hub.SendMessage(new NodeChatStreamRequest(conversationId, "hi"), CancellationToken.None))
+            {
+                // The refusal throws before the first event, so the body never runs.
+            }
+        });
+
+        AssertEx.Equal($"{nameof(NodeConflictProblemType.ConversationTurnParked)}: {rejection.Message}", exception.Message);
+    }
+
+    [Test]
     public async Task RegenerateMessage_WhenTheConversationIsReadOnly_SurfacesAHubExceptionCarryingTheConflictToken()
     {
         var conversationId = Guid.NewGuid();

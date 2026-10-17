@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -85,6 +86,18 @@ public sealed class InvocationFailureClassifierTests
 
         AssertEx.Equal(FailureCategory.Unexpected, classification.Category);
         AssertEx.Equal(exception.Message.Length > 512 ? exception.Message[..512] : exception.Message, classification.Message);
+    }
+
+    // A capacity refusal of the model's launch gets its own category and keeps its sanitized, actionable text verbatim.
+    [Test]
+    public void MapFailure_CapacityRefused_IsInsufficientCapacityWithTheRefusalVerbatim()
+    {
+        const string refusal = "Insufficient capacity for 'big' (Chat): another model is still loading. Loading now: 'other' (Chat).";
+
+        var classification = InvocationFailureClassifier.MapFailure(new LlamaCapacityRefusedException(refusal));
+
+        AssertEx.Equal(FailureCategory.InsufficientCapacity, classification.Category);
+        AssertEx.Equal(refusal, classification.Message);
     }
 
     // A wrapper naming a model-load failure over a 500 stays ModelLoadFailed: the 5xx arm runs after the model-load arm.

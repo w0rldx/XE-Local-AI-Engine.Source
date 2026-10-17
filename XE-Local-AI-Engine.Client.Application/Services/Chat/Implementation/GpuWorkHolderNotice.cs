@@ -32,7 +32,7 @@ internal static class GpuWorkHolderNotice
         Guid requestId,
         CancellationToken cancellationToken)
     {
-        if (dispatcher.CurrentInvocation is not { } holder
+        if (dispatcher.SlotHolder is not { } holder
             || holder.ConversationId == conversationId
             || NodeChatInvocationPump.IsTerminal(holder.Status)
             || !gate.Holders.Contains(GpuWorkKind.Benchmark)

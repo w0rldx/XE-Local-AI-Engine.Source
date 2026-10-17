@@ -1086,7 +1086,9 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                                       ReasoningCount = state.ReasoningTokens,
                                       Parts = parts.HasParts ? parts.Snapshot() : null,
                                       GenerationDurationMs = state.GenerationDurationMs,
-                                      Envelope = envelope
+                                      Envelope = envelope,
+                                      // Only a failed turn keeps its category on the row, as the chat pump does.
+                                      FailureCategory = terminalStatus == NodeChatMessageStatusValues.Failed ? state.FailureCategory : null
                                   },
                                   CancellationToken.None);
         }

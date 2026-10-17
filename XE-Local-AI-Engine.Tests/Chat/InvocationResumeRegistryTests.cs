@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -948,6 +949,43 @@ public sealed class InvocationResumeRegistryTests
                 events.Add(streamEvent);
             }
         });
+    }
+
+    // The resumed terminal carries the category name of a failed turn, and none for a cancelled one.
+    [Test]
+    [Arguments(InvocationStatus.Failed, FailureCategory.InsufficientCapacity, ChatStreamEventTypes.AssistantFailed, "InsufficientCapacity")]
+    [Arguments(InvocationStatus.Cancelled, FailureCategory.Cancelled, ChatStreamEventTypes.AssistantCancelled, null)]
+    public async Task ResumeAsync_TerminalCarriesTheFailureCategoryOfAFailedTurnOnly(InvocationStatus terminalStatus,
+        FailureCategory category,
+        string expectedType,
+        string? expectedCategory)
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var registry = CreateRegistry(dispatcher);
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, "Hello"));
+
+        var events = new List<ChatStreamEvent>();
+        var consumer = Task.Run(async () =>
+        {
+            await foreach (var streamEvent in registry.ResumeAsync(invocationId, CancellationToken.None))
+            {
+                events.Add(streamEvent);
+            }
+        });
+        await AssertEx.EventuallyAsync(() => events.Count >= 1, TimeSpan.FromSeconds(5));
+
+        var terminalState = NewState(invocationId, conversationId, terminalStatus, "Hello");
+        terminalState.FailureCategory = category;
+        terminalState.Error = "the reason";
+        RaiseState(dispatcher, terminalState);
+        await consumer;
+
+        var terminal = events[^1];
+        AssertEx.Equal(expectedType, terminal.Type);
+        AssertEx.True(string.Equals(expectedCategory, terminal.FailureCategory, StringComparison.Ordinal), $"expected category {expectedCategory ?? "null"}, got {terminal.FailureCategory ?? "null"}.");
+        AssertEx.True(events.Take(events.Count - 1).All(streamEvent => streamEvent.FailureCategory is null), "only the terminal carries a category.");
     }
 
     private static InvocationResumeRegistry CreateRegistry(IWorkerEventDispatcher dispatcher, ChatStreamBudgetOptions? budget = null)

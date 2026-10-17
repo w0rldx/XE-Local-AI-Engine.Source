@@ -26,7 +26,8 @@ public sealed class UsageSummaryMapperTests
             PromptTokens = prompt,
             CompletionTokens = completion,
             ReasoningTokens = reasoning,
-            TotalTokens = total
+            TotalTokens = total,
+            TokensReported = runs
         };
     }
 

@@ -32,6 +32,9 @@ export interface UsageModelRow {
 	// Null while no run in the group reported reasoning tokens: many local providers never report a count.
 	readonly reasoningTokens: number | null;
 	readonly totalTokens: number;
+	// Runs that reported token usage. A run stopped before the model reported usage has none, so the sums above cover
+	// only these runs: 0 means the row's tokens are not reported at all, fewer than runCount that some runs are missing.
+	readonly tokensReported: number;
 	// Estimated cost in USD, summed from the per-bucket server-computed values (never recomputed client-side). 0 for a
 	// model that only ran on free/local/unpriced providers.
 	readonly estimatedCostUsd: number;
@@ -128,6 +131,7 @@ export function aggregateByModel(items: readonly UsageBucketDto[]): UsageModelRo
 				completionTokens: existing.completionTokens + bucket.completionTokens,
 				reasoningTokens: addReported(existing.reasoningTokens, bucket.reasoningTokens),
 				totalTokens: existing.totalTokens + bucket.totalTokens,
+				tokensReported: existing.tokensReported + bucket.tokensReported,
 				estimatedCostUsd: existing.estimatedCostUsd + bucket.estimatedCostUsd,
 			});
 		} else {
@@ -141,6 +145,7 @@ export function aggregateByModel(items: readonly UsageBucketDto[]): UsageModelRo
 				completionTokens: bucket.completionTokens,
 				reasoningTokens: bucket.reasoningTokens ?? null,
 				totalTokens: bucket.totalTokens,
+				tokensReported: bucket.tokensReported,
 				estimatedCostUsd: bucket.estimatedCostUsd,
 			});
 		}

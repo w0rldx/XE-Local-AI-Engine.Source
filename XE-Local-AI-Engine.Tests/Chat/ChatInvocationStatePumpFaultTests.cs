@@ -4,6 +4,7 @@ using System.Threading.Channels;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -35,7 +36,7 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
     public async Task PumpAsync_WhenFlushFaultsMidStream_TerminalizesRowFailedAndRethrows()
     {
         await using var provider = await BuildProviderAsync("pump-fault-flush.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 
         var conversationId = Guid.NewGuid();
         var (correlation, assistantMessageId) = await SeedStreamingRowAsync(persistence, conversationId);
@@ -88,10 +89,59 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
     }
 
     [Test]
+    public async Task PumpAsync_AFailedTerminal_CarriesItsFailureCategoryOnTheLiveEvent()
+    {
+        // Live-QA D1 phase 5: the live assistant-failed event of an expired approval read null while the row read Timeout.
+        await using var provider = await BuildProviderAsync("pump-live-failure-category.sqlite");
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
+        var conversationId = Guid.NewGuid();
+        var (correlation, _) = await SeedStreamingRowAsync(persistence, conversationId);
+        var pump = new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System);
+        var stateChannel = Channel.CreateUnbounded<InvocationState>();
+        var sequence = new NodeChatStreamSequence();
+        var eventSink = new ChatStreamEventSink(correlation, sequence, new ChatStreamBudgetOptions(), TimeProvider.System);
+        stateChannel.Writer.TryWrite(new InvocationState
+        {
+            InvocationId = correlation.RequestId,
+            ConversationId = conversationId,
+            Status = InvocationStatus.Failed,
+            Error = "The approval for tool 'run_python' expired.",
+            FailureCategory = FailureCategory.Timeout,
+            StartedAt = DateTimeOffset.UtcNow,
+            LastUpdatedAt = DateTimeOffset.UtcNow,
+            CompletedAt = DateTimeOffset.UtcNow
+        });
+        stateChannel.Writer.TryComplete();
+
+        var events = new List<ChatStreamEvent>();
+        var collector = Task.Run(async () =>
+        {
+            await foreach (var streamEvent in eventSink.ReadAllAsync())
+            {
+                events.Add(streamEvent);
+            }
+        });
+
+        await pump.PumpAsync(stateChannel.Reader,
+            eventSink,
+            correlation,
+            "model-x",
+            sequence,
+            new NodeChatPartAccumulator(),
+            onTerminal: null,
+            CancellationToken.None);
+        eventSink.Complete();
+        await collector;
+
+        var failed = events.Single(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantFailed);
+        AssertEx.Equal(nameof(FailureCategory.Timeout), failed.FailureCategory);
+    }
+
+    [Test]
     public async Task PumpAsync_WhenFaultRacesACommittedCompletedTerminal_LeavesCompletedIntact()
     {
         await using var provider = await BuildProviderAsync("pump-fault-idempotent.sqlite");
-        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 
         var conversationId = Guid.NewGuid();
         var (correlation, assistantMessageId) = await SeedStreamingRowAsync(persistence, conversationId);

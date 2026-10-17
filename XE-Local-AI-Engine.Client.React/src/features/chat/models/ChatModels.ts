@@ -149,6 +149,8 @@ export interface ChatMessageModel {
 	sortOrder: number;
 	model?: string;
 	error?: string;
+	// The server `FailureCategory` name of a failed turn; drives the localized headline above `error`.
+	failureCategory?: string;
 	origin?: ChatOrigin;
 	inputTokens?: number;
 	outputTokens?: number;

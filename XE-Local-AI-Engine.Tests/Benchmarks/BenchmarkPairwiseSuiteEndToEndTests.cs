@@ -25,7 +25,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class BenchmarkPairwiseSuiteEndToEndTests
 {
-    private static readonly Guid RevisionId = new("44444444-4444-4444-4444-444444444444");
+    internal static readonly Guid RevisionId = new("44444444-4444-4444-4444-444444444444");
     private static readonly Guid ItemZero = new("cccccccc-0000-0000-0000-000000000000");
     private static readonly Guid ItemOne = new("dddddddd-0000-0000-0000-000000000000");
     private const string ExecutionKey = "exec-v1";
@@ -200,7 +200,7 @@ public sealed class BenchmarkPairwiseSuiteEndToEndTests
         AssertEx.True(scores.All(static entry => entry.Score is null && entry.Reason == BenchmarkRunJudgeStates.ReasonPairwiseInsufficient));
     }
 
-    private static BenchmarkRunRecord SuiteRun(BenchmarkRuntimeSnapshotV1 snapshot, Guid item, string cell, string answer) =>
+    internal static BenchmarkRunRecord SuiteRun(BenchmarkRuntimeSnapshotV1 snapshot, Guid item, string cell, string answer) =>
         BenchmarkJudgeExecutorTests.Run(snapshot, BenchmarkRunJudgeStates.Running, version: 1) with
         {
             TaskItemId = item,
@@ -210,7 +210,7 @@ public sealed class BenchmarkPairwiseSuiteEndToEndTests
             OutputPartsJson = BenchmarkExecutionSerialization.SerializeParts([new BenchmarkOutputPart("output", Content: answer)])
         };
 
-    private static BenchmarkComparisonRecord Comparison(BenchmarkPairwiseSlot slot, int order, InstalledModelSnapshot installed, int sequence, string? verdict = null) =>
+    internal static BenchmarkComparisonRecord Comparison(BenchmarkPairwiseSlot slot, int order, InstalledModelSnapshot installed, int sequence, string? verdict = null) =>
         new()
         {
             Id = Guid.NewGuid(),
@@ -252,7 +252,7 @@ public sealed class BenchmarkPairwiseSuiteEndToEndTests
             }
         };
 
-    private static BenchmarkJudgePolicyRevisionRecord Revision() =>
+    internal static BenchmarkJudgePolicyRevisionRecord Revision(string? referenceAnswer = null) =>
         new()
         {
             Id = RevisionId,
@@ -260,7 +260,8 @@ public sealed class BenchmarkPairwiseSuiteEndToEndTests
             Revision = 1,
             PolicyJson = BenchmarkJudgeSerialization.SerializePolicy(BenchmarkJudgeExecutorTests.Policy() with
             {
-                Mode = BenchmarkJudgePolicyModes.Pairwise
+                Mode = BenchmarkJudgePolicyModes.Pairwise,
+                ReferenceAnswer = referenceAnswer
             }),
             PolicyHash = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             ReferenceExecutionKey = ExecutionKey,
@@ -268,7 +269,7 @@ public sealed class BenchmarkPairwiseSuiteEndToEndTests
             CreatedAtUtc = 1
         };
 
-    private static BenchmarkComparisonExecutor Executor(IBenchmarkStore store,
+    internal static BenchmarkComparisonExecutor Executor(IBenchmarkStore store,
         BenchmarkRuntimeSnapshotV1 snapshot,
         BenchmarkJudgeExecutorTests.FakeLease lease,
         IWorkerEventDispatcher dispatcher,

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -48,7 +49,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 [Category(TestCategories.Unit)]
-public sealed class NodeChatStreamServiceTests
+public sealed partial class NodeChatStreamServiceTests
 {
     [Test]
     public async Task SendMessageAsync_WhenInvocationReportsUsage_StreamsTerminalTokenCounts()
@@ -162,6 +163,104 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    public async Task SendMessageAsync_WhileAnotherConversationsTurnIsParked_CompletesAtOnce_AndTheParkedTurnFinishesAfterIt()
+    {
+        var parkedConversationId = Guid.NewGuid();
+        var otherConversationId = Guid.NewGuid();
+        var dispatcher = CreateRealDispatcher();
+        var runner = new ParkingInvocationRunner(dispatcher, parkedConversationId);
+        var terminalOrder = new ConcurrentQueue<Guid>();
+        var parkedRequest = new NodeChatStreamRequest(parkedConversationId, "use the tool", MessageId: Guid.NewGuid(), RequestId: Guid.NewGuid());
+        var otherRequest = new NodeChatStreamRequest(otherConversationId, "hello", MessageId: Guid.NewGuid(), RequestId: Guid.NewGuid());
+        var parkedService = CreateParkingService(CreatePersistence(parkedConversationId, parkedRequest.MessageId!.Value, parkedRequest.RequestId!.Value,
+            _ => terminalOrder.Enqueue(parkedConversationId)), runner, dispatcher);
+        var otherService = CreateParkingService(CreatePersistence(otherConversationId, otherRequest.MessageId!.Value, otherRequest.RequestId!.Value,
+            _ => terminalOrder.Enqueue(otherConversationId)), runner, dispatcher);
+
+        var parkedSend = DrainAsync(parkedService.SendMessageAsync(parkedRequest));
+        await runner.Parked.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        var otherEvents = await DrainAsync(otherService.SendMessageAsync(otherRequest)).WaitAsync(TimeSpan.FromSeconds(10));
+
+        AssertEx.ContainsSingle(otherEvents, static streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantCompleted);
+        AssertEx.False(otherEvents.Exists(static streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.QueuedBehindParkedTurn)), "no parked-turn notice");
+        AssertEx.False(parkedSend.IsCompleted, "the parked turn is still waiting on its card");
+
+        runner.Answer.SetResult();
+        var parkedEvents = await parkedSend.WaitAsync(TimeSpan.FromSeconds(10));
+
+        AssertEx.ContainsSingle(parkedEvents, static streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantCompleted);
+        await AssertEx.EventuallyAsync(() => terminalOrder.Count == 2, TimeSpan.FromSeconds(10));
+        AssertEx.Equal(otherConversationId, terminalOrder.First(), "the other conversation's reply finished first");
+        AssertEx.Equal(parkedConversationId, terminalOrder.Last(), "the parked turn's terminal still persists after the other one's");
+        AssertEx.Null(dispatcher.SlotHolder, "both leases gave the slot back");
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenAParkedTurnIsAnsweredWhileAnotherHoldsTheSlot_PersistsTheResumeQueuedNotice()
+    {
+        var parkedConversationId = Guid.NewGuid();
+        var otherConversationId = Guid.NewGuid();
+        var dispatcher = CreateRealDispatcher();
+        var runner = new ParkingInvocationRunner(dispatcher, parkedConversationId, holdOthers: true);
+        var resumeQueued = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        dispatcher.TurnNoticeChanged += (_, args) =>
+        {
+            if (args.Payload.Kind == TurnNoticeKind.ResumeQueuedBehindTurn)
+            {
+                resumeQueued.TrySetResult();
+            }
+        };
+        NodeChatTerminalizeMessageRequest? parkedTerminal = null;
+        var parkedRequest = new NodeChatStreamRequest(parkedConversationId, "use the tool", MessageId: Guid.NewGuid(), RequestId: Guid.NewGuid());
+        var otherRequest = new NodeChatStreamRequest(otherConversationId, "a long answer", MessageId: Guid.NewGuid(), RequestId: Guid.NewGuid());
+        var parkedService = CreateParkingService(CreatePersistence(parkedConversationId, parkedRequest.MessageId!.Value, parkedRequest.RequestId!.Value,
+            request => parkedTerminal = request), runner, dispatcher);
+        var otherService = CreateParkingService(CreatePersistence(otherConversationId, otherRequest.MessageId!.Value, otherRequest.RequestId!.Value,
+            static _ => { }), runner, dispatcher);
+
+        var parkedSend = DrainAsync(parkedService.SendMessageAsync(parkedRequest));
+        await runner.Parked.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var otherSend = DrainAsync(otherService.SendMessageAsync(otherRequest));
+        await runner.OtherRunning.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        runner.Answer.SetResult();
+        await resumeQueued.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        runner.ReleaseOther.SetResult();
+        _ = await otherSend.WaitAsync(TimeSpan.FromSeconds(10));
+        var parkedEvents = await parkedSend.WaitAsync(TimeSpan.FromSeconds(10));
+
+        AssertEx.ContainsSingle(parkedEvents, static streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.ResumeQueuedBehindTurn));
+        var notice = AssertEx.NotNull(AssertEx.NotNull(parkedTerminal).Parts)
+                             .Single(static part => part.Kind == NodeChatMessagePartKinds.Notice && part.Name == nameof(TurnNoticeKind.ResumeQueuedBehindTurn));
+        AssertEx.Equal(otherConversationId.ToString(), notice.State, "the persisted notice names the conversation that held the slot");
+    }
+
+    [Test]
+    public async Task SendMessageAsync_IntoAConversationWhoseTurnIsParked_IsRefusedAsAParkedTurnConflict()
+    {
+        var conversationId = Guid.NewGuid();
+        var dispatcher = CreateRealDispatcher();
+        var parked = RuntimePackageBuilderFor(conversationId);
+        await using var parkedLease = await dispatcher.ReportInvocationAssignedAsync(parked);
+        await dispatcher.ReportApprovalRequestedAsync(new ApprovalRequestPayload
+        {
+            InvocationId = parked.InvocationId,
+            RequestId = "approval-1",
+            Description = "A tool call requires approval."
+        });
+        AssertEx.True(dispatcher.ReleaseSlotForPark(parked.InvocationId));
+        var request = new NodeChatStreamRequest(conversationId, "hello again", MessageId: Guid.NewGuid(), RequestId: Guid.NewGuid());
+        var persistence = CreatePersistence(conversationId, request.MessageId!.Value, request.RequestId!.Value, static _ => { });
+        var service = CreateParkingService(persistence, new ParkingInvocationRunner(dispatcher, Guid.Empty), dispatcher);
+
+        var exception = await AssertEx.ThrowsAsync<NodeChatTurnParkedException>(() => DrainAsync(service.SendMessageAsync(request)));
+
+        AssertEx.Equal(conversationId, exception.ConversationId);
+        await persistence.DidNotReceive().PersistUserMessageAsync(Arg.Any<NodeChatPersistUserMessageRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task SendMessageAsync_EmitsQueuedBeforeStreaming()
     {
         var conversationId = Guid.NewGuid();
@@ -233,8 +332,12 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         // The holder's turn is live when this send arrives: the fake hands the slot over at once, so only the notice can tell.
         await using var holderLease = await dispatcher.ReportInvocationAssignedAsync(RuntimePackageBuilder.Valid().WithConversationId(holderConversationId).Build());
-        // A parked holder is QueuedBehindParkedTurn's to name, so only one queued notice reaches the turn.
-        AssertEx.NotNull(dispatcher.CurrentInvocation).PendingApproval = holderParked ? ParkedApproval() : null;
+        // A parked step gives the slot back, so it is not the holder and nothing queues behind it.
+        if (holderParked)
+        {
+            AssertEx.NotNull(dispatcher.CurrentInvocation).PendingApproval = ParkedApproval();
+            AssertEx.True(dispatcher.ReleaseSlotForPark(AssertEx.NotNull(dispatcher.CurrentInvocation).InvocationId));
+        }
         var runner = new CompletingInvocationRunner(dispatcher);
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -4704,20 +4807,23 @@ public sealed class NodeChatStreamServiceTests
             NullLogger<NodeChatStreamService>.Instance,
             new GpuWorkGate());
 
-        var drained = 0;
-        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
                            UseLocalTools: true)))
         {
-            drained++;
+            events.Add(streamEvent);
         }
 
-        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.True(events.Count > 0, "Expected the send to stream events.");
         AssertEx.NotNull(dispatcher.CurrentInvocation);
         AssertEx.Equal(FailureCategory.ModelNotInstalled, dispatcher.CurrentInvocation!.FailureCategory);
         AssertEx.Equal(InvocationStatus.Failed, dispatcher.CurrentInvocation.Status);
+        // The pre-run category reaches the client on the terminal event, so the SPA can show its localized headline.
+        var terminal = events.Single(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantFailed);
+        AssertEx.Equal(nameof(FailureCategory.ModelNotInstalled), terminal.FailureCategory);
     }
 
     [Test]
@@ -6152,7 +6258,10 @@ public sealed class NodeChatStreamServiceTests
                            request.Status,
                            request.Content ?? string.Empty,
                            request.Reasoning,
-                           request.Error);
+                           request.Error) with
+                       {
+                           FailureCategory = request.FailureCategory
+                       };
                    });
 
         return persistence;
@@ -6663,7 +6772,36 @@ public sealed class NodeChatStreamServiceTests
 
         public event EventHandler<UserQuestionRequestedChangedEventArgs>? UserQuestionRequestedChanged;
 
+        private Guid? _slotHolderId;
+
         public InvocationState? CurrentInvocation { get; private set; }
+
+        public InvocationState? SlotHolder =>
+            CurrentInvocation is { } current && current.InvocationId == _slotHolderId && !NodeChatInvocationPump.IsTerminal(current.Status) ? current : null;
+
+        public IReadOnlyList<InvocationState> GetLiveInvocations() =>
+            CurrentInvocation is { } current && !NodeChatInvocationPump.IsTerminal(current.Status) ? [current] : [];
+
+        public InvocationLiveSnapshot GetLiveSnapshot() => new() { Current = SlotHolder, Live = GetLiveInvocations() };
+
+        public bool ReleaseSlotForPark(Guid invocationId)
+        {
+            if (_slotHolderId != invocationId)
+            {
+                return false;
+            }
+
+            _slotHolderId = null;
+            return true;
+        }
+
+        public Task ReportPromptTimedOutAsync(Guid invocationId, string requestId) => Task.CompletedTask;
+
+        public Task ReacquireSlotAsync(Guid invocationId, CancellationToken cancellationToken)
+        {
+            _slotHolderId = invocationId;
+            return Task.CompletedTask;
+        }
 
         public Task DispatchApprovalResolvedAsync(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
         {
@@ -6672,6 +6810,7 @@ public sealed class NodeChatStreamServiceTests
 
         public Task<IAsyncDisposable> ReportInvocationAssignedAsync(RuntimePackage package, CancellationToken cancellationToken = default)
         {
+            _slotHolderId = package.InvocationId;
             CurrentInvocation = new InvocationState
             {
                 InvocationId = package.InvocationId,

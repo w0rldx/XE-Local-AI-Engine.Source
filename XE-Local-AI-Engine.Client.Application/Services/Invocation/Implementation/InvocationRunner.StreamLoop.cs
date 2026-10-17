@@ -384,7 +384,7 @@ public sealed partial class InvocationRunner
             var retrievals = new Dictionary<ToolApprovalRequestContent, WebReviewRetrieval>();
             foreach (var webRequest in loop.PendingApprovals.Where(ToolApprovalCoordinator.IsWebReviewRequest))
             {
-                if (await _toolApprovalCoordinator.RequestWebConsentAsync(package, webRequest, _lifecycleTracker.SetInvocationDeadline, invocationToken) is { } refusal)
+                if (await _toolApprovalCoordinator.RequestWebConsentAsync(package, webRequest, ParkFor(package), invocationToken) is { } refusal)
                 {
                     retrievals[webRequest] = refusal;
                 }
@@ -396,7 +396,7 @@ public sealed partial class InvocationRunner
 
             if (consented.Count > 0)
             {
-                _lifecycleTracker.SetToolExecuting(executing: true);
+                _lifecycleTracker.SetToolExecuting(package.InvocationId, executing: true);
                 try
                 {
                     foreach (var (webRequest, retrieval) in await _toolApprovalCoordinator.RetrieveWebContentAsync(package, consented, invocationToken))
@@ -406,7 +406,7 @@ public sealed partial class InvocationRunner
                 }
                 finally
                 {
-                    _lifecycleTracker.SetToolExecuting(executing: false);
+                    _lifecycleTracker.SetToolExecuting(package.InvocationId, executing: false);
                 }
             }
 
@@ -419,7 +419,7 @@ public sealed partial class InvocationRunner
             // A web review, like ask_user, always approves: the handler returns whatever the review stashed, the decline text included.
             if (webRetrievals.TryGetValue(approvalRequest, out var webRetrieval))
             {
-                var reviewNote = await _toolApprovalCoordinator.RequestWebReviewAsync(package, approvalRequest, webRetrieval, _lifecycleTracker.SetInvocationDeadline, invocationToken);
+                var reviewNote = await _toolApprovalCoordinator.RequestWebReviewAsync(package, approvalRequest, webRetrieval, ParkFor(package), invocationToken);
                 approvalResponses.Add(approvalRequest.CreateResponse(approved: true, reviewNote));
                 loop.OpenToolCalls.OpenApproved(approvalRequest);
                 continue;
@@ -429,13 +429,13 @@ public sealed partial class InvocationRunner
             // and then always approves, so the framework executes the tool and the handler returns that answer. Every other tool keeps the approve/deny path.
             if (ToolApprovalCoordinator.IsUserQuestionRequest(approvalRequest))
             {
-                var answerNote = await _toolApprovalCoordinator.RequestUserAnswerAsync(package, approvalRequest, _lifecycleTracker.SetInvocationDeadline, invocationToken);
+                var answerNote = await _toolApprovalCoordinator.RequestUserAnswerAsync(package, approvalRequest, ParkFor(package), invocationToken);
                 approvalResponses.Add(approvalRequest.CreateResponse(approved: true, answerNote));
                 loop.OpenToolCalls.OpenApproved(approvalRequest);
                 continue;
             }
 
-            var approved = await _toolApprovalCoordinator.RequestToolApprovalAsync(package, approvalRequest, _lifecycleTracker.SetInvocationDeadline, invocationToken);
+            var approved = await _toolApprovalCoordinator.RequestToolApprovalAsync(package, approvalRequest, ParkFor(package), invocationToken);
             approvalResponses.Add(approvalRequest.CreateResponse(approved, approved ? "Approved by user." : "Rejected by user."));
             if (approved)
             {
@@ -615,10 +615,14 @@ public sealed partial class InvocationRunner
     {
         private readonly HashSet<string> _ids = new(StringComparer.Ordinal);
         private readonly InvocationLifecycleTracker _tracker;
+        private readonly Guid _invocationId;
         private bool _atRoundBoundary = true;
 
-        public OpenToolCalls(InvocationLifecycleTracker tracker) =>
+        public OpenToolCalls(InvocationLifecycleTracker tracker, Guid invocationId)
+        {
             _tracker = tracker;
+            _invocationId = invocationId;
+        }
 
         public bool Any => _ids.Count > 0;
 
@@ -626,7 +630,7 @@ public sealed partial class InvocationRunner
         {
             _ = _ids.Add(callId);
             _atRoundBoundary = false;
-            _tracker.SetToolExecuting(executing: true);
+            _tracker.SetToolExecuting(_invocationId, executing: true);
         }
 
         /// <summary>An approved call runs in the resume segment before the provider streams; an id-less one could never be closed.</summary>
@@ -644,7 +648,7 @@ public sealed partial class InvocationRunner
             _ = _ids.Remove(callId);
             // A round boundary even with ids still open: the framework runs a round's calls one at a time (AllowConcurrentInvocation is false).
             _atRoundBoundary = true;
-            _tracker.SetToolExecuting(Any);
+            _tracker.SetToolExecuting(_invocationId, Any);
         }
 
         public void OnProviderOutput()
@@ -659,7 +663,7 @@ public sealed partial class InvocationRunner
         {
             _ids.Clear();
             _atRoundBoundary = true;
-            _tracker.SetToolExecuting(executing: false);
+            _tracker.SetToolExecuting(_invocationId, executing: false);
         }
     }
 

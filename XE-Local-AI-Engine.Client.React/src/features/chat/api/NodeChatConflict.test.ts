@@ -5,6 +5,7 @@ import { ApiError } from "@/core/api/errors/ApiError";
 import type { ConflictProblemDetails } from "@/core/api/models/ProblemDetails";
 import {
 	isNodeChatReadOnlyConflict,
+	isNodeChatTurnParkedConflict,
 	isNodeChatWorkflowRunLiveConflict,
 	stripSignalRHubErrorPrefix,
 } from "@/features/chat/api/NodeChatConflict";
@@ -109,5 +110,20 @@ describe("stripSignalRHubErrorPrefix", () => {
 			),
 		).toBe("ReadOnlyConversation: x");
 		expect(stripSignalRHubErrorPrefix("plain message")).toBe("plain message");
+	});
+});
+
+describe("isNodeChatTurnParkedConflict", () => {
+	it("matches the REST 409 and the wrapped hub refusal, and nothing else", () => {
+		expect(isNodeChatTurnParkedConflict(new ApiError(409, conflict("ConversationTurnParked")))).toBe(true);
+		expect(
+			isNodeChatTurnParkedConflict(
+				new Error(
+					"An error occurred on the server while streaming results. HubException: ConversationTurnParked: Conversation 0e5b has a reply waiting on an approval or a question; answer the waiting card before sending another message.",
+				),
+			),
+		).toBe(true);
+		expect(isNodeChatTurnParkedConflict(new ApiError(409, conflict("GraphWorkflowRunLiveInConversation")))).toBe(false);
+		expect(isNodeChatWorkflowRunLiveConflict(new Error("ConversationTurnParked: parked."))).toBe(false);
 	});
 });

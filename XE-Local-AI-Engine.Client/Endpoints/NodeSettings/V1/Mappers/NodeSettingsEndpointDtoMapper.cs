@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Mappers;
 
-using System.Numerics;
 using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
@@ -295,8 +294,9 @@ internal static class NodeSettingsEndpointDtoMapper
     }
 
     /// <summary>
-    ///     Merges the request into the current stored settings: an optional field that is <see langword="null" /> in
-    ///     the request keeps its current stored value, mirroring the <c>DefaultModelName</c> merge.
+    ///     Merges the request into the current stored settings: an omitted member keeps its stored value, an explicit
+    ///     JSON null (<see cref="SaveNodeSettingsRequest.Clears" />) clears it back to the effective default, and a value
+    ///     sets it.
     /// </summary>
     /// <remarks>
     ///     The store's <c>Normalize</c> then range-clamps every field on save, so the boundary validator and this merge
@@ -312,219 +312,203 @@ internal static class NodeSettingsEndpointDtoMapper
         var (externalAccessProfile, autoCheckApplicationUpdates, autoCheckRuntimeUpdates, autoProvisionFirstRunModel) =
             ApplyExternalAccess(request, currentSettings);
 
+        // The validator has already proven a supplied value parses; the `else` is written rather than banged so a
+        // future caller that skips the validator keeps the stored value instead of persisting junk.
+        var containerRuntimeSelection = currentSettings.ContainerRuntimeSelection;
+        if (request.Clears(nameof(request.ContainerRuntimeSelection)))
+        {
+            containerRuntimeSelection = null;
+        }
+        else if (request.ContainerRuntimeSelection is { } selection
+                 && ContainerRuntimeSelectionParser.TryParse(selection, out var requestedRuntimeSelection))
+        {
+            containerRuntimeSelection = ContainerRuntimeSelectionParser.Format(requestedRuntimeSelection);
+        }
+
         return new StoredNodeSettings
         {
-            MaxMessageRequestTimeoutSeconds = request.MaxMessageRequestTimeoutSeconds ?? currentSettings.MaxMessageRequestTimeoutSeconds,
-            DefaultModelName = request.DefaultModelName is null
-                ? currentSettings.DefaultModelName
-                : request.DefaultModelName.Trim(),
-            EnableTools = request.EnableTools ?? currentSettings.EnableTools,
-            CustomToolsEnabled = request.CustomToolsEnabled ?? currentSettings.CustomToolsEnabled,
-            ToolRelevanceEnabled = request.ToolRelevanceEnabled ?? currentSettings.ToolRelevanceEnabled,
-            WebAccessEnabled = request.WebAccessEnabled ?? currentSettings.WebAccessEnabled,
-            // Blank clears it: the store's Normalize maps an empty string to null, like OllamaEndpoint.
-            WebSearchSearxngUrl = request.WebSearchSearxngUrl is null
-                ? currentSettings.WebSearchSearxngUrl
-                : request.WebSearchSearxngUrl.Trim(),
+            // The one non-nullable stored member: null resets it to the shipped default instead of storing null.
+            MaxMessageRequestTimeoutSeconds = request.Clears(nameof(request.MaxMessageRequestTimeoutSeconds))
+                ? StoredNodeSettings.DefaultMaxMessageRequestTimeoutSeconds
+                : request.MaxMessageRequestTimeoutSeconds ?? currentSettings.MaxMessageRequestTimeoutSeconds,
+            DefaultModelName = MergeText(request.DefaultModelName, currentSettings.DefaultModelName, request.Clears(nameof(request.DefaultModelName))),
+            EnableTools = Merge(request.EnableTools, currentSettings.EnableTools, request.Clears(nameof(request.EnableTools))),
+            CustomToolsEnabled = Merge(request.CustomToolsEnabled, currentSettings.CustomToolsEnabled, request.Clears(nameof(request.CustomToolsEnabled))),
+            ToolRelevanceEnabled = Merge(request.ToolRelevanceEnabled, currentSettings.ToolRelevanceEnabled, request.Clears(nameof(request.ToolRelevanceEnabled))),
+            WebAccessEnabled = Merge(request.WebAccessEnabled, currentSettings.WebAccessEnabled, request.Clears(nameof(request.WebAccessEnabled))),
+            WebSearchSearxngUrl = MergeText(request.WebSearchSearxngUrl, currentSettings.WebSearchSearxngUrl, request.Clears(nameof(request.WebSearchSearxngUrl))),
             ExternalAccessProfile = externalAccessProfile,
-            // Plain null-preserving merge, unlike the external-access block above: the mode couples to no other field, so it needs no joint resolution. The validator has
-            // already proven a supplied value is one of the two literals; the store's Normalize trims and re-checks it.
-            UiMode = request.UiMode is null
-                ? currentSettings.UiMode
-                : request.UiMode.Trim(),
-            // The UiMode merge: the validator has proven a supplied value is low or high, and the store's Normalize re-checks it.
-            SandboxSecurityProfile = request.SandboxSecurityProfile is null
-                ? currentSettings.SandboxSecurityProfile
-                : request.SandboxSecurityProfile.Trim(),
-            UpdateChannel = request.UpdateChannel is null
-                ? currentSettings.UpdateChannel
-                : request.UpdateChannel.Trim(),
+            // Plain merge, unlike the external-access block above: the mode couples to no other field, so it needs no joint resolution. The validator has
+            // already proven a supplied value is one of the two literals and refused a null; the store's Normalize trims and re-checks it.
+            UiMode = MergeText(request.UiMode, currentSettings.UiMode, request.Clears(nameof(request.UiMode))),
+            // The UiMode merge: the validator has proven a supplied value is low or high and refused a null, and the store's Normalize re-checks it.
+            SandboxSecurityProfile = MergeText(request.SandboxSecurityProfile, currentSettings.SandboxSecurityProfile, request.Clears(nameof(request.SandboxSecurityProfile))),
+            UpdateChannel = MergeText(request.UpdateChannel, currentSettings.UpdateChannel, request.Clears(nameof(request.UpdateChannel))),
             AutoCheckApplicationUpdates = autoCheckApplicationUpdates,
             AutoCheckRuntimeUpdates = autoCheckRuntimeUpdates,
             AutoProvisionFirstRunModel = autoProvisionFirstRunModel,
-            ToolCapableModels = request.ToolCapableModels ?? currentSettings.ToolCapableModels,
-            OllamaEndpoint = request.OllamaEndpoint is null
-                ? currentSettings.OllamaEndpoint
-                : request.OllamaEndpoint.Trim(),
-            HuggingFaceDefaultQuant = request.HuggingFaceDefaultQuant is null
-                ? currentSettings.HuggingFaceDefaultQuant
-                : request.HuggingFaceDefaultQuant.Trim(),
-            // A nullable numeric knob takes TokenSettingUnset (-1) as "back to the default" via KeepOrUnset; exceptions say why.
-            HuggingFaceDiskMarginBytes = KeepOrUnset(request.HuggingFaceDiskMarginBytes, currentSettings.HuggingFaceDiskMarginBytes),
-            LlamaMaxLoadedProcesses = KeepOrUnset(request.LlamaMaxLoadedProcesses, currentSettings.LlamaMaxLoadedProcesses),
-            LlamaIdleTimeToLiveSeconds = KeepOrUnset(request.LlamaIdleTimeToLiveSeconds, currentSettings.LlamaIdleTimeToLiveSeconds),
-            KeepModelWarmEnabled = request.KeepModelWarmEnabled ?? currentSettings.KeepModelWarmEnabled,
-            KeepModelWarmModelName = request.KeepModelWarmModelName is null
-                ? currentSettings.KeepModelWarmModelName
-                : request.KeepModelWarmModelName.Trim(),
-            KeepModelWarmIntervalSeconds = KeepOrUnset(request.KeepModelWarmIntervalSeconds, currentSettings.KeepModelWarmIntervalSeconds),
-            MaxResponseSizeMb = KeepOrUnset(request.MaxResponseSizeMb, currentSettings.MaxResponseSizeMb),
-            RecommendedLlamaCppTag = request.RecommendedLlamaCppTag is null
-                ? currentSettings.RecommendedLlamaCppTag
-                : request.RecommendedLlamaCppTag.Trim(),
-            ChatCacheReuse = KeepOrUnset(request.ChatCacheReuse, currentSettings.ChatCacheReuse),
-            SpeculativeMode = request.SpeculativeMode is null
-                ? currentSettings.SpeculativeMode
-                : request.SpeculativeMode.Trim(),
-            KvCacheType = request.KvCacheType is null
-                ? currentSettings.KvCacheType
-                : request.KvCacheType.Trim(),
-            // The validator has already proven a supplied value parses; the `else` is written rather than banged so a
-            // future caller that skips the validator keeps the stored value instead of persisting junk.
-            ContainerRuntimeSelection =
-                request.ContainerRuntimeSelection is null
-                || !ContainerRuntimeSelectionParser.TryParse(request.ContainerRuntimeSelection, out var requestedRuntimeSelection)
-                    ? currentSettings.ContainerRuntimeSelection
-                    : ContainerRuntimeSelectionParser.Format(requestedRuntimeSelection),
-            SpeculativeDraftModelName = request.SpeculativeDraftModelName is null
-                ? currentSettings.SpeculativeDraftModelName
-                : request.SpeculativeDraftModelName.Trim(),
-            SpeculativeDraftMaxTokens = KeepOrUnset(request.SpeculativeDraftMaxTokens, currentSettings.SpeculativeDraftMaxTokens),
-            // No -1 here: in llama.cpp's own vocabulary a negative layer count is a value, not "unset".
-            SpeculativeDraftGpuLayers = request.SpeculativeDraftGpuLayers ?? currentSettings.SpeculativeDraftGpuLayers,
-            // Optional string, mirroring OllamaEndpoint/DefaultModelName: a null request field keeps the current value, and a supplied value (including the empty string the
-            // "Off" option sends) is trimmed, with the store's Normalize mapping blank to null — reranking disabled.
-            RerankerModelName = request.RerankerModelName is null
-                ? currentSettings.RerankerModelName
-                : request.RerankerModelName.Trim(),
-            AutoEffortFastModelName = request.AutoEffortFastModelName is null
-                ? currentSettings.AutoEffortFastModelName
-                : request.AutoEffortFastModelName.Trim(),
-            OrchestrationIdleTimeoutSeconds = KeepOrUnset(request.OrchestrationIdleTimeoutSeconds, currentSettings.OrchestrationIdleTimeoutSeconds),
-            AgentHomePrepareTimeoutSeconds = KeepOrUnset(request.AgentHomePrepareTimeoutSeconds, currentSettings.AgentHomePrepareTimeoutSeconds),
-            AgentHomeCommandTimeoutSeconds = KeepOrUnset(request.AgentHomeCommandTimeoutSeconds, currentSettings.AgentHomeCommandTimeoutSeconds),
-            AgentHomeMaxSelectedFolderBytes = KeepOrUnset(request.AgentHomeMaxSelectedFolderBytes, currentSettings.AgentHomeMaxSelectedFolderBytes),
-            AgentHomeMaxPatchBytes = KeepOrUnset(request.AgentHomeMaxPatchBytes, currentSettings.AgentHomeMaxPatchBytes),
-            MaxPendingToolCallAgeMinutes = KeepOrUnset(request.MaxPendingToolCallAgeMinutes, currentSettings.MaxPendingToolCallAgeMinutes),
-            DetachedGraceSeconds = KeepOrUnset(request.DetachedGraceSeconds, currentSettings.DetachedGraceSeconds),
+            ToolCapableModels = MergeObject(request.ToolCapableModels, currentSettings.ToolCapableModels, request.Clears(nameof(request.ToolCapableModels))),
+            OllamaEndpoint = MergeText(request.OllamaEndpoint, currentSettings.OllamaEndpoint, request.Clears(nameof(request.OllamaEndpoint))),
+            HuggingFaceDefaultQuant = MergeText(request.HuggingFaceDefaultQuant, currentSettings.HuggingFaceDefaultQuant, request.Clears(nameof(request.HuggingFaceDefaultQuant))),
+            HuggingFaceDiskMarginBytes = Merge(request.HuggingFaceDiskMarginBytes, currentSettings.HuggingFaceDiskMarginBytes, request.Clears(nameof(request.HuggingFaceDiskMarginBytes))),
+            LlamaMaxLoadedProcesses = Merge(request.LlamaMaxLoadedProcesses, currentSettings.LlamaMaxLoadedProcesses, request.Clears(nameof(request.LlamaMaxLoadedProcesses))),
+            LlamaIdleTimeToLiveSeconds = Merge(request.LlamaIdleTimeToLiveSeconds, currentSettings.LlamaIdleTimeToLiveSeconds, request.Clears(nameof(request.LlamaIdleTimeToLiveSeconds))),
+            KeepModelWarmEnabled = Merge(request.KeepModelWarmEnabled, currentSettings.KeepModelWarmEnabled, request.Clears(nameof(request.KeepModelWarmEnabled))),
+            KeepModelWarmModelName = MergeText(request.KeepModelWarmModelName, currentSettings.KeepModelWarmModelName, request.Clears(nameof(request.KeepModelWarmModelName))),
+            KeepModelWarmIntervalSeconds = Merge(request.KeepModelWarmIntervalSeconds, currentSettings.KeepModelWarmIntervalSeconds, request.Clears(nameof(request.KeepModelWarmIntervalSeconds))),
+            MaxResponseSizeMb = Merge(request.MaxResponseSizeMb, currentSettings.MaxResponseSizeMb, request.Clears(nameof(request.MaxResponseSizeMb))),
+            RecommendedLlamaCppTag = MergeText(request.RecommendedLlamaCppTag, currentSettings.RecommendedLlamaCppTag, request.Clears(nameof(request.RecommendedLlamaCppTag))),
+            ChatCacheReuse = Merge(request.ChatCacheReuse, currentSettings.ChatCacheReuse, request.Clears(nameof(request.ChatCacheReuse))),
+            SpeculativeMode = MergeText(request.SpeculativeMode, currentSettings.SpeculativeMode, request.Clears(nameof(request.SpeculativeMode))),
+            KvCacheType = MergeText(request.KvCacheType, currentSettings.KvCacheType, request.Clears(nameof(request.KvCacheType))),
+            ContainerRuntimeSelection = containerRuntimeSelection,
+            SpeculativeDraftModelName = MergeText(request.SpeculativeDraftModelName, currentSettings.SpeculativeDraftModelName, request.Clears(nameof(request.SpeculativeDraftModelName))),
+            SpeculativeDraftMaxTokens = Merge(request.SpeculativeDraftMaxTokens, currentSettings.SpeculativeDraftMaxTokens, request.Clears(nameof(request.SpeculativeDraftMaxTokens))),
+            SpeculativeDraftGpuLayers = Merge(request.SpeculativeDraftGpuLayers, currentSettings.SpeculativeDraftGpuLayers, request.Clears(nameof(request.SpeculativeDraftGpuLayers))),
+            // Null is the "Off" option: stored null, reranking disabled.
+            RerankerModelName = MergeText(request.RerankerModelName, currentSettings.RerankerModelName, request.Clears(nameof(request.RerankerModelName))),
+            AutoEffortFastModelName = MergeText(request.AutoEffortFastModelName, currentSettings.AutoEffortFastModelName, request.Clears(nameof(request.AutoEffortFastModelName))),
+            OrchestrationIdleTimeoutSeconds = Merge(request.OrchestrationIdleTimeoutSeconds, currentSettings.OrchestrationIdleTimeoutSeconds,
+                request.Clears(nameof(request.OrchestrationIdleTimeoutSeconds))),
+            AgentHomePrepareTimeoutSeconds = Merge(request.AgentHomePrepareTimeoutSeconds, currentSettings.AgentHomePrepareTimeoutSeconds,
+                request.Clears(nameof(request.AgentHomePrepareTimeoutSeconds))),
+            AgentHomeCommandTimeoutSeconds = Merge(request.AgentHomeCommandTimeoutSeconds, currentSettings.AgentHomeCommandTimeoutSeconds,
+                request.Clears(nameof(request.AgentHomeCommandTimeoutSeconds))),
+            AgentHomeMaxSelectedFolderBytes = Merge(request.AgentHomeMaxSelectedFolderBytes, currentSettings.AgentHomeMaxSelectedFolderBytes,
+                request.Clears(nameof(request.AgentHomeMaxSelectedFolderBytes))),
+            AgentHomeMaxPatchBytes = Merge(request.AgentHomeMaxPatchBytes, currentSettings.AgentHomeMaxPatchBytes, request.Clears(nameof(request.AgentHomeMaxPatchBytes))),
+            MaxPendingToolCallAgeMinutes = Merge(request.MaxPendingToolCallAgeMinutes, currentSettings.MaxPendingToolCallAgeMinutes, request.Clears(nameof(request.MaxPendingToolCallAgeMinutes))),
+            DetachedGraceSeconds = Merge(request.DetachedGraceSeconds, currentSettings.DetachedGraceSeconds, request.Clears(nameof(request.DetachedGraceSeconds))),
             // The node-default tool-approval policy has no editable field on this request, so the currently stored value is preserved: an unrelated node-settings save must
             // never wipe it.
             ToolApprovalPolicy = currentSettings.ToolApprovalPolicy,
-            VoiceFeatureEnabled = request.VoiceFeatureEnabled ?? currentSettings.VoiceFeatureEnabled,
-            DefaultVoiceProfile = request.DefaultVoiceProfile is null
-                ? currentSettings.DefaultVoiceProfile
-                : request.DefaultVoiceProfile.Trim(),
-            // Null-preserving: a null request map keeps the currently stored override, and a supplied map (wrapped back into the stored shape) REPLACES it. The store's
+            VoiceFeatureEnabled = Merge(request.VoiceFeatureEnabled, currentSettings.VoiceFeatureEnabled, request.Clears(nameof(request.VoiceFeatureEnabled))),
+            DefaultVoiceProfile = MergeText(request.DefaultVoiceProfile, currentSettings.DefaultVoiceProfile, request.Clears(nameof(request.DefaultVoiceProfile))),
+            // Omitted keeps the stored override, null clears it, and a supplied map (wrapped back into the stored shape) REPLACES it. The store's
             // Normalize then trims keys and drops negative or non-finite entries, collapsing an empty or all-junk map to null — no override.
-            UsageRates = request.UsageRates is null
-                ? currentSettings.UsageRates
-                : new NodeUsageRateSettings
-                {
-                    Models = request.UsageRates
-                },
-            TranscriptionIdleTimeoutMinutes = KeepOrUnset(request.TranscriptionIdleTimeoutMinutes, currentSettings.TranscriptionIdleTimeoutMinutes),
-            LlamaReadinessTimeoutCapSeconds = KeepOrUnset(request.LlamaReadinessTimeoutCapSeconds, currentSettings.LlamaReadinessTimeoutCapSeconds),
-            LlamaChatHttpTimeoutSeconds = KeepOrUnset(request.LlamaChatHttpTimeoutSeconds, currentSettings.LlamaChatHttpTimeoutSeconds),
-            LlamaEmbeddingHttpTimeoutSeconds = KeepOrUnset(request.LlamaEmbeddingHttpTimeoutSeconds, currentSettings.LlamaEmbeddingHttpTimeoutSeconds),
-            // -1 is the request's "back to automatic", the one way a null-keeps member can clear a stored count.
-            LlamaChatCacheRamMiB = request.LlamaChatCacheRamMiB switch
-            {
-                null => currentSettings.LlamaChatCacheRamMiB,
-                StoredNodeSettings.LlamaChatCacheRamMiBAuto => null,
-                { } cacheRamMiB => cacheRamMiB
-            },
-            LlamaCpuThreadReserve = KeepOrUnset(request.LlamaCpuThreadReserve, currentSettings.LlamaCpuThreadReserve),
-            LlamaGpuReservePercent = KeepOrUnset(request.LlamaGpuReservePercent, currentSettings.LlamaGpuReservePercent),
-            LlamaRamReservePercent = KeepOrUnset(request.LlamaRamReservePercent, currentSettings.LlamaRamReservePercent),
-            ImageIdleTimeToLiveSeconds = KeepOrUnset(request.ImageIdleTimeToLiveSeconds, currentSettings.ImageIdleTimeToLiveSeconds),
-            ModelFitSafetyMarginPercent = KeepOrUnset(request.ModelFitSafetyMarginPercent, currentSettings.ModelFitSafetyMarginPercent),
-            MaxProviderCallsPerInvocation = KeepOrUnset(request.MaxProviderCallsPerInvocation, currentSettings.MaxProviderCallsPerInvocation),
-            CustomToolMaxTimeoutSeconds = KeepOrUnset(request.CustomToolMaxTimeoutSeconds, currentSettings.CustomToolMaxTimeoutSeconds),
-            WebFetchTimeoutSeconds = KeepOrUnset(request.WebFetchTimeoutSeconds, currentSettings.WebFetchTimeoutSeconds),
-            // The validator has proven a non-empty value is a GUID; the empty string clears the router.
-            IntentRouterDefinitionId = request.IntentRouterDefinitionId switch
-            {
-                null => currentSettings.IntentRouterDefinitionId,
-                "" => null,
-                { } routerId => Guid.TryParse(routerId, out var parsed) ? parsed : currentSettings.IntentRouterDefinitionId
-            },
-            IntentMaxUtteranceAgeSeconds = KeepOrUnset(request.IntentMaxUtteranceAgeSeconds, currentSettings.IntentMaxUtteranceAgeSeconds),
-            WebFetchMaxContentChars = KeepOrUnset(request.WebFetchMaxContentChars, currentSettings.WebFetchMaxContentChars),
-            KnowledgeSearchDefaultResults = KeepOrUnset(request.KnowledgeSearchDefaultResults, currentSettings.KnowledgeSearchDefaultResults),
-            KnowledgeSearchMaxResults = KeepOrUnset(request.KnowledgeSearchMaxResults, currentSettings.KnowledgeSearchMaxResults),
-            ReasoningBudgetMinimalTokens = KeepOrUnset(request.ReasoningBudgetMinimalTokens, currentSettings.ReasoningBudgetMinimalTokens),
-            ReasoningBudgetLowTokens = KeepOrUnset(request.ReasoningBudgetLowTokens, currentSettings.ReasoningBudgetLowTokens),
-            ReasoningBudgetMediumTokens = KeepOrUnset(request.ReasoningBudgetMediumTokens, currentSettings.ReasoningBudgetMediumTokens),
-            ReasoningBudgetHighTokens = KeepOrUnset(request.ReasoningBudgetHighTokens, currentSettings.ReasoningBudgetHighTokens),
-            // The empty string clears these two back to the shipped default, like WebSearchSearxngUrl.
-            DefaultReasoningEffort = request.DefaultReasoningEffort switch
-            {
-                null => currentSettings.DefaultReasoningEffort,
-                "" => null,
-                { } effort => effort.Trim()
-            },
-            ChatOutputCapMode = request.ChatOutputCapMode switch
-            {
-                null => currentSettings.ChatOutputCapMode,
-                "" => null,
-                { } mode => mode.Trim()
-            },
-            ChatOutputCapMaxTokens = KeepOrUnset(request.ChatOutputCapMaxTokens, currentSettings.ChatOutputCapMaxTokens),
-            HuggingFaceDownloadConnections = KeepOrUnset(request.HuggingFaceDownloadConnections, currentSettings.HuggingFaceDownloadConnections),
-            TranscriptionInferenceTimeoutMinutes = KeepOrUnset(request.TranscriptionInferenceTimeoutMinutes, currentSettings.TranscriptionInferenceTimeoutMinutes),
-            AgentHomeMaxRunSeconds = KeepOrUnset(request.AgentHomeMaxRunSeconds, currentSettings.AgentHomeMaxRunSeconds),
-            AgentHomeRunRetentionDays = KeepOrUnset(request.AgentHomeRunRetentionDays, currentSettings.AgentHomeRunRetentionDays),
-            ToolPipelineMaxIterationsPerRequest = KeepOrUnset(request.ToolPipelineMaxIterationsPerRequest, currentSettings.ToolPipelineMaxIterationsPerRequest),
-            ToolPipelineMaxToolResultChars = KeepOrUnset(request.ToolPipelineMaxToolResultChars, currentSettings.ToolPipelineMaxToolResultChars),
-            ToolPipelineMaxConsecutiveInvalidToolCalls = KeepOrUnset(request.ToolPipelineMaxConsecutiveInvalidToolCalls, currentSettings.ToolPipelineMaxConsecutiveInvalidToolCalls),
-            DefaultContextTokens = KeepOrUnset(request.DefaultContextTokens, currentSettings.DefaultContextTokens),
-            ProviderBudgetRecentMessagesToKeep = KeepOrUnset(request.ProviderBudgetRecentMessagesToKeep, currentSettings.ProviderBudgetRecentMessagesToKeep),
-            ProviderBudgetMaxCumulativeInputTokens = KeepOrUnset(request.ProviderBudgetMaxCumulativeInputTokens, currentSettings.ProviderBudgetMaxCumulativeInputTokens),
-            ContextBudgetRecentTurnKeepCount = KeepOrUnset(request.ContextBudgetRecentTurnKeepCount, currentSettings.ContextBudgetRecentTurnKeepCount),
-            CompactionAutoCompactPercent = KeepOrUnset(request.CompactionAutoCompactPercent, currentSettings.CompactionAutoCompactPercent),
-            CompactionRecentMessagesVerbatim = KeepOrUnset(request.CompactionRecentMessagesVerbatim, currentSettings.CompactionRecentMessagesVerbatim),
-            MaxInlinedAttachmentChars = KeepOrUnset(request.MaxInlinedAttachmentChars, currentSettings.MaxInlinedAttachmentChars),
-            KnowledgeChatTopK = KeepOrUnset(request.KnowledgeChatTopK, currentSettings.KnowledgeChatTopK),
-            ProviderMaxRetries = KeepOrUnset(request.ProviderMaxRetries, currentSettings.ProviderMaxRetries),
-            SpawnMaxConcurrent = KeepOrUnset(request.SpawnMaxConcurrent, currentSettings.SpawnMaxConcurrent),
-            SpawnMaxCloud = KeepOrUnset(request.SpawnMaxCloud, currentSettings.SpawnMaxCloud),
-            SpawnQueueWaitSeconds = KeepOrUnset(request.SpawnQueueWaitSeconds, currentSettings.SpawnQueueWaitSeconds),
-            CompactionAutoEnabled = request.CompactionAutoEnabled ?? currentSettings.CompactionAutoEnabled,
-            CompactionDistillEnabled = request.CompactionDistillEnabled ?? currentSettings.CompactionDistillEnabled,
-            ProviderRetryEnabled = request.ProviderRetryEnabled ?? currentSettings.ProviderRetryEnabled,
-            KnowledgeAdaptiveRerankingEnabled = request.KnowledgeAdaptiveRerankingEnabled ?? currentSettings.KnowledgeAdaptiveRerankingEnabled,
-            KnowledgeRetrievalLatencyBudgetMs = KeepOrUnset(request.KnowledgeRetrievalLatencyBudgetMs, currentSettings.KnowledgeRetrievalLatencyBudgetMs),
-            KnowledgeScheduledReindexEnabled = request.KnowledgeScheduledReindexEnabled ?? currentSettings.KnowledgeScheduledReindexEnabled,
-            KnowledgeScheduledReindexIntervalMinutes = KeepOrUnset(request.KnowledgeScheduledReindexIntervalMinutes, currentSettings.KnowledgeScheduledReindexIntervalMinutes),
-            KnowledgeAgentToolsEnabled = request.KnowledgeAgentToolsEnabled ?? currentSettings.KnowledgeAgentToolsEnabled,
-            AllowCloudModelAccess = request.AllowCloudModelAccess ?? currentSettings.AllowCloudModelAccess,
-            AllowCloudModelUnattendedRuns = request.AllowCloudModelUnattendedRuns ?? currentSettings.AllowCloudModelUnattendedRuns,
-            AllowCloudModelWebTools = request.AllowCloudModelWebTools ?? currentSettings.AllowCloudModelWebTools,
-            AllowCloudModelMcpTools = request.AllowCloudModelMcpTools ?? currentSettings.AllowCloudModelMcpTools,
-            AllowCloudModelSubAgents = request.AllowCloudModelSubAgents ?? currentSettings.AllowCloudModelSubAgents,
-            PlaybookAnalysisModelName = request.PlaybookAnalysisModelName is null ? currentSettings.PlaybookAnalysisModelName : request.PlaybookAnalysisModelName.Trim(),
-            PlaybookEvalModelName = request.PlaybookEvalModelName is null ? currentSettings.PlaybookEvalModelName : request.PlaybookEvalModelName.Trim(),
-            MemoryExtractionModelName = request.MemoryExtractionModelName is null ? currentSettings.MemoryExtractionModelName : request.MemoryExtractionModelName.Trim(),
-            ChatRetentionEnabled = request.ChatRetentionEnabled ?? currentSettings.ChatRetentionEnabled,
-            ChatRetentionDays = KeepOrUnset(request.ChatRetentionDays, currentSettings.ChatRetentionDays),
-            AgentExecutionLogRetentionEnabled = request.AgentExecutionLogRetentionEnabled ?? currentSettings.AgentExecutionLogRetentionEnabled,
-            AgentExecutionLogRetentionDays = KeepOrUnset(request.AgentExecutionLogRetentionDays, currentSettings.AgentExecutionLogRetentionDays),
-            NodeDbBackupRetainCount = KeepOrUnset(request.NodeDbBackupRetainCount, currentSettings.NodeDbBackupRetainCount),
-            BenchmarkKldCacheMaxBytes = KeepOrUnset(request.BenchmarkKldCacheMaxBytes, currentSettings.BenchmarkKldCacheMaxBytes),
-            SchedulerHistoryRetentionDays = KeepOrUnset(request.SchedulerHistoryRetentionDays, currentSettings.SchedulerHistoryRetentionDays),
-            ImageMaxLoadedProcesses = KeepOrUnset(request.ImageMaxLoadedProcesses, currentSettings.ImageMaxLoadedProcesses),
-            ImageTextEncoderOnGpu = request.ImageTextEncoderOnGpu ?? currentSettings.ImageTextEncoderOnGpu,
-            GraphWorkflowMaxConcurrentRuns = KeepOrUnset(request.GraphWorkflowMaxConcurrentRuns, currentSettings.GraphWorkflowMaxConcurrentRuns),
-            GraphWorkflowDefaultNodeTimeoutSeconds = KeepOrUnset(request.GraphWorkflowDefaultNodeTimeoutSeconds, currentSettings.GraphWorkflowDefaultNodeTimeoutSeconds),
-            WorkSessionMaxStepsPerRun = KeepOrUnset(request.WorkSessionMaxStepsPerRun, currentSettings.WorkSessionMaxStepsPerRun),
-            WorkSessionMaxConcurrentSessions = KeepOrUnset(request.WorkSessionMaxConcurrentSessions, currentSettings.WorkSessionMaxConcurrentSessions),
-            DevelopmentMaxAttemptDurationSeconds = KeepOrUnset(request.DevelopmentMaxAttemptDurationSeconds, currentSettings.DevelopmentMaxAttemptDurationSeconds),
-            DevelopmentMaxToolCalls = KeepOrUnset(request.DevelopmentMaxToolCalls, currentSettings.DevelopmentMaxToolCalls),
-            DevelopmentMaxOutputTokens = KeepOrUnset(request.DevelopmentMaxOutputTokens, currentSettings.DevelopmentMaxOutputTokens),
-            AgentHomeMaxInnerToolCalls = KeepOrUnset(request.AgentHomeMaxInnerToolCalls, currentSettings.AgentHomeMaxInnerToolCalls),
-            AgentHomePatchApplyTimeoutSeconds = KeepOrUnset(request.AgentHomePatchApplyTimeoutSeconds, currentSettings.AgentHomePatchApplyTimeoutSeconds),
-            AgentHomeRunRetentionMaxRuns = KeepOrUnset(request.AgentHomeRunRetentionMaxRuns, currentSettings.AgentHomeRunRetentionMaxRuns),
-            AgentHomeRunRetentionMaxTotalBytes = KeepOrUnset(request.AgentHomeRunRetentionMaxTotalBytes, currentSettings.AgentHomeRunRetentionMaxTotalBytes),
-            DevelopmentEnabled = request.DevelopmentEnabled ?? currentSettings.DevelopmentEnabled,
-            WorkSessionsEnabled = request.WorkSessionsEnabled ?? currentSettings.WorkSessionsEnabled,
-            GraphWorkflowsEnabled = request.GraphWorkflowsEnabled ?? currentSettings.GraphWorkflowsEnabled,
-            TranscriptionEnabled = request.TranscriptionEnabled ?? currentSettings.TranscriptionEnabled,
-            ExternalAppsEnabled = request.ExternalAppsEnabled ?? currentSettings.ExternalAppsEnabled,
-            ComputeEnabled = request.ComputeEnabled ?? currentSettings.ComputeEnabled,
-            AgentHomeEnabled = request.AgentHomeEnabled ?? currentSettings.AgentHomeEnabled,
-            SchedulerEnabled = request.SchedulerEnabled ?? currentSettings.SchedulerEnabled,
-            DevWorkflowsEnabled = request.DevWorkflowsEnabled ?? currentSettings.DevWorkflowsEnabled,
-            ExecutionPreviewsEnabled = request.ExecutionPreviewsEnabled ?? currentSettings.ExecutionPreviewsEnabled
+            UsageRates = MergeObject(
+                request.UsageRates is { } rates ? new NodeUsageRateSettings { Models = rates } : null,
+                currentSettings.UsageRates,
+                request.Clears(nameof(request.UsageRates))),
+            TranscriptionIdleTimeoutMinutes = Merge(request.TranscriptionIdleTimeoutMinutes, currentSettings.TranscriptionIdleTimeoutMinutes,
+                request.Clears(nameof(request.TranscriptionIdleTimeoutMinutes))),
+            LlamaReadinessTimeoutCapSeconds = Merge(request.LlamaReadinessTimeoutCapSeconds, currentSettings.LlamaReadinessTimeoutCapSeconds,
+                request.Clears(nameof(request.LlamaReadinessTimeoutCapSeconds))),
+            LlamaChatHttpTimeoutSeconds = Merge(request.LlamaChatHttpTimeoutSeconds, currentSettings.LlamaChatHttpTimeoutSeconds, request.Clears(nameof(request.LlamaChatHttpTimeoutSeconds))),
+            LlamaEmbeddingHttpTimeoutSeconds = Merge(request.LlamaEmbeddingHttpTimeoutSeconds, currentSettings.LlamaEmbeddingHttpTimeoutSeconds,
+                request.Clears(nameof(request.LlamaEmbeddingHttpTimeoutSeconds))),
+            // Null is automatic.
+            LlamaChatCacheRamMiB = Merge(request.LlamaChatCacheRamMiB, currentSettings.LlamaChatCacheRamMiB, request.Clears(nameof(request.LlamaChatCacheRamMiB))),
+            LlamaCpuThreadReserve = Merge(request.LlamaCpuThreadReserve, currentSettings.LlamaCpuThreadReserve, request.Clears(nameof(request.LlamaCpuThreadReserve))),
+            LlamaGpuReservePercent = Merge(request.LlamaGpuReservePercent, currentSettings.LlamaGpuReservePercent, request.Clears(nameof(request.LlamaGpuReservePercent))),
+            LlamaRamReservePercent = Merge(request.LlamaRamReservePercent, currentSettings.LlamaRamReservePercent, request.Clears(nameof(request.LlamaRamReservePercent))),
+            ImageIdleTimeToLiveSeconds = Merge(request.ImageIdleTimeToLiveSeconds, currentSettings.ImageIdleTimeToLiveSeconds, request.Clears(nameof(request.ImageIdleTimeToLiveSeconds))),
+            ModelFitSafetyMarginPercent = Merge(request.ModelFitSafetyMarginPercent, currentSettings.ModelFitSafetyMarginPercent, request.Clears(nameof(request.ModelFitSafetyMarginPercent))),
+            MaxProviderCallsPerInvocation = Merge(request.MaxProviderCallsPerInvocation, currentSettings.MaxProviderCallsPerInvocation, request.Clears(nameof(request.MaxProviderCallsPerInvocation))),
+            CustomToolMaxTimeoutSeconds = Merge(request.CustomToolMaxTimeoutSeconds, currentSettings.CustomToolMaxTimeoutSeconds, request.Clears(nameof(request.CustomToolMaxTimeoutSeconds))),
+            WebFetchTimeoutSeconds = Merge(request.WebFetchTimeoutSeconds, currentSettings.WebFetchTimeoutSeconds, request.Clears(nameof(request.WebFetchTimeoutSeconds))),
+            // The validator has proven a supplied value is a GUID; null clears the router (alias-only routing).
+            IntentRouterDefinitionId = Merge(
+                Guid.TryParse(request.IntentRouterDefinitionId, out var parsed) ? parsed : (Guid?)null,
+                currentSettings.IntentRouterDefinitionId,
+                request.Clears(nameof(request.IntentRouterDefinitionId))),
+            IntentMaxUtteranceAgeSeconds = Merge(request.IntentMaxUtteranceAgeSeconds, currentSettings.IntentMaxUtteranceAgeSeconds, request.Clears(nameof(request.IntentMaxUtteranceAgeSeconds))),
+            WebFetchMaxContentChars = Merge(request.WebFetchMaxContentChars, currentSettings.WebFetchMaxContentChars, request.Clears(nameof(request.WebFetchMaxContentChars))),
+            KnowledgeSearchDefaultResults = Merge(request.KnowledgeSearchDefaultResults, currentSettings.KnowledgeSearchDefaultResults, request.Clears(nameof(request.KnowledgeSearchDefaultResults))),
+            KnowledgeSearchMaxResults = Merge(request.KnowledgeSearchMaxResults, currentSettings.KnowledgeSearchMaxResults, request.Clears(nameof(request.KnowledgeSearchMaxResults))),
+            ReasoningBudgetMinimalTokens = Merge(request.ReasoningBudgetMinimalTokens, currentSettings.ReasoningBudgetMinimalTokens, request.Clears(nameof(request.ReasoningBudgetMinimalTokens))),
+            ReasoningBudgetLowTokens = Merge(request.ReasoningBudgetLowTokens, currentSettings.ReasoningBudgetLowTokens, request.Clears(nameof(request.ReasoningBudgetLowTokens))),
+            ReasoningBudgetMediumTokens = Merge(request.ReasoningBudgetMediumTokens, currentSettings.ReasoningBudgetMediumTokens, request.Clears(nameof(request.ReasoningBudgetMediumTokens))),
+            ReasoningBudgetHighTokens = Merge(request.ReasoningBudgetHighTokens, currentSettings.ReasoningBudgetHighTokens, request.Clears(nameof(request.ReasoningBudgetHighTokens))),
+            DefaultReasoningEffort = MergeText(request.DefaultReasoningEffort, currentSettings.DefaultReasoningEffort, request.Clears(nameof(request.DefaultReasoningEffort))),
+            ChatOutputCapMode = MergeText(request.ChatOutputCapMode, currentSettings.ChatOutputCapMode, request.Clears(nameof(request.ChatOutputCapMode))),
+            ChatOutputCapMaxTokens = Merge(request.ChatOutputCapMaxTokens, currentSettings.ChatOutputCapMaxTokens, request.Clears(nameof(request.ChatOutputCapMaxTokens))),
+            HuggingFaceDownloadConnections = Merge(request.HuggingFaceDownloadConnections, currentSettings.HuggingFaceDownloadConnections,
+                request.Clears(nameof(request.HuggingFaceDownloadConnections))),
+            TranscriptionInferenceTimeoutMinutes = Merge(request.TranscriptionInferenceTimeoutMinutes, currentSettings.TranscriptionInferenceTimeoutMinutes,
+                request.Clears(nameof(request.TranscriptionInferenceTimeoutMinutes))),
+            AgentHomeMaxRunSeconds = Merge(request.AgentHomeMaxRunSeconds, currentSettings.AgentHomeMaxRunSeconds, request.Clears(nameof(request.AgentHomeMaxRunSeconds))),
+            AgentHomeRunRetentionDays = Merge(request.AgentHomeRunRetentionDays, currentSettings.AgentHomeRunRetentionDays, request.Clears(nameof(request.AgentHomeRunRetentionDays))),
+            ToolPipelineMaxIterationsPerRequest = Merge(request.ToolPipelineMaxIterationsPerRequest, currentSettings.ToolPipelineMaxIterationsPerRequest,
+                request.Clears(nameof(request.ToolPipelineMaxIterationsPerRequest))),
+            ToolPipelineMaxToolResultChars = Merge(request.ToolPipelineMaxToolResultChars, currentSettings.ToolPipelineMaxToolResultChars,
+                request.Clears(nameof(request.ToolPipelineMaxToolResultChars))),
+            ToolPipelineMaxConsecutiveInvalidToolCalls = Merge(request.ToolPipelineMaxConsecutiveInvalidToolCalls, currentSettings.ToolPipelineMaxConsecutiveInvalidToolCalls,
+                request.Clears(nameof(request.ToolPipelineMaxConsecutiveInvalidToolCalls))),
+            DefaultContextTokens = Merge(request.DefaultContextTokens, currentSettings.DefaultContextTokens, request.Clears(nameof(request.DefaultContextTokens))),
+            ProviderBudgetRecentMessagesToKeep = Merge(request.ProviderBudgetRecentMessagesToKeep, currentSettings.ProviderBudgetRecentMessagesToKeep,
+                request.Clears(nameof(request.ProviderBudgetRecentMessagesToKeep))),
+            ProviderBudgetMaxCumulativeInputTokens = Merge(request.ProviderBudgetMaxCumulativeInputTokens, currentSettings.ProviderBudgetMaxCumulativeInputTokens,
+                request.Clears(nameof(request.ProviderBudgetMaxCumulativeInputTokens))),
+            ContextBudgetRecentTurnKeepCount = Merge(request.ContextBudgetRecentTurnKeepCount, currentSettings.ContextBudgetRecentTurnKeepCount,
+                request.Clears(nameof(request.ContextBudgetRecentTurnKeepCount))),
+            CompactionAutoCompactPercent = Merge(request.CompactionAutoCompactPercent, currentSettings.CompactionAutoCompactPercent, request.Clears(nameof(request.CompactionAutoCompactPercent))),
+            CompactionRecentMessagesVerbatim = Merge(request.CompactionRecentMessagesVerbatim, currentSettings.CompactionRecentMessagesVerbatim,
+                request.Clears(nameof(request.CompactionRecentMessagesVerbatim))),
+            MaxInlinedAttachmentChars = Merge(request.MaxInlinedAttachmentChars, currentSettings.MaxInlinedAttachmentChars, request.Clears(nameof(request.MaxInlinedAttachmentChars))),
+            KnowledgeChatTopK = Merge(request.KnowledgeChatTopK, currentSettings.KnowledgeChatTopK, request.Clears(nameof(request.KnowledgeChatTopK))),
+            ProviderMaxRetries = Merge(request.ProviderMaxRetries, currentSettings.ProviderMaxRetries, request.Clears(nameof(request.ProviderMaxRetries))),
+            SpawnMaxConcurrent = Merge(request.SpawnMaxConcurrent, currentSettings.SpawnMaxConcurrent, request.Clears(nameof(request.SpawnMaxConcurrent))),
+            SpawnMaxCloud = Merge(request.SpawnMaxCloud, currentSettings.SpawnMaxCloud, request.Clears(nameof(request.SpawnMaxCloud))),
+            SpawnQueueWaitSeconds = Merge(request.SpawnQueueWaitSeconds, currentSettings.SpawnQueueWaitSeconds, request.Clears(nameof(request.SpawnQueueWaitSeconds))),
+            CompactionAutoEnabled = Merge(request.CompactionAutoEnabled, currentSettings.CompactionAutoEnabled, request.Clears(nameof(request.CompactionAutoEnabled))),
+            CompactionDistillEnabled = Merge(request.CompactionDistillEnabled, currentSettings.CompactionDistillEnabled, request.Clears(nameof(request.CompactionDistillEnabled))),
+            ProviderRetryEnabled = Merge(request.ProviderRetryEnabled, currentSettings.ProviderRetryEnabled, request.Clears(nameof(request.ProviderRetryEnabled))),
+            KnowledgeAdaptiveRerankingEnabled = Merge(request.KnowledgeAdaptiveRerankingEnabled, currentSettings.KnowledgeAdaptiveRerankingEnabled,
+                request.Clears(nameof(request.KnowledgeAdaptiveRerankingEnabled))),
+            KnowledgeRetrievalLatencyBudgetMs = Merge(request.KnowledgeRetrievalLatencyBudgetMs, currentSettings.KnowledgeRetrievalLatencyBudgetMs,
+                request.Clears(nameof(request.KnowledgeRetrievalLatencyBudgetMs))),
+            KnowledgeScheduledReindexEnabled = Merge(request.KnowledgeScheduledReindexEnabled, currentSettings.KnowledgeScheduledReindexEnabled,
+                request.Clears(nameof(request.KnowledgeScheduledReindexEnabled))),
+            KnowledgeScheduledReindexIntervalMinutes = Merge(request.KnowledgeScheduledReindexIntervalMinutes, currentSettings.KnowledgeScheduledReindexIntervalMinutes,
+                request.Clears(nameof(request.KnowledgeScheduledReindexIntervalMinutes))),
+            KnowledgeAgentToolsEnabled = Merge(request.KnowledgeAgentToolsEnabled, currentSettings.KnowledgeAgentToolsEnabled, request.Clears(nameof(request.KnowledgeAgentToolsEnabled))),
+            AllowCloudModelAccess = Merge(request.AllowCloudModelAccess, currentSettings.AllowCloudModelAccess, request.Clears(nameof(request.AllowCloudModelAccess))),
+            AllowCloudModelUnattendedRuns = Merge(request.AllowCloudModelUnattendedRuns, currentSettings.AllowCloudModelUnattendedRuns, request.Clears(nameof(request.AllowCloudModelUnattendedRuns))),
+            AllowCloudModelWebTools = Merge(request.AllowCloudModelWebTools, currentSettings.AllowCloudModelWebTools, request.Clears(nameof(request.AllowCloudModelWebTools))),
+            AllowCloudModelMcpTools = Merge(request.AllowCloudModelMcpTools, currentSettings.AllowCloudModelMcpTools, request.Clears(nameof(request.AllowCloudModelMcpTools))),
+            AllowCloudModelSubAgents = Merge(request.AllowCloudModelSubAgents, currentSettings.AllowCloudModelSubAgents, request.Clears(nameof(request.AllowCloudModelSubAgents))),
+            PlaybookAnalysisModelName = MergeText(request.PlaybookAnalysisModelName, currentSettings.PlaybookAnalysisModelName, request.Clears(nameof(request.PlaybookAnalysisModelName))),
+            PlaybookEvalModelName = MergeText(request.PlaybookEvalModelName, currentSettings.PlaybookEvalModelName, request.Clears(nameof(request.PlaybookEvalModelName))),
+            MemoryExtractionModelName = MergeText(request.MemoryExtractionModelName, currentSettings.MemoryExtractionModelName, request.Clears(nameof(request.MemoryExtractionModelName))),
+            ChatRetentionEnabled = Merge(request.ChatRetentionEnabled, currentSettings.ChatRetentionEnabled, request.Clears(nameof(request.ChatRetentionEnabled))),
+            ChatRetentionDays = Merge(request.ChatRetentionDays, currentSettings.ChatRetentionDays, request.Clears(nameof(request.ChatRetentionDays))),
+            AgentExecutionLogRetentionEnabled = Merge(request.AgentExecutionLogRetentionEnabled, currentSettings.AgentExecutionLogRetentionEnabled,
+                request.Clears(nameof(request.AgentExecutionLogRetentionEnabled))),
+            AgentExecutionLogRetentionDays = Merge(request.AgentExecutionLogRetentionDays, currentSettings.AgentExecutionLogRetentionDays,
+                request.Clears(nameof(request.AgentExecutionLogRetentionDays))),
+            NodeDbBackupRetainCount = Merge(request.NodeDbBackupRetainCount, currentSettings.NodeDbBackupRetainCount, request.Clears(nameof(request.NodeDbBackupRetainCount))),
+            BenchmarkKldCacheMaxBytes = Merge(request.BenchmarkKldCacheMaxBytes, currentSettings.BenchmarkKldCacheMaxBytes, request.Clears(nameof(request.BenchmarkKldCacheMaxBytes))),
+            SchedulerHistoryRetentionDays = Merge(request.SchedulerHistoryRetentionDays, currentSettings.SchedulerHistoryRetentionDays, request.Clears(nameof(request.SchedulerHistoryRetentionDays))),
+            ImageMaxLoadedProcesses = Merge(request.ImageMaxLoadedProcesses, currentSettings.ImageMaxLoadedProcesses, request.Clears(nameof(request.ImageMaxLoadedProcesses))),
+            ImageTextEncoderOnGpu = Merge(request.ImageTextEncoderOnGpu, currentSettings.ImageTextEncoderOnGpu, request.Clears(nameof(request.ImageTextEncoderOnGpu))),
+            GraphWorkflowMaxConcurrentRuns = Merge(request.GraphWorkflowMaxConcurrentRuns, currentSettings.GraphWorkflowMaxConcurrentRuns,
+                request.Clears(nameof(request.GraphWorkflowMaxConcurrentRuns))),
+            GraphWorkflowDefaultNodeTimeoutSeconds = Merge(request.GraphWorkflowDefaultNodeTimeoutSeconds, currentSettings.GraphWorkflowDefaultNodeTimeoutSeconds,
+                request.Clears(nameof(request.GraphWorkflowDefaultNodeTimeoutSeconds))),
+            WorkSessionMaxStepsPerRun = Merge(request.WorkSessionMaxStepsPerRun, currentSettings.WorkSessionMaxStepsPerRun, request.Clears(nameof(request.WorkSessionMaxStepsPerRun))),
+            WorkSessionMaxConcurrentSessions = Merge(request.WorkSessionMaxConcurrentSessions, currentSettings.WorkSessionMaxConcurrentSessions,
+                request.Clears(nameof(request.WorkSessionMaxConcurrentSessions))),
+            DevelopmentMaxAttemptDurationSeconds = Merge(request.DevelopmentMaxAttemptDurationSeconds, currentSettings.DevelopmentMaxAttemptDurationSeconds,
+                request.Clears(nameof(request.DevelopmentMaxAttemptDurationSeconds))),
+            DevelopmentMaxToolCalls = Merge(request.DevelopmentMaxToolCalls, currentSettings.DevelopmentMaxToolCalls, request.Clears(nameof(request.DevelopmentMaxToolCalls))),
+            DevelopmentMaxOutputTokens = Merge(request.DevelopmentMaxOutputTokens, currentSettings.DevelopmentMaxOutputTokens, request.Clears(nameof(request.DevelopmentMaxOutputTokens))),
+            AgentHomeMaxInnerToolCalls = Merge(request.AgentHomeMaxInnerToolCalls, currentSettings.AgentHomeMaxInnerToolCalls, request.Clears(nameof(request.AgentHomeMaxInnerToolCalls))),
+            AgentHomePatchApplyTimeoutSeconds = Merge(request.AgentHomePatchApplyTimeoutSeconds, currentSettings.AgentHomePatchApplyTimeoutSeconds,
+                request.Clears(nameof(request.AgentHomePatchApplyTimeoutSeconds))),
+            AgentHomeRunRetentionMaxRuns = Merge(request.AgentHomeRunRetentionMaxRuns, currentSettings.AgentHomeRunRetentionMaxRuns, request.Clears(nameof(request.AgentHomeRunRetentionMaxRuns))),
+            AgentHomeRunRetentionMaxTotalBytes = Merge(request.AgentHomeRunRetentionMaxTotalBytes, currentSettings.AgentHomeRunRetentionMaxTotalBytes,
+                request.Clears(nameof(request.AgentHomeRunRetentionMaxTotalBytes))),
+            DevelopmentEnabled = Merge(request.DevelopmentEnabled, currentSettings.DevelopmentEnabled, request.Clears(nameof(request.DevelopmentEnabled))),
+            WorkSessionsEnabled = Merge(request.WorkSessionsEnabled, currentSettings.WorkSessionsEnabled, request.Clears(nameof(request.WorkSessionsEnabled))),
+            GraphWorkflowsEnabled = Merge(request.GraphWorkflowsEnabled, currentSettings.GraphWorkflowsEnabled, request.Clears(nameof(request.GraphWorkflowsEnabled))),
+            TranscriptionEnabled = Merge(request.TranscriptionEnabled, currentSettings.TranscriptionEnabled, request.Clears(nameof(request.TranscriptionEnabled))),
+            ExternalAppsEnabled = Merge(request.ExternalAppsEnabled, currentSettings.ExternalAppsEnabled, request.Clears(nameof(request.ExternalAppsEnabled))),
+            ComputeEnabled = Merge(request.ComputeEnabled, currentSettings.ComputeEnabled, request.Clears(nameof(request.ComputeEnabled))),
+            AgentHomeEnabled = Merge(request.AgentHomeEnabled, currentSettings.AgentHomeEnabled, request.Clears(nameof(request.AgentHomeEnabled))),
+            SchedulerEnabled = Merge(request.SchedulerEnabled, currentSettings.SchedulerEnabled, request.Clears(nameof(request.SchedulerEnabled))),
+            DevWorkflowsEnabled = Merge(request.DevWorkflowsEnabled, currentSettings.DevWorkflowsEnabled, request.Clears(nameof(request.DevWorkflowsEnabled))),
+            ExecutionPreviewsEnabled = Merge(request.ExecutionPreviewsEnabled, currentSettings.ExecutionPreviewsEnabled, request.Clears(nameof(request.ExecutionPreviewsEnabled)))
         };
     }
 
@@ -535,7 +519,8 @@ internal static class NodeSettingsEndpointDtoMapper
     /// <remarks>
     ///     A request carrying a PRESET (<c>recommended</c> or <c>offline</c>; the validator rejected anything else)
     ///     writes that literal and that preset's triple, ignoring any switch sent with it — one bool drives all three,
-    ///     so the presets cannot drift apart. A request carrying at least one switch writes those switches and stamps
+    ///     so the presets cannot drift apart. A request carrying at least one switch (an explicit null clears that switch
+    ///     to its default and counts as carried) writes those switches and stamps
     ///     the preset the resulting triple matches, else <c>custom</c>. Any other save preserves all four.
     /// </remarks>
     private static ExternalAccessStamp ApplyExternalAccess(SaveNodeSettingsRequest request,
@@ -547,9 +532,12 @@ internal static class NodeSettingsEndpointDtoMapper
             return new ExternalAccessStamp(request.ExternalAccessProfile, enabled, enabled, enabled);
         }
 
-        if (request.AutoCheckApplicationUpdates is null
-            && request.AutoCheckRuntimeUpdates is null
-            && request.AutoProvisionFirstRunModel is null)
+        var clearsApplicationUpdates = request.Clears(nameof(request.AutoCheckApplicationUpdates));
+        var clearsRuntimeUpdates = request.Clears(nameof(request.AutoCheckRuntimeUpdates));
+        var clearsFirstRunModel = request.Clears(nameof(request.AutoProvisionFirstRunModel));
+        if (request.AutoCheckApplicationUpdates is null && !clearsApplicationUpdates
+            && request.AutoCheckRuntimeUpdates is null && !clearsRuntimeUpdates
+            && request.AutoProvisionFirstRunModel is null && !clearsFirstRunModel)
         {
             return new ExternalAccessStamp(currentSettings.ExternalAccessProfile,
                 currentSettings.AutoCheckApplicationUpdates,
@@ -557,9 +545,9 @@ internal static class NodeSettingsEndpointDtoMapper
                 currentSettings.AutoProvisionFirstRunModel);
         }
 
-        var applicationUpdates = request.AutoCheckApplicationUpdates ?? currentSettings.AutoCheckApplicationUpdates;
-        var runtimeUpdates = request.AutoCheckRuntimeUpdates ?? currentSettings.AutoCheckRuntimeUpdates;
-        var firstRunModel = request.AutoProvisionFirstRunModel ?? currentSettings.AutoProvisionFirstRunModel;
+        var applicationUpdates = Merge(request.AutoCheckApplicationUpdates, currentSettings.AutoCheckApplicationUpdates, clearsApplicationUpdates);
+        var runtimeUpdates = Merge(request.AutoCheckRuntimeUpdates, currentSettings.AutoCheckRuntimeUpdates, clearsRuntimeUpdates);
+        var firstRunModel = Merge(request.AutoProvisionFirstRunModel, currentSettings.AutoProvisionFirstRunModel, clearsFirstRunModel);
         var allOn = (applicationUpdates ?? StoredNodeSettings.DefaultAutoCheckApplicationUpdates)
                     && (runtimeUpdates ?? StoredNodeSettings.DefaultAutoCheckRuntimeUpdates)
                     && (firstRunModel ?? StoredNodeSettings.DefaultAutoProvisionFirstRunModel);
@@ -580,15 +568,23 @@ internal static class NodeSettingsEndpointDtoMapper
     /// <summary>The external-access profile stamp and the three switches it describes.</summary>
     private readonly record struct ExternalAccessStamp(string? Profile, bool? ApplicationUpdates, bool? RuntimeUpdates, bool? FirstRunModel);
 
-    /// <summary>Null keeps the stored value; <see cref="StoredNodeSettings.TokenSettingUnset" /> clears it back to the default.</summary>
-    private static T? KeepOrUnset<T>(T? requested, T? current)
-        where T : struct, INumber<T>
+    /// <summary>Omitted keeps the stored value, an explicit null clears it, a value sets it.</summary>
+    private static T? Merge<T>(T? requested, T? current, bool clears)
+        where T : struct
     {
-        if (requested is not { } value)
-        {
-            return current;
-        }
+        return clears ? null : requested ?? current;
+    }
 
-        return value == T.CreateChecked(StoredNodeSettings.TokenSettingUnset) ? null : value;
+    /// <summary>The <see cref="Merge{T}" /> of a reference-typed member.</summary>
+    private static T? MergeObject<T>(T? requested, T? current, bool clears)
+        where T : class
+    {
+        return clears ? null : requested ?? current;
+    }
+
+    /// <summary>The <see cref="Merge{T}" /> of a text member: a supplied value is trimmed.</summary>
+    private static string? MergeText(string? requested, string? current, bool clears)
+    {
+        return clears ? null : requested?.Trim() ?? current;
     }
 }

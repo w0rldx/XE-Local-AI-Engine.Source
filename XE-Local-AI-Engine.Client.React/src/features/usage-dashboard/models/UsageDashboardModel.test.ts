@@ -31,6 +31,7 @@ function bucket(overrides: Partial<UsageBucketDto>): UsageBucketDto {
 		completionTokens: 20,
 		reasoningTokens: 5,
 		totalTokens: 35,
+		tokensReported: 1,
 		estimatedCostUsd: 0,
 		currency: "USD",
 		...overrides,
@@ -69,6 +70,16 @@ describe("UsageDashboardModel aggregation", () => {
 		const qwen = rows.find((r) => r.modelName === "qwen3:8b");
 		expect(qwen?.totalTokens).toBe(50);
 		expect(qwen?.providers).toEqual(["codex", "local"]);
+	});
+
+	it("aggregateByModel sums the runs that reported tokens per model", () => {
+		const rows = aggregateByModel([
+			bucket({ modelName: "qwen3:8b", provider: "local", runCount: 3, tokensReported: 2 }),
+			bucket({ modelName: "qwen3:8b", provider: "unknown", runCount: 1, tokensReported: 0, totalTokens: 0 }),
+		]);
+
+		expect(rows[0]?.runCount).toBe(4);
+		expect(rows[0]?.tokensReported).toBe(2);
 	});
 
 	it("aggregateByModel sums the server-computed per-bucket cost per model", () => {

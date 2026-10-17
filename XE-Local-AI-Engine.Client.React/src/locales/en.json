@@ -188,6 +188,8 @@
 			"queuedBehindTrainingRunText": "This message was queued behind a running training run.",
 			"queuedBehindWorkSession": "Waiting for a work session",
 			"queuedBehindWorkSessionText": "This message was queued behind a running work session step.",
+			"resumeQueuedBehindTurn": "Waiting for another reply",
+			"resumeQueuedBehindTurnText": "After your answer, this reply was queued behind another running reply.",
 			"stoppedWhileThinkingText": "The model stopped while thinking before it could answer; its thoughts are kept above.",
 			"toolCallAsTextText": "The model wrote a tool call as text instead of calling the tool, so the call did not run and there is no answer.",
 			"toolCallInReasoningText": "The model tried to call a tool inside its reasoning, where the call cannot run, and stopped without an answer.",
@@ -303,6 +305,7 @@
 		"hide": "Hide",
 		"keepEditing": "Keep editing",
 		"loading": "Loading...",
+		"loadingRateLimited": "Too many requests to the node. Retrying in {{seconds}} s.",
 		"noData": "No records found",
 		"ok": "Ok",
 		"pagination": {
@@ -2125,10 +2128,27 @@
 				"lockedTitle": "Encrypted chat locked"
 			},
 			"error": {
+				"categories": {
+					"InsufficientCapacity": "Not enough free memory to load this model right now.",
+					"ModelLoadFailed": "The model could not be loaded.",
+					"ModelUnavailable": "The selected model is not installed or not reachable.",
+					"Timeout": "The response timed out."
+				},
+				"categoryLabels": {
+					"InsufficientCapacity": "Insufficient capacity",
+					"ModelLoadFailed": "Model load failed",
+					"ModelNotInstalled": "Model not installed",
+					"ModelUnavailable": "Model unavailable",
+					"ProviderAuthFailed": "Provider sign-in failed",
+					"ProviderRateLimited": "Provider rate limit",
+					"ProviderUnreachable": "Provider unreachable",
+					"Timeout": "Timeout"
+				},
 				"clientWatchdogNoFirstChunk": "Connection watchdog: the response never started arriving in this browser.",
 				"clientWatchdogStall": "Connection watchdog: the response stopped arriving in this browser.",
 				"goToModels": "Go to Models",
 				"modelNotInstalled": "No chat model installed. Pull a GGUF model to start chatting.",
+				"providerError": "The model provider rejected or did not answer the request.",
 				"title": "Response failed"
 			},
 			"feedback": {
@@ -2350,6 +2370,7 @@
 				"reject": "Reject",
 				"title": "Tool approval required"
 			},
+			"turnParked": "A reply in this conversation is waiting for your answer. Answer the waiting card, then send again.",
 			"unknownError": "Unknown error",
 			"waitingForResponse": "Waiting for response",
 			"waitingForStreamedResponse": "Waiting for streamed response",
@@ -5335,6 +5356,9 @@
 					"title": "Invocation history"
 				},
 				"idle": "Idle",
+				"live": {
+					"title": "Other live invocation"
+				},
 				"loadError": "Invocation monitor data could not be loaded.",
 				"loading": "Loading invocation monitor…",
 				"status": {
@@ -8112,6 +8136,9 @@
 					"total": "Total"
 				},
 				"empty": "No model usage recorded for this range.",
+				"notReported": "Not reported",
+				"runsNotReported_one": "{{count}} run not reported",
+				"runsNotReported_other": "{{count}} runs not reported",
 				"title": "Usage by model"
 			},
 			"providers": {

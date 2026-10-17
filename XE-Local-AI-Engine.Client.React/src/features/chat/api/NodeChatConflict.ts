@@ -18,6 +18,12 @@ const readOnlyConversationConflictType = "ReadOnlyConversation";
 const graphWorkflowRunLiveConflictType = "GraphWorkflowRunLiveInConversation";
 
 /**
+ * The node's refusal of a send or regenerate into a conversation whose reply waits on an approval or a question, or was
+ * answered and waits to resume. The user answers the waiting card first. Same two wire shapes as the others.
+ */
+const conversationTurnParkedConflictType = "ConversationTurnParked";
+
+/**
  * SignalR wraps a server HubException as "An unexpected error occurred invoking '<method>' on the server.
  * HubException: <the actual message>" — or, when the hub method is a STREAM that throws once enumerated, as "An error
  * occurred on the server while streaming results. HubException: <the actual message>". The prefix is generic noise and
@@ -49,6 +55,11 @@ export function isNodeChatReadOnlyConflict(error: unknown): boolean {
 /** True when the node refused a normal send because the conversation's bound workflow run is still live. */
 export function isNodeChatWorkflowRunLiveConflict(error: unknown): boolean {
 	return isNodeChatConflict(error, graphWorkflowRunLiveConflictType);
+}
+
+/** True when the node refused a send or regenerate because this conversation's reply is parked on a card. */
+export function isNodeChatTurnParkedConflict(error: unknown): boolean {
+	return isNodeChatConflict(error, conversationTurnParkedConflictType);
 }
 
 function isNodeChatConflict(error: unknown, conflictType: string): boolean {

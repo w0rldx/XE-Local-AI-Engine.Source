@@ -14,6 +14,7 @@ import {
 	logoutNodeAuth,
 	nodeAuthClient,
 	refreshNodeAuthToken,
+	refreshRetryWaitSeconds,
 } from "@/core/auth/api/NodeAuthApi";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 
@@ -147,6 +148,22 @@ describe("auth client", () => {
 			await expect(refreshed).resolves.toEqual(token);
 			await expect(joined).resolves.toEqual(token);
 			expect(sent).toHaveLength(2);
+		});
+
+		it("exposes the seconds left on the Retry-After wait while it is sat out, and 0 after", async () => {
+			const sent: SentRequest[] = [];
+			authInstance.defaults.adapter = scriptedRefresh(sent, [429, 200]);
+			expect(refreshRetryWaitSeconds()).toBe(0);
+
+			const refreshed = refreshNodeAuthToken();
+			await vi.advanceTimersByTimeAsync(0);
+			expect(refreshRetryWaitSeconds()).toBe(60);
+			await vi.advanceTimersByTimeAsync(59_500);
+			expect(refreshRetryWaitSeconds()).toBe(1);
+			await vi.advanceTimersByTimeAsync(500);
+
+			await expect(refreshed).resolves.toEqual(token);
+			expect(refreshRetryWaitSeconds()).toBe(0);
 		});
 
 		it("answers later callers from the second 429 until Retry-After has passed", async () => {

@@ -104,7 +104,8 @@ public sealed class AppUpdateBusyProbe
             });
         }
 
-        // Chat turns, agent runs, graph-workflow and integration calls all run through the invocation runner.
+        // Chat turns, agent runs, graph-workflow and integration calls all run through the invocation runner. A turn parked on a human
+        // counts too: it gave the slot back, but an update would still end it.
         if (_invocationRunner.ActiveInvocationCount > 0)
         {
             items.Add(new AppUpdateBusyItem

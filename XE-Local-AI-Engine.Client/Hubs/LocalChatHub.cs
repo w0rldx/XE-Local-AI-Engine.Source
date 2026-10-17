@@ -259,7 +259,7 @@ public sealed class LocalChatHub : Hub
     /// </summary>
     /// <remarks>
     ///     Matched by exception TYPE, never by a message string: widening it to every fault would forward internal
-    ///     detail to the browser. The read-only and live-workflow rejections are PREFIXED with their
+    ///     detail to the browser. The read-only, live-workflow and parked-turn rejections are PREFIXED with their
     ///     <see cref="NodeConflictProblemType" /> name — the discriminator the REST 409 carries as
     ///     <c>ConflictProblemDetails.conflictType</c> — via the enum, never a literal. The rejections are thrown LAZILY,
     ///     hence the manual enumeration. See docs/wiki/09-api-and-hubs.md ("Chat hub: attachment and refusals").
@@ -285,6 +285,10 @@ public sealed class LocalChatHub : Hub
                 catch (NodeChatWorkflowRunLiveException exception)
                 {
                     throw new HubException($"{NodeConflictProblemType.GraphWorkflowRunLiveInConversation}: {exception.Message}", exception);
+                }
+                catch (NodeChatTurnParkedException exception)
+                {
+                    throw new HubException($"{NodeConflictProblemType.ConversationTurnParked}: {exception.Message}", exception);
                 }
                 catch (Exception exception) when (exception is NodeChatConversationNotFoundException
                                                       or NodeChatMessageNotFoundException

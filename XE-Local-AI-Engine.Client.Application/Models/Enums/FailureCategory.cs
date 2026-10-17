@@ -64,5 +64,11 @@ public enum FailureCategory
     ///     The turn stopped at its provider-call budget: a work session step's own cap, or the node-wide ceiling on a
     ///     runaway tool or hand-off loop. A designed bound rather than a fault; a work session continues on its next step.
     /// </summary>
-    CallBudgetReached = 14
+    CallBudgetReached = 14,
+
+    /// <summary>
+    ///     The node had no room to load the model next to the models already loaded or loading (a capacity refusal of
+    ///     the model's launch). The sanitized message names those models and says what to do.
+    /// </summary>
+    InsufficientCapacity = 15
 }

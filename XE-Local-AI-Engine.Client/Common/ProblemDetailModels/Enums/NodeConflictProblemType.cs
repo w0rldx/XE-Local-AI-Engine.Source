@@ -187,5 +187,11 @@ public enum NodeConflictProblemType
     ///     A write lost a race — the reconciler moves status while an operator saves variables, or a command carries a
     ///     stale <c>expectedVersion</c>. Ordinary rather than exceptional: refresh and retry.
     /// </summary>
-    ExternalAppVersionConflict
+    ExternalAppVersionConflict,
+
+    /// <summary>
+    ///     A chat send or regenerate into a conversation whose reply waits on an approval or a question, or was answered and
+    ///     waits to resume. Answer the waiting card, then send.
+    /// </summary>
+    ConversationTurnParked
 }

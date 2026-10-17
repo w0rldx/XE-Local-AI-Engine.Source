@@ -168,6 +168,31 @@ public sealed class AgentExecutionLogUsageSummaryTests : IDisposable
     }
 
     [Test]
+    public async Task SummarizeTokenUsageAsync_CountsOnlyTheRunsThatReportedTokens()
+    {
+        // R5-07: a run stopped before the model reported usage leaves its token columns NULL; the bucket says how many runs its sums cover.
+        var databasePath = GetDatabasePath("usage-summary-reported.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new AgentExecutionLogStore(context, TimeProvider.System);
+
+        await AddEnvelopeAsync(context, "llama-x", DayOneStart + 10, prompt: 100, completion: 200, reasoning: null, total: 300);
+        await AddEnvelopeAsync(context, "llama-x", DayOneStart + 20, prompt: null, completion: null, reasoning: null, total: null);
+        await AddEnvelopeAsync(context, "llama-stopped", DayOneStart + 30, prompt: null, completion: null, reasoning: null, total: null);
+
+        var summary = await store.SummarizeTokenUsageAsync(fromEpochMsInclusive: null, toEpochMsExclusive: null);
+
+        var mixed = summary.Single(bucket => bucket.ModelName == "llama-x");
+        AssertEx.Equal(expected: 2, mixed.RunCount);
+        AssertEx.Equal(expected: 1, mixed.TokensReported);
+        AssertEx.Equal(expected: 300L, mixed.TotalTokens);
+        AssertEx.Equal(expected: 0, summary.Single(bucket => bucket.ModelName == "llama-stopped").TokensReported);
+    }
+
+    [Test]
     public async Task SummarizeTokenUsageAsync_EmptyRange_ReturnsEmpty()
     {
         var databasePath = GetDatabasePath("usage-summary-empty.sqlite");

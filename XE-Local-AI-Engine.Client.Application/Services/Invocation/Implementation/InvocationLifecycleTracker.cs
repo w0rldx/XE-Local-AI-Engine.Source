@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
-///     The active invocation's lifecycle state machine: registration and completion tracking, the whole-turn watchdog
+///     Each registered invocation's lifecycle state machine, keyed by invocation id: registration and completion tracking, the whole-turn watchdog
 ///     and its human-park re-arm, deliberate cancellation, shutdown drain, and cancellation attribution.
 /// </summary>
 /// <remarks>
@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///     mapping first, reporting a watchdog timeout as a plain cancellation. Two locks, or an earlier snapshot into locals, reintroduce that bug.
 /// </remarks>
 // Not interfaced: one implementation, and the state is the runner's own. Public only because InvocationRunner's constructor is, and DI activation requires it.
-// A singleton for the runner's own reason — it holds the live turn while cancels and results arrive on other call stacks — sharing the one PendingToolCallRegistry.
+// A singleton for the runner's own reason — it holds the live turns while cancels and results arrive on other call stacks — sharing the one PendingToolCallRegistry.
 public sealed class InvocationLifecycleTracker
 {
     private readonly ConcurrentDictionary<Guid, TaskCompletionSource> _activeInvocationCompletions = new();
@@ -32,46 +32,12 @@ public sealed class InvocationLifecycleTracker
 
     private readonly Lock _syncRoot = new();
 
-    private Guid? _currentInvocationId;
+    // Every registered turn by invocation id, guarded by _syncRoot. The dispatcher's slot admits one turn at a time today.
+    private readonly Dictionary<Guid, ActiveTurn> _turns = new();
 
     // Set once (never reset) when shutdown drain begins, guarded by _syncRoot. A local invocation reaching admission after it is set registers
     // AFTER the drain snapshot, so it is rejected rather than becoming an untracked active run the drain never waits for.
     private bool _draining;
-
-    // The caller/host token the active invocation's source is linked to (RegisterActiveInvocation), captured so a cancellation is attributed to the caller
-    // rather than the invocation watchdog WITHOUT a token callback: those run in reverse registration order, so the streaming agent's is released first.
-    private CancellationToken _hostCancellationToken;
-
-    private CancellationTokenSource? _invocationCancellationTokenSource;
-
-    // The whole-turn deadline, a timer on _timeProvider rather than CancelAfter (which only runs on the system clock). Re-armed in place under _syncRoot.
-    private ITimer? _deadlineTimer;
-
-    private DateTimeOffset _deadlineDueAt;
-
-    // While a server-side tool runs, the model's clock is paused: what it had left is kept here and re-armed when the tool returns.
-    private bool _toolExecuting;
-
-    private TimeSpan _modelBudgetAtToolStart;
-
-    // What the model had left when the active human park began, re-armed on release so approvals pause the turn budget rather than refill it.
-    private TimeSpan _modelBudgetAtPark;
-
-    // The least a release from a park re-arms: one stream-idle window, so the tool result and one model round can land even when the model had all but spent
-    // its budget when the park began. Zero (no floor) for a caller that registers without one.
-    private TimeSpan _releaseBudgetFloor;
-
-    // The active turn's whole-turn budget, retained so the deadline can be RE-ARMED around a human round-trip
-    // (see SetInvocationDeadline). Written and read only under _syncRoot, alongside the source it arms.
-    private TimeSpan _invocationTimeout;
-
-    // Whether the active turn is parked waiting on a human (a tool approval or an ask_user question), written and read only under _syncRoot. It exists so the
-    // AttachmentChanged handler can re-apply the deadline for a park it did not start: a client re-attaching mid-park gets the full budget from that moment.
-    private bool _parkedOnHuman;
-
-    // Why the active invocation was DELIBERATELY cancelled, recorded synchronously under _syncRoot by the requester itself (Cancel / CancelAll). Unknown means
-    // nobody asked, so the cancellation came from the invocation's own CancelAfter watchdog or the linked caller token, both read off state at mapping time.
-    private CancellationOrigin _requestedCancellationOrigin;
 
     public InvocationLifecycleTracker(IInvocationAttachmentTracker attachmentTracker,
         PendingToolCallRegistry pendingToolCallRegistry,
@@ -135,10 +101,10 @@ public sealed class InvocationLifecycleTracker
 
         lock (_syncRoot)
         {
-            if (_currentInvocationId == invocationId)
+            if (_turns.TryGetValue(invocationId, out var turn))
             {
-                invocationCancellationTokenSource = _invocationCancellationTokenSource;
-                _requestedCancellationOrigin = origin;
+                invocationCancellationTokenSource = turn.Source;
+                turn.RequestedCancellationOrigin = origin;
             }
         }
 
@@ -150,27 +116,46 @@ public sealed class InvocationLifecycleTracker
 
     public void CancelAll()
     {
-        CancellationTokenSource? invocationCancellationTokenSource;
+        List<CancellationTokenSource> sources;
 
         lock (_syncRoot)
         {
-            invocationCancellationTokenSource = _invocationCancellationTokenSource;
-
-            // An external stop of everything in flight (the hub's disconnect request), NOT the invocation watchdog:
-            // record it here so the turn is classified as a shutdown-style cancellation rather than a timeout.
-            if (invocationCancellationTokenSource is not null && _requestedCancellationOrigin == CancellationOrigin.Unknown)
+            sources = new List<CancellationTokenSource>(_turns.Count);
+            foreach (var turn in _turns.Values)
             {
-                _requestedCancellationOrigin = CancellationOrigin.Shutdown;
+                sources.Add(turn.Source);
+
+                // An external stop of everything in flight (the hub's disconnect request), NOT the invocation watchdog:
+                // record it here so the turn is classified as a shutdown-style cancellation rather than a timeout.
+                if (turn.RequestedCancellationOrigin == CancellationOrigin.Unknown)
+                {
+                    turn.RequestedCancellationOrigin = CancellationOrigin.Shutdown;
+                }
             }
         }
 
-        invocationCancellationTokenSource?.Cancel();
-
-        foreach (var pendingToolCall in _pendingToolCalls)
+        try
         {
-            if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
+            foreach (var source in sources)
             {
-                removedPendingToolCall.ApprovalCompletion.TrySetCanceled(CancellationToken.None);
+                try
+                {
+                    source.Cancel();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // That turn was cleared between the snapshot and this cancel; the others still need theirs.
+                }
+            }
+        }
+        finally
+        {
+            foreach (var pendingToolCall in _pendingToolCalls)
+            {
+                if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
+                {
+                    removedPendingToolCall.ApprovalCompletion.TrySetCanceled(CancellationToken.None);
+                }
             }
         }
     }
@@ -183,47 +168,45 @@ public sealed class InvocationLifecycleTracker
     ///     Release re-arms the budget left when the park began, floored at one stream-idle window, so approvals cannot extend the turn.
     ///     Each wait keeps its own <c>CancelAfter(_maxPendingToolCallAge)</c>. A park during a tool keeps the tool's pause.
     /// </remarks>
-    public void SetInvocationDeadline(bool parkedOnHuman)
+    public void SetInvocationDeadline(Guid invocationId, bool parkedOnHuman)
     {
         lock (_syncRoot)
         {
-            var releasing = _parkedOnHuman && !parkedOnHuman;
-            if (parkedOnHuman && !_parkedOnHuman && !_toolExecuting)
+            if (!_turns.TryGetValue(invocationId, out var turn))
             {
-                var left = _deadlineDueAt - _timeProvider.GetUtcNow();
-                _modelBudgetAtPark = left > TimeSpan.Zero ? left : TimeSpan.Zero;
+                return;
             }
 
-            _parkedOnHuman = parkedOnHuman;
+            var releasing = turn.ParkedOnHuman && !parkedOnHuman;
+            if (parkedOnHuman && !turn.ParkedOnHuman && !turn.ToolExecuting)
+            {
+                var left = turn.DeadlineDueAt - _timeProvider.GetUtcNow();
+                turn.ModelBudgetAtPark = left > TimeSpan.Zero ? left : TimeSpan.Zero;
+            }
+
+            turn.ParkedOnHuman = parkedOnHuman;
             if (!releasing)
             {
-                ApplyInvocationDeadline();
+                ApplyInvocationDeadline(invocationId, turn);
             }
-            else if (_invocationCancellationTokenSource is not null && _toolExecuting)
+            else if (turn.ToolExecuting)
             {
-                ArmDeadline(_invocationTimeout);
+                ArmDeadline(turn, turn.InvocationTimeout);
             }
-            else if (_invocationCancellationTokenSource is not null)
+            else
             {
-                ArmDeadline(_modelBudgetAtPark > _releaseBudgetFloor ? _modelBudgetAtPark : _releaseBudgetFloor);
+                ArmDeadline(turn, turn.ModelBudgetAtPark > turn.ReleaseBudgetFloor ? turn.ModelBudgetAtPark : turn.ReleaseBudgetFloor);
             }
         }
     }
 
     // Caller must hold _syncRoot.
-    private void ApplyInvocationDeadline()
+    private void ApplyInvocationDeadline(Guid invocationId, ActiveTurn turn)
     {
-        if (_invocationCancellationTokenSource is null)
-        {
-            return;
-        }
-
         // The parked deadline keeps a full model budget on top of the human cap purely as a backstop: if the
         // re-arm on release were ever skipped, the turn still ends rather than running unbounded.
-        var extendPark = _parkedOnHuman
-                         && _currentInvocationId is { } invocationId
-                         && !_attachmentTracker.IsDetached(invocationId);
-        ArmDeadline(extendPark ? _maxPendingToolCallAge + _invocationTimeout : _invocationTimeout);
+        var extendPark = turn.ParkedOnHuman && !_attachmentTracker.IsDetached(invocationId);
+        ArmDeadline(turn, extendPark ? _maxPendingToolCallAge + turn.InvocationTimeout : turn.InvocationTimeout);
     }
 
     /// <summary>
@@ -233,34 +216,34 @@ public sealed class InvocationLifecycleTracker
     ///     Like a human park, tool time is not charged to the model: an AgentHome run bounded by its own <c>MaxRunSeconds</c> would otherwise be cut by
     ///     the turn deadline the model had already spent part of. The tool's backstop is a full <c>InvocationTimeout</c> from its start. Idempotent.
     /// </remarks>
-    public void SetToolExecuting(bool executing)
+    public void SetToolExecuting(Guid invocationId, bool executing)
     {
         lock (_syncRoot)
         {
-            if (executing == _toolExecuting || _invocationCancellationTokenSource is null || _parkedOnHuman)
+            if (!_turns.TryGetValue(invocationId, out var turn) || executing == turn.ToolExecuting || turn.ParkedOnHuman)
             {
                 return;
             }
 
-            _toolExecuting = executing;
+            turn.ToolExecuting = executing;
             if (executing)
             {
-                var left = _deadlineDueAt - _timeProvider.GetUtcNow();
-                _modelBudgetAtToolStart = left > TimeSpan.Zero ? left : TimeSpan.Zero;
-                ArmDeadline(_invocationTimeout);
+                var left = turn.DeadlineDueAt - _timeProvider.GetUtcNow();
+                turn.ModelBudgetAtToolStart = left > TimeSpan.Zero ? left : TimeSpan.Zero;
+                ArmDeadline(turn, turn.InvocationTimeout);
             }
             else
             {
-                ArmDeadline(_modelBudgetAtToolStart);
+                ArmDeadline(turn, turn.ModelBudgetAtToolStart);
             }
         }
     }
 
     // Caller must hold _syncRoot.
-    private void ArmDeadline(TimeSpan dueIn)
+    private void ArmDeadline(ActiveTurn turn, TimeSpan dueIn)
     {
-        _deadlineDueAt = _timeProvider.GetUtcNow() + dueIn;
-        _ = _deadlineTimer?.Change(dueIn, Timeout.InfiniteTimeSpan);
+        turn.DeadlineDueAt = _timeProvider.GetUtcNow() + dueIn;
+        _ = turn.DeadlineTimer.Change(dueIn, Timeout.InfiniteTimeSpan);
     }
 
     private static void FireDeadline(object? state) =>
@@ -284,9 +267,9 @@ public sealed class InvocationLifecycleTracker
     {
         lock (_syncRoot)
         {
-            if (_parkedOnHuman && _currentInvocationId == args.InvocationId)
+            if (_turns.TryGetValue(args.InvocationId, out var turn) && turn.ParkedOnHuman)
             {
-                ApplyInvocationDeadline();
+                ApplyInvocationDeadline(args.InvocationId, turn);
             }
         }
     }
@@ -320,25 +303,28 @@ public sealed class InvocationLifecycleTracker
 
     // Attributes the cancellation that ended the turn from state already observable at mapping time: a deliberate cancel recorded by its own requester, the
     // linked caller token, or the CancelAfter watchdog by elimination — never a token-callback flag, which reverse ordering can leave unrun. Resolved ONCE per turn.
-    public CancellationOrigin ResolveCancellationOrigin()
+    public CancellationOrigin ResolveCancellationOrigin(Guid invocationId)
     {
         lock (_syncRoot)
         {
-            if (_requestedCancellationOrigin != CancellationOrigin.Unknown)
+            if (!_turns.TryGetValue(invocationId, out var turn))
             {
-                return _requestedCancellationOrigin;
+                return CancellationOrigin.ProviderTimeout;
             }
 
-            if (_hostCancellationToken.IsCancellationRequested)
+            if (turn.RequestedCancellationOrigin != CancellationOrigin.Unknown)
+            {
+                return turn.RequestedCancellationOrigin;
+            }
+
+            if (turn.HostToken.IsCancellationRequested)
             {
                 return CancellationOrigin.Shutdown;
             }
 
             // Nobody asked and the caller's token is still live, so a cancelled invocation source can only be its own CancelAfter watchdog. With NOTHING of ours
             // cancelled the exception came from below us — an HTTP client timeout on a token nobody here owns — which is a provider timeout, not an external stop.
-            return _invocationCancellationTokenSource?.IsCancellationRequested == true
-                ? CancellationOrigin.Watchdog
-                : CancellationOrigin.ProviderTimeout;
+            return turn.Source.IsCancellationRequested ? CancellationOrigin.Watchdog : CancellationOrigin.ProviderTimeout;
         }
     }
 
@@ -410,86 +396,100 @@ public sealed class InvocationLifecycleTracker
     /// <param name="streamIdleTimeout">The turn's stream-idle window, the floor a release from a human park re-arms (see SetInvocationDeadline).</param>
     public void RegisterActiveInvocation(Guid invocationId, TimeSpan invocationTimeout, TimeSpan streamIdleTimeout, CancellationToken cancellationToken)
     {
-        CancellationTokenSource? invocationCancellationTokenSource = null;
-
-        try
+        var source = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var timer = _timeProvider.CreateTimer(FireDeadline, source, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+        var turn = new ActiveTurn
         {
-            invocationCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            Source = source,
+            HostToken = cancellationToken,
+            DeadlineTimer = timer,
+            InvocationTimeout = invocationTimeout,
+            ReleaseBudgetFloor = streamIdleTimeout
+        };
 
-            lock (_syncRoot)
+        lock (_syncRoot)
+        {
+            if (_turns.TryAdd(invocationId, turn))
             {
-                if (_currentInvocationId is not null)
-                {
-                    throw new InvalidOperationException("Worker is busy with another invocation");
-                }
-
-                _currentInvocationId = invocationId;
-                _requestedCancellationOrigin = CancellationOrigin.Unknown;
-                _hostCancellationToken = cancellationToken;
-                _invocationCancellationTokenSource = invocationCancellationTokenSource;
-
-                // Retained so a human round-trip can re-arm this same deadline (see SetInvocationDeadline).
-                _invocationTimeout = invocationTimeout;
-                _releaseBudgetFloor = streamIdleTimeout;
-                _deadlineTimer = _timeProvider.CreateTimer(FireDeadline, invocationCancellationTokenSource, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
-                ArmDeadline(invocationTimeout);
-                invocationCancellationTokenSource = null;
+                ArmDeadline(turn, invocationTimeout);
+                return;
             }
         }
-        finally
-        {
-            invocationCancellationTokenSource?.Dispose();
-        }
+
+        timer.Dispose();
+        source.Dispose();
+        throw new InvalidOperationException($"Invocation {invocationId} is already registered.");
     }
 
-    // Internal, not public: only InvocationRunner (same assembly) reads the active turn's token, and a public
+    // Internal, not public: only InvocationRunner (same assembly) reads a turn's token, and a public
     // getter would trip CA1024's "use a property" rule for a member that legitimately throws when no turn is active.
-    internal CancellationToken GetInvocationCancellationToken()
+    internal CancellationToken GetInvocationCancellationToken(Guid invocationId)
     {
         lock (_syncRoot)
         {
-            if (_invocationCancellationTokenSource is null)
-            {
-                throw new InvalidOperationException("No active invocation is registered.");
-            }
-
-            return _invocationCancellationTokenSource.Token;
+            return _turns.TryGetValue(invocationId, out var turn)
+                ? turn.Source.Token
+                : throw new InvalidOperationException($"Invocation {invocationId} is not registered.");
         }
     }
 
-    public bool IsCurrentInvocation(Guid invocationId)
+    public bool IsActive(Guid invocationId)
     {
         lock (_syncRoot)
         {
-            return _currentInvocationId == invocationId;
+            return _turns.ContainsKey(invocationId);
         }
     }
 
     public void ClearActiveInvocation(Guid invocationId)
     {
-        CancellationTokenSource? invocationCancellationTokenSource;
+        ActiveTurn? turn;
 
         lock (_syncRoot)
         {
-            if (_currentInvocationId != invocationId)
+            if (!_turns.Remove(invocationId, out turn))
             {
                 return;
             }
 
-            invocationCancellationTokenSource = _invocationCancellationTokenSource;
-            _invocationCancellationTokenSource = null;
-            _deadlineTimer?.Dispose();
-            _deadlineTimer = null;
-            _toolExecuting = false;
-            _invocationTimeout = TimeSpan.Zero;
-            _releaseBudgetFloor = TimeSpan.Zero;
-            _parkedOnHuman = false;
-            _currentInvocationId = null;
-            _requestedCancellationOrigin = CancellationOrigin.Unknown;
-            _hostCancellationToken = CancellationToken.None;
+            turn.DeadlineTimer.Dispose();
         }
 
-        invocationCancellationTokenSource?.Dispose();
+        turn.Source.Dispose();
+    }
+
+    /// <summary>One registered turn's lifecycle state, read and written only under <see cref="_syncRoot" />.</summary>
+    private sealed class ActiveTurn
+    {
+        // The caller/host token the source is linked to, so a cancellation is attributed to the caller without a token callback.
+        public required CancellationTokenSource Source { get; init; }
+
+        public required CancellationToken HostToken { get; init; }
+
+        // The whole-turn deadline, a timer on _timeProvider rather than CancelAfter (which only runs on the system clock).
+        public required ITimer DeadlineTimer { get; init; }
+
+        // Retained so the deadline can be RE-ARMED around a human round-trip (see SetInvocationDeadline).
+        public required TimeSpan InvocationTimeout { get; init; }
+
+        // The least a release from a park re-arms: one stream-idle window. Zero (no floor) for a caller that registers without one.
+        public required TimeSpan ReleaseBudgetFloor { get; init; }
+
+        public DateTimeOffset DeadlineDueAt { get; set; }
+
+        // While a server-side tool runs, the model's clock is paused: what it had left is kept and re-armed when the tool returns.
+        public bool ToolExecuting { get; set; }
+
+        public TimeSpan ModelBudgetAtToolStart { get; set; }
+
+        // What the model had left when the park began, re-armed on release so approvals pause the turn budget rather than refill it.
+        public TimeSpan ModelBudgetAtPark { get; set; }
+
+        // Parked on a human (an approval or an ask_user question): lets the AttachmentChanged handler re-apply the deadline for a park it did not start.
+        public bool ParkedOnHuman { get; set; }
+
+        // Why the turn was DELIBERATELY cancelled, recorded by the requester itself. Unknown means the watchdog or the caller token, read at mapping time.
+        public CancellationOrigin RequestedCancellationOrigin { get; set; }
     }
 
     /// <summary>

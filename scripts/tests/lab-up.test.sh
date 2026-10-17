@@ -791,7 +791,9 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
     def do_GET(self):
-        self.answer(BODY)
+        # The memory model the node reports: the content of <port file>.memory when present, else unset (null).
+        memory = sys.argv[1] + ".memory"
+        self.answer(dict(BODY, memoryExtractionModelName=open(memory).read() if os.path.exists(memory) else None))
     def do_PUT(self):
         self.rfile.read(int(self.headers.get("Content-Length") or 0))
         self.answer({})
@@ -819,6 +821,19 @@ for secret in tok-secret-1 tok-secret-2 key-secret-3 pw-secret-4; do
 done
 check_contains "http.jsonl keeps non-secret token counters" "promptTokens" "${JSONL}"
 check_contains "http.jsonl keeps the PUT's other fields" "externalAccessProfile" "${JSONL}"
+# A desired "" is the retired clear signal: the PUT refuses it, so the driver sends null instead.
+printf 'qwen3:8b' >"${CTL}/node-port.memory"
+EV_CLEAR="${TEMP_ROOT}/driver-evidence-clear"
+python3 "${REAL}/lab-driver.py" settings-ensure --base-url "http://127.0.0.1:$(cat "${CTL}/node-port" 2>/dev/null)" \
+  --token t --evidence "${EV_CLEAR}" --desired '{"memoryExtractionModelName":""}' >/dev/null 2>&1
+check "settings-ensure with a desired empty string exits 0" "0" "$?"
+check "a desired empty string is PUT as null" '{"memoryExtractionModelName": null}' \
+  "$(python3 -c 'import json,sys; print(next(json.loads(l)["request"] for l in open(sys.argv[1]) if json.loads(l)["method"] == "PUT"))' "${EV_CLEAR}/http.jsonl" 2>/dev/null)"
+rm -f "${CTL}/node-port.memory"
+out="$(python3 "${REAL}/lab-driver.py" settings-ensure --base-url "http://127.0.0.1:$(cat "${CTL}/node-port" 2>/dev/null)" \
+  --token t --evidence "${TEMP_ROOT}/driver-evidence-unset" --desired '{"memoryExtractionModelName":""}' 2>/dev/null)"
+check "a desired empty string against an unset member is skipped" $'skipped\ttrue' "$(grep '^skipped' <<<"${out}")"
+check "a desired empty string against an unset member verifies" $'verified\ttrue' "$(grep '^verified' <<<"${out}")"
 # The sink scrubs too, so a record that bypasses RecordingClient (hub events) cannot write a credential.
 python3 -c '
 import importlib.util, json, sys

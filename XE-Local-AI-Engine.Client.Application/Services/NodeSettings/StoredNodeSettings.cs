@@ -197,12 +197,6 @@ public sealed partial record StoredNodeSettings
 
     public const int MaxLlamaChatCacheRamMiB = 131072;
 
-    /// <summary>
-    ///     The request-only sentinel that resets <see cref="LlamaChatCacheRamMiB" /> to automatic (stored
-    ///     <see langword="null" />), because a <see langword="null" /> request member means "keep".
-    /// </summary>
-    public const int LlamaChatCacheRamMiBAuto = -1;
-
     /// <summary>Default CPU threads left free for the host; mirrors <c>LlamaServerLaunchPolicyOptions.CpuThreadReserve</c>.</summary>
     public const int DefaultLlamaCpuThreadReserve = 1;
 
@@ -278,12 +272,6 @@ public sealed partial record StoredNodeSettings
 
     /// <summary>Upper bound for each per-effort reasoning budget; the launched window narrows it further per turn.</summary>
     public const int MaxReasoningBudgetTokens = 131_072;
-
-    /// <summary>
-    ///     The request-only sentinel that resets a nullable numeric setting whose request member says "-1 resets to the
-    ///     default" (stored <see langword="null" />), because a <see langword="null" /> request member means "keep".
-    /// </summary>
-    public const int TokenSettingUnset = -1;
 
     /// <summary>Chat output-cap variant: cap the answer and say when it stopped at length (the shipped default).</summary>
     public const string ChatOutputCapModeCap = "cap";

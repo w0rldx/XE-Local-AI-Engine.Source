@@ -323,7 +323,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
             if (decision.Verdict == CapacityVerdict.RejectInsufficient)
             {
                 // The category the chat path gives a capacity refusal of a model launch.
-                failureCategory = FailureCategory.ModelLoadFailed;
+                failureCategory = FailureCategory.InsufficientCapacity;
                 throw new ScheduledJobExecutionException(decision.Reason);
             }
 

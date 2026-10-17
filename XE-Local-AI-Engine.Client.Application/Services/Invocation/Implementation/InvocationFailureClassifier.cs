@@ -92,8 +92,8 @@ internal static class InvocationFailureClassifier
             // terminal agent-runtime failure; the policy runs after warm-up but before any generation method is called.
             InvocationGenerationRejectedException generationRejected => new FailureClassification(FailureCategory.AgentRuntime, generationRejected.Message),
             // A capacity refusal of the model's launch reaches the chat path unwrapped. Its sanitized reason names only models and says what to do
-            // ("Eject one of them or pick a loaded model"), so it is surfaced verbatim rather than as the generic model-load text.
-            LlamaCapacityRefusedException capacityRefused => new FailureClassification(FailureCategory.ModelLoadFailed, capacityRefused.Message),
+            // ("Eject one of them or pick a loaded model"), so it is surfaced verbatim under its own category rather than as a model-load failure.
+            LlamaCapacityRefusedException capacityRefused => new FailureClassification(FailureCategory.InsufficientCapacity, capacityRefused.Message),
             // No runtime installed and the Offline profile refused to fetch one: its sanitized reason says so and names Node Settings.
             _ when FindInChain<LlamaRuntimeNotInstalledException>(exception) is { } runtimeNotInstalled =>
                 new FailureClassification(FailureCategory.ModelLoadFailed, runtimeNotInstalled.Message),

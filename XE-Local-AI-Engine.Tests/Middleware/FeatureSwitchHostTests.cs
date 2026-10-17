@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Middleware;
 
 using System.Net;
-using System.Net.Http.Json;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -69,7 +68,7 @@ public sealed class FeatureSwitchHostTests
         using var request = new HttpRequestMessage(HttpMethod.Put, $"{ApiPrefix}/node-settings");
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
-        request.Content = JsonContent.Create(body);
+        request.Content = NodeSettingsRequestContent.Create(body);
         using var response = await client.SendAsync(request);
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
     }

@@ -382,6 +382,55 @@ describe("ChatMessage actions", () => {
 		expect(screen.getByTestId("chat-message-error-category-assistant-1").textContent).toContain("inter-chunk-stall");
 	});
 
+	it("shows the localized headline above the raw server text as a dimmed detail for a known category", () => {
+		renderWithProviders(
+			<ChatMessage
+				message={assistantMessage({
+					content: "",
+					status: "failed",
+					error: "Insufficient capacity for 'big' (Chat). Loading now: 'other'.",
+				})}
+				failureCategory="InsufficientCapacity"
+			/>,
+		);
+
+		expect(screen.getByTestId("chat-message-error-headline-assistant-1").textContent).toBe(
+			"Not enough free memory to load this model right now.",
+		);
+		expect(screen.getByTestId("chat-message-error-detail-assistant-1").textContent).toBe(
+			"Insufficient capacity for 'big' (Chat). Loading now: 'other'.",
+		);
+		// The headline already names the category, so no badge repeats it.
+		expect(screen.queryByTestId("chat-message-error-category-assistant-1")).toBeNull();
+	});
+
+	it("shows the shared provider headline for every provider category", () => {
+		renderWithProviders(
+			<ChatMessage
+				message={assistantMessage({ content: "", status: "failed", error: "HTTP 429 from the gateway." })}
+				failureCategory="ProviderRateLimited"
+			/>,
+		);
+
+		expect(screen.getByTestId("chat-message-error-headline-assistant-1").textContent).toBe(
+			"The model provider rejected or did not answer the request.",
+		);
+		expect(screen.getByTestId("chat-message-error-detail-assistant-1").textContent).toBe("HTTP 429 from the gateway.");
+	});
+
+	it("shows the raw server text alone for a category without a headline", () => {
+		renderWithProviders(
+			<ChatMessage
+				message={assistantMessage({ content: "", status: "failed", error: "Something new broke." })}
+				failureCategory="SomeFutureCategory"
+			/>,
+		);
+
+		expect(screen.queryByTestId("chat-message-error-headline-assistant-1")).toBeNull();
+		expect(screen.getByTestId("chat-message-error-assistant-1").textContent).toContain("Something new broke.");
+		expect(screen.getByTestId("chat-message-error-category-assistant-1").textContent).toBe("SomeFutureCategory");
+	});
+
 	it("renders the friendly ModelNotInstalled message and a Models link for the no-chat-model failure", () => {
 		// A "Local runtime default" send with no installed GGUF chat model surfaces FailureCategory ModelNotInstalled.
 		// The alert must render the friendly i18n message + a "Go to Models" CTA, not just the raw backend string.
@@ -401,6 +450,8 @@ describe("ChatMessage actions", () => {
 
 		const modelsLink = screen.getByTestId("chat-message-error-models-link-assistant-1");
 		expect(modelsLink.getAttribute("href")).toBe("/models");
+		// No headline key for this category, so the badge names it, localized.
+		expect(screen.getByTestId("chat-message-error-category-assistant-1").textContent).toBe("Model not installed");
 	});
 
 	it("renders the error block alongside partial content when a turn streamed text before failing", () => {
