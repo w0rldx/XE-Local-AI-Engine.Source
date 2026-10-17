@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>One human park of a turn: it gives the node's invocation slot back while it waits, and takes it again before the model runs.</summary>

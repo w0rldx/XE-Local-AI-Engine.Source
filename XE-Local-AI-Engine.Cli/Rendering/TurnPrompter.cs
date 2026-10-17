@@ -92,6 +92,7 @@ internal sealed class TurnPrompter
     {
         var title = (question.Header is { } header ? $"[bold]{Markup.Escape(header)}[/]: " : string.Empty) + Markup.Escape(question.Question);
         var labels = question.Options.Select(static option => option.Label).Append(OtherChoice).ToList();
+
         string Convert(string label) =>
             question.Options.FirstOrDefault(option => string.Equals(option.Label, label, StringComparison.Ordinal)) is { } option ? Label(option) : label;
 

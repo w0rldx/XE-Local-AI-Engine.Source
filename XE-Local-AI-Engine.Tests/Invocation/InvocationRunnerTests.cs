@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Invocation;
 
 using System.ClientModel.Primitives;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
 using System.Diagnostics;
@@ -63,10 +64,10 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Providers.OpenAICompat.Implementation;
 using XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
-using XE_Local_AI_Engine.Tests.Transcription;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
+using XE_Local_AI_Engine.Tests.Transcription;
 using ChatFinishReason = Microsoft.Extensions.AI.ChatFinishReason;
 using ChatMessage = Microsoft.Extensions.AI.ChatMessage;
 
@@ -6805,7 +6806,7 @@ public sealed class InvocationRunnerTests
     private static CancellationTokenSource? GetActiveInvocationCancellationTokenSource(InvocationRunner runner)
     {
         var tracker = GetPrivateField(runner, "_lifecycleTracker");
-        var turns = (System.Collections.IDictionary)GetPrivateField(tracker, "_turns");
+        var turns = (IDictionary)GetPrivateField(tracker, "_turns");
         var turn = turns.Values.Cast<object>().SingleOrDefault();
         return turn is null ? null : (CancellationTokenSource?)AssertEx.NotNull(turn.GetType().GetProperty("Source")).GetValue(turn);
     }

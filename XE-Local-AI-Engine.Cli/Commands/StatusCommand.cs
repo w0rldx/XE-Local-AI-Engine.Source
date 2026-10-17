@@ -38,8 +38,10 @@ internal static class StatusCommand
         }
 
         var grid = new Grid().AddColumn(new GridColumn().NoWrap()).AddColumn();
+
         void Row(string name, string? value) =>
             grid.AddRow(new Text(name, new Style(decoration: Decoration.Bold)), new Text(string.IsNullOrEmpty(value) ? "-" : value));
+
         Row("Origin", session.Node.Origin.GetLeftPart(UriPartial.Authority));
         Row("Version", info.Commit is { Length: > 0 } commit ? $"{info.Version} ({commit})" : info.Version);
         Row("Flavour", info.Flavour);

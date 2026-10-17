@@ -357,7 +357,8 @@ public sealed class CapacityService : ICapacityService
         };
     }
 
-    private static string Describe(IEnumerable<RunningKey> keys) => string.Join(", ", keys.Select(static key => $"'{key.ModelName}' ({key.Role})"));
+    private static string Describe(IEnumerable<RunningKey> keys) =>
+        string.Join(", ", keys.Select(static key => $"'{key.ModelName}' ({key.Role})"));
 
     /// <summary>Whether the footprint fits every non-zero resource axis of the live free baseline, less the in-flight ledger reservations.</summary>
     /// <remarks>

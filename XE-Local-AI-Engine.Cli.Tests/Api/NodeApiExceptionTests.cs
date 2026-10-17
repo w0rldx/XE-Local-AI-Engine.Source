@@ -9,9 +9,11 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class NodeApiExceptionTests
 {
     [Test]
-    [Arguments("fastendpoints errors[]", 400, """{"title":"One or more validation errors occurred.","status":400,"errors":[{"name":"title","reason":"Title is too long."}]}""", "Title is too long.", null)]
+    [Arguments("fastendpoints errors[]", 400, """{"title":"One or more validation errors occurred.","status":400,"errors":[{"name":"title","reason":"Title is too long."}]}""", "Title is too long.",
+        null)]
     [Arguments("aspnet validation", 400, """{"title":"Validation","errors":{"password":["Password is required."]}}""", "Password is required.", null)]
-    [Arguments("conflict envelope", 409, """{"title":"Conflict","detail":"The conversation is read-only.","conflictType":"ReadOnlyConversation"}""", "The conversation is read-only.", "ReadOnlyConversation")]
+    [Arguments("conflict envelope", 409, """{"title":"Conflict","detail":"The conversation is read-only.","conflictType":"ReadOnlyConversation"}""", "The conversation is read-only.",
+        "ReadOnlyConversation")]
     [Arguments("locked-out body", 401, """{"message":"Try again later.","code":"locked-out","retryAfterSeconds":60}""", "Try again later.", null)]
     [Arguments("title only", 503, """{"title":"Vault locked"}""", "Vault locked", null)]
     [Arguments("empty body", 404, "", "The node answered 404 Not Found.", null)]

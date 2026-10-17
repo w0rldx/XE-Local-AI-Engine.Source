@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Cli.Commands;
 
 using Spectre.Console;
+using XE_Local_AI_Engine.Cli.Auth;
 
 /// <summary>What a command reads from and writes to: the process streams in production, captured writers in tests.</summary>
 internal sealed class CliEnvironment
@@ -61,7 +62,7 @@ internal sealed class CliEnvironment
             GetVariable = Environment.GetEnvironmentVariable,
             TimeProvider = TimeProvider.System,
             Interrupts = interrupts,
-            DefaultTokenFilePath = Auth.TokenFileStore.DefaultPath()
+            DefaultTokenFilePath = TokenFileStore.DefaultPath()
         };
     }
 }

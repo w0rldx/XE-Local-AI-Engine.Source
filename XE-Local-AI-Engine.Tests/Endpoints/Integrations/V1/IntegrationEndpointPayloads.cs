@@ -59,7 +59,10 @@ internal static class IntegrationEndpointPayloads
             targetAgentDefinitionId,
             targetGraphWorkflowDefinitionId,
             sessionPolicy = "PerInvocation",
-            acceptedInputKinds = new[] { "text" }
+            acceptedInputKinds = new[]
+            {
+                "text"
+            }
         };
 
     /// <summary>Seeds a real graph workflow definition, because the trigger service probes it like an agent.</summary>

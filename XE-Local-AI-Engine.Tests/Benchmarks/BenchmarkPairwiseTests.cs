@@ -115,14 +115,30 @@ public sealed class BenchmarkPairwiseTests
 
         var plan = BenchmarkPairwisePlanner.Plan(candidates, BenchmarkPairwisePolicy.MaximumRuns);
 
-        var pairs = plan.Slots.Select(static slot => string.Join('|', new[] { slot.RunAId, slot.RunBId }.Order())).Order().ToArray();
+        var pairs = plan.Slots.Select(static slot => string.Join('|', new[]
+        {
+            slot.RunAId,
+            slot.RunBId
+        }.Order())).Order().ToArray();
         string[] expected =
         [
             .. new[]
             {
-                new[] { RunA, RunB },
-                new[] { item0Repeat, RunB },
-                new[] { item1Large, item1Small }
+                new[]
+                {
+                    RunA,
+                    RunB
+                },
+                new[]
+                {
+                    item0Repeat,
+                    RunB
+                },
+                new[]
+                {
+                    item1Large,
+                    item1Small
+                }
             }.Select(static pair => string.Join('|', pair.Order())).Order()
         ];
         AssertEx.Equal(string.Join(", ", expected), string.Join(", ", pairs),

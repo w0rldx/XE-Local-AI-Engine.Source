@@ -299,7 +299,8 @@ public sealed class GraphWorkflowDocumentTests
 
         var input = GraphWorkflowDocuments.ComposeInput("""{"topic":"latency"}""", [], previous);
 
-        AssertEx.Equal("""{"run":{"input":{"topic":"latency"},"previous":{"runId":"11111111-2222-3333-4444-555555555555","completedAtUtc":"2025-10-12T10:00:00.123Z","output":{"report":"| a | b |"}}},"upstream":{},"input":null}""",
+        AssertEx.Equal(
+            """{"run":{"input":{"topic":"latency"},"previous":{"runId":"11111111-2222-3333-4444-555555555555","completedAtUtc":"2025-10-12T10:00:00.123Z","output":{"report":"| a | b |"}}},"upstream":{},"input":null}""",
             input);
         AssertEx.Equal("| a | b |", GraphWorkflowDocuments.Resolve(input, "run.previous.output.report")?.GetString());
         AssertEx.Equal<JsonValueKind?>(JsonValueKind.Null,

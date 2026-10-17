@@ -388,8 +388,7 @@ public sealed class McpServerConnectionManagerTests
     {
         // Tester round 3 (REPORT-3 §6.5, N-16): whitespace-splitting a cmd /c script argument blanked "[canary]" and the probe DLL path.
         var dll = OperatingSystem.IsWindows() ? @"C:\probe\probe-mcp.dll" : "/opt/probe/probe-mcp.dll";
-        var status = await RefreshWithFailureAsync(
-            () => new McpServerStartupException("The MCP server 'Broken' exited before completing the MCP handshake.",
+        var status = await RefreshWithFailureAsync(() => new McpServerStartupException("The MCP server 'Broken' exited before completing the MCP handshake.",
                 $"[canary] STEP1canary\nThe application '{dll}' does not exist\nkey arg-secret-9f8e7d6c rejected"),
             arguments: ["/c", "echo [canary] & echo STEP1canary", dll, "arg-secret-9f8e7d6c"]);
 
@@ -1888,9 +1887,11 @@ public sealed class McpServerConnectionManagerTests
             _onWarning = onWarning;
         }
 
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull =>
+            null;
 
-        public bool IsEnabled(LogLevel logLevel) => true;
+        public bool IsEnabled(LogLevel logLevel) =>
+            true;
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {

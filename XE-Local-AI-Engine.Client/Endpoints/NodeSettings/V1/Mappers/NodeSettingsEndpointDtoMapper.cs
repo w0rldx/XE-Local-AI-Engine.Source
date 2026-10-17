@@ -386,8 +386,12 @@ internal static class NodeSettingsEndpointDtoMapper
             DefaultVoiceProfile = MergeText(request.DefaultVoiceProfile, currentSettings.DefaultVoiceProfile, request.Clears(nameof(request.DefaultVoiceProfile))),
             // Omitted keeps the stored override, null clears it, and a supplied map (wrapped back into the stored shape) REPLACES it. The store's
             // Normalize then trims keys and drops negative or non-finite entries, collapsing an empty or all-junk map to null — no override.
-            UsageRates = MergeObject(
-                request.UsageRates is { } rates ? new NodeUsageRateSettings { Models = rates } : null,
+            UsageRates = MergeObject(request.UsageRates is { } rates
+                    ? new NodeUsageRateSettings
+                    {
+                        Models = rates
+                    }
+                    : null,
                 currentSettings.UsageRates,
                 request.Clears(nameof(request.UsageRates))),
             TranscriptionIdleTimeoutMinutes = Merge(request.TranscriptionIdleTimeoutMinutes, currentSettings.TranscriptionIdleTimeoutMinutes,
@@ -408,8 +412,7 @@ internal static class NodeSettingsEndpointDtoMapper
             CustomToolMaxTimeoutSeconds = Merge(request.CustomToolMaxTimeoutSeconds, currentSettings.CustomToolMaxTimeoutSeconds, request.Clears(nameof(request.CustomToolMaxTimeoutSeconds))),
             WebFetchTimeoutSeconds = Merge(request.WebFetchTimeoutSeconds, currentSettings.WebFetchTimeoutSeconds, request.Clears(nameof(request.WebFetchTimeoutSeconds))),
             // The validator has proven a supplied value is a GUID; null clears the router (alias-only routing).
-            IntentRouterDefinitionId = Merge(
-                Guid.TryParse(request.IntentRouterDefinitionId, out var parsed) ? parsed : (Guid?)null,
+            IntentRouterDefinitionId = Merge(Guid.TryParse(request.IntentRouterDefinitionId, out var parsed) ? parsed : (Guid?)null,
                 currentSettings.IntentRouterDefinitionId,
                 request.Clears(nameof(request.IntentRouterDefinitionId))),
             IntentMaxUtteranceAgeSeconds = Merge(request.IntentMaxUtteranceAgeSeconds, currentSettings.IntentMaxUtteranceAgeSeconds, request.Clears(nameof(request.IntentMaxUtteranceAgeSeconds))),
@@ -536,8 +539,8 @@ internal static class NodeSettingsEndpointDtoMapper
         var clearsRuntimeUpdates = request.Clears(nameof(request.AutoCheckRuntimeUpdates));
         var clearsFirstRunModel = request.Clears(nameof(request.AutoProvisionFirstRunModel));
         if (request.AutoCheckApplicationUpdates is null && !clearsApplicationUpdates
-            && request.AutoCheckRuntimeUpdates is null && !clearsRuntimeUpdates
-            && request.AutoProvisionFirstRunModel is null && !clearsFirstRunModel)
+                                                        && request.AutoCheckRuntimeUpdates is null && !clearsRuntimeUpdates
+                                                        && request.AutoProvisionFirstRunModel is null && !clearsFirstRunModel)
         {
             return new ExternalAccessStamp(currentSettings.ExternalAccessProfile,
                 currentSettings.AutoCheckApplicationUpdates,

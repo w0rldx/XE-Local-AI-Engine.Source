@@ -70,7 +70,10 @@ public sealed class ExternalAppServiceUpdateTests
     public async Task Update_AfterAnEmptyCatalogStart_IsRefusedWithTheRestartReasonAndStopsNothing()
     {
         await using var harness = await ExternalAppServiceHarness.CreateAsync(Version2(),
-            startupSettings: new NodeStartupSettings { ExternalAppsAwaitingCatalog = true });
+            startupSettings: new NodeStartupSettings
+            {
+                ExternalAppsAwaitingCatalog = true
+            });
         var row = await harness.SeedAsync(Version1(), ExternalAppInstanceStatus.Running, ExternalAppDesiredState.Running);
 
         var preview = await harness.Service.PreviewUpdateAsync(row.Id);

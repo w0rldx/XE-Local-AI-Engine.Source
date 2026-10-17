@@ -61,7 +61,14 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         var canonical = GgufModelName.Format(Repo, Quant);
         var store = new ProvisioningDownloadTransaction
         {
-            Interrupted = [new InterruptedGgufDownload { ModelName = canonical, TotalBytes = 42 }]
+            Interrupted =
+            [
+                new InterruptedGgufDownload
+                {
+                    ModelName = canonical,
+                    TotalBytes = 42
+                }
+            ]
         };
         var coordinator = BuildCoordinator(store, new InMemoryCoordinatedModelProviderMapStore());
 

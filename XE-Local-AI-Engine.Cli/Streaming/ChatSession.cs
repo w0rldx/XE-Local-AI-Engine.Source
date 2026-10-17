@@ -170,87 +170,87 @@ internal sealed class ChatSession : IAsyncDisposable
         {
             var end = StreamEnd.Settle;
             using (var deadline = new CancellationTokenSource())
-            using (var subscription = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token))
+                using (var subscription = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token))
 #pragma warning disable MA0045 // A TimerCallback is synchronous by contract.
-            await using (var watchdogTimer = _timeProvider.CreateTimer(static state => ((CancellationTokenSource)state!).Cancel(),
-                             deadline,
-                             Timeout.InfiniteTimeSpan,
-                             Timeout.InfiniteTimeSpan))
+                    await using (var watchdogTimer = _timeProvider.CreateTimer(static state => ((CancellationTokenSource)state!).Cancel(),
+                                     deadline,
+                                     Timeout.InfiniteTimeSpan,
+                                     Timeout.InfiniteTimeSpan))
 #pragma warning restore MA0045
-            {
-                var frames = _connection.StreamAsyncCore<ChatStreamEvent>(method, arguments, subscription.Token).GetAsyncEnumerator(subscription.Token);
-                var foldedAny = false;
-                try
-                {
-                    while (true)
                     {
-                        watchdogTimer.Change(watchdog.NextDeadline, Timeout.InfiniteTimeSpan);
-                        var read = await ReadAsync(frames);
-                        watchdogTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
-                        cancellationToken.ThrowIfCancellationRequested();
-                        if (deadline.IsCancellationRequested)
+                        var frames = _connection.StreamAsyncCore<ChatStreamEvent>(method, arguments, subscription.Token).GetAsyncEnumerator(subscription.Token);
+                        var foldedAny = false;
+                        try
                         {
-                            throw new ChatStreamWatchdogException(watchdog.AwaitingFirstFrame);
-                        }
-
-                        if (read.Frame is { } frame)
-                        {
-                            watchdog.Observe(frame);
-                            if (resolveMessageId)
+                            while (true)
                             {
-                                resolveMessageId = false;
-                                folder.MessageId = await FindAssistantMessageIdAsync(frame, cancellationToken);
-                            }
+                                watchdogTimer.Change(watchdog.NextDeadline, Timeout.InfiniteTimeSpan);
+                                var read = await ReadAsync(frames);
+                                watchdogTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+                                cancellationToken.ThrowIfCancellationRequested();
+                                if (deadline.IsCancellationRequested)
+                                {
+                                    throw new ChatStreamWatchdogException(watchdog.AwaitingFirstFrame);
+                                }
 
-                            var outcome = folder.Fold(frame);
+                                if (read.Frame is { } frame)
+                                {
+                                    watchdog.Observe(frame);
+                                    if (resolveMessageId)
+                                    {
+                                        resolveMessageId = false;
+                                        folder.MessageId = await FindAssistantMessageIdAsync(frame, cancellationToken);
+                                    }
 
-                            // A resume whose FIRST frame is a reconcile is the replay cap: re-entering would earn the same
-                            // answer, so settle from the persisted message, whose ids the fold above latched.
-                            if (isResume && !foldedAny && frame.Type == ChatStreamEventTypes.AssistantReconcile)
-                            {
-                                break;
-                            }
+                                    var outcome = folder.Fold(frame);
 
-                            foldedAny = true;
-                            if (outcome.Event is { } surfaced)
-                            {
-                                yield return surfaced;
-                            }
+                                    // A resume whose FIRST frame is a reconcile is the replay cap: re-entering would earn the same
+                                    // answer, so settle from the persisted message, whose ids the fold above latched.
+                                    if (isResume && !foldedAny && frame.Type == ChatStreamEventTypes.AssistantReconcile)
+                                    {
+                                        break;
+                                    }
 
-                            if (folder.IsTerminal)
-                            {
-                                yield break;
-                            }
+                                    foldedAny = true;
+                                    if (outcome.Event is { } surfaced)
+                                    {
+                                        yield return surfaced;
+                                    }
 
-                            if (outcome.NeedsResume)
-                            {
+                                    if (folder.IsTerminal)
+                                    {
+                                        yield break;
+                                    }
+
+                                    if (outcome.NeedsResume)
+                                    {
+                                        end = StreamEnd.Repair;
+                                        break;
+                                    }
+
+                                    continue;
+                                }
+
+                                if (read.Error is null || (read.Error is HubException && isResume))
+                                {
+                                    break;
+                                }
+
+                                if (read.Error is HubException || folder.InvocationId is null || !await WaitForReconnectAsync(cancellationToken))
+                                {
+                                    ExceptionDispatchInfo.Throw(read.Error);
+                                }
+
                                 end = StreamEnd.Repair;
                                 break;
                             }
-
-                            continue;
                         }
-
-                        if (read.Error is null || (read.Error is HubException && isResume))
+                        finally
                         {
-                            break;
+                            await subscription.CancelAsync();
+                            await frames.DisposeAsync();
                         }
-
-                        if (read.Error is HubException || folder.InvocationId is null || !await WaitForReconnectAsync(cancellationToken))
-                        {
-                            ExceptionDispatchInfo.Throw(read.Error);
-                        }
-
-                        end = StreamEnd.Repair;
-                        break;
                     }
-                }
-                finally
-                {
-                    await subscription.CancelAsync();
-                    await frames.DisposeAsync();
-                }
-            }
 
             if (end == StreamEnd.Repair && folder.InvocationId is { } invocationId && ++repairs <= MaxRepairsPerStream)
             {

@@ -255,7 +255,8 @@ public sealed class ConversationMaintenanceWorker : BackgroundService
 
         if (hostBudgetSpent)
         {
-            _logger.LogWarning("Conversation maintenance worker stopped without draining: the host shutdown budget was already spent; abandoned {Abandoned} running and dropped {Dropped} queued job(s).",
+            _logger.LogWarning(
+                "Conversation maintenance worker stopped without draining: the host shutdown budget was already spent; abandoned {Abandoned} running and dropped {Dropped} queued job(s).",
                 unwound ? 0 : 1,
                 dropped);
         }

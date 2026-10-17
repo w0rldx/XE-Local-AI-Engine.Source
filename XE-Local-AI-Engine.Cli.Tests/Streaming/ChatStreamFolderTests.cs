@@ -138,7 +138,13 @@ public sealed class ChatStreamFolderTests
         var approval = Frame(ChatStreamEventTypes.ApprovalRequested, approvalRequestId: "approval-1");
         var question = Frame(ChatStreamEventTypes.QuestionRequested, questionRequestId: "question-1");
 
-        var outcomes = new[] { approval, question, approval, question }.Select(folder.Fold).ToList();
+        var outcomes = new[]
+        {
+            approval,
+            question,
+            approval,
+            question
+        }.Select(folder.Fold).ToList();
 
         AssertEx.Equal(CliStreamEventKind.ApprovalRequested, AssertEx.NotNull(outcomes[0].Event).Kind);
         AssertEx.Equal(CliStreamEventKind.QuestionRequested, AssertEx.NotNull(outcomes[1].Event).Kind);

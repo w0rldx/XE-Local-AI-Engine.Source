@@ -756,7 +756,14 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         AssertEx.Contains(json, "\"failureCategory\":\"InsufficientCapacity\"");
         AssertEx.Equal(FailureCategory.InsufficientCapacity, NodeChatMetadataSerializer.ParseFailureCategory(NodeChatMetadataSerializer.DeserializeMetadata(json).FailureCategory));
         AssertEx.Null(NodeChatMetadataSerializer.DeserializeMetadata("""{"model":"llama","inputCount":5}""").FailureCategory);
-        foreach (var stored in new[] { "\"SomeFutureCategory\"", "\"15\"", "\"Timeout, Cancelled\"", "\" Timeout\"", "\"timeout\"" })
+        foreach (var stored in new[]
+                 {
+                     "\"SomeFutureCategory\"",
+                     "\"15\"",
+                     "\"Timeout, Cancelled\"",
+                     "\" Timeout\"",
+                     "\"timeout\""
+                 })
         {
             var parsed = NodeChatMetadataSerializer.DeserializeMetadata($$"""{"model":"llama","failureCategory":{{stored}}}""");
             AssertEx.Null(NodeChatMetadataSerializer.ParseFailureCategory(parsed.FailureCategory), stored);
@@ -1762,7 +1769,10 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         });
 
         var summary = (await service.ListConversationsAsync(new NodeChatListConversationsRequest())).Single();
-        var withArchived = (await service.ListConversationsAsync(new NodeChatListConversationsRequest { IncludeArchived = true })).Single();
+        var withArchived = (await service.ListConversationsAsync(new NodeChatListConversationsRequest
+        {
+            IncludeArchived = true
+        })).Single();
 
         AssertEx.Equal(NodeChatMessageStatusValues.Failed, failed.Status);
         AssertEx.Equal("what is the weather", summary.LastMessagePreview);

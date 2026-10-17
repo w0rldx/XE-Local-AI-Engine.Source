@@ -49,7 +49,11 @@ internal sealed class SingleSystemMessageChatClient : DelegatingChatClient
         var hasInstructions = !string.IsNullOrEmpty(instructions);
         if (leadingSystemCount + (hasInstructions ? 1 : 0) < 2 || !AreFoldable(materialized, leadingSystemCount))
         {
-            return new FoldedRequest { Messages = materialized, Options = options };
+            return new FoldedRequest
+            {
+                Messages = materialized,
+                Options = options
+            };
         }
 
         var parts = new List<string>(leadingSystemCount + 1);
@@ -82,7 +86,11 @@ internal sealed class SingleSystemMessageChatClient : DelegatingChatClient
             foldedOptions.Instructions = null;
         }
 
-        return new FoldedRequest { Messages = folded, Options = foldedOptions };
+        return new FoldedRequest
+        {
+            Messages = folded,
+            Options = foldedOptions
+        };
     }
 
     // The fold keeps only text, so a system message carrying anything else (non-text content, provider properties) is

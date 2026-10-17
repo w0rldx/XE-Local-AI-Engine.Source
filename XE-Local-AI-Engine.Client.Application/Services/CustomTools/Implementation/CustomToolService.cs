@@ -367,8 +367,7 @@ internal sealed partial class CustomToolService : ICustomToolService
             var isDnsName = hostType == UriHostNameType.Dns && !CustomToolSsrfGuard.LooksLikeNumericHostLiteral(entry);
             if (!isCanonicalLiteral && !isDnsName)
             {
-                throw new CustomToolValidationException(
-                    $"Private host '{entry}' must be an exact host name or a canonical IP address, without scheme, port, path, credentials or wildcard.");
+                throw new CustomToolValidationException($"Private host '{entry}' must be an exact host name or a canonical IP address, without scheme, port, path, credentials or wildcard.");
             }
 
             if (literal is not null && isCanonicalLiteral && CustomToolSsrfGuard.IsAlwaysDeniedAddress(literal))

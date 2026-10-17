@@ -346,7 +346,16 @@ public sealed class LiveTranscriptionSessionRegistryTests
     {
         // The field case: a 600 ms "Hey." detected as English opens twelve seconds of German.
         var transcriber = new ScriptedWhisperTranscriber(static window => window.StartMs == 0
-            ? [new WhisperTranscriptSegment { StartSeconds = 0.0, EndSeconds = 0.6, Text = "Hey.", Confidence = 0.9 }]
+            ?
+            [
+                new WhisperTranscriptSegment
+                {
+                    StartSeconds = 0.0,
+                    EndSeconds = 0.6,
+                    Text = "Hey.",
+                    Confidence = 0.9
+                }
+            ]
             : OneSegment(window))
         {
             DetectedLanguageCode = "en"
@@ -613,7 +622,8 @@ public sealed class LiveTranscriptionSessionRegistryTests
             }
 
             await AssertEx.EventuallyAsync(() => Snapshot(quiet).Count >= 2, TestBudgets.Contended, "Each check past the threshold reports.");
-            AssertEx.Equal("Others:10000,Others:11000", string.Join(',', Snapshot(quiet).Take(2)), $"Eleven seconds of silent frames read as eleven quiet seconds: {string.Join(',', Snapshot(quiet))}");
+            AssertEx.Equal("Others:10000,Others:11000", string.Join(',', Snapshot(quiet).Take(2)),
+                $"Eleven seconds of silent frames read as eleven quiet seconds: {string.Join(',', Snapshot(quiet))}");
             await AssertEx.EventuallyAsync(() => transcriber.CallCount > 0, TestBudgets.Contended, "The silent frames were still queued and transcribed.");
             AssertEx.True(fixture.Registry.IsLive(sessionId), "A quiet source never ends the session.");
             AssertEx.Empty(Snapshot(statuses), "No end of any kind happened.");

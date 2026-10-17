@@ -32,7 +32,8 @@ internal sealed class LlamaServerPortAllocator
     public int ReservedCount => _allocatedPorts.Count;
 
     /// <summary>Reserved ports of one class — the count that class's loaded-model cap is measured against (caller holds the admission gate).</summary>
-    public int ReservedCountOf(bool companion) => companion ? _companionPorts.Count : _allocatedPorts.Count - _companionPorts.Count;
+    public int ReservedCountOf(bool companion) =>
+        companion ? _companionPorts.Count : _allocatedPorts.Count - _companionPorts.Count;
 
     /// <summary>Allocates a free port from the configured range for a chat or companion process (caller holds the admission gate).</summary>
     public int Allocate(bool companion = false)

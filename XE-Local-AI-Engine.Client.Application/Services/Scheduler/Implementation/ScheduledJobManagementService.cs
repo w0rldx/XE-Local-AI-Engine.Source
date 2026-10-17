@@ -617,7 +617,10 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         }
 
         // Quartz computes a cron trigger's first fire from one second before its start.
-        var cron = new CronExpression(input.CronExpression!) { TimeZone = timeZone };
+        var cron = new CronExpression(input.CronExpression!)
+        {
+            TimeZone = timeZone
+        };
         if (cron.GetTimeAfter(start.AddSeconds(-1)) is not { } firstFire || firstFire > end)
         {
             throw new ScheduledJobValidationException("The schedule never fires before its end time.");

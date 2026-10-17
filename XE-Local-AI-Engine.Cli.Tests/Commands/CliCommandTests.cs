@@ -56,7 +56,20 @@ public sealed class CliCommandTests
         var exitCode = await cli.RunAsync("--help");
 
         AssertEx.Equal(ExitCodes.Success, exitCode);
-        foreach (var expected in new[] { "status", "models", "agents", "ask", "chat", "--json", "--password-stdin", "--insecure-dev-cert", "--no-token-file", "--token-file", "6 interaction required" })
+        foreach (var expected in new[]
+                 {
+                     "status",
+                     "models",
+                     "agents",
+                     "ask",
+                     "chat",
+                     "--json",
+                     "--password-stdin",
+                     "--insecure-dev-cert",
+                     "--no-token-file",
+                     "--token-file",
+                     "6 interaction required"
+                 })
         {
             AssertEx.Contains(cli.Out, expected);
         }
@@ -172,7 +185,10 @@ public sealed class CliCommandTests
 #pragma warning disable CA2000 // The session owns the client and auth, the hub session its never-started connection.
         var http = NodeHttp.CreateClient(connection);
         var auth = new NodeAuthClient(http, origin, TimeProvider.System, tokenFilePath: null, _ => Task.FromResult<string?>("pw"));
-        using var session = new NodeSession(new DiscoveredNode { Origin = origin }, connection, http, auth, new NodeAuthStatus());
+        using var session = new NodeSession(new DiscoveredNode
+        {
+            Origin = origin
+        }, connection, http, auth, new NodeAuthStatus());
         await using var hub = new ChatSession(ChatSession.CreateConnection(connection, auth), session.Api, TimeProvider.System);
 #pragma warning restore CA2000
         var chat = new ChatCommand(cli.Environment, session, hub, showReasoning: false);
@@ -231,7 +247,10 @@ public sealed class CliCommandTests
 #pragma warning disable CA2000 // The session owns the client and auth, the hub session its never-started connection.
         var http = NodeHttp.CreateClient(connection);
         var auth = new NodeAuthClient(http, origin, TimeProvider.System, tokenFilePath: null, _ => Task.FromResult<string?>("pw"));
-        using var session = new NodeSession(new DiscoveredNode { Origin = origin }, connection, http, auth, new NodeAuthStatus());
+        using var session = new NodeSession(new DiscoveredNode
+        {
+            Origin = origin
+        }, connection, http, auth, new NodeAuthStatus());
         await using var hub = new ChatSession(ChatSession.CreateConnection(connection, auth), session.Api, TimeProvider.System);
 #pragma warning restore CA2000
         var chat = new ChatCommand(cli.Environment, session, hub, showReasoning: false);

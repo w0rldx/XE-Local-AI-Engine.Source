@@ -126,6 +126,7 @@ public sealed class SandboxLauncherAppContainerTests : IDisposable
         AssertEx.Equal(@"C:\tools", environment["PATH"]);
         await Task.CompletedTask;
     }
+
     [Test]
     public async Task Apply_PinsEveryThreadCountVariableToTheThreadLimit_AndTheCallersOwnValueWins()
     {

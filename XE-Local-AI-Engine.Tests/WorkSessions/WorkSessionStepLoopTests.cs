@@ -205,7 +205,12 @@ public sealed class WorkSessionStepLoopTests
         });
 
         var supervisor = factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>();
-        AssertEx.True(supervisor.TryStart(first, new WorkSessionRuntimeOverride { ModelProfile = null, ReasoningEffort = null, RepositoryRoot = "/repositories/calc" }));
+        AssertEx.True(supervisor.TryStart(first, new WorkSessionRuntimeOverride
+        {
+            ModelProfile = null,
+            ReasoningEffort = null,
+            RepositoryRoot = "/repositories/calc"
+        }));
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, first, AgentWorkSessionStatus.Completed);
         AssertEx.True(supervisor.TryStart(second));
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, second, AgentWorkSessionStatus.Completed);
@@ -503,7 +508,9 @@ public sealed class WorkSessionStepLoopTests
 
         var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId);
         AssertEx.Contains(events, entry => entry.EventType == WorkSessionEventTypes.ParkTimedOut, "The park outlived MaxParkedSeconds and was stopped.");
-        AssertEx.False(events.Any(entry => entry.EventType == "SessionStatusChanged" && entry.Outcome == nameof(AgentWorkSessionStatus.Running) && entry.Sequence > events.First(parked => parked.Outcome == nameof(AgentWorkSessionStatus.WaitingForApproval)).Sequence),
+        AssertEx.False(
+            events.Any(entry => entry.EventType == "SessionStatusChanged" && entry.Outcome == nameof(AgentWorkSessionStatus.Running) &&
+                                entry.Sequence > events.First(parked => parked.Outcome == nameof(AgentWorkSessionStatus.WaitingForApproval)).Sequence),
             "A reasoning-only delta must not move the session back to Running.");
     }
 

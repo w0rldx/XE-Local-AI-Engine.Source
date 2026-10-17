@@ -47,7 +47,11 @@ public sealed class InvocationMonitorEndpointTests
                 RequestedAt = FrozenNow
             }
         };
-        dispatcher.GetLiveSnapshot().Returns(new InvocationLiveSnapshot { Current = currentState, Live = [] });
+        dispatcher.GetLiveSnapshot().Returns(new InvocationLiveSnapshot
+        {
+            Current = currentState,
+            Live = []
+        });
         var history = Substitute.For<IInvocationHistory>();
         history.Capacity.Returns(50);
         history.Snapshot().Returns([
@@ -101,7 +105,11 @@ public sealed class InvocationMonitorEndpointTests
     public async Task GetInvocations_WhenAnEntryFailed_ShowsTheFixedSentenceForItsCategory(FailureCategory category, string expectedError)
     {
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        dispatcher.GetLiveSnapshot().Returns(new InvocationLiveSnapshot { Current = null, Live = [] });
+        dispatcher.GetLiveSnapshot().Returns(new InvocationLiveSnapshot
+        {
+            Current = null,
+            Live = []
+        });
         var history = Substitute.For<IInvocationHistory>();
         history.Capacity.Returns(50);
         history.Snapshot().Returns([
@@ -178,7 +186,11 @@ public sealed class InvocationMonitorEndpointTests
                 RequestedAt = FrozenNow
             }
         };
-        dispatcher.GetLiveSnapshot().Returns(new InvocationLiveSnapshot { Current = currentState, Live = [] });
+        dispatcher.GetLiveSnapshot().Returns(new InvocationLiveSnapshot
+        {
+            Current = currentState,
+            Live = []
+        });
         var history = Substitute.For<IInvocationHistory>();
         history.Capacity.Returns(50);
         history.Snapshot().Returns([]);
@@ -201,7 +213,11 @@ public sealed class InvocationMonitorEndpointTests
     public async Task GetInvocations_WhenIdle_ReturnsEmptyCurrentAndHistory()
     {
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        dispatcher.GetLiveSnapshot().Returns(new InvocationLiveSnapshot { Current = null, Live = [] });
+        dispatcher.GetLiveSnapshot().Returns(new InvocationLiveSnapshot
+        {
+            Current = null,
+            Live = []
+        });
         var history = Substitute.For<IInvocationHistory>();
         history.Capacity.Returns(50);
         history.Snapshot().Returns([]);
@@ -231,7 +247,11 @@ public sealed class InvocationMonitorEndpointTests
         };
         var running = LiveState(runningInvocationId);
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        dispatcher.GetLiveSnapshot().Returns(new InvocationLiveSnapshot { Current = running, Live = [parked, running] });
+        dispatcher.GetLiveSnapshot().Returns(new InvocationLiveSnapshot
+        {
+            Current = running,
+            Live = [parked, running]
+        });
         var history = Substitute.For<IInvocationHistory>();
         history.Capacity.Returns(50);
         history.Snapshot().Returns([]);

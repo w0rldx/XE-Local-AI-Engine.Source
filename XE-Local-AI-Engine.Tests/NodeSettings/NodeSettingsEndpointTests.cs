@@ -506,7 +506,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+        request.Content = new StringContent(body, Encoding.UTF8, "application/json");
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -747,26 +747,38 @@ public sealed class NodeSettingsEndpointTests
             return await client.SendAsync(putRequest);
         }
 
-        using (var set = await PutAsync(new SaveNodeSettingsRequest { IntentRouterDefinitionId = routerId.ToString() }))
+        using (var set = await PutAsync(new SaveNodeSettingsRequest
+               {
+                   IntentRouterDefinitionId = routerId.ToString()
+               }))
         {
             AssertEx.Equal(HttpStatusCode.OK, set.StatusCode, await set.Content.ReadAsStringAsync());
         }
 
         AssertEx.Equal(routerId, saved.IntentRouterDefinitionId);
 
-        using (var kept = await PutAsync(new SaveNodeSettingsRequest { WebFetchTimeoutSeconds = 30 }))
+        using (var kept = await PutAsync(new SaveNodeSettingsRequest
+               {
+                   WebFetchTimeoutSeconds = 30
+               }))
         {
             AssertEx.Equal(HttpStatusCode.OK, kept.StatusCode);
         }
 
         AssertEx.Equal(routerId, saved.IntentRouterDefinitionId);
 
-        using (var refused = await PutAsync(new SaveNodeSettingsRequest { IntentRouterDefinitionId = "not-a-guid" }))
+        using (var refused = await PutAsync(new SaveNodeSettingsRequest
+               {
+                   IntentRouterDefinitionId = "not-a-guid"
+               }))
         {
             AssertEx.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
         }
 
-        using (var blank = await PutAsync(new SaveNodeSettingsRequest { IntentRouterDefinitionId = "" }))
+        using (var blank = await PutAsync(new SaveNodeSettingsRequest
+               {
+                   IntentRouterDefinitionId = ""
+               }))
         {
             AssertEx.Equal(HttpStatusCode.BadRequest, blank.StatusCode);
             AssertEx.Contains(await blank.Content.ReadAsStringAsync(), "send null to clear it", StringComparison.Ordinal);
@@ -820,6 +832,7 @@ public sealed class NodeSettingsEndpointTests
         {
             AssertEx.Contains(error.ErrorMessage, "or null for the default", StringComparison.Ordinal);
         }
+
         AssertEx.False(idleTtl.IsValid);
         AssertEx.Contains(idleTtl.Errors.Single().ErrorMessage, "must be between 30 and 86400, or null for the default", StringComparison.Ordinal);
         AssertEx.False(patchBytes.IsValid);
@@ -2771,7 +2784,11 @@ public sealed class NodeSettingsEndpointTests
             {
                 Models = new Dictionary<string, ModelRate>
                 {
-                    ["m"] = new() { InputPer1M = 1, OutputPer1M = 2 }
+                    ["m"] = new()
+                    {
+                        InputPer1M = 1,
+                        OutputPer1M = 2
+                    }
                 }
             },
             SpeculativeDraftGpuLayers = 10,
@@ -2783,8 +2800,7 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = new StringContent(
-            """{"llamaMaxLoadedProcesses":null,"ollamaEndpoint":null,"enableTools":null,"usageRates":null,"speculativeDraftGpuLayers":null,"updateChannel":null}""",
+        request.Content = new StringContent("""{"llamaMaxLoadedProcesses":null,"ollamaEndpoint":null,"enableTools":null,"usageRates":null,"speculativeDraftGpuLayers":null,"updateChannel":null}""",
             Encoding.UTF8, "application/json");
         using var response = await client.SendAsync(request);
 
@@ -2914,7 +2930,7 @@ public sealed class NodeSettingsEndpointTests
         rewrapped.TypeInfoResolver = rewrapped.TypeInfoResolver!.WithAddedModifier(static _ => { });
         ConfigureServices.ConfigureJsonSerializerOptions(rewrapped);
         AssertEx.True(AssertEx.NotNull(JsonSerializer.Deserialize<SaveNodeSettingsRequest>("""{"ollamaEndpoint":null}""", rewrapped))
-            .Clears(nameof(SaveNodeSettingsRequest.OllamaEndpoint)));
+                              .Clears(nameof(SaveNodeSettingsRequest.OllamaEndpoint)));
 
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         ConfigureServices.ConfigureJsonSerializerOptions(options);

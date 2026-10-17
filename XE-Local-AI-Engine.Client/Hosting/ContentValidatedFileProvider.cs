@@ -40,7 +40,12 @@ internal sealed class ContentValidatedFileProvider : IFileProvider
         {
             try
             {
-                stamp = new ContentStamp { Length = file.Length, RealLastModified = file.LastModified, ContentLastModified = HashToDate(file) };
+                stamp = new ContentStamp
+                {
+                    Length = file.Length,
+                    RealLastModified = file.LastModified,
+                    ContentLastModified = HashToDate(file)
+                };
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
@@ -63,9 +68,11 @@ internal sealed class ContentValidatedFileProvider : IFileProvider
                && !relative.EndsWith(".html", StringComparison.OrdinalIgnoreCase);
     }
 
-    public IDirectoryContents GetDirectoryContents(string subpath) => _inner.GetDirectoryContents(subpath);
+    public IDirectoryContents GetDirectoryContents(string subpath) =>
+        _inner.GetDirectoryContents(subpath);
 
-    public IChangeToken Watch(string filter) => _inner.Watch(filter);
+    public IChangeToken Watch(string filter) =>
+        _inner.Watch(filter);
 
     /// <summary>Folds the content hash into whole seconds after the Unix epoch (1970 to 2038), which the middleware truncates to anyway.</summary>
     private static DateTimeOffset HashToDate(IFileInfo file)
@@ -100,6 +107,8 @@ internal sealed class ContentValidatedFileProvider : IFileProvider
         public string Name => _inner.Name;
         public DateTimeOffset LastModified { get; }
         public bool IsDirectory => _inner.IsDirectory;
-        public Stream CreateReadStream() => _inner.CreateReadStream();
+
+        public Stream CreateReadStream() =>
+            _inner.CreateReadStream();
     }
 }

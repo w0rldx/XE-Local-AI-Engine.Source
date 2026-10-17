@@ -191,7 +191,8 @@ public sealed class SandboxLauncher : ISandboxLauncher
                 {
                     if (NonNtfsVolumeFormat(tree) is { } format)
                     {
-                        _logger.LogWarning("The sandbox may not be able to read the granted folder {Folder}: it lies on a {Format} volume, not NTFS, where the AppContainer grant may not take effect. Move the server to an NTFS folder if it fails to start.",
+                        _logger.LogWarning(
+                            "The sandbox may not be able to read the granted folder {Folder}: it lies on a {Format} volume, not NTFS, where the AppContainer grant may not take effect. Move the server to an NTFS folder if it fails to start.",
                             tree,
                             format);
                     }

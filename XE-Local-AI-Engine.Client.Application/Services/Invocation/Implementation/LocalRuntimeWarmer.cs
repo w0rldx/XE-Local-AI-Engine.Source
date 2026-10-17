@@ -106,6 +106,7 @@ public sealed class LocalRuntimeWarmer
             // The load waits for the exclusive job (R7-03); without this the loading state carries no reason.
             await dispatcher.ReportTurnNoticeAsync(gpuWorkNotice);
         }
+
         _logger.LogInformation("Warming local model for invocation {InvocationId} before streaming (readiness decoupled from the stream-idle watchdog).", invocationId);
 
         using var readinessActivity = NodeActivitySource.Source.StartActivity("chat.invocation.model_readiness");

@@ -232,7 +232,7 @@ public sealed class LayerDependencyTests
             ],
             ["XE-Local-AI-Engine.AI.Contracts"] = [],
             ["XE-Local-AI-Engine.Cli"] = ["Microsoft.AspNetCore.SignalR.Client", "Spectre.Console", "System.CommandLine"],
-            ["XE-Local-AI-Engine.Desktop"] =["Avalonia.Desktop", "Avalonia.Controls.WebView", "Avalonia.Themes.Fluent", "Velopack"],
+            ["XE-Local-AI-Engine.Desktop"] = ["Avalonia.Desktop", "Avalonia.Controls.WebView", "Avalonia.Themes.Fluent", "Velopack"],
             ["XE-Local-AI-Engine.AppHost"] =
             [
                 "Aspire.Hosting.AppHost",

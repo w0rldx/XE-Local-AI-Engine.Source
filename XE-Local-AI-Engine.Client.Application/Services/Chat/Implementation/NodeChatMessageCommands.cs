@@ -503,7 +503,8 @@ internal sealed class NodeChatMessageCommands
                         if (envelope is not null)
                         {
                             await WriteRunEnvelopeRowAsync(dbContext, dbTransaction, conversationId, messageId, requestId, agentDefinitionId, status, model,
-                                promptTokens: null, completionTokens: null, reasoningTokens: null, totalTokens: null, envelope, envelopeProvider, createdAtUtc, RunEnvelopeWriteMode.InsertIfAbsent, token);
+                                promptTokens: null, completionTokens: null, reasoningTokens: null, totalTokens: null, envelope, envelopeProvider, createdAtUtc, RunEnvelopeWriteMode.InsertIfAbsent,
+                                token);
                         }
 
                         await TouchConversationAsync(dbContext, conversationId, updatedAtUtc, token);

@@ -186,7 +186,8 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
 
         var mismatches = _directory.MismatchesAgainst(installed, expected);
         return mismatches.Count > 0
-            ? Status(ManagedPythonEnvironmentState.UpdateRequired, ManagedPythonReasonCode.UpdateRequired, "The compute runtime is out of date and is rebuilt on next use.", installed.Identity, mismatches)
+            ? Status(ManagedPythonEnvironmentState.UpdateRequired, ManagedPythonReasonCode.UpdateRequired, "The compute runtime is out of date and is rebuilt on next use.", installed.Identity,
+                mismatches)
             : Status(ManagedPythonEnvironmentState.Ready, ManagedPythonReasonCode.None, reason: null, installed.Identity);
     }
 

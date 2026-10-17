@@ -30,7 +30,8 @@ public sealed partial class ParallelLimitConventionTests
     {
         var source = SourceCommentStripper.StripComments(File.ReadAllText(RepositoryPaths.Combine(project, "AssemblyParallelLimit.cs")));
 
-        AssertEx.True(AssemblyCap().IsMatch(source), $"{project}/AssemblyParallelLimit.cs lost its [assembly: ParallelLimiter<AssemblyParallelLimit>]: a bare host run would start 4 × cores tests at once.");
+        AssertEx.True(AssemblyCap().IsMatch(source),
+            $"{project}/AssemblyParallelLimit.cs lost its [assembly: ParallelLimiter<AssemblyParallelLimit>]: a bare host run would start 4 × cores tests at once.");
         AssertEx.True(LimitOfEight().IsMatch(source), $"{project}/AssemblyParallelLimit.cs no longer caps at eight; raise it only with a new RSS measurement.");
     }
 
@@ -44,7 +45,8 @@ public sealed partial class ParallelLimitConventionTests
             {
                 var relative = Path.GetRelativePath(RepositoryPaths.Root, file).Replace('\\', '/');
                 if (relative.Contains("/bin/", StringComparison.Ordinal) || relative.Contains("/obj/", StringComparison.Ordinal)
-                    || relative.EndsWith("/AssemblyParallelLimit.cs", StringComparison.Ordinal) || relative.EndsWith("/ParallelLimitConventionTests.cs", StringComparison.Ordinal))
+                                                                         || relative.EndsWith("/AssemblyParallelLimit.cs", StringComparison.Ordinal) ||
+                                                                         relative.EndsWith("/ParallelLimitConventionTests.cs", StringComparison.Ordinal))
                 {
                     continue;
                 }

@@ -1258,7 +1258,8 @@ public sealed record SaveNodeSettingsRequest
     public bool? ExecutionPreviewsEnabled { get; init; }
 
     /// <summary>Whether the body carried <paramref name="member" /> (the CLR property name) as an explicit JSON null.</summary>
-    internal bool Clears(string member) => _explicitNulls.Contains(member);
+    internal bool Clears(string member) =>
+        _explicitNulls.Contains(member);
 
     /// <summary>
     ///     The serializer resolver that records explicit nulls on this type and answers for no other. Inserted at the head of

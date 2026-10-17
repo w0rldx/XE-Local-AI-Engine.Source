@@ -254,8 +254,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
 
-        var thrown = await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(ValidCronInput(
-            templateId: RunSavedAgentHandler.TemplateIdValue,
+        var thrown = await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue,
             parameters: """{ "agentDefinitionId": "11111111-1111-1111-1111-111111111111", "prompt": "hi" }""")));
 
         AssertEx.True(thrown.Message.StartsWith("agentDefinitionId:", StringComparison.Ordinal), "The refusal names the field.");
@@ -334,8 +333,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var created = await service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue, parameters: ValidRunAgentParameters));
 
-        var thrown = await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.UpdateJobAsync(created.Id, ValidCronInput(
-            templateId: RunSavedAgentHandler.TemplateIdValue,
+        var thrown = await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.UpdateJobAsync(created.Id, ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue,
             parameters: """{ "agentDefinitionId": "11111111-1111-1111-1111-111111111111", "prompt": "hi" }""")));
 
         AssertEx.True(thrown.Message.StartsWith("agentDefinitionId:", StringComparison.Ordinal), "The refusal names the field.");
@@ -1537,7 +1535,8 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     }
 
     // January 1 of next year at midnight UTC: in the future, and a boundary the hourly cron fires on.
-    private static DateTimeOffset NextYearStart() => new(DateTimeOffset.UtcNow.Year + 1, 1, 1, 0, 0, 0, TimeSpan.Zero);
+    private static DateTimeOffset NextYearStart() =>
+        new(DateTimeOffset.UtcNow.Year + 1, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
     // A schedule on the template that supports the kind: test.echo for Cron and OneShot, the simple-interval test handler otherwise.
     private static ScheduledJobManagementInput ScheduleInput(ScheduleKind kind,

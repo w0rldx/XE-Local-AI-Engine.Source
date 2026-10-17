@@ -741,7 +741,8 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         };
     }
 
-    private static string EchoModelName(string modelName) => modelName.Length <= MaxEchoedModelNameLength ? modelName : modelName[..MaxEchoedModelNameLength] + "…";
+    private static string EchoModelName(string modelName) =>
+        modelName.Length <= MaxEchoedModelNameLength ? modelName : modelName[..MaxEchoedModelNameLength] + "…";
 
     private static void ValidateInput(CreateImageJobInput input)
     {

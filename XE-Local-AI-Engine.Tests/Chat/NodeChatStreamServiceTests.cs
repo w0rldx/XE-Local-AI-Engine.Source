@@ -338,6 +338,7 @@ public sealed partial class NodeChatStreamServiceTests
             AssertEx.NotNull(dispatcher.CurrentInvocation).PendingApproval = ParkedApproval();
             AssertEx.True(dispatcher.ReleaseSlotForPark(AssertEx.NotNull(dispatcher.CurrentInvocation).InvocationId));
         }
+
         var runner = new CompletingInvocationRunner(dispatcher);
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -6151,16 +6152,17 @@ public sealed partial class NodeChatStreamServiceTests
         return persistence;
     }
 
-    private static InvocationApprovalState ParkedApproval() => new()
-    {
-        RequestId = "approval-1",
-        Description = "Run a command",
-        RequestedAt = DateTimeOffset.UtcNow,
-        CallId = "call-1",
-        ToolName = "run_command",
-        Arguments = "{}",
-        SessionScopeEligible = false
-    };
+    private static InvocationApprovalState ParkedApproval() =>
+        new()
+        {
+            RequestId = "approval-1",
+            Description = "Run a command",
+            RequestedAt = DateTimeOffset.UtcNow,
+            CallId = "call-1",
+            ToolName = "run_command",
+            Arguments = "{}",
+            SessionScopeEligible = false
+        };
 
     private static INodeChatPersistenceService CreatePersistence(Guid conversationId,
         Guid assistantMessageId,
@@ -6253,15 +6255,15 @@ public sealed partial class NodeChatStreamServiceTests
                    {
                        var request = callInfo.ArgAt<NodeChatTerminalizeMessageRequest>(0);
                        return CreateAssistantMessage(conversationId,
-                           assistantMessageId,
-                           requestId,
-                           request.Status,
-                           request.Content ?? string.Empty,
-                           request.Reasoning,
-                           request.Error) with
-                       {
-                           FailureCategory = request.FailureCategory
-                       };
+                               assistantMessageId,
+                               requestId,
+                               request.Status,
+                               request.Content ?? string.Empty,
+                               request.Reasoning,
+                               request.Error) with
+                           {
+                               FailureCategory = request.FailureCategory
+                           };
                    });
 
         return persistence;
@@ -6776,13 +6778,17 @@ public sealed partial class NodeChatStreamServiceTests
 
         public InvocationState? CurrentInvocation { get; private set; }
 
-        public InvocationState? SlotHolder =>
-            CurrentInvocation is { } current && current.InvocationId == _slotHolderId && !NodeChatInvocationPump.IsTerminal(current.Status) ? current : null;
+        public InvocationState? SlotHolder => CurrentInvocation is { } current && current.InvocationId == _slotHolderId && !NodeChatInvocationPump.IsTerminal(current.Status) ? current : null;
 
         public IReadOnlyList<InvocationState> GetLiveInvocations() =>
             CurrentInvocation is { } current && !NodeChatInvocationPump.IsTerminal(current.Status) ? [current] : [];
 
-        public InvocationLiveSnapshot GetLiveSnapshot() => new() { Current = SlotHolder, Live = GetLiveInvocations() };
+        public InvocationLiveSnapshot GetLiveSnapshot() =>
+            new()
+            {
+                Current = SlotHolder,
+                Live = GetLiveInvocations()
+            };
 
         public bool ReleaseSlotForPark(Guid invocationId)
         {
@@ -6795,7 +6801,8 @@ public sealed partial class NodeChatStreamServiceTests
             return true;
         }
 
-        public Task ReportPromptTimedOutAsync(Guid invocationId, string requestId) => Task.CompletedTask;
+        public Task ReportPromptTimedOutAsync(Guid invocationId, string requestId) =>
+            Task.CompletedTask;
 
         public Task ReacquireSlotAsync(Guid invocationId, CancellationToken cancellationToken)
         {

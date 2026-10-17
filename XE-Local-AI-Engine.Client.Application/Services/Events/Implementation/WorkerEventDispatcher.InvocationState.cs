@@ -81,8 +81,7 @@ public sealed partial class WorkerEventDispatcher
 
                 if (NodeChatInvocationPump.IsTerminal(dropped.Status))
                 {
-                    _logger.LogWarning(
-                        "Dropped a terminal {Status} update for invocation {InvocationId} because it is not live. The terminal will not be persisted via this slot.",
+                    _logger.LogWarning("Dropped a terminal {Status} update for invocation {InvocationId} because it is not live. The terminal will not be persisted via this slot.",
                         dropped.Status,
                         invocationId);
                 }

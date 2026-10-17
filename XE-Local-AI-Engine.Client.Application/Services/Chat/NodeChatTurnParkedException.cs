@@ -11,7 +11,8 @@ namespace XE_Local_AI_Engine.Client.Services.Chat;
 /// </remarks>
 public sealed class NodeChatTurnParkedException : InvalidOperationException
 {
-    public NodeChatTurnParkedException(Guid conversationId) : base($"Conversation {conversationId} has a reply waiting on an approval or a question; answer the waiting card before sending another message.")
+    public NodeChatTurnParkedException(Guid conversationId) : base(
+        $"Conversation {conversationId} has a reply waiting on an approval or a question; answer the waiting card before sending another message.")
     {
         ConversationId = conversationId;
     }

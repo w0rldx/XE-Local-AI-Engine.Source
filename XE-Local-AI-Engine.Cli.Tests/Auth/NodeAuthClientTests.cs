@@ -110,10 +110,10 @@ public sealed class NodeAuthClientTests
             var time = new ManualTimeProvider();
             using var issuing = new ScriptedHttpHandler(_ => ScriptedHttpHandler.Json(HttpStatusCode.OK, ScriptedHttpHandler.Tokens("access-1", time.GetUtcNow().AddHours(1), "refresh-1")));
             using (var http = Client(issuing))
-            using (var auth = new NodeAuthClient(http, Origin, time, path, passwordProvider: null))
-            {
-                await auth.LoginAsync("pw", email: null, CancellationToken.None);
-            }
+                using (var auth = new NodeAuthClient(http, Origin, time, path, passwordProvider: null))
+                {
+                    await auth.LoginAsync("pw", email: null, CancellationToken.None);
+                }
 
             using var silent = new ScriptedHttpHandler(_ => throw new InvalidOperationException("a stored live token needs no request"));
             using var silentHttp = Client(silent);

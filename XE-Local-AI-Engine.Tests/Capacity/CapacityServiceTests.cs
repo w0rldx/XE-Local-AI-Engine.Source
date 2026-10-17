@@ -294,13 +294,14 @@ public sealed class CapacityServiceTests
         decision.Reservation!.Dispose();
     }
 
-    private static LlamaServerProcessHealth Responsive(string modelName, ModelRole role) => new()
-    {
-        ModelName = modelName,
-        Role = role,
-        IsResponsive = true,
-        Detail = "ok"
-    };
+    private static LlamaServerProcessHealth Responsive(string modelName, ModelRole role) =>
+        new()
+        {
+            ModelName = modelName,
+            Role = role,
+            IsResponsive = true,
+            Detail = "ok"
+        };
 
     [Test]
     public async Task Capacity_PendingAdmissionCountsTowardProcessCap()

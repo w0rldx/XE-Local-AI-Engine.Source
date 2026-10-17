@@ -167,7 +167,12 @@ public sealed class NativeDesktopContractTests
         AssertEx.Contains(source, "Title = DesktopText.Settings;");
         AssertEx.Contains(source, "CanMinimize = false;");
         AssertEx.Contains(source, "CanMaximize = false;");
-        AssertEx.Equal(3, new[] { DesktopText.Settings, DesktopText.Quit, DesktopText.CloseTitle }.Distinct(StringComparer.Ordinal).Count());
+        AssertEx.Equal(3, new[]
+        {
+            DesktopText.Settings,
+            DesktopText.Quit,
+            DesktopText.CloseTitle
+        }.Distinct(StringComparer.Ordinal).Count());
         AssertEx.Contains(source, "Text = DesktopText.Current(Label(current)),");
         AssertEx.Contains(source, "IsDefault = isDefault,");
         AssertEx.Contains(source, "if (isDefault)");

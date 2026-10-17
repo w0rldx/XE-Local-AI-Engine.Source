@@ -343,6 +343,7 @@ namespace XE_Local_AI_Engine.Client
                     // The password unlock's one-time ticket: NodeRefreshEndpoint trades it for a session once when the stored refresh cookie fails.
                     builder.Services.AddSingleton(unlockTicket);
                 }
+
                 Log.Information("Vault unlocked; port {Port} free again after {ElapsedMs} ms; building the engine host.",
                     Uri.TryCreate(bindUrl, UriKind.Absolute, out var boundUri) ? boundUri.Port : 0,
                     portRelease.ElapsedMilliseconds);

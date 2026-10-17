@@ -487,7 +487,8 @@ public sealed class GraphWorkflowDefinitionEndpointTests
              });
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(GraphWorkflowGraphs.StartAgentEnd).Replace("{\"name\"", "{\"triggerSources\":[\"Schedule\"],\"name\"", StringComparison.Ordinal));
+        using var response = await SendAsync(factory, "POST", Definitions,
+            CreateBody(GraphWorkflowGraphs.StartAgentEnd).Replace("{\"name\"", "{\"triggerSources\":[\"Schedule\"],\"name\"", StringComparison.Ordinal));
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
         AssertEx.Equal(GraphWorkflowTriggerSource.Manual | GraphWorkflowTriggerSource.Chat, AssertEx.NotNull(command).TriggerSources);
@@ -507,7 +508,8 @@ public sealed class GraphWorkflowDefinitionEndpointTests
              });
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(GraphWorkflowGraphs.StartAgentEnd).Replace("{\"name\"", "{\"allowsActions\":true,\"name\"", StringComparison.Ordinal));
+        using var response = await SendAsync(factory, "POST", Definitions,
+            CreateBody(GraphWorkflowGraphs.StartAgentEnd).Replace("{\"name\"", "{\"allowsActions\":true,\"name\"", StringComparison.Ordinal));
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
         AssertEx.False(AssertEx.NotNull(command).AllowsActions);

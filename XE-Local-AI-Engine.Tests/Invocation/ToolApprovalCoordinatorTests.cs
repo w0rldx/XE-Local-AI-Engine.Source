@@ -290,8 +290,7 @@ public sealed class ToolApprovalCoordinatorTests
         slots.ReleaseSlotForPark(invocationId).Returns(_ => throw new InvalidOperationException("subscriber failed"));
         var coordinator = CreateCoordinator(dispatcher: new RecordingApprovalDispatcher());
 
-        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => coordinator.RequestToolApprovalAsync(
-            RuntimePackageBuilder.Valid().WithInvocationId(invocationId).Build(),
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => coordinator.RequestToolApprovalAsync(RuntimePackageBuilder.Valid().WithInvocationId(invocationId).Build(),
             ToolApprovalRequest(),
             new HumanPark(tracker, slots, invocationId),
             CancellationToken.None));
@@ -831,15 +830,20 @@ public sealed class ToolApprovalCoordinatorTests
 
         public InvocationState? SlotHolder => _inner.SlotHolder;
 
-        public IReadOnlyList<InvocationState> GetLiveInvocations() => _inner.GetLiveInvocations();
+        public IReadOnlyList<InvocationState> GetLiveInvocations() =>
+            _inner.GetLiveInvocations();
 
-        public InvocationLiveSnapshot GetLiveSnapshot() => _inner.GetLiveSnapshot();
+        public InvocationLiveSnapshot GetLiveSnapshot() =>
+            _inner.GetLiveSnapshot();
 
-        public bool ReleaseSlotForPark(Guid invocationId) => _inner.ReleaseSlotForPark(invocationId);
+        public bool ReleaseSlotForPark(Guid invocationId) =>
+            _inner.ReleaseSlotForPark(invocationId);
 
-        public Task ReportPromptTimedOutAsync(Guid invocationId, string requestId) => _inner.ReportPromptTimedOutAsync(invocationId, requestId);
+        public Task ReportPromptTimedOutAsync(Guid invocationId, string requestId) =>
+            _inner.ReportPromptTimedOutAsync(invocationId, requestId);
 
-        public Task ReacquireSlotAsync(Guid invocationId, CancellationToken cancellationToken) => _inner.ReacquireSlotAsync(invocationId, cancellationToken);
+        public Task ReacquireSlotAsync(Guid invocationId, CancellationToken cancellationToken) =>
+            _inner.ReacquireSlotAsync(invocationId, cancellationToken);
 
         public event EventHandler<InvocationStateChangedEventArgs>? InvocationStateChanged
         {

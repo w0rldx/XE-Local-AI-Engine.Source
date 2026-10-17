@@ -113,7 +113,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             : null;
         // The offer drops a listed run_python while compute is off; the flag lets the turn say so instead of a log line.
         var computeWithheld = supportsTools && definition.AllowedToolNames.Contains(ComputeToolDefinition.ToolName, StringComparer.Ordinal)
-                              && !await _runtimeSettings.GetComputeEnabledAsync(cancellationToken);
+                                            && !await _runtimeSettings.GetComputeEnabledAsync(cancellationToken);
 
         return new ResolvedAgentRuntime(resolvedPrompt,
             allowedTools,

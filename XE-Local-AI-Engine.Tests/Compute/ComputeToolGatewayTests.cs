@@ -883,8 +883,7 @@ public sealed class ComputeToolGatewayTests
     {
         var provider = new RecordingSandboxProvider(Contained);
         var gateway = CreateGateway(provider,
-            environment: new StubEnvironment(
-                new ComputeEnvironmentException("The Python compute tool is available on Linux x64 and Windows x64 only.")));
+            environment: new StubEnvironment(new ComputeEnvironmentException("The Python compute tool is available on Linux x64 and Windows x64 only.")));
 
         var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
         {

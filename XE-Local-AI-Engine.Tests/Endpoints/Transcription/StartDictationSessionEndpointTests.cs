@@ -30,7 +30,12 @@ public sealed class StartDictationSessionEndpointTests
         await using var factory = FactoryWith(new FakeWhisperServerSupervisor());
         using var client = factory.CreateClient();
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, Route) { Content = JsonContent.Create(new { }) };
+        using var request = new HttpRequestMessage(HttpMethod.Post, Route)
+        {
+            Content = JsonContent.Create(new
+            {
+            })
+        };
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -43,7 +48,12 @@ public sealed class StartDictationSessionEndpointTests
         await using var factory = FactoryWith(supervisor);
         using var client = factory.CreateClient();
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, Route) { Content = JsonContent.Create(new { }) };
+        using var request = new HttpRequestMessage(HttpMethod.Post, Route)
+        {
+            Content = JsonContent.Create(new
+            {
+            })
+        };
         factory.AddNonOperatorBearerToken(request);
         using var response = await client.SendAsync(request);
 
@@ -135,7 +145,10 @@ public sealed class StartDictationSessionEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory);
-        request.Content = JsonContent.Create(new { language });
+        request.Content = JsonContent.Create(new
+        {
+            language
+        });
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
@@ -175,7 +188,10 @@ public sealed class StartDictationSessionEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory);
-        request.Content = JsonContent.Create(new { language });
+        request.Content = JsonContent.Create(new
+        {
+            language
+        });
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -186,7 +202,12 @@ public sealed class StartDictationSessionEndpointTests
 
     private static HttpRequestMessage Authorized(TestServerWebAppFactory factory)
     {
-        var request = new HttpRequestMessage(HttpMethod.Post, Route) { Content = JsonContent.Create(new { }) };
+        var request = new HttpRequestMessage(HttpMethod.Post, Route)
+        {
+            Content = JsonContent.Create(new
+            {
+            })
+        };
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
         return request;

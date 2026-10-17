@@ -21,7 +21,11 @@ public sealed class AskCommandIntegrationTests
         await using var node = await StartAsync(request =>
         {
             sent = request;
-            return [Frame(Server.ChatStreamEventTypes.AssistantDelta, delta: "Hel", offset: 0), Frame(Server.ChatStreamEventTypes.AssistantDelta, delta: "lo", offset: 3), Frame(Server.ChatStreamEventTypes.AssistantCompleted, content: "Hello")];
+            return
+            [
+                Frame(Server.ChatStreamEventTypes.AssistantDelta, delta: "Hel", offset: 0), Frame(Server.ChatStreamEventTypes.AssistantDelta, delta: "lo", offset: 3),
+                Frame(Server.ChatStreamEventTypes.AssistantCompleted, content: "Hello")
+            ];
         });
         using var cli = Cli(node);
 
@@ -56,7 +60,10 @@ public sealed class AskCommandIntegrationTests
     }
 
     private static TestCli Cli(TestNode node) =>
-        new(node.Server.CreateHandler, new Dictionary<string, string>(StringComparer.Ordinal) { [PasswordSource.EnvironmentVariable] = TestNode.AdminPassword });
+        new(node.Server.CreateHandler, new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [PasswordSource.EnvironmentVariable] = TestNode.AdminPassword
+        });
 
     private static async Task<TestNode> StartAsync(Func<Server.NodeChatStreamRequest, IReadOnlyList<Server.ChatStreamEvent>> script)
     {

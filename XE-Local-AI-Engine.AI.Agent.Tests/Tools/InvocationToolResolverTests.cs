@@ -236,14 +236,20 @@ public sealed class InvocationToolResolverTests
     [Test]
     public async Task ResolveForAgentTurnAsync_WhenThePreflightRefuses_DropsTheApprovalWrap_AndTheCallAnswersTheRefusalWithoutRunningTheHandler()
     {
-        var handler = new PreflightedHandler { Refusal = "run_python rejected: compute is off." };
+        var handler = new PreflightedHandler
+        {
+            Refusal = "run_python rejected: compute is off."
+        };
         var registry = PreflightRegistry(handler);
 
         var resolved = await ResolveForTurnAsync(registry);
 
         var function = AssertEx.NotNull(resolved.Single() as AIFunction);
         AssertEx.False(function is ApprovalRequiredAIFunction, "no approval card for a call the node refuses whatever its arguments");
-        var result = AssertEx.NotNull(await function.InvokeAsync(new AIFunctionArguments { ["code"] = "print(1)" }) as string);
+        var result = AssertEx.NotNull(await function.InvokeAsync(new AIFunctionArguments
+        {
+            ["code"] = "print(1)"
+        }) as string);
         AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.TryGetCode(result), "the refusal is recorded as a failed call");
         AssertEx.Contains(result, "compute is off");
         AssertEx.Equal(expected: 0, handler.Executions, "the approval-free variant never reaches the handler");
@@ -262,7 +268,10 @@ public sealed class InvocationToolResolverTests
     [Test]
     public async Task ResolveAsync_WithoutThePerTurnPreflight_KeepsTheApprovalWrap_EvenWhenItWouldRefuse()
     {
-        var registry = PreflightRegistry(new PreflightedHandler { Refusal = "refused" });
+        var registry = PreflightRegistry(new PreflightedHandler
+        {
+            Refusal = "refused"
+        });
 
         var resolved = await InvocationToolResolver.ResolveAsync(RunPythonOffer(),
             new FakeToolRegistry(),
@@ -277,7 +286,10 @@ public sealed class InvocationToolResolverTests
     [Test]
     public async Task ResolveForAgentTurnAsync_EvaluatesThePreflightOnEveryResolution()
     {
-        var handler = new PreflightedHandler { Refusal = "refused" };
+        var handler = new PreflightedHandler
+        {
+            Refusal = "refused"
+        };
         var registry = PreflightRegistry(handler);
 
         var first = await ResolveForTurnAsync(registry);
@@ -291,11 +303,17 @@ public sealed class InvocationToolResolverTests
     [Test]
     public async Task RefusingVariant_WhenTheNodeCanRunTheToolByCallTime_StillDoesNotRunItUnapproved()
     {
-        var handler = new PreflightedHandler { Refusal = "refused" };
+        var handler = new PreflightedHandler
+        {
+            Refusal = "refused"
+        };
         var function = AssertEx.NotNull((await ResolveForTurnAsync(PreflightRegistry(handler))).Single() as AIFunction);
         handler.Refusal = null;
 
-        var result = AssertEx.NotNull(await function.InvokeAsync(new AIFunctionArguments { ["code"] = "print(1)" }) as string);
+        var result = AssertEx.NotNull(await function.InvokeAsync(new AIFunctionArguments
+        {
+            ["code"] = "print(1)"
+        }) as string);
 
         AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.TryGetCode(result));
         AssertEx.Contains(result, "needs approval");
@@ -341,7 +359,8 @@ public sealed class InvocationToolResolverTests
             return Task.FromResult("ran");
         }
 
-        public ValueTask<string?> PreflightAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(Refusal);
+        public ValueTask<string?> PreflightAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(Refusal);
     }
 
     private static IList<AITool> Resolve(IReadOnlyList<AITool> offered,

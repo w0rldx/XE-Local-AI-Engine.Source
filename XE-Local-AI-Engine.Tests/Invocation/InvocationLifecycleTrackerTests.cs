@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Invocation;
 
+using System.Collections;
 using System.Reflection;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -323,7 +324,7 @@ public sealed class InvocationLifecycleTrackerTests
     private static CancellationTokenSource TurnSource(InvocationLifecycleTracker tracker, Guid invocationId)
     {
         var field = AssertEx.NotNull(typeof(InvocationLifecycleTracker).GetField("_turns", BindingFlags.Instance | BindingFlags.NonPublic));
-        var turn = AssertEx.NotNull(((System.Collections.IDictionary)AssertEx.NotNull(field.GetValue(tracker)))[invocationId]);
+        var turn = AssertEx.NotNull(((IDictionary)AssertEx.NotNull(field.GetValue(tracker)))[invocationId]);
         return (CancellationTokenSource)AssertEx.NotNull(AssertEx.NotNull(turn.GetType().GetProperty("Source")).GetValue(turn));
     }
 

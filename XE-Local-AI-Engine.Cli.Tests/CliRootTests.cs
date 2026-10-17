@@ -12,7 +12,11 @@ public sealed class CliRootTests
         await using var output = new StringWriter();
         await using var error = new StringWriter();
 
-        var exitCode = await CliRoot.Create().Parse(["version"]).InvokeAsync(new InvocationConfiguration { Output = output, Error = error });
+        var exitCode = await CliRoot.Create().Parse(["version"]).InvokeAsync(new InvocationConfiguration
+        {
+            Output = output,
+            Error = error
+        });
 
         AssertEx.Equal(0, exitCode);
         AssertEx.Equal(CliRoot.InformationalVersion, output.ToString().Trim());
@@ -26,7 +30,11 @@ public sealed class CliRootTests
         await using var output = new StringWriter();
         await using var error = new StringWriter();
 
-        var exitCode = await CliRoot.Create().Parse(["no-such-command"]).InvokeAsync(new InvocationConfiguration { Output = output, Error = error });
+        var exitCode = await CliRoot.Create().Parse(["no-such-command"]).InvokeAsync(new InvocationConfiguration
+        {
+            Output = output,
+            Error = error
+        });
 
         AssertEx.NotEqual(0, exitCode);
         AssertEx.Contains(error.ToString(), "no-such-command");

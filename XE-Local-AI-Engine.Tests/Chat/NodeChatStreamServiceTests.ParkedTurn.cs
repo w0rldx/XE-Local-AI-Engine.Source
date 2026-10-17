@@ -5,21 +5,20 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
-using XE_Local_AI_Engine.AI.Contracts.Events;
-using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
-using XE_Local_AI_Engine.Client.Services.Chat;
-using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
-using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
+using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
-using XE_Local_AI_Engine.Tests.Testing.Builders;
+using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 // Helpers for the R4-03 parked-turn tests: the real dispatcher slot and a runner that parks one conversation.
 public sealed partial class NodeChatStreamServiceTests
@@ -32,9 +31,9 @@ public sealed partial class NodeChatStreamServiceTests
             TimeProvider.System);
     }
 
-    private static Client.Models.RuntimePackage RuntimePackageBuilderFor(Guid conversationId)
+    private static RuntimePackage RuntimePackageBuilderFor(Guid conversationId)
     {
-        return Testing.Builders.RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).WithConversationId(conversationId).Build();
+        return RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).WithConversationId(conversationId).Build();
     }
 
     private static async Task<List<ChatStreamEvent>> DrainAsync(IAsyncEnumerable<ChatStreamEvent> stream)
@@ -83,6 +82,7 @@ public sealed partial class NodeChatStreamServiceTests
     {
         private readonly WorkerEventDispatcher _dispatcher;
         private readonly Guid _parkedConversationId;
+
         private readonly InvocationLifecycleTracker _tracker = new(Substitute.For<IInvocationAttachmentTracker>(),
             new PendingToolCallRegistry(),
             StubNodeRuntimeSettings.Create().Build(),
@@ -148,7 +148,8 @@ public sealed partial class NodeChatStreamServiceTests
             await _dispatcher.ReportInvocationCompletedAsync(invocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13);
         }
 
-        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default) => Task.FromResult(true);
+        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default) =>
+            Task.FromResult(true);
 
         public void Cancel(Guid invocationId)
         {

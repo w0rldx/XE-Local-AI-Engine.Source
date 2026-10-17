@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Cli.Tests.Discovery;
 
+using System.Globalization;
 using System.Text.Json;
 using XE_Local_AI_Engine.Cli.Discovery;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -146,7 +147,7 @@ public sealed class NodeLocatorTests
                     dir = value;
                     break;
                 default:
-                    pid = int.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
+                    pid = int.Parse(value, CultureInfo.InvariantCulture);
                     break;
             }
         }

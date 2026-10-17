@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Desktop;
 using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
+using Program = XE_Local_AI_Engine.Client.Program;
 
 [Category(TestCategories.Integration)]
 public sealed class DesktopLifecycleTests
@@ -263,7 +264,7 @@ public sealed class DesktopLifecycleTests
     [Test]
     public void StartupFailureExitCode_MapsAPreReadyAccessDenialToTheEnginesDataDirectoryCode()
     {
-        AssertEx.Equal(XE_Local_AI_Engine.Client.Program.DataDirectoryUnusableExitCode, DesktopApplication.DataDirectoryUnusableExitCode,
+        AssertEx.Equal(Program.DataDirectoryUnusableExitCode, DesktopApplication.DataDirectoryUnusableExitCode,
             "The shell's duplicate must stay the engine's code.");
         AssertEx.Equal(10, DesktopApplication.StartupFailureExitCode(new UnauthorizedAccessException("denied"), engineReady: false));
         AssertEx.Equal(1, DesktopApplication.StartupFailureExitCode(new UnauthorizedAccessException("denied"), engineReady: true),

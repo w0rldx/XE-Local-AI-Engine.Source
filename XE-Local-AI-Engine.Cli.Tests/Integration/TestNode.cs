@@ -40,11 +40,12 @@ internal sealed class TestNode : IAsyncDisposable
 
     public TestServer Server => _app.GetTestServer();
 
-    public NodeConnectionOptions ConnectionOptions => new()
-    {
-        Origin = new Uri("http://localhost/"),
-        HandlerFactory = Server.CreateHandler
-    };
+    public NodeConnectionOptions ConnectionOptions =>
+        new()
+        {
+            Origin = new Uri("http://localhost/"),
+            HandlerFactory = Server.CreateHandler
+        };
 
     public static async Task<TestNode> StartAsync(Action<IServiceCollection>? configureServices = null)
     {

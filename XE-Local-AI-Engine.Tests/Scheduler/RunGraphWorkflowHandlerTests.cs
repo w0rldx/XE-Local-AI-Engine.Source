@@ -1,8 +1,10 @@
 namespace XE_Local_AI_Engine.Tests.Scheduler;
 
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using NSubstitute.Core;
 using NSubstitute.ExceptionExtensions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -40,7 +42,7 @@ public sealed class RunGraphWorkflowHandlerTests
         AssertEx.False(descriptor.AllowAgentCreation, "an agent must not schedule a side-effecting workflow.");
         AssertEx.Equal(HistoryDetailLevel.Detailed, descriptor.HistoryDetailLevel);
         AssertEx.Equal(SchedulerMisfirePolicy.SkipMissed, descriptor.DefaultMisfirePolicy);
-        using var schema = System.Text.Json.JsonDocument.Parse(descriptor.ParameterSchema!);
+        using var schema = JsonDocument.Parse(descriptor.ParameterSchema!);
         AssertEx.Equal("definitionId", schema.RootElement.GetProperty("required")[0].GetString());
     }
 
@@ -161,7 +163,8 @@ public sealed class RunGraphWorkflowHandlerTests
     {
         var harness = new Harness();
         harness.RunService.StartAsync(DefinitionId, Arg.Any<Guid>(), Arg.Any<string?>(), null, Arg.Any<GraphWorkflowRunOrigin>(), Arg.Any<CancellationToken>())
-               .ThrowsAsync(new GraphWorkflowRunConflictException("Graph workflow definition 'Lights' does not accept runs started by Schedule. The operator can add the source in the workflow settings."));
+               .ThrowsAsync(new GraphWorkflowRunConflictException(
+                   "Graph workflow definition 'Lights' does not accept runs started by Schedule. The operator can add the source in the workflow settings."));
 
         var exception = await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(() => harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None));
 
@@ -248,7 +251,7 @@ public sealed class RunGraphWorkflowHandlerTests
         AssertEx.Equal(harness.Handler, resolved);
     }
 
-    private static bool IsStart(NSubstitute.Core.ICall call) =>
+    private static bool IsStart(ICall call) =>
         string.Equals(call.GetMethodInfo().Name, nameof(IGraphWorkflowRunService.StartAsync), StringComparison.Ordinal);
 
     private static void StubDefinition(Harness harness, GraphWorkflowTriggerSource sources) =>
@@ -268,7 +271,8 @@ public sealed class RunGraphWorkflowHandlerTests
             TriggerSources = sources
         });
 
-    private static string ValidParams() => $$"""{ "definitionId": "{{DefinitionIdString}}" }""";
+    private static string ValidParams() =>
+        $$"""{ "definitionId": "{{DefinitionIdString}}" }""";
 
     private static ScheduledJobExecutionContext Context(string? parametersJson, Func<string, int?, CancellationToken, Task>? reportProgress = null) =>
         new()
@@ -343,7 +347,8 @@ public sealed class RunGraphWorkflowHandlerTests
     {
         private long _nowTicks = DateTimeOffset.UnixEpoch.UtcTicks;
 
-        public override DateTimeOffset GetUtcNow() => new(Interlocked.Read(ref _nowTicks), TimeSpan.Zero);
+        public override DateTimeOffset GetUtcNow() =>
+            new(Interlocked.Read(ref _nowTicks), TimeSpan.Zero);
 
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
         {
@@ -354,13 +359,15 @@ public sealed class RunGraphWorkflowHandlerTests
 
         private sealed class InertTimer : ITimer
         {
-            public bool Change(TimeSpan dueTime, TimeSpan period) => true;
+            public bool Change(TimeSpan dueTime, TimeSpan period) =>
+                true;
 
             public void Dispose()
             {
             }
 
-            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+            public ValueTask DisposeAsync() =>
+                ValueTask.CompletedTask;
         }
     }
 
@@ -373,7 +380,10 @@ public sealed class RunGraphWorkflowHandlerTests
             services.AddSingleton(Store);
             services.AddSingleton<INodeRuntimeSettings>(StubNodeRuntimeSettings.Create().WithGraphWorkflowsEnabled(graphWorkflowsEnabled).Build());
             var provider = services.BuildServiceProvider();
-            var options = Options.Create(new GraphWorkflowOptions { MaxRunInputBytes = maxRunInputBytes });
+            var options = Options.Create(new GraphWorkflowOptions
+            {
+                MaxRunInputBytes = maxRunInputBytes
+            });
 
             Handler = new RunGraphWorkflowHandler(provider.GetRequiredService<IServiceScopeFactory>(), options, new SteppingClock());
         }

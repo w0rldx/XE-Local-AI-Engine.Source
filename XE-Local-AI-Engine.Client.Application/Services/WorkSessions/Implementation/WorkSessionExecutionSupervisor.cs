@@ -395,8 +395,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             correlation,
             _timeProvider,
             () => IsAnsweredAndWaiting(correlation.RequestId),
-            () => _logger.LogInformation(
-                "Work session {SessionId} step {Step} reached its park budget after its card was answered; it waits for the invocation slot, so it was left running.",
+            () => _logger.LogInformation("Work session {SessionId} step {Step} reached its park budget after its card was answered; it waits for the invocation slot, so it was left running.",
                 sessionId,
                 step));
         run.Correlation = correlation;

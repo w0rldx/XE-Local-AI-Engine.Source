@@ -223,7 +223,8 @@ public sealed class MemoryExtractionWorker : BackgroundService
         // A cancelled host token means the host's budget, not this window, ran out, so the log must not say "exceeded".
         if (hostBudgetSpent)
         {
-            _logger.LogWarning("Memory extraction worker stopped without draining: the host shutdown budget was already spent; abandoned {Abandoned} in-flight and dropped {Dropped} queued extraction(s).",
+            _logger.LogWarning(
+                "Memory extraction worker stopped without draining: the host shutdown budget was already spent; abandoned {Abandoned} in-flight and dropped {Dropped} queued extraction(s).",
                 abandoned,
                 dropped);
         }

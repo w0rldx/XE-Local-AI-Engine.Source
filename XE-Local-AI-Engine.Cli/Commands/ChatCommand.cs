@@ -110,24 +110,24 @@ internal sealed class ChatCommand
         }
 
         using (session)
-        await using (hub)
-        {
-            using (var linked = CommandRunner.LinkInterrupt(environment, cancellationToken))
+            await using (hub)
             {
-                chat._agent = await AgentLookup.ResolveAsync(session.Api, parse.GetValue(AskCommand.Agent), linked.Token);
-                if (parse.GetValue(Conversation) is { } existing)
+                using (var linked = CommandRunner.LinkInterrupt(environment, cancellationToken))
                 {
-                    await chat.OpenConversationAsync(AgentLookup.ParseConversationId(existing), linked.Token);
+                    chat._agent = await AgentLookup.ResolveAsync(session.Api, parse.GetValue(AskCommand.Agent), linked.Token);
+                    if (parse.GetValue(Conversation) is { } existing)
+                    {
+                        await chat.OpenConversationAsync(AgentLookup.ParseConversationId(existing), linked.Token);
+                    }
                 }
-            }
 
-            if (chat._conversationId is { } opened)
-            {
-                await chat.RunTurnAsync(token => hub.ResumeConversationAsync(opened, token), turn: null, cancellationToken);
-            }
+                if (chat._conversationId is { } opened)
+                {
+                    await chat.RunTurnAsync(token => hub.ResumeConversationAsync(opened, token), turn: null, cancellationToken);
+                }
 
-            return await chat.LoopAsync(cancellationToken);
-        }
+                return await chat.LoopAsync(cancellationToken);
+            }
     }
 
     private async Task<int> LoopAsync(CancellationToken cancellationToken)

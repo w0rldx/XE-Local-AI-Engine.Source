@@ -128,7 +128,8 @@ public sealed class GraphWorkflowShareFileEndpointTests
 
         using var export = await SendAsync(factory, "GET", Export);
         var exportBody = await export.Content.ReadAsStringAsync();
-        using var imported = await SendAsync(factory, "POST", Import, ImportBody(GraphWorkflowGraphs.StartAgentEnd).Replace("\"name\"", "\"allowsActions\":true,\"triggerSources\":[\"Schedule\"],\"name\"", StringComparison.Ordinal));
+        using var imported = await SendAsync(factory, "POST", Import,
+            ImportBody(GraphWorkflowGraphs.StartAgentEnd).Replace("\"name\"", "\"allowsActions\":true,\"triggerSources\":[\"Schedule\"],\"name\"", StringComparison.Ordinal));
 
         AssertEx.Equal(HttpStatusCode.OK, export.StatusCode, exportBody);
         AssertEx.False(exportBody.Contains("allowsActions", StringComparison.Ordinal), $"the share file never carries the flag: {exportBody}");

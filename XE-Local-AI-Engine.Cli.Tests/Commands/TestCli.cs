@@ -40,8 +40,7 @@ internal sealed class TestCli : IDisposable
     public string Error => _error.ToString();
 
     /// <summary>Standard output as JSON lines.</summary>
-    public IReadOnlyList<JsonElement> JsonLines =>
-        [.. Out.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(static line => JsonDocument.Parse(line).RootElement.Clone())];
+    public IReadOnlyList<JsonElement> JsonLines => [.. Out.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(static line => JsonDocument.Parse(line).RootElement.Clone())];
 
     public static IAnsiConsole Capture(TextWriter writer) =>
         AnsiConsole.Create(new AnsiConsoleSettings

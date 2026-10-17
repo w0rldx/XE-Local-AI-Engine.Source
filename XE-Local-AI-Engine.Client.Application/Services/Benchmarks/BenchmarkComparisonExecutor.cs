@@ -149,6 +149,7 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
             {
                 throw new BenchmarkExecutionException(CrossCaseMessage);
             }
+
             var snapshot = _snapshots.Deserialize(runA.RuntimeSnapshotJson.Span);
 
             // The item's own reference answer, exactly as pointwise judging resolves it; only the reference, because a verifier override has no meaning for a pairwise verdict.

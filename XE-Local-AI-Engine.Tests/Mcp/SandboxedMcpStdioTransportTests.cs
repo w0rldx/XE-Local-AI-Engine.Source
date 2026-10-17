@@ -1304,24 +1304,54 @@ public sealed class SandboxedMcpStdioTransportTests
         var home = Path.GetFullPath("/srv/accounts/xe");
         var roots = SandboxedMcpStdioTransport.BuildSensitiveHostRoots(NodeDataRoot, () => home);
 
-        string Under(params string[] parts) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.Combine([home, .. parts])));
+        string Under(params string[] parts) =>
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.Combine([home, .. parts])));
+
         void Expect(string path, bool deniesSubtree) =>
             AssertEx.True(roots.Any(root => root.HostPath == Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)) && root.DeniesSubtree == deniesSubtree),
                 $"'{path}' must be on the list with DeniesSubtree = {deniesSubtree}.");
 
         Expect(home, deniesSubtree: false);
-        foreach (var store in new[] { ".ssh", ".gnupg", ".aws", ".azure", ".config", ".docker", ".kube", ".mozilla", ".thunderbird", ".password-store", ".pki" })
+        foreach (var store in new[]
+                 {
+                     ".ssh",
+                     ".gnupg",
+                     ".aws",
+                     ".azure",
+                     ".config",
+                     ".docker",
+                     ".kube",
+                     ".mozilla",
+                     ".thunderbird",
+                     ".password-store",
+                     ".pki"
+                 })
         {
             Expect(Under(store), deniesSubtree: true);
         }
 
         Expect(Under(".local", "share", "keyrings"), deniesSubtree: true);
-        foreach (var store in new[] { "Microsoft", "Mozilla", "Thunderbird", "Opera Software", "gnupg", "GitHub CLI", "gcloud" })
+        foreach (var store in new[]
+                 {
+                     "Microsoft",
+                     "Mozilla",
+                     "Thunderbird",
+                     "Opera Software",
+                     "gnupg",
+                     "GitHub CLI",
+                     "gcloud"
+                 })
         {
             Expect(Under("AppData", "Roaming", store), deniesSubtree: true);
         }
 
-        foreach (var store in new[] { "Google", "Mozilla", "BraveSoftware", "Vivaldi" })
+        foreach (var store in new[]
+                 {
+                     "Google",
+                     "Mozilla",
+                     "BraveSoftware",
+                     "Vivaldi"
+                 })
         {
             Expect(Under("AppData", "Local", store), deniesSubtree: true);
         }
@@ -1362,7 +1392,13 @@ public sealed class SandboxedMcpStdioTransportTests
 
         var roots = SandboxedMcpStdioTransport.BuildSensitiveHostRoots(NodeDataRoot, static () => Path.GetFullPath("/srv/accounts/xe"));
 
-        foreach (var store in new[] { Path.Combine(roaming, "Microsoft"), Path.Combine(roaming, "Mozilla"), Path.Combine(local, "Google"), Path.Combine(local, "Microsoft") })
+        foreach (var store in new[]
+                 {
+                     Path.Combine(roaming, "Microsoft"),
+                     Path.Combine(roaming, "Mozilla"),
+                     Path.Combine(local, "Google"),
+                     Path.Combine(local, "Microsoft")
+                 })
         {
             var lexical = Path.TrimEndingDirectorySeparator(Path.GetFullPath(store));
             AssertEx.True(roots.Any(root => root.HostPath == lexical && root.DeniesSubtree), $"'{lexical}' must be denied with its subtree.");
@@ -1610,6 +1646,7 @@ public sealed class SandboxedMcpStdioTransportTests
         try
         {
             var handle = IsolatedHandle(SandboxIsolatedPaths.Posix);
+
             string? CwdFor(string? workingDirectory, IReadOnlyList<string>? granted = null)
             {
                 var record = StdioRecord(McpTrustTier.Sandboxed) with

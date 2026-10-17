@@ -4219,13 +4219,17 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         public InvocationState? CurrentInvocation { get; private set; }
 
-        public InvocationState? SlotHolder =>
-            CurrentInvocation is { } current && current.InvocationId == _slotHolderId && !NodeChatInvocationPump.IsTerminal(current.Status) ? current : null;
+        public InvocationState? SlotHolder => CurrentInvocation is { } current && current.InvocationId == _slotHolderId && !NodeChatInvocationPump.IsTerminal(current.Status) ? current : null;
 
         public IReadOnlyList<InvocationState> GetLiveInvocations() =>
             CurrentInvocation is { } current && !NodeChatInvocationPump.IsTerminal(current.Status) ? [current] : [];
 
-        public InvocationLiveSnapshot GetLiveSnapshot() => new() { Current = SlotHolder, Live = GetLiveInvocations() };
+        public InvocationLiveSnapshot GetLiveSnapshot() =>
+            new()
+            {
+                Current = SlotHolder,
+                Live = GetLiveInvocations()
+            };
 
         public bool ReleaseSlotForPark(Guid invocationId)
         {
@@ -4238,7 +4242,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             return true;
         }
 
-        public Task ReportPromptTimedOutAsync(Guid invocationId, string requestId) => Task.CompletedTask;
+        public Task ReportPromptTimedOutAsync(Guid invocationId, string requestId) =>
+            Task.CompletedTask;
 
         public Task ReacquireSlotAsync(Guid invocationId, CancellationToken cancellationToken)
         {

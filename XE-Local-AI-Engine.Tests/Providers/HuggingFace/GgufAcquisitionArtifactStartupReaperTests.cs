@@ -43,7 +43,11 @@ public sealed class GgufAcquisitionArtifactStartupReaperTests
         var longRunning = dir.FilePath("Long-Q8_0.gguf");
         var abandoned = dir.FilePath("Gone-Q8_0.gguf");
         var stale = DateTime.UtcNow - GgufAcquisitionArtifactStartupReaper.StaleArtifactAge - TimeSpan.FromMinutes(1);
-        foreach (var final in new[] { longRunning, abandoned })
+        foreach (var final in new[]
+                 {
+                     longRunning,
+                     abandoned
+                 })
         {
             await File.WriteAllTextAsync(final + ".intent.part", "{}");
             await File.WriteAllTextAsync(final + ".part", "partial");

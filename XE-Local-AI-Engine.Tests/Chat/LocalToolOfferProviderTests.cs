@@ -558,8 +558,7 @@ public sealed class LocalToolOfferProviderTests
         var catalogEntry = provider.GetKnownTools().Single(static entry => entry.Name == ComputeToolDefinition.ToolName);
         // The picker is the one place an operator learns the tool is unavailable on this node; on a pinned platform no caveat is owed.
         AssertEx.Equal(!ManagedPythonPins.IsCurrentPlatformSupported,
-            catalogEntry.Description.EndsWith(
-                " (not available on this node's platform: Linux x64 and Windows x64 only; an agent selecting it gets no tool)",
+            catalogEntry.Description.EndsWith(" (not available on this node's platform: Linux x64 and Windows x64 only; an agent selecting it gets no tool)",
                 StringComparison.Ordinal),
             "The platform caveat is shown exactly where the tool is withheld.");
     }

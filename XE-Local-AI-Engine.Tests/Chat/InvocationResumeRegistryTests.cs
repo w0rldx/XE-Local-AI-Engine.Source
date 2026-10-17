@@ -984,7 +984,8 @@ public sealed class InvocationResumeRegistryTests
 
         var terminal = events[^1];
         AssertEx.Equal(expectedType, terminal.Type);
-        AssertEx.True(string.Equals(expectedCategory, terminal.FailureCategory, StringComparison.Ordinal), $"expected category {expectedCategory ?? "null"}, got {terminal.FailureCategory ?? "null"}.");
+        AssertEx.True(string.Equals(expectedCategory, terminal.FailureCategory, StringComparison.Ordinal),
+            $"expected category {expectedCategory ?? "null"}, got {terminal.FailureCategory ?? "null"}.");
         AssertEx.True(events.Take(events.Count - 1).All(streamEvent => streamEvent.FailureCategory is null), "only the terminal carries a category.");
     }
 

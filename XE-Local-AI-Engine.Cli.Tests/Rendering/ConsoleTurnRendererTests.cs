@@ -75,7 +75,10 @@ public sealed class ConsoleTurnRendererTests
         using var renderer = Renderer(content, side);
 
         // Serialized the way the node does it, with the default encoder.
-        var arguments = JsonSerializer.Serialize(new Dictionary<string, string>(StringComparer.Ordinal) { ["code"] = "print(\"17 × 23\")" });
+        var arguments = JsonSerializer.Serialize(new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["code"] = "print(\"17 × 23\")"
+        });
         AssertEx.Contains(arguments, "\\u0022", message: "the scenario needs the node's escaped form");
         await renderer.RenderAsync(Event(CliStreamEventKind.ApprovalRequested, ChatStreamEventTypes.ApprovalRequested, toolName: "run_python", arguments: arguments), CancellationToken.None);
 
@@ -87,7 +90,12 @@ public sealed class ConsoleTurnRendererTests
     {
         await using var output = new StringWriter();
 
-        await JsonTurnRenderer.WriteLineAsync(output, new AskJsonLine { Type = "event", Kind = "delta", Text = "It's \"17 × 23\"" }, CancellationToken.None);
+        await JsonTurnRenderer.WriteLineAsync(output, new AskJsonLine
+        {
+            Type = "event",
+            Kind = "delta",
+            Text = "It's \"17 × 23\""
+        }, CancellationToken.None);
 
         AssertEx.Contains(output.ToString(), "\"text\":\"It's \\\"17 × 23\\\"\"");
         AssertEx.False(output.ToString().Contains("\\u", StringComparison.Ordinal), "nothing is \\u-escaped");

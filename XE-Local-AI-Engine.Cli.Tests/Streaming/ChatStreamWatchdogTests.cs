@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Cli.Tests.Streaming;
 
+using System.Globalization;
 using XE_Local_AI_Engine.Cli.Streaming;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -44,7 +45,7 @@ public sealed class ChatStreamWatchdogTests
             RuntimePhase = type == ChatStreamEventTypes.AssistantPhase ? detail : null,
             Delta = type == ChatStreamEventTypes.AssistantDelta ? detail : null,
             InvocationTimeoutSeconds = type is ChatStreamEventTypes.AssistantStreaming or ChatStreamEventTypes.AssistantQueued && detail is not null
-                ? int.Parse(detail, System.Globalization.CultureInfo.InvariantCulture)
+                ? int.Parse(detail, CultureInfo.InvariantCulture)
                 : null
         };
     }

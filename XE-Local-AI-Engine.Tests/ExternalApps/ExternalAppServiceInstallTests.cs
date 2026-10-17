@@ -120,8 +120,7 @@ public sealed class ExternalAppServiceInstallTests
         await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
         // The lookup still answers with the manifest it captured; the document now served is empty.
         harness.Catalog.GetCatalogAsync(Arg.Any<CancellationToken>())
-               .Returns(Task.FromResult(new ExternalAppCatalogSnapshot(
-                   new ExternalAppCatalogDocument(SchemaVersion: 1, "2026-10-15T00:00:00Z", Applications: []),
+               .Returns(Task.FromResult(new ExternalAppCatalogSnapshot(new ExternalAppCatalogDocument(SchemaVersion: 1, "2026-10-15T00:00:00Z", Applications: []),
                    ExternalAppCatalogSource.Remote,
                    FetchedAtUtc: null,
                    SourceUrl: null,
@@ -142,7 +141,10 @@ public sealed class ExternalAppServiceInstallTests
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
 
         await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest,
-            startupSettings: new NodeStartupSettings { ExternalAppsAwaitingCatalog = true });
+            startupSettings: new NodeStartupSettings
+            {
+                ExternalAppsAwaitingCatalog = true
+            });
 
         var preview = await harness.Service.PreviewInstallAsync(AppId);
         AssertEx.False(preview.CanInstall);
@@ -166,7 +168,10 @@ public sealed class ExternalAppServiceInstallTests
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
 
         await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest,
-            startupSettings: new NodeStartupSettings { ExternalAppsAwaitingCatalog = true });
+            startupSettings: new NodeStartupSettings
+            {
+                ExternalAppsAwaitingCatalog = true
+            });
         var existing = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Stopped);
 
         var probe = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

@@ -646,8 +646,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         // check stays (no cross-conversation read); the send is refused by name before anything is persisted.
         if (await _turnContextBuilder.ListForeignAttachmentIdsAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken) is { Count: > 0 } foreign)
         {
-            throw new NodeChatInvalidRequestException(
-                $"These attachments are not files of this conversation: {string.Join(", ", foreign)}. Upload them to this conversation and send again.");
+            throw new NodeChatInvalidRequestException($"These attachments are not files of this conversation: {string.Join(", ", foreign)}. Upload them to this conversation and send again.");
         }
 
         var persistedSelectedPath = request.SelectedPath is not null

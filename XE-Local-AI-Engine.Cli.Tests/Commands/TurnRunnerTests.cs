@@ -33,8 +33,7 @@ public sealed class TurnRunnerTests
         await using var output = new StringWriter();
         using var renderer = new JsonTurnRenderer(output);
 
-        var outcome = await new TurnRunner(node.Api, renderer, prompter: null, TimeProvider.System).RunAsync(
-            _ => PlayAsync(Event(CliStreamEventKind.Status, ChatStreamEventTypes.AssistantStreaming),
+        var outcome = await new TurnRunner(node.Api, renderer, prompter: null, TimeProvider.System).RunAsync(_ => PlayAsync(Event(CliStreamEventKind.Status, ChatStreamEventTypes.AssistantStreaming),
                 Event(CliStreamEventKind.Delta, ChatStreamEventTypes.AssistantDelta, text: "Hel", reasoning: "hmm"),
                 Event(CliStreamEventKind.ToolActivity, ChatStreamEventTypes.ToolCallRequested, toolName: "read_file"),
                 Event(CliStreamEventKind.ToolActivity, ChatStreamEventTypes.ToolCallCompleted, toolName: "read_file"),
@@ -75,8 +74,7 @@ public sealed class TurnRunnerTests
         using var renderer = new JsonTurnRenderer(output);
 
         // The deny is sent beside the loop; the node, parked on the approval, completes only once it has it.
-        var outcome = await new TurnRunner(node.Api, renderer, prompter: null, TimeProvider.System).RunAsync(
-            token => PlayAsync(node.ResolvePosted.Task,
+        var outcome = await new TurnRunner(node.Api, renderer, prompter: null, TimeProvider.System).RunAsync(token => PlayAsync(node.ResolvePosted.Task,
                 afterFirst: null,
                 [
                     Event(CliStreamEventKind.ApprovalRequested, ChatStreamEventTypes.ApprovalRequested, toolName: "write_file", approvalRequestId: "approval-1", sessionScopeEligible: true),
@@ -105,8 +103,7 @@ public sealed class TurnRunnerTests
         await using var output = new StringWriter();
         using var renderer = new JsonTurnRenderer(output);
 
-        var run = new TurnRunner(node.Api, renderer, prompter: null, TimeProvider.System).RunAsync(
-            token => PlayAsync(node.CancelPosted.Task,
+        var run = new TurnRunner(node.Api, renderer, prompter: null, TimeProvider.System).RunAsync(token => PlayAsync(node.CancelPosted.Task,
                 afterFirst: null,
                 [
                     Event(CliStreamEventKind.ApprovalRequested, ChatStreamEventTypes.ApprovalRequested, toolName: "write_file", approvalRequestId: "approval-1"),
@@ -136,8 +133,7 @@ public sealed class TurnRunnerTests
         await using var output = new StringWriter();
         using var renderer = new JsonTurnRenderer(output);
 
-        var outcome = await new TurnRunner(node.Api, renderer, prompter: null, TimeProvider.System).RunAsync(
-            token => PlayAsync(node.CancelPosted.Task,
+        var outcome = await new TurnRunner(node.Api, renderer, prompter: null, TimeProvider.System).RunAsync(token => PlayAsync(node.CancelPosted.Task,
                 afterFirst: null,
                 [
                     Event(CliStreamEventKind.QuestionRequested, ChatStreamEventTypes.QuestionRequested, questionRequestId: "question-1"),
@@ -165,8 +161,7 @@ public sealed class TurnRunnerTests
         await using var output = new StringWriter();
         using var renderer = new JsonTurnRenderer(output);
 
-        var outcome = await new TurnRunner(node.Api, renderer, prompter: null, TimeProvider.System).RunAsync(
-            token => PlayAsync(node.CancelPosted.Task,
+        var outcome = await new TurnRunner(node.Api, renderer, prompter: null, TimeProvider.System).RunAsync(token => PlayAsync(node.CancelPosted.Task,
                 interrupts.Raise,
                 [
                     Event(CliStreamEventKind.Delta, ChatStreamEventTypes.AssistantDelta, text: "Hel"),
@@ -192,8 +187,7 @@ public sealed class TurnRunnerTests
         await using var output = new StringWriter();
         using var renderer = new JsonTurnRenderer(output);
 
-        var run = new TurnRunner(node.Api, renderer, prompter: null, time).RunAsync(
-            token => PlayAsync(new TaskCompletionSource().Task,
+        var run = new TurnRunner(node.Api, renderer, prompter: null, time).RunAsync(token => PlayAsync(new TaskCompletionSource().Task,
                 interrupts.Raise,
                 [Event(CliStreamEventKind.Delta, ChatStreamEventTypes.AssistantDelta, text: "Hel")],
                 token),
@@ -219,8 +213,7 @@ public sealed class TurnRunnerTests
         await using var output = new StringWriter();
         using var renderer = new JsonTurnRenderer(output);
 
-        var run = new TurnRunner(node.Api, renderer, prompter: null, time).RunAsync(
-            token => PlayAsync(new TaskCompletionSource().Task,
+        var run = new TurnRunner(node.Api, renderer, prompter: null, time).RunAsync(token => PlayAsync(new TaskCompletionSource().Task,
                 interrupts.Raise,
                 [Event(CliStreamEventKind.Delta, ChatStreamEventTypes.AssistantDelta, text: "Hel")],
                 token),
@@ -246,13 +239,13 @@ public sealed class TurnRunnerTests
         await using var side = new StringWriter();
         using var renderer = new ConsoleTurnRenderer(content, TestCli.Capture(side), sameScreen: false, showReasoning: false, TimeProvider.System);
 
-        await new TurnRunner(node.Api, renderer, prompter: null, TimeProvider.System).RunAsync(
-            _ => PlayAsync(Event(CliStreamEventKind.Delta, ChatStreamEventTypes.AssistantDelta, reasoning: "let me think"),
-                Event(CliStreamEventKind.Delta, ChatStreamEventTypes.AssistantDelta, reasoning: " more"),
-                Event(CliStreamEventKind.Delta, ChatStreamEventTypes.AssistantDelta, text: "Hel"),
-                Event(CliStreamEventKind.ToolActivity, ChatStreamEventTypes.ToolCallRequested, toolName: "read_file"),
-                Event(CliStreamEventKind.Snapshot, ChatStreamEventTypes.AssistantSnapshot, text: "Hello [b]"),
-                Event(CliStreamEventKind.Completed, ChatStreamEventTypes.AssistantCompleted, text: "Hello [b] world")),
+        await new TurnRunner(node.Api, renderer, prompter: null, TimeProvider.System).RunAsync(_ =>
+                PlayAsync(Event(CliStreamEventKind.Delta, ChatStreamEventTypes.AssistantDelta, reasoning: "let me think"),
+                    Event(CliStreamEventKind.Delta, ChatStreamEventTypes.AssistantDelta, reasoning: " more"),
+                    Event(CliStreamEventKind.Delta, ChatStreamEventTypes.AssistantDelta, text: "Hel"),
+                    Event(CliStreamEventKind.ToolActivity, ChatStreamEventTypes.ToolCallRequested, toolName: "read_file"),
+                    Event(CliStreamEventKind.Snapshot, ChatStreamEventTypes.AssistantSnapshot, text: "Hello [b]"),
+                    Event(CliStreamEventKind.Completed, ChatStreamEventTypes.AssistantCompleted, text: "Hello [b] world")),
             Turn(),
             CancellationToken.None,
             CancellationToken.None);
@@ -274,15 +267,15 @@ public sealed class TurnRunnerTests
 
         // The node reports a rejected call as a plain result with IsError false; only this client knows it denied it.
         // The node, parked on the approval, runs the call only once the deny has reached it.
-        await new TurnRunner(node.Api, renderer, prompter: null, TimeProvider.System).RunAsync(
-            token => PlayAfterAsync(Event(CliStreamEventKind.ApprovalRequested, ChatStreamEventTypes.ApprovalRequested, toolName: "run_python", approvalRequestId: "approval-1"),
-                node.ResolvePosted.Task,
-                [
-                    Event(CliStreamEventKind.ToolActivity, ChatStreamEventTypes.ToolCallRequested, toolName: "run_python"),
-                    Event(CliStreamEventKind.ToolActivity, ChatStreamEventTypes.ToolCallCompleted, toolName: "run_python"),
-                    Event(CliStreamEventKind.Completed, ChatStreamEventTypes.AssistantCompleted, text: "I could not run it.")
-                ],
-                token),
+        await new TurnRunner(node.Api, renderer, prompter: null, TimeProvider.System).RunAsync(token =>
+                PlayAfterAsync(Event(CliStreamEventKind.ApprovalRequested, ChatStreamEventTypes.ApprovalRequested, toolName: "run_python", approvalRequestId: "approval-1"),
+                    node.ResolvePosted.Task,
+                    [
+                        Event(CliStreamEventKind.ToolActivity, ChatStreamEventTypes.ToolCallRequested, toolName: "run_python"),
+                        Event(CliStreamEventKind.ToolActivity, ChatStreamEventTypes.ToolCallCompleted, toolName: "run_python"),
+                        Event(CliStreamEventKind.Completed, ChatStreamEventTypes.AssistantCompleted, text: "I could not run it.")
+                    ],
+                    token),
             Turn(),
             CancellationToken.None,
             CancellationToken.None);
@@ -327,7 +320,7 @@ public sealed class TurnRunnerTests
         console.Key.SetResult(new ConsoleKeyInfo('\r', ConsoleKey.Enter, shift: false, alt: false, control: false));
 
         var outcome = await new TurnRunner(node.Api, renderer, new TurnPrompter(console), TimeProvider.System).RunAsync(
-            token => PlayAsync(node.ResolvePosted.Task, afterFirst: null, [Prompt(approval),Event(CliStreamEventKind.Completed, ChatStreamEventTypes.AssistantCompleted, text: "Done")], token),
+            token => PlayAsync(node.ResolvePosted.Task, afterFirst: null, [Prompt(approval), Event(CliStreamEventKind.Completed, ChatStreamEventTypes.AssistantCompleted, text: "Done")], token),
             Turn(),
             CancellationToken.None,
             CancellationToken.None);

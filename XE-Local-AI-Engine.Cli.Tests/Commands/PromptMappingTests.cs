@@ -48,10 +48,10 @@ public sealed class PromptMappingTests
     public void Parse_ReadsHeaderMultiSelectAndOptionDetails_TreatingABlankHeaderAsAbsent()
     {
         var questions = UserQuestionParser.Parse("""
-            [{"header":"Scope","question":"Which files?","multiSelect":true,
-              "options":[{"label":"src","description":"the code","recommended":true},{"label":"docs"}]},
-             {"header":"  ","question":"Proceed?","options":[{"label":"yes"}]}]
-            """);
+                                                 [{"header":"Scope","question":"Which files?","multiSelect":true,
+                                                   "options":[{"label":"src","description":"the code","recommended":true},{"label":"docs"}]},
+                                                  {"header":"  ","question":"Proceed?","options":[{"label":"yes"}]}]
+                                                 """);
 
         AssertEx.Equal("Scope", questions[0].Header);
         AssertEx.True(questions[0].MultiSelect);
@@ -66,9 +66,9 @@ public sealed class PromptMappingTests
     public void ToAnswer_KeepsKnownLabelsCapsASingleSelectAtOneAndCarriesTheOtherText()
     {
         var questions = UserQuestionParser.Parse("""
-            [{"question":"Many","multiSelect":true,"options":[{"label":"a"},{"label":"b"}]},
-             {"question":"One","options":[{"label":"x"},{"label":"y"}]}]
-            """);
+                                                 [{"question":"Many","multiSelect":true,"options":[{"label":"a"},{"label":"b"}]},
+                                                  {"question":"One","options":[{"label":"x"},{"label":"y"}]}]
+                                                 """);
 
         var many = UserQuestionParser.ToAnswer(questions[0], ["a", TurnPrompter.OtherChoice, "b", "a"], "  typed  ");
         var one = UserQuestionParser.ToAnswer(questions[1], ["y", "x"], other: null);

@@ -62,8 +62,18 @@ public sealed class NodeApiDtoContractTests
 
         foreach (var path in new[]
                  {
-                     "auth/status", "auth/login", "auth/refresh", "chat/conversations", "chat/conversations/{conversationId}", "chat/cancel",
-                     "chat/approvals/resolve", "chat/questions/resolve", "models", "models/running", "agents", "diagnostics/node-info"
+                     "auth/status",
+                     "auth/login",
+                     "auth/refresh",
+                     "chat/conversations",
+                     "chat/conversations/{conversationId}",
+                     "chat/cancel",
+                     "chat/approvals/resolve",
+                     "chat/questions/resolve",
+                     "models",
+                     "models/running",
+                     "agents",
+                     "diagnostics/node-info"
                  })
         {
             AssertEx.True(paths.TryGetProperty("/" + NodeHttp.ApiPrefix + path, out _), path);
