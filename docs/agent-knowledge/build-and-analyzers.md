@@ -54,6 +54,10 @@ where Debug was green.
 
 **Rule:** `Directory.Build.props` states `NuGetAudit`, `NuGetAuditMode=all` and `NuGetAuditLevel=low` (the SDK defaults, written for legibility). Under `TreatWarningsAsErrors` a newly disclosed advisory of any severity reds restore or build with no source change; that is by design. Bump the package or add a reviewed override for that one advisory; never lower the level or narrow the mode to `direct`. **Prevents:** silencing supply-chain advisories to get a green build. **Authority:** `Directory.Build.props` (NuGet audit block).
 
+### A NuGet advisory published mid-task reds every gate: pin on a one-commit chore branch that lands first
+
+**Rule:** when `NuGetAudit` plus `TreatWarningsAsErrors` turns a fresh advisory (NU1902) into a restore failure, open a one-commit chore branch that pins the transitive package under `CentralPackageTransitivePinningEnabled` in `Directory.Packages.props`, land it first, and cherry-pick that commit onto every open branch; drop the pin once a parent package floors at the fixed version. **Prevents:** every open branch and `develop` CI staying red for a day, and fix branches carrying unrelated version bumps. **Authority:** `Directory.Packages.props`; `scripts/run-backend-tests.sh`; the MessagePack GHSA-qhrr-8q5h-9q3h pin, 2026-10-16.
+
 ### Measuring an analyzer rule: drop warnings-as-errors for that build, and flip the rule under `[*.cs]`
 
 **Rule:** to count a rule's violations, set it to `warning` inside the `[*.cs]` section (the file ends in narrow globs, the last an endpoint-DTO glob, so an appended line scopes to those alone), build Release once with `-p:TreatWarningsAsErrors=false`, and confirm every project printed a `-> *.dll` line. Install the flip behind a `trap … EXIT` restore. **Prevents:** a partial count (under warnings-as-errors the first failing project stops its dependents) or a zero from a mis-scoped flip, promoting a rule on false evidence. **Authority:** `.editorconfig` section order. [evidence](../agent-knowledge-evidence.md#measuring-an-analyzer-rule-drop-warnings-as-errors-for-that-build-and-flip-the-rule-under-cs)

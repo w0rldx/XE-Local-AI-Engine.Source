@@ -79,6 +79,10 @@ lock, or the parallelism limits.
 
 **Rule:** `NO_BUILD_LOCK=1` on a long opt-in lane such as the model matrix is acceptable only when the lane builds nothing shared: it builds its own worktree once up front, and the assembly guard stays armed and reports the build output unchanged at the end, or the result is void. Sibling sessions keep building their own worktrees meanwhile, so timing numbers (time to first token, tokens per second) measured under that load are not comparable with an idle-machine run; say so in the evidence. **Prevents:** a run whose binaries changed underneath it being reported as green, and loaded-machine timings read as a regression or a win. **Authority:** `scripts/with-build-lock.sh`, `scripts/assembly-guard.sh`, `scripts/run-model-matrix-local.sh` header.
 
+### A worker that idles on a background gate is not reliably woken: poll in a bounded loop
+
+**Rule:** a worker agent that starts the backend gate or `pnpm run acceptance` in the background must not end its turn waiting for the completion notice; it polls the gate's log or lock (`scripts/build-lock-status.sh`) in a bounded loop with a finite deadline and reports the final line itself. **Prevents:** a lane that looks finished to the coordinator while its gate result was never read, and a worker parked for an hour on a gate that ended in ten minutes. **Authority:** `scripts/build-lock-status.sh`; "Verify against the whole module, not just the class you touched" above.
+
 ## Flakes and parallelism
 
 ### A bare test-host run must never rely on TUnit's default width

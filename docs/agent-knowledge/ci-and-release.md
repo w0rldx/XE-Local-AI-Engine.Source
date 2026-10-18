@@ -149,6 +149,10 @@ shared worktree commit new files through the private-index recipe (wiki 13, "Com
 its new test or source file, and the fix-up commit that follows. **Authority:** `git help commit` ("only from the named
 paths ... already known to Git").
 
+### A worker never rewrites a shared ledger file; rows are edited in place
+
+**Rule:** a findings or status ledger that several agents update (a findings file, a plan's checklist) is edited row by row with targeted replacements; no agent writes the whole file, and a coordinator re-counts the rows after every worker hand-off. **Prevents:** one worker's full-file write silently discarding every other lane's rows (the 2026-10-16 live-QA ledger lost 36 of 40 rows once and was rebuilt from the per-round files). **Authority:** `AGENTS.md` ("never let two tasks claim the same file"); the header rule of the round's findings ledger.
+
 ## Stale beliefs
 
 Superseded claims; the entries above are the active rules.

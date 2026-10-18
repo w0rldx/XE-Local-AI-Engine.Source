@@ -149,6 +149,10 @@ the llama.cpp path"); assigning `RawRepresentationFactory` directly discards the
 llama.cpp request field silently vanishing from the wire when a second feature patches the body. **Authority:**
 `DeferredLlamaServerStructuredOutputTests.ResponseFormatAndThinkingSwitch_BothReachWire`.
 
+### Qwen3.5-9B puts its answer inside a reasoning part and emits trailing reasoning-only deltas after an approval request
+
+**Rule:** a live round or benchmark on `unsloth/Qwen3.5-9B-GGUF` reads the reasoning part as well as the content part before judging a turn empty or unranked, and tolerates reasoning-only deltas that arrive after `approval-requested`; these are model behaviours, not stream defects, and "repairing" them in the stream service breaks the 27B. **Prevents:** stream bugs filed against the chat runner for the 9B's output shape, and 9B benchmark runs marked unranked because the answer sat in the reasoning part. **Authority:** the reasoning-part handling in `docs/wiki/14-inference-runtime.md`; live-QA 2026-10-16 rounds R4 and R7.
+
 ## Stale beliefs
 
 Superseded claims; the entries above are the active rules.

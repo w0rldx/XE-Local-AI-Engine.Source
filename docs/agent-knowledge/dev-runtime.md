@@ -129,9 +129,17 @@ read as a stale-AppHost problem. **Authority:** `dev_aspire_ps_json`, `dev_match
 **Rule:** a live round beside another running host still gets its own copy of the MANAGED llama-server build (behind `XE_LLAMACPP_SERVER_PATH`); never point two hosts at another host's `source-build/active/build/bin/llama-server`, because the startup `StaleProcessReaper` still claims every llama-server under its managed root by path. A BYO binary outside the root is safe to share: on Linux it is reaped only through this node's spawn receipts (`runtime/llama-server/<pid>.json`), resolved by pid (/proc exe realpath + starttime), not by process name. **Prevents:** a resident model vanishing mid-round. **Authority:** `StaleProcessReaper`, `ProcessSpawnReceiptStore`, `LlamaServerProcessSupervisor.SpawnCoreAsync`.
 [evidence](../agent-knowledge-evidence.md#two-hosts-on-one-box-must-never-share-a-llama-server-binary-path-or-one-hosts-reaper-kills-the-others-models)
 
+### A backend gate in a lab worktree rewrites that host's `node-settings.json`
+
+**Rule:** the dev host keeps node settings in `XE-Local-AI-Engine.Client/node-settings.json` (gitignored) under the content root, and the Integration test hosts started by `scripts/run-backend-tests.sh` share that root and rewrite the file with defaults. Never queue the gate in a worktree whose lab host you still need; after an unavoidable gate, re-apply the lab's settings with `PUT node-settings` and restart the host (`ToolApprovalCoordinator` reads `maxPendingToolCallAgeMinutes` once per process). Check `GET node-settings` after every `scripts/lab-up.sh`. **Prevents:** a lab host that silently comes back with default settings (custom tools gone from the offer, pending-card cap back at 10 minutes) and void evidence, with nothing in the node log saying so. **Authority:** `ToolApprovalCoordinator`; `scripts/run-backend-tests.sh`.
+
 ### A lab or scratch models dir holds hard links or copies, never symlinks
 
 **Rule:** when seeding a throwaway models directory (`scripts/lab-up.sh` profile `modelsDir`, any `HuggingFace__ModelsDirectory` a live round points at), hard-link or copy the GGUF, its `.xe-model.json` sidecar and any projector from the user-level store: `ln <src> <dir>/`, never `ln -s`. Every installed-model member is refused when `FileInfo.LinkTarget` is set or the file is a reparse point, so a symlinked model is skipped at startup (`invalid acquisition sidecar` in the host log), `GET models` says `isAvailable=false`, and the lab stops at the model phase (exit 2, no manifest). **Prevents:** a round spending its first hour on a "model not installed" that is only a link. **Authority:** `InstalledGgufSnapshotStore` / `InstalledGgufDeletionStore` member checks, `ValidatedGgufImportSource.OpenNoFollow`; wiki 13 "Lab bootstrap for live rounds".
+
+### `lab-up.sh` in a worktree needs the models hard-linked, projector included, and a Debug AppHost built before `--no-build`
+
+**Rule:** before `scripts/lab-up.sh` runs from a worktree, hard-link every installed model file the round needs into that worktree's lab models dir, including the multimodal projector GGUF beside its weights, and build the AppHost once in Debug; only then is `--no-build` valid. **Prevents:** a lab that boots but reports the 27B as not installed (projector missing), or fails on a stale or absent Debug build. **Authority:** the `scripts/lab-up.sh` header; "A lab or scratch models dir holds hard links or copies, never symlinks" above.
 
 ## Containers, sandbox and External Apps (host side)
 
