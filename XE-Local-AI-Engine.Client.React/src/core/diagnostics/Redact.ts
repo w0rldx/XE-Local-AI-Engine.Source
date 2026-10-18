@@ -64,10 +64,13 @@ const TOKEN_PATTERNS: readonly RegExp[] = [
 
 // `password=…`, `api_key: …`, `password="…"` and JSON `"password": "…"` keep the key, the separator and any quotes;
 // only the value is masked. A quoted value runs to the SAME closing quote, so the other quote character may appear
-// inside it (`password="it's"`). Mirrors the server's AssignedSecretRegex: a bare value cannot start with `[` and a
-// quoted one may not start with the marker, so an already-masked value never matches again.
+// inside it (`password="it's"`), and a backslash consumes the character after it: in a JSON-serialised value `\"` is
+// an escaped quote, not the end of the secret (the console collector serialises object arguments before redacting, so
+// a password holding a quote would otherwise leak its tail). Mirrors the server's AssignedSecretRegex, quoted branch
+// included; change both together: a bare value cannot start with `[` and a quoted one may not start with the marker,
+// so an already-masked value never matches again.
 const ASSIGNMENT_PATTERN =
-	/\b(api[_-]?key|secret|password|connectionstring|client_secret|access_token|refresh_token)(["']?\s*[=:]\s*)(?:(["'])(?!\[REDACTED\])(?:(?!\3)[^\r\n]){4,}\3|[^\s,;{}"'[]{4,})/gi;
+	/\b(api[_-]?key|secret|password|connectionstring|client_secret|access_token|refresh_token)(["']?\s*[=:]\s*)(?:(")(?!\[REDACTED\])(?:\\.|[^"\\\r\n]){4,}"|(')(?!\[REDACTED\])[^'\r\n]{4,}'|[^\s,;{}"'[]{4,})/gi;
 
 // A 20+ char run of key-ish characters, masked only when isSecretShaped says so (mirrors the server's TokenRunRegex).
 const TOKEN_RUN_PATTERN = /(?<![A-Za-z0-9+/=_-])[A-Za-z0-9+/=_-]{20,}(?![A-Za-z0-9+/=_-])/g;
@@ -110,7 +113,13 @@ export function redactString(value: string): string {
 	for (const pattern of TOKEN_PATTERNS) {
 		result = result.replace(pattern, REDACTED);
 	}
-	result = result.replace(ASSIGNMENT_PATTERN, `$1$2$3${REDACTED}$3`);
+	result = result.replace(
+		ASSIGNMENT_PATTERN,
+		(_match, key: string, separator: string, doubleQuote?: string, singleQuote?: string) => {
+			const quote = doubleQuote ?? singleQuote ?? "";
+			return `${key}${separator}${quote}${REDACTED}${quote}`;
+		},
+	);
 	result = result.replace(TOKEN_RUN_PATTERN, (run) => (isSecretShaped(run) ? REDACTED : run));
 	return result.replace(EMAIL_PATTERN, "[redacted-email]").replace(HOME_PATH_PATTERN, "~");
 }

@@ -194,10 +194,10 @@ public sealed partial class SupportBundleScrubber
         RegexOptions.CultureInvariant, MatchTimeoutMilliseconds)]
     private static partial Regex KnownTokenRegex();
 
-    // A value assigned to a secret-named key: bare, JSON or YAML style, the key and the value optionally quoted. A quoted
-    // value keeps its quotes; an already-masked value never matches again.
+    // A secret-named key's value, bare or quoted. In double quotes a backslash escapes the next char (JSON); in single
+    // quotes it is literal (YAML/shell). A masked value never re-matches. Mirrors Redact.ts ASSIGNMENT_PATTERN: change both.
     [GeneratedRegex(@"\b(?<name>api[_-]?key|secret|password|connectionstring|client_secret|access_token|refresh_token)(?<separator>[""']?\s*[=:]\s*)"
-                    + @"(?:(?<quote>[""'])(?!\[redacted-token\])(?:(?!\k<quote>)[^\r\n]){4,}\k<quote>|[^\s,;{}""'\[]{4,})",
+                    + @"(?:(?<quote>"")(?!\[redacted-token\])(?:\\.|[^""\\\r\n]){4,}""|(?<quote>')(?!\[redacted-token\])[^'\r\n]{4,}'|[^\s,;{}""'\[]{4,})",
         RegexOptions.CultureInvariant | RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture, MatchTimeoutMilliseconds)]
     private static partial Regex AssignedSecretRegex();
 

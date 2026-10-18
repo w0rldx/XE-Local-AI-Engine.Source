@@ -140,9 +140,12 @@ public sealed class SupportBundleScrubberTests
     [Arguments("password=hunter22 api_key: plainkey", "password=[redacted-token] api_key: [redacted-token]")]
     [Arguments("password=\"hunter22\"", "password=\"[redacted-token]\"")]
     [Arguments("password: 'hunter22'", "password: '[redacted-token]'")]
+    [Arguments("password: 'hunter22\\' sent", "password: '[redacted-token]' sent")]
     [Arguments("{\"password\":\"hunter22\"}", "{\"password\":\"[redacted-token]\"}")]
     [Arguments("{\"api_key\": \"sk-short\", \"Client_Secret\": \"it's a secret\", \"name\": \"kept\"}",
         "{\"api_key\": \"[redacted-token]\", \"Client_Secret\": \"[redacted-token]\", \"name\": \"kept\"}")]
+    [Arguments("{\"password\":\"abcd\\\"private-value\"}", "{\"password\":\"[redacted-token]\"}")]
+    [Arguments("{\"api_key\":\"abcd\\\\\"}", "{\"api_key\":\"[redacted-token]\"}")]
     public void SecretAssignments_MaskTheValue_KeepingNameAndQuotes(string input, string expected)
     {
         var once = Posix.Scrub(input);

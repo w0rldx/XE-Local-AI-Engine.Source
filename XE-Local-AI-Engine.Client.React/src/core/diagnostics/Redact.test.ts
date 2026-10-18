@@ -139,6 +139,13 @@ describe("redactString", () => {
 		["a JSON pair", '{"password":"hunter22"}', '{"password":"[REDACTED]"}'],
 		["an apostrophe inside a double-quoted secret", 'password="it\'s a secret" end', 'password="[REDACTED]" end'],
 		["a double quote inside a single-quoted secret", "password='say \"hi\" now' end", "password='[REDACTED]' end"],
+		["a literal trailing backslash inside a single-quoted secret", "password: 'hunter22\\' sent", "password: '[REDACTED]' sent"],
+		[
+			"a JSON-escaped quote inside the secret (console args are serialised before redaction)",
+			JSON.stringify({ password: 'abcd"private-value' }),
+			'{"password":"[REDACTED]"}',
+		],
+		["a JSON-escaped backslash before the closing quote", JSON.stringify({ api_key: "abcd\\" }), '{"api_key":"[REDACTED]"}'],
 		["JSON with an apostrophe in the value", '{"secret":"don\'t tell","n":1}', '{"secret":"[REDACTED]","n":1}'],
 		[
 			"a JSON line with two secret keys",

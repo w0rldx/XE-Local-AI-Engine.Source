@@ -5,9 +5,11 @@
 set -uo pipefail
 
 DEV_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-if ! DEV_PROJECT_ROOT="$(git -C "${DEV_SCRIPT_DIR}" rev-parse --show-toplevel 2>/dev/null)"; then
-  DEV_PROJECT_ROOT="$(cd "${DEV_SCRIPT_DIR}/.." && pwd -P)"
-fi
+# The checkout is the directory above this script, by construction (scripts/ sits at the repo root). Never ask
+# git: `git -C` honours an inherited GIT_DIR or GIT_WORK_TREE (a private index, another checkout), would answer
+# with THAT repository, and dev-stop.sh would then target another checkout's AppHost, the cross-worktree stop this
+# script exists to prevent.
+DEV_PROJECT_ROOT="$(cd "${DEV_SCRIPT_DIR}/.." && pwd -P)"
 DEV_APPHOST="${XE_ASPIRE_APPHOST:-${DEV_PROJECT_ROOT}/XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj}"
 DEV_QUERY_TIMEOUT="${XE_ASPIRE_QUERY_TIMEOUT_SECONDS:-15}"
 
@@ -117,7 +119,12 @@ try:
     apps = json.load(sys.stdin)
 except (json.JSONDecodeError, TypeError):
     raise SystemExit(4)
-for app in apps if isinstance(apps, list) else []:
+# Only a LIST of application objects is a valid answer. Any other valid JSON ({}, null, a string, a list holding
+# non-objects) is a malformed query, status 4, never "no instance" (3): dev-stop.sh treats 3 as proven absence and
+# would exit 0 with the stack still running, or confirm a teardown that never happened.
+if not isinstance(apps, list) or not all(isinstance(app, dict) for app in apps):
+    raise SystemExit(4)
+for app in apps:
     path = app.get("appHostPath") or app.get("AppHostPath")
     if path and os.path.realpath(path) == target:
         dashboard = app.get("dashboardUrl") or ""

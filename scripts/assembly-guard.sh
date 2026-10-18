@@ -20,7 +20,8 @@
 #
 # What it compares
 #   For each root, every file that a build can rewrite and a test host can load: *.dll, *.exe, *.so,
-#   *.dylib, *.deps.json, *.runtimeconfig.json, and the extensionless MTP apphost. Identity is
+#   *.dylib, *.deps.json, *.runtimeconfig.json, and every executable file: the MTP apphost is named after
+#   the project, dots included (XE-Local-AI-Engine.Tests), so "no extension" never matches it. Identity is
 #   (size, mtime-with-sub-second-precision). Test runs write logs, .trx and temp files into these
 #   trees all the time; none of those are tracked, so a normal run produces no diff.
 #
@@ -92,7 +93,7 @@ write_manifest() {
     find "${root}" -type f \
       \( -name '*.dll' -o -name '*.exe' -o -name '*.so' -o -name '*.dylib' \
          -o -name '*.deps.json' -o -name '*.runtimeconfig.json' \
-         -o \( -perm -u+x -not -name '*.*' \) \) \
+         -o -perm -u+x \) \
       -printf '%s\t%T@\t%p\n' 2>/dev/null
   done | LC_ALL=C sort -t'	' -k3 >>"${out}"
 }

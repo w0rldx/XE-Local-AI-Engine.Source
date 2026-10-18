@@ -369,4 +369,32 @@ grep -Fq "Startup session anchor identity changed; refusing to signal that sessi
 grep -Fq "chmod 700 \"\${private_dir}\"" "${SCRIPT_DIR}/dev-start.sh"
 grep -Fq "rm -rf -- \"\${private_dir}\"" "${SCRIPT_DIR}/dev-start.sh"
 
+# The AppHost belongs to the checkout the helper lives in, whatever git-selecting variables the caller inherited:
+# `git -C` honours GIT_DIR/GIT_WORK_TREE, so a helper that asked git for the top level would hand dev-stop.sh
+# ANOTHER checkout's AppHost.
+FOREIGN="${TEMP_ROOT}/other-checkout"
+mkdir -p "${FOREIGN}/scripts" "${FOREIGN}/XE-Local-AI-Engine.AppHost"
+cp "${SCRIPT_DIR}/dev-aspire-common.sh" "${FOREIGN}/scripts/"
+git -C "${FOREIGN}" init -q
+# shellcheck disable=SC2016 # the body expands in the child shell
+resolved="$(env -u XE_ASPIRE_APPHOST GIT_DIR="${PROJECT_ROOT}/.git" GIT_WORK_TREE="${PROJECT_ROOT}" bash -c \
+  'source "$1/scripts/dev-aspire-common.sh"; printf "%s" "${DEV_APPHOST}"' _ "${FOREIGN}")"
+expected="$(cd "${FOREIGN}" && pwd -P)/XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj"
+[[ "${resolved}" == "${expected}" ]] || { echo "FAIL: DEV_APPHOST followed the inherited git variables: ${resolved}" >&2; exit 1; }
+
+# `aspire ps` JSON that is valid but not a list of application objects is a FAILED query (4), never absence (3):
+# dev-stop.sh exits 0 on 3 believing nothing runs, and confirms a teardown on 3 during cleanup.
+shape_status() {
+  local status=0
+  bash -c 'shape="$2"; source "$1/dev-aspire-common.sh"; dev_aspire_ps_json() { printf "%s" "${shape}"; }; dev_matching_app_json >/dev/null' \
+    _ "${SCRIPT_DIR}" "$1" || status=$?
+  echo "${status}"
+}
+for shape in '{}' 'null' '"x"' '[1, "x"]' '[{}, 2]' 'not json'; do
+  [[ "$(shape_status "${shape}")" -eq 4 ]] || { echo "FAIL: aspire ps answer ${shape} must be status 4, got $(shape_status "${shape}")" >&2; exit 1; }
+done
+[[ "$(shape_status '[]')" -eq 3 ]] || { echo "FAIL: an empty list must be status 3" >&2; exit 1; }
+[[ "$(shape_status '[{"appHostPath":"/elsewhere/Other.csproj","appHostPid":7}]')" -eq 3 ]] \
+  || { echo "FAIL: a list without this AppHost must be status 3" >&2; exit 1; }
+
 echo "dev-aspire-helpers.test.sh: PASS"
