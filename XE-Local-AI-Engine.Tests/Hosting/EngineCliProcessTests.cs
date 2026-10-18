@@ -576,7 +576,9 @@ public sealed class EngineCliProcessTests : IDisposable
         string nodeName = DefaultNodeName,
         string? standardInput = null)
     {
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        // 90 s, not 30: a real `--setup` measures 14-15 s idle at width 1 and timed out twice at 30 s on a shared 4-core
+        // CI runner under four parallel groups with coverage (2026-10-18). Every caller still asserts exit code and output.
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
         using var process = new Process
         {
             StartInfo = CreateStartInfo(arguments, launchMode, dataDirectory ?? _root, adminPassword, nodeName)
