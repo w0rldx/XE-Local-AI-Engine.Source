@@ -4179,6 +4179,7 @@
 				"addAllowedUrl": "Link hinzufügen",
 				"addBinding": "Bindung hinzufügen",
 				"addLabel": "Label hinzufügen",
+				"addLevel": "Stufe hinzufügen",
 				"advanced": "Erweitert",
 				"agent": "Agent",
 				"agentPlaceholder": "Der Standardagent dieses Knotens",
@@ -4201,9 +4202,17 @@
 				"cloudModelHelp": "Cloud-Modelle laufen nur, wenn „Cloud-Modelle unbeaufsichtigt ausführen lassen“ unter Node-Einstellungen → Datenschutz & Updates eingeschaltet ist oder die externe Verbindung des Modells unbeaufsichtigte Läufe erlaubt.",
 				"cloudModelLabel": "{{label}} · {{provider}} (Cloud)",
 				"conditionPathHelp": "Ausgehende Kanten ohne eigenen Pfad vergleichen diesen.",
+				"criterionPlaceholder": "Optionale Beschreibung dieses Labels",
+				"criterionValue": "Beschreibung von Label {{index}}",
+				"decisionModelHelp": "Hier laufen nur installierte Modelle vom Typ Entscheidung. Importieren Sie eines in der Modellverwaltung.",
+				"decisionModelPlaceholder": "Installiertes Entscheidungsmodell wählen",
 				"decisionProvider": "Anbieter",
+				"decisionProviderHint": {
+					"systemone": "Natives Entscheidungsmodell; die Wahrscheinlichkeiten meldet das Modell selbst, sie sind nicht kalibriert."
+				},
 				"decisionProviderName": {
-					"llm": "Sprachmodell"
+					"llm": "Sprachmodell",
+					"systemone": "Natives Entscheidungsmodell (systemone)"
 				},
 				"decisionProviderPlaceholder": "Sprachmodell (Standard)",
 				"defaultInput": "Standardeingabe (JSON)",
@@ -4230,6 +4239,8 @@
 				"labelValue": "Label {{index}}",
 				"labels": "Labels",
 				"labelsHelp": "2 bis 32 verschiedene Labels mit je höchstens 64 Zeichen.",
+				"levels": "Stufen, niedrigste zuerst",
+				"levelsHelp": "2 bis 10 verschiedene Stufen, niedrigste zuerst. output.score ist stufenlos; output.choice ist die nächstgelegene Stufe.",
 				"llmModelPlaceholder": "Lokales Standardmodell des Nodes",
 				"llmPrompt": "Prompt",
 				"maxAttempts": "Maximale Versuche",
@@ -4246,6 +4257,14 @@
 				"publishToChat": "Ergebnis im Chat veröffentlichen",
 				"question": "Frage",
 				"questionHelp": "Worüber das Modell entscheidet. Ausgehende Kanten verzweigen nach output.choice.",
+				"questionHelpNoul": "Eine Ja/Nein-Frage. output.noul ist P(ja) von 0 bis 1: verzweigen Sie mit Gte nach output.noul oder mit Eq nach output.choice, das wörtlich yes oder no enthält.",
+				"questionHelpScore": "Was das Modell auf den Stufen unten bewertet. Verzweigen Sie mit Gte oder Lt nach output.score.",
+				"questionType": "Fragetyp",
+				"questionTypeName": {
+					"choice": "Auswahl (ein Label wählen)",
+					"noul": "Ja/Nein",
+					"score": "Bewertung (geordnete Stufen)"
+				},
 				"reasoningEffort": "Reasoning-Aufwand",
 				"reasoningEffortPlaceholder": "Standard des Anbieters",
 				"remove": "Knoten löschen",
@@ -4300,9 +4319,16 @@
 					"conditionNeedsTwoOutbound": "„{{subject}}“ ist ein Bedingungsknoten und braucht mindestens zwei ausgehende Kanten.",
 					"cycle": "Der Graph führt auf sich selbst zurück. Ein Graph-Workflow darf nur vorwärts laufen.",
 					"danglingNonEnd": "„{{subject}}“ hat keine ausgehende Kante. Nur ein End-Knoten darf eine Sackgasse sein.",
+					"decisionCriteriaKeyUnknown": "„{{subject}}“ beschreibt ein Label, das es nicht anbietet. Jeder Kriterienschlüssel muss eines der Labels sein.",
+					"decisionCriteriaTooLong": "„{{subject}}“ hat eine Label-Beschreibung mit mehr als 512 Zeichen.",
+					"decisionInputBindingRequired": "„{{subject}}“ nutzt den nativen Entscheidungsanbieter und braucht mindestens eine Eingabebindung: Der gebundene Text ist das, worüber er entscheidet.",
 					"decisionLabelsInvalid": "„{{subject}}“ braucht 2 bis 32 verschiedene, nicht leere Labels mit höchstens 64 Zeichen.",
+					"decisionModelRequired": "„{{subject}}“ nutzt den nativen Entscheidungsanbieter und muss ein installiertes Entscheidungsmodell nennen.",
+					"decisionNoulHasLabels": "„{{subject}}“ stellt eine Ja/Nein-Frage, die weder Labels noch Kriterien annimmt.",
 					"decisionProviderUnknown": "„{{subject}}“ nennt einen Entscheidungsanbieter, den diese Version nicht kennt.",
 					"decisionQuestionMissing": "„{{subject}}“ ist eine Modellentscheidung ohne Frage.",
+					"decisionScoreLevelsInvalid": "„{{subject}}“ braucht 2 bis 10 verschiedene, nicht leere Stufen mit höchstens 64 Zeichen und keine Kriterien.",
+					"decisionTypeUnsupportedByProvider": "„{{subject}}“ stellt eine Ja/Nein- oder Bewertungsfrage, die nur der native Entscheidungsanbieter beantwortet.",
 					"duplicateEdgeKey": "Der Schlüssel „{{subject}}“ ist bereits vergeben. Knoten und Kanten teilen sich einen Schlüsselraum.",
 					"duplicateNodeKey": "Zwei Knoten verwenden den Schlüssel „{{subject}}“. Jeder Knoten- und Kantenschlüssel muss eindeutig sein.",
 					"endHasOutbound": "„{{subject}}“ ist ein End-Knoten und darf keine ausgehenden Kanten haben.",
@@ -4471,13 +4497,17 @@
 					"invalid": "Erlaubt sind Buchstaben, Ziffern, Bindestriche und Unterstriche, höchstens 64 Zeichen."
 				},
 				"labels": {
-					"invalid": "Verwenden Sie 2 bis 32 verschiedene, nicht leere Labels mit höchstens 64 Zeichen."
+					"invalid": "Verwenden Sie 2 bis 32 verschiedene, nicht leere Labels mit höchstens 64 Zeichen.",
+					"levelsInvalid": "Verwenden Sie 2 bis 10 verschiedene, nicht leere Stufen mit höchstens 64 Zeichen."
 				},
 				"llmPrompt": {
 					"required": "Geben Sie den Prompt ein, den das Modell erhält."
 				},
 				"maxAttempts": {
 					"range": "Geben Sie eine ganze Zahl zwischen 1 und 100 ein."
+				},
+				"model": {
+					"decisionRequired": "Wählen Sie das Entscheidungsmodell, das dieser Knoten ausführt."
 				},
 				"name": {
 					"required": "Geben Sie einen Namen ein.",
@@ -4494,6 +4524,9 @@
 				},
 				"question": {
 					"required": "Geben Sie die Frage ein, über die das Modell entscheidet."
+				},
+				"questionType": {
+					"unsupportedByProvider": "Der Sprachmodell-Anbieter beantwortet nur Auswahlfragen. Wählen Sie den nativen Entscheidungsanbieter."
 				},
 				"responseJsonSchema": {
 					"notObject": "Geben Sie ein JSON-Objektschema ein oder lassen Sie das Feld leer."
@@ -4542,6 +4575,12 @@
 				"close": "Schließen",
 				"completed": "beendet {{when}}",
 				"decisionChoice": "Gewählt: {{choice}}",
+				"decisionConfidence": "Konfidenz {{confidence}}",
+				"decisionNoul": "P(ja) {{probability}}: {{answer}}",
+				"decisionNoulOnly": "P(ja) {{probability}}",
+				"decisionScore": "Bewertung {{score}}, nächste Stufe {{level}}",
+				"decisionUncalibrated": "Vom Modell gemeldet, nicht kalibriert.",
+				"decisionUnsupportedType": "Diese Version kann diesen Ergebnistyp nicht anzeigen. Die Rohausgabe steht unten.",
 				"emptyDocument": "Die Laufzeit hat hier nichts aufgezeichnet.",
 				"joinOutput": "Ein Zusammenführungsknoten gibt eine Zuordnung aus, deren Schlüssel der Knoten ist, aus dem der jeweilige Zweig kam.",
 				"loadFailed": "Dieser Knoten konnte nicht geladen werden.",
@@ -5985,6 +6024,7 @@
 				"useCases": {
 					"chat": "Chat",
 					"coding": "Programmierung",
+					"decision": "Entscheidung",
 					"embedding": "Embedding",
 					"general": "Allgemein",
 					"multimodal": "Multimodal",
@@ -6214,6 +6254,7 @@
 				"columnHeader": "Typ",
 				"kind": {
 					"chat": "Chat",
+					"decision": "Entscheidung",
 					"draft": "Entwurf (spekulatives Decoding)",
 					"embedding": "Embedding",
 					"reranker": "Reranker",

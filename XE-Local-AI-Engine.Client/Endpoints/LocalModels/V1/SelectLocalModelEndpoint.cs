@@ -36,6 +36,12 @@ public sealed class SelectLocalModelEndpoint : Endpoint<SelectLocalModelRequest,
 
         var result = await _administrationService
             .SelectDefaultAsync(req.ModelName, LocalModelSelectionPolicy.ConfiguredModel, ct);
+        if (!result.Succeeded)
+        {
+            AddError(result.DisplayMessage ?? "The model cannot be selected as the default.");
+            await Send.ErrorsAsync(cancellation: ct);
+            return;
+        }
 
         await Send.OkAsync(new SelectLocalModelResponse
         {

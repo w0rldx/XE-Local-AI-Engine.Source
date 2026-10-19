@@ -19,7 +19,13 @@ public enum ModelKind
     ///     Speculative-decoding draft model (an MTP drafter). Has no standalone chat use — it loads inside a chat
     ///     process as the drafter — so it is excluded from every chat picker and offered only as the node's draft model.
     /// </summary>
-    Draft = 4
+    Draft = 4,
+
+    /// <summary>
+    ///     Native decision model (a GGUF declaring <c>&lt;arch&gt;.decision.type</c>): it answers classification
+    ///     questions through llama-server's <c>/v1/systemone</c> and generates no text, so it is never a chat model.
+    /// </summary>
+    Decision = 5
 
     // Reserved for future growth (append only, do NOT renumber): Vision, CodeCompletion, Moderation.
 }

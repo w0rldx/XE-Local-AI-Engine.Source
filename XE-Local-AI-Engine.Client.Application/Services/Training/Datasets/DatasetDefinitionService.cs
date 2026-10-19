@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 public interface IDatasetDefinitionService
 {
@@ -37,6 +38,7 @@ public sealed class DatasetDefinitionService : IDatasetDefinitionService
     private readonly IToolApprovalPolicy _approvalPolicy;
     private readonly IModelCapabilityResolver _capabilityResolver;
     private readonly IModelClassificationStore _classifications;
+    private readonly IGgufModelStore _ggufModels;
     private readonly ILocalToolOfferProvider _offerProvider;
     private readonly ITrainingDatasetStore _store;
 
@@ -44,16 +46,19 @@ public sealed class DatasetDefinitionService : IDatasetDefinitionService
         ILocalToolOfferProvider offerProvider,
         IToolApprovalPolicy approvalPolicy,
         IModelCapabilityResolver capabilityResolver,
-        IModelClassificationStore classifications)
+        IModelClassificationStore classifications,
+        IGgufModelStore ggufModels)
     {
         ArgumentNullException.ThrowIfNull(approvalPolicy);
         ArgumentNullException.ThrowIfNull(capabilityResolver);
         ArgumentNullException.ThrowIfNull(classifications);
+        ArgumentNullException.ThrowIfNull(ggufModels);
         ArgumentNullException.ThrowIfNull(offerProvider);
         ArgumentNullException.ThrowIfNull(store);
         _approvalPolicy = approvalPolicy;
         _capabilityResolver = capabilityResolver;
         _classifications = classifications;
+        _ggufModels = ggufModels;
         _offerProvider = offerProvider;
         _store = store;
     }
@@ -150,13 +155,14 @@ public sealed class DatasetDefinitionService : IDatasetDefinitionService
         };
     }
 
-    /// <summary>A reranker or embedder can only fail at generation, so it is refused at save, as the benchmark side does.</summary>
+    /// <summary>A reranker, embedder or decision model can only fail at generation, so it is refused at save, as the benchmark side does.</summary>
     private async Task EnsureTextGenerationModelAsync(string modelName, string role, CancellationToken cancellationToken)
     {
         var classification = await _classifications.GetByNameAsync(modelName, cancellationToken);
-        if (!LocalGgufModelKindClassifier.IsChatModel(modelName, classification))
+        var decisionType = await LocalGgufModelKindClassifier.ReadDecisionTypeAsync(_ggufModels, modelName, cancellationToken);
+        if (!LocalGgufModelKindClassifier.IsChatModel(modelName, classification, decisionType))
         {
-            throw new TrainingValidationException($"'{modelName}' is not a text-generation model (a reranker, embedder or draft model cannot be the {role}).");
+            throw new TrainingValidationException($"'{modelName}' is not a text-generation model (a reranker, embedder, draft or decision model cannot be the {role}).");
         }
     }
 

@@ -67,7 +67,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     /// </summary>
     /// <remarks>
     ///     Chat processes count against <see cref="LlamaServerSupervisorOptions.MaxLoadedProcesses" />, companions (embedding,
-    ///     reranker) against <see cref="LlamaServerSupervisorOptions.MaxLoadedCompanionProcesses" />, each by its
+    ///     reranker, decision) against <see cref="LlamaServerSupervisorOptions.MaxLoadedCompanionProcesses" />, each by its
     ///     <em>reserved-port</em> count, so in-flight spawns are included — see wiki 03, "Eviction &amp; reaper". A
     ///     <see cref="ModelResidencyIntent.Background" /> spawn never evicts a live chat process.
     /// </remarks>
@@ -459,7 +459,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     }
 
     private static bool IsCompanion(ModelRole role) =>
-        role is ModelRole.Embedding or ModelRole.Reranker;
+        role is ModelRole.Embedding or ModelRole.Reranker or ModelRole.Decision;
 
     private static LlamaRuntimeException CapReached()
     {

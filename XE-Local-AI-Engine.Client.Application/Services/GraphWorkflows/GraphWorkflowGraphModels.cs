@@ -79,14 +79,22 @@ internal sealed record GraphWorkflowChatInputConfig : GraphWorkflowNodeConfig
 }
 
 /// <summary>
-///     A classifier node: <see cref="Question" /> asked of a decision provider, answered with exactly one of
-///     <see cref="Labels" />. <see cref="Provider" /> is a closed vocabulary; <c>llm</c> lowers to an LLM call.
+///     A classifier node: <see cref="Question" /> asked of a decision provider as a <see cref="QuestionType" /> question.
+///     <see cref="Provider" /> is a closed vocabulary: <c>llm</c> lowers a choice to an LLM call, <c>systemone</c> asks a
+///     native decision model through llama-server.
 /// </summary>
 internal sealed record GraphWorkflowDecisionModelConfig : GraphWorkflowNodeConfig
 {
     public required string Question { get; init; }
 
+    /// <summary><c>choice</c> (the default), <c>noul</c> or <c>score</c>; <c>llm</c> answers <c>choice</c> only.</summary>
+    public string QuestionType { get; init; } = GraphWorkflowGraph.DecisionChoice;
+
+    /// <summary>Choice: the options. Score: the ordered levels, lowest first. Noul: empty.</summary>
     public required IReadOnlyList<string> Labels { get; init; }
+
+    /// <summary>Choice only: an optional description per label, keyed by label.</summary>
+    public IReadOnlyDictionary<string, string> Criteria { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
 
     public required string Provider { get; init; }
 

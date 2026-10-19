@@ -41,7 +41,7 @@ this file holds only the traps those pages lack. Benchmarks, knowledge base, tra
 
 ### Model kind classification
 
-**Rule:** `ModelKind` includes Reranker; test reranker names before embedding names. The capability-classification cache is digest-keyed, so an Ollama capability change without a digest change stays cached. **Prevents:** rerankers classified as embedding models; expecting a re-probe that never happens. **Authority:** `ModelKind` (`Client.Persistence`).
+**Rule:** `ModelKind` includes Reranker and Decision; a GGUF whose header declares `<arch>.decision.type` is Decision before any name rule (Kev-4B is a `qwen35` with a tool-calling chat template), and test reranker names before embedding names. The capability-classification cache is digest-keyed, so an Ollama capability change without a digest change stays cached. **Prevents:** rerankers classified as embedding models; expecting a re-probe that never happens. **Authority:** `ModelKind` (`Client.Persistence`).
 
 ### Local-default chat resolution must stay Ollama-blind
 
@@ -117,3 +117,4 @@ Superseded claims; the entries above are the active rules.
 | Advisor runs an llmfit container/HostAgent. | It uses in-process fit estimation and live HF discovery (§3). |
 | Recommendation is raw-size descending. | Explore ranking is capability-bucketed (§3). |
 | `ModelKind` has only Unknown/Chat/Embedding. | Reranker is a fourth kind and is checked first (§3). |
+| An installed GGUF's kind comes from its name alone. | A header `<arch>.decision.type` classifies `Decision` first, ahead of the draft marker, every name rule and the Chat default (`LocalGgufModelKindClassifier.Classify(name, decisionType)`); names still decide the rest. |

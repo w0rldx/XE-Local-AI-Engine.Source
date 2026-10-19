@@ -198,7 +198,8 @@ internal sealed class BenchmarkCatalogService : IBenchmarkCatalogService
             facts.Role,
             facts.ModelName,
             await _classifications.GetByNameAsync(facts.ModelName, cancellationToken),
-            "benchmark");
+            "benchmark",
+            await LocalGgufModelKindClassifier.ReadDecisionTypeAsync(_ggufModels, facts.ModelName, cancellationToken));
         return facts;
     }
 
@@ -228,7 +229,8 @@ internal sealed class BenchmarkCatalogService : IBenchmarkCatalogService
         {
             BenchmarkModelEligibility.Validate(lease.Snapshot,
                 await _classifications.GetByNameAsync(lease.Snapshot.ModelName, cancellationToken),
-                "benchmark");
+                "benchmark",
+                await LocalGgufModelKindClassifier.ReadDecisionTypeAsync(_ggufModels, lease.Snapshot.ModelName, cancellationToken));
             return lease;
         }
         catch

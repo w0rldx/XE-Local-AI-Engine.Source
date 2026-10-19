@@ -25,7 +25,7 @@ public sealed class ModelFitRequestValidator
     /// </remarks>
     public const int MaxLimit = 50;
 
-    /// <summary>The six llmfit-supported use-case values. Matched ordinally and case-sensitively.</summary>
+    /// <summary>The six llmfit-supported use-case values plus <c>decision</c> (native decision models). Matched ordinally and case-sensitively.</summary>
     public static readonly IReadOnlySet<string> AllowedUseCases =
         new HashSet<string>(StringComparer.Ordinal)
         {
@@ -34,7 +34,8 @@ public sealed class ModelFitRequestValidator
             "reasoning",
             "chat",
             "multimodal",
-            "embedding"
+            "embedding",
+            "decision"
         };
 
     /// <summary>

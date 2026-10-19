@@ -25,6 +25,13 @@ public sealed class ModelFitMapperRoleTests
     }
 
     [Test]
+    public void TheDecisionRole_RoundTripsItsWireToken()
+    {
+        AssertEx.Equal(ModelRole.Decision, ModelFitMapper.TryParseRole("Decision")!.Value);
+        AssertEx.Equal("decision", ModelRole.Decision.ToWireString());
+    }
+
+    [Test]
     [Arguments(true, false, "responsive")]
     [Arguments(false, false, "unresponsive")]
     [Arguments(false, true, "exited")]

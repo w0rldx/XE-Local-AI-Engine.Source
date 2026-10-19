@@ -457,6 +457,83 @@ describe("validateGraphWorkflowGraph mirrors the chat-contract refusals", () => 
 		expect(rulesOf(chatWith("classify", { question: "Which?", labels: ["a", "b"] }))).toEqual([]);
 	});
 
+	describe("DecisionModel type × provider matrix", () => {
+		const native = { question: "Which?", provider: "systemone", model: "julia-1", inputBindings: { text: "input.text" } };
+		const decide = (config: Record<string, unknown>) => rulesOf(chatWith("classify", config));
+
+		it("accepts each question type on systemone in its legal shape", () => {
+			expect(decide({ ...native, labels: ["a", "b"], criteria: { a: "about a" } })).toEqual([]);
+			expect(decide({ ...native, questionType: "choice", labels: ["a", "b"] })).toEqual([]);
+			expect(decide({ ...native, questionType: "score", labels: ["low", "mid", "high"] })).toEqual([]);
+			expect(decide({ ...native, questionType: "noul" })).toEqual([]);
+		});
+
+		it("decisionCriteriaKeyUnknown: a criteria key that is not a label, or criteria that is not an object", () => {
+			expect(decide({ ...native, labels: ["a", "b"], criteria: { c: "not offered" } })).toEqual(["decisionCriteriaKeyUnknown"]);
+			expect(decide({ ...native, labels: ["a", "b"], criteria: ["a"] })).toEqual(["decisionCriteriaKeyUnknown"]);
+		});
+
+		it("decisionScoreLevelsInvalid: fewer than 2 or more than 10 levels, or any criteria", () => {
+			const eleven = Array.from({ length: 11 }, (_, index) => `l${index}`);
+			for (const config of [
+				{ labels: ["only"] },
+				{ labels: eleven },
+				{ labels: ["low", "low"] },
+				{ labels: ["low", "high"], criteria: { low: "x" } },
+			]) {
+				expect(decide({ ...native, questionType: "score", ...config }), JSON.stringify(config)).toEqual([
+					"decisionScoreLevelsInvalid",
+				]);
+			}
+			expect(decide({ ...native, questionType: "score", labels: eleven.slice(0, 10) })).toEqual([]);
+		});
+
+		it("decisionNoulHasLabels: labels or criteria on a yes/no question", () => {
+			expect(decide({ ...native, questionType: "noul", labels: ["yes", "no"] })).toEqual(["decisionNoulHasLabels"]);
+			expect(decide({ ...native, questionType: "noul", criteria: {} })).toEqual(["decisionNoulHasLabels"]);
+		});
+
+		it("decisionTypeUnsupportedByProvider: llm (explicit or absent) answers choice only", () => {
+			expect(decide({ question: "Which?", questionType: "noul" })).toEqual(["decisionTypeUnsupportedByProvider"]);
+			expect(decide({ question: "Which?", provider: "llm", questionType: "score", labels: ["low", "high"] })).toEqual([
+				"decisionTypeUnsupportedByProvider",
+			]);
+			expect(decide({ question: "Which?", provider: "llm", questionType: "choice", labels: ["a", "b"] })).toEqual([]);
+		});
+
+		it("decisionCriteriaTooLong: a description over the server's 512-character cap", () => {
+			const labels = ["a", "b"];
+			expect(decide({ ...native, labels, criteria: { a: "x".repeat(513) } })).toEqual(["decisionCriteriaTooLong"]);
+			expect(decide({ ...native, labels, criteria: { a: "x".repeat(512) } })).toEqual([]);
+		});
+
+		it("leaves an unknown questionType to the server rather than calling it a yes/no or score question", () => {
+			expect(decide({ question: "Which?", questionType: "ranking" })).toEqual([]);
+			expect(
+				decisionModelConfigSchema.safeParse({
+					question: "Q",
+					questionType: "ranking",
+					labels: [],
+					criteria: {},
+					provider: null,
+					model: null,
+					inputBindings: [],
+				}).success,
+			).toBe(true);
+		});
+
+		it("decisionInputBindingRequired: systemone with no binding has no text to decide on; llm is unaffected", () => {
+			expect(decide({ ...native, inputBindings: undefined, labels: ["a", "b"] })).toEqual(["decisionInputBindingRequired"]);
+			expect(decide({ ...native, inputBindings: {}, questionType: "noul" })).toEqual(["decisionInputBindingRequired"]);
+			expect(decide({ question: "Which?", labels: ["a", "b"] })).toEqual([]);
+		});
+
+		it("decisionModelRequired: systemone without a model", () => {
+			expect(decide({ ...native, model: undefined, labels: ["a", "b"] })).toEqual(["decisionModelRequired"]);
+			expect(decide({ ...native, model: " ", questionType: "noul" })).toEqual(["decisionModelRequired"]);
+		});
+	});
+
 	it("pauseOffersAnswer", () => {
 		const offered = liveGraph();
 		const nodes = offered.nodes?.map((node) =>
@@ -556,6 +633,17 @@ describe("every rule has an English message", () => {
 });
 
 describe("config form schemas", () => {
+	/** A valid llm choice DecisionModel as the drawer holds it; each case overrides one member. */
+	const decisionForm = {
+		question: "Q",
+		questionType: null,
+		labels: ["a", "b"],
+		criteria: {},
+		provider: null,
+		model: null,
+		inputBindings: [],
+	};
+
 	it("accepts the eight-node graph's own config shapes", () => {
 		expect(startConfigSchema.safeParse({ inputSchema: null, defaultInput: null, aliases: [] }).success).toBe(true);
 		expect(
@@ -598,18 +686,37 @@ describe("config form schemas", () => {
 		expect(conditionConfigSchema.safeParse({ path: "out\uFEFFput.json" }).success).toBe(true);
 	});
 
+	it("accepts a native score form and a native yes/no form with no labels", () => {
+		const native = { ...decisionForm, provider: "systemone", model: "laya" };
+		expect(decisionModelConfigSchema.safeParse({ ...native, questionType: "score", labels: ["low", "high"] }).success).toBe(true);
+		expect(decisionModelConfigSchema.safeParse({ ...native, questionType: "noul", labels: [] }).success).toBe(true);
+	});
+
 	it("answers an i18n KEY, not a sentence, for every field it refuses", () => {
 		const cases = [
 			[chatInputConfigSchema, { prompt: " " }, "pages.graphWorkflows.form.prompt.required"],
+			[decisionModelConfigSchema, { ...decisionForm, question: "" }, "pages.graphWorkflows.form.question.required"],
+			[decisionModelConfigSchema, { ...decisionForm, labels: ["a"] }, "pages.graphWorkflows.form.labels.invalid"],
 			[
 				decisionModelConfigSchema,
-				{ question: "", labels: ["a", "b"], inputBindings: [] },
-				"pages.graphWorkflows.form.question.required",
+				{
+					...decisionForm,
+					questionType: "score",
+					provider: "systemone",
+					model: "m",
+					labels: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"],
+				},
+				"pages.graphWorkflows.form.labels.levelsInvalid",
 			],
 			[
 				decisionModelConfigSchema,
-				{ question: "Q", labels: ["a"], inputBindings: [] },
-				"pages.graphWorkflows.form.labels.invalid",
+				{ ...decisionForm, questionType: "noul", labels: [] },
+				"pages.graphWorkflows.form.questionType.unsupportedByProvider",
+			],
+			[
+				decisionModelConfigSchema,
+				{ ...decisionForm, provider: "systemone", model: " " },
+				"pages.graphWorkflows.form.model.decisionRequired",
 			],
 			[nodeCommonSchema, { key: "not a key", label: "" }, "pages.graphWorkflows.form.key.invalid"],
 			[nodeCommonSchema, { key: "a", label: "", maxAttempts: 101 }, "pages.graphWorkflows.form.maxAttempts.range"],

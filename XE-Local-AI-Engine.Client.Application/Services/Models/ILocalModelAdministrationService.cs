@@ -10,6 +10,7 @@ public static class LocalModelAdministrationFailureCodes
 {
     public const string InvalidModelName = "invalid_model_name";
     public const string ModelNotInstalled = "model_not_installed";
+    public const string ModelKindNotChat = "model_kind_not_chat";
 }
 
 public sealed class LocalModelDeletionResult

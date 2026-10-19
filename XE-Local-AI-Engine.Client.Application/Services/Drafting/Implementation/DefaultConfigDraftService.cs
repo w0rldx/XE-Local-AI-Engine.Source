@@ -231,9 +231,9 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
 
         // A fresh GGUF has no row, so an installed one uses the shared GGUF chat rule (override, row, then name).
         var installedGguf = await _ggufModelStore.ListInstalledModelsAsync(cancellationToken);
-        if (installedGguf.Any(descriptor => string.Equals(descriptor.ModelName, modelName, StringComparison.OrdinalIgnoreCase)))
+        if (installedGguf.FirstOrDefault(descriptor => string.Equals(descriptor.ModelName, modelName, StringComparison.OrdinalIgnoreCase)) is { } installed)
         {
-            return LocalGgufModelKindClassifier.IsChatModel(modelName, classification) ? LlamaServerProviderConstants.ProviderName : null;
+            return LocalGgufModelKindClassifier.IsChatModel(modelName, classification, installed.DecisionType) ? LlamaServerProviderConstants.ProviderName : null;
         }
 
         // An Ollama model needs a persisted Chat row: drafting must not be the thing that discovers its kind.

@@ -293,6 +293,6 @@ public sealed class HardwareProfileResponse
     /// <summary>The model the offload figures describe, or null when no load has been observed.</summary>
     public string? GpuOffloadModelName { get; init; }
 
-    /// <summary>The role (<c>chat|embedding|reranker</c>) the observed process serves, or null.</summary>
+    /// <summary>The role (<c>chat|embedding|reranker|decision</c>) the observed process serves, or null.</summary>
     public string? GpuOffloadRole { get; init; }
 }

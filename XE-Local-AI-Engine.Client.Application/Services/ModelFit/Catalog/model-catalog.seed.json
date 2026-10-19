@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026.10.4",
-  "updatedAt": "2026-10-06",
+  "catalogVersion": "2026.10.5",
+  "updatedAt": "2026-10-19",
   "models": [
     {
       "id": "qwen3-0.6b",
@@ -722,6 +722,57 @@
       "minLlamaCppTag": "b9692",
       "releaseDate": "2024-02-10",
       "notes": "The knowledge base's one-click embedding model."
+    },
+    {
+      "id": "laya",
+      "family": "Laya",
+      "displayName": "Laya (decision)",
+      "publisher": "convaiinnovations",
+      "ggufRepo": "ggml-org/Laya-GGUF",
+      "license": "apache-2.0",
+      "tier": "A",
+      "useCases": ["decision"],
+      "totalParamsB": 0.421,
+      "activeParamsB": null,
+      "moe": false,
+      "contextLength": 8192,
+      "minLlamaCppTag": "b11669",
+      "releaseDate": "2026-10-01",
+      "notes": "Native decision model for DecisionModel nodes with provider systemone; English only."
+    },
+    {
+      "id": "kev-4b",
+      "family": "Kev",
+      "displayName": "Kev-4B (decision)",
+      "publisher": "jaredpalmer",
+      "ggufRepo": "ggml-org/Kev-4B-GGUF",
+      "license": "apache-2.0",
+      "tier": "A",
+      "useCases": ["decision"],
+      "totalParamsB": 4.2,
+      "activeParamsB": null,
+      "moe": false,
+      "contextLength": 262144,
+      "minLlamaCppTag": "b11669",
+      "releaseDate": "2026-10-01",
+      "notes": "Native decision model on a Qwen3.5-4B base for DecisionModel nodes with provider systemone; the engine runs it at an 8192-token window."
+    },
+    {
+      "id": "julia-1",
+      "family": "Julia",
+      "displayName": "Julia-1 (decision)",
+      "publisher": "SupersonicLabs",
+      "ggufRepo": "ggml-org/Julia-1-GGUF",
+      "license": "apache-2.0",
+      "tier": "A",
+      "useCases": ["decision"],
+      "totalParamsB": 0.144,
+      "activeParamsB": null,
+      "moe": false,
+      "contextLength": 8192,
+      "minLlamaCppTag": "b11669",
+      "releaseDate": "2026-10-01",
+      "notes": "Small multilingual native decision model for DecisionModel nodes with provider systemone. In the 2026-10-19 live check it labelled a plain bug report as a feature request in English and German with near-certain confidence, where Laya and Kev-4B answered correctly: verify it on your own inputs before routing on it."
     },
     {
       "id": "llama-3.1-8b-instruct",

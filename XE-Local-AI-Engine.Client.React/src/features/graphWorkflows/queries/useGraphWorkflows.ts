@@ -320,6 +320,21 @@ export function useGraphWorkflowLlmModelOptions(options: FeedOptions = {}) {
 	});
 }
 
+/**
+ * A `systemone` DecisionModel node runs a native decision model through llama-server, so only installed
+ * node-managed GGUFs classified `Decision` qualify. Same list query as above, so no extra request.
+ */
+export function useGraphWorkflowDecisionModelOptions(options: FeedOptions = {}) {
+	return useQuery({
+		...listLocalModelsOptions(),
+		enabled: options.enabled ?? true,
+		select: (data) =>
+			(data.items ?? [])
+				.filter((model) => model.kind === "Decision" && model.provider === LLAMACPP_PROVIDER)
+				.map(toGraphWorkflowModelOption),
+	});
+}
+
 function useDefinitionRefresh(): (definitionId?: string) => Promise<void> {
 	const queryClient = useQueryClient();
 	return async (definitionId?: string): Promise<void> => {

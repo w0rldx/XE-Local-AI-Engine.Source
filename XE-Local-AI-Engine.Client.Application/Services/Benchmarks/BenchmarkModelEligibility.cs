@@ -17,15 +17,15 @@ internal static class BenchmarkModelEligibility
     ///     content — so a projector-bearing chat model measures the same as a bare one. Genuine vision or
     ///     projector-only models are excluded by their <see cref="GgufRole" />, not by this.
     /// </remarks>
-    public static void Validate(InstalledModelSnapshot snapshot, ModelClassificationRecord? classification, string role) =>
-        Validate(snapshot.ProviderName, snapshot.Role, snapshot.ModelName, classification, role);
+    public static void Validate(InstalledModelSnapshot snapshot, ModelClassificationRecord? classification, string role, string? decisionType = null) =>
+        Validate(snapshot.ProviderName, snapshot.Role, snapshot.ModelName, classification, role, decisionType);
 
-    /// <inheritdoc cref="Validate(InstalledModelSnapshot, ModelClassificationRecord, string)" />
-    public static void Validate(string? providerName, GgufRole ggufRole, string modelName, ModelClassificationRecord? classification, string role)
+    /// <inheritdoc cref="Validate(InstalledModelSnapshot, ModelClassificationRecord, string, string)" />
+    public static void Validate(string? providerName, GgufRole ggufRole, string modelName, ModelClassificationRecord? classification, string role, string? decisionType = null)
     {
         if (!string.Equals(providerName, "llamacpp", StringComparison.OrdinalIgnoreCase)
             || ggufRole != GgufRole.Chat
-            || !LocalGgufModelKindClassifier.IsChatModel(modelName, classification))
+            || !LocalGgufModelKindClassifier.IsChatModel(modelName, classification, decisionType))
         {
             throw new BenchmarkEligibilityException($"The selected {role} model is not an eligible local text-generation GGUF.");
         }
@@ -39,9 +39,9 @@ internal static class BenchmarkModelEligibility
     ///     could never join a rank cohort — refuse it at the policy instead of letting every run it scores come out
     ///     permanently unranked.
     /// </remarks>
-    public static void ValidateJudge(InstalledModelSnapshot snapshot, ModelClassificationRecord? classification)
+    public static void ValidateJudge(InstalledModelSnapshot snapshot, ModelClassificationRecord? classification, string? decisionType = null)
     {
-        Validate(snapshot, classification, "judge");
+        Validate(snapshot, classification, "judge", decisionType);
         if (snapshot.Members.Any(static member => member.Role == InstalledModelPhysicalMemberRole.Projector))
         {
             throw new BenchmarkEligibilityException(

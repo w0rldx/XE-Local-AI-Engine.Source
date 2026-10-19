@@ -7,7 +7,7 @@ using System.Runtime.InteropServices;
 /// </summary>
 public sealed class LlamaCppAssetPin
 {
-    /// <summary>The release asset file name (for example <c>llama-b10201-bin-win-vulkan-x64.zip</c>).</summary>
+    /// <summary>The release asset file name (for example <c>llama-b11669-bin-win-vulkan-x64.zip</c>).</summary>
     public required string AssetName { get; init; }
 
     /// <summary>Lowercase hex SHA256 the downloaded archive must match.</summary>
@@ -45,7 +45,7 @@ public sealed class LlamaCppAssetPin
 public static class LlamaCppReleasePins
 {
     /// <summary>The recommended-pinned llama.cpp release tag.</summary>
-    public const string PinnedTag = "b10201";
+    public const string PinnedTag = "b11669";
 
     /// <summary>
     ///     The exact upstream commit SHA <see cref="PinnedTag" /> resolves to on <c>ggml-org/llama.cpp</c>.
@@ -57,7 +57,7 @@ public static class LlamaCppReleasePins
     ///     <see cref="PinnedTag" /> when bumping the recommended version
     ///     (<c>git ls-remote https://github.com/ggml-org/llama.cpp refs/tags/&lt;tag&gt;</c>).
     /// </remarks>
-    public const string PinnedCudaSourceCommitSha = "8f4646a63ee29f2e0ab971b0290b141938769762";
+    public const string PinnedCudaSourceCommitSha = "620d2225cc436ab0b001e3200e590e3b286ef9ab";
 
     /// <summary>Backend-neutral alias for the exact source commit behind <see cref="PinnedTag" />.</summary>
     public const string PinnedSourceCommitSha = PinnedCudaSourceCommitSha;
@@ -65,17 +65,17 @@ public static class LlamaCppReleasePins
     private const string WindowsServerPath = "build/bin/llama-server.exe";
     private const string UnixServerPath = "build/bin/llama-server";
 
-    // Keyed by (os, arch, variant). Verified against the b10201 release-assets digest API on 2026-07-31.
+    // Keyed by (os, arch, variant). Verified against the b11669 release-assets digest API on 2026-10-19.
     private static readonly IReadOnlyDictionary<PinKey, LlamaCppAssetPin> Pins =
         new Dictionary<PinKey, LlamaCppAssetPin>
         {
             // Windows x64 — the CUDA pin also carries its companion runtime archive; both digests come from the release-assets digest API. The cudart asset name is NOT
-            // tag-prefixed upstream, and its digest is unchanged from b9692, upstream shipping the same CUDA 12.4 runtime archive across those releases.
+            // tag-prefixed upstream, and its digest is unchanged from b9692 through b11669, upstream shipping the same CUDA 12.4 runtime archive across those releases.
             [new PinKey(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda)] =
                 new()
                 {
-                    AssetName = "llama-b10201-bin-win-cuda-12.4-x64.zip",
-                    Sha256 = "0b25fa35df1acb01a7bf0325fe554cbae1d7be39dfd630e979ad5a5ddc66599b",
+                    AssetName = "llama-b11669-bin-win-cuda-12.4-x64.zip",
+                    Sha256 = "c2da1f73ed176ae093ac5aceb978a7b167a16113f6d74c6789eeaee2135cb8dc",
                     ServerRelativePath = WindowsServerPath,
                     CudartAssetName = "cudart-llama-bin-win-cuda-12.4-x64.zip",
                     CudartSha256 = "8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6"
@@ -83,15 +83,15 @@ public static class LlamaCppReleasePins
             [new PinKey(OSPlatform.Windows, Architecture.X64, GpuVariant.Vulkan)] =
                 new()
                 {
-                    AssetName = "llama-b10201-bin-win-vulkan-x64.zip",
-                    Sha256 = "7284f987944f0700b0d039b1b2f786302308f1479b8f1d61efa0a0ba35acea42",
+                    AssetName = "llama-b11669-bin-win-vulkan-x64.zip",
+                    Sha256 = "2c07574e7bde71321cb785282b20cc821e951132149eeceeea32ddebdbf0598e",
                     ServerRelativePath = WindowsServerPath
                 },
             [new PinKey(OSPlatform.Windows, Architecture.X64, GpuVariant.Cpu)] =
                 new()
                 {
-                    AssetName = "llama-b10201-bin-win-cpu-x64.zip",
-                    Sha256 = "8b8d4f0f6738e11842dd5250de0736052de41b0ef4de8d3fb119c37335de2833",
+                    AssetName = "llama-b11669-bin-win-cpu-x64.zip",
+                    Sha256 = "37b3efcf962847ca869745fd4ccf7f5e7e8dacfeff9fa3523b4ca8cdc66d632b",
                     ServerRelativePath = WindowsServerPath
                 },
 
@@ -99,8 +99,8 @@ public static class LlamaCppReleasePins
             [new PinKey(OSPlatform.Windows, Architecture.Arm64, GpuVariant.Cpu)] =
                 new()
                 {
-                    AssetName = "llama-b10201-bin-win-cpu-arm64.zip",
-                    Sha256 = "e1b97a489cb66d04f92f53d2c633ede0721c4e26dc0bfdcf7ec6f4e31091f1a8",
+                    AssetName = "llama-b11669-bin-win-cpu-arm64.zip",
+                    Sha256 = "9cff39ffed17edcd03a7d876073f74d7b48cd43a1e5eafdd59ee094185ad871b",
                     ServerRelativePath = WindowsServerPath
                 },
 
@@ -108,15 +108,15 @@ public static class LlamaCppReleasePins
             [new PinKey(OSPlatform.Linux, Architecture.X64, GpuVariant.Vulkan)] =
                 new()
                 {
-                    AssetName = "llama-b10201-bin-ubuntu-vulkan-x64.tar.gz",
-                    Sha256 = "ac495ca88439c0218a226b01120526aa051ed5adaacc6abe207c753931b03a57",
+                    AssetName = "llama-b11669-bin-ubuntu-vulkan-x64.tar.gz",
+                    Sha256 = "e8709e5ba6c1b093dea7f3de57f4aba842f9a188fba6b465782d65d6fcfa4d9f",
                     ServerRelativePath = UnixServerPath
                 },
             [new PinKey(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)] =
                 new()
                 {
-                    AssetName = "llama-b10201-bin-ubuntu-x64.tar.gz",
-                    Sha256 = "7a985be324ebbce0de698fe34e830990838fce13ddb90a92c7f87ea2532ba797",
+                    AssetName = "llama-b11669-bin-ubuntu-x64.tar.gz",
+                    Sha256 = "cf07c1c112d709bd67e522017471de57ed0ec8bea031d732c5422351c07f65ac",
                     ServerRelativePath = UnixServerPath
                 },
 
@@ -124,15 +124,15 @@ public static class LlamaCppReleasePins
             [new PinKey(OSPlatform.Linux, Architecture.Arm64, GpuVariant.Vulkan)] =
                 new()
                 {
-                    AssetName = "llama-b10201-bin-ubuntu-vulkan-arm64.tar.gz",
-                    Sha256 = "5e350769055d053a204b9d4479af560b3b8e9c71729bb1da8b03f2aa70d19533",
+                    AssetName = "llama-b11669-bin-ubuntu-vulkan-arm64.tar.gz",
+                    Sha256 = "d283522e479c0d532e3a04d715dd852ffb2d95925caa6d41ef2ba53a65e46a51",
                     ServerRelativePath = UnixServerPath
                 },
             [new PinKey(OSPlatform.Linux, Architecture.Arm64, GpuVariant.Cpu)] =
                 new()
                 {
-                    AssetName = "llama-b10201-bin-ubuntu-arm64.tar.gz",
-                    Sha256 = "8e001059da48a95bfb17ebab2d7e118ad15878b69840458d7cbbf443591af9e7",
+                    AssetName = "llama-b11669-bin-ubuntu-arm64.tar.gz",
+                    Sha256 = "9ac6fda2058d35677608a06f751a50122ddfa4ce0ddb7f084466b8e79b6d4a99",
                     ServerRelativePath = UnixServerPath
                 },
 
@@ -140,15 +140,15 @@ public static class LlamaCppReleasePins
             [new PinKey(OSPlatform.OSX, Architecture.Arm64, GpuVariant.Cpu)] =
                 new()
                 {
-                    AssetName = "llama-b10201-bin-macos-arm64.tar.gz",
-                    Sha256 = "4c323231709d670d7282ed1efdc4b479831305d7e8a6ba3c18bb0cff2dae401e",
+                    AssetName = "llama-b11669-bin-macos-arm64.tar.gz",
+                    Sha256 = "dbed55493d72bc1ba2babc8770d669c2289b5bc4ee9fb2a4dfc158d45b7d13fd",
                     ServerRelativePath = UnixServerPath
                 },
             [new PinKey(OSPlatform.OSX, Architecture.X64, GpuVariant.Cpu)] =
                 new()
                 {
-                    AssetName = "llama-b10201-bin-macos-x64.tar.gz",
-                    Sha256 = "ab3f2f59dbc06914dcceb062a8aef8f56bf303eacfa008cc27f8fb0e9206e1bf",
+                    AssetName = "llama-b11669-bin-macos-x64.tar.gz",
+                    Sha256 = "cab28238d78158109b48deb27b05d50e0dcef56275d2e76da9ca8281526c7532",
                     ServerRelativePath = UnixServerPath
                 }
         };

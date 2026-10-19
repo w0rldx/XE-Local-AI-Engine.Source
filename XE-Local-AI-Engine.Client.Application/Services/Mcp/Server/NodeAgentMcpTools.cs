@@ -117,7 +117,7 @@ public sealed class NodeAgentMcpTools
                      {
                          Name = model.ModelName,
                          SizeBytes = model.SizeBytes,
-                         Kind = ToWireKind(LocalGgufModelKindClassifier.Classify(model.ModelName)),
+                         Kind = ToWireKind(LocalGgufModelKindClassifier.Classify(model.ModelName, model.DecisionType)),
                          IsDefault = string.Equals(model.ModelName, settings.DefaultModelName, StringComparison.Ordinal)
                      })
         ];
@@ -564,6 +564,7 @@ public sealed class NodeAgentMcpTools
             ModelKind.Embedding => "embedding",
             ModelKind.Reranker => "reranker",
             ModelKind.Draft => "draft",
+            ModelKind.Decision => "decision",
             _ => "chat"
         };
 

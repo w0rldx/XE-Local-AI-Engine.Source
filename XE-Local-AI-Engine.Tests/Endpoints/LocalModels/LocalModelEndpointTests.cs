@@ -305,6 +305,41 @@ public sealed class LocalModelEndpointTests
     }
 
     [Test]
+    public async Task SelectLocalModel_WhenDecisionModel_Returns400AndKeepsTheDefault()
+    {
+        var ggufModelStore = Substitute.For<IGgufModelStore>();
+        ggufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
+                      .Returns([
+                          new LocalModelDescriptor
+                          {
+                              ModelName = "org/Laya-GGUF:Q8_0",
+                              ProviderName = LlamaCppProviderName,
+                              IsAvailable = true,
+                              SizeBytes = null,
+                              ModifiedAt = null,
+                              MaxContextTokens = null,
+                              DecisionType = "classify"
+                          }
+                      ]);
+        var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings
+        {
+            DefaultModelName = "chat-model"
+        });
+        await using var context = CreateContext(Substitute.For<IOllamaModelService>(), settingsStore, LlamaCppProviderName, ggufModelStore);
+        using var client = context.Factory.CreateClient();
+
+        using var request = CreateRequest(context.Factory, HttpMethod.Post, "/api/local/v1/models/select");
+        request.Content = JsonContent.Create(new SelectLocalModelRequest
+        {
+            ModelName = "org/Laya-GGUF:Q8_0"
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Equal("chat-model", settingsStore.Current.DefaultModelName);
+    }
+
+    [Test]
     public async Task DeleteLocalModel_WhenValid_UsesJournaledGgufCoordinator()
     {
         // Local models are GGUF files served by the bundled llama.cpp runtime (Ollama is no longer a runtime), so the

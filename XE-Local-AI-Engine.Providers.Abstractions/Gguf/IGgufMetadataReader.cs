@@ -26,6 +26,9 @@ public sealed class GgufModelMetadata
 
     /// <summary>True when the GGUF declares a positive expert count.</summary>
     public required bool IsMoe { get; init; }
+
+    /// <summary>The <c>&lt;arch&gt;.decision.type</c> family of a native decision model, or <see langword="null" /> for any other model.</summary>
+    public string? DecisionType { get; init; }
 }
 
 /// <summary>

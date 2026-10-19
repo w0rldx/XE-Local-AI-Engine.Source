@@ -344,7 +344,8 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
             SlidingWindowPattern = own.SlidingWindowPattern ?? complete.SlidingWindowPattern,
             AttentionKeyLengthMla = own.AttentionKeyLengthMla ?? complete.AttentionKeyLengthMla,
             AttentionValueLengthMla = own.AttentionValueLengthMla ?? complete.AttentionValueLengthMla,
-            FullAttentionInterval = own.FullAttentionInterval ?? complete.FullAttentionInterval
+            FullAttentionInterval = own.FullAttentionInterval ?? complete.FullAttentionInterval,
+            DecisionType = own.DecisionType ?? complete.DecisionType
         };
     }
 

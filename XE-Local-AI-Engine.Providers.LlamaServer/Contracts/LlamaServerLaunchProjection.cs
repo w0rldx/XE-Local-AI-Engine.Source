@@ -148,7 +148,7 @@ public sealed record LlamaServerLaunchProjection
 
         // A pooled role sizes -b/-ub to whichever context this spawn actually emits, so anything that fits the
         // advertised window survives one physical micro-batch.
-        var isPooledRole = role is ModelRole.Embedding or ModelRole.Reranker;
+        var isPooledRole = role is ModelRole.Embedding or ModelRole.Reranker or ModelRole.Decision;
         var pooledBatch = plan?.RequestedContextTokens ?? resolved.CtxSize;
         int? batchSize = isPooledRole && pooledBatch > 0 ? pooledBatch : null;
 

@@ -23,9 +23,9 @@ internal static partial class LlamaGrammarToolSchemaCompatibility
     ///     proven to compile for the full production tool offer.
     /// </summary>
     /// <remarks>
-    ///     Integer <c>minimum</c>/<c>maximum</c> are deliberately NOT bounded here — they are value ranges, not
-    ///     repetition counts, and were measured safe at 100000. The measurements behind 1024, including why a threshold
-    ///     just under the per-keyword cliff is not enough: docs/wiki/03-local-runtime-and-providers.md, "The grammar
+    ///     Integer <c>minimum</c>/<c>maximum</c> are value ranges, not repetitions, and stay unbounded. llama.cpp's
+    ///     threshold is still 2000 at b11669, which drops an upper bound above it but rejects a lower one, so 1024 stays
+    ///     safe (1999 is the largest bound safe for every keyword). Measurements: wiki reference 03, "The grammar
     ///     repetition bound".
     /// </remarks>
     internal const int MaxGrammarRepetitionBound = 1024;

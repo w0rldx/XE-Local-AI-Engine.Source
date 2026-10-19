@@ -45,7 +45,11 @@ internal sealed class LlmDecisionProvider : IGraphWorkflowDecisionProvider
         {
             Model = config.Model,
             SystemPrompt = SystemPrompt,
-            Prompt = $"{config.Question}\n\nLabels: {string.Join(", ", config.Labels)}",
+            // Criteria, when the node declares any, travel as one line per described label after the list; a node with none sends the prompt it always did.
+            Prompt = config.Criteria.Count == 0
+                ? $"{config.Question}\n\nLabels: {string.Join(", ", config.Labels)}"
+                : $"{config.Question}\n\nLabels: {string.Join(", ", config.Labels)}\n\nWhat the labels mean:\n"
+                  + string.Join('\n', config.Labels.Where(config.Criteria.ContainsKey).Select(label => $"- {label}: {config.Criteria[label]}")),
             InputBindings = config.InputBindings,
             ReasoningEffort = "none",
             ResponseJsonSchema = JsonSerializer.SerializeToElement(schema),
@@ -65,6 +69,7 @@ internal sealed class LlmDecisionProvider : IGraphWorkflowDecisionProvider
                 ? choice.GetString()
                 : null,
             Confidence = null,
-            Probabilities = null
+            Probabilities = null,
+            Type = GraphWorkflowGraph.DecisionChoice
         };
 }

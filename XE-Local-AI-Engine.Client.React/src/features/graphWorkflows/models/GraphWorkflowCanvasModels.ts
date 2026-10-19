@@ -143,7 +143,12 @@ export type GraphWorkflowCanvasNodeData =
 	| (GraphWorkflowNodeBase & {
 			readonly kind: "DecisionModel";
 			readonly question: string;
+			/** Absent means `choice`. A string, not the union, so an imported unknown value stays visible. */
+			readonly questionType: string | null;
+			/** Choice labels, or score levels lowest first. Kept on the canvas for `noul` but not sent. */
 			readonly labels: readonly string[];
+			/** Choice only: label → description. Not sent for `noul` or `score`. */
+			readonly criteria: Readonly<Record<string, string>>;
 			readonly provider: string | null;
 			readonly model: string | null;
 			readonly inputBindings: readonly GraphWorkflowInputBinding[];
@@ -208,6 +213,14 @@ function stringOrNull(value: unknown): string | null {
 
 function stringOrEmpty(value: unknown): string {
 	return typeof value === "string" ? value : "";
+}
+
+/** A DecisionModel's `criteria` map; non-string descriptions are dropped (the server takes label → text only). */
+function criteriaFromWire(value: unknown): Readonly<Record<string, string>> {
+	if (value === null || typeof value !== "object" || Array.isArray(value)) {
+		return {};
+	}
+	return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
 }
 
 function booleanOr(value: unknown, fallback: boolean): boolean {
@@ -384,9 +397,11 @@ function nodeDataFromWire(node: GraphWorkflowGraphNode): GraphWorkflowCanvasNode
 				...base,
 				kind: "DecisionModel",
 				question: stringOrEmpty(config["question"]),
+				questionType: stringOrNull(config["questionType"]),
 				labels: Array.isArray(config["labels"])
 					? config["labels"].filter((entry): entry is string => typeof entry === "string")
 					: [],
+				criteria: criteriaFromWire(config["criteria"]),
 				provider: stringOrNull(config["provider"]),
 				model: stringOrNull(config["model"]),
 				inputBindings: bindingsFromWire(config["inputBindings"]),
@@ -661,9 +676,19 @@ function configToWire(data: GraphWorkflowCanvasNodeData, issues: GraphWorkflowGr
 			return { prompt: data.prompt };
 		case "DecisionModel": {
 			const bindings = llmBindingsToWire(data.inputBindings, data.key, issues);
+			// Labels stay on the canvas when the type flips to `noul`, so flipping back restores them, but the wire must not
+			// carry them (`decisionNoulHasLabels`). Criteria likewise travel for `choice` only, and only when one is set.
+			const type = data.questionType ?? "choice";
+			// An imported key that names no label has no row to edit it in, so it is dropped here rather than leaving
+			// the node unsaveable on `decisionCriteriaKeyUnknown`.
+			const criteria = Object.entries(data.criteria).filter(
+				([label, description]) => data.labels.includes(label) && description.trim().length > 0,
+			);
 			return {
 				question: data.question,
-				labels: data.labels,
+				...(data.questionType === null ? {} : { questionType: data.questionType }),
+				...(type === "noul" ? {} : { labels: data.labels }),
+				...(type === "choice" && criteria.length > 0 ? { criteria: Object.fromEntries(criteria) } : {}),
 				...(data.provider === null ? {} : { provider: data.provider }),
 				...(data.model === null ? {} : { model: data.model }),
 				...(bindings ? { inputBindings: bindings } : {}),
@@ -798,7 +823,17 @@ export function defaultNodeData(kind: GraphWorkflowNodeKind, key: string): Graph
 		case "ChatInput":
 			return { ...base, kind, prompt: "" };
 		case "DecisionModel":
-			return { ...base, kind, question: "", labels: [], provider: null, model: null, inputBindings: [] };
+			return {
+				...base,
+				kind,
+				question: "",
+				questionType: null,
+				labels: [],
+				criteria: {},
+				provider: null,
+				model: null,
+				inputBindings: [],
+			};
 		// `default` IS the End case — see `nodeDataFromWire`.
 		default:
 			return { ...base, kind, outcome: "completed", resultPath: null };

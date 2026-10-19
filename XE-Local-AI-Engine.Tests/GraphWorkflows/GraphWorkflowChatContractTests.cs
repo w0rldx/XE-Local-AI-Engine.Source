@@ -229,6 +229,72 @@ public sealed class GraphWorkflowChatContractTests
         AssertEx.Null(none.Choice);
     }
 
+    [Test]
+    public void ADecisionModel_ReadsEachQuestionTypeOfTheMatrix()
+    {
+        var choice = DecisionConfig("""{ "question": "Q?", "labels": ["a", "b"], "criteria": { "a": " the first " } }""");
+        AssertEx.Equal("choice", choice.QuestionType, "an omitted question type is a choice, as every saved graph already is.");
+        AssertEx.Equal("the first", choice.Criteria["a"], "a description is trimmed.");
+        AssertEx.False(choice.Criteria.ContainsKey("b"), "criteria may describe only some labels.");
+
+        var score = DecisionConfig("""{ "question": "Q?", "questionType": "score", "labels": ["low", "mid", "high"], "provider": "systemone", "model": "m", "inputBindings": { "text": "run.input.message" } }""");
+        AssertEx.Equal("score", score.QuestionType);
+        AssertEx.Equal("low,mid,high", string.Join(",", score.Labels), "levels keep their order, lowest first.");
+
+        var noul = DecisionConfig("""{ "question": "Q?", "questionType": "noul", "provider": "systemone", "model": " m ", "inputBindings": { "text": "run.input.message" } }""");
+        AssertEx.Equal("noul", noul.QuestionType);
+        AssertEx.Empty(noul.Labels);
+        AssertEx.Equal("m", noul.Model);
+        AssertEx.Equal("systemone", noul.Provider);
+
+        var tenLevels = string.Join(", ", Enumerable.Range(0, 10).Select(static index => $"\"l{index}\""));
+        AssertEx.Equal(expected: 10,
+            DecisionConfig($$"""{ "question": "Q?", "questionType": "score", "labels": [{{tenLevels}}], "provider": "systemone", "model": "m", "inputBindings": { "text": "run.input.message" } }""").Labels.Count);
+    }
+
+    [Test]
+    [Arguments("""{ "question": "Q?", "questionType": "noul", "labels": ["a", "b"], "provider": "systemone", "model": "m" }""", "takes no 'labels'")]
+    [Arguments("""{ "question": "Q?", "questionType": "score", "labels": ["a", "b"] }""", "which the 'llm' decision provider cannot answer")]
+    [Arguments("""{ "question": "Q?", "questionType": "noul" }""", "which the 'llm' decision provider cannot answer")]
+    [Arguments("""{ "question": "Q?", "questionType": "maybe", "labels": ["a", "b"] }""", "asks a 'maybe' question")]
+    [Arguments("""{ "question": "Q?", "labels": ["a", "b"], "provider": "systemone" }""", "must name its decision model")]
+    [Arguments("""{ "question": "Q?", "labels": ["a", "b"], "criteria": { "c": "x" } }""", "describes 'c', which is not one of its labels")]
+    [Arguments("""{ "question": "Q?", "labels": ["a", "b"], "criteria": { "a": " " } }""", "not a string of 1 to 512 characters")]
+    [Arguments("""{ "question": "Q?", "labels": ["a", "b"], "criteria": ["a"] }""", "must be an object mapping a label")]
+    [Arguments("""{ "question": "Q?", "questionType": "score", "labels": ["a", "b"], "criteria": { "a": "x" }, "provider": "systemone", "model": "m" }""",
+        "which only a 'choice' question reads")]
+    [Arguments("""{ "question": "Q?", "questionType": "noul", "provider": "systemone", "model": "m", "criteria": {} }""", "which only a 'choice' question reads")]
+    [Arguments("""{ "question": "Q?", "questionType": "score", "labels": ["a"], "provider": "systemone", "model": "m", "inputBindings": { "t": "run.input.message" } }""", "declares 1 label(s)")]
+    [Arguments("""{ "question": "Q?", "labels": ["a", "b"], "provider": "systemone", "model": "m" }""", "needs at least one 'inputBindings' entry")]
+    [Arguments("""{ "question": "Q?", "labels": ["a", "b"], "provider": "systemone", "model": "m", "inputBindings": {} }""", "needs at least one 'inputBindings' entry")]
+    public void ADecisionModel_RefusesWhatTheTypeMatrixForbids(string config, string expected) =>
+        AssertEx.Contains(Refusal(DecisionModel(config)), expected);
+
+    [Test]
+    public void AScoreQuestion_RefusesMoreThanTenLevels()
+    {
+        var eleven = string.Join(", ", Enumerable.Range(0, 11).Select(static index => $"\"l{index}\""));
+
+        AssertEx.Contains(Refusal(DecisionModel($$"""{ "question": "Q?", "questionType": "score", "labels": [{{eleven}}], "provider": "systemone", "model": "m", "inputBindings": { "t": "run.input.message" } }""")),
+            "needs between 2 and 10");
+    }
+
+    [Test]
+    public void TheLlmProvider_SendsCriteriaOnlyWhenTheNodeDeclaresThem()
+    {
+        var provider = new LlmDecisionProvider();
+
+        var described = provider.Lower(DecisionConfig("""{ "question": "Q?", "labels": ["a", "b"], "criteria": { "b": "the second" } }"""));
+        var plain = provider.Lower(DecisionConfig("""{ "question": "Q?", "labels": ["a", "b"] }"""));
+
+        AssertEx.Contains(described.Prompt, "- b: the second");
+        AssertEx.False(described.Prompt.Contains("- a:", StringComparison.Ordinal), "an undescribed label gets no line.");
+        AssertEx.Equal("Q?\n\nLabels: a, b", plain.Prompt, "a node without criteria sends the prompt it always did.");
+    }
+
+    private static GraphWorkflowDecisionModelConfig DecisionConfig(string config) =>
+        AssertEx.NotNull(GraphWorkflowGraph.Parse(DecisionModel(config)).Nodes["decide"].Config as GraphWorkflowDecisionModelConfig);
+
     private static string Refusal(string json) =>
         AssertEx.Throws<GraphWorkflowValidationException>(() => GraphWorkflowGraph.Parse(json)).Message;
 

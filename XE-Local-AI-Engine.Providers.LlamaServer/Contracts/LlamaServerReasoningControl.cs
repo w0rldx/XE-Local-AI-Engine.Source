@@ -11,7 +11,7 @@ using Microsoft.Extensions.AI;
 ///     A request that carried <c>reasoning_control: true</c> stamps the first update of its stream with
 ///     <see cref="EndpointKey" /> (the server's base address); the update's <see cref="ChatResponseUpdate.ResponseId" /> is
 ///     the <c>chatcmpl-…</c> id the control route needs; <see cref="TryRead" /> recovers both. Route and body verified
-///     against the pinned build's server README (b10201, "POST /v1/chat/completions/control").
+///     against the b10201 server README ("POST /v1/chat/completions/control").
 /// </remarks>
 public static class LlamaServerReasoningControl
 {

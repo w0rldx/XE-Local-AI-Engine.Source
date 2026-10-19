@@ -44,7 +44,7 @@ public sealed class PooledRoleLaunchAdmission : ILlamaServerPooledLaunchAdmissio
     public async Task<IDisposable?> AdmitAsync(string modelName, ModelRole role, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        if (role is not (ModelRole.Embedding or ModelRole.Reranker))
+        if (role is not (ModelRole.Embedding or ModelRole.Reranker or ModelRole.Decision))
         {
             throw new ArgumentOutOfRangeException(nameof(role), role, "Only pooled roles are admitted by this hook.");
         }

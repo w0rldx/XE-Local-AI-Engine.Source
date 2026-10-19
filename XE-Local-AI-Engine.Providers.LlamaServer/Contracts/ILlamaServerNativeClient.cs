@@ -38,7 +38,7 @@ public interface ILlamaServerNativeClient
     ///     chat template and counts the result, over the same guarded transport as <see cref="TokenizeAsync" />.
     /// </summary>
     /// <remarks>
-    ///     Only each tool's name, description and JSON schema are sent. Verified on the pinned build (b10201, 8f4646a) with
+    ///     Only each tool's name, description and JSON schema are sent. Verified at b10201 (8f4646a) with
     ///     <c>--jinja</c>: the count equals <c>/tokenize</c> over the <c>/apply-template</c> prompt, tools included. Read the count
     ///     through <see cref="LlamaServerTokenizeResponse.ReadTokenCountAsync" />.
     /// </remarks>

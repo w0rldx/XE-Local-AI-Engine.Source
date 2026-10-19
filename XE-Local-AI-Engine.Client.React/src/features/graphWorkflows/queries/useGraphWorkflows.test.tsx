@@ -26,6 +26,7 @@ import {
 	useDecideGraphWorkflowNodeRun,
 	useDeleteGraphWorkflowDefinition,
 	useGraphWorkflowAgentOptions,
+	useGraphWorkflowDecisionModelOptions,
 	useGraphWorkflowDefinition,
 	useGraphWorkflowDefinitions,
 	useGraphWorkflowLlmModelOptions,
@@ -241,6 +242,8 @@ describe("graph workflow read hooks", () => {
 						localModel({ modelName: "gpt-5.5", kind: "Chat", provider: "CodexOAuth" }),
 						localModel({ modelName: "my-deploy", displayLabel: "My deploy", kind: "Chat", provider: "AzureFoundry" }),
 						localModel({ modelName: "nomic-embed", kind: "Embedding", detectedKind: "Embedding", provider: "llamacpp" }),
+						localModel({ modelName: "julia-1", displayLabel: "Julia-1", kind: "Decision", provider: "llamacpp" }),
+						localModel({ modelName: "ollama-decision", kind: "Decision", provider: "ollama" }),
 					],
 				}),
 			),
@@ -249,6 +252,15 @@ describe("graph workflow read hooks", () => {
 
 		const agent = renderHook(() => useGraphWorkflowModelOptions(), { wrapper });
 		const llm = renderHook(() => useGraphWorkflowLlmModelOptions(), { wrapper });
+		const decision = renderHook(() => useGraphWorkflowDecisionModelOptions(), { wrapper });
+
+		// A systemone node runs through llama-server only, so a Decision model elsewhere is not offered; and no chat
+		// picker offers a Decision model.
+		await waitFor(() =>
+			expect(decision.result.current.data?.map(({ value, label }) => ({ value, label }))).toEqual([
+				{ value: "julia-1", label: "Julia-1" },
+			]),
+		);
 
 		await waitFor(() => expect(agent.result.current.data).toHaveLength(6));
 		expect(agent.result.current.data?.map((option) => option.value)).toEqual([

@@ -1,9 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.NodeSettings;
 
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1;
 using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Validators;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -785,7 +787,10 @@ public sealed class NodeSettingsAdministrationServiceTests
         var selectionPolicy = new DefaultModelSelectionPolicy(ggufModelStore,
             cloudResolver,
             cloudFactory,
-            new ModelNameValidator(Options.Create(new SecurityOptions())));
+            new ModelNameValidator(Options.Create(new SecurityOptions())),
+            new ServiceCollection().AddSingleton(Substitute.For<IModelClassificationStore>())
+                                   .BuildServiceProvider()
+                                   .GetRequiredService<IServiceScopeFactory>());
         return new NodeSettingsAdministrationService(store,
             runtime,
             selectionPolicy,

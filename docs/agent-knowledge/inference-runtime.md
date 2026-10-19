@@ -48,12 +48,13 @@ auto-admits: `ToolCapableModelRegistrar` adds template-capable GGUFs at startup,
 
 ### Passing all five gates is still not enough — llama.cpp must be able to COMPILE the tool schemas
 
-**Rule:** llama-server compiles the whole tools array into one grammar whose repetition ceiling is spent ACROSS the
-whole tools array; `LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound` (1024) is empirical for the whole
-offer, MCP schemas included. Sanitize only the llama.cpp wire, never domain constants. Prove it with
-`scripts/run-tool-grammar-smoke-local.sh` on a non-reasoning tool-capable GGUF: sanitized 200, unsanitized control 400 (a
-control 200: GBNF skipped or upstream moved the limit; re-measure). Residual failure:
-`FailureCategory.ModelCapabilityUnsupported`. Grammar via `--verbose` (`PUT models/{modelName}/launch-args` + unload).
+**Rule:** llama-server compiles the whole tools array into one grammar;
+`LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound` (1024) is empirical for the whole offer, MCP schemas
+included, and stays safe at b11669 (every failing bound there is 2000+). Sanitize only the llama.cpp wire,
+never domain constants. Prove it with `scripts/run-tool-grammar-smoke-local.sh` on a non-reasoning tool-capable GGUF:
+sanitized 200, raw `minLength` 4096 control 400 (a control 200: GBNF skipped or upstream moved the limit;
+re-measure). Residual: `FailureCategory.ModelCapabilityUnsupported`. Grammar via `--verbose`
+(`PUT models/{modelName}/launch-args` + unload).
 **Prevents:** a 400 on each tool turn. **Authority:** wiki 03 ("The grammar repetition bound").
 [evidence](../agent-knowledge-evidence.md#passing-all-five-gates-is-still-not-enough--llamacpp-must-be-able-to-compile-the-tool-schemas)
 
@@ -124,7 +125,7 @@ tools are filtered. **Prevents:** unsupported kwargs and unrecoverable sessions.
 
 ### Measure chat-template token overhead through llama-server, never with a hand-tuned per-template constant
 
-**Rule:** the calibration round measures the tool preamble per model through `POST /v1/messages/count_tokens` (system + messages + tools; on b10201 it equals `/tokenize` over `/apply-template`), with and without a fixed probe tool set, and subtracts what the estimator already charges for the probe. **Prevents:** a constant tuned on one template (Qwen3.8: ~198) under- or over-charging every other template (qwen2.5-0.5b: 84). **Authority:** `LlamaTokenEstimatorCalibrationService`, `TokenEstimatorCalibrationStore.ResolveToolTemplatePreamble`; open-items O1, 2026-09-28.
+**Rule:** the calibration round measures the tool preamble per model through `POST /v1/messages/count_tokens` (system + messages + tools; on b10201 and b11669 it equals `/tokenize` over `/apply-template`), with and without a fixed probe tool set, and subtracts what the estimator already charges for the probe. **Prevents:** a constant tuned on one template (Qwen3.8: ~198) under- or over-charging every other template (qwen2.5-0.5b: 84). **Authority:** `LlamaTokenEstimatorCalibrationService`, `TokenEstimatorCalibrationStore.ResolveToolTemplatePreamble`; open-items O1, 2026-09-28.
 
 ### A supervisor caller that must not extend a helper-loaded model's lifetime passes the Transient intent
 
@@ -159,8 +160,12 @@ Superseded claims; the entries above are the active rules.
 
 | Stale belief | Current correction |
 |---|---|
+| The tool-grammar repetition ceiling is spent across the whole tools array, and the raw production offer is the smoke's negative control. | At b11669 an upper bound above 2000 is silently dropped (upstream #26613), so the raw production offer compiles; a lower bound above 2000 still fails. The control is a synthetic raw `minLength` 4096 tool. No array-wide budget showed at b11669 (64 extra tools at the lower-bound limits); it is unverified at b10201. Wiki reference 03, "The grammar repetition bound". |
+| The llama.cpp pin is b10201. | It is b11669 (release v0.7.0); read `LlamaCppReleasePins.PinnedTag`, never a tag quoted in a doc. Its `--version` line now reads `version: 0.7.0-dev (build N, commit X)`, and `--mlock`/`--mmap`/`--no-mmap` are gone in favour of `--load-mode`. |
 | A GGUF that reaches the store while the host runs (copied, linked) stays off the tool-capable list until a restart, and its two-tool offer is silent. | The offer self-heals the miss through `ToolCapableModelRegistrar`; an unhealed allow-list trim raises a `ToolsWithheld` notice naming the setting. |
 | A parked turn holds the node's invocation slot until its card is answered or expires. | A parked turn releases it (`HumanPark`, `ReleaseSlotForPark`) and waits for it again on resume (`ReacquireSlotAsync`). |
 | Harmony reasoning must remain undetected. | It is detected as distinct `native_reasoning`, mutually exclusive with graded thinking |
 | An Agent node's `responseJsonSchema` is merely obeyed, not grammar-enforced. | Grammar-enforced from generation start, proven live with a negative control and the captured GBNF. |
 | A `maxLength` in a response schema never reaches llama.cpp, because the MEAI OpenAI strict-schema transform rewrote it into a `description` first. | Still true of every other provider (validate bounds downstream); on llama-server `ApplyResponseSchemaPassthrough` writes the schema onto the body, so the grammar enforces it. |
+| Every non-chat llama-server role takes a role flag (`--embeddings --pooling …` or `--rerank`), and there are three roles. | `ModelRole.Decision` is a fourth, pooled companion role launched with NO role flag (the server reads `decision.type` from the GGUF) and `-b`/`-ub` pinned to its context (wiki 03, "`ModelRole` and the external-endpoint option"). |
+| Two companion slots: the embedder and the reranker. | `MaxLoadedCompanionProcesses` defaults to 3, the third for one decision model. |

@@ -97,4 +97,10 @@ public sealed record LocalModelDescriptor
 
     /// <summary>The quantization label (<c>Q4_K_M</c>), or null when unknown.</summary>
     public string? QuantizationLevel { get; init; }
+
+    /// <summary>
+    ///     The GGUF's <c>&lt;arch&gt;.decision.type</c> family when the file is a native decision model (llama-server
+    ///     serves it through <c>/v1/systemone</c>, never chat), or null for every other model.
+    /// </summary>
+    public string? DecisionType { get; init; }
 }

@@ -239,6 +239,23 @@ public sealed class SupervisorEvictionTests
     }
 
     [Test]
+    public async Task ADecisionModel_IsACompanion_AndTheDefaultCompanionCapHoldsAllThree()
+    {
+        // The default cap gives the embedder, the reranker and one decision model a slot each, and none of them takes a chat slot.
+        var launcher = new FakeProcessLauncher();
+        var defaults = new LlamaServerSupervisorOptions();
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            options: CapOf(cap: 1, TimeSpan.FromMinutes(15), companionCap: defaults.MaxLoadedCompanionProcesses));
+        await supervisor.EnsureRunningAsync("chat-9b", ModelRole.Chat, CancellationToken.None);
+        await supervisor.EnsureRunningAsync("embed-model", ModelRole.Embedding, CancellationToken.None);
+        await supervisor.EnsureRunningAsync("rerank-model", ModelRole.Reranker, CancellationToken.None);
+        await supervisor.EnsureRunningAsync("ggml-org/Julia-1-GGUF:Q8_0", ModelRole.Decision, CancellationToken.None);
+
+        AssertEx.Equal(expected: 4, launcher.LaunchCount);
+        AssertEx.False(launcher.Handles.Any(handle => handle.WasTreeKilled), "a decision model neither frees a chat slot nor evicts a companion under the default cap.");
+    }
+
+    [Test]
     public async Task ChatSpawnAtTheChatCap_NeverEvictsACompanion()
     {
         var launcher = new FakeProcessLauncher();

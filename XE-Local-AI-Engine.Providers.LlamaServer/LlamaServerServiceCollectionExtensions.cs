@@ -273,6 +273,19 @@ public static class LlamaServerServiceCollectionExtensions
                 sp.GetRequiredService<IHttpClientFactory>().CreateClient(LlamaServerRerankerClient.HttpClientName),
                 sp.GetRequiredService<ILogger<LlamaServerRerankerClient>>()));
 
+        // Native decision models (/v1/systemone): the reranker's shape, with the same reason for a resilience-free client — a retried
+        // POST repeats the forward pass. The backstop sits above the client's own 30 s ceiling, so the typed Timeout outcome fires first.
+#pragma warning disable EXTEXP0001 // RemoveAllResilienceHandlers is experimental; see the reranker registration above.
+        services.AddHttpClient(LlamaServerSystemOneClient.HttpClientName,
+                    static client => client.Timeout = RerankBackstopTimeout)
+                .RemoveAllResilienceHandlers();
+#pragma warning restore EXTEXP0001
+
+        services.TryAddSingleton<ILlamaServerSystemOneClient>(static sp =>
+            new LlamaServerSystemOneClient(sp.GetRequiredService<ILlamaServerProcessSupervisor>(),
+                sp.GetRequiredService<IHttpClientFactory>().CreateClient(LlamaServerSystemOneClient.HttpClientName),
+                sp.GetRequiredService<ILogger<LlamaServerSystemOneClient>>()));
+
         // SEAM: the llamacpp ILocalModelProvider, over the supervisor and the caller-supplied IGgufModelStore (the Hugging Face GGUF store), added to the
         // ILocalModelProvider set alongside Ollama so the per-model resolver dispatches across both. Singleton — it holds no per-request state, and the deferred clients own the cold-start.
         services.TryAddSingleton<LlamaServerLocalModelProvider>(static sp =>

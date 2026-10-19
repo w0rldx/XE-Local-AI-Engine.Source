@@ -113,7 +113,7 @@ internal static class LlamaServerLaunchArgumentComposer
         }
         else if (key.Role == ModelRole.Reranker)
         {
-            // Reranker role, exposed only with --rerank (alias --reranking) plus rank pooling, verified against b9692 and re-confirmed against the pinned b10201
+            // Reranker role, exposed only with --rerank (alias --reranking) plus rank pooling, verified against b9692 and re-confirmed at b10201
             // help output. MUTUALLY EXCLUSIVE with the embedding branch above, and carrying none of the chat-only flags. See wiki 03, "Per-role launch flags".
             args.Add("--rerank");
             args.Add("--pooling");
@@ -121,6 +121,16 @@ internal static class LlamaServerLaunchArgumentComposer
             AppendPooledForwardPassBatchArgs(args, projection);
 
             // One-shot scoring passes have no prompt state worth caching, so disable the host prompt cache instead of inheriting the upstream default.
+            args.Add("--cache-ram");
+            args.Add("0");
+        }
+        else if (key.Role == ModelRole.Decision)
+        {
+            // Native decision model: NO role flag. llama-server switches to the /v1/systemone lane on the GGUF's <arch>.decision.type key and enables
+            // its own pooling. The whole prompt is evaluated in one batch and must fit --ubatch-size (upstream README), so -b/-ub are pinned to the context.
+            AppendPooledForwardPassBatchArgs(args, projection);
+
+            // b11669 already defaults the cache to 0 for decision models; emitted anyway so the vector states it, as on the other pooled roles.
             args.Add("--cache-ram");
             args.Add("0");
         }
@@ -167,7 +177,7 @@ internal static class LlamaServerLaunchArgumentComposer
         if (projection.AutoFit)
         {
             // Let llama.cpp auto-fit choose and print placement: the explicit context is RESPECTED by it, and the KV/FA flags are not placement flags, so auto-fit
-            // stays active. Verified against b9692; the pinned b10201 help output confirms auto-fit adjusts only UNSET arguments.
+            // stays active. Verified against b9692; the b10201 help output confirms auto-fit adjusts only UNSET arguments.
             args.Add("--fit");
             args.Add("on");
         }

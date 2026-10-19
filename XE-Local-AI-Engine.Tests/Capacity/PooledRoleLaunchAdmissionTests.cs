@@ -67,6 +67,7 @@ public sealed class PooledRoleLaunchAdmissionTests
     [Test]
     [Arguments(ModelRole.Embedding, true)]
     [Arguments(ModelRole.Reranker, false)]
+    [Arguments(ModelRole.Decision, false)]
     public async Task OnlyTheEmbedder_IsNeverRejectedOnBudget(ModelRole role, bool expected)
     {
         await using var host = Host.Create(new CapacityDecision

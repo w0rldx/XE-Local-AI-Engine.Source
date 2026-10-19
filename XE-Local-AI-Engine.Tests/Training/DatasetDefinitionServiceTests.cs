@@ -9,12 +9,17 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
 public sealed class DatasetDefinitionServiceTests
 {
+    /// <summary>A qwen35-based native decision model whose name looks like any chat GGUF.</summary>
+    private const string DecisionModelName = "ggml-org/Kev-4B-GGUF:Q4_K_M";
+
     [Test]
     [Arguments(0.04)]
     [Arguments(0.31)]
@@ -52,6 +57,7 @@ public sealed class DatasetDefinitionServiceTests
     [Test]
     [Arguments("gpustack/bge-reranker-v2-m3-GGUF:Q4_K_M")]
     [Arguments("nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M")]
+    [Arguments(DecisionModelName)]
     public async Task Definition_NonTextGenerationTeacher_IsRefusedAtSave(string teacher)
     {
         var harness = new Harness();
@@ -183,7 +189,23 @@ public sealed class DatasetDefinitionServiceTests
             var capabilities = Substitute.For<IModelCapabilityResolver>();
             _ = capabilities.ResolveAsync("teacher.gguf", Arg.Any<CancellationToken>()).Returns(new ModelCapabilitySnapshot(teacherSupportsThinking, true, false));
 
-            Service = new DatasetDefinitionService(store, offerProvider, Policy, capabilities, Substitute.For<IModelClassificationStore>());
+            // One installed native decision model: its header decision type, not its name, is what refuses it as a teacher.
+            var ggufModels = Substitute.For<IGgufModelStore>();
+            _ = ggufModels.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
+                          .Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([
+                              new LocalModelDescriptor
+                              {
+                                  ModelName = DecisionModelName,
+                                  ProviderName = "llamacpp",
+                                  IsAvailable = true,
+                                  SizeBytes = 1,
+                                  ModifiedAt = DateTimeOffset.UnixEpoch,
+                                  MaxContextTokens = 8192,
+                                  DecisionType = "kev"
+                              }
+                          ]));
+
+            Service = new DatasetDefinitionService(store, offerProvider, Policy, capabilities, Substitute.For<IModelClassificationStore>(), ggufModels);
         }
 
         public IDatasetDefinitionService Service { get; }

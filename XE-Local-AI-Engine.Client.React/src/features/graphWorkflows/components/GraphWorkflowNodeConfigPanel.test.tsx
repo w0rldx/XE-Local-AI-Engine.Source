@@ -45,6 +45,7 @@ interface Handlers {
 	readonly graphSettings?: GraphWorkflowGraphSettings;
 	readonly tools?: typeof tools;
 	readonly allowsActions?: boolean;
+	readonly decisionModelOptionsReady?: boolean;
 }
 
 function renderPanel(node: GraphWorkflowCanvasNodeData, handlers: Handlers = {}) {
@@ -67,6 +68,8 @@ function renderPanel(node: GraphWorkflowCanvasNodeData, handlers: Handlers = {})
 					{ value: "tiny", label: "Tiny", isToolCapable: false },
 					{ value: "gpt-5.5", label: "gpt-5.5", isToolCapable: true, cloudProvider: "Codex" },
 				]}
+				decisionModelOptions={[{ value: "julia-1", label: "Julia-1" }]}
+				decisionModelOptionsReady={handlers.decisionModelOptionsReady}
 				graphSettings={handlers.graphSettings}
 			/>
 		</ConfirmProvider>,
@@ -480,7 +483,107 @@ describe("GraphWorkflowNodeConfigPanel", () => {
 			const dropdown = document.getElementById(input.getAttribute("aria-controls") ?? "");
 			const options = await within(dropdown as HTMLElement).findAllByRole("option", { hidden: true });
 
-			expect(options.map((option) => option.textContent)).toEqual(["Language model"]);
+			expect(options.map((option) => option.textContent)).toEqual(["Language model", "Native decision model (systemone)"]);
+		});
+
+		async function optionsOf(testId: string): Promise<(string | null)[]> {
+			const input = screen.getByTestId(testId);
+			fireEvent.click(input);
+			const dropdown = document.getElementById(input.getAttribute("aria-controls") ?? "");
+			const options = await within(dropdown as HTMLElement).findAllByRole("option", { hidden: true });
+			return options.map((option) => option.textContent);
+		}
+
+		it("shows a description field per choice label and moves it with a renamed label", () => {
+			const onChange = vi.fn();
+			renderPanel(
+				{ ...decisionNode(["coding", "general"]), criteria: { coding: "writes code" } } as GraphWorkflowCanvasNodeData,
+				{
+					onChange,
+				},
+			);
+
+			expect((screen.getByTestId("gw-node-config-label-criterion-0") as HTMLInputElement).value).toBe("writes code");
+			fireEvent.change(screen.getByTestId("gw-node-config-label-criterion-1"), { target: { value: "anything else" } });
+			expect(onChange).toHaveBeenLastCalledWith({ criteria: { coding: "writes code", general: "anything else" } });
+			fireEvent.change(screen.getByTestId("gw-node-config-label-0"), { target: { value: "code" } });
+			expect(onChange).toHaveBeenLastCalledWith({ labels: ["code", "general"], criteria: { code: "writes code" } });
+			fireEvent.click(screen.getByTestId("gw-node-config-label-remove-0"));
+			expect(onChange).toHaveBeenLastCalledWith({ labels: ["general"], criteria: {} });
+		});
+
+		it("relabels the list as ordered levels for score and hides it for noul", () => {
+			const score = renderPanel({
+				...decisionNode(["low", "high"]),
+				questionType: "score",
+				provider: "systemone",
+			} as GraphWorkflowCanvasNodeData);
+			expect(screen.getByRole("group", { name: "Levels, lowest first" })).toBeTruthy();
+			expect(screen.queryByTestId("gw-node-config-label-criterion-0")).toBeNull();
+			score.unmount();
+
+			renderPanel({ ...decisionNode(["kept"]), questionType: "noul", provider: "systemone" } as GraphWorkflowCanvasNodeData);
+			expect(screen.queryByTestId("gw-node-config-label-add")).toBeNull();
+			expect(screen.queryByTestId("gw-node-config-label-0")).toBeNull();
+		});
+
+		it("offers the three question types and writes the picked one", async () => {
+			const onChange = vi.fn();
+			renderPanel(decisionNode(["a", "b"]), { onChange });
+
+			expect(await optionsOf("gw-node-config-decision-type")).toEqual([
+				"Choice (pick one label)",
+				"Yes/no",
+				"Score (ordered levels)",
+			]);
+			fireEvent.click(screen.getByRole("option", { name: "Yes/no", hidden: true }));
+			expect(onChange).toHaveBeenLastCalledWith({ questionType: "noul" });
+		});
+
+		it("lists only Decision-kind models for systemone, with the uncalibrated hint", async () => {
+			renderPanel({ ...decisionNode(["a", "b"]), provider: "systemone" } as GraphWorkflowCanvasNodeData);
+
+			expect(screen.getByText("Native decision model; probabilities are model-reported and uncalibrated.")).toBeTruthy();
+			expect(await optionsOf("gw-node-config-decision-model")).toEqual(["Julia-1"]);
+		});
+
+		it("drops a chat model when the provider switches to systemone", async () => {
+			const onChange = vi.fn();
+			renderPanel({ ...decisionNode(["a", "b"]), model: "qwen3-8b" } as GraphWorkflowCanvasNodeData, { onChange });
+
+			await optionsOf("gw-node-config-decision-provider");
+			fireEvent.click(screen.getByRole("option", { name: "Native decision model (systemone)", hidden: true }));
+			expect(onChange).toHaveBeenLastCalledWith({ provider: "systemone", model: null });
+		});
+
+		it("keeps the model when the effective provider does not change, or the target list has not loaded", async () => {
+			const onChange = vi.fn();
+			const same = renderPanel({ ...decisionNode(["a", "b"]), model: "qwen3-8b" } as GraphWorkflowCanvasNodeData, {
+				onChange,
+			});
+			// null → "llm" is the same provider: picking it must not erase the model.
+			await optionsOf("gw-node-config-decision-provider");
+			fireEvent.click(screen.getByRole("option", { name: "Language model", hidden: true }));
+			expect(onChange).toHaveBeenLastCalledWith({ provider: "llm" });
+			same.unmount();
+
+			renderPanel({ ...decisionNode(["a", "b"]), model: "qwen3-8b" } as GraphWorkflowCanvasNodeData, {
+				onChange,
+				decisionModelOptionsReady: false,
+			});
+			await optionsOf("gw-node-config-decision-provider");
+			fireEvent.click(screen.getByRole("option", { name: "Native decision model (systemone)", hidden: true }));
+			expect(onChange).toHaveBeenLastCalledWith({ provider: "systemone" });
+		});
+
+		it("does not overwrite a label's own description when another label is renamed onto it", () => {
+			const onChange = vi.fn();
+			renderPanel({ ...decisionNode(["a", "b"]), criteria: { a: "first", b: "second" } } as GraphWorkflowCanvasNodeData, {
+				onChange,
+			});
+
+			fireEvent.change(screen.getByTestId("gw-node-config-label-0"), { target: { value: "b" } });
+			expect(onChange).toHaveBeenLastCalledWith({ labels: ["b", "b"], criteria: { b: "second" } });
 		});
 	});
 

@@ -166,6 +166,24 @@ public sealed class SupervisorSpawnArgsTests
     }
 
     [Test]
+    public async Task EnsureRunning_DecisionRole_CarriesNoRoleFlag()
+    {
+        // llama-server reads <arch>.decision.type off the GGUF and picks its own pooling; any role flag would put it on another lane.
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = NewSupervisor(launcher);
+
+        await supervisor.EnsureRunningAsync("ggml-org/Kev-4B-GGUF:Q4_K_M", ModelRole.Decision, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+        foreach (var roleFlag in new[] { "--jinja", "--embeddings", "--rerank", "--pooling", "--cache-reuse", "--mmproj" })
+        {
+            AssertEx.False(spec!.Arguments.Contains(roleFlag), $"a decision process must not carry {roleFlag}.");
+        }
+
+        AssertEx.Equal(ModelRole.Decision, spec!.Role);
+    }
+
+    [Test]
     public async Task EnsureRunning_GpuVariant_NoProfile_LaunchArgsEmitFitOnAndMetrics()
     {
         var launcher = new FakeProcessLauncher();
@@ -590,6 +608,7 @@ public sealed class SupervisorSpawnArgsTests
     [Test]
     [Arguments(ModelRole.Embedding, "nomic-embed")]
     [Arguments(ModelRole.Reranker, "bge-reranker-v2-m3")]
+    [Arguments(ModelRole.Decision, "ggml-org/Laya-GGUF:Q8_0")]
     public async Task EnsureRunning_PooledRole_PinsPhysicalBatchToTheContext(ModelRole role, string modelName)
     {
         // REGRESSION (capture run 2026-08-01): a pooled embedding/rerank forward pass is non-causal, so llama-server
@@ -673,6 +692,7 @@ public sealed class SupervisorSpawnArgsTests
     [Test]
     [Arguments(ModelRole.Embedding, "nomic-embed")]
     [Arguments(ModelRole.Reranker, "bge-reranker-v2-m3")]
+    [Arguments(ModelRole.Decision, "ggml-org/Laya-GGUF:Q8_0")]
     public async Task EnsureRunning_PooledRole_DisablesHostPromptCache(ModelRole role, string modelName)
     {
         // One-shot forward passes cache no reusable prompt state — pooled roles pin --cache-ram 0 instead of

@@ -4179,6 +4179,7 @@
 				"addAllowedUrl": "Add link",
 				"addBinding": "Add binding",
 				"addLabel": "Add label",
+				"addLevel": "Add level",
 				"advanced": "Advanced",
 				"agent": "Agent",
 				"agentPlaceholder": "This node's default agent",
@@ -4201,9 +4202,17 @@
 				"cloudModelHelp": "Cloud models run only when “Let cloud models run unattended” is on in Node Settings → Privacy & updates, or when the model's external connection grants unattended runs.",
 				"cloudModelLabel": "{{label}} · {{provider}} (cloud)",
 				"conditionPathHelp": "Outgoing edges with no path of their own compare this one.",
+				"criterionPlaceholder": "Optional description of this label",
+				"criterionValue": "Description of label {{index}}",
+				"decisionModelHelp": "Only installed models of type Decision run here. Import one from Model Management.",
+				"decisionModelPlaceholder": "Pick an installed decision model",
 				"decisionProvider": "Provider",
+				"decisionProviderHint": {
+					"systemone": "Native decision model; probabilities are model-reported and uncalibrated."
+				},
 				"decisionProviderName": {
-					"llm": "Language model"
+					"llm": "Language model",
+					"systemone": "Native decision model (systemone)"
 				},
 				"decisionProviderPlaceholder": "Language model (default)",
 				"defaultInput": "Default input (JSON)",
@@ -4230,6 +4239,8 @@
 				"labelValue": "Label {{index}}",
 				"labels": "Labels",
 				"labelsHelp": "Between 2 and 32 distinct labels, each up to 64 characters.",
+				"levels": "Levels, lowest first",
+				"levelsHelp": "Between 2 and 10 distinct levels, lowest first. output.score is continuous; output.choice is the nearest level.",
 				"llmModelPlaceholder": "Node default local model",
 				"llmPrompt": "Prompt",
 				"maxAttempts": "Max attempts",
@@ -4246,6 +4257,14 @@
 				"publishToChat": "Post the result to the chat",
 				"question": "Question",
 				"questionHelp": "What the model decides. Outgoing edges route on output.choice.",
+				"questionHelpNoul": "A yes/no question. output.noul is P(yes) from 0 to 1: route with Gte on output.noul, or with Eq on output.choice, which is the literal yes or no.",
+				"questionHelpScore": "What the model rates on the levels below. Route with Gte or Lt on output.score.",
+				"questionType": "Question type",
+				"questionTypeName": {
+					"choice": "Choice (pick one label)",
+					"noul": "Yes/no",
+					"score": "Score (ordered levels)"
+				},
 				"reasoningEffort": "Reasoning effort",
 				"reasoningEffortPlaceholder": "Provider default",
 				"remove": "Delete node",
@@ -4300,9 +4319,16 @@
 					"conditionNeedsTwoOutbound": "“{{subject}}” is a Condition node and needs at least two outgoing edges.",
 					"cycle": "The graph loops back on itself. A graph workflow must run forward only.",
 					"danglingNonEnd": "“{{subject}}” has no outgoing edge. Only an End node may be a dead end.",
+					"decisionCriteriaKeyUnknown": "“{{subject}}” describes a label it does not offer. Every criteria key must be one of the labels.",
+					"decisionCriteriaTooLong": "“{{subject}}” has a label description longer than 512 characters.",
+					"decisionInputBindingRequired": "“{{subject}}” uses the native decision provider and needs at least one input binding: the bound text is what it decides on.",
 					"decisionLabelsInvalid": "“{{subject}}” needs between 2 and 32 distinct, non-empty labels of at most 64 characters.",
+					"decisionModelRequired": "“{{subject}}” uses the native decision provider and must name an installed decision model.",
+					"decisionNoulHasLabels": "“{{subject}}” asks a yes/no question, which takes no labels and no criteria.",
 					"decisionProviderUnknown": "“{{subject}}” names a decision provider this version does not know.",
 					"decisionQuestionMissing": "“{{subject}}” is a model decision with no question.",
+					"decisionScoreLevelsInvalid": "“{{subject}}” needs between 2 and 10 distinct, non-empty levels of at most 64 characters, and no criteria.",
+					"decisionTypeUnsupportedByProvider": "“{{subject}}” asks a yes/no or score question, which only the native decision provider answers.",
 					"duplicateEdgeKey": "The key “{{subject}}” is already taken. Nodes and edges share one set of keys.",
 					"duplicateNodeKey": "Two nodes share the key “{{subject}}”. Every node and edge key must be unique.",
 					"endHasOutbound": "“{{subject}}” is an End node and cannot have outgoing edges.",
@@ -4471,13 +4497,17 @@
 					"invalid": "Use letters, digits, hyphens and underscores, up to 64 characters."
 				},
 				"labels": {
-					"invalid": "Use between 2 and 32 distinct, non-empty labels of at most 64 characters."
+					"invalid": "Use between 2 and 32 distinct, non-empty labels of at most 64 characters.",
+					"levelsInvalid": "Use between 2 and 10 distinct, non-empty levels of at most 64 characters."
 				},
 				"llmPrompt": {
 					"required": "Enter the prompt this model receives."
 				},
 				"maxAttempts": {
 					"range": "Enter a whole number between 1 and 100."
+				},
+				"model": {
+					"decisionRequired": "Pick the decision model this node runs."
 				},
 				"name": {
 					"required": "Enter a name.",
@@ -4494,6 +4524,9 @@
 				},
 				"question": {
 					"required": "Enter the question the model decides."
+				},
+				"questionType": {
+					"unsupportedByProvider": "The language model provider answers choice questions only. Pick the native decision provider."
 				},
 				"responseJsonSchema": {
 					"notObject": "Enter a JSON object schema, or leave it empty."
@@ -4542,6 +4575,12 @@
 				"close": "Close",
 				"completed": "finished {{when}}",
 				"decisionChoice": "Chose {{choice}}",
+				"decisionConfidence": "Confidence {{confidence}}",
+				"decisionNoul": "P(yes) {{probability}}: {{answer}}",
+				"decisionNoulOnly": "P(yes) {{probability}}",
+				"decisionScore": "Score {{score}}, nearest level {{level}}",
+				"decisionUncalibrated": "Model-reported, uncalibrated.",
+				"decisionUnsupportedType": "This version cannot show this result type. The raw output is below.",
 				"emptyDocument": "The runtime recorded nothing here.",
 				"joinOutput": "A Join node emits one map, keyed by the node each incoming branch came from.",
 				"loadFailed": "This node could not be loaded.",
@@ -5985,6 +6024,7 @@
 				"useCases": {
 					"chat": "Chat",
 					"coding": "Coding",
+					"decision": "Decision",
 					"embedding": "Embedding",
 					"general": "General",
 					"multimodal": "Multimodal",
@@ -6214,6 +6254,7 @@
 				"columnHeader": "Type",
 				"kind": {
 					"chat": "Chat",
+					"decision": "Decision",
 					"draft": "Draft (speculative decoding)",
 					"embedding": "Embedding",
 					"reranker": "Reranker",

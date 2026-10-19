@@ -26,6 +26,14 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 - Windows portable build ships `uninstall-xe-local-ai-engine.ps1` next to the app; it stops the node (and stops if a process survives), refuses a data folder that contains the extracted app or is a junction or symlink, and removes the data folder only on confirmation, with a typed `delete key` when `node.key` is present. The installer page and FAQ point at it.
 
+- **Native decision models in graph workflows** — a `DecisionModel` node can name the new `systemone` provider and run
+  Laya, Kev-4B or Julia-1 (or any GGUF that declares a decision type) through llama-server, asking a choice, a yes/no
+  (`noul`) or a score question. The node output carries the model's own probabilities, confidence, yes-likelihood or
+  score, which are not calibrated and route through ordinary conditions. The three models are listed in the curated
+  catalog under the new `decision` use case, install through the usual repository download, show as kind Decision and
+  never appear in the chat picker. Selecting one, or an embedding, reranker or draft model, as the node's default chat
+  model is refused with a 400; the select route used to answer 200 even when the selection was rejected. Needs
+  llama.cpp b11669 or later.
 - **Delete a finished graph-workflow run** — the run toolbar offers "Delete run" on a finished run; after a
   confirmation the run, its node results and its event log are removed for good and the workflow itself is kept
   (`DELETE graph-workflows/runs/{runId}`, 409 while the run is still live).
@@ -171,6 +179,10 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **llama.cpp pinned to b11669** (release v0.7.0, source commit `620d2225`, all ten asset SHA256 digests and the
+  cudart companion re-verified against the release API). The bundled runtime no longer enforces a tool's upper
+  length or item bound above 2000 in its grammar; the tool-schema compatibility pass still strips such bounds, and
+  argument validation still applies them.
 - **Untrusted content is fenced on every path to a model.** Results from outbound MCP tools, custom-tool HTTP bodies
   and host-program output, the upstream outputs a graph Agent node reads, and the bound inputs of a graph LLM node
   (including `run.previous`) now arrive inside the same untrusted-content fence that web pages, attachments and

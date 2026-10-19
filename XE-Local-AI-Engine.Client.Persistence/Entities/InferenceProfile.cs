@@ -22,7 +22,7 @@ internal sealed record class InferenceProfile
 
     /// <summary>
     ///     The llama-server role this profile targets, stored as the integer value of <c>ModelRole</c> (Chat=0,
-    ///     Embedding=1). Part of the natural key.
+    ///     Embedding=1, Reranker=2, Decision=3; the benchmark harness refuses Decision). Part of the natural key.
     /// </summary>
     /// <remarks>
     ///     Persisted as a plain <see cref="int" /> because Persistence does not reference

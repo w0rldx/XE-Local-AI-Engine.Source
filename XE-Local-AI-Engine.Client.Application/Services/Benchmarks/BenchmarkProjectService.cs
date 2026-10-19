@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
@@ -595,7 +596,9 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         try
         {
             await using var lease = await _installedModels.AcquireAsync(modelName, cancellationToken);
-            BenchmarkModelEligibility.ValidateJudge(lease.Snapshot, await _classifications.GetByNameAsync(lease.Snapshot.ModelName, cancellationToken));
+            BenchmarkModelEligibility.ValidateJudge(lease.Snapshot,
+                await _classifications.GetByNameAsync(lease.Snapshot.ModelName, cancellationToken),
+                await LocalGgufModelKindClassifier.ReadDecisionTypeAsync(_ggufModels, lease.Snapshot.ModelName, cancellationToken));
             var policy = new BenchmarkJudgePolicyV1(BenchmarkJudgePolicyModelV1.FromSnapshot(BenchmarkInstalledModelSnapshotMapper.ToSnapshot(lease.Snapshot)),
                 draft.ContextTokens,
                 BenchmarkJudgePolicyVersions.PromptVersion,

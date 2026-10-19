@@ -5,7 +5,7 @@ public sealed class RunningModelResponse
 {
     public required string ModelName { get; init; }
 
-    /// <summary>Lowercase role the process serves — <c>chat|embedding|reranker</c>.</summary>
+    /// <summary>Lowercase role the process serves — <c>chat|embedding|reranker|decision</c>.</summary>
     public required string Role { get; init; }
 
     public required bool IsResponsive { get; init; }
@@ -42,14 +42,14 @@ public sealed class ListRunningModelsResponse
 /// <remarks>
 ///     The eject is GRACEFUL by default: it waits a bounded window for in-flight inference to drain before teardown and
 ///     reports through <see cref="EjectRunningModelResponse.Outcome" /> when it could not complete safely, rather than
-///     killing a running turn silently. <see cref="Role" /> is <c>chat|embedding|reranker</c> (case-insensitive); an unknown
+///     killing a running turn silently. <see cref="Role" /> is <c>chat|embedding|reranker|decision</c> (case-insensitive); an unknown
 ///     role answers 400.
 /// </remarks>
 public sealed class EjectRunningModelRequest
 {
     public required string ModelName { get; init; }
 
-    /// <summary>Role of the process to evict — <c>chat|embedding|reranker</c>. Defaults to <c>chat</c> when omitted.</summary>
+    /// <summary>Role of the process to evict — <c>chat|embedding|reranker|decision</c>. Defaults to <c>chat</c> when omitted.</summary>
     public string? Role { get; init; }
 
     /// <summary>

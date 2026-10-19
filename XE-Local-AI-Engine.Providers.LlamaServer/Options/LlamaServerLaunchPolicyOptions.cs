@@ -58,6 +58,16 @@ public sealed class LlamaServerLaunchPolicyOptions
     public int RerankerContextTokens { get; init; } = DefaultRerankerContextTokens;
 
     /// <summary>
+    ///     Requested decision-role context window in tokens, before the cap to the model's train context: Julia-1 and Laya
+    ///     train at 8192, so the cap minus the safety margin launches them at 7936; Kev-4B (trained 262144) is held at 8192.
+    /// </summary>
+    /// <remarks>
+    ///     A constant, not a setting: the decision role pins <c>-b</c>/<c>-ub</c> to this window because the whole
+    ///     prompt is one physical batch, so a 262144-token window would mean a 262144-token compute buffer.
+    /// </remarks>
+    public const int DecisionContextTokens = 8192;
+
+    /// <summary>
     ///     Reserved headroom in tokens subtracted from a model's train-context ceiling when the requested role context
     ///     would otherwise be capped exactly at that ceiling. Must be non-negative.
     /// </summary>
@@ -164,6 +174,7 @@ public sealed class LlamaServerLaunchPolicyOptions
             ModelRole.Chat => ChatContextTokens,
             ModelRole.Embedding => EmbeddingContextTokens,
             ModelRole.Reranker => RerankerContextTokens,
+            ModelRole.Decision => DecisionContextTokens,
             _ => ChatContextTokens
         };
     }

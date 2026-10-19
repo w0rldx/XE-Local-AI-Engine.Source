@@ -57,6 +57,53 @@ publishes, or the `vpk` pin (both package jobs red after the Velopack 1.2.161 ro
 97c771b97). **Authority:** `.github/workflows/dev-build.yml` and `package-velopack.yml`; the promoted
 `UPSTREAM_PACKAGE_LICENSE_TEXTS` rule in ci-and-release.
 
+### A `systemone` probability or confidence is a routing signal, not a calibrated probability
+
+**Rule:** treat `output.probabilities`, `output.confidence`, `output.noul` and `output.score` from a `systemone`
+`DecisionModel` as model-reported and uncalibrated; pick any `Gte`/`Lt` threshold on them from a measurement on your
+own inputs, label the numbers so in the UI, and never present them as "the model is 99 % sure". **Prevents:** a graph
+that routes, abstains or escalates on a threshold that only looked principled; upstream scales the numbers by
+temperatures stored in the model file and states they are not guaranteed calibrated (llama.cpp #29818, README).
+**Authority:** wiki 21 §4.9; `SystemOneDecisionProvider`.
+
+### A decision model's whole prompt must fit one physical batch
+
+**Rule:** the `Decision` role launches with `-b`/`-ub` equal to its context (`LlamaServerLaunchPolicyOptions.DecisionContextTokens`,
+capped to the train context); never drop the pooled batch pair from that branch, and size a decision node's bound input
+against `-ub`, not against the model's advertised context. **Prevents:** every decision prompt longer than llama.cpp's
+default 512-token `n_ubatch` being refused (upstream README: "the whole prompt is evaluated in one batch: it must fit in
+`--ubatch-size`"), which reads as a broken model rather than a launch flag. b11669 refuses an over-long prompt with HTTP
+500 "input (N tokens) is too large to process" (live, 2026-10-19), not 400. **Authority:** `LlamaServerLaunchArgumentComposer`
+(Decision branch), `LlamaServerLaunchProjection.From`; `SupervisorSpawnArgsTests.EnsureRunning_PooledRole_PinsPhysicalBatchToTheContext`.
+
+### `decision.type` names a model family, not a question type
+
+**Rule:** read `<arch>.decision.type` (`laya`, `kev`, `lev`, `openjev`) only as "this GGUF is a native decision model"
+and which upstream family it is; the question type (`choice`, `noul`, `score`) is the node's `questionType`, chosen per
+request. Julia-1 carries `laya` although it is not Laya. **Prevents:** gating question types on the header value,
+mapping a family to a single question type, or classifying Julia-1 as "unknown family" and refusing it.
+**Authority:** `GgufHeaderMetadata.DecisionType`, `LocalGgufModelKindClassifier.Classify`; the Hugging Face GGUF
+summaries of `ggml-org/Julia-1-GGUF` and `ggml-org/Laya-GGUF` (both `laya`, read 2026-10-19).
+
+### After a llama.cpp pin bump the grammar smoke's negative control must be a bound the new build still rejects
+
+**Rule:** after bumping `LlamaCppReleasePins.PinnedTag`, run `scripts/run-tool-grammar-smoke-local.sh` against the new
+binary AND the previous one; when the negative control comes back 200 on a non-reasoning model, re-measure the
+per-keyword ceiling on the new build before touching `MaxGrammarRepetitionBound`, and move the control to a bound the
+new build still rejects. A silently dropped upper bound makes the run inert, not green. **Prevents:** reading an
+upstream behaviour change as a raised limit (b11669 degrades an upper bound above 2000 to unbounded, upstream #26613,
+so the raw production offer stopped failing while `minLength` 2001 still fails; 2026-10-19). **Authority:**
+`LlamaGrammarLiveSmokeTests`; wiki reference 03, "The grammar repetition bound".
+
+### A second resident decision model evicts the embedder or the reranker
+
+**Rule:** at the default `MaxLoadedCompanionProcesses` of 3 only one decision model is resident beside the embedder and
+the reranker; a graph that uses two decision models makes each load evict the least-recently-used idle companion. Until
+decision models get a cap of their own (proposed follow-up: a separate decision slot count, so companions evict only
+within their role), use one decision model per node, or raise the cap. **Prevents:** knowledge search going cold or
+thrashing (the V-01 shape) because a graph alternates between two decision models. **Authority:**
+`LlamaServerIdleReaper.AdmitAndAllocatePortAsync`, `LlamaServerSupervisorOptions.MaxLoadedCompanionProcesses`; wiki 03,
+"`ModelRole` and the external-endpoint option".
 ### A trace of a turn driven by `gpu-smoke-driver.py chat` mostly measures the driver
 
 **Rule:** when the question is the node's own CPU during a chat turn, drive the turn from a WebSocket or keep-alive

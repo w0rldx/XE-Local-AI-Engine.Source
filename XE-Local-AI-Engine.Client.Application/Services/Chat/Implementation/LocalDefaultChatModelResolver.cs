@@ -53,8 +53,10 @@ public sealed class LocalDefaultChatModelResolver : ILocalDefaultChatModelResolv
         var records = await _modelClassificationStore.ListAsync(cancellationToken);
         var classificationIndex = records.ToDictionary(static r => r.ModelName, static r => r, StringComparer.OrdinalIgnoreCase);
 
+        // A native decision model (header decision.type) is structurally excluded, like a drafter, ahead of every override.
         var chatModels = named
-                         .Where(descriptor => !IsExcludedFromChat(classificationIndex, descriptor.ModelName))
+                         .Where(descriptor => string.IsNullOrWhiteSpace(descriptor.DecisionType)
+                                              && !IsExcludedFromChat(classificationIndex, descriptor.ModelName))
                          .ToArray();
         if (chatModels.Length == 0)
         {
@@ -151,7 +153,7 @@ public sealed class LocalDefaultChatModelResolver : ILocalDefaultChatModelResolv
         }
 
         var effectiveKind = record.OverrideKind ?? record.DetectedKind;
-        return effectiveKind is ModelKind.Embedding or ModelKind.Reranker or ModelKind.Draft;
+        return effectiveKind is ModelKind.Embedding or ModelKind.Reranker or ModelKind.Draft or ModelKind.Decision;
     }
 
     /// <summary>
@@ -165,6 +167,6 @@ public sealed class LocalDefaultChatModelResolver : ILocalDefaultChatModelResolv
     {
         return index.TryGetValue(modelName, out var record)
                && record.OverrideKind is { } overrideKind
-               && overrideKind is not (ModelKind.Embedding or ModelKind.Reranker or ModelKind.Draft);
+               && overrideKind is not (ModelKind.Embedding or ModelKind.Reranker or ModelKind.Draft or ModelKind.Decision);
     }
 }

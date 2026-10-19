@@ -85,6 +85,13 @@ export const graphWorkflowGraphRules = [
 	"decisionQuestionMissing",
 	"decisionLabelsInvalid",
 	"decisionProviderUnknown",
+	"decisionTypeUnsupportedByProvider",
+	"decisionScoreLevelsInvalid",
+	"decisionNoulHasLabels",
+	"decisionCriteriaKeyUnknown",
+	"decisionCriteriaTooLong",
+	"decisionModelRequired",
+	"decisionInputBindingRequired",
 	"pauseOffersAnswer",
 	"serverRejected",
 	"serverWarned",
@@ -205,9 +212,9 @@ interface GraphWorkflowChatContext {
 	readonly acceptsAttachments: boolean;
 }
 
-/** `GraphWorkflowGraph.ParseLabels`: 2..32 distinct, non-blank strings of at most 64 characters. */
-function labelsAreValid(value: unknown): boolean {
-	if (!Array.isArray(value) || value.length < 2 || value.length > 32) {
+/** `GraphWorkflowGraph.ParseLabels`: 2..`max` distinct, non-blank strings of at most 64 characters (32 labels, 10 levels). */
+function labelsAreValid(value: unknown, max = 32): boolean {
+	if (!Array.isArray(value) || value.length < 2 || value.length > max) {
 		return false;
 	}
 	const seen = new Set<string>();
@@ -218,6 +225,68 @@ function labelsAreValid(value: unknown): boolean {
 		seen.add(label);
 	}
 	return true;
+}
+
+/** The server's cap on one `criteria` description, refused at save. */
+export const GRAPH_WORKFLOW_MAX_CRITERION_LENGTH = 512;
+
+function isPresent(value: unknown): boolean {
+	return value !== undefined && value !== null;
+}
+
+/**
+ * The DecisionModel type × provider matrix, as the server's parser applies it: `choice` takes 2..32 labels and
+ * criteria keyed by them; `score` takes 2..10 ordered levels and no criteria; `noul` takes neither; `llm` answers
+ * `choice` only; `systemone` must name its model. An unknown `questionType` is left to the server's message.
+ */
+function decisionShapeIssues(key: string, config: Record<string, unknown>): readonly GraphWorkflowGraphIssue[] {
+	const issues: GraphWorkflowGraphIssue[] = [];
+	const type = text(config["questionType"]).trim() || "choice";
+	const labels = config["labels"];
+	const criteria = config["criteria"];
+	if (type === "choice") {
+		if (!labelsAreValid(labels)) {
+			issues.push({ rule: "decisionLabelsInvalid", subject: key });
+		}
+		if (isPresent(criteria)) {
+			const known = Array.isArray(labels) ? labels : [];
+			if (!isPlainObject(criteria) || Object.keys(criteria as object).some((label) => !known.includes(label))) {
+				issues.push({ rule: "decisionCriteriaKeyUnknown", subject: key });
+			}
+			if (
+				isPlainObject(criteria) &&
+				Object.values(criteria as object).some(
+					(description) => typeof description === "string" && description.length > GRAPH_WORKFLOW_MAX_CRITERION_LENGTH,
+				)
+			) {
+				issues.push({ rule: "decisionCriteriaTooLong", subject: key });
+			}
+		}
+	} else if (type === "score") {
+		if (!labelsAreValid(labels, 10) || isPresent(criteria)) {
+			issues.push({ rule: "decisionScoreLevelsInvalid", subject: key });
+		}
+	} else if (type === "noul" && (isPresent(labels) || isPresent(criteria))) {
+		issues.push({ rule: "decisionNoulHasLabels", subject: key });
+	}
+	const provider = text(config["provider"]).trim() || "llm";
+	if (!(graphWorkflowDecisionProviders as readonly string[]).includes(provider)) {
+		issues.push({ rule: "decisionProviderUnknown", subject: key });
+	}
+	// An unknown type is the server's to name; "yes/no or score" would be the wrong sentence for it.
+	if (provider === "llm" && (type === "noul" || type === "score")) {
+		issues.push({ rule: "decisionTypeUnsupportedByProvider", subject: key });
+	}
+	if (provider === "systemone" && text(config["model"]).trim().length === 0) {
+		issues.push({ rule: "decisionModelRequired", subject: key });
+	}
+	// systemone decides on the bound text alone (the question is its instructions), so with no binding it has nothing
+	// to read. `llm` still has the question as its prompt and stays unaffected.
+	const bindings = config["inputBindings"];
+	if (provider === "systemone" && !(isPlainObject(bindings) && Object.keys(bindings as object).length > 0)) {
+		issues.push({ rule: "decisionInputBindingRequired", subject: key });
+	}
+	return issues;
 }
 
 /** The chat-contract refusals that live on one node's config (backend report "For the frontend worker"). */
@@ -246,13 +315,7 @@ function chatNodeIssues(
 		if (text(config["question"]).trim().length === 0) {
 			issues.push({ rule: "decisionQuestionMissing", subject: key });
 		}
-		if (!labelsAreValid(config["labels"])) {
-			issues.push({ rule: "decisionLabelsInvalid", subject: key });
-		}
-		const provider = text(config["provider"]).trim();
-		if (provider.length > 0 && !(graphWorkflowDecisionProviders as readonly string[]).includes(provider)) {
-			issues.push({ rule: "decisionProviderUnknown", subject: key });
-		}
+		issues.push(...decisionShapeIssues(key, config));
 	}
 	if (kind === "Pause") {
 		const allowed = config["allowedDecisions"];
@@ -839,14 +902,36 @@ export const chatInputConfigSchema = z.object({
 		.min(1, { message: messageKey("prompt", "required") }),
 });
 
-export const decisionModelConfigSchema = z.object({
-	question: z
-		.string()
-		.trim()
-		.min(1, { message: messageKey("question", "required") }),
-	labels: z.array(z.string()).refine(labelsAreValid, { message: messageKey("labels", "invalid") }),
-	inputBindings: llmCallConfigSchema.shape.inputBindings,
-});
+/** The drawer's half of `decisionShapeIssues`, keyed to the field that has to change. Hidden fields (`noul` labels) stay silent. */
+export const decisionModelConfigSchema = z
+	.object({
+		question: z
+			.string()
+			.trim()
+			.min(1, { message: messageKey("question", "required") }),
+		questionType: z.string().nullable(),
+		labels: z.array(z.string()),
+		criteria: z.record(z.string(), z.string()),
+		provider: z.string().nullable(),
+		model: z.string().nullable(),
+		inputBindings: llmCallConfigSchema.shape.inputBindings,
+	})
+	.superRefine((node, context) => {
+		const type = node.questionType ?? "choice";
+		const provider = node.provider ?? "llm";
+		if (type === "choice" && !labelsAreValid(node.labels)) {
+			context.addIssue({ code: "custom", path: ["labels"], message: messageKey("labels", "invalid") });
+		}
+		if (type === "score" && !labelsAreValid(node.labels, 10)) {
+			context.addIssue({ code: "custom", path: ["labels"], message: messageKey("labels", "levelsInvalid") });
+		}
+		if (provider === "llm" && (type === "noul" || type === "score")) {
+			context.addIssue({ code: "custom", path: ["questionType"], message: messageKey("questionType", "unsupportedByProvider") });
+		}
+		if (provider === "systemone" && (node.model ?? "").trim().length === 0) {
+			context.addIssue({ code: "custom", path: ["model"], message: messageKey("model", "decisionRequired") });
+		}
+	});
 
 export const endConfigSchema = z.object({
 	outcome: z

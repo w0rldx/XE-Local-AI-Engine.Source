@@ -17,19 +17,24 @@
 #   after touching the tool catalog, the compatibility pass, or the pinned llama.cpp version.
 #
 # THE NEGATIVE CONTROL IS THE POINT — a 200 proves nothing on its own
-#   The test posts the offer twice: once after the compatibility pass (must be 200) and once with
-#   the original bounds (must be 400 carrying "failed to parse grammar"). The second post is what
-#   makes the first one mean anything, because there are two ways a green run can be VACUOUS:
+#   The test posts twice: the production offer plus a synthetic control tool after the
+#   compatibility pass (must be 200), and the control tool alone with its raw minLength 4096
+#   (must be 400 carrying "failed to parse grammar"). The control is synthetic because the
+#   production offer's large bounds are all upper bounds, and llama.cpp b11669 (upstream #26613)
+#   silently drops an upper bound above 2000 instead of failing; a minimum above 2000 still fails
+#   on every build from b10201 on. The second post is what makes the first one mean anything,
+#   because there are two ways a green run can be VACUOUS:
 #
 #     * A REASONING MODEL IS USELESS HERE. It emits reasoning_content first, so llama.cpp never
 #       enters the constrained branch and never compiles a grammar at all. Qwen3.6-27B returns 200
 #       on the exact payload that 400s on Qwen2.5-0.5B — a smoke that only checks "did it 200"
 #       would pass against a model that never exercised the code path. Pick a NON-REASONING,
 #       tool-capable model (Qwen2.5-0.5B-Instruct is ideal: 400 MB and fast).
-#     * llama.cpp may have RAISED its limits, in which case the unsanitized offer compiles too and
-#       LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound needs re-measuring.
+#     * llama.cpp may have changed its limits, in which case the raw control compiles too. After a
+#       pin bump, re-measure the per-keyword ceiling on the new build, pick a control bound it still
+#       rejects, and re-check LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound.
 #
-#   The test fails on an accepted unsanitized offer and names both causes explicitly. It is never
+#   The test fails on an accepted negative control and names both causes explicitly. It is never
 #   allowed to pass.
 #
 #   A third way to be inert: llama-server IGNORES the offered tools without --jinja, so no grammar
@@ -44,8 +49,9 @@
 #                       SUCCESS, so exit 0 alone can never be trusted: the run must show a
 #                       non-zero test count, must not report a skip, and must have produced the
 #                       evidence file the test writes only after both assertions pass.
-#   4. Sanitized 200  — the shipped tool offer compiled into a grammar on the live server.
-#   5. Unsanitized 400 — the negative control above. Without it, step 4 is unfalsifiable.
+#   4. Sanitized 200  — the shipped tool offer (plus the sanitized control) compiled into a grammar.
+#   5. Control 400    — the raw negative control above was rejected. Without it, step 4 is
+#                       unfalsifiable.
 #
 # Usage:
 #   scripts/run-tool-grammar-smoke-local.sh [options]
@@ -285,7 +291,7 @@ fi
 # Step 3 — run the gated test and prove it EXECUTED.
 ledger_expect "3-test-ran"
 ledger_expect "4-sanitized-offer-accepted"
-ledger_expect "5-unsanitized-offer-rejected"
+ledger_expect "5-negative-control-rejected"
 
 TEST_CMD=(dotnet test "${PROJECT_ROOT}/XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj"
           --configuration Release --no-build
@@ -334,8 +340,8 @@ if [[ -s "${EVIDENCE_PATH}" ]]; then
   python3 -m json.tool "${EVIDENCE_PATH}" || warn "the evidence file is not valid JSON."
 
   SANITIZED_STATUS="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sanitizedOffer"]["actual"])' "${EVIDENCE_PATH}" 2>/dev/null || echo "")"
-  UNSANITIZED_STATUS="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["unsanitizedOffer"]["actual"])' "${EVIDENCE_PATH}" 2>/dev/null || echo "")"
-  UNSANITIZED_MESSAGE="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["unsanitizedOffer"]["message"])' "${EVIDENCE_PATH}" 2>/dev/null || echo "")"
+  CONTROL_STATUS="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["negativeControl"]["actual"])' "${EVIDENCE_PATH}" 2>/dev/null || echo "")"
+  CONTROL_MESSAGE="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["negativeControl"]["message"])' "${EVIDENCE_PATH}" 2>/dev/null || echo "")"
 
   if [[ "${SANITIZED_STATUS}" == "200" ]]; then
     ledger_pass "4-sanitized-offer-accepted"
@@ -343,13 +349,13 @@ if [[ -s "${EVIDENCE_PATH}" ]]; then
     step_fail "4-sanitized-offer-accepted" "the sanitized production tool offer was not accepted (HTTP ${SANITIZED_STATUS:-<none>})."
   fi
 
-  if [[ "${UNSANITIZED_STATUS}" == "400" ]] && grep -qi 'failed to parse grammar' <<<"${UNSANITIZED_MESSAGE}"; then
-    ledger_pass "5-unsanitized-offer-rejected"
+  if [[ "${CONTROL_STATUS}" == "400" ]] && grep -qi 'failed to parse grammar' <<<"${CONTROL_MESSAGE}"; then
+    ledger_pass "5-negative-control-rejected"
   else
-    step_fail "5-unsanitized-offer-rejected" \
-      "the NEGATIVE CONTROL did not hold (HTTP ${UNSANITIZED_STATUS:-<none>}): ${UNSANITIZED_MESSAGE:-<no message>}.
-  Either this model is a REASONING model (it never compiles a grammar, so the run is inert), or
-  llama.cpp raised its repetition limits and MaxGrammarRepetitionBound must be re-measured."
+    step_fail "5-negative-control-rejected" \
+      "the NEGATIVE CONTROL (raw minLength 4096) did not hold (HTTP ${CONTROL_STATUS:-<none>}): ${CONTROL_MESSAGE:-<no message>}.
+  Either this model is a REASONING model (it never compiles a grammar, so the run is inert), or this
+  llama.cpp build no longer rejects that bound: re-measure its ceiling and pick a control it rejects."
   fi
 fi
 

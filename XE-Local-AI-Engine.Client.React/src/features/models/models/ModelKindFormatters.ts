@@ -17,6 +17,8 @@ export function kindBadgeColor(kind: string): string {
 			return "orange";
 		case "Draft":
 			return "teal";
+		case "Decision":
+			return "cyan";
 		default:
 			return "gray";
 	}
@@ -33,6 +35,8 @@ export function kindLabel(t: Translate, kind: string): string {
 			return t("pages.models.type.kind.reranker", "Reranker");
 		case "Draft":
 			return t("pages.models.type.kind.draft", "Draft (speculative decoding)");
+		case "Decision":
+			return t("pages.models.type.kind.decision", "Decision");
 		case "Unknown":
 			return t("pages.models.type.kind.unknown", "Unknown");
 		default:
@@ -75,9 +79,9 @@ export function capabilityBadgeColor(capability: string): string {
 	}
 }
 
-// The three classifications the operator can pick from when overriding a model's kind. Mirrors
+// The classifications the operator can pick from when overriding a model's kind. Mirrors
 // the persisted ModelKind enum names — the value is sent verbatim to the override endpoint.
-const overridableKinds = ["Chat", "Embedding", "Reranker", "Unknown"] as const;
+const overridableKinds = ["Chat", "Embedding", "Reranker", "Decision", "Unknown"] as const;
 
 // Override options for a given model: the fixed overridable kinds, plus the model's current effective kind when it is
 // not already in the list. This keeps the Select's value (the effective model.kind) always matching an option, so a

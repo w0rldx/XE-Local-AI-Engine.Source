@@ -10,13 +10,13 @@ public sealed class LlamaServerSupervisorOptions
     /// <summary>Max number of concurrently-loaded CHAT-role processes; the embedding and reranker companions have their own slots.</summary>
     public int MaxLoadedProcesses { get; init; } = 3;
 
-    /// <summary>Slots for the companion roles (embedding, reranker), held beside <see cref="MaxLoadedProcesses" />.</summary>
+    /// <summary>Slots for the companion roles (embedding, reranker, decision), held beside <see cref="MaxLoadedProcesses" />.</summary>
     /// <remarks>
-    ///     Two: the knowledge embedder and the reranker. Companions evict only each other at this cap and a chat model never
-    ///     evicts a companion, so two resident chat models cannot make the pair thrash. Memory is guarded by the capacity
-    ///     admission, not by this count.
+    ///     Three: the knowledge embedder, the reranker and one native decision model. Companions evict only each other at
+    ///     this cap and a chat model never evicts a companion, so two resident chat models cannot make them thrash. Memory
+    ///     is guarded by the capacity admission, not by this count.
     /// </remarks>
-    public int MaxLoadedCompanionProcesses { get; init; } = 2;
+    public int MaxLoadedCompanionProcesses { get; init; } = 3;
 
     /// <summary>Idle duration after which an unused process is evicted by the reaper.</summary>
     public TimeSpan IdleTimeToLive { get; init; } = TimeSpan.FromMinutes(15);

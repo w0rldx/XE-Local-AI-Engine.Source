@@ -378,7 +378,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     /// <remarks>
     ///     Without the marker the options are returned unchanged, so every other request is byte-identical, and a
     ///     pre-existing <see cref="ChatOptions.RawRepresentationFactory" /> (the thinking switch above sets one) is
-    ///     composed rather than dropped. Semantics verified against the pinned build b10201, and the templates that
+    ///     composed rather than dropped. Semantics verified at b10201, and the templates that
     ///     read the field at all: wiki 03, "Deferred chat / embedding clients".
     /// </remarks>
     internal static ChatOptions? ApplyReasoningBudget(ChatOptions? options)
@@ -479,7 +479,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     ///     pre-existing <see cref="ChatOptions.RawRepresentationFactory" /> is composed rather than dropped.
     ///     <c>num_ctx</c> is deliberately EXCLUDED: llama-server's window is fixed by the context size it launched with,
     ///     so a per-request value is not honoured and that knob stays a client-side history budget. Why the passthrough
-    ///     must exist and why the four names are safe (verified on the pinned build b10201): wiki 03.
+    ///     must exist and why the four names are safe (verified at b10201): wiki 03.
     /// </remarks>
     internal static ChatOptions? ApplySamplingPassthrough(ChatOptions? options)
     {

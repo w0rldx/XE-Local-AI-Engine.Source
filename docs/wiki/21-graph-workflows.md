@@ -1033,27 +1033,80 @@ successor reached only through one receives the answer document, not the content
 
 | Config member | Meaning |
 |---|---|
-| `question` | **Required.** What is being decided. |
-| `labels` | **Required.** 2–32 distinct, non-blank strings of at most 64 characters. Flat on purpose: they become a grammar enum, far below the repetition bound. |
-| `provider` | Optional closed vocabulary, `llm` only (and the default). A provider this build cannot run is refused at save. |
-| `model` | Optional, as on `LlmCall`: an installed node-managed GGUF chat model, a cloud model while `AllowCloudModelUnattendedRuns` is on, else the local default. |
-| `inputBindings` | Optional, exactly as on `LlmCall` (§4.2a). |
+| `question` | **Required.** What is being decided. For `systemone` it is sent as the question's `instructions`. |
+| `questionType` | Optional: `choice` (the default), `noul` (a yes-likelihood in [0, 1]) or `score` (a position on ordered levels). |
+| `labels` | `choice`: **required**, 2–32 distinct, non-blank strings of at most 64 characters (flat on purpose: for `llm` they become a grammar enum). `score`: **required**, 2–10 levels, lowest first. `noul`: must be absent. |
+| `criteria` | Optional, `choice` only: an object mapping some of the labels to a 1–512 character description. A key that is not a label is refused. |
+| `provider` | Optional closed vocabulary: `llm` (the default) or `systemone`. A provider this build cannot run is refused at save. `llm` answers `choice` only. |
+| `model` | `llm`: optional, as on `LlmCall` (an installed node-managed GGUF chat model, a cloud model while `AllowCloudModelUnattendedRuns` is on, else the local default). `systemone`: **required**, an installed node-managed GGUF classified `Decision`. |
+| `inputBindings` | Exactly as on `LlmCall` (§4.2a). A `systemone` node needs at least one: the bound text is what it decides on. |
 
-A classifier node on the invocation lane. The named `IGraphWorkflowDecisionProvider`
+The save-time matrix: a `noul` or `score` question on `llm` is refused (its grammar is an enum), `systemone` without a
+`model` is refused, `systemone` without any `inputBindings` is refused (the client calls this `decisionInputBindingRequired`;
+the server, like every graph validation, returns the message keyed by node, not a code), `criteria` outside a `choice` is
+refused, and a `noul` with `labels` is refused. A save-time not-installed warning on a `systemone` node names a decision
+model, not a chat model.
+
+**`llm` provider.** A classifier node on the invocation lane. `LlmDecisionProvider`
 (`Services/GraphWorkflows/Decisions/`) **lowers** the node to an `LlmCall` config — a fixed classifier system prompt,
-the question plus the label list as the prompt, the same bindings, `reasoningEffort: "none"`, `temperature: 0` (so the
-same input routes the same way on a re-run) and the response schema
-`{ type: object, properties: { choice: { type: string, enum: labels } }, required: [choice] }` — which runs through
-`RunLlmTurnAsync` unchanged, model gate, capacity and binding rules included. The provider then **interprets** the
-answer, and the executor holds the choice to the labels: an answer that is not a JSON object, or names anything
-outside them, fails `NodeFailed` (retryable, so `AttemptsExhausted` on the last attempt), and the reason never repeats
-the model's text. `LlmDecisionProvider` is the one provider; Laya/ONNX classifiers are later providers of the same
-seam.
+the question plus the label list (and one line per described label when `criteria` are declared) as the prompt, the
+same bindings, `reasoningEffort: "none"`, `temperature: 0` (so the same input routes the same way on a re-run) and the
+response schema `{ type: object, properties: { choice: { type: string, enum: labels } }, required: [choice] }` — which
+runs through `RunLlmTurnAsync` unchanged, model gate, capacity and binding rules included. The provider then
+**interprets** the answer, and the executor holds the choice to the labels: an answer that is not a JSON object, or
+names anything outside them, fails `NodeFailed` (retryable, so `AttemptsExhausted` on the last attempt), and the reason
+never repeats the model's text.
 
-Output: `{ "choice": "<label>", "confidence": null, "probabilities": null, "provider": "llm", "usage": { … } }`.
+**`systemone` provider.** `SystemOneDecisionProvider` is an `IGraphWorkflowNativeDecisionProvider`: it answers itself
+through a native decision model (Julia-1, Laya, Kev-4B: any GGUF carrying `<arch>.decision.type`) and llama-server's
+`POST /v1/systemone`, one question named `q` per request. `RunDecisionTurnAsync` dispatches by provider name; the
+native lane (`RunNativeDecisionTurnAsync`) binds the input with the same binder and `MaxRunInputBytes` cap as
+`TryBuildBoundPrompt` (the bound data block is the `state`; the question is not repeated in it), gates the model
+(node-local, installed, decision type present, else `ValidationFailed`), admits capacity for `ModelRole.Decision`
+(`CapacityRejected` on a refusal), then calls `ILlamaServerSystemOneClient`, which leases the model's decision-role
+process (starting it when cold) under its own budget of 5 s plus 10 ms per estimated input token, capped at 30 s. Calls on
+one model are serialized in the client (the process is `--parallel 1`), and the budget starts only once a call owns the
+model, so concurrent nodes queue against their node timeout rather than time out on the server's queue. The 5–30 s
+window does not scale with model size: the small BERT-class models answer in about 0.1 s, but Kev-4B on a CPU build took
+about 1.3 s for a 200-token input in the live round, so an input of a few thousand tokens on CPU can exceed 30 s and fail
+`Timeout` on every attempt. It
+deliberately takes no node-wide invocation slot (the decision process is a pooled companion with its own lease, and
+the chat slot would queue it behind chat turns) and runs no invocation runner, so there is no invocation record and no
+runner watchdog; attachments and steering do not apply. An answer of another type than `questionType`, an off-label
+choice or a missing number fails `NodeFailed` (retryable), each with its own reason; HTTP 501 (the model is not a
+decision model) fails `ValidationFailed` naming the model; a refused request (HTTP 400, or the HTTP 500 "input (N tokens)
+is too large to process" b11669 answers for a prompt longer than the process's physical batch: `-ub` equals the launched
+context, 7936 for Julia-1 and Laya, 8192 for Kev-4B) also fails `ValidationFailed`, because a retry would send the same
+input again; the client's own timeout fails `Timeout`; transport errors fail `NodeFailed`. The server's text goes to the
+node log only.
+
+Output, the same shape from both providers:
+
+```jsonc
+{
+  "type": "choice",                  // echoes questionType
+  "choice": "billing",               // choice: the label. noul: "yes" at 0.5 or above, else "no". score: the nearest level's label
+  "noul": null,                      // noul only: the yes-likelihood
+  "score": null,                     // score only: continuous, may fall between levels (0 = the first level)
+  "legend": null,                    // score only: level index → level name, as the server reports it
+  "probabilities": { "billing": 0.99, "shipping": 0.01 },  // systemone choice (keyed by label) / score (keyed by level index "0", "1", …, as upstream sends them); null from llm
+  "confidence": 0.99,                // systemone where reported; null from llm
+  "provider": "systemone",
+  "usage": { "inputTokens": 239, "outputTokens": 0, … }
+}
+```
+
 `confidence` and `probabilities` are always null from the `llm` provider — a grammar-constrained answer carries no
-calibrated score, and inventing one would route on noise. Out-edges route on `output.choice`, directly or through a
-`Condition`. An interrupted `Running` DecisionModel row is failed `Interrupted` at startup like every model turn (§3.5).
+score, and inventing one would route on noise. The `systemone` numbers are **model-reported and uncalibrated**: upstream
+scales them by temperatures stored in the model file and does not guarantee calibration, so a threshold is a routing
+heuristic to measure on your own inputs, not a probability. For `noul` and `score`, `noul` and `score` are the truth
+and `choice` is a convenience for `eq` routing.
+
+Out-edges route on the output directly or through a `Condition` (ops `eq ne gt gte lt lte exists notExists`). Typical
+routes: a choice on `output.choice` `eq "billing"`; a yes/no on `output.noul` `gte 0.7`; urgency on `output.score`
+`gte 1.5`; an abstain branch on `output.confidence` `lt 0.6` beside the label edges. There is no threshold knob on the
+node itself (ADR 0021's rejection of a confidence threshold stands). An interrupted `Running` DecisionModel row is
+failed `Interrupted` at startup like every model turn (§3.5).
 
 ---
 

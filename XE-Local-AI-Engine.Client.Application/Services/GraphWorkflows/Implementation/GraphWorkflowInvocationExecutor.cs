@@ -64,6 +64,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IReadOnlyList<IGraphWorkflowDecisionProvider> _decisionProviders;
+    private readonly IReadOnlyList<IGraphWorkflowNativeDecisionProvider> _nativeDecisionProviders;
     private readonly IInvocationRunner _invocationRunner;
     private readonly GraphWorkflowInFlightLane<GraphWorkflowAgentTurn> _lane;
     private readonly ILogger<GraphWorkflowInvocationExecutor> _logger;
@@ -76,9 +77,11 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         GraphWorkflowSweepWake sweepWake,
         IOptions<GraphWorkflowOptions> options,
         IEnumerable<IGraphWorkflowDecisionProvider> decisionProviders,
+        IEnumerable<IGraphWorkflowNativeDecisionProvider> nativeDecisionProviders,
         ILogger<GraphWorkflowInvocationExecutor> logger)
     {
         _decisionProviders = [.. decisionProviders ?? throw new ArgumentNullException(nameof(decisionProviders))];
+        _nativeDecisionProviders = [.. nativeDecisionProviders ?? throw new ArgumentNullException(nameof(nativeDecisionProviders))];
         ArgumentNullException.ThrowIfNull(options);
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _sweepWake = sweepWake ?? throw new ArgumentNullException(nameof(sweepWake));
@@ -537,7 +540,8 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                 }
 
                 var classification = await services.GetRequiredService<IModelClassificationStore>().GetByNameAsync(effectiveModel, cancellationToken);
-                if (!LocalGgufModelKindClassifier.IsChatModel(effectiveModel, classification))
+                var decisionType = await LocalGgufModelKindClassifier.ReadDecisionTypeAsync(services.GetRequiredService<IGgufModelStore>(), effectiveModel, cancellationToken);
+                if (!LocalGgufModelKindClassifier.IsChatModel(effectiveModel, classification, decisionType))
                 {
                     return Invalid($"Graph workflow {callName} nodes require a model classified for chat.");
                 }
@@ -641,6 +645,11 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         StrongBox<bool> leaseAcquired,
         CancellationToken cancellationToken)
     {
+        if (_nativeDecisionProviders.FirstOrDefault(candidate => string.Equals(candidate.Name, config.Provider, StringComparison.Ordinal)) is { } native)
+        {
+            return await RunNativeDecisionTurnAsync(runId, nodeRunId, node, config, native, inputJson, leaseAcquired, cancellationToken);
+        }
+
         var provider = _decisionProviders.FirstOrDefault(candidate => string.Equals(candidate.Name, config.Provider, StringComparison.Ordinal));
         if (provider is null)
         {
@@ -659,25 +668,188 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             return Failure(GraphWorkflowFailureClass.NodeFailed, "The decision model answered with something that is not one of this node's labels.");
         }
 
-        return new GraphWorkflowAgentTurn
+        return DecisionTurn(decision, choice, provider.Name, turn.Usage, turn.Text, turn.Json);
+    }
+
+    /// <summary>
+    ///     A <c>DecisionModel</c> turn on a NATIVE provider: the LLM lane's bindings, model gate and capacity admission,
+    ///     then one provider call against the model's decision-role process instead of an invocation.
+    /// </summary>
+    /// <remarks>
+    ///     Skipped on purpose: the node-wide invocation slot (a pooled companion holds its own lease), the invocation runner
+    ///     (the client's budget bounds the call), attachments, steering and cloud models. A wrong type, an off-label choice
+    ///     or a missing number fails <c>NodeFailed</c>; HTTP 501 fails <c>ValidationFailed</c>. Why each: wiki 21 §4.9.
+    /// </remarks>
+    private async Task<GraphWorkflowAgentTurn> RunNativeDecisionTurnAsync(Guid runId,
+        Guid nodeRunId,
+        GraphWorkflowGraphNode node,
+        GraphWorkflowDecisionModelConfig config,
+        IGraphWorkflowNativeDecisionProvider provider,
+        string inputJson,
+        StrongBox<bool> leaseAcquired,
+        CancellationToken cancellationToken)
+    {
+        IDisposable? reservation = null;
+        try
+        {
+            // The question travels as the instructions, so the state is the bound input alone, built by the same binder and byte cap the LLM lane uses.
+            if (!TryBuildBoundPrompt(new GraphWorkflowLlmCallConfig
+                    {
+                        Model = config.Model,
+                        SystemPrompt = null,
+                        Prompt = string.Empty,
+                        InputBindings = config.InputBindings,
+                        ReasoningEffort = null,
+                        ResponseJsonSchema = null,
+                        SamplingOptions = null
+                    },
+                    inputJson,
+                    _options.MaxRunInputBytes,
+                    out var boundState,
+                    out var bindingError))
+            {
+                return Invalid($"Node '{node.NodeKey}' {bindingError}");
+            }
+
+            var state = boundState.Trim();
+            if (state.Length == 0)
+            {
+                return Invalid($"Node '{node.NodeKey}' asks its decision model about nothing: a '{provider.Name}' node needs 'inputBindings' naming the text to decide on.");
+            }
+
+            // The parser refuses a native node without a model, so this is the node's own pin, never a default.
+            var model = config.Model!;
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var services = scope.ServiceProvider;
+            var trust = services.GetRequiredService<IModelTrustResolver>();
+            var ggufModels = services.GetRequiredService<IGgufModelStore>();
+            if (await trust.ResolveAsync(model, cancellationToken) != ModelTrustLocality.Local
+                || !await NodeLocalModelGate.IsInstalledNodeLocalLlamaModelAsync(model,
+                    ggufModels,
+                    trust,
+                    services.GetRequiredService<ILocalModelProviderResolver>(),
+                    cancellationToken))
+            {
+                return Invalid($"Graph workflow '{provider.Name}' decision nodes require an installed node-managed GGUF decision model; node '{node.NodeKey}' names '{model}', which is not one.");
+            }
+
+            if (string.IsNullOrWhiteSpace(await LocalGgufModelKindClassifier.ReadDecisionTypeAsync(ggufModels, model, cancellationToken)))
+            {
+                return Invalid($"Node '{node.NodeKey}' names '{model}', which is not classified as a decision model: its GGUF declares no decision type.");
+            }
+
+            var admission = await services.GetRequiredService<ICapacityService>().DecideAsync(model, ModelRole.Decision, cancellationToken);
+            if (admission.Verdict == CapacityVerdict.RejectInsufficient)
+            {
+                return Failure(GraphWorkflowFailureClass.CapacityRejected, admission.Reason);
+            }
+
+            reservation = admission.Reservation;
+
+            // Running from here: no node-wide slot is taken (see the remarks), so the row may say a model is working on it now.
+            leaseAcquired.Value = true;
+            _sweepWake.Raise();
+
+            var decision = await provider.DecideAsync(new NativeDecisionRequest
+                {
+                    ModelName = model,
+                    State = state,
+                    Config = config
+                },
+                cancellationToken);
+            if (decision.FailureClass != GraphWorkflowFailureClass.None)
+            {
+                return Failure(decision.FailureClass, decision.FailureReason ?? "The decision model did not answer. See the node logs for details.");
+            }
+
+            if (!string.Equals(decision.Type, config.QuestionType, StringComparison.Ordinal))
+            {
+                return Failure(GraphWorkflowFailureClass.NodeFailed, $"The decision model answered a different kind of question than this node's '{config.QuestionType}'.");
+            }
+
+            var answered = config.QuestionType switch
+            {
+                GraphWorkflowGraph.DecisionNoul => decision.Noul is { } noul && double.IsFinite(noul),
+                GraphWorkflowGraph.DecisionScore => decision.Score is { } score && double.IsFinite(score),
+                _ => true
+            };
+            if (!answered)
+            {
+                return Failure(GraphWorkflowFailureClass.NodeFailed, $"The decision model answered this node's '{config.QuestionType}' question without a usable number.");
+            }
+
+            if (decision.Choice is not { } choice
+                || (config.QuestionType == GraphWorkflowGraph.DecisionChoice && !config.Labels.Contains(choice, StringComparer.Ordinal)))
+            {
+                return Failure(GraphWorkflowFailureClass.NodeFailed, "The decision model answered with something that is not one of this node's labels.");
+            }
+
+            var usage = new GraphWorkflowAgentUsage
+            {
+                InputTokens = decision.InputTokens,
+                OutputTokens = 0,
+                TotalTokens = decision.InputTokens,
+                ReasoningTokens = null,
+                DurationMs = decision.DurationMs,
+                FinishReason = null,
+                Model = model
+            };
+            _logger.LogInformation("Graph workflow run {RunId} node run {NodeRunId} ('{NodeKey}') decided with {Provider} on {Model}: {InputTokens} input tokens in {DurationMs} ms.",
+                runId,
+                nodeRunId,
+                node.NodeKey,
+                provider.Name,
+                model,
+                decision.InputTokens,
+                decision.DurationMs);
+            return DecisionTurn(decision, choice, provider.Name, usage, text: string.Empty, json: null);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            // A cancellation this node did not ask for (a supervisor drain, say) is a failure of the decision, not a stop of the run.
+            _logger.LogWarning(exception,
+                "Graph workflow run {RunId} node run {NodeRunId} ('{NodeKey}') could not complete its {Provider} decision.",
+                runId,
+                nodeRunId,
+                node.NodeKey,
+                provider.Name);
+            return Failure(GraphWorkflowFailureClass.NodeFailed, "This node run's decision model did not complete. See the node logs for details.");
+        }
+        finally
+        {
+            reservation?.Dispose();
+        }
+    }
+
+    /// <summary>A decided turn: the node's output document, the same shape whichever provider answered.</summary>
+    private static GraphWorkflowAgentTurn DecisionTurn(DecisionResult decision,
+        string choice,
+        string providerName,
+        GraphWorkflowAgentUsage? usage,
+        string text,
+        JsonElement? json) =>
+        new()
         {
             Succeeded = true,
             FailureClass = GraphWorkflowFailureClass.None,
             SanitizedReason = null,
-            Text = turn.Text,
-            Json = turn.Json,
-            Usage = turn.Usage,
+            Text = text,
+            Json = json,
+            Usage = usage,
             Output = JsonSerializer.SerializeToElement(new DecisionOutputPayload
                 {
+                    Type = decision.Type,
                     Choice = choice,
+                    Noul = decision.Noul,
+                    Score = decision.Score,
+                    Legend = decision.Legend,
                     Confidence = decision.Confidence,
                     Probabilities = decision.Probabilities,
-                    Provider = provider.Name,
-                    Usage = turn.Usage
+                    Provider = providerName,
+                    Usage = usage
                 },
                 JsonOptions)
         };
-    }
 
     internal static bool TryBuildBoundPrompt(GraphWorkflowLlmCallConfig config,
         string inputJson,
@@ -1440,7 +1612,15 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
     /// <summary>The <c>DecisionModel</c> <c>output</c> shape. Conditions route on <c>output.choice</c>.</summary>
     private sealed record DecisionOutputPayload
     {
+        public required string Type { get; init; }
+
         public required string Choice { get; init; }
+
+        public required double? Noul { get; init; }
+
+        public required double? Score { get; init; }
+
+        public required IReadOnlyDictionary<string, string>? Legend { get; init; }
 
         public required double? Confidence { get; init; }
 

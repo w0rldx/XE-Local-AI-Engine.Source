@@ -56,6 +56,10 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
     public GraphWorkflowHarness(GraphWorkflowAgentHostFixture host) =>
         _factory = (host ?? throw new ArgumentNullException(nameof(host))).Factory;
 
+    /// <summary>The agent-lane host with the <c>/v1/systemone</c> client faked, for native decision nodes.</summary>
+    public GraphWorkflowHarness(GraphWorkflowSystemOneHostFixture host) =>
+        _factory = (host ?? throw new ArgumentNullException(nameof(host))).Factory;
+
     /// <summary>The tool-lane host, whose invocation service is scripted per tool name.</summary>
     public GraphWorkflowHarness(GraphWorkflowToolHostFixture host) =>
         _factory = (host ?? throw new ArgumentNullException(nameof(host))).Factory;

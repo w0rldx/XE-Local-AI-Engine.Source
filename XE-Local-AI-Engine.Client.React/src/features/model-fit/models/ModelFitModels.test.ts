@@ -9,8 +9,8 @@ import {
 } from "@/features/model-fit/models/ModelFitModels";
 
 describe("model-fit use cases", () => {
-	it("exposes exactly the six llmfit-supported use cases", () => {
-		expect([...modelFitUseCases]).toEqual(["general", "coding", "reasoning", "chat", "multimodal", "embedding"]);
+	it("exposes exactly the seven server-allowed use cases", () => {
+		expect([...modelFitUseCases]).toEqual(["general", "coding", "reasoning", "chat", "multimodal", "embedding", "decision"]);
 	});
 
 	it("defaults to the coding use case matching the scheduler template default", () => {

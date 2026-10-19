@@ -48,7 +48,8 @@ public sealed class GgufMetadataReader : IGgufMetadataReader
             QuantType = header.QuantType,
             ContextLength = header.ContextLength,
             ExpertCount = expertCount,
-            IsMoe = header.IsMoe
+            IsMoe = header.IsMoe,
+            DecisionType = header.DecisionType
         };
     }
 }

@@ -51,6 +51,12 @@ internal sealed record GgufHeaderMetadata
 
     public long? FullAttentionInterval { get; init; }
 
+    /// <summary>
+    ///     The native decision-model family from <c>&lt;general.architecture&gt;.decision.type</c> (<c>laya</c>,
+    ///     <c>kev</c>, …), or null when the header declares none. A family, not a question type.
+    /// </summary>
+    public string? DecisionType { get; init; }
+
     public static GgufHeaderMetadata Empty { get; } = new()
     {
         Architecture = null,

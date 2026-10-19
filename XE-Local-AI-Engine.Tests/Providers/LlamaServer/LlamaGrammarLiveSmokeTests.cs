@@ -24,9 +24,14 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         <b>The negative control is the load-bearing assertion.</b> A 200 on the sanitized offer proves nothing on its
 ///         own: a REASONING model emits <c>reasoning_content</c> first, so llama.cpp never enters the constrained branch
 ///         and never compiles a grammar at all — Qwen3.6-27B returns 200 on the very payload that 400s on
-///         Qwen2.5-0.5B. So this test also posts the offer WITHOUT the compatibility pass and REQUIRES a 400 carrying
-///         <c>failed to parse grammar</c>. If that comes back 200, the run is inert and the test fails loudly rather
-///         than banking a meaningless green.
+///         Qwen2.5-0.5B. So this test also posts a synthetic tool WITHOUT the compatibility pass and REQUIRES a 400
+///         carrying <c>failed to parse grammar</c>. If that comes back 200, the run is inert and the test fails loudly
+///         rather than banking a meaningless green.
+///     </para>
+///     <para>
+///         The control is synthetic, not the raw production offer, because the production offer's large bounds are all
+///         upper bounds, and llama.cpp b11669 (upstream #26613) silently drops an upper bound above 2000 instead of
+///         failing. A <c>minLength</c> above 2000 still fails on every build from the b10201 floor through b11669.
 ///     </para>
 ///     <para>
 ///         The server is launched with <c>--jinja</c> because that is what production does
@@ -55,13 +60,21 @@ public sealed class LlamaGrammarLiveSmokeTests
     /// </summary>
     private const string GrammarFailureSignature = "failed to parse grammar";
 
+    /// <summary>
+    ///     The negative control's one bound: a <c>minLength</c> above llama.cpp's repetition threshold (2000). Every build
+    ///     from the b10201 floor through b11669 rejects it, and the compatibility pass strips it.
+    /// </summary>
+    private const int NegativeControlMinLength = 4096;
+
+    private const string NegativeControlToolName = "grammar_negative_control";
+
     private static readonly JsonSerializerOptions EvidenceJsonOptions = new()
     {
         WriteIndented = true
     };
 
     [Test]
-    public async Task LiveLlamaServer_CompilesTheSanitizedToolOffer_AndStillRejectsTheUnsanitizedOne()
+    public async Task LiveLlamaServer_CompilesTheSanitizedToolOffer_AndRejectsTheUnsanitizedNegativeControl()
     {
         var serverPath = Environment.GetEnvironmentVariable(ServerPathVariable);
         var modelPath = Environment.GetEnvironmentVariable(ModelPathVariable);
@@ -77,26 +90,32 @@ public sealed class LlamaGrammarLiveSmokeTests
         var server = RequireFile(ServerPathVariable, serverPath);
         var model = RequireFile(ModelPathVariable, modelPath);
 
-        // Both bodies come from the REAL MEAI OpenAI adapter over the REAL production tool offer, so what is posted is
-        // what the app posts — not a hand-serialized approximation of it.
+        // Both bodies come from the REAL MEAI OpenAI adapter, so what is posted is what the app posts — not a
+        // hand-serialized approximation of it. The sanitized half carries the REAL production offer plus the control
+        // tool, which proves the shipped catalog compiles AND that the pass neutralizes the control's bound.
         var offered = LlamaGrammarToolOffer.BuildProductionToolOffer();
-        AssertEx.NotEmpty(offered, "the production tool offer must not be empty, or both posts below would be vacuous.");
+        AssertEx.NotEmpty(offered, "the production tool offer must not be empty, or the sanitized post below would be vacuous.");
 
-        var original = new ChatOptions
+        var control = LlamaGrammarToolOffer.BuildTool(NegativeControlToolName,
+            $$$"""{"type":"object","properties":{"value":{"type":"string","minLength":{{{NegativeControlMinLength}}}}},"required":["value"]}""");
+        var positive = new ChatOptions
         {
-            Tools = [.. offered.Cast<AITool>()]
+            Tools = [.. offered.Cast<AITool>(), control]
         };
-        var unsanitizedBody = await LlamaGrammarToolOffer.CaptureWireBodyAsync(original, CancellationToken.None);
-        var sanitizedBody = await LlamaGrammarToolOffer.CaptureWireBodyAsync(AssertEx.NotNull(DeferredLlamaServerChatClient.ApplyToolSchemaCompatibility(original)),
+        var negative = new ChatOptions
+        {
+            Tools = [control]
+        };
+        var sanitizedBody = await LlamaGrammarToolOffer.CaptureWireBodyAsync(AssertEx.NotNull(DeferredLlamaServerChatClient.ApplyToolSchemaCompatibility(positive)),
             CancellationToken.None);
+        var negativeControlBody = await LlamaGrammarToolOffer.CaptureWireBodyAsync(negative, CancellationToken.None);
 
-        // Pre-flight: the negative control can only mean something while the raw offer still carries an uncompilable
-        // bound. If the catalog ever drops below the limit on its own, say so here rather than letting the live 400
-        // assertion fail with a confusing "the server accepted it" message.
-        AssertEx.True(LlamaGrammarToolSchemaCompatibility.RequiresSanitizing(ExtractTools(unsanitizedBody)),
-            "the unsanitized production offer no longer carries any bound above "
-            + $"{LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound}, so it is not a negative control any more. "
-            + "Either the catalog changed or the compatibility pass leaked into the raw offer.");
+        // Pre-flight: the control means something only while the pass would sanitize it and the posted body still
+        // carries it raw. Say so here rather than letting the live 400 assertion fail with "the server accepted it".
+        AssertEx.True(LlamaGrammarToolSchemaCompatibility.RequiresSanitizing(ExtractTools(negativeControlBody)),
+            $"the negative control's minLength {NegativeControlMinLength} is no longer above "
+            + $"{LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound}, or the pass leaked into the raw body, "
+            + "so it is not a negative control any more.");
         AssertEx.False(LlamaGrammarToolSchemaCompatibility.RequiresSanitizing(ExtractTools(sanitizedBody)),
             "the sanitized body must carry no bound above the compilable limit before it is worth posting.");
 
@@ -118,18 +137,18 @@ public sealed class LlamaGrammarLiveSmokeTests
                 "the SANITIZED production tool offer must compile into a grammar on a live llama-server. "
                 + $"Server said: {Excerpt(sanitized.Body)}");
 
-            var unsanitized = await PostChatCompletionAsync(http, unsanitizedBody);
-            AssertEx.False(unsanitized.Status == HttpStatusCode.OK, InertRunMessage(unsanitized.Body));
+            var negativeControl = await PostChatCompletionAsync(http, negativeControlBody);
+            AssertEx.False(negativeControl.Status == HttpStatusCode.OK, InertRunMessage(negativeControl.Body));
             AssertEx.Equal(HttpStatusCode.BadRequest,
-                unsanitized.Status,
-                $"the UNSANITIZED offer must be rejected with 400. Server said: {Excerpt(unsanitized.Body)}");
-            AssertEx.Contains(unsanitized.Body,
+                negativeControl.Status,
+                $"the UNSANITIZED negative control must be rejected with 400. Server said: {Excerpt(negativeControl.Body)}");
+            AssertEx.Contains(negativeControl.Body,
                 GrammarFailureSignature,
                 StringComparison.OrdinalIgnoreCase,
                 "the 400 must be the GRAMMAR failure this pass exists to prevent, not some unrelated rejection. "
-                + $"Server said: {Excerpt(unsanitized.Body)}");
+                + $"Server said: {Excerpt(negativeControl.Body)}");
 
-            await WriteEvidenceAsync(server, model, sanitized, unsanitized);
+            await WriteEvidenceAsync(server, model, sanitized, negativeControl);
         }
         finally
         {
@@ -151,19 +170,19 @@ public sealed class LlamaGrammarLiveSmokeTests
     }
 
     /// <summary>
-    ///     Message for the one outcome that must never be allowed to pass: the unsanitized offer was ACCEPTED. It names
-    ///     both causes explicitly, because the two demand opposite responses — one means this run measured nothing, the
-    ///     other means our constant is now wrong.
+    ///     Message for the one outcome that must never pass: the unsanitized negative control was ACCEPTED. It names both
+    ///     causes, because they demand opposite responses: one means this run measured nothing, the other a changed build.
     /// </summary>
     private static string InertRunMessage(string body)
     {
-        return "INERT RUN — the UNSANITIZED tool offer was ACCEPTED (HTTP 200), so this smoke proved nothing. "
-               + "Exactly one of these is true, and they need opposite responses:\n"
+        return $"INERT RUN — the UNSANITIZED negative control (one tool, minLength {NegativeControlMinLength}) was ACCEPTED "
+               + "(HTTP 200), so this smoke proved nothing. Exactly one of these is true, and they need opposite responses:\n"
                + "  (a) the model is a REASONING model: it emits reasoning_content first, so llama.cpp never enters the "
                + "constrained branch and never compiles the grammar. Re-run against a non-reasoning tool-capable model "
                + "(e.g. Qwen2.5-0.5B-Instruct) — this run measured nothing.\n"
-               + "  (b) llama.cpp raised its repetition limits: re-measure the per-keyword and whole-tools-array ceiling "
-               + $"and update LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound (currently "
+               + "  (b) this llama.cpp build no longer rejects a minimum repetition above its threshold: re-measure the "
+               + "per-keyword ceiling on it, pick a control bound it still rejects, and re-check "
+               + $"LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound (currently "
                + $"{LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound}).\n"
                + $"Server said: {Excerpt(body)}";
     }
@@ -341,7 +360,7 @@ public sealed class LlamaGrammarLiveSmokeTests
     ///     Writes the verdict of BOTH posts. The runner script requires this file, so a skipped or half-run test can
     ///     never be mistaken for a pass by anything reading only the exit code — TUnit reports a skip as success.
     /// </summary>
-    private static async Task WriteEvidenceAsync(string serverPath, string modelPath, LiveResponse sanitized, LiveResponse unsanitized)
+    private static async Task WriteEvidenceAsync(string serverPath, string modelPath, LiveResponse sanitized, LiveResponse negativeControl)
     {
         var evidencePath = Environment.GetEnvironmentVariable(EvidencePathVariable);
         if (string.IsNullOrWhiteSpace(evidencePath))
@@ -351,7 +370,7 @@ public sealed class LlamaGrammarLiveSmokeTests
 
         var payload = new
         {
-            schemaVersion = 1,
+            schemaVersion = 2,
             capturedAtUtc = DateTimeOffset.UtcNow,
             result = "passed",
             llamaServer = serverPath,
@@ -362,12 +381,14 @@ public sealed class LlamaGrammarLiveSmokeTests
                 expected = 200,
                 actual = (int)sanitized.Status
             },
-            unsanitizedOffer = new
+            negativeControl = new
             {
+                tool = NegativeControlToolName,
+                minLength = NegativeControlMinLength,
                 expected = 400,
-                actual = (int)unsanitized.Status,
+                actual = (int)negativeControl.Status,
                 signature = GrammarFailureSignature,
-                message = Excerpt(unsanitized.Body)
+                message = Excerpt(negativeControl.Body)
             }
         };
 

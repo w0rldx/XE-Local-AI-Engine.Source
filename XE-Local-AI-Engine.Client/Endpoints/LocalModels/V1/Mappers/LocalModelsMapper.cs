@@ -68,8 +68,8 @@ internal static class LocalModelsMapper
                .Select(descriptor =>
                {
                    // Kind from the name alone (a fresh GGUF carries no probe), per ModelKindDetector.EmbeddingNameFragments and its reranker sibling; the picker shows only Chat. The MTP- draft
-                   // quant marker wins, then RERANK before embedding (bge-reranker-… matches both), then a BGE-/BGE: prefix or an EMBED / ALL-MINILM / NOMIC-EMBED / MXBAI-EMBED fragment.
-                   var kind = LocalGgufModelKindClassifier.Classify(descriptor.ModelName);
+                   // quant marker wins, then RERANK before embedding (bge-reranker-… matches both), then a BGE-/BGE: prefix or an EMBED / ALL-MINILM / NOMIC-EMBED / MXBAI-EMBED fragment; a header decision.type outranks them all.
+                   var kind = LocalGgufModelKindClassifier.Classify(descriptor.ModelName, descriptor.DecisionType);
                    return new LocalModelResponse
                    {
                        ModelName = descriptor.ModelName,
@@ -81,16 +81,15 @@ internal static class LocalModelsMapper
                        IsSelected = string.Equals(descriptor.ModelName, selectedModelName, StringComparison.OrdinalIgnoreCase),
                        Kind = kind.ToString(),
                        DetectedKind = kind.ToString(),
-                       // The template detector adds "completion" to every GGUF; an embedding or reranker head generates no text.
-                       Capabilities = kind is ModelKind.Embedding or ModelKind.Reranker
-                           ? [.. descriptor.Capabilities.Where(static capability => !string.Equals(capability, "completion", StringComparison.Ordinal))]
-                           : descriptor.Capabilities,
-                       IsReasoningCapable = descriptor.IsReasoningCapable,
-                       IsNativeReasoningCapable = descriptor.IsNativeReasoningCapable,
+                       // The template detector adds "completion" to every GGUF; an embedding, reranker or decision head generates no text. A decision model
+                       // (Kev-4B) can still carry its base model's chat template, so it reports none of the template-derived chat capabilities either.
+                       Capabilities = GgufCapabilitiesFor(kind, descriptor.Capabilities),
+                       IsReasoningCapable = kind != ModelKind.Decision && descriptor.IsReasoningCapable,
+                       IsNativeReasoningCapable = kind != ModelKind.Decision && descriptor.IsNativeReasoningCapable,
                        // Detected from the SAME chat template as the reasoning flags: a graded model whose template renders no reasoning end marker keeps its effort but
                        // loses its token cap, and the node says so rather than letting the UI imply a budget that llama.cpp silently ignores.
                        ReasoningBudgetEnforceable = descriptor.ReasoningBudgetEnforceable,
-                       IsToolCapable = descriptor.IsToolCapable,
+                       IsToolCapable = kind != ModelKind.Decision && descriptor.IsToolCapable,
                        IsMultimodalCapable = descriptor.IsMultimodalCapable,
                        Family = descriptor.Family,
                        ParameterSize = descriptor.ParameterSize,
@@ -101,6 +100,14 @@ internal static class LocalModelsMapper
                .OrderBy(static model => model.ModelName, StringComparer.OrdinalIgnoreCase)
                .ToArray();
     }
+
+    private static IReadOnlyList<string> GgufCapabilitiesFor(ModelKind kind, IReadOnlyList<string> detected) =>
+        kind switch
+        {
+            ModelKind.Decision => [],
+            ModelKind.Embedding or ModelKind.Reranker => [.. detected.Where(static capability => !string.Equals(capability, "completion", StringComparison.Ordinal))],
+            _ => detected
+        };
 
     // Appends GGUF entries after the Ollama group, deduping by ModelName (case-insensitive) so a name installed under
     // both runtimes is listed once (the Ollama entry wins). Returns a single ordered array (Ollama first, then GGUF).

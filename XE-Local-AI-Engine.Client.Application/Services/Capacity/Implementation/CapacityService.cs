@@ -174,8 +174,8 @@ public sealed class CapacityService : ICapacityService
             };
         }
 
-        // Pooled roles (embedder, reranker) are spawned below every caller; the embedder is booked but never refused on budget.
-        var isPooledRole = role is ModelRole.Embedding or ModelRole.Reranker;
+        // Pooled roles (embedder, reranker, decision) are spawned below every caller; the embedder is booked but never refused on budget.
+        var isPooledRole = role is ModelRole.Embedding or ModelRole.Reranker or ModelRole.Decision;
         var neverReject = request.NeverRejectOnBudget;
         var ollamaWarning = isOllama && running.Count > 0;
         var canPublish = !launchSnapshot.HasGlobalBlocker;
@@ -203,7 +203,7 @@ public sealed class CapacityService : ICapacityService
         // A pooled role and the supervisor's own chat admission skip it: at the cap the supervisor evicts within the class or refuses the launch itself.
         var activeProcessKeys = running.Select(static key => new ProcessLaunchAdmissionKey(key.ModelName, key.Role))
                                        .Concat(launchSnapshot.AdmittedKeys)
-                                       .Where(static key => key.Role is not (ModelRole.Embedding or ModelRole.Reranker))
+                                       .Where(static key => key.Role is not (ModelRole.Embedding or ModelRole.Reranker or ModelRole.Decision))
                                        .ToHashSet();
         if (!isPooledRole && !request.SupervisorEnforcesProcessCap && activeProcessKeys.Count + 1 > _localProviderResolver.MaxLoadedProcesses)
         {
@@ -279,7 +279,7 @@ public sealed class CapacityService : ICapacityService
         bool ollamaWarning,
         bool published)
     {
-        if (request.Role is ModelRole.Embedding or ModelRole.Reranker)
+        if (request.Role is ModelRole.Embedding or ModelRole.Reranker or ModelRole.Decision)
         {
             _logger.LogDebug("Capacity admitted pooled {Model} ({Role}); launch admission published: {Published}.", request.ModelName, request.Role, published);
         }

@@ -73,7 +73,7 @@ internal static class GgufCapabilityDetector
     ///     <c>&lt;/thinking&gt;</c> is the alternate spelling of the first, and all stay literal since a loose word would match prose.
     /// </summary>
     /// <remarks>
-    ///     The server gate (<c>tools/server/server-common.cpp</c> at the pinned b10201) writes the budget onto the sampler ONLY when
+    ///     The server gate (<c>tools/server/server-common.cpp</c> verified at b10201) writes the budget onto the sampler ONLY when
     ///     <c>chat_params.thinking_end_tags</c> is non-empty; an empty set is accepted, silently ignored, and the model free-runs. It
     ///     is filled by a per-family parser hardcoding the tags, or the generic autoparser diffing out the marker written AFTER the
     ///     reasoning text; both need a literal end marker. These markers were read out of installed GGUF headers — that census and the

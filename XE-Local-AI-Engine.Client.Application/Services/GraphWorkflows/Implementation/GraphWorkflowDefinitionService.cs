@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Decisions;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Tools;
@@ -270,7 +271,7 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
             {
                 if (await IsNotInstalledAsync(model, cancellationToken))
                 {
-                    warnings.Add(NotInstalledWarning(node.NodeKey, model));
+                    warnings.Add(NotInstalledWarning(node.NodeKey, model, IsNativeDecisionNode(node.Config) ? "decision" : "chat"));
                 }
             }
             else if (!(await _trust.ResolveCloudGrantsAsync(model, cancellationToken)).UnattendedRuns
@@ -285,10 +286,14 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
         return warnings;
     }
 
-    private static GraphWorkflowValidationError NotInstalledWarning(string nodeKey, string model) =>
+    private static GraphWorkflowValidationError NotInstalledWarning(string nodeKey, string model, string modelKind = "chat") =>
         new(nodeKey,
-            $"Node '{nodeKey}' pins model '{model}', which is not an installed node-managed GGUF chat model, so a run will refuse this node. "
+            $"Node '{nodeKey}' pins model '{model}', which is not an installed node-managed GGUF {modelKind} model, so a run will refuse this node. "
             + "Install the model or pin another one.");
+
+    /// <summary>A <c>DecisionModel</c> node answered by a native decision model rather than a chat model.</summary>
+    private static bool IsNativeDecisionNode(GraphWorkflowNodeConfig config) =>
+        config is GraphWorkflowDecisionModelConfig { Provider: SystemOneDecisionProvider.ProviderName };
 
     /// <summary>Whether <paramref name="model" /> routes to llama-server with no GGUF installed under its name, answering <see langword="false" /> when a lookup cannot say.</summary>
     private async Task<bool> IsMissingLlamaServerModelAsync(string model, CancellationToken cancellationToken)

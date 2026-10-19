@@ -38,6 +38,7 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 		agentOptionsQuery,
 		modelOptionsQuery,
 		llmModelOptionsQuery,
+		decisionModelOptionsQuery,
 		createMutation,
 		updateMutation,
 		validateMutation,
@@ -205,6 +206,9 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 			agentOptions={agentOptionsQuery.data ?? []}
 			modelOptions={modelOptionsQuery.data ?? []}
 			llmModelOptions={llmModelOptionsQuery.data ?? []}
+			decisionModelOptions={decisionModelOptionsQuery.data ?? []}
+			llmModelOptionsReady={llmModelOptionsQuery.isSuccess}
+			decisionModelOptionsReady={decisionModelOptionsQuery.isSuccess}
 			graphSettings={editor.settings}
 		/>
 	) : selectedEdge ? (

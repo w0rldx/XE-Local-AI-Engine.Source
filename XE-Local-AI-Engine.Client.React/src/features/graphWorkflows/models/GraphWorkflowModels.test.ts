@@ -11,6 +11,7 @@ import {
 	graphWorkflowConditionOperators,
 	graphWorkflowDecisionKinds,
 	graphWorkflowDecisionProviders,
+	graphWorkflowDecisionQuestionTypes,
 	graphWorkflowDefaultMaxAttempts,
 	graphWorkflowDefinitionKinds,
 	graphWorkflowEventTypeLabelKey,
@@ -31,8 +32,55 @@ import {
 	narrowGraphWorkflowNodeRunStatus,
 	narrowGraphWorkflowRunStatus,
 	normalizeGraphWorkflowConditionOperator,
+	readGraphWorkflowDecisionModelOutput,
 	toGraphWorkflowDecisionKinds,
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
+
+describe("readGraphWorkflowDecisionModelOutput", () => {
+	it("reads an llm choice output (no type) as choice with every native member null", () => {
+		expect(readGraphWorkflowDecisionModelOutput({ choice: "coding", provider: "llm" })).toEqual({
+			type: "choice",
+			choice: "coding",
+			noul: null,
+			score: null,
+			legend: null,
+			probabilities: null,
+			confidence: null,
+		});
+	});
+
+	it("keeps the systemone numbers and drops members of the wrong shape", () => {
+		expect(
+			readGraphWorkflowDecisionModelOutput({
+				type: "score",
+				choice: "mid",
+				score: 1.4,
+				legend: { "0": "low", "1": "mid", "2": 7 },
+				probabilities: { "0": 0.1, "1": 0.7, "2": "high" },
+				confidence: Number.NaN,
+			}),
+		).toEqual({
+			type: "score",
+			choice: "mid",
+			noul: null,
+			score: 1.4,
+			legend: { "0": "low", "1": "mid" },
+			probabilities: { "0": 0.1, "1": 0.7 },
+			confidence: null,
+		});
+	});
+
+	it("reads a present but unknown type as undefined, keeping the choice fallback for an absent one only", () => {
+		expect(readGraphWorkflowDecisionModelOutput({ type: "ranking", choice: "a" })?.type).toBeUndefined();
+		expect(readGraphWorkflowDecisionModelOutput({ type: 3, choice: "a" })?.type).toBeUndefined();
+		expect(readGraphWorkflowDecisionModelOutput({ type: null, choice: "a" })?.type).toBe("choice");
+	});
+
+	it("is undefined for anything that is not an output object", () => {
+		expect(readGraphWorkflowDecisionModelOutput(undefined)).toBeUndefined();
+		expect(readGraphWorkflowDecisionModelOutput(["choice"])).toBeUndefined();
+	});
+});
 
 describe("graph-workflow vocabularies", () => {
 	// The member LISTS are the contract with the server: they cross the wire as C# enum names, so a member silently
@@ -57,7 +105,8 @@ describe("graph-workflow vocabularies", () => {
 		expect(graphWorkflowDecisionKinds).toEqual(["Approve", "Reject", "Answer"]);
 		expect(graphWorkflowPauseDecisionKinds).toEqual(["Approve", "Reject"]);
 		expect(graphWorkflowDefinitionKinds).toEqual(["Standard", "Chat"]);
-		expect(graphWorkflowDecisionProviders).toEqual(["llm"]);
+		expect(graphWorkflowDecisionProviders).toEqual(["llm", "systemone"]);
+		expect(graphWorkflowDecisionQuestionTypes).toEqual(["choice", "noul", "score"]);
 		expect(graphWorkflowFailureClasses).toHaveLength(10);
 		expect(graphWorkflowConditionOperators).toEqual(["Eq", "Ne", "Gt", "Gte", "Lt", "Lte", "Exists", "NotExists"]);
 		expect(graphWorkflowEventTypes).toHaveLength(20);

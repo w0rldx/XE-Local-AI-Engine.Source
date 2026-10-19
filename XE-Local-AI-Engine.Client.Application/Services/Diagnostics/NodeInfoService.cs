@@ -340,6 +340,7 @@ public sealed class NodeInfoService : INodeInfoService
                                        {
                                            ModelRole.Embedding => "embedding",
                                            ModelRole.Reranker => "reranker",
+                                           ModelRole.Decision => "decision",
                                            _ => "chat"
                                        },
                                        State = (process.HasExited, process.IsResponsive) switch

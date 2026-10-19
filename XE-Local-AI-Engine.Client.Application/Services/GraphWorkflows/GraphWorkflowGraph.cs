@@ -43,14 +43,30 @@ internal sealed class GraphWorkflowGraph
     private static readonly string[] ReasoningEfforts = ["none", "low", "medium", "high"];
 
     /// <summary>The decision providers a <c>DecisionModel</c> node may name. Closed: a provider this build cannot run is refused at save.</summary>
-    internal static readonly string[] DecisionProviders = [LlmDecisionProvider.ProviderName];
+    internal static readonly string[] DecisionProviders = [LlmDecisionProvider.ProviderName, SystemOneDecisionProvider.ProviderName];
+
+    /// <summary>The <c>questionType</c> a <c>DecisionModel</c> node reads when it names none.</summary>
+    internal const string DecisionChoice = "choice";
+
+    internal const string DecisionNoul = "noul";
+
+    internal const string DecisionScore = "score";
+
+    /// <summary>The question types a <c>DecisionModel</c> node may ask. Closed, like the providers.</summary>
+    internal static readonly string[] DecisionQuestionTypes = [DecisionChoice, DecisionNoul, DecisionScore];
 
     /// <summary>The label bounds of a <c>DecisionModel</c> node. Flat strings, so the enum grammar stays far below the repetition bound.</summary>
     private const int MinDecisionLabels = 2;
 
     private const int MaxDecisionLabels = 32;
 
+    /// <summary>A score question's ordered levels: upstream answers 2 to 10.</summary>
+    private const int MaxDecisionScoreLevels = 10;
+
     private const int MaxDecisionLabelLength = 64;
+
+    /// <summary>The longest description a choice criterion may carry.</summary>
+    private const int MaxDecisionCriterionLength = 512;
 
     /// <summary>The alias bounds of a <c>Start</c> node.</summary>
     private const int MaxAliases = 32;
@@ -77,7 +93,7 @@ internal sealed class GraphWorkflowGraph
         [GraphWorkflowNodeKind.Pause] = ["prompt", "allowedDecisions", "requireComment"],
         [GraphWorkflowNodeKind.End] = ["outcome", "resultPath", "publishToChat"],
         [GraphWorkflowNodeKind.ChatInput] = ["prompt"],
-        [GraphWorkflowNodeKind.DecisionModel] = ["question", "labels", "provider", "model", "inputBindings"]
+        [GraphWorkflowNodeKind.DecisionModel] = ["question", "questionType", "labels", "criteria", "provider", "model", "inputBindings"]
     };
 
     /// <summary>
@@ -608,14 +624,7 @@ internal sealed class GraphWorkflowGraph
             {
                 Prompt = RequiredString(config, "prompt", owner)
             },
-            GraphWorkflowNodeKind.DecisionModel => new GraphWorkflowDecisionModelConfig
-            {
-                Question = RequiredString(config, "question", owner),
-                Labels = ParseLabels(config, nodeKey),
-                Provider = ParseDecisionProvider(config, nodeKey),
-                Model = StrictOptionalString(config, "model", nodeKey)?.Trim() is { Length: > 0 } decisionModel ? decisionModel : null,
-                InputBindings = ParseBindings(config, "inputBindings", nodeKey)
-            },
+            GraphWorkflowNodeKind.DecisionModel => ParseDecisionModel(config, nodeKey, owner),
             _ => new GraphWorkflowEmptyConfig()
         };
     }
@@ -681,10 +690,106 @@ internal sealed class GraphWorkflowGraph
     }
 
     /// <summary>
-    ///     A <c>DecisionModel</c> node's labels: 2 to 32 distinct, non-blank strings of at most 64 characters. They become
-    ///     a grammar enum, so a flat, bounded list is what keeps it compilable.
+    ///     A <c>DecisionModel</c> node, held to the question-type matrix: <c>choice</c> takes 2 to 32 labels and optional
+    ///     <c>criteria</c> keyed by them; <c>score</c> takes 2 to 10 ordered levels and no criteria; <c>noul</c> takes neither.
     /// </summary>
-    private static IReadOnlyList<string> ParseLabels(JsonElement config, string nodeKey)
+    /// <remarks>
+    ///     <c>llm</c> answers <c>choice</c> only, because its grammar is an enum; <c>systemone</c> must name its model, because
+    ///     no node setting picks a default decision model.
+    /// </remarks>
+    private static GraphWorkflowDecisionModelConfig ParseDecisionModel(JsonElement config, string nodeKey, string owner)
+    {
+        // The question first, as before, so a node missing it is still told that before anything else.
+        var question = RequiredString(config, "question", owner);
+        var provider = ParseDecisionProvider(config, nodeKey);
+        var questionType = StrictOptionalString(config, "questionType", nodeKey)?.Trim() is { Length: > 0 } named ? named : DecisionChoice;
+        if (!DecisionQuestionTypes.Contains(questionType, StringComparer.Ordinal))
+        {
+            throw new GraphWorkflowValidationException($"Node '{nodeKey}' asks a '{questionType}' question; expected one of {string.Join(", ", DecisionQuestionTypes)}.");
+        }
+
+        if (questionType != DecisionChoice && provider == LlmDecisionProvider.ProviderName)
+        {
+            throw new GraphWorkflowValidationException($"Node '{nodeKey}' asks a '{questionType}' question, which the 'llm' decision provider cannot answer; it answers 'choice' only. Use 'systemone'.");
+        }
+
+        var model = StrictOptionalString(config, "model", nodeKey)?.Trim() is { Length: > 0 } decisionModel ? decisionModel : null;
+        if (model is null && provider == SystemOneDecisionProvider.ProviderName)
+        {
+            throw new GraphWorkflowValidationException($"Node '{nodeKey}' uses the 'systemone' decision provider and must name its decision model in 'model'.");
+        }
+
+        var hasLabels = config.TryGetProperty("labels", out var labels) && labels.ValueKind != JsonValueKind.Null;
+        var hasCriteria = config.TryGetProperty("criteria", out var criteria) && criteria.ValueKind != JsonValueKind.Null;
+        if (questionType != DecisionChoice && hasCriteria)
+        {
+            throw new GraphWorkflowValidationException($"Node '{nodeKey}' declares 'criteria', which only a 'choice' question reads.");
+        }
+
+        if (questionType == DecisionNoul && hasLabels)
+        {
+            throw new GraphWorkflowValidationException($"Node '{nodeKey}' asks a 'noul' question, which answers yes or no and takes no 'labels'.");
+        }
+
+        var inputBindings = ParseBindings(config, "inputBindings", nodeKey);
+        if (inputBindings.Count == 0 && provider == SystemOneDecisionProvider.ProviderName)
+        {
+            throw new GraphWorkflowValidationException(
+                $"Node '{nodeKey}' uses the 'systemone' decision provider and needs at least one 'inputBindings' entry naming the text to decide on.");
+        }
+
+        var parsedLabels = questionType switch
+        {
+            DecisionNoul => [],
+            DecisionScore => ParseLabels(config, nodeKey, MaxDecisionScoreLevels),
+            _ => ParseLabels(config, nodeKey, MaxDecisionLabels)
+        };
+
+        return new GraphWorkflowDecisionModelConfig
+        {
+            Question = question,
+            QuestionType = questionType,
+            Labels = parsedLabels,
+            Criteria = hasCriteria ? ParseCriteria(criteria, parsedLabels, nodeKey) : new Dictionary<string, string>(StringComparer.Ordinal),
+            Provider = provider,
+            Model = model,
+            InputBindings = inputBindings
+        };
+    }
+
+    /// <summary>A choice question's <c>criteria</c>: an object mapping some of its labels to a non-blank description.</summary>
+    private static Dictionary<string, string> ParseCriteria(JsonElement criteria, IReadOnlyList<string> labels, string nodeKey)
+    {
+        if (criteria.ValueKind != JsonValueKind.Object)
+        {
+            throw new GraphWorkflowValidationException($"The 'criteria' on node '{nodeKey}' must be an object mapping a label to its description.");
+        }
+
+        var parsed = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var member in criteria.EnumerateObject())
+        {
+            if (!labels.Contains(member.Name, StringComparer.Ordinal))
+            {
+                throw new GraphWorkflowValidationException($"The 'criteria' on node '{nodeKey}' describes '{member.Name}', which is not one of its labels.");
+            }
+
+            var description = member.Value.ValueKind == JsonValueKind.String ? member.Value.GetString()?.Trim() : null;
+            if (string.IsNullOrEmpty(description) || description.Length > MaxDecisionCriterionLength)
+            {
+                throw new GraphWorkflowValidationException($"The 'criteria' on node '{nodeKey}' describes '{member.Name}' with something that is not a string of 1 to {MaxDecisionCriterionLength} characters.");
+            }
+
+            parsed[member.Name] = description;
+        }
+
+        return parsed;
+    }
+
+    /// <summary>
+    ///     A <c>DecisionModel</c> node's labels: 2 to <paramref name="maxLabels" /> distinct, non-blank strings of at most
+    ///     64 characters. They become a grammar enum, so a flat, bounded list is what keeps it compilable.
+    /// </summary>
+    private static IReadOnlyList<string> ParseLabels(JsonElement config, string nodeKey, int maxLabels)
     {
         if (!config.TryGetProperty("labels", out var value) || value.ValueKind != JsonValueKind.Array)
         {
@@ -708,9 +813,9 @@ internal sealed class GraphWorkflowGraph
             labels.Add(label);
         }
 
-        return labels.Count is >= MinDecisionLabels and <= MaxDecisionLabels
+        return labels.Count >= MinDecisionLabels && labels.Count <= maxLabels
             ? labels
-            : throw new GraphWorkflowValidationException($"Node '{nodeKey}' declares {labels.Count} label(s); a DecisionModel node needs between {MinDecisionLabels} and {MaxDecisionLabels}.");
+            : throw new GraphWorkflowValidationException($"Node '{nodeKey}' declares {labels.Count} label(s); a DecisionModel node needs between {MinDecisionLabels} and {maxLabels}.");
     }
 
     /// <summary>The decision provider, <c>llm</c> when the node names none; anything outside the closed vocabulary is refused.</summary>

@@ -71,6 +71,11 @@ export interface GraphWorkflowNodeConfigPanelProps {
 	readonly agentOptions: readonly GraphWorkflowAgentOption[];
 	readonly modelOptions: readonly GraphWorkflowModelOption[];
 	readonly llmModelOptions?: readonly GraphWorkflowModelOption[];
+	/** Installed `Decision`-kind models, for a `systemone` DecisionModel node. */
+	readonly decisionModelOptions?: readonly GraphWorkflowModelOption[];
+	/** Whether the LLM and Decision model queries succeeded; the DecisionModel form only clears a model against a loaded list. */
+	readonly llmModelOptionsReady?: boolean;
+	readonly decisionModelOptionsReady?: boolean;
 	/** The graph's `kind` and `chat` block: they decide which chat switches apply and what End publishes by default. */
 	readonly graphSettings?: GraphWorkflowGraphSettings;
 	readonly readOnly?: boolean;
@@ -130,6 +135,9 @@ export function GraphWorkflowNodeConfigPanel({
 	agentOptions,
 	modelOptions,
 	llmModelOptions = modelOptions,
+	decisionModelOptions = [],
+	llmModelOptionsReady = true,
+	decisionModelOptionsReady = true,
 	graphSettings = standardGraphSettings,
 	readOnly = false,
 }: GraphWorkflowNodeConfigPanelProps) {
@@ -389,6 +397,9 @@ export function GraphWorkflowNodeConfigPanel({
 						errorFor={errorFor}
 						onTouch={touch}
 						modelOptions={llmModelOptions}
+						decisionModelOptions={decisionModelOptions}
+						modelOptionsReady={llmModelOptionsReady}
+						decisionModelOptionsReady={decisionModelOptionsReady}
 						readOnly={readOnly}
 					/>
 				);

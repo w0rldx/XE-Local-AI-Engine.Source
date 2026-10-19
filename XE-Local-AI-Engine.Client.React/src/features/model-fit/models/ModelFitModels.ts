@@ -1,11 +1,19 @@
 import { z } from "zod";
 
-// The six llmfit-supported use cases (server-enforced allowlist). The recommendations page lets the
-// operator pick one and re-queries; the backend validates the value again and is authoritative. Stored as a
-// string literal union so the selector and query key stay type-safe.
-export type ModelFitUseCase = "general" | "coding" | "reasoning" | "chat" | "multimodal" | "embedding";
+// The seven use cases of the server-enforced allowlist (`decision` = native decision models served by llama-server's
+// systemone endpoint). The recommendations page lets the operator pick one and re-queries; the backend validates the
+// value again and is authoritative. Stored as a string literal union so the selector and query key stay type-safe.
+export type ModelFitUseCase = "general" | "coding" | "reasoning" | "chat" | "multimodal" | "embedding" | "decision";
 
-export const modelFitUseCases: readonly ModelFitUseCase[] = ["general", "coding", "reasoning", "chat", "multimodal", "embedding"];
+export const modelFitUseCases: readonly ModelFitUseCase[] = [
+	"general",
+	"coding",
+	"reasoning",
+	"chat",
+	"multimodal",
+	"embedding",
+	"decision",
+];
 
 // Default use case the page opens on (matches the scheduler template default).
 export const defaultModelFitUseCase: ModelFitUseCase = "coding";
@@ -122,7 +130,7 @@ export interface ModelFitRecommendationFilters {
 	readonly useCase: ModelFitUseCase;
 }
 
-const modelFitUseCaseSchema = z.enum(["general", "coding", "reasoning", "chat", "multimodal", "embedding"]);
+const modelFitUseCaseSchema = z.enum(["general", "coding", "reasoning", "chat", "multimodal", "embedding", "decision"]);
 
 // Known GPU-vendor values the hardware profile reports. Anything outside this set (a future vendor) maps to "unknown".
 export type HardwareGpuVendor = "nvidia" | "amd" | "intel" | "none" | "unknown";

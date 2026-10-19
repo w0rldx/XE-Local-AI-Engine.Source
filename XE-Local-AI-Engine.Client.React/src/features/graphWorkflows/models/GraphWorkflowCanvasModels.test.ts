@@ -11,6 +11,7 @@ import {
 	type GraphWorkflowCanvasEdge,
 	type GraphWorkflowCanvasNode,
 	type GraphWorkflowCanvasNodeData,
+	type GraphWorkflowLoadedCanvas,
 	graphToCanvas,
 	graphWorkflowNodeTypeByKind,
 	graphWorkflowsEqual,
@@ -121,6 +122,77 @@ describe("graphToCanvas / canvasToGraph round trip", () => {
 		expect(dataOfKind(canvas, "code", "LlmCall")).toMatchObject({ publishToChat: true, includeAttachments: true });
 		// Absent stays absent: the End takes the parser's Chat-graph default rather than a written `true`.
 		expect(dataOfKind(canvas, "done", "End").publishToChat).toBeUndefined();
+	});
+
+	describe("native DecisionModel members", () => {
+		function withClassify(config: Record<string, unknown>): GraphWorkflowGraph {
+			return {
+				...chatGraph,
+				nodes: (chatGraph.nodes ?? []).map((node) => (node.key === "classify" ? { ...node, config } : node)),
+			};
+		}
+		function classifyConfig(canvas: GraphWorkflowLoadedCanvas): unknown {
+			const { graph } = canvasToGraph(canvas.nodes, canvas.edges, canvas.settings);
+			return graph.nodes?.find((node) => node.key === "classify")?.config;
+		}
+
+		it("round-trips a systemone choice with criteria and a score with ordered levels, verbatim", () => {
+			for (const config of [
+				{
+					question: "Which team?",
+					questionType: "choice",
+					labels: ["billing", "shipping"],
+					criteria: { billing: "payments, refunds" },
+					provider: "systemone",
+					model: "julia-1",
+				},
+				{ question: "How urgent?", questionType: "score", labels: ["low", "mid", "high"], provider: "systemone", model: "laya" },
+			]) {
+				expect(classifyConfig(graphToCanvas(withClassify(config)))).toEqual(config);
+			}
+		});
+
+		it("drops an imported criteria key that names no label, so the node stays saveable", () => {
+			const canvas = graphToCanvas(
+				withClassify({
+					question: "Which team?",
+					labels: ["billing", "shipping"],
+					criteria: { billing: "payments", support: "orphaned" },
+					provider: "systemone",
+					model: "julia-1",
+				}),
+			);
+			expect(classifyConfig(canvas)).toMatchObject({ criteria: { billing: "payments" } });
+		});
+
+		it("keeps labels on the canvas for noul but leaves them, and blank criteria, off the wire", () => {
+			const canvas = graphToCanvas(
+				withClassify({ question: "Spam?", questionType: "noul", provider: "systemone", model: "laya" }),
+			);
+			const nodes = canvas.nodes.map((node) =>
+				node.data.kind === "DecisionModel"
+					? { ...node, data: { ...node.data, labels: ["kept"], criteria: { kept: "x" } } }
+					: node,
+			);
+			expect(classifyConfig({ ...canvas, nodes })).toEqual({
+				question: "Spam?",
+				questionType: "noul",
+				provider: "systemone",
+				model: "laya",
+			});
+
+			const blank = canvas.nodes.map((node) =>
+				node.data.kind === "DecisionModel"
+					? { ...node, data: { ...node.data, questionType: null, labels: ["a", "b"], criteria: { a: " " } } }
+					: node,
+			);
+			expect(classifyConfig({ ...canvas, nodes: blank })).toEqual({
+				question: "Spam?",
+				labels: ["a", "b"],
+				provider: "systemone",
+				model: "laya",
+			});
+		});
 	});
 
 	it("writes kind without a chat block when the Chat graph never set one, and drops both for Standard", () => {

@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
@@ -268,7 +269,10 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         var freezeScope = scope ?? ownedScope!;
         var trimmedPrimary = primaryModelName.Trim();
         var primary = (await freezeScope.AcquireAsync(trimmedPrimary, AcquireVerifiedAsync, cancellationToken)).Snapshot;
-        BenchmarkModelEligibility.Validate(primary, await _classifications.GetByNameAsync(primary.ModelName, cancellationToken), "primary");
+        BenchmarkModelEligibility.Validate(primary,
+            await _classifications.GetByNameAsync(primary.ModelName, cancellationToken),
+            "primary",
+            await LocalGgufModelKindClassifier.ReadDecisionTypeAsync(_ggufModels, primary.ModelName, cancellationToken));
         await EnsureKldBaseMatchesAsync(project, primary.ModelName, cancellationToken);
 
         // The judge is no longer part of the freeze: its runtime is resolved per attempt, against the policy

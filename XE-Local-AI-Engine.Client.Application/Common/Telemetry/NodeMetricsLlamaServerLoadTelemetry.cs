@@ -81,6 +81,7 @@ internal sealed class NodeMetricsLlamaServerLoadTelemetry : ILlamaServerLoadTele
         {
             ModelRole.Embedding => "embedding",
             ModelRole.Reranker => "reranker",
+            ModelRole.Decision => "decision",
             _ => "chat"
         };
     }

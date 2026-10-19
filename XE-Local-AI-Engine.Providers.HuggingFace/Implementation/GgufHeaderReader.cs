@@ -406,6 +406,7 @@ internal sealed class GgufHeaderReader
         // Hybrid recurrent/attention stacks (qwen3next, qwen35, qwen35moe): only every Nth layer holds a KV cache, the rest keep a fixed-size recurrent state. Deliberately NO per-architecture
         // default (llama.cpp assumes 4 when the key is absent): without the key the estimator keeps charging every layer, the conservative side.
         var fullAttentionInterval = TryGetLong(values, Arch("full_attention_interval"));
+        var decisionType = architecture is null ? null : GetString(values, $"{architecture}.decision.type");
 
         // The Jinja chat template (when present) reveals the model's real tool / reasoning surface for capability
         // detection. Architecture-independent key; null when the GGUF was written without one (a raw base model).
@@ -431,7 +432,10 @@ internal sealed class GgufHeaderReader
             SlidingWindowPattern = slidingWindowPattern,
             AttentionKeyLengthMla = attentionKeyLengthMla,
             AttentionValueLengthMla = attentionValueLengthMla,
-            FullAttentionInterval = fullAttentionInterval
+            FullAttentionInterval = fullAttentionInterval,
+
+            // llama-server switches a model to the /v1/systemone decision lane on this key; a blank value counts as absent.
+            DecisionType = string.IsNullOrWhiteSpace(decisionType) ? null : decisionType.Trim()
         };
     }
 

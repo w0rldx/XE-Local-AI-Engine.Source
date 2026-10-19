@@ -158,6 +158,27 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
         AssertEx.Contains(warning.Message, $"'{LocalModel}'", message: "the author has to know which pin to fix.");
     }
 
+    /// <summary>A <c>systemone</c> node runs on a decision model, so its not-installed warning must not send the author looking for a chat model.</summary>
+    [Test]
+    public async Task ValidateAsync_WhenASystemOneNodePinsAnUninstalledModel_WarnsAboutADecisionModel()
+    {
+        var service = BuildService(LocalModel, LlamaServerProviderConstants.ProviderName);
+
+        var result = await service.ValidateAsync($$"""
+                                                   { "schemaVersion": 1,
+                                                     "nodes": [{ "key": "start", "kind": "Start" },
+                                                               { "key": "decide", "kind": "DecisionModel",
+                                                                 "config": { "question": "Q?", "labels": ["a", "b"], "provider": "systemone", "model": "{{LocalModel}}",
+                                                                             "inputBindings": { "text": "run.input.message" } } },
+                                                               { "key": "done", "kind": "End", "config": { "outcome": "completed" } }],
+                                                     "edges": [{ "key": "e1", "from": "start", "to": "decide" }, { "key": "e2", "from": "decide", "to": "done" }] }
+                                                   """);
+
+        var warning = AssertEx.NotNull(result.Warnings.SingleOrDefault(), $"one node, one warning: {string.Join(" | ", result.Warnings)}");
+        AssertEx.Contains(warning.Message, "GGUF decision model");
+        AssertEx.False(warning.Message.Contains("chat model", StringComparison.Ordinal));
+    }
+
     /// <summary>The same pin to a model the runtime gate accepts says nothing, so the warning means what the run will do.</summary>
     [Test]
     public async Task ValidateAsync_WhenAnLlmCallPinsAnInstalledLocalModel_DoesNotWarn()

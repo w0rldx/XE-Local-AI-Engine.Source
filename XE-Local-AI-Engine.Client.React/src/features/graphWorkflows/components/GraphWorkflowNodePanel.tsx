@@ -6,6 +6,7 @@ import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
+import { GraphWorkflowDecisionModelResult } from "@/features/graphWorkflows/components/GraphWorkflowDecisionModelResult";
 import { GraphWorkflowDecisionPanel } from "@/features/graphWorkflows/components/GraphWorkflowDecisionPanel";
 import { GraphWorkflowNodeStatusBadge } from "@/features/graphWorkflows/components/GraphWorkflowStatusBadge";
 import {
@@ -227,13 +228,7 @@ export function GraphWorkflowNodePanel({ runId, nodeKey, runStatus, pauseConfig,
 									{field(inner, "text") as string}
 								</Text>
 							) : null}
-							{kind === "DecisionModel" && typeof field(inner, "choice") === "string" ? (
-								<Text size="sm" data-testid="graph-workflow-node-panel-choice">
-									{t("pages.graphWorkflows.nodePanel.decisionChoice", "Chose {{choice}}", {
-										choice: field(inner, "choice") as string,
-									})}
-								</Text>
-							) : null}
+							{kind === "DecisionModel" ? <GraphWorkflowDecisionModelResult output={inner} /> : null}
 							{passThrough ? (
 								<Text size="xs" c="dimmed" data-testid="graph-workflow-node-panel-pass-through">
 									{passThrough === "passThrough"

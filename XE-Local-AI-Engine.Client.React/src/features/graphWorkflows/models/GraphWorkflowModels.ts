@@ -139,7 +139,64 @@ export const graphWorkflowTriggerSources = ["Manual", "Chat", "Schedule", "Integ
 export type GraphWorkflowTriggerSource = (typeof graphWorkflowTriggerSources)[number];
 
 /** `GraphWorkflowGraph.DecisionProviders`: the closed set a DecisionModel node may name. Absent means `llm`. */
-export const graphWorkflowDecisionProviders = ["llm"] as const;
+export const graphWorkflowDecisionProviders = ["llm", "systemone"] as const;
+
+/** A DecisionModel node's `questionType`. Absent means `choice`; `llm` answers `choice` only. */
+export const graphWorkflowDecisionQuestionTypes = ["choice", "noul", "score"] as const;
+export type GraphWorkflowDecisionQuestionType = (typeof graphWorkflowDecisionQuestionTypes)[number];
+
+/**
+ * A DecisionModel node's output document, read leniently: the node output is a JSON blob, so every member is
+ * whatever the server wrote or `null`. `probabilities` and `confidence` come from `systemone` only and are
+ * model-reported, uncalibrated numbers; `llm` leaves them null.
+ */
+export interface GraphWorkflowDecisionModelOutput {
+	/** `undefined` when the server sent a type this client does not know. */
+	readonly type: GraphWorkflowDecisionQuestionType | undefined;
+	readonly choice: string | null;
+	readonly noul: number | null;
+	readonly score: number | null;
+	readonly legend: Readonly<Record<string, string>> | null;
+	readonly probabilities: Readonly<Record<string, number>> | null;
+	readonly confidence: number | null;
+}
+
+function numberOrNull(value: unknown): number | null {
+	return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function recordOf<T>(value: unknown, keep: (entry: unknown) => entry is T): Readonly<Record<string, T>> | null {
+	if (value === null || typeof value !== "object" || Array.isArray(value)) {
+		return null;
+	}
+	const entries = Object.entries(value).filter((entry): entry is [string, T] => keep(entry[1]));
+	return entries.length > 0 ? Object.fromEntries(entries) : null;
+}
+
+/** `undefined` when the value is not an object at all; an output with no `type` is the pre-`questionType` choice shape. */
+export function readGraphWorkflowDecisionModelOutput(value: unknown): GraphWorkflowDecisionModelOutput | undefined {
+	if (value === null || typeof value !== "object" || Array.isArray(value)) {
+		return undefined;
+	}
+	const output = value as Record<string, unknown>;
+	const rawType = output["type"];
+	return {
+		// Absent is the llm-era choice shape; a type this client does not know reads as `undefined`, never as a choice.
+		type:
+			rawType === undefined || rawType === null
+				? "choice"
+				: asMember(graphWorkflowDecisionQuestionTypes, typeof rawType === "string" ? rawType : null),
+		choice: typeof output["choice"] === "string" ? output["choice"] : null,
+		noul: numberOrNull(output["noul"]),
+		score: numberOrNull(output["score"]),
+		legend: recordOf(output["legend"], (entry): entry is string => typeof entry === "string"),
+		probabilities: recordOf(
+			output["probabilities"],
+			(entry): entry is number => typeof entry === "number" && Number.isFinite(entry),
+		),
+		confidence: numberOrNull(output["confidence"]),
+	};
+}
 
 /** A real C# enum persisted as text, so it crosses the wire as a member name. `None` means "nothing went wrong". */
 export const graphWorkflowFailureClasses = [

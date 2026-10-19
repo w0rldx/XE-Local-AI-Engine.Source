@@ -85,6 +85,9 @@ internal static class AddNodeGraphWorkflowsExtensions
         // The decision providers a DecisionModel node may name. Each lowers the node to an LLM call the lane above runs.
         builder.Services.AddSingleton<IGraphWorkflowDecisionProvider, LlmDecisionProvider>();
 
+        // The native ones answer themselves through a model built for deciding; the lane gates, binds and admits before asking.
+        builder.Services.AddSingleton<IGraphWorkflowNativeDecisionProvider, SystemOneDecisionProvider>();
+
         // The Pause lane. A lane that drives nothing: it parks the row on a person and the answer arrives through
         // DecideAsync, which is precisely what an inline kind never does.
         builder.Services.AddSingleton<IGraphWorkflowNodeExecutor, GraphWorkflowPauseExecutor>();

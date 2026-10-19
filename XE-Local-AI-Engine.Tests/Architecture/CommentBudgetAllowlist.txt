@@ -1383,7 +1383,7 @@ XE-Local-AI-Engine.Tests/Providers/LlamaServer/LlamaDeviceInventoryProbeTests.cs
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/LlamaFitParamsOutputParserTests.cs|run|1
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/LlamaGrammarLiveSmokeTests.cs|block|1
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/LlamaGrammarLiveSmokeTests.cs|run|2
-XE-Local-AI-Engine.Tests/Providers/LlamaServer/LlamaGrammarLiveSmokeTests.cs|summary|4
+XE-Local-AI-Engine.Tests/Providers/LlamaServer/LlamaGrammarLiveSmokeTests.cs|summary|3
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/LlamaGrammarPatternCompatibilityTests.cs|block|1
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/LlamaGrammarPatternCompatibilityTests.cs|run|2
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/LlamaGrammarPatternCompatibilityTests.cs|summary|2

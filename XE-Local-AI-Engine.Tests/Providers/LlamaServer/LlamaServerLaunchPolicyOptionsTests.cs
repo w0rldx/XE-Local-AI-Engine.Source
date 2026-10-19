@@ -173,6 +173,8 @@ public sealed class LlamaServerLaunchPolicyOptionsTests
         AssertEx.Equal(options.ChatContextTokens, options.ContextTokensForRole(ModelRole.Chat));
         AssertEx.Equal(options.EmbeddingContextTokens, options.ContextTokensForRole(ModelRole.Embedding));
         AssertEx.Equal(options.RerankerContextTokens, options.ContextTokensForRole(ModelRole.Reranker));
+        AssertEx.Equal(LlamaServerLaunchPolicyOptions.DecisionContextTokens, options.ContextTokensForRole(ModelRole.Decision),
+            "the decision role asks for its own window, not the chat fallback, because -ub is pinned to it.");
     }
 
     private static Task AssertValidationThrowsAsync(LlamaServerLaunchPolicyOptions options)
