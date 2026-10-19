@@ -56,3 +56,48 @@ job that fails on the backend license corpus, the bundle-input evidence merge ac
 publishes, or the `vpk` pin (both package jobs red after the Velopack 1.2.161 round, 2026-10-18, fixed in
 97c771b97). **Authority:** `.github/workflows/dev-build.yml` and `package-velopack.yml`; the promoted
 `UPSTREAM_PACKAGE_LICENSE_TEXTS` rule in ci-and-release.
+
+### A trace of a turn driven by `gpu-smoke-driver.py chat` mostly measures the driver
+
+**Rule:** when the question is the node's own CPU during a chat turn, drive the turn from a WebSocket or keep-alive
+client (the SPA) or subtract the transport frames; `scripts/gpu-smoke-driver.py chat` long-polls the hub with a new
+TLS connection per poll, about 130 requests per turn. **Prevents:** reading Kestrel TLS handshakes,
+`NodeSecurityStampCheck.IsCurrentAsync` and the middleware pipeline, 60–70 % of the node's sampled CPU in that setup,
+as product cost (profiling round, 2026-10-19). **Authority:** `command_chat` in `scripts/gpu-smoke-driver.py`;
+`NodeSecurityStampCheck.IsCurrentAsync`.
+
+### A fresh conversation's first output includes llama-server's prompt-cache save
+
+**Rule:** before blaming the harness for a first-output regression with unchanged prompt tokens, look for "prompt cache
+update took N ms" in the Debug-forwarded llama-server log and subtract it. With a nonzero `--cache-ram`, llama-server
+saves the previous slot state synchronously before prefill: 0.5–2.1 s for 15–20k-token states on the 27B. The time is
+outside `/metrics` prompt seconds and inside the harness `FirstOutputMs`. **Prevents:** chasing a node regression that
+is the host cache save (2026-10-19). **Authority:** the `--cache-ram` entry in
+`docs/wiki/reference/03-llama-server-launch-flags.md`; `LlamaServerSupervisorOptions.ChatCacheRamMiB`.
+
+### Restart-gated node settings are read once; an eject does not apply them
+
+**Rule:** after changing `llamaChatCacheRamMiB` or any field in `restartGatedNodeSettingsFields` (including
+`llamaMaxLoadedProcesses`), restart the node and confirm the live process argument (for example `--cache-ram` in
+`pgrep -af llama-server`) before measuring. **Prevents:** a PUT plus eject that respawns llama-server with the old value,
+because `AddNodeModelRuntimeExtensions.BuildSeededLlamaServerSupervisorOptions` reads the setting once into the
+singleton `LlamaServerSupervisorOptions`; the settings UI warns, the API response does not (2026-10-19, a void lab
+arm). **Authority:** `AddNodeModelRuntimeExtensions.BuildSeededLlamaServerSupervisorOptions`;
+`restartGatedNodeSettingsFields` in `NodeSettingsFieldsModel.ts`.
+
+### llama-server's host prompt cache never restores a tool-using turn
+
+**Rule:** do not count a "found better prompt" line as a conversation restore without checking which conversation owns
+the entry. A follow-up to a tool-using turn replays tool results as 2000-char excerpts while the saved state holds the
+full results, so the keep ratio stays at or below 0.209, under llama-server's 0.25 gate. **Prevents:** reading a
+cross-conversation partial hit, which identical first prompts across lab conversations produce, as the cache working
+(2026-10-19). **Authority:** `ConversationContextBuilder.ProjectToolExchanges` and
+`ConversationContextBudgetOptions.DefaultHistoricalToolResultExcerptChars`.
+
+### A host prompt-cache entry is about twice the logged state size on hybrid models
+
+**Rule:** size a `--cache-ram` budget from the "cache state" or "exceeds cache size limit" lines of the llama-server
+log, not from the "total state size" of the save line. **Prevents:** a budget that holds half the entries expected,
+because on hybrid models each entry also carries context checkpoints (a 668 MiB logged state was a 1266.8 MiB entry on
+the 27B, 2026-10-19). **Authority:** `LlamaServerSupervisorOptions.ChatCacheRamMiB`; the `--cache-ram` entry in
+`docs/wiki/reference/03-llama-server-launch-flags.md`.

@@ -437,7 +437,7 @@ export function NodeSettingsRuntimeCard({ form, bounds, errors, onChange, draftM
 						<Text size="xs" c="dimmed">
 							{t(
 								"pages.nodeSettings.fields.llamaChatCacheRam.description",
-								"Host memory llama-server keeps for cached prompts. Automatic uses one eighth of RAM (512–8192 MiB).",
+								"Host memory llama-server keeps for cached prompts. Automatic uses one eighth of RAM (512–8192 MiB). It speeds up returning to long conversations, costs about a second on each new conversation and never helps conversations that use tools; choose Off for tool-only use. Applies after a node restart.",
 							)}
 						</Text>
 						<SegmentedControl

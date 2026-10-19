@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
 using System.Collections.ObjectModel;
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -646,6 +647,27 @@ public sealed class LocalToolOfferProviderTests
         var offered = provider.GetOfferedTools("qwen3:8b", isCloudModel: false);
 
         AssertEx.Contains(offered, tool => tool.Name == KnowledgeSearchToolName);
+    }
+
+    /// <summary>
+    ///     Profiling F8 (2026-10-19): with no description on <c>limit</c> the 27B asked for 10 hits in 4 of 9 turns, doubling
+    ///     the search result. The offered schema must say the limit is optional and when to raise it.
+    /// </summary>
+    [Test]
+    public void GetOfferedTools_KnowledgeSearchLimit_TellsTheModelToKeepTheDefaultPage()
+    {
+        var provider = CreateProvider("qwen3:8b");
+
+        var search = provider.GetOfferedTools("qwen3:8b", isCloudModel: false).Single(tool => tool.Name == KnowledgeSearchToolName);
+
+        using var schema = JsonDocument.Parse(AssertEx.NotNull(search.ParameterSchema));
+        var limit = schema.RootElement.GetProperty("properties").GetProperty("limit");
+        AssertEx.True(limit.TryGetProperty("description", out var description), "the offered limit property must carry a description");
+        var text = description.GetString() ?? string.Empty;
+        AssertEx.Contains(text, "Optional", StringComparison.Ordinal);
+        AssertEx.Contains(text, $"{StoredNodeSettings.DefaultKnowledgeSearchDefaultResults} unless the operator changed it", StringComparison.Ordinal);
+        AssertEx.Contains(text, "Raise it only when", StringComparison.Ordinal);
+        AssertEx.Contains(search.Description, "omit limit", StringComparison.Ordinal);
     }
 
     [Test]

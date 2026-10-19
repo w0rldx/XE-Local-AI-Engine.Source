@@ -6661,7 +6661,7 @@
 				"llamaChatCacheRam": {
 					"auto": "Automatisch",
 					"custom": "Eigener Wert",
-					"description": "Arbeitsspeicher, den llama-server für zwischengespeicherte Prompts nutzt. Automatisch verwendet ein Achtel des RAM (512–8192 MiB).",
+					"description": "Arbeitsspeicher, den llama-server für zwischengespeicherte Prompts nutzt. Automatisch verwendet ein Achtel des RAM (512–8192 MiB). Das beschleunigt die Rückkehr zu langen Unterhaltungen, kostet bei jeder neuen Unterhaltung etwa eine Sekunde und hilft Unterhaltungen mit Tools nie; wählen Sie „Aus“, wenn Sie nur mit Tools arbeiten. Gilt nach einem Neustart des Nodes.",
 					"label": "Prompt-Cache-Speicher",
 					"off": "Aus",
 					"sizeLabel": "Größe des Prompt-Caches"

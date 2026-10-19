@@ -58,11 +58,10 @@ public sealed class LlamaServerSupervisorOptions
     ///     prompt cache. Must be non-negative. Defaults via <see cref="ComputeDefaultChatCacheRamMiB" />.
     /// </summary>
     /// <remarks>
-    ///     The supervisor always emits the flag explicitly rather than inherit the pinned build's implicit 8192 MiB
-    ///     default, whose eviction is known-ineffective on Linux under default overcommit (upstream issue #22629). This
-    ///     budget goes to chat; the pooled embedding/rerank roles get <c>0</c>, having no prompt state worth caching.
-    ///     Like <see cref="ChatCacheReuse" /> it is a launch flag outside any frozen-profile identity. See
-    ///     docs/wiki/03-local-runtime-and-providers.md, "Per-role launch flags and the pooled batch-size rule".
+    ///     Always emitted explicitly instead of the pinned build's implicit 8192 MiB, whose eviction fails on Linux under
+    ///     default overcommit (upstream #22629); pooled roles get <c>0</c>. Outside any frozen-profile identity, like
+    ///     <see cref="ChatCacheReuse" />. Saving costs first output on each new conversation and only plain chat restores:
+    ///     docs/wiki/reference/03-llama-server-launch-flags.md, the <c>--cache-ram</c> entry.
     /// </remarks>
     public int ChatCacheRamMiB { get; init; } = ComputeDefaultChatCacheRamMiB(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes);
 

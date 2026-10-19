@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
 
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     Worker-side name, description and parameter-schema constants for the read-only knowledge-base agent tools
@@ -24,7 +25,7 @@ internal static class SearchKnowledgeBaseToolDefinition
         + "documents: rely solely on the retrieved passages for document-grounded claims; do not invent what the documents "
         + "say; if the results do not contain enough information to answer, say so plainly instead of guessing. Questions "
         + "that are not about the operator's documents are answered as usual, from general knowledge. Typical flow: search "
-        + "first, then pass the returned collectionId to read_surrounding_chunks around a promising hit, or to "
+        + "first (omit limit to get the node's default page of hits), then pass the returned collectionId to read_surrounding_chunks around a promising hit, or to "
         + "read_document to read a whole document. Returns compact JSON hits with collectionId, documentId, chunkId, content, score, "
         + "scoreKind (Fusion or Rerank: the scale of score, comparable only within one result, not a probability), and "
         + "chunkIndex; an empty result set means the knowledge base has nothing matching the query.";
@@ -41,7 +42,12 @@ internal static class SearchKnowledgeBaseToolDefinition
                                                         "required": ["query"],
                                                         "properties": {
                                                           "query": { "type": "string", "minLength": 1, "maxLength": {{KnowledgeQueryLimits.MaxQueryLength}} },
-                                                          "limit": { "type": "integer", "minimum": 1, "maximum": 20 },
+                                                          "limit": {
+                                                            "type": "integer",
+                                                            "minimum": 1,
+                                                            "maximum": 20,
+                                                            "description": "Optional. Omit it to get the node's default page of hits ({{StoredNodeSettings.DefaultKnowledgeSearchDefaultResults}} unless the operator changed it). Raise it only when that first page was not enough, because every extra hit costs context."
+                                                          },
                                                           "documentId": { "type": "string", "maxLength": 64 },
                                                           "collectionId": { "type": "string", "minLength": 1, "maxLength": {{KnowledgeCollectionScope.MaxLength}} },
                                                           "expandNeighbors": { "type": "boolean" }

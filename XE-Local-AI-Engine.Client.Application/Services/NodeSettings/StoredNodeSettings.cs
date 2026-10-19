@@ -1203,8 +1203,9 @@ public sealed partial record StoredNodeSettings
     public int? LlamaEmbeddingHttpTimeoutSeconds { get; init; }
 
     /// <summary>
-    ///     Chat-role host prompt-cache budget in MiB (<c>--cache-ram</c>); <c>0</c> disables it. <see langword="null" />
-    ///     (absent) is automatic: one eighth of RAM, clamped to 512–8192 MiB. Applies on the next node restart.
+    ///     Chat-role host prompt-cache budget in MiB (<c>--cache-ram</c>); <c>0</c> disables it and suits tool-only use.
+    ///     <see langword="null" /> (absent) is automatic: one eighth of RAM, clamped to 512–8192 MiB. Applies on the next
+    ///     node restart.
     /// </summary>
     public int? LlamaChatCacheRamMiB { get; init; }
 
