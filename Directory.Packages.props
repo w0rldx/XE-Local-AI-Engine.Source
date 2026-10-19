@@ -86,7 +86,7 @@
          bump additionally needs `playwright.ps1 install` to refresh ~/.cache/ms-playwright and CI's browser layer. -->
     <PackageVersion Include="TUnit.Playwright" Version="1.74.0" />
     <PackageVersion Include="Microsoft.Extensions.AI" Version="10.10.0" />
-    <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.10.1" />
+    <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.11.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.10.0" />
     <!-- Transitive only (pulled in by Microsoft.Extensions.AI.OpenAI): pinned
          explicitly, matching the version CentralPackageTransitivePinningEnabled currently resolves, so the plain
@@ -117,9 +117,9 @@
     <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.13" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.10.0" />
     <!-- Compatibility cohort: upgrade the stable MAF trio together after verifying their matching release set. -->
-    <PackageVersion Include="Microsoft.Agents.AI" Version="1.22.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.Abstractions" Version="1.22.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.22.0" />
+    <PackageVersion Include="Microsoft.Agents.AI" Version="1.25.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.Abstractions" Version="1.25.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.25.0" />
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.10.0" />
     <!-- MXC process containment (Windows ProcessContainer = AppContainer + DACL) as the Preview launch mechanism inside
          ProcessSandboxRuntimeProvider. Pinned EXACTLY: the policy guard rejects weakening properties by name, so a new
