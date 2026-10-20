@@ -12,11 +12,9 @@ using UglyToad.PdfPig.Outline;
 ///     order and emitted as a paragraph; image-only / scanned PDFs yield no text (OCR is out of scope).
 /// </summary>
 /// <remarks>
-///     When the PDF has an outline (bookmarks), each bookmark that targets a page becomes a Markdown header placed
-///     at the line of the page text where its title starts (the page splits there; a title that is not found at a line
-///     start, or only before the previous bookmark's position, keeps the header before the remaining text), so the
-///     outline drives the chunker's heading trail. Runs of U+FFFD (glyphs with no
-///     Unicode mapping, typically table-of-contents leader dots) collapse to a single space.
+///     Each page-targeting bookmark becomes a Markdown header at the line where its title starts, so the outline drives
+///     the heading trail. A title found only at a line start of the next page moves there; any other miss keeps the
+///     header before the remaining text. Runs of U+FFFD (unmapped glyphs such as leader dots) collapse to one space.
 /// </remarks>
 internal sealed class PdfDocumentReader : IngestionDocumentReader
 {
@@ -33,47 +31,61 @@ internal sealed class PdfDocumentReader : IngestionDocumentReader
         using (var pdf = PdfDocument.Open(source))
         {
             var bookmarksByPage = ReadBookmarksByPage(pdf);
+            List<OutlineEntry> carried = [];
+            string? nextPageText = null;
 
-            foreach (var page in pdf.GetPages())
+            for (var pageNumber = 1; pageNumber <= pdf.NumberOfPages; pageNumber++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var pageText = CollapseReplacementRuns(ContentOrderTextExtractor.GetText(page, addDoubleNewline: true));
+                var pageText = nextPageText ?? ReadPageText(pdf, pageNumber);
+                nextPageText = null;
                 var segmentStart = 0;
                 var searchFrom = 0;
+                var fromPreviousPage = carried.Count;
+                List<OutlineEntry> bookmarks = [.. carried, .. bookmarksByPage.GetValueOrDefault(pageNumber) ?? []];
+                carried = [];
 
-                if (bookmarksByPage.TryGetValue(page.Number, out var bookmarks))
+                for (var index = 0; index < bookmarks.Count; index++)
                 {
-                    foreach (var (outlineLevel, title) in bookmarks)
-                    {
-                        // Split the page at the line where the title starts, forward only; a title that is absent or
-                        // only found before the previous anchor keeps the header at the current position.
-                        var anchor = FindTitleAtLineStart(pageText, title, searchFrom);
-                        if (anchor >= 0)
-                        {
-                            AddParagraph(section, pageText[segmentStart..anchor], page.Number);
-                            segmentStart = anchor;
-                            searchFrom = anchor + 1;
-                        }
+                    var (outlineLevel, title) = bookmarks[index];
 
-                        var level = Math.Clamp(outlineLevel + 1, 1, MaxHeadingLevel);
-                        var heading = string.Create(CultureInfo.InvariantCulture, $"{new string('#', level)} {title}");
-                        section.Elements.Add(new IngestionDocumentHeader(heading)
-                        {
-                            Text = heading,
-                            Level = level,
-                            PageNumber = page.Number
-                        });
+                    // Split the page at the line where the title starts, forward only. A title absent here but at a line
+                    // start on the next page moves there once (outlines that target the page before the heading).
+                    var anchor = FindTitleAtLineStart(pageText, title, searchFrom);
+                    if (anchor >= 0)
+                    {
+                        AddParagraph(section, pageText[segmentStart..anchor], pageNumber);
+                        segmentStart = anchor;
+                        searchFrom = anchor + 1;
                     }
+                    else if (index >= fromPreviousPage && pageNumber < pdf.NumberOfPages
+                             && FindTitleAtLineStart(nextPageText ??= ReadPageText(pdf, pageNumber + 1), title, 0) >= 0)
+                    {
+                        carried.Add(bookmarks[index]);
+                        continue;
+                    }
+
+                    var level = Math.Clamp(outlineLevel + 1, 1, MaxHeadingLevel);
+                    var heading = string.Create(CultureInfo.InvariantCulture, $"{new string('#', level)} {title}");
+                    section.Elements.Add(new IngestionDocumentHeader(heading)
+                    {
+                        Text = heading,
+                        Level = level,
+                        PageNumber = pageNumber
+                    });
                 }
 
-                AddParagraph(section, pageText[segmentStart..], page.Number);
+                AddParagraph(section, pageText[segmentStart..], pageNumber);
             }
         }
 
         document.Sections.Add(section);
         return Task.FromResult(document);
     }
+
+    private static string ReadPageText(PdfDocument pdf, int pageNumber) =>
+        CollapseReplacementRuns(ContentOrderTextExtractor.GetText(pdf.GetPage(pageNumber), addDoubleNewline: true));
 
     // Page-targeting outline entries grouped by page, in outline order, titles whitespace-collapsed; URI, external and
     // embedded bookmarks (no page in this document) and empty titles are skipped.
@@ -122,9 +134,9 @@ internal sealed class PdfDocumentReader : IngestionDocumentReader
     }
 
     /// <summary>
-    ///     First line start at or after <paramref name="from" /> whose line begins with the title as whole words
-    ///     (case-insensitive, any whitespace run matches a title space), or -1.
+    ///     First line start at or after <paramref name="from" /> that begins with the title as whole words, or -1.
     /// </summary>
+    /// <remarks>Case-insensitive; a title space matches any whitespace run, as may the gap after a title hyphen or slash.</remarks>
     internal static int FindTitleAtLineStart(string text, string title, int from)
     {
         for (var lineStart = from; lineStart < text.Length; lineStart++)
@@ -134,19 +146,23 @@ internal sealed class PdfDocumentReader : IngestionDocumentReader
                 continue;
             }
 
-            var position = lineStart;
-            while (position < text.Length && text[position] is ' ' or '\t')
-            {
-                position++;
-            }
-
-            if (MatchesTitleAt(text, title, position))
+            if (MatchesTitleAt(text, title, SkipSpaces(text, lineStart)))
             {
                 return lineStart;
             }
         }
 
         return -1;
+    }
+
+    private static int SkipSpaces(string text, int position)
+    {
+        while (position < text.Length && text[position] is ' ' or '\t')
+        {
+            position++;
+        }
+
+        return position;
     }
 
     private static bool MatchesTitleAt(string text, string title, int position)
@@ -165,11 +181,7 @@ internal sealed class PdfDocumentReader : IngestionDocumentReader
                     return false;
                 }
 
-                while (position < text.Length && char.IsWhiteSpace(text[position]))
-                {
-                    position++;
-                }
-
+                position = SkipWhiteSpace(text, position);
                 continue;
             }
 
@@ -179,9 +191,23 @@ internal sealed class PdfDocumentReader : IngestionDocumentReader
             }
 
             position++;
+            if (expected is '-' or '/')
+            {
+                position = SkipWhiteSpace(text, position);
+            }
         }
 
         return position == text.Length || char.IsWhiteSpace(text[position]);
+    }
+
+    private static int SkipWhiteSpace(string text, int position)
+    {
+        while (position < text.Length && char.IsWhiteSpace(text[position]))
+        {
+            position++;
+        }
+
+        return position;
     }
 
     // Each run of U+FFFD becomes one space, so unmapped leader dots no longer reach chunks or embeddings.

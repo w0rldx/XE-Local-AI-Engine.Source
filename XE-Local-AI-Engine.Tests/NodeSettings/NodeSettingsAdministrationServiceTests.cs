@@ -409,6 +409,57 @@ public sealed class NodeSettingsAdministrationServiceTests
     }
 
     [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task SaveTrusted_ClearingThePin_IsRefusedOnlyWhileADocumentIsIndexed(bool corpusIndexed)
+    {
+        // A clear on an indexed corpus would re-arm the first-by-name fallback; on an empty corpus it stays allowed.
+        const string Pin = "nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0";
+        var store = new FakeNodeSettingsStore(new StoredNodeSettings
+        {
+            KnowledgeEmbeddingModelName = Pin
+        });
+        var service = CreateService(store,
+            localModelProviderResolver: EmbeddingProviderResolver(Pin),
+            indexedEmbeddingModels: corpusIndexed ? [Pin] : []);
+
+        var result = await service.SaveTrustedMergedAsync(current => current with
+        {
+            KnowledgeEmbeddingModelName = null
+        });
+
+        AssertEx.Equal(!corpusIndexed, result.Updated);
+        if (corpusIndexed)
+        {
+            var error = result.ValidationErrors.Single();
+            AssertEx.Equal(NodeSettingsField.KnowledgeEmbeddingModelName, error.Field);
+            AssertEx.Contains(error.Message, Pin);
+            AssertEx.Contains(error.Message, "set an installed embedding model instead");
+            AssertEx.Equal(Pin, store.Current.KnowledgeEmbeddingModelName);
+        }
+        else
+        {
+            AssertEx.Null(store.Current.KnowledgeEmbeddingModelName);
+        }
+    }
+
+    [Test]
+    public async Task SaveTrusted_PinOfAMissingModel_IsRefusedWithAMessageThatNullClears()
+    {
+        var store = new FakeNodeSettingsStore(new StoredNodeSettings());
+        var service = CreateService(store, localModelProviderResolver: EmbeddingProviderResolver());
+
+        var result = await service.SaveTrustedMergedAsync(current => current with
+        {
+            KnowledgeEmbeddingModelName = "ggml-org/embeddinggemma-2-GGUF:BF16"
+        });
+
+        var message = result.ValidationErrors.Single().Message;
+        AssertEx.Contains(message, "null clears the pin");
+        AssertEx.False(message.Contains("blank", StringComparison.Ordinal), "the message must not offer a blank value.");
+    }
+
+    [Test]
     public async Task Save_WhenAutoEffortFastModelIsNotInstalled_IsRejected()
     {
         // The hole this closes: with no cloud provider configured, `ModelTrustResolver` classifies a
@@ -886,7 +937,8 @@ public sealed class NodeSettingsAdministrationServiceTests
         ILocalModelProviderResolver? localModelProviderResolver = null,
         bool fastModelInstalled = true,
         IOllamaModelService? ollamaModelService = null,
-        IKnowledgeModelPrewarmer? knowledgeModelPrewarmer = null)
+        IKnowledgeModelPrewarmer? knowledgeModelPrewarmer = null,
+        params string[] indexedEmbeddingModels)
     {
         var runtime = runtimeSettings ?? Substitute.For<INodeRuntimeSettings>();
         runtime.GetLlamaMaxLoadedProcessesAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(StoredNodeSettings.DefaultLlamaMaxLoadedProcesses));
@@ -933,7 +985,19 @@ public sealed class NodeSettingsAdministrationServiceTests
             ollamaModelService ?? Substitute.For<IOllamaModelService>(),
             Options.Create(new KnowledgeBaseOptions()),
             knowledgeModelPrewarmer ?? Substitute.For<IKnowledgeModelPrewarmer>(),
+            CatalogScopeFactory(indexedEmbeddingModels),
             NullLogger<NodeSettingsAdministrationService>.Instance);
+    }
+
+    // The distinct embedding models of the Indexed documents; none is an empty corpus.
+    private static IServiceScopeFactory CatalogScopeFactory(IReadOnlyList<string> indexedEmbeddingModels)
+    {
+        var catalog = Substitute.For<IKnowledgeDocumentCatalogService>();
+        catalog.ListIndexedEmbeddingModelsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+               .Returns(call => Task.FromResult<IReadOnlyList<string>>(indexedEmbeddingModels.Take(call.Arg<int>()).ToList()));
+        return new ServiceCollection().AddScoped(_ => catalog)
+                                      .BuildServiceProvider()
+                                      .GetRequiredService<IServiceScopeFactory>();
     }
 
     /// <summary>

@@ -949,8 +949,8 @@ public sealed record SaveNodeSettingsRequest
     public string? RerankerModelName { get; init; }
 
     /// <summary>
-    ///     Pins the knowledge-base embedding model; must name an installed embedding model. Changing it marks every document
-    ///     indexed with another model stale for a reindex. Null clears the pin, and the node pins again on the next index.
+    ///     Pins the knowledge-base embedding model; must name an installed embedding model, and a change marks documents of
+    ///     another model stale. Null clears the pin only while no document is Indexed.
     /// </summary>
     public string? KnowledgeEmbeddingModelName { get; init; }
 

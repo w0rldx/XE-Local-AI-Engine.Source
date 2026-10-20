@@ -281,7 +281,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
 
             if (await KnowledgeEmbeddingModelPin.PinIfUnsetAsync(_settingsStore, resolvedModel, cancellationToken))
             {
-                _logger.LogInformation("Pinned the knowledge embedding model {ModelName} after the first index commit.", resolvedModel);
+                _logger.LogInformation("Pinned the knowledge embedding model {ModelName} after an index commit.", resolvedModel);
             }
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)

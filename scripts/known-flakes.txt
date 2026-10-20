@@ -3,3 +3,4 @@
 # flaky class is listed method by method. A match only annotates the failure line; the gate stays
 # red, nothing is skipped or retried. Remove a line when its root cause is fixed.
 McpOnlyPrimaryServe_EmitsCanonicalReadinessSupportsStatusAndEnforcesPortAndLeaseExits|2026-10-08|EngineCliProcessTests: socket error, green 3/3 alone, cause not found
+ResolveReadOnlyTrees_ForAnExistingFolderWhoseRealNameCannotBeRead_IsRefusedNotDropped|2026-10-20|SandboxedMcpStdioTransportTests: symlink-chain fixture, red once in the kb-engine-wave candidate gate, green 1/1 alone and in every other gate that day

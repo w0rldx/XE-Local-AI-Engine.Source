@@ -1553,7 +1553,7 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.Equal("nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0", stored.KnowledgeEmbeddingModelName);
         AssertEx.Equal("nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0", stored.ToResponse(DefaultEffectiveValues).KnowledgeEmbeddingModelName);
 
-        // Omitted keeps the pin; an explicit null clears it, and the node pins again on the next index.
+        // Omitted keeps the pin; an explicit null maps to a clear, which the administration service refuses on an indexed corpus.
         AssertEx.Equal("nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0", new SaveNodeSettingsRequest().ToStoredSettings(stored).KnowledgeEmbeddingModelName);
         AssertEx.Null(ParseRequest("""{"knowledgeEmbeddingModelName":null}""").ToStoredSettings(stored).KnowledgeEmbeddingModelName);
     }

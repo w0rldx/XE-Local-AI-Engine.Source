@@ -90,6 +90,42 @@ public sealed class DocumentTextExtractorTests
     }
 
     [Test]
+    [Arguments("A multi-", "continental store", "A multi-continental store")]
+    [Arguments("Risks of CI/", "CD pipelines", "Risks of CI/CD pipelines")]
+    public async Task Extractor_WhenTitleWrapsAfterAHyphenOrSlash_AnchorsAtItsFirstLine(string firstLine, string secondLine, string title)
+    {
+        var trail = await ReadSamePageTrailAsync(["Intro text", firstLine, secondLine, "Body"], [title]);
+
+        AssertEx.Equal($"P@1:Intro text|H1@1:# {title}|P@1:{firstLine} {secondLine} Body", trail);
+    }
+
+    [Test]
+    public async Task Extractor_WhenTitleIsOnlyOnTheNextPage_MovesItsHeaderThereAheadOfThatPagesOwnBookmark()
+    {
+        // Some outlines target the page before the heading; the title is then at a line start one page later.
+        var trail = await ReadPagesTrailAsync([["Page one text"], ["Lead in", "Alpha", "Alpha body", "Beta", "Beta body"]],
+            [new(1, "Alpha"), new(2, "Beta")]);
+
+        AssertEx.Equal("P@1:Page one text|P@2:Lead in|H1@2:# Alpha|P@2:Alpha Alpha body|H1@2:# Beta|P@2:Beta Beta body", trail);
+    }
+
+    [Test]
+    public async Task Extractor_WhenTitleIsOnNeitherPage_KeepsItsHeaderOnItsOwnPage()
+    {
+        var trail = await ReadPagesTrailAsync([["Page one text"], ["Page two text"]], [new(1, "Delta")]);
+
+        AssertEx.Equal("H1@1:# Delta|P@1:Page one text|P@2:Page two text", trail);
+    }
+
+    [Test]
+    public async Task Extractor_WhenTitleIsOnlyMidLineOnTheNextPage_KeepsItsHeaderOnItsOwnPage()
+    {
+        var trail = await ReadPagesTrailAsync([["Page one text"], ["This page mentions Alpha mid-line"]], [new(1, "Alpha")]);
+
+        AssertEx.Equal("H1@1:# Alpha|P@1:Page one text|P@2:This page mentions Alpha mid-line", trail);
+    }
+
+    [Test]
     public async Task Extractor_WhenLaterBookmarkTitleIsOnlyBeforeThePreviousAnchor_KeepsItsHeaderAtThatAnchor()
     {
         var trail = await ReadSamePageTrailAsync(["Intro text", "Alpha", "Alpha body", "Beta", "Beta body"], ["Beta", "Alpha"]);
@@ -698,20 +734,24 @@ public sealed class DocumentTextExtractorTests
         return Encoding.ASCII.GetBytes(builder.ToString());
     }
 
-    // Three pages with an outline: Chapter One (page 1) > Section 1.1 (page 2), Chapter Two (page 3), plus a URI
-    // bookmark and an empty-titled page bookmark that must both be skipped. Built with PdfPig's writer.
-    private static async Task<string> ReadSamePageTrailAsync(string[] lines, string[] bookmarkTitles)
+    private static Task<string> ReadSamePageTrailAsync(string[] lines, string[] bookmarkTitles) =>
+        ReadPagesTrailAsync([lines], [.. bookmarkTitles.Select(static title => new PageBookmark(1, title))]);
+
+    private static async Task<string> ReadPagesTrailAsync(string[][] pages, PageBookmark[] bookmarks)
     {
         using var builder = new PdfDocumentBuilder();
         var font = builder.AddStandard14Font(Standard14Font.Helvetica);
-        var page = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
-        for (var index = 0; index < lines.Length; index++)
+        foreach (var lines in pages)
         {
-            _ = page.AddText(lines[index], 12, new PdfPoint(72, 780 - (index * 100)), font);
+            var page = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+            for (var index = 0; index < lines.Length; index++)
+            {
+                _ = page.AddText(lines[index], 12, new PdfPoint(72, 780 - (index * 100)), font);
+            }
         }
 
-        builder.Bookmarks = new Bookmarks([.. bookmarkTitles.Select(title => (BookmarkNode)new DocumentBookmarkNode(title, 0,
-            new ExplicitDestination(1, ExplicitDestinationType.FitPage, ExplicitDestinationCoordinates.Empty), []))]);
+        builder.Bookmarks = new Bookmarks([.. bookmarks.Select(bookmark => (BookmarkNode)new DocumentBookmarkNode(bookmark.Title, 0,
+            new ExplicitDestination(bookmark.Page, ExplicitDestinationType.FitPage, ExplicitDestinationCoordinates.Empty), []))]);
         using var stream = new MemoryStream(builder.Build());
 
         var result = await CreateExtractor().ExtractStructuredAsync(stream, "book.pdf", ".pdf", CancellationToken.None);
@@ -721,6 +761,10 @@ public sealed class DocumentTextExtractorTests
             ? $"H{header.Level}@{header.PageNumber}:{header.Text}"
             : $"P@{element.PageNumber}:{string.Join(' ', (element.Text ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))}"));
     }
+
+    // Three pages with an outline: Chapter One (page 1) > Section 1.1 (page 2), Chapter Two (page 3), plus a URI
+    // bookmark and an empty-titled page bookmark that must both be skipped. Built with PdfPig's writer.
+    private readonly record struct PageBookmark(int Page, string Title);
 
     private static byte[] BuildOutlinedPdf()
     {

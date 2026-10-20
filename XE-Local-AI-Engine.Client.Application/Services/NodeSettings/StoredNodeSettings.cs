@@ -1046,9 +1046,9 @@ public sealed partial record StoredNodeSettings
     /// <remarks>
     ///     <see langword="null" /> (default) resolves <c>KnowledgeBase:EmbeddingModelName</c>, else the first installed
     ///     embedding-named model. The node writes it once, after the first successful index commit or at startup when the
-    ///     indexed corpus names exactly one installed model, and never overwrites it; only an operator save changes it, and
-    ///     that save must name an installed embedding model. A pinned model that is not installed never falls back to another
-    ///     one: search stays lexical and reports <c>EmbedderChanged</c>. Read live per resolve.
+    ///     indexed corpus names exactly one installed model; only an operator save changes it, naming an installed embedding
+    ///     model or clearing it while nothing is Indexed. A missing pinned model never falls back: search stays lexical and
+    ///     reports <c>EmbedderChanged</c>. Read live per resolve.
     /// </remarks>
     public string? KnowledgeEmbeddingModelName { get; init; }
 

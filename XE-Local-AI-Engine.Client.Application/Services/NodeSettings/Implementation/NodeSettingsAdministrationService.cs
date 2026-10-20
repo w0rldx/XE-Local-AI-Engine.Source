@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -21,7 +22,7 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         "The model must be an installed node-local model (a GGUF model or an Ollama model on this machine), or blank to use the default model.";
 
     private const string EmbeddingModelNotInstalledMessage =
-        "The knowledge-base embedding model must be an installed embedding model, or blank to let the node pin the model that indexes first.";
+        "The knowledge-base embedding model must name an installed embedding model; null clears the pin.";
 
     /// <summary>
     ///     How many times a save re-validates against a record that changed under it before it gives up and refuses.
@@ -40,6 +41,7 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
     private readonly IModelTrustResolver _modelTrustResolver;
     private readonly ILogger<NodeSettingsAdministrationService> _logger;
     private readonly IOllamaModelService _ollamaModelService;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly KnowledgeBaseOptions _knowledgeOptions;
     private readonly IKnowledgeModelPrewarmer _knowledgeModelPrewarmer;
     private readonly INodeRuntimeSettings _runtimeSettings;
@@ -54,8 +56,11 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         IOllamaModelService ollamaModelService,
         IOptions<KnowledgeBaseOptions> knowledgeOptions,
         IKnowledgeModelPrewarmer knowledgeModelPrewarmer,
+        IServiceScopeFactory scopeFactory,
         ILogger<NodeSettingsAdministrationService> logger)
     {
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
         ArgumentNullException.ThrowIfNull(knowledgeOptions);
         _knowledgeOptions = knowledgeOptions.Value;
         ArgumentNullException.ThrowIfNull(ollamaModelService);
@@ -224,6 +229,22 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
                 ]);
             }
 
+            // A clear on an indexed corpus would re-arm the first-by-name fallback and could switch the embedder silently.
+            if (string.IsNullOrWhiteSpace(settings.KnowledgeEmbeddingModelName)
+                && !string.IsNullOrWhiteSpace(validatedAgainst.KnowledgeEmbeddingModelName)
+                && await HasIndexedKnowledgeDocumentsAsync(cancellationToken))
+            {
+                return NodeSettingsAdministrationResult.Rejected(settings,
+                [
+                    new NodeSettingsValidationError
+                    {
+                        Field = NodeSettingsField.KnowledgeEmbeddingModelName,
+                        Message = string.Create(CultureInfo.InvariantCulture,
+                            $"The knowledge-base embedding model {validatedAgainst.KnowledgeEmbeddingModelName} indexes the existing documents and cannot be cleared; set an installed embedding model instead.")
+                    }
+                ]);
+            }
+
             if (await FindNonLocalBackgroundModelAsync(settings, validatedAgainst, cancellationToken) is { } backgroundModelField)
             {
                 return NodeSettingsAdministrationResult.Rejected(settings,
@@ -306,6 +327,14 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         };
 
         return JsonSerializer.Serialize(withoutMachineKey, ComparisonSerializerOptions);
+    }
+
+    private async Task<bool> HasIndexedKnowledgeDocumentsAsync(CancellationToken cancellationToken)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var models = await scope.ServiceProvider.GetRequiredService<IKnowledgeDocumentCatalogService>()
+                                .ListIndexedEmbeddingModelsAsync(limit: 1, cancellationToken);
+        return models.Count > 0;
     }
 
     // Enforcement point 1's predicate, shared verbatim with point 2 (the dispatcher's per-turn re-check) so a value this save accepts is
