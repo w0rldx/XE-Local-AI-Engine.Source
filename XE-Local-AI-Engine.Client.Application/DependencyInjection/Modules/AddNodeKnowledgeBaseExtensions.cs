@@ -38,8 +38,8 @@ internal static class AddNodeKnowledgeBaseExtensions
         // Stateless, thread-safe collaborators — safe as singletons and injectable into the scoped ingestion service.
         builder.Services.AddSingleton<IChunkingService, HeaderBoundaryChunkingService>();
         builder.Services.AddSingleton<IKnowledgeEmbeddingPrefixer, KnowledgeEmbeddingPrefixer>();
-        // Maps the configured embedding name to a model actually installed on the resolved provider (shared by the
-        // ingestion embedder and the search lane so chunk + query vectors use the identical model). Options-only → singleton.
+        // Maps the pinned or configured embedding name to an installed model, shared by ingestion and search so chunk and
+        // query vectors use the identical model. Reads the pin through the singleton settings store → singleton.
         builder.Services.AddSingleton<IEmbeddingModelResolver, EmbeddingModelResolver>();
         // Depends only on singletons (provider resolver, embedding-model resolver, prefixer, options); disposes each generator per call.
         builder.Services.AddSingleton<IKnowledgeChunkEmbedder, KnowledgeChunkEmbedder>();
@@ -83,9 +83,10 @@ internal static class AddNodeKnowledgeBaseExtensions
         // serves every scoped search; lets a repeated query skip the embedding round trip.
         builder.Services.AddSingleton<IKnowledgeQueryEmbeddingCache, KnowledgeQueryEmbeddingCache>();
 
-        // Singleton so every turn and search shares one single-flight warm and one refusal cooldown. Search never spawns
-        // the reranker; the invocation runner (knowledge search offered) and a cold-degraded search request this warm.
+        // Singleton: one single-flight warm and one refusal cooldown. Search never spawns the reranker; node start, a saved
+        // reranker change, a turn offering knowledge search and a skipped or cold-degraded rerank request it (wiki 15).
         builder.Services.AddSingleton<IKnowledgeModelPrewarmer, KnowledgeModelPrewarmer>();
+        builder.Services.AddHostedService<KnowledgeRerankerStartupWarmService>();
 
         // Search lane, SCOPED: every retrieval collaborator reads through the request-scoped NodeChatDbContext connection. The vector
         // backend comes from the scoped-resolving IVectorSearchFactory — NOT a singleton keyed registration capturing a scoped DbContext.
@@ -99,6 +100,10 @@ internal static class AddNodeKnowledgeBaseExtensions
         // drains the SAME instance the endpoint enqueues onto.
         builder.Services.AddSingleton<KnowledgeIngestionDispatcher>();
         builder.Services.AddSingleton<IKnowledgeIngestionDispatcher>(sp => sp.GetRequiredService<KnowledgeIngestionDispatcher>());
+
+        // One-shot startup backfill of the embedding pin for a corpus indexed before the pin existed. Registered ahead of the
+        // ingestion worker so it usually runs first; the ingestion commit pins through the same write-once path either way.
+        builder.Services.AddHostedService<KnowledgeEmbeddingModelPinBackfill>();
 
         // Background worker: drains the queue with SemaphoreSlim-bounded concurrency, a fresh scope per document.
         builder.Services.AddHostedService<KnowledgeIngestionWorker>();

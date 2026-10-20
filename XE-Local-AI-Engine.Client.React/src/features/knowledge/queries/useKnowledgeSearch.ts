@@ -18,6 +18,8 @@ export interface UseKnowledgeSearchResult {
 	readonly results: readonly KnowledgeSearchHit[];
 	// Why the most recently resolved search ran degraded (lexical-only, reranker unavailable); empty when it ran fully.
 	readonly degradations: readonly KnowledgeSearchDegradation[];
+	// True when the last search's reranked best hit scored low (no strong match); null when it carried no verdict.
+	readonly weakMatch: boolean | null;
 	readonly isSearching: boolean;
 	readonly error: unknown;
 	// True once at least one search has resolved this session — drives the empty-vs-no-results distinction.
@@ -35,6 +37,7 @@ export interface UseKnowledgeSearchResult {
 export function useKnowledgeSearch(collectionId = KNOWLEDGE_DEFAULT_COLLECTION_ID): UseKnowledgeSearchResult {
 	const [results, setResults] = useState<readonly KnowledgeSearchHit[]>([]);
 	const [degradations, setDegradations] = useState<readonly KnowledgeSearchDegradation[]>([]);
+	const [weakMatch, setWeakMatch] = useState<boolean | null>(null);
 	const [hasSearched, setHasSearched] = useState(false);
 	const [lastQuery, setLastQuery] = useState("");
 	const activeCollectionRef = useRef(collectionId);
@@ -61,6 +64,7 @@ export function useKnowledgeSearch(collectionId = KNOWLEDGE_DEFAULT_COLLECTION_I
 		resetMutation();
 		setResults([]);
 		setDegradations([]);
+		setWeakMatch(null);
 		setHasSearched(false);
 		setLastQuery("");
 	}, [collectionId, resetMutation]);
@@ -83,6 +87,7 @@ export function useKnowledgeSearch(collectionId = KNOWLEDGE_DEFAULT_COLLECTION_I
 						}
 						setResults(response.results ?? []);
 						setDegradations(response.degradations ?? []);
+						setWeakMatch(response.weakMatch ?? null);
 						setLastQuery(trimmed);
 						setHasSearched(true);
 					},
@@ -97,6 +102,7 @@ export function useKnowledgeSearch(collectionId = KNOWLEDGE_DEFAULT_COLLECTION_I
 		resetMutation();
 		setResults([]);
 		setDegradations([]);
+		setWeakMatch(null);
 		setHasSearched(false);
 		setLastQuery("");
 	}, [resetMutation]);
@@ -104,6 +110,7 @@ export function useKnowledgeSearch(collectionId = KNOWLEDGE_DEFAULT_COLLECTION_I
 	return {
 		results,
 		degradations,
+		weakMatch,
 		isSearching: mutation.isPending,
 		error: mutation.error,
 		hasSearched,

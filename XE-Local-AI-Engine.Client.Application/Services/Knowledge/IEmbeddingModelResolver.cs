@@ -18,11 +18,11 @@ public interface IEmbeddingModelResolver
 {
     /// <summary>Resolves the embedding model name to use on <paramref name="provider" />.</summary>
     /// <remarks>
-    ///     Resolution order: (1) the configured name when a case-insensitively equal model is installed, confident;
-    ///     (2) otherwise the first installed model whose NAME identifies an embedding model
-    ///     (<see cref="ModelKindDetector.IsEmbeddingName" />), by ordinal-ignore-case name order, confident;
-    ///     (3) otherwise the configured name unchanged and NOT confident, so the caller's graceful not-available path
-    ///     fires. A transport failure while enumerating installed models also degrades to (3), NOT confident, never throwing.
+    ///     (1) The stored pin, else the configured name, when an equal model (ignoring case) is installed: confident. A missing
+    ///     pin stops here, NOT confident with <see cref="EmbeddingModelResolution.PinnedModelMissing" />. (2) With nothing
+    ///     pinned, the first installed <see cref="ModelKindDetector.IsEmbeddingName" /> model by ordinal-ignore-case name:
+    ///     confident. (3) Otherwise the configured name, NOT confident, so the caller's not-available path fires; a transport
+    ///     failure while listing models also degrades to (3), never throwing.
     /// </remarks>
     Task<EmbeddingModelResolution> ResolveAsync(ILocalModelProvider provider, CancellationToken cancellationToken);
 }

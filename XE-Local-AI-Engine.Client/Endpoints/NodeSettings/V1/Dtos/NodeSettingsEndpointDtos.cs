@@ -209,6 +209,12 @@ public sealed record NodeSettingsResponse
     /// </summary>
     public string? RerankerModelName { get; init; }
 
+    /// <summary>
+    ///     The pinned knowledge-base embedding model name; <see langword="null" /> until the node pins the model that built
+    ///     the first index (or the configured default resolves).
+    /// </summary>
+    public string? KnowledgeEmbeddingModelName { get; init; }
+
     public string? AutoEffortFastModelName { get; init; }
 
     public long? HuggingFaceDiskMarginBytes { get; init; }
@@ -941,6 +947,12 @@ public sealed record SaveNodeSettingsRequest
 
     /// <summary>Installed cross-encoder reranker model name for knowledge-base search rerank. Null disables reranking.</summary>
     public string? RerankerModelName { get; init; }
+
+    /// <summary>
+    ///     Pins the knowledge-base embedding model; must name an installed embedding model. Changing it marks every document
+    ///     indexed with another model stale for a reindex. Null clears the pin, and the node pins again on the next index.
+    /// </summary>
+    public string? KnowledgeEmbeddingModelName { get; init; }
 
     public string? AutoEffortFastModelName { get; init; }
 

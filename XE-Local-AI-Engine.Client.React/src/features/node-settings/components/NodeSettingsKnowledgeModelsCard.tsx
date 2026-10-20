@@ -14,6 +14,7 @@ interface Props {
 	readonly errors: Readonly<Record<string, string>>;
 	readonly onChange: <K extends keyof NodeSettingsFieldsForm>(field: K, value: NodeSettingsFieldsForm[K]) => void;
 	readonly rerankerModelOptions: readonly NodeSettingsModelOption[];
+	readonly embeddingModelOptions: readonly NodeSettingsModelOption[];
 	readonly rerankerDownload: { readonly onStart: () => void; readonly pending: boolean; readonly inFlight: boolean };
 	readonly embeddingDownload: { readonly onStart: () => void; readonly pending: boolean; readonly inFlight: boolean };
 }
@@ -22,6 +23,7 @@ export function NodeSettingsKnowledgeModelsCard({
 	errors,
 	onChange,
 	rerankerModelOptions,
+	embeddingModelOptions,
 	rerankerDownload,
 	embeddingDownload,
 }: Props) {
@@ -33,6 +35,17 @@ export function NodeSettingsKnowledgeModelsCard({
 		}
 		return options;
 	}, [rerankerModelOptions, form.rerankerModelName, t]);
+	// A pin whose model is gone stays visible under its name, never silently blank.
+	const embeddingOptions = useMemo(() => {
+		const options = [
+			{ value: "", label: t("pages.nodeSettings.fields.embeddingModel.unpinned", "Not pinned yet (set by the first index)") },
+			...embeddingModelOptions,
+		];
+		if (form.knowledgeEmbeddingModelName !== "" && !options.some((option) => option.value === form.knowledgeEmbeddingModelName)) {
+			options.push({ value: form.knowledgeEmbeddingModelName, label: form.knowledgeEmbeddingModelName });
+		}
+		return options;
+	}, [embeddingModelOptions, form.knowledgeEmbeddingModelName, t]);
 	return (
 		<Card withBorder={true} radius="md" p="lg" data-testid="node-settings-knowledge-models-card">
 			<Stack gap="md">
@@ -61,6 +74,25 @@ export function NodeSettingsKnowledgeModelsCard({
 						{t("pages.nodeSettings.fields.embeddingModel.downloadRecommended", "Download recommended embedding model")}
 					</Button>
 				</Group>
+				<Select
+					label={nodeSettingsFieldLabel(
+						t,
+						"knowledgeEmbeddingModelName",
+						t("pages.nodeSettings.fields.embeddingModel.label", "Embedding model"),
+					)}
+					description={t(
+						"pages.nodeSettings.fields.embeddingModel.description",
+						"The model every knowledge-base document and query is embedded with. The node pins the model that indexes the first document, so installing another embedding model never switches it. Changing it here marks every document indexed with another model for reindexing.",
+					)}
+					data={embeddingOptions}
+					value={form.knowledgeEmbeddingModelName}
+					onChange={(value) => onChange("knowledgeEmbeddingModelName", value ?? "")}
+					allowDeselect={false}
+					searchable={true}
+					nothingFoundMessage={t("pages.nodeSettings.fields.embeddingModel.empty", "No installed embedding models")}
+					error={nodeSettingsFieldError(t, errors, "knowledgeEmbeddingModelName")}
+					data-testid="node-settings-embedding-model"
+				/>
 				<Select
 					label={nodeSettingsFieldLabel(
 						t,

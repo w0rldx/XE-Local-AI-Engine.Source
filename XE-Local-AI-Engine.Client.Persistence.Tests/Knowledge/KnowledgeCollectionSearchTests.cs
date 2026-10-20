@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
@@ -240,7 +241,7 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
 
         return new KnowledgeSearchService(context,
             providerResolver,
-            new EmbeddingModelResolver(options),
+            new EmbeddingModelResolver(options, new FakeNodeSettingsStore(new StoredNodeSettings())),
             new KnowledgeEmbeddingPrefixer(),
             new FtsSearch(context),
             vectorSearchFactory,

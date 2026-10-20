@@ -57,10 +57,12 @@ function hit(overrides: Partial<KnowledgeSearchHit> = {}): KnowledgeSearchHit {
 function searchBag(
 	results: readonly KnowledgeSearchHit[],
 	degradations: UseKnowledgeSearchResult["degradations"] = [],
+	weakMatch: boolean | null = null,
 ): UseKnowledgeSearchResult {
 	return {
 		results,
 		degradations,
+		weakMatch,
 		isSearching: false,
 		error: undefined,
 		hasSearched: true,
@@ -221,6 +223,14 @@ describe("KnowledgeSearchPanel degradation notice", () => {
 		expect(screen.queryByTestId("knowledge-search-degradation-LexicalOnly")).toBeNull();
 	});
 
+	it("names an embedder change instead of serving stale vectors silently", () => {
+		renderWithProviders(<KnowledgeSearchPanel documents={[]} search={searchBag([hit()], ["EmbedderChanged"])} />);
+
+		expect(screen.getByTestId("knowledge-search-degradation-EmbedderChanged").textContent).toContain(
+			"The embedding model changed since some documents were indexed",
+		);
+	});
+
 	it("skips a degradation value it has no notice for instead of throwing", () => {
 		const unknown = "SomethingNewer" as UseKnowledgeSearchResult["degradations"][number];
 		renderWithProviders(<KnowledgeSearchPanel documents={[]} search={searchBag([hit()], [unknown, "LexicalOnly"])} />);
@@ -233,5 +243,30 @@ describe("KnowledgeSearchPanel degradation notice", () => {
 		renderWithProviders(<KnowledgeSearchPanel documents={[]} search={searchBag([hit()])} />);
 
 		expect(screen.queryByTestId(/knowledge-search-degradation-/)).toBeNull();
+	});
+});
+
+describe("KnowledgeSearchPanel weak-match notice", () => {
+	beforeEach(() => {
+		stubMatchMedia();
+	});
+
+	afterEach(() => {
+		cleanup();
+	});
+
+	it("says the documents hold no strong match when the reranked best hit scored low, and keeps the hits", () => {
+		renderWithProviders(
+			<KnowledgeSearchPanel documents={[]} search={searchBag([hit({ scoreKind: "Rerank", score: -2.1 })], [], true)} />,
+		);
+
+		expect(screen.getByTestId("knowledge-search-weak-match").textContent).toContain("No strong match in your documents");
+		expect(screen.getByTestId("knowledge-search-results")).toBeTruthy();
+	});
+
+	it.each([false, null])("shows no weak-match notice when the verdict is %s", (weakMatch) => {
+		renderWithProviders(<KnowledgeSearchPanel documents={[]} search={searchBag([hit()], [], weakMatch)} />);
+
+		expect(screen.queryByTestId("knowledge-search-weak-match")).toBeNull();
 	});
 });

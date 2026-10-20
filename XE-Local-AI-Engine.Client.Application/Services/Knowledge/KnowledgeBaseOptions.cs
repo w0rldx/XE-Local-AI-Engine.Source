@@ -68,6 +68,17 @@ public sealed class KnowledgeBaseOptions
     /// </remarks>
     public int RetrievalLatencyBudgetMilliseconds { get; set; } = 500;
 
+    /// <summary>
+    ///     Reranked top-hit score below which a search reports <see cref="KnowledgeSearchResult.WeakMatch" />. Default 0.75.
+    /// </summary>
+    /// <remarks>
+    ///     The scale is the raw llama-server <c>relevance_score</c> of the recommended reranker, bge-reranker-v2-m3
+    ///     (roughly -11 to +7), and is model-specific: another reranker needs its own value (a 0 to 1 scorer such as
+    ///     qwen3 would read weak on every query). The default sits between the measured near-miss and answerable top
+    ///     scores of the bge live rounds. Only a reranked result gets a verdict.
+    /// </remarks>
+    public double WeakMatchRerankScoreThreshold { get; set; } = 0.75;
+
     /// <summary>Periodically enqueue stale-vector documents after a scheduled embedding-model change.</summary>
     public bool ScheduledModelReindexEnabled { get; set; } = true;
 

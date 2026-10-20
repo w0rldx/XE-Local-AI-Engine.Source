@@ -31,6 +31,11 @@ const DEGRADATION_NOTICES: Record<KnowledgeSearchDegradation, DegradationNotice>
 		fallback:
 			"The reranker is not ready yet, so results are in their unreranked order. It starts in the background; search again shortly.",
 	},
+	EmbedderChanged: {
+		key: "pages.knowledgeBase.search.degradation.embedderChanged",
+		fallback:
+			"The embedding model changed since some documents were indexed, or the pinned embedding model is not installed. Those results come from keyword matching only until the documents are reindexed with the pinned model.",
+	},
 };
 
 // Semantic-search probe: a query box + ranked hit list (title · section · score · snippet). Distinguishes the
@@ -111,6 +116,15 @@ export function KnowledgeSearchPanel({ search, documents }: KnowledgeSearchPanel
 						) : null;
 					})
 				: null}
+
+			{!search.isSearching && search.weakMatch === true && search.results.length > 0 ? (
+				<Alert color="gray" variant="light" icon={<IconInfoCircle size={16} />} data-testid="knowledge-search-weak-match">
+					{t(
+						"pages.knowledgeBase.search.weakMatch",
+						"No strong match in your documents. These are the closest results, but they may not answer the question.",
+					)}
+				</Alert>
+			) : null}
 
 			{search.results.length > 0 ? (
 				<Stack gap="sm" data-testid="knowledge-search-results">

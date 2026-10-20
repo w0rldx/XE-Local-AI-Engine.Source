@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
@@ -39,6 +40,9 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
 
     private const string BgeNativeIdentity =
         "bge-m3@inventory-v1:26e50285285b6c8f2a6d22cc6a650c14303f9c7b74bfcbd19aa0a111a48d7faa::native:v1:768";
+
+    // Sorts before the nomic GGUF, so it wins the no-pin fallback once installed beside it.
+    private const string SecondEmbedderName = "ggml-org/embeddinggemma-2-GGUF:BF16";
 
     private const int Dimensions = 768;
 
@@ -156,7 +160,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             var options = Options.Create(new KnowledgeBaseOptions());
             var catalog = new KnowledgeDocumentCatalogService(context,
                 CreateOutageProviderResolver(),
-                new EmbeddingModelResolver(options),
+                new EmbeddingModelResolver(options, new FakeNodeSettingsStore(new StoredNodeSettings())),
                 options,
                 TimeProvider.System);
             reset = await catalog.ResetStaleDocumentsToPendingAsync(CancellationToken.None);
@@ -186,7 +190,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             var options = Options.Create(new KnowledgeBaseOptions());
             var catalog = new KnowledgeDocumentCatalogService(context,
                 CreateOutageProviderResolver(),
-                new EmbeddingModelResolver(options),
+                new EmbeddingModelResolver(options, new FakeNodeSettingsStore(new StoredNodeSettings())),
                 options,
                 TimeProvider.System);
             reset = await catalog.ResetStaleDocumentsToPendingAsync(CancellationToken.None);
@@ -279,6 +283,139 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         AssertEx.Equal(KnowledgeDocumentStatus.Indexed, result.Results[0].DocumentStatus);
         AssertEx.True(result.Results[0].ServingLastKnownGood,
             "An Indexed document whose vectors do not match the current embedding identity must disclose lexical results as last-known-good until reindex.");
+        AssertEx.Equal(nameof(KnowledgeSearchDegradation.EmbedderChanged), string.Join(",", result.Degradations),
+            "The identity mismatch is promoted once to the response, not left on the hit alone.");
+    }
+
+    [Test]
+    public async Task SearchAsync_WhenIndexedDocumentMatchesTheQueryIdentity_ReportsNoEmbedderChange()
+    {
+        var databasePath = GetDatabasePath("search-current-identity.sqlite");
+        var documentId = Guid.NewGuid();
+        var chunkId = Guid.NewGuid();
+
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed);
+        await SeedChunkAsync(databasePath, documentId, chunkId, "current lexical content");
+
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var service = CreateSearchService(context,
+            EmptyVectorSearch(),
+            ftsHits:
+            [
+                new FtsSearchHit
+                {
+                    ChunkId = chunkId,
+                    DocumentId = documentId,
+                    Bm25Score = -1.0
+                }
+            ]);
+
+        var result = await service.SearchAsync(new KnowledgeSearchRequest
+        {
+            Query = "current lexical content",
+            Limit = 5
+        }, CancellationToken.None);
+
+        AssertEx.Equal(1, result.Results.Count);
+        AssertEx.False(result.Results[0].ServingLastKnownGood);
+        AssertEx.Empty(result.Degradations);
+    }
+
+    [Test]
+    public async Task SearchAsync_WhenPinnedEmbedderIsMissing_ReportsEmbedderChangedAndNeverEmbedsWithAnotherModel()
+    {
+        var databasePath = GetDatabasePath("search-pin-missing.sqlite");
+        var documentId = Guid.NewGuid();
+        var chunkId = Guid.NewGuid();
+
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed);
+        await SeedChunkAsync(databasePath, documentId, chunkId, "current lexical content");
+
+        // The pinned GGUF is gone; another embedder is installed and would win the no-pin fallback.
+        var provider = new FixedEmbeddingProvider(Descriptor(SecondEmbedderName));
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var service = CreateSearchService(context,
+            EmptyVectorSearch(),
+            CreateProviderResolver(provider),
+            ftsHits:
+            [
+                new FtsSearchHit
+                {
+                    ChunkId = chunkId,
+                    DocumentId = documentId,
+                    Bm25Score = -1.0
+                }
+            ],
+            settingsStore: PinnedStore(ResolvedGgufName));
+
+        var result = await service.SearchAsync(new KnowledgeSearchRequest
+        {
+            Query = "current lexical content",
+            Limit = 5
+        }, CancellationToken.None);
+
+        AssertEx.Equal(1, result.Results.Count);
+        AssertEx.Equal("LexicalOnly,EmbedderChanged", string.Join(",", result.Degradations));
+        AssertEx.Equal(0, provider.GenerateCallCount, "A missing pin must never embed the query with another installed model.");
+    }
+
+    [Test]
+    public async Task ResetStale_WithAPin_InstallingASecondEmbedderLeavesTheCorpusFresh()
+    {
+        // W4a-1: without a pin, the second embedder sorts first and the whole corpus turns stale and re-embeds with it.
+        var databasePath = GetDatabasePath("catalog-pin-second-embedder.sqlite");
+        var indexedId = Guid.NewGuid();
+
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, indexedId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed);
+        var providerResolver = CreateProviderResolver(new FixedEmbeddingProvider(Descriptor(SecondEmbedderName), Descriptor(ResolvedGgufName)));
+        var options = Options.Create(new KnowledgeBaseOptions());
+
+        IReadOnlyList<Guid> pinnedReset;
+        IReadOnlyList<Guid> unpinnedReset;
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            pinnedReset = await new KnowledgeDocumentCatalogService(context, providerResolver,
+                    new EmbeddingModelResolver(options, PinnedStore(ResolvedGgufName)), options, TimeProvider.System)
+                .ResetStaleDocumentsToPendingAsync(CancellationToken.None);
+            unpinnedReset = await new KnowledgeDocumentCatalogService(context, providerResolver,
+                    new EmbeddingModelResolver(options, new FakeNodeSettingsStore(new StoredNodeSettings())), options, TimeProvider.System)
+                .ResetStaleDocumentsToPendingAsync(CancellationToken.None);
+        }
+
+        AssertEx.Empty(pinnedReset, "The pinned model is still installed, so nothing is stale.");
+        AssertEx.Equal(indexedId, unpinnedReset.Single(), "Control: the unpinned fallback switches to the second embedder.");
+    }
+
+    [Test]
+    public async Task RunAsync_PinsTheResolvedModelOnceAfterTheFirstIndexCommit()
+    {
+        var databasePath = GetDatabasePath("ingestion-pin-once.sqlite");
+        var firstId = Guid.NewGuid();
+        var secondId = Guid.NewGuid();
+
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, firstId, ConfiguredName, KnowledgeDocumentStatus.Pending);
+        await SeedDocumentAsync(databasePath, secondId, ConfiguredName, KnowledgeDocumentStatus.Pending);
+        var store = new FakeNodeSettingsStore(new StoredNodeSettings());
+
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            await CreateIngestionService(context, store).RunAsync(firstId, CancellationToken.None);
+        }
+
+        AssertEx.Equal(ResolvedGgufName, store.Current.KnowledgeEmbeddingModelName);
+        AssertEx.Equal(1, store.WriteCount);
+
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            await CreateIngestionService(context, store).RunAsync(secondId, CancellationToken.None);
+        }
+
+        AssertEx.Equal(KnowledgeDocumentStatus.Indexed.ToString(), await ReadStatusAsync(databasePath, secondId));
+        AssertEx.Equal(1, store.WriteCount, "The pin is write-once: a later index commit never rewrites it.");
     }
 
     [Test]
@@ -516,7 +653,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         {
             var catalogService = new KnowledgeDocumentCatalogService(context,
                 CreateOutageProviderResolver(),
-                new EmbeddingModelResolver(options),
+                new EmbeddingModelResolver(options, new FakeNodeSettingsStore(new StoredNodeSettings())),
                 options,
                 TimeProvider.System);
 
@@ -534,7 +671,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
     }
 
 
-    private static KnowledgeIngestionService CreateIngestionService(NodeChatDbContext context)
+    private static KnowledgeIngestionService CreateIngestionService(NodeChatDbContext context, INodeSettingsStore? settingsStore = null)
     {
         var options = Options.Create(new KnowledgeBaseOptions());
 
@@ -564,8 +701,15 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             new KnowledgeIndexWriter(context, TimeProvider.System),
             Substitute.For<IKnowledgeIndexingNotifier>(),
             TimeProvider.System,
-            NullLogger<KnowledgeIngestionService>.Instance);
+            NullLogger<KnowledgeIngestionService>.Instance,
+            settingsStore: settingsStore);
     }
+
+    private static FakeNodeSettingsStore PinnedStore(string pin) =>
+        new(new StoredNodeSettings
+        {
+            KnowledgeEmbeddingModelName = pin
+        });
 
     private static KnowledgeDocumentCatalogService CreateCatalogService(NodeChatDbContext context,
         KnowledgeEmbeddingVectorMode vectorMode = KnowledgeEmbeddingVectorMode.Matryoshka512)
@@ -574,7 +718,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         {
             EmbeddingVectorMode = vectorMode
         });
-        return new KnowledgeDocumentCatalogService(context, CreateResolvingProviderResolver(), new EmbeddingModelResolver(options), options, TimeProvider.System);
+        return new KnowledgeDocumentCatalogService(context, CreateResolvingProviderResolver(), new EmbeddingModelResolver(options, new FakeNodeSettingsStore(new StoredNodeSettings())), options, TimeProvider.System);
     }
 
     private static KnowledgeSearchService CreateSearchService(NodeChatDbContext context,
@@ -582,7 +726,8 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         ILocalModelProviderResolver? providerResolver = null,
         IKnowledgeQueryEmbeddingCache? queryEmbeddingCache = null,
         IOptions<KnowledgeBaseOptions>? options = null,
-        IReadOnlyList<FtsSearchHit>? ftsHits = null)
+        IReadOnlyList<FtsSearchHit>? ftsHits = null,
+        INodeSettingsStore? settingsStore = null)
     {
         options ??= Options.Create(new KnowledgeBaseOptions());
 
@@ -595,7 +740,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
 
         return new KnowledgeSearchService(context,
             providerResolver ?? CreateResolvingProviderResolver(),
-            new EmbeddingModelResolver(options),
+            new EmbeddingModelResolver(options, settingsStore ?? new FakeNodeSettingsStore(new StoredNodeSettings())),
             new KnowledgeEmbeddingPrefixer(),
             ftsSearch,
             vectorSearchFactory,
@@ -626,7 +771,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
     private static KnowledgeChunkEmbedder CreateEmbedder(IOptions<KnowledgeBaseOptions> options)
     {
         return new KnowledgeChunkEmbedder(CreateResolvingProviderResolver(),
-            new EmbeddingModelResolver(options),
+            new EmbeddingModelResolver(options, new FakeNodeSettingsStore(new StoredNodeSettings())),
             new KnowledgeEmbeddingPrefixer(),
             options);
     }

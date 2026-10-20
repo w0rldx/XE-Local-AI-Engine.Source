@@ -1,8 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
 using System.Text.Json;
+using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Models.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
@@ -16,6 +19,9 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
 
     private const string BackgroundModelNotLocalMessage =
         "The model must be an installed node-local model (a GGUF model or an Ollama model on this machine), or blank to use the default model.";
+
+    private const string EmbeddingModelNotInstalledMessage =
+        "The knowledge-base embedding model must be an installed embedding model, or blank to let the node pin the model that indexes first.";
 
     /// <summary>
     ///     How many times a save re-validates against a record that changed under it before it gives up and refuses.
@@ -34,6 +40,8 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
     private readonly IModelTrustResolver _modelTrustResolver;
     private readonly ILogger<NodeSettingsAdministrationService> _logger;
     private readonly IOllamaModelService _ollamaModelService;
+    private readonly KnowledgeBaseOptions _knowledgeOptions;
+    private readonly IKnowledgeModelPrewarmer _knowledgeModelPrewarmer;
     private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly INodeSettingsStore _store;
 
@@ -44,10 +52,16 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         IModelTrustResolver modelTrustResolver,
         ILocalModelProviderResolver localModelProviderResolver,
         IOllamaModelService ollamaModelService,
+        IOptions<KnowledgeBaseOptions> knowledgeOptions,
+        IKnowledgeModelPrewarmer knowledgeModelPrewarmer,
         ILogger<NodeSettingsAdministrationService> logger)
     {
+        ArgumentNullException.ThrowIfNull(knowledgeOptions);
+        _knowledgeOptions = knowledgeOptions.Value;
         ArgumentNullException.ThrowIfNull(ollamaModelService);
         _ollamaModelService = ollamaModelService;
+        ArgumentNullException.ThrowIfNull(knowledgeModelPrewarmer);
+        _knowledgeModelPrewarmer = knowledgeModelPrewarmer;
         ArgumentNullException.ThrowIfNull(defaultModelSelectionPolicy);
         ArgumentNullException.ThrowIfNull(ggufModelStore);
         ArgumentNullException.ThrowIfNull(localModelProviderResolver);
@@ -194,6 +208,22 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
                 ]);
             }
 
+            // Only on a CHANGE, like the fast-model gate: a later uninstall must not block an unrelated save. The resolver then
+            // reports the pinned model missing instead of falling back to another embedder.
+            if (!string.Equals(settings.KnowledgeEmbeddingModelName, validatedAgainst.KnowledgeEmbeddingModelName, StringComparison.Ordinal)
+                && !string.IsNullOrWhiteSpace(settings.KnowledgeEmbeddingModelName)
+                && !await IsInstalledEmbeddingModelAsync(settings.KnowledgeEmbeddingModelName.Trim(), cancellationToken))
+            {
+                return NodeSettingsAdministrationResult.Rejected(settings,
+                [
+                    new NodeSettingsValidationError
+                    {
+                        Field = NodeSettingsField.KnowledgeEmbeddingModelName,
+                        Message = EmbeddingModelNotInstalledMessage
+                    }
+                ]);
+            }
+
             if (await FindNonLocalBackgroundModelAsync(settings, validatedAgainst, cancellationToken) is { } backgroundModelField)
             {
                 return NodeSettingsAdministrationResult.Rejected(settings,
@@ -237,6 +267,14 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
             {
                 validatedAgainst = await GetTrustedSettingsAsync(cancellationToken);
                 continue;
+            }
+
+            // Search never spawns the reranker, so a newly chosen one is warmed here on both save paths. A cleared name
+            // falls back to the configured seed, which the startup warm already covered.
+            if (!string.IsNullOrWhiteSpace(persisted.RerankerModelName)
+                && !string.Equals(persisted.RerankerModelName, validatedAgainst.RerankerModelName, StringComparison.Ordinal))
+            {
+                _knowledgeModelPrewarmer.RequestWarm();
             }
 
             return NodeSettingsAdministrationResult.Saved(persisted);
@@ -321,6 +359,31 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         // Membership is the load-bearing check: both resolvers call an unknown id local, so only an installed model passes.
         return await _ggufModelStore.ExistsAsync(modelName, cancellationToken)
                || await _ollamaModelService.IsLoopbackModelInstalledAsync(modelName, cancellationToken);
+    }
+
+    // The same match the embedding resolver makes (exact, case-insensitive, on the knowledge embedding provider), plus the
+    // embedding-name check so a chat or reranker model cannot be pinned. An unreachable provider cannot confirm it: refused.
+    private async Task<bool> IsInstalledEmbeddingModelAsync(string modelName, CancellationToken cancellationToken)
+    {
+        if (!ModelKindDetector.IsEmbeddingName(modelName))
+        {
+            return false;
+        }
+
+        try
+        {
+            var provider = _localModelProviderResolver.ResolveProvider(_knowledgeOptions.EmbeddingProviderName);
+            var installed = await provider.ListModelsAsync(cancellationToken);
+            return installed.Any(descriptor => string.Equals(descriptor.ModelName, modelName, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
+        {
+            return false;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
     }
 
     private static string? TrimWhenProvided(string? value, string? current) =>

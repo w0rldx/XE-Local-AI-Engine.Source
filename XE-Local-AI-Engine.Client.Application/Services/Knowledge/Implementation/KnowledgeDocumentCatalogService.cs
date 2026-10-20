@@ -402,6 +402,26 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         return pendingIds;
     }
 
+    public async Task<IReadOnlyList<string>> ListIndexedEmbeddingModelsAsync(int limit, CancellationToken cancellationToken)
+    {
+        var connection = _dbContext.Database.GetDbConnection();
+        await OpenIfNeededAsync(connection, cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT DISTINCT embedding_model FROM knowledge_documents WHERE status = $indexed LIMIT $limit;";
+        AddParameter(command, "$indexed", KnowledgeDocumentStatus.Indexed.ToString());
+        AddParameter(command, "$limit", limit);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var models = new List<string>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            models.Add(reader.GetString(0));
+        }
+
+        return models;
+    }
+
     private static async Task<IReadOnlyList<KnowledgeDocumentChunkView>> ReadChunksAsync(DbConnection connection, Guid documentId, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();

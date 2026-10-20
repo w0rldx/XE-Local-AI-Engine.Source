@@ -103,6 +103,7 @@ function renderCard(overrides: RenderOverrides = {}): {
 				autoEffortFastModelOptions={overrides.autoEffortFastModelOptions ?? []}
 				backgroundModelOptions={overrides.backgroundModelOptions ?? []}
 				rerankerModelOptions={[]}
+				embeddingModelOptions={[]}
 				onDownloadRecommendedReranker={onDownload}
 				isDownloadRecommendedRerankerPending={overrides.isDownloadRecommendedRerankerPending ?? false}
 				isRecommendedRerankerInFlight={overrides.isRecommendedRerankerInFlight ?? false}

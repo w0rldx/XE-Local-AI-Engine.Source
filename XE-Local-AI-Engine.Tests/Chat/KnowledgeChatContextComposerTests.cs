@@ -168,4 +168,29 @@ public sealed class KnowledgeChatContextComposerTests
 
         AssertEx.Null(KnowledgeChatContextComposer.Compose(hits, charBudget: 10_000));
     }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public void Compose_AddsTheWeakMatchNoticeOnlyForAWeakMatch_AndKeepsTheExcerpts(bool weakMatch)
+    {
+        var hits = new List<KnowledgeSearchHit>
+        {
+            Hit("Design Doc", "The system uses hybrid retrieval.", score: 0.2, scoreKind: KnowledgeScoreKind.Rerank)
+        };
+
+        var result = AssertEx.NotNull(KnowledgeChatContextComposer.Compose(hits, charBudget: 10_000, weakMatch));
+
+        AssertEx.Equal(weakMatch, result.Context.Contains(KnowledgeChatContextComposer.WeakMatchNotice, StringComparison.Ordinal));
+        // A weak match still inlines what was found: the model decides, the excerpt and its source stay.
+        AssertEx.Contains(result.Context, "The system uses hybrid retrieval.");
+        AssertEx.Equal(1, result.Sources.Count);
+    }
+
+    [Test]
+    public void WeakMatchNotice_KeepsTheGeneralKnowledgeEscape()
+    {
+        // Model-matrix F18: without it small models refuse general questions for the rest of the conversation.
+        AssertEx.Contains(KnowledgeChatContextComposer.WeakMatchNotice, "general question may still be answered from your own knowledge");
+    }
 }

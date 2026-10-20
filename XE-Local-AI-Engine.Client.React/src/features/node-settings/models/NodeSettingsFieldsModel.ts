@@ -263,6 +263,8 @@ export interface NodeSettingsFieldsForm {
 	chatCacheReuse: number | string;
 	// Knowledge-base reranker (empty = reranking off)
 	rerankerModelName: string;
+	// Knowledge-base embedding pin (empty = not pinned yet; the node pins the model of the first index)
+	knowledgeEmbeddingModelName: string;
 	// Node-local model a FAST `auto` reasoning-effort turn may be moved onto (empty = no swap, ladder only)
 	autoEffortFastModelName: string;
 	// Per-model usage cost rates (USD per 1M tokens), edited as ordered rows and reduced to the stored map on save.
@@ -586,6 +588,7 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	speculativeDraftMaxTokens: 3,
 	chatCacheReuse: 256,
 	rerankerModelName: "",
+	knowledgeEmbeddingModelName: "",
 	autoEffortFastModelName: "",
 	usageRates: [],
 	// No profile until the node has one: "" is what an absent server value seeds too (see toNodeSettingsFieldsForm),
@@ -757,6 +760,7 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 		speculativeDraftMaxTokens: numberOr(response.speculativeDraftMaxTokens, nodeSettingsFieldDefaults.speculativeDraftMaxTokens),
 		chatCacheReuse: numberOr(response.chatCacheReuse, nodeSettingsFieldDefaults.chatCacheReuse),
 		rerankerModelName: response.rerankerModelName ?? "",
+		knowledgeEmbeddingModelName: response.knowledgeEmbeddingModelName ?? "",
 		autoEffortFastModelName: response.autoEffortFastModelName ?? "",
 		usageRates: toUsageRateRows(response.usageRates),
 		// An absent profile is genuinely undecided (a corrupted settings file reads as null), so it renders as an
@@ -1108,7 +1112,7 @@ export function toNodeSettingsFieldBounds(response: NodeSettingsResponse | undef
 // (read per sweep) and containerRuntimeSelection (read per call); and the other chat knobs — defaultContextTokens,
 // providerBudget*, contextBudgetRecentTurnKeepCount, compaction*, maxInlinedAttachmentChars, knowledgeChatTopK,
 // providerRetryEnabled / providerMaxRetries and spawn* — each read per turn, job, send or root run; and the knowledge,
-// privacy and usage knobs — rerankerModelName, knowledgeAdaptiveRerankingEnabled, knowledgeRetrievalLatencyBudgetMs, knowledgeAgentToolsEnabled,
+// privacy and usage knobs — rerankerModelName, knowledgeEmbeddingModelName, knowledgeAdaptiveRerankingEnabled, knowledgeRetrievalLatencyBudgetMs, knowledgeAgentToolsEnabled,
 // allowCloudModelAccess and the four other cloud-model permissions, the three background models, the two retention switches, every retention window,
 // nodeDbBackupRetainCount and benchmarkKldCacheMaxBytes — each read per search, offer, turn, run, sweep or backup; and the
 // other seven feature switches — FeatureSwitchMiddleware and every per-service check read them per request. Three carry
@@ -1401,6 +1405,11 @@ export function buildNodeSettingsRequest(
 	// differs from the baseline, including a switch back to "Off".
 	if (form.rerankerModelName !== baseline.rerankerModelName) {
 		body.rerankerModelName = textOrNull(form.rerankerModelName);
+	}
+
+	// Knowledge-base embedding pin — sent only on a change; the backend refuses a name that is not an installed embedding model.
+	if (form.knowledgeEmbeddingModelName !== baseline.knowledgeEmbeddingModelName) {
+		body.knowledgeEmbeddingModelName = textOrNull(form.knowledgeEmbeddingModelName);
 	}
 
 	// Fast model for automatic reasoning effort — same shape as the reranker: "Off" is sent as null. Deliberately NOT

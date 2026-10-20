@@ -99,6 +99,54 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         AssertEx.Equal(0.9, result.Results[0].Score);
         AssertAllScoreKind(result, KnowledgeScoreKind.Rerank);
         AssertDegradations(result, KnowledgeSearchDegradation.LexicalOnly);
+        // 0.9 clears the default 0.75 threshold.
+        AssertEx.Equal(false, result.WeakMatch);
+    }
+
+    [Test]
+    [Arguments(0.95, true)]
+    [Arguments(0.9, false)]
+    [Arguments(0.5, false)]
+    public async Task SearchAsync_RerankedTopHit_ReportsWeakMatchAgainstTheThreshold(double threshold, bool expectedWeakMatch)
+    {
+        var databasePath = GetDatabasePath("rerank-weak-match.sqlite");
+        var documentId = Guid.NewGuid();
+        var chunkAlpha = Guid.NewGuid();
+        var chunkGamma = Guid.NewGuid();
+
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentId);
+        await SeedChunkAsync(databasePath, documentId, chunkAlpha, chunkIndex: 0, "alpha content");
+        await SeedChunkAsync(databasePath, documentId, chunkGamma, chunkIndex: 2, "gamma content");
+        var ftsHits = new List<FtsSearchHit>
+        {
+            new()
+            {
+                ChunkId = chunkAlpha,
+                DocumentId = documentId,
+                Bm25Score = -3.0
+            },
+            new()
+            {
+                ChunkId = chunkGamma,
+                DocumentId = documentId,
+                Bm25Score = -1.0
+            }
+        };
+
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var service = CreateSearchService(context, ftsHits, RerankerScoringBy(ScoreGammaBestBetaMidAlphaLow), RerankerModel,
+            weakMatchRerankScoreThreshold: threshold);
+
+        var result = await service.SearchAsync(new KnowledgeSearchRequest
+        {
+            Query = "the query",
+            Limit = 2
+        }, CancellationToken.None);
+
+        // The verdict reads the reranked TOP score (gamma, 0.9); a score equal to the threshold is not weak.
+        AssertEx.Equal(chunkGamma, result.Results[0].ChunkId);
+        AssertEx.Equal(expectedWeakMatch, result.WeakMatch);
     }
 
     [Test]
@@ -208,6 +256,8 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         AssertEx.Equal(chunkBeta, orderedChunkIds[1]);
         AssertAllScoreKind(result, KnowledgeScoreKind.Fusion);
         AssertDegradations(result, KnowledgeSearchDegradation.LexicalOnly, KnowledgeSearchDegradation.RerankerUnavailable);
+        // A failed rerank leaves fusion scores, which carry no verdict.
+        AssertEx.Null(result.WeakMatch);
     }
 
     [Test]
@@ -240,10 +290,11 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
             }
         };
         var reranker = Substitute.For<IRerankerClient>();
+        var prewarmer = Substitute.For<IKnowledgeModelPrewarmer>();
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         // Empty reranker model name = reranking OFF.
-        var service = CreateSearchService(context, ftsHits, reranker, rerankerModelName: string.Empty);
+        var service = CreateSearchService(context, ftsHits, reranker, rerankerModelName: string.Empty, prewarmer: prewarmer);
 
         var result = await service.SearchAsync(new KnowledgeSearchRequest
         {
@@ -256,6 +307,9 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         AssertAllScoreKind(result, KnowledgeScoreKind.Fusion);
         AssertDegradations(result, KnowledgeSearchDegradation.LexicalOnly);
         await reranker.DidNotReceive().RerankAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+        // No reranker configured: nothing to warm, and fusion order carries no verdict.
+        prewarmer.DidNotReceive().RequestWarm();
+        AssertEx.Null(result.WeakMatch);
     }
 
     [Test]
@@ -360,7 +414,9 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         AssertAllScoreKind(result, KnowledgeScoreKind.Fusion);
         AssertDegradations(result, KnowledgeSearchDegradation.LexicalOnly);
         await reranker.DidNotReceive().RerankAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
-        prewarmer.DidNotReceive().RequestWarm();
+        // A configured reranker the gate skipped is still warmed, so the next ambiguous query finds it resident.
+        prewarmer.Received(1).RequestWarm();
+        AssertEx.Null(result.WeakMatch);
     }
 
     [Test]
@@ -416,6 +472,7 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         await reranker.Received(1).RerankAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
         // An abandoned rerank may be a hung server, which only the warm's liveness re-probe catches.
         prewarmer.Received(1).RequestWarm();
+        AssertEx.Null(result.WeakMatch);
     }
 
     [Test]
@@ -500,13 +557,15 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         string rerankerModelName,
         int retrievalLatencyBudgetMilliseconds = 30_000,
         IKnowledgeModelPrewarmer? prewarmer = null,
-        INodeRuntimeSettings? runtimeSettings = null)
+        INodeRuntimeSettings? runtimeSettings = null,
+        double weakMatchRerankScoreThreshold = 0.75)
     {
         var options = Options.Create(new KnowledgeBaseOptions
         {
             RerankerModelName = rerankerModelName,
             AdaptiveRerankingEnabled = false,
-            RetrievalLatencyBudgetMilliseconds = retrievalLatencyBudgetMilliseconds
+            RetrievalLatencyBudgetMilliseconds = retrievalLatencyBudgetMilliseconds,
+            WeakMatchRerankScoreThreshold = weakMatchRerankScoreThreshold
         });
 
         var ftsSearch = Substitute.For<IFtsSearch>();
@@ -524,7 +583,7 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
 
         return new KnowledgeSearchService(context,
             providerResolver,
-            new EmbeddingModelResolver(options),
+            new EmbeddingModelResolver(options, new FakeNodeSettingsStore(new StoredNodeSettings())),
             new KnowledgeEmbeddingPrefixer(),
             ftsSearch,
             vectorSearchFactory,

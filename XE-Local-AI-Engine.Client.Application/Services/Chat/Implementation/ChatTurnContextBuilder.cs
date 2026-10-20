@@ -318,7 +318,9 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
                 return null;
             }
 
-            var composed = KnowledgeChatContextComposer.Compose(result.Results, _localChatOptions.Value.MaxInlinedKnowledgeChars);
+            var composed = KnowledgeChatContextComposer.Compose(result.Results,
+                _localChatOptions.Value.MaxInlinedKnowledgeChars,
+                weakMatch: result.WeakMatch == true);
             if (composed is null)
             {
                 return null;

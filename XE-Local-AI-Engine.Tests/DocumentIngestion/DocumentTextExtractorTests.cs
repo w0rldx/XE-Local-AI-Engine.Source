@@ -65,6 +65,39 @@ public sealed class DocumentTextExtractorTests
     }
 
     [Test]
+    public async Task Extractor_WhenTwoBookmarksTargetOnePage_SplitsThePageAtEachTitleLine()
+    {
+        var trail = await ReadSamePageTrailAsync(["Intro text", "Alpha", "Alpha body", "Beta", "Beta body"], ["Alpha", "Beta"]);
+
+        // The heading line stays in the body after its header.
+        AssertEx.Equal("P@1:Intro text|H1@1:# Alpha|P@1:Alpha Alpha body|H1@1:# Beta|P@1:Beta Beta body", trail);
+    }
+
+    [Test]
+    public async Task Extractor_WhenBookmarkTitleOnlyOccursMidLineOrMidWord_DoesNotSplitThePage()
+    {
+        var trail = await ReadSamePageTrailAsync(["Intro mentions Gamma here", "Gammaray body"], ["Gamma"]);
+
+        AssertEx.Equal("H1@1:# Gamma|P@1:Intro mentions Gamma here Gammaray body", trail);
+    }
+
+    [Test]
+    public async Task Extractor_WhenBookmarkTitleIsNotOnThePage_KeepsItsHeaderAtTheCurrentPosition()
+    {
+        var trail = await ReadSamePageTrailAsync(["Intro text", "Alpha", "Alpha body"], ["Delta", "Alpha"]);
+
+        AssertEx.Equal("H1@1:# Delta|P@1:Intro text|H1@1:# Alpha|P@1:Alpha Alpha body", trail);
+    }
+
+    [Test]
+    public async Task Extractor_WhenLaterBookmarkTitleIsOnlyBeforeThePreviousAnchor_KeepsItsHeaderAtThatAnchor()
+    {
+        var trail = await ReadSamePageTrailAsync(["Intro text", "Alpha", "Alpha body", "Beta", "Beta body"], ["Beta", "Alpha"]);
+
+        AssertEx.Equal("P@1:Intro text Alpha Alpha body|H1@1:# Beta|H1@1:# Alpha|P@1:Beta Beta body", trail);
+    }
+
+    [Test]
     public async Task Extractor_WhenPdfOutlineIsPresent_MarkdownCarriesTheHeadings()
     {
         using var stream = new MemoryStream(BuildOutlinedPdf());
@@ -667,6 +700,28 @@ public sealed class DocumentTextExtractorTests
 
     // Three pages with an outline: Chapter One (page 1) > Section 1.1 (page 2), Chapter Two (page 3), plus a URI
     // bookmark and an empty-titled page bookmark that must both be skipped. Built with PdfPig's writer.
+    private static async Task<string> ReadSamePageTrailAsync(string[] lines, string[] bookmarkTitles)
+    {
+        using var builder = new PdfDocumentBuilder();
+        var font = builder.AddStandard14Font(Standard14Font.Helvetica);
+        var page = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+        for (var index = 0; index < lines.Length; index++)
+        {
+            _ = page.AddText(lines[index], 12, new PdfPoint(72, 780 - (index * 100)), font);
+        }
+
+        builder.Bookmarks = new Bookmarks([.. bookmarkTitles.Select(title => (BookmarkNode)new DocumentBookmarkNode(title, 0,
+            new ExplicitDestination(1, ExplicitDestinationType.FitPage, ExplicitDestinationCoordinates.Empty), []))]);
+        using var stream = new MemoryStream(builder.Build());
+
+        var result = await CreateExtractor().ExtractStructuredAsync(stream, "book.pdf", ".pdf", CancellationToken.None);
+
+        AssertEx.Equal(DocumentExtractionStatus.Extracted, result.Status);
+        return string.Join("|", AssertEx.NotNull(result.Document).EnumerateContent().Select(element => element is IngestionDocumentHeader header
+            ? $"H{header.Level}@{header.PageNumber}:{header.Text}"
+            : $"P@{element.PageNumber}:{string.Join(' ', (element.Text ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))}"));
+    }
+
     private static byte[] BuildOutlinedPdf()
     {
         using var builder = new PdfDocumentBuilder();

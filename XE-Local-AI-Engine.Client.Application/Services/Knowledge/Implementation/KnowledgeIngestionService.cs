@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using static Chat.Implementation.NodeChatPersistenceSql;
 
 /// <summary>
@@ -35,6 +36,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
     private readonly IKnowledgeIndexWriter _indexWriter;
     private readonly IKnowledgeIndexingNotifier _notifier;
     private readonly IKnowledgeChunkEmbeddingCache? _embeddingCache;
+    private readonly INodeSettingsStore? _settingsStore;
     private readonly TimeSpan _documentTimeout;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<KnowledgeIngestionService> _logger;
@@ -49,8 +51,10 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         TimeProvider timeProvider,
         ILogger<KnowledgeIngestionService> logger,
         IKnowledgeChunkEmbeddingCache? embeddingCache = null,
-        IOptions<KnowledgeBaseOptions>? options = null)
+        IOptions<KnowledgeBaseOptions>? options = null,
+        INodeSettingsStore? settingsStore = null)
     {
+        _settingsStore = settingsStore;
         _documentTimeout = TimeSpan.FromMinutes(Math.Max(1, (options?.Value ?? new KnowledgeBaseOptions()).IngestionDocumentTimeoutMinutes));
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
@@ -254,7 +258,36 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         var indexed = await _indexWriter.WriteAsync(input, cancellationToken);
         if (indexed)
         {
+            await PinEmbeddingModelIfUnsetAsync(embeddingResult.ResolvedModel, cancellationToken);
             await _notifier.NotifyDocumentChangedAsync(documentId, KnowledgeDocumentStatus.Indexed, cancellationToken);
+        }
+    }
+
+    // The first committed index pins the model that built it, so a second embedder installed later can never take over
+    // silently. Write-once; the document is already Indexed, so a settings-file failure is logged and never fails it.
+    private async Task PinEmbeddingModelIfUnsetAsync(string resolvedModel, CancellationToken cancellationToken)
+    {
+        if (_settingsStore is null || string.IsNullOrWhiteSpace(resolvedModel))
+        {
+            return;
+        }
+
+        try
+        {
+            if (!string.IsNullOrWhiteSpace((await _settingsStore.LoadAsync(cancellationToken)).KnowledgeEmbeddingModelName))
+            {
+                return;
+            }
+
+            if (await KnowledgeEmbeddingModelPin.PinIfUnsetAsync(_settingsStore, resolvedModel, cancellationToken))
+            {
+                _logger.LogInformation("Pinned the knowledge embedding model {ModelName} after the first index commit.", resolvedModel);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning("Could not pin the knowledge embedding model ({ExceptionType}); the next index commit retries.",
+                exception.GetType().Name);
         }
     }
 

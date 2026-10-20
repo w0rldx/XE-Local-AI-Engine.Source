@@ -10,10 +10,13 @@ using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1;
 using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Validators;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Models.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Validation;
+using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.Ollama.Contracts;
@@ -356,6 +359,53 @@ public sealed class NodeSettingsAdministrationServiceTests
 
         AssertEx.False(result.Updated);
         AssertEx.Equal(NodeSettingsField.AutoEffortFastModelName, result.ValidationErrors[0].Field);
+    }
+
+    [Test]
+    [Arguments("nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0", true)]
+    [Arguments("ggml-org/embeddinggemma-2-GGUF:BF16", false)]
+    [Arguments("unsloth/Qwen3-8B-GGUF:Q4_K_M", false)]
+    public async Task SaveTrusted_KnowledgeEmbeddingPin_AcceptsOnlyAnInstalledEmbeddingModel(string pin, bool accepted)
+    {
+        // Installed: the nomic embedder and a chat model. A pin naming a missing embedder or a non-embedding model is refused.
+        var store = new FakeNodeSettingsStore(new StoredNodeSettings());
+        var service = CreateService(store, localModelProviderResolver: EmbeddingProviderResolver(
+            "nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0", "unsloth/Qwen3-8B-GGUF:Q4_K_M"));
+
+        var result = await service.SaveTrustedMergedAsync(current => current with
+        {
+            KnowledgeEmbeddingModelName = pin
+        });
+
+        AssertEx.Equal(accepted, result.Updated);
+        if (accepted)
+        {
+            AssertEx.Equal(pin, store.Current.KnowledgeEmbeddingModelName);
+        }
+        else
+        {
+            AssertEx.Equal(NodeSettingsField.KnowledgeEmbeddingModelName, result.ValidationErrors.Single().Field);
+            AssertEx.Null(store.Current.KnowledgeEmbeddingModelName);
+        }
+    }
+
+    [Test]
+    public async Task SaveTrusted_UnchangedPinOfAnUninstalledModel_DoesNotBlockAnUnrelatedSave()
+    {
+        // The pin is judged only on a change: an embedder removed after pinning must not lock the settings page.
+        var store = new FakeNodeSettingsStore(new StoredNodeSettings
+        {
+            KnowledgeEmbeddingModelName = "nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0"
+        });
+        var service = CreateService(store, localModelProviderResolver: EmbeddingProviderResolver());
+
+        var result = await service.SaveTrustedMergedAsync(current => current with
+        {
+            EnableTools = false
+        });
+
+        AssertEx.True(result.Updated);
+        AssertEx.Equal("nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0", store.Current.KnowledgeEmbeddingModelName);
     }
 
     [Test]
@@ -747,6 +797,87 @@ public sealed class NodeSettingsAdministrationServiceTests
         cloudFactory.Received(1).InvalidateSelectionCache();
     }
 
+    private static ILocalModelProviderResolver EmbeddingProviderResolver(params string[] installedModels)
+    {
+        var provider = Substitute.For<ILocalModelProvider>();
+        provider.ListModelsAsync(Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>(installedModels
+                                                                             .Select(static name => new LocalModelDescriptor
+                                                                             {
+                                                                                 ModelName = name,
+                                                                                 ProviderName = LlamaServerProviderConstants.ProviderName,
+                                                                                 IsAvailable = true,
+                                                                                 SizeBytes = null,
+                                                                                 ModifiedAt = null,
+                                                                                 MaxContextTokens = null,
+                                                                                 Capabilities = []
+                                                                             })
+                                                                             .ToList()));
+        var resolver = Substitute.For<ILocalModelProviderResolver>();
+        resolver.ResolveProvider(Arg.Any<string>()).Returns(provider);
+        resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(LlamaServerProviderConstants.ProviderName));
+        return resolver;
+    }
+
+    [Test]
+    [Arguments("bge-reranker-v2-m3", 1)]
+    [Arguments("old-reranker", 0)]
+    [Arguments("", 0)]
+    public async Task ApplyAgenticPatchAsync_WarmsTheRerankerOnlyWhenASavedNameChanges(string patchedName, int expectedWarms)
+    {
+        // The agentic (MCP) path and the REST path share ValidateAndSaveAsync, so this pins both: a new name warms once,
+        // an unchanged one does not, and a cleared one falls back to the configured seed the startup warm covered.
+        var store = new FakeNodeSettingsStore(new StoredNodeSettings
+        {
+            RerankerModelName = "old-reranker"
+        });
+        var prewarmer = Substitute.For<IKnowledgeModelPrewarmer>();
+        var service = CreateService(store, knowledgeModelPrewarmer: prewarmer);
+
+        var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
+        {
+            RerankerModelName = patchedName
+        });
+
+        AssertEx.True(result.Updated, "a well-formed reranker patch must be saved.");
+        prewarmer.Received(expectedWarms).RequestWarm();
+    }
+
+    [Test]
+    public async Task SaveTrustedMergedAsync_WhenTheRerankerNameChanges_RequestsOneWarm()
+    {
+        var store = new FakeNodeSettingsStore(new StoredNodeSettings());
+        var prewarmer = Substitute.For<IKnowledgeModelPrewarmer>();
+        var service = CreateService(store, knowledgeModelPrewarmer: prewarmer);
+
+        var result = await service.SaveTrustedMergedAsync(record => record with
+        {
+            RerankerModelName = "bge-reranker-v2-m3"
+        });
+
+        AssertEx.True(result.Updated);
+        prewarmer.Received(1).RequestWarm();
+    }
+
+    [Test]
+    public async Task SaveTrustedMergedAsync_WhenTheSaveIsRejected_RequestsNoWarm()
+    {
+        var store = new FakeNodeSettingsStore(new StoredNodeSettings());
+        var prewarmer = Substitute.For<IKnowledgeModelPrewarmer>();
+        var service = CreateService(store, knowledgeModelPrewarmer: prewarmer);
+
+        var result = await service.SaveTrustedMergedAsync(record => record with
+        {
+            RerankerModelName = "bge-reranker-v2-m3",
+            // Keep-warm on with no model is refused by the merged-record policy, so nothing is written.
+            KeepModelWarmEnabled = true
+        });
+
+        AssertEx.False(result.Updated);
+        prewarmer.DidNotReceive().RequestWarm();
+    }
+
     private static NodeSettingsAdministrationService CreateService(INodeSettingsStore store,
         ICloudModelResolver? cloudResolver = null,
         IActiveCloudChatClientFactory? cloudFactory = null,
@@ -754,7 +885,8 @@ public sealed class NodeSettingsAdministrationServiceTests
         IModelTrustResolver? modelTrustResolver = null,
         ILocalModelProviderResolver? localModelProviderResolver = null,
         bool fastModelInstalled = true,
-        IOllamaModelService? ollamaModelService = null)
+        IOllamaModelService? ollamaModelService = null,
+        IKnowledgeModelPrewarmer? knowledgeModelPrewarmer = null)
     {
         var runtime = runtimeSettings ?? Substitute.For<INodeRuntimeSettings>();
         runtime.GetLlamaMaxLoadedProcessesAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(StoredNodeSettings.DefaultLlamaMaxLoadedProcesses));
@@ -799,6 +931,8 @@ public sealed class NodeSettingsAdministrationServiceTests
             localModelProviderResolver,
             // Default: nothing is installed on Ollama, so only the GGUF registry admits a background model.
             ollamaModelService ?? Substitute.For<IOllamaModelService>(),
+            Options.Create(new KnowledgeBaseOptions()),
+            knowledgeModelPrewarmer ?? Substitute.For<IKnowledgeModelPrewarmer>(),
             NullLogger<NodeSettingsAdministrationService>.Instance);
     }
 

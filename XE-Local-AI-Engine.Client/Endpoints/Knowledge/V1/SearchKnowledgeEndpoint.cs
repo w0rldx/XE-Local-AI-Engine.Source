@@ -54,7 +54,8 @@ public sealed class SearchKnowledgeEndpoint : Endpoint<SearchKnowledgeRequest, S
         await Send.OkAsync(new SearchKnowledgeResponse
             {
                 Results = [.. result.Results.Select(ToResponse)],
-                Degradations = result.Degradations
+                Degradations = result.Degradations,
+                WeakMatch = result.WeakMatch
             },
             ct);
     }

@@ -40023,6 +40023,10 @@
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesKnowledgeKnowledgeSearchDegradation"
             }
+          },
+          "weakMatch": {
+            "type": "boolean",
+            "nullable": true
           }
         }
       },
@@ -44302,6 +44306,10 @@
             "type": "string",
             "nullable": true
           },
+          "knowledgeEmbeddingModelName": {
+            "type": "string",
+            "nullable": true
+          },
           "autoEffortFastModelName": {
             "type": "string",
             "nullable": true
@@ -45359,6 +45367,10 @@
             "nullable": true
           },
           "rerankerModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "knowledgeEmbeddingModelName": {
             "type": "string",
             "nullable": true
           },
@@ -51924,11 +51936,13 @@
         "description": "",
         "x-enumNames": [
           "LexicalOnly",
-          "RerankerUnavailable"
+          "RerankerUnavailable",
+          "EmbedderChanged"
         ],
         "enum": [
           "LexicalOnly",
-          "RerankerUnavailable"
+          "RerankerUnavailable",
+          "EmbedderChanged"
         ]
       },
       "XE_Local_AI_EngineClientServicesMcpMcpConnectionFailureReason": {

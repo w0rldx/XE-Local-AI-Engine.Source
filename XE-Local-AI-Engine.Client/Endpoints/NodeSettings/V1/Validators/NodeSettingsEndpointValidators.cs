@@ -43,6 +43,7 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
         NotBlank(RuleFor(static request => request.ContainerRuntimeSelection));
         NotBlank(RuleFor(static request => request.SpeculativeDraftModelName));
         NotBlank(RuleFor(static request => request.RerankerModelName));
+        NotBlank(RuleFor(static request => request.KnowledgeEmbeddingModelName));
         NotBlank(RuleFor(static request => request.AutoEffortFastModelName));
         NotBlank(RuleFor(static request => request.DefaultVoiceProfile));
         NotBlank(RuleFor(static request => request.IntentRouterDefinitionId));
@@ -82,6 +83,12 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
         RuleFor(static request => request.RerankerModelName!)
             .Must(StoredNodeSettings.IsPlausibleModelName)
             .When(static request => !string.IsNullOrWhiteSpace(request.RerankerModelName))
+            .WithMessage(StoredNodeSettings.ImplausibleModelNameMessage);
+
+        // Shape here; "is it an installed embedding model" runs on save in the administration service.
+        RuleFor(static request => request.KnowledgeEmbeddingModelName!)
+            .Must(StoredNodeSettings.IsPlausibleModelName)
+            .When(static request => !string.IsNullOrWhiteSpace(request.KnowledgeEmbeddingModelName))
             .WithMessage(StoredNodeSettings.ImplausibleModelNameMessage);
 
         RuleFor(static request => request.AutoEffortFastModelName!)

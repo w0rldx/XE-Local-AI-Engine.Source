@@ -84,6 +84,9 @@ public interface IKnowledgeDocumentCatalogService
     ///     semantics — and in-progress clobbering — of <see cref="ResetNonTerminalToPendingAsync" />.
     /// </remarks>
     Task<IReadOnlyList<Guid>> ListPendingDocumentIdsAsync(CancellationToken cancellationToken);
+
+    /// <summary>Up to <paramref name="limit" /> distinct embedding model names the Indexed documents were built with.</summary>
+    Task<IReadOnlyList<string>> ListIndexedEmbeddingModelsAsync(int limit, CancellationToken cancellationToken);
 }
 
 /// <summary>Documents plus the embedding model ingestion would embed them with right now.</summary>

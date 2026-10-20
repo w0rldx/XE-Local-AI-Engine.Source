@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -184,7 +185,7 @@ public sealed class RetrievalEvalLiveTests : IDisposable
             new KnowledgeBaseOptions(),
             LiveCorpusView.SourcePathOf,
             ct);
-        var resolution = await new EmbeddingModelResolver(Microsoft.Extensions.Options.Options.Create(new KnowledgeBaseOptions())).ResolveAsync(embeddingProvider, ct);
+        var resolution = await new EmbeddingModelResolver(Microsoft.Extensions.Options.Options.Create(new KnowledgeBaseOptions()), new FakeNodeSettingsStore(new StoredNodeSettings())).ResolveAsync(embeddingProvider, ct);
         record.EmbeddingVectors = $"resolved '{resolution.Name}' ({(resolution.IsConfident ? "confident" : "NOT confident: no vector policy applies")}); "
                                   + await RequireProductionVectorPolicyAsync(fixture, embedName, ct);
 

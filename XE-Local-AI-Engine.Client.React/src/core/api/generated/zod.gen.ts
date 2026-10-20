@@ -7613,11 +7613,16 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsR
 	variants: z.array(zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse),
 });
 
-export const zXeLocalAiEngineClientServicesKnowledgeKnowledgeSearchDegradation = z.enum(["LexicalOnly", "RerankerUnavailable"]);
+export const zXeLocalAiEngineClientServicesKnowledgeKnowledgeSearchDegradation = z.enum([
+	"LexicalOnly",
+	"RerankerUnavailable",
+	"EmbedderChanged",
+]);
 
 export const zXeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeResponse = z.object({
 	results: z.array(zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse),
 	degradations: z.array(zXeLocalAiEngineClientServicesKnowledgeKnowledgeSearchDegradation),
+	weakMatch: z.boolean().nullish(),
 });
 
 export const zXeLocalAiEngineClientServicesMcpMcpConnectionFailureReason = z.enum([
@@ -7847,6 +7852,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
 	rerankerModelName: z.string().nullish(),
+	knowledgeEmbeddingModelName: z.string().nullish(),
 	autoEffortFastModelName: z.string().nullish(),
 	huggingFaceDiskMarginBytes: z.int().nullish(),
 	minHuggingFaceDiskMarginBytes: z.int().optional(),
@@ -8830,6 +8836,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
 	rerankerModelName: z.string().nullish(),
+	knowledgeEmbeddingModelName: z.string().nullish(),
 	autoEffortFastModelName: z.string().nullish(),
 	huggingFaceDiskMarginBytes: z.int().nullish(),
 	orchestrationIdleTimeoutSeconds: z

@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Validators;
 using XE_Local_AI_Engine.Client.Services.AppUpdate;
 using XE_Local_AI_Engine.Client.Services.Containers;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -74,6 +75,26 @@ public sealed class NodeSettingsEndpointTests
         await nodeSettingsStore.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
                 Persisted(mutate).MaxMessageRequestTimeoutSeconds == 600),
             Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenTheRerankerChanges_RequestsOneKnowledgeWarm()
+    {
+        // The test host removes every hosted service, so the startup warm cannot add a call: the one counted is the save's.
+        var nodeSettingsStore = NewSettingsStore();
+        var prewarmer = Substitute.For<IKnowledgeModelPrewarmer>();
+        await using var factory = CreateFactory(nodeSettingsStore, knowledgeModelPrewarmer: prewarmer);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
+        {
+            RerankerModelName = "bge-reranker-v2-m3"
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        prewarmer.Received(1).RequestWarm();
     }
 
     [Test]
@@ -401,6 +422,7 @@ public sealed class NodeSettingsEndpointTests
     [Test]
     [Arguments("keepModelWarmModelName")]
     [Arguments("rerankerModelName")]
+    [Arguments("knowledgeEmbeddingModelName")]
     [Arguments("autoEffortFastModelName")]
     public async Task SaveNodeSettings_WithAMalformedRoleModelName_IsRejectedUnderTheWireName(string wireName)
     {
@@ -419,6 +441,10 @@ public sealed class NodeSettingsEndpointTests
             "rerankerModelName" => new SaveNodeSettingsRequest
             {
                 RerankerModelName = malformed
+            },
+            "knowledgeEmbeddingModelName" => new SaveNodeSettingsRequest
+            {
+                KnowledgeEmbeddingModelName = malformed
             },
             _ => new SaveNodeSettingsRequest
             {
@@ -1515,6 +1541,21 @@ public sealed class NodeSettingsEndpointTests
         // The "Off" option sends null, which clears the reranker model name.
         var cleared = ParseRequest("""{"rerankerModelName":null}""").ToStoredSettings(stored);
         AssertEx.Null(cleared.RerankerModelName);
+    }
+
+    [Test]
+    public void NodeSettings_KnowledgeEmbeddingModelName_RoundTripsThroughMapper()
+    {
+        var stored = new SaveNodeSettingsRequest
+        {
+            KnowledgeEmbeddingModelName = "  nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0  "
+        }.ToStoredSettings(new StoredNodeSettings());
+        AssertEx.Equal("nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0", stored.KnowledgeEmbeddingModelName);
+        AssertEx.Equal("nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0", stored.ToResponse(DefaultEffectiveValues).KnowledgeEmbeddingModelName);
+
+        // Omitted keeps the pin; an explicit null clears it, and the node pins again on the next index.
+        AssertEx.Equal("nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0", new SaveNodeSettingsRequest().ToStoredSettings(stored).KnowledgeEmbeddingModelName);
+        AssertEx.Null(ParseRequest("""{"knowledgeEmbeddingModelName":null}""").ToStoredSettings(stored).KnowledgeEmbeddingModelName);
     }
 
     [Test]
@@ -2949,7 +2990,8 @@ public sealed class NodeSettingsEndpointTests
 
     private static TestServerWebAppFactory CreateFactory(INodeSettingsStore nodeSettingsStore,
         INodeRuntimeSettings? runtimeSettings = null,
-        IReadOnlyDictionary<string, string?>? configuration = null)
+        IReadOnlyDictionary<string, string?>? configuration = null,
+        IKnowledgeModelPrewarmer? knowledgeModelPrewarmer = null)
     {
         return new TestServerWebAppFactory
         {
@@ -2958,6 +3000,12 @@ public sealed class NodeSettingsEndpointTests
             {
                 services.RemoveAll<INodeSettingsStore>();
                 services.AddSingleton(nodeSettingsStore);
+                if (knowledgeModelPrewarmer is not null)
+                {
+                    services.RemoveAll<IKnowledgeModelPrewarmer>();
+                    services.AddSingleton(knowledgeModelPrewarmer);
+                }
+
                 if (runtimeSettings is not null)
                 {
                     services.RemoveAll<INodeRuntimeSettings>();

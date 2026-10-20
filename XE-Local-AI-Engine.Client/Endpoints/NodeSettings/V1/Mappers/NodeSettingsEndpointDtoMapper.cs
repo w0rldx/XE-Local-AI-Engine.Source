@@ -69,6 +69,7 @@ internal static class NodeSettingsEndpointDtoMapper
             MinSpeculativeDraftGpuLayers = StoredNodeSettings.MinSpeculativeDraftGpuLayers,
             MaxAllowedSpeculativeDraftGpuLayers = StoredNodeSettings.MaxSpeculativeDraftGpuLayers,
             RerankerModelName = settings.RerankerModelName,
+            KnowledgeEmbeddingModelName = settings.KnowledgeEmbeddingModelName,
             AutoEffortFastModelName = settings.AutoEffortFastModelName,
             HuggingFaceDiskMarginBytes = settings.HuggingFaceDiskMarginBytes,
             MinHuggingFaceDiskMarginBytes = StoredNodeSettings.MinHuggingFaceDiskMarginBytes,
@@ -367,6 +368,8 @@ internal static class NodeSettingsEndpointDtoMapper
             SpeculativeDraftGpuLayers = Merge(request.SpeculativeDraftGpuLayers, currentSettings.SpeculativeDraftGpuLayers, request.Clears(nameof(request.SpeculativeDraftGpuLayers))),
             // Null is the "Off" option: stored null, reranking disabled.
             RerankerModelName = MergeText(request.RerankerModelName, currentSettings.RerankerModelName, request.Clears(nameof(request.RerankerModelName))),
+            KnowledgeEmbeddingModelName = MergeText(request.KnowledgeEmbeddingModelName, currentSettings.KnowledgeEmbeddingModelName,
+                request.Clears(nameof(request.KnowledgeEmbeddingModelName))),
             AutoEffortFastModelName = MergeText(request.AutoEffortFastModelName, currentSettings.AutoEffortFastModelName, request.Clears(nameof(request.AutoEffortFastModelName))),
             OrchestrationIdleTimeoutSeconds = Merge(request.OrchestrationIdleTimeoutSeconds, currentSettings.OrchestrationIdleTimeoutSeconds,
                 request.Clears(nameof(request.OrchestrationIdleTimeoutSeconds))),

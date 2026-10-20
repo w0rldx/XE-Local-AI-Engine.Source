@@ -7,6 +7,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -237,7 +238,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         providerResolver.ResolveProvider(Arg.Any<string>()).Returns(provider);
 
         return new KnowledgeChunkEmbedder(providerResolver,
-            new EmbeddingModelResolver(options),
+            new EmbeddingModelResolver(options, new FakeNodeSettingsStore(new StoredNodeSettings())),
             new KnowledgeEmbeddingPrefixer(),
             options);
     }

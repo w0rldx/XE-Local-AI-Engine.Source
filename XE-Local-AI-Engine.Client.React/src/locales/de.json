@@ -5624,6 +5624,7 @@
 			"search": {
 				"aria": "Wissensdatenbank durchsuchen",
 				"degradation": {
+					"embedderChanged": "Das Embedding-Modell hat sich seit der Indizierung einiger Dokumente geändert, oder das festgelegte Embedding-Modell ist nicht installiert. Diese Ergebnisse stammen nur aus dem Schlüsselwortabgleich, bis die Dokumente mit dem festgelegten Modell neu indiziert sind.",
 					"lexicalOnly": "Das Embedding-Modell ist nicht verfügbar, daher stammen diese Ergebnisse nur aus dem Schlüsselwortabgleich.",
 					"rerankerUnavailable": "Der Reranker ist noch nicht bereit, daher sind die Ergebnisse nicht neu sortiert. Er startet im Hintergrund; suchen Sie gleich noch einmal."
 				},
@@ -5632,7 +5633,8 @@
 				"hint": "Die Suche umfasst alle indexierten Dokumente dieser Wissensdatenbank.",
 				"noResults": "Kein indexierter Inhalt passt zu \"{{query}}\".",
 				"placeholder": "Die Wissensdatenbank fragen…",
-				"submit": "Suchen"
+				"submit": "Suchen",
+				"weakMatch": "Keine starke Übereinstimmung in Ihren Dokumenten. Dies sind die nächstliegenden Ergebnisse, sie beantworten die Frage aber möglicherweise nicht."
 			},
 			"status": {
 				"chunking": "Wird zerlegt",
@@ -6633,12 +6635,16 @@
 					"title": "Downloads"
 				},
 				"embeddingModel": {
+					"description": "Das Modell, mit dem jedes Dokument und jede Anfrage der Wissensdatenbank eingebettet wird. Der Knoten legt das Modell fest, das das erste Dokument indiziert; ein weiteres installiertes Embedding-Modell ändert es daher nie. Wenn Sie es hier ändern, wird jedes mit einem anderen Modell indizierte Dokument zur Neuindizierung vorgemerkt.",
 					"downloadAlreadyInstalled": "Das empfohlene Embedding-Modell ({{model}}) ist bereits installiert.",
 					"downloadError": "Der Download des empfohlenen Embedding-Modells konnte nicht gestartet werden.",
 					"downloadInFlight": "Das empfohlene Embedding-Modell ({{model}}) wird bereits heruntergeladen.",
 					"downloadRecommended": "Empfohlenes Embedding-Modell herunterladen",
 					"downloadStarted": "Das empfohlene Embedding-Modell ({{model}}) wird heruntergeladen.",
-					"recommendedHelp": "Erforderlich für die Wissensdatenbank: Ohne Embedding-Modell können Dokumente nicht indexiert werden. Empfohlen: nomic-embed-text-v1.5 (~274 MB)."
+					"empty": "Keine installierten Embedding-Modelle",
+					"label": "Embedding-Modell",
+					"recommendedHelp": "Erforderlich für die Wissensdatenbank: Ohne Embedding-Modell können Dokumente nicht indexiert werden. Empfohlen: nomic-embed-text-v1.5 (~274 MB).",
+					"unpinned": "Noch nicht festgelegt (wird bei der ersten Indizierung gesetzt)"
 				},
 				"enableTools": {
 					"description": "Lokale Chat-Agenten dürfen Tools aufrufen. Änderungen werden ohne Neustart des Nodes wirksam.",

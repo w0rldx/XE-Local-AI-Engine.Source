@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
@@ -293,7 +294,7 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
         var options = Options.Create(new KnowledgeBaseOptions());
         return new KnowledgeDocumentCatalogService(context,
             new ThrowingProviderResolver(),
-            new EmbeddingModelResolver(options),
+            new EmbeddingModelResolver(options, new FakeNodeSettingsStore(new StoredNodeSettings())),
             options,
             TimeProvider.System);
     }
@@ -345,7 +346,7 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
         }
 
         var embedder = new KnowledgeChunkEmbedder(new ThrowingProviderResolver(),
-            new EmbeddingModelResolver(options),
+            new EmbeddingModelResolver(options, new FakeNodeSettingsStore(new StoredNodeSettings())),
             new KnowledgeEmbeddingPrefixer(),
             options);
 

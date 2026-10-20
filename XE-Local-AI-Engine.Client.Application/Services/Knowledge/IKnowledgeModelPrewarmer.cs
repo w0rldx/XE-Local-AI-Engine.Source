@@ -5,9 +5,9 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 ///     finds them warm instead of degrading to fusion order.
 /// </summary>
 /// <remarks>
-///     Search never spawns the reranker itself; a cold one degrades to fusion. Requested once per turn that offers the
-///     knowledge search tool and again after a search whose rerank came back empty. Details:
-///     <c>docs/wiki/15-knowledge-base.md</c> ("Hybrid retrieval").
+///     Search never spawns the reranker itself; a cold one degrades to fusion. Requested at node start, after a saved
+///     reranker change, once per turn that offers the knowledge search tool, and by a search whose rerank was skipped or
+///     came back empty. Details: <c>docs/wiki/15-knowledge-base.md</c> ("Pre-warm").
 /// </remarks>
 public interface IKnowledgeModelPrewarmer
 {

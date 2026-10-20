@@ -332,6 +332,7 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
             SpeculativeDraftGpuLayers = ClampToRange(settings.SpeculativeDraftGpuLayers,
                 StoredNodeSettings.MinSpeculativeDraftGpuLayers, StoredNodeSettings.MaxSpeculativeDraftGpuLayers),
             RerankerModelName = TrimToNull(settings.RerankerModelName),
+            KnowledgeEmbeddingModelName = TrimToNull(settings.KnowledgeEmbeddingModelName),
             AutoEffortFastModelName = TrimToNull(settings.AutoEffortFastModelName),
             DefaultVoiceProfile = TrimToNull(settings.DefaultVoiceProfile),
             LlamaReadinessTimeoutCapSeconds = ClampToRange(settings.LlamaReadinessTimeoutCapSeconds,

@@ -479,6 +479,7 @@ internal static class McpAdminWireNames
             NodeSettingsField.AgentHomeEnabled => "agent_home_enabled",
             NodeSettingsField.HuggingFaceDefaultQuant => "hugging_face_default_quant",
             NodeSettingsField.RerankerModelName => "reranker_model_name",
+            NodeSettingsField.KnowledgeEmbeddingModelName => "knowledge_embedding_model_name",
             _ => throw new ArgumentOutOfRangeException(nameof(field), field, "Unknown node-settings field.")
         };
 

@@ -300,6 +300,47 @@ public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
     }
 
     [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    [Arguments(null)]
+    public async Task ExecuteAsync_CarriesTheWeakMatchVerdictAndSwapsTheNoteOnlyWhenWeak(bool? weakMatch)
+    {
+        var handler = CreateHandler(new KnowledgeSearchResult
+        {
+            Results =
+            [
+                new KnowledgeSearchHit
+                {
+                    DocumentId = Guid.NewGuid(),
+                    ChunkId = Guid.NewGuid(),
+                    Title = "Runbook",
+                    Section = null,
+                    Content = "restart the node",
+                    Source = "knowledge_base",
+                    Score = -3.25,
+                    ScoreKind = KnowledgeScoreKind.Rerank,
+                    ChunkIndex = 0,
+                    DocumentStatus = KnowledgeDocumentStatus.Indexed,
+                    ServingLastKnownGood = false
+                }
+            ],
+            WeakMatch = weakMatch
+        });
+
+        var json = await handler.ExecuteAsync("""{"query":"anything"}""");
+
+        using var document = JsonDocument.Parse(json);
+        var served = document.RootElement.GetProperty("weakMatch");
+        AssertEx.Equal(weakMatch, served.ValueKind == JsonValueKind.Null ? null : served.GetBoolean());
+        var expectedNote = weakMatch == true
+            ? SearchKnowledgeBaseToolHandler.WeakMatchNote
+            : SearchKnowledgeBaseToolHandler.RankedResultsNote;
+        AssertEx.Equal(expectedNote, document.RootElement.GetProperty("note").GetString());
+        // The hit is still served: a weak match is a hint to the model, not a filter.
+        AssertEx.Equal(1, document.RootElement.GetProperty("results").GetArrayLength());
+    }
+
+    [Test]
     public async Task ExecuteAsync_WhenChunkForgesEndMarker_FenceStaysIntact()
     {
         // A chunk body that embeds a verbatim END marker prefix must NOT be able to close the fence: the real end marker

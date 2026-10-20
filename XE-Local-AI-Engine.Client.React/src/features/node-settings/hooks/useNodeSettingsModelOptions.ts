@@ -69,6 +69,16 @@ export function useNodeSettingsModelOptions(form: NodeSettingsFieldsForm, errors
 		[localModels],
 	);
 
+	// The embedding pin takes only installed embedding models; the backend refuses anything else at save.
+	const embeddingModelOptions = useMemo(
+		() =>
+			(localModels?.items ?? [])
+				.filter((model) => model.kind === "Embedding")
+				.map((model) => ({ value: model.modelName ?? "", label: model.modelName ?? "" }))
+				.filter((option) => option.value.length > 0),
+		[localModels],
+	);
+
 	const selectedRouterId = form.intentRouterDefinitionId;
 	const intentRouterOptions = useMemo(() => {
 		const options = (graphDefinitions?.definitions ?? [])
@@ -88,6 +98,7 @@ export function useNodeSettingsModelOptions(form: NodeSettingsFieldsForm, errors
 		// model, never a cloud id, an external id or an Ollama name. The backend refuses anything else at save.
 		autoEffortFastModelOptions: installedKeepWarmModelOptions,
 		rerankerModelOptions,
+		embeddingModelOptions,
 		backgroundModelOptions,
 		keepWarmModelUnavailable,
 		visibleErrors: keepWarmModelUnavailable ? { ...errors, keepModelWarmModelName: "unavailableKeepWarmModel" } : errors,

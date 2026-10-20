@@ -73,4 +73,47 @@ public sealed class SearchKnowledgeEndpointTests
         AssertEx.Equal(6.75, hit.GetProperty("score").GetDouble());
         AssertEx.Equal(expectedWireValue, hit.GetProperty("scoreKind").GetString());
     }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    [Arguments(null)]
+    public async Task Search_CarriesTheWeakMatchVerdict(bool? weakMatch)
+    {
+        var searchService = Substitute.For<IKnowledgeSearchService>();
+        searchService.SearchAsync(Arg.Any<KnowledgeSearchRequest>(), Arg.Any<CancellationToken>())
+                     .Returns(new KnowledgeSearchResult
+                     {
+                         Results = [],
+                         WeakMatch = weakMatch
+                     });
+
+        await using var factory = new TestServerWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<IKnowledgeSearchService>();
+                services.AddScoped(_ => searchService);
+            }
+        };
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, SearchRoute)
+        {
+            Content = JsonContent.Create(new
+            {
+                query = "restart"
+            })
+        };
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        // No verdict may be written as null or left out; either way it must never read as true or false.
+        bool? served = body.RootElement.TryGetProperty("weakMatch", out var property) && property.ValueKind != JsonValueKind.Null
+            ? property.GetBoolean()
+            : null;
+        AssertEx.Equal(weakMatch, served);
+    }
 }

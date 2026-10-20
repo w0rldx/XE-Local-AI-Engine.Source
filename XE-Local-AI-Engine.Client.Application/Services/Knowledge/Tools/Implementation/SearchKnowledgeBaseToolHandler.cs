@@ -29,6 +29,10 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
     internal const string RankedResultsNote =
         "These are the closest matches in the knowledge base, ranked, and they may not address the question. If they do not and the question is not about the operator's documents, answer it from your general knowledge.";
 
+    // The reranker scored even the best hit below the weak-match threshold: same general-knowledge escape, firmer about the documents.
+    internal const string WeakMatchNote =
+        "The knowledge base has no strong match for this query: even the best result scored low, so these results probably do not answer it. If the question is about the operator's documents, say they do not appear to contain the answer; otherwise answer it from your general knowledge.";
+
     /// <summary>
     ///     Upper bound on the total hit-content characters serialized into one response, so a wide search cannot dump an
     ///     unbounded payload into the model context.
@@ -183,7 +187,9 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
             returnedResults = hits.Count,
             totalResults = result.Results.Count,
             truncated,
-            note = RankedResultsNote
+            // null = no verdict (the top hit is not reranked), so the model never reads a fusion order as strong.
+            weakMatch = result.WeakMatch,
+            note = result.WeakMatch == true ? WeakMatchNote : RankedResultsNote
         };
 
         return JsonSerializer.Serialize(payload, SerializerOptions);

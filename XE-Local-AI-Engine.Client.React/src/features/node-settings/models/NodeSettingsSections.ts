@@ -82,6 +82,7 @@ const nodeSettingsFieldSections: Readonly<
 	ollamaEndpoint: "runtimes",
 	huggingFaceDefaultQuant: "models",
 	rerankerModelName: "knowledge",
+	knowledgeEmbeddingModelName: "knowledge",
 	webAccessEnabled: "knowledge",
 	webSearchSearxngUrl: "knowledge",
 	voiceFeatureEnabled: "voice",

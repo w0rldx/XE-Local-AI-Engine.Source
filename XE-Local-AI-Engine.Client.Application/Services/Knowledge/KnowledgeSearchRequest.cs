@@ -29,6 +29,16 @@ public sealed class KnowledgeSearchResult
 
     /// <summary>Every degradation this search ran under; empty when the whole pipeline ran.</summary>
     public IReadOnlyList<KnowledgeSearchDegradation> Degradations { get; init; } = [];
+
+    /// <summary>
+    ///     Whether the reranked top hit scored below <see cref="KnowledgeBaseOptions.WeakMatchRerankScoreThreshold" />:
+    ///     the documents hold no strong match for the query.
+    /// </summary>
+    /// <remarks>
+    ///     <see langword="null" /> means no verdict: no hits, or the top hit is not reranked (reranker off, adaptive skip,
+    ///     cold, failed or past the budget). A fusion score never reads as strong or weak.
+    /// </remarks>
+    public bool? WeakMatch { get; init; }
 }
 
 /// <summary>

@@ -263,6 +263,12 @@ public sealed class SearchKnowledgeResponse
 
     /// <summary>Every degradation the search ran under (enum names), empty when the full pipeline ran; the UI shows each as a notice.</summary>
     public required IReadOnlyList<KnowledgeSearchDegradation> Degradations { get; init; }
+
+    /// <summary>
+    ///     True when the reranked top hit scored below the weak-match threshold (the documents hold no strong match),
+    ///     false when it scored at or above it, null when the top hit is not reranked or there are no hits.
+    /// </summary>
+    public bool? WeakMatch { get; init; }
 }
 
 /// <summary>Result of a corpus-wide reindex: how many stale-model documents were reset to Pending and enqueued.</summary>

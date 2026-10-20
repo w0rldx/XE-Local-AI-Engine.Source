@@ -5624,6 +5624,7 @@
 			"search": {
 				"aria": "Search the knowledge base",
 				"degradation": {
+					"embedderChanged": "The embedding model changed since some documents were indexed, or the pinned embedding model is not installed. Those results come from keyword matching only until the documents are reindexed with the pinned model.",
 					"lexicalOnly": "The embedding model is unavailable, so these results come from keyword matching only.",
 					"rerankerUnavailable": "The reranker is not ready yet, so results are in their unreranked order. It starts in the background; search again shortly."
 				},
@@ -5632,7 +5633,8 @@
 				"hint": "Search runs over every indexed document in this knowledge base.",
 				"noResults": "No indexed content matches \"{{query}}\".",
 				"placeholder": "Ask the knowledge base…",
-				"submit": "Search"
+				"submit": "Search",
+				"weakMatch": "No strong match in your documents. These are the closest results, but they may not answer the question."
 			},
 			"status": {
 				"chunking": "Chunking",
@@ -6633,12 +6635,16 @@
 					"title": "Downloads"
 				},
 				"embeddingModel": {
+					"description": "The model every knowledge-base document and query is embedded with. The node pins the model that indexes the first document, so installing another embedding model never switches it. Changing it here marks every document indexed with another model for reindexing.",
 					"downloadAlreadyInstalled": "The recommended embedding model ({{model}}) is already installed.",
 					"downloadError": "Could not start the recommended embedding model download.",
 					"downloadInFlight": "The recommended embedding model ({{model}}) is already downloading.",
 					"downloadRecommended": "Download recommended embedding model",
 					"downloadStarted": "Downloading the recommended embedding model ({{model}}).",
-					"recommendedHelp": "Required for the knowledge base: without an embedding model, documents cannot be indexed. Recommended: nomic-embed-text-v1.5 (~274 MB)."
+					"empty": "No installed embedding models",
+					"label": "Embedding model",
+					"recommendedHelp": "Required for the knowledge base: without an embedding model, documents cannot be indexed. Recommended: nomic-embed-text-v1.5 (~274 MB).",
+					"unpinned": "Not pinned yet (set by the first index)"
 				},
 				"enableTools": {
 					"description": "Allow local chat agents to call tools. Changes take effect without restarting the node.",

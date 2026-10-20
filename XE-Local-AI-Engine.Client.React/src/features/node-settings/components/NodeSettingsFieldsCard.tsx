@@ -67,6 +67,7 @@ export interface NodeSettingsFieldsCardProps {
 	// All installed models offered as the knowledge-base reranker (reranker GGUFs are not a chat kind, so this list is
 	// not filtered to chat-capable models).
 	readonly rerankerModelOptions: readonly NodeSettingsModelOption[];
+	readonly embeddingModelOptions: readonly NodeSettingsModelOption[];
 	// Saved graph workflows offered as the intent router.
 	readonly intentRouterOptions: readonly NodeSettingsModelOption[];
 	// One-click download of the node's recommended reranker GGUF. The page owns the mutation + progress feed; this
@@ -174,6 +175,7 @@ export function NodeSettingsFieldsCard(props: NodeSettingsFieldsCardProps) {
 						errors={errors}
 						onChange={onChange}
 						rerankerModelOptions={props.rerankerModelOptions}
+						embeddingModelOptions={props.embeddingModelOptions}
 						rerankerDownload={{
 							onStart: props.onDownloadRecommendedReranker,
 							pending: props.isDownloadRecommendedRerankerPending,

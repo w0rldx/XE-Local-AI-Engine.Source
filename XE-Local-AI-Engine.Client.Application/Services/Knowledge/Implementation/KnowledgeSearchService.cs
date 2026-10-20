@@ -130,7 +130,7 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
         var ftsRanked = (await ftsArm)
                         .Select(hit => new RankFusionInput(hit.ChunkId, -hit.Bm25Score))
                         .ToList();
-        var (queryVector, resolvedModel, vectorIdentity) = await embedArm;
+        var (queryVector, resolvedModel, vectorIdentity, pinnedModelMissing) = await embedArm;
 
         var vectorRanked = new List<RankFusionInput>();
         if (!queryVector.IsEmpty)
@@ -177,6 +177,13 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
             deduped.Count,
             Stopwatch.GetElapsedTime(searchStart),
             latencyBudget);
+        if (!rerankDecision.ShouldRerank && !string.IsNullOrWhiteSpace(rerankerModelName))
+        {
+            // A skipped rerank still warms, so the next ambiguous query finds the reranker resident; the warm's reuse path
+            // also refreshes its idle timestamp, so the reaper no longer evicts it between skipped queries (wiki 15, "Pre-warm").
+            _prewarmer?.RequestWarm();
+        }
+
         var selections = rerankDecision.ShouldRerank
             ? await RerankWithinBudgetAsync(rerankerModelName!, request.Query, deduped, limit, searchStart, latencyBudget, cancellationToken)
             : deduped.Take(limit).ToList();
@@ -188,16 +195,17 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
         var contents = await ResolveContentsAsync(selections, request.ExpandNeighbors, cancellationToken);
 
         var hits = new List<KnowledgeSearchHit>(selections.Count);
+        var embedderChanged = pinnedModelMissing;
         for (var index = 0; index < selections.Count; index++)
         {
             var selection = selections[index];
 
             // A hit only exists because the document has queryable chunks, so disclose last-known-good projections while a
             // re-index is pending or failed, and when an Indexed row still carries an older vector identity.
-            var servingLastKnownGood =
-                selection.Row.DocumentStatus != KnowledgeDocumentStatus.Indexed
-                || (!queryVector.IsEmpty
-                    && !string.Equals(selection.Row.VectorIdentity, vectorIdentity, StringComparison.Ordinal));
+            var builtWithAnotherEmbedder = !queryVector.IsEmpty
+                                           && !string.Equals(selection.Row.VectorIdentity, vectorIdentity, StringComparison.Ordinal);
+            var servingLastKnownGood = selection.Row.DocumentStatus != KnowledgeDocumentStatus.Indexed || builtWithAnotherEmbedder;
+            embedderChanged |= builtWithAnotherEmbedder;
 
             hits.Add(new KnowledgeSearchHit
             {
@@ -223,10 +231,21 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
             });
         }
 
+        // Promoted once to the response: per hit it only reads as "last known good", which a reader cannot tell from a pending
+        // reindex of the same model.
+        if (embedderChanged)
+        {
+            degradations.Add(KnowledgeSearchDegradation.EmbedderChanged);
+        }
+
         return new KnowledgeSearchResult
         {
             Results = hits,
-            Degradations = degradations
+            Degradations = degradations,
+            // Only a reranked top hit carries a relevance verdict; fusion scores are rank-derived and say nothing absolute.
+            WeakMatch = selections.Count > 0 && selections[0].ScoreKind == KnowledgeScoreKind.Rerank
+                ? selections[0].Score < _options.WeakMatchRerankScoreThreshold
+                : null
         };
     }
 
@@ -294,7 +313,7 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
     // A rerank that was due but came back in fusion order is a degradation; an adaptive-gate skip is a decision, not one.
     private static List<KnowledgeSearchDegradation> ClassifyDegradations(bool lexicalOnly, bool rerankWasDue, IReadOnlyList<ChunkSelection> selections)
     {
-        var degradations = new List<KnowledgeSearchDegradation>(capacity: 2);
+        var degradations = new List<KnowledgeSearchDegradation>(capacity: 3);
         if (lexicalOnly)
         {
             degradations.Add(KnowledgeSearchDegradation.LexicalOnly);
@@ -461,7 +480,8 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
             {
                 // No installed embedder: a generator here only reaches a capacity admission and a failing spawn on every search.
                 NoEmbedderInstalled(_logger, embeddingModelName);
-                return new QueryEmbedding(ReadOnlyMemory<float>.Empty, embeddingModelName, KnowledgeEmbeddingVectorPolicy.LegacyIdentity);
+                return new QueryEmbedding(ReadOnlyMemory<float>.Empty, embeddingModelName, KnowledgeEmbeddingVectorPolicy.LegacyIdentity,
+                    resolution.PinnedModelMissing);
             }
 
             var cacheFamilyIdentity = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, _options.EmbeddingVectorMode);
@@ -656,9 +676,9 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
         public required KnowledgeScoreKind ScoreKind { get; init; }
     }
 
-    // The embedded query the semantic arm searches with: the vector (empty on the degrade path, which skips the arm), the
-    // resolved model name scoping which stored vectors it may meet, and the identity pinning the policy it was built under.
-    private sealed record QueryEmbedding(ReadOnlyMemory<float> Vector, string ResolvedModel, string VectorIdentity);
+    // The query vector (empty on the degrade path), the resolved model and identity scoping the stored vectors it may meet,
+    // and whether the degrade came from a pinned embedder that is not installed (reported as EmbedderChanged).
+    private sealed record QueryEmbedding(ReadOnlyMemory<float> Vector, string ResolvedModel, string VectorIdentity, bool PinnedModelMissing = false);
 
     [LoggerMessage(EventId = QueryEmbeddingUnavailableEventId, Level = LogLevel.Warning,
         Message = "Knowledge search query embedding unavailable; returning lexical results only. Exception type: {ExceptionType}.")]

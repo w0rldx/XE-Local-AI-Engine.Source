@@ -58,7 +58,7 @@ describe("useKnowledgeSearch over the real client", () => {
 		server.use(
 			http.post(localApiPath(searchPath), async ({ request }) => {
 				observedBody = await request.json();
-				return HttpResponse.json({ results: [hit()], degradations: ["RerankerUnavailable"] });
+				return HttpResponse.json({ results: [hit()], degradations: ["RerankerUnavailable"], weakMatch: true });
 			}),
 		);
 		const { wrapper } = createProvidersWrapper();
@@ -70,6 +70,7 @@ describe("useKnowledgeSearch over the real client", () => {
 		expect(observedBody).toEqual({ query: "restart", limit: 10, collectionId: "PROJECT-A" });
 		expect(result.current.results).toHaveLength(1);
 		expect(result.current.degradations).toEqual(["RerankerUnavailable"]);
+		expect(result.current.weakMatch).toBe(true);
 		expect(result.current.lastQuery).toBe("restart");
 	});
 

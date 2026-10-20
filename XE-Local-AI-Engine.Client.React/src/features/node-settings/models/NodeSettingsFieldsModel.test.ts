@@ -508,6 +508,18 @@ describe("buildNodeSettingsRequest", () => {
 		expect(body.rerankerModelName).toBeNull();
 	});
 
+	it("sends a changed embedding pin, null when it is cleared, and nothing when it is unchanged", () => {
+		const pinned = { ...baseline, knowledgeEmbeddingModelName: "nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0" };
+		expect(buildNodeSettingsRequest(pinned, baseline, bounds, false).body.knowledgeEmbeddingModelName).toBe(
+			"nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0",
+		);
+		expect(
+			buildNodeSettingsRequest({ ...pinned, knowledgeEmbeddingModelName: "" }, pinned, bounds, false).body
+				.knowledgeEmbeddingModelName,
+		).toBeNull();
+		expect("knowledgeEmbeddingModelName" in buildNodeSettingsRequest(pinned, pinned, bounds, false).body).toBe(false);
+	});
+
 	it("sends a changed fast model for automatic reasoning effort, and null for Off", () => {
 		const form = { ...baseline, autoEffortFastModelName: "  qwen3-1.7b  " };
 		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);

@@ -10,5 +10,11 @@ public enum KnowledgeSearchDegradation
     LexicalOnly,
 
     /// <summary>A reranker is configured but was cold, busy, failed or missed the latency budget; hits keep fusion order.</summary>
-    RerankerUnavailable
+    RerankerUnavailable,
+
+    /// <summary>
+    ///     The embedding model no longer matches the index: a hit was built with another model or policy (a reindex is
+    ///     pending), or the pinned embedding model is not installed.
+    /// </summary>
+    EmbedderChanged
 }

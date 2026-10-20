@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -108,6 +109,37 @@ public sealed class EmbeddingModelResolverTests
 
         AssertEx.Equal(ConfiguredName, resolution.Name);
         AssertEx.False(resolution.IsConfident, "Nothing installed matched, so this is a bare fallback, not a real resolution.");
+        AssertEx.False(resolution.PinnedModelMissing, "Nothing is pinned, so nothing pinned can be missing.");
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenPinnedModelInstalled_PinWinsOverConfiguredNameAndEarlierSortedEmbedder()
+    {
+        // The configured name is installed AND an embedder sorts before the pin; the pin still wins.
+        var provider = ProviderWithModels(Descriptor("ggml-org/embeddinggemma-2-GGUF:BF16"),
+            Descriptor("nomic-embed-text"),
+            Descriptor("nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0"));
+        var resolver = CreateResolver(pin: "nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0");
+
+        var resolution = await resolver.ResolveAsync(provider, CancellationToken.None);
+
+        AssertEx.Equal("nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0", resolution.Name);
+        AssertEx.True(resolution.IsConfident);
+        AssertEx.False(resolution.PinnedModelMissing);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenPinnedModelMissing_IsNotConfidentAndNeverFallsBackToAnotherEmbedder()
+    {
+        // The silent switch this pin exists to stop: another embedder installed, the pinned one gone.
+        var provider = ProviderWithModels(Descriptor("ggml-org/embeddinggemma-2-GGUF:BF16"), Descriptor("nomic-embed-text"));
+        var resolver = CreateResolver(pin: "nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0");
+
+        var resolution = await resolver.ResolveAsync(provider, CancellationToken.None);
+
+        AssertEx.Equal("nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0", resolution.Name);
+        AssertEx.False(resolution.IsConfident, "A missing pin is never a vector identity.");
+        AssertEx.True(resolution.PinnedModelMissing);
     }
 
     [Test]
@@ -168,11 +200,14 @@ public sealed class EmbeddingModelResolverTests
         AssertEx.False(resolution.IsConfident, "A request timeout is a degrade, not a real resolution.");
     }
 
-    private static EmbeddingModelResolver CreateResolver()
+    private static EmbeddingModelResolver CreateResolver(string? pin = null)
     {
         return new EmbeddingModelResolver(Options.Create(new KnowledgeBaseOptions
         {
             EmbeddingModelName = ConfiguredName
+        }), new FakeNodeSettingsStore(new StoredNodeSettings
+        {
+            KnowledgeEmbeddingModelName = pin
         }));
     }
 

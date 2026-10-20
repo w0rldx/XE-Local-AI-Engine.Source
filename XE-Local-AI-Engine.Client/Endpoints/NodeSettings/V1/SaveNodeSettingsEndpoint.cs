@@ -85,6 +85,9 @@ public sealed class SaveNodeSettingsEndpoint : Endpoint<SaveNodeSettingsRequest,
             case NodeSettingsField.AutoEffortFastModelName:
                 AddError(r => r.AutoEffortFastModelName, error.Message);
                 break;
+            case NodeSettingsField.KnowledgeEmbeddingModelName:
+                AddError(r => r.KnowledgeEmbeddingModelName, error.Message);
+                break;
             case NodeSettingsField.KnowledgeSearchDefaultResults:
                 AddError(r => r.KnowledgeSearchDefaultResults, error.Message);
                 break;

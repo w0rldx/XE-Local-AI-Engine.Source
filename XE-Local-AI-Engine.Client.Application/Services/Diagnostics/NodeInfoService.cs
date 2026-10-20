@@ -68,6 +68,7 @@ public sealed class NodeInfoService : INodeInfoService
         nameof(StoredNodeSettings.SpeculativeDraftMaxTokens),
         nameof(StoredNodeSettings.SpeculativeDraftGpuLayers),
         nameof(StoredNodeSettings.RerankerModelName),
+        nameof(StoredNodeSettings.KnowledgeEmbeddingModelName),
         nameof(StoredNodeSettings.AutoEffortFastModelName),
         nameof(StoredNodeSettings.VoiceFeatureEnabled),
         nameof(StoredNodeSettings.CustomToolsEnabled),

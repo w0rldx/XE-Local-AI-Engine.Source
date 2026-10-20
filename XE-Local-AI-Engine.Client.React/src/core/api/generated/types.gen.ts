@@ -3848,6 +3848,7 @@ export type XeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeRequest = {
 export type XeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeResponse = {
 	results: Array<XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse>;
 	degradations: Array<XeLocalAiEngineClientServicesKnowledgeKnowledgeSearchDegradation>;
+	weakMatch?: boolean | null;
 };
 
 export type XeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentRequest = {
@@ -5066,6 +5067,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	minSpeculativeDraftGpuLayers?: number;
 	maxAllowedSpeculativeDraftGpuLayers?: number;
 	rerankerModelName?: string | null;
+	knowledgeEmbeddingModelName?: string | null;
 	autoEffortFastModelName?: string | null;
 	huggingFaceDiskMarginBytes?: number | null;
 	minHuggingFaceDiskMarginBytes?: number;
@@ -5323,6 +5325,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	speculativeDraftMaxTokens?: number | null;
 	speculativeDraftGpuLayers?: number | null;
 	rerankerModelName?: string | null;
+	knowledgeEmbeddingModelName?: string | null;
 	autoEffortFastModelName?: string | null;
 	huggingFaceDiskMarginBytes?: number | null;
 	orchestrationIdleTimeoutSeconds?: number | null;
@@ -7107,7 +7110,10 @@ export type XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus =
 
 export type XeLocalAiEngineClientServicesKnowledgeKnowledgeScoreKind = "Fusion" | "Rerank";
 
-export type XeLocalAiEngineClientServicesKnowledgeKnowledgeSearchDegradation = "LexicalOnly" | "RerankerUnavailable";
+export type XeLocalAiEngineClientServicesKnowledgeKnowledgeSearchDegradation =
+	| "LexicalOnly"
+	| "RerankerUnavailable"
+	| "EmbedderChanged";
 
 export type XeLocalAiEngineClientServicesMcpMcpConnectionFailureReason =
 	| "Unknown"

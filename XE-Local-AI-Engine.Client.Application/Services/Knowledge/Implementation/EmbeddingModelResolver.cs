@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Contracts;
@@ -13,18 +14,27 @@ using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
 {
     private readonly KnowledgeBaseOptions _options;
+    private readonly INodeSettingsStore _settingsStore;
 
-    public EmbeddingModelResolver(IOptions<KnowledgeBaseOptions> options)
+    public EmbeddingModelResolver(IOptions<KnowledgeBaseOptions> options, INodeSettingsStore settingsStore)
     {
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
+        _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
     }
 
     public async Task<EmbeddingModelResolution> ResolveAsync(ILocalModelProvider provider, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(provider);
 
-        var configuredName = _options.EmbeddingModelName;
+        // The stored pin wins over the configured name, read live so an operator save applies on the next resolve.
+        var pinnedName = (await _settingsStore.LoadAsync(cancellationToken)).KnowledgeEmbeddingModelName;
+        if (string.IsNullOrWhiteSpace(pinnedName))
+        {
+            pinnedName = null;
+        }
+
+        var effectiveName = pinnedName?.Trim() ?? _options.EmbeddingModelName;
 
         IReadOnlyList<LocalModelDescriptor> installed;
         try
@@ -37,7 +47,7 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
             // graceful "not available" path fires. NOT confident, never a vector identity; no model or chunk text involved.
             return new EmbeddingModelResolution
             {
-                Name = configuredName,
+                Name = effectiveName,
                 IsConfident = false
             };
         }
@@ -47,20 +57,31 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
             // filter separates them, so an unfired caller token means timeout and degrades, and a real cancel rethrows.
             return new EmbeddingModelResolution
             {
-                Name = configuredName,
+                Name = effectiveName,
                 IsConfident = false
             };
         }
 
-        // (1) Exact configured name is installed → keep it (an Ollama node with nomic-embed-text is unaffected).
+        // (1) Exact pinned or configured name is installed → keep it (an Ollama node with nomic-embed-text is unaffected).
         var exactMatch = installed.FirstOrDefault(descriptor =>
-            string.Equals(descriptor.ModelName, configuredName, StringComparison.OrdinalIgnoreCase));
+            string.Equals(descriptor.ModelName, effectiveName, StringComparison.OrdinalIgnoreCase));
         if (exactMatch is not null)
         {
-            return CreateConfidentResolution(configuredName, exactMatch);
+            return CreateConfidentResolution(effectiveName, exactMatch);
         }
 
-        // (2) First installed embedding-named model in a deterministic order (for example a nomic-embed GGUF).
+        // A pinned model that is not installed never falls back: another embedder would silently re-embed the corpus.
+        if (pinnedName is not null)
+        {
+            return new EmbeddingModelResolution
+            {
+                Name = effectiveName,
+                IsConfident = false,
+                PinnedModelMissing = true
+            };
+        }
+
+        // (2) Nothing pinned yet: first installed embedding-named model in a deterministic order (for example a nomic-embed GGUF).
         var embeddingModel = installed
                              .Where(descriptor => !string.IsNullOrWhiteSpace(descriptor.ModelName)
                                                   && ModelKindDetector.IsEmbeddingName(descriptor.ModelName))
@@ -74,7 +95,7 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
         // (3) Nothing installed matches → keep the configured name, NOT confident (graceful failure downstream).
         return new EmbeddingModelResolution
         {
-            Name = configuredName,
+            Name = effectiveName,
             IsConfident = false
         };
     }
