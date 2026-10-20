@@ -515,6 +515,99 @@ public sealed class BenchmarkRunExecutorTests
     }
 
     [Test]
+    public async Task Execute_WhenToolsCalled_RecordsCountAndTotalToolTime()
+    {
+        // Three calls: two timed, one surrogate (no duration). The untimed call still counts but adds no time.
+        var persisted = await ExecuteCapturingSuccessAsync((dispatcher, invocationId) =>
+        {
+            RaiseToolCall(dispatcher, invocationId, "call-1", durationMs: 120);
+            RaiseToolCall(dispatcher, invocationId, "call-2", durationMs: null);
+            RaiseToolCall(dispatcher, invocationId, "call-3", durationMs: 380);
+        });
+
+        AssertEx.Equal(expected: 3, persisted.ToolCallCount);
+        AssertEx.Equal(expected: 500L, persisted.ToolTimeMs, "the sum of the measured durations; an unmeasured call adds nothing");
+    }
+
+    [Test]
+    public async Task Execute_WhenNoTools_RecordsZeroNotNull()
+    {
+        var persisted = await ExecuteCapturingSuccessAsync(static (_, _) => { });
+
+        // NULL is reserved for a run measured before the rollup existed; a run of today with no calls is a measured 0.
+        AssertEx.Equal(expected: 0, persisted.ToolCallCount);
+        AssertEx.Equal(expected: 0L, persisted.ToolTimeMs);
+    }
+
+    private static void RaiseToolCall(IWorkerEventDispatcher dispatcher, Guid invocationId, string callId, long? durationMs)
+    {
+        dispatcher.ToolCallLifecycleChanged += Raise.EventWith(dispatcher,
+            new ToolCallLifecycleChangedEventArgs(new ToolCallLifecyclePayload
+            {
+                InvocationId = invocationId,
+                ToolCallId = callId,
+                ToolName = "web_search",
+                Phase = ToolCallLifecyclePhase.Requested,
+                Arguments = "{}"
+            }));
+        dispatcher.ToolCallLifecycleChanged += Raise.EventWith(dispatcher,
+            new ToolCallLifecycleChangedEventArgs(new ToolCallLifecyclePayload
+            {
+                InvocationId = invocationId,
+                ToolCallId = callId,
+                ToolName = "web_search",
+                Phase = ToolCallLifecyclePhase.Completed,
+                Result = "ok",
+                DurationMs = durationMs
+            }));
+    }
+
+    /// <summary>Runs one primary that raises <paramref name="raiseTools" /> and then answers; returns the success command it persisted.</summary>
+    private static async Task<BenchmarkPrimarySuccessCommand> ExecuteCapturingSuccessAsync(Action<IWorkerEventDispatcher, Guid> raiseTools)
+    {
+        var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
+        var installed = Installed("model.gguf", 'a');
+        var store = Substitute.For<IBenchmarkStore>();
+        BenchmarkPrimarySuccessCommand? command = null;
+        store.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                 LastStreamSequence = call.Arg<BenchmarkPrimarySuccessCommand>().LastStreamSequence,
+                 Version = 3
+             });
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        await using var assignment = new TrackingAsyncDisposable();
+        dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
+        var runner = Substitute.For<IInvocationRunner>();
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(async call =>
+              {
+                  var execution = call.Arg<InvocationExecutionContext>();
+                  var invocationId = execution.Package.InvocationId;
+                  _ = await AssertEx.NotNull(execution.GenerationAdmissionPolicy).EvaluateAsync(Admission(invocationId));
+                  raiseTools(dispatcher, invocationId);
+                  dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
+                      new InvocationStateChangedEventArgs(State(invocationId, InvocationStatus.Completed, "The answer is 42.", 4096, 100, "stop")));
+              });
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
+            new BenchmarkCancellationRegistry(), PassthroughSupervisor());
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork
+        {
+            QueueSequence = 1,
+            RunId = run.Id,
+            Kind = BenchmarkWorkKind.Primary,
+            Attempt = 1,
+            Version = 2,
+            Run = run
+        }, CancellationToken.None);
+
+        return AssertEx.NotNull(command, "the run must succeed for its rollup to be persisted");
+    }
+
+    [Test]
     public async Task Execute_UsesTheRunsFrozenGenerationTimeoutAndRecordsATimeoutAsItsStopReason()
     {
         // Live: a 27B reasoning run was cancelled at 307 s under the old pinned 300 s, before it could finish OR reach

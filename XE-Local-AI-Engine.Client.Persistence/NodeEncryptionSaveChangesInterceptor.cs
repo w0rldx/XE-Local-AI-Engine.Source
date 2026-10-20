@@ -316,6 +316,17 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
         }
 
+        // Review notes are free text that may quote the answer; the scores beside them are plaintext numbers.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<BenchmarkRunReview>())
+        {
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.NotesJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_run_review_notes_json",
+                trackedProperties);
+        }
+
         foreach (var entry in nodeContext.ChangeTracker.Entries<BenchmarkRun>())
         {
             EncryptRequiredProperty(entry,

@@ -21,6 +21,7 @@ internal static class BenchmarkRankingPolicy
     ///     the first-launch cost it controls for. TRUNCATION and the SILENT-INCOMPLETE beside it follow, before every judge-derived reason and after the override —
     ///     their score stays visible but never ranks, read off the persisted stop reason, not the status.
     /// </remarks>
+    /// <param name="review">Required at every caller, so no path can forget it and rank a judge score in a review project.</param>
     /// <param name="pairwise">
     ///     This run's place in the project's active pairwise fit, or <see langword="null" /> when judging is pointwise;
     ///     there no judge attempt exists and the fit alone decides the exclusion.
@@ -31,6 +32,7 @@ internal static class BenchmarkRankingPolicy
         bool isWarmup,
         string? primaryStopReason,
         BenchmarkRunIdentity identity,
+        ReviewGate review,
         PairwiseRunView? pairwise = null)
     {
         // The stale stamps sit ABOVE the operator override, truncation still below it: an operator who read a truncated answer and scored it anyway has overruled
@@ -38,6 +40,11 @@ internal static class BenchmarkRankingPolicy
         var revised = identity.Revised;
         var setRevised = identity.SetRevised;
         var stale = revised || setRevised;
+        if (review != ReviewGate.NotApplicable && !isWarmup && !stale)
+        {
+            return ApplyReviewGate(judge, userScore, primaryStopReason, review);
+        }
+
         var unanswered = isWarmup || stale || userScore is not null ? null : UnansweredReason(primaryStopReason);
         if (!isWarmup && !stale && unanswered is null)
         {
@@ -59,6 +66,61 @@ internal static class BenchmarkRankingPolicy
         {
             RankExclusionReason = isWarmup ? BenchmarkRunJudgeStates.ReasonWarmup : reason
         }, null, BenchmarkQualityScoreSources.None, false);
+    }
+
+    /// <summary>A gated run ranks on the reviewer's score alone, never a judge or pairwise one.</summary>
+    /// <remarks>Below warm-up and the stale stamps: review-stale, then review-rejected, then the approved score, then truncation, then review-pending.</remarks>
+    private static RunExclusionOutcome ApplyReviewGate(BenchmarkRunJudgeView judge, int? userScore, string? primaryStopReason, ReviewGate review)
+    {
+        if (review == ReviewGate.Approved && userScore is { } approved)
+        {
+            return new RunExclusionOutcome(judge with
+            {
+                RankExclusionReason = null
+            }, approved, BenchmarkQualityScoreSources.User, true);
+        }
+
+        var reason = review switch
+        {
+            ReviewGate.AwaitingJudge => UnansweredReason(primaryStopReason) ?? AwaitingJudgeReason(judge),
+            ReviewGate.Stale => BenchmarkRunJudgeStates.ReasonReviewStale,
+            ReviewGate.Rejected => BenchmarkRunJudgeStates.ReasonReviewRejected,
+            _ => UnansweredReason(primaryStopReason) ?? BenchmarkRunJudgeStates.ReasonReviewPending
+        };
+        return new RunExclusionOutcome(judge with
+        {
+            RankExclusionReason = reason
+        }, null, BenchmarkQualityScoreSources.None, false);
+    }
+
+    /// <summary>
+    ///     Why a run whose review cannot open yet is unranked: its judging under the current revision is pending, failed or missing. The view's own reason is
+    ///     blank when a user score sits on the run, so the state names it then.
+    /// </summary>
+    private static string AwaitingJudgeReason(BenchmarkRunJudgeView judge) =>
+        judge.RankExclusionReason ?? judge.State switch
+        {
+            BenchmarkRunJudgeStates.Queued or BenchmarkRunJudgeStates.Running => BenchmarkRunJudgeStates.ReasonJudgePending,
+            BenchmarkRunJudgeStates.Failed => BenchmarkRunJudgeStates.ReasonJudgeFailed,
+            BenchmarkRunJudgeStates.Cancelled => BenchmarkRunJudgeStates.ReasonJudgeCancelled,
+            BenchmarkRunJudgeStates.Succeeded => BenchmarkRunJudgeStates.ReasonPolicyOutdated,
+            _ => BenchmarkRunJudgeStates.ReasonNoScore
+        };
+
+    /// <summary>Where a run stands in its project's review phase.</summary>
+    /// <remarks>
+    ///     <see cref="NotApplicable" /> is the pre-review path, unchanged: the project does not require review, the run answered a non-scoring leaf whose judge
+    ///     score feeds the recall axis, or the primary did not succeed and has no score to gate. <see cref="AwaitingJudge" /> is an open review whose judging has not
+    ///     yet succeeded under the current revision: unranked on the judge's own reason, and not a review gap.
+    /// </remarks>
+    public enum ReviewGate
+    {
+        NotApplicable,
+        AwaitingJudge,
+        Pending,
+        Stale,
+        Rejected,
+        Approved
     }
 
     /// <summary>The judge view after the run-level exclusions, the quality score and its source, and whether a score could ever rank the run.</summary>

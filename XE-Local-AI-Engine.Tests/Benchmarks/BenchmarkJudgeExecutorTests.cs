@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
@@ -31,6 +32,8 @@ public sealed class BenchmarkJudgeExecutorTests
     private static readonly Guid AttemptId = new("33333333-3333-3333-3333-333333333333");
     private static readonly Guid RevisionId = new("44444444-4444-4444-4444-444444444444");
     private const string PolicyHash = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    private static readonly NullNodeSqliteKeyHolder KeyHolder = new();
 
     /// <summary>A one-criterion rubric, so a judge reply in the test stays readable.</summary>
     private const string JudgeReply =
@@ -592,6 +595,7 @@ public sealed class BenchmarkJudgeExecutorTests
                 Interval = TimeSpan.Zero
             },
             Substitute.For<IBenchmarkPythonTestsVerifier>(),
+            UnusedArtifactStore(),
             NullLogger<BenchmarkJudgeExecutor>.Instance);
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
@@ -929,6 +933,200 @@ public sealed class BenchmarkJudgeExecutorTests
         AssertEx.Contains(failureMessage, "needle", message: "The message names the criterion that matched nothing.");
     }
 
+    [Test]
+    public async Task Execute_WhenPythonTestsRuns_WritesStdoutAndStderrArtifacts()
+    {
+        using var root = new TempDirectory("xe-judge-artifacts");
+        var artifacts = new BenchmarkRunArtifactBlobStore(new FakeNodeDataDirectory(root.Path), KeyHolder);
+        var installed = Installed();
+        var snapshot = Snapshot(installed);
+        var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
+        var store = Substitute.For<IBenchmarkStore>();
+        StubJudgeAttempt(store, installed, rubric: PythonTestsRubric(withLlmCriterion: false));
+        IReadOnlyList<BenchmarkRunArtifactCommand>? recorded = null;
+        var blobsBeforeRow = new List<BenchmarkRunArtifactBlobReadStatus>();
+        store.AddRunArtifactsAsync(run.Id, AttemptId, Arg.Any<IReadOnlyList<BenchmarkRunArtifactCommand>>(), Arg.Any<CancellationToken>())
+             .Returns(async call =>
+             {
+                 recorded = call.ArgAt<IReadOnlyList<BenchmarkRunArtifactCommand>>(2);
+                 foreach (var artifact in recorded)
+                 {
+                     blobsBeforeRow.Add((await artifacts.ReadAsync(run.Id, artifact.Id, artifact.ContentHash, artifact.ByteCount)).Status);
+                 }
+
+                 return (IReadOnlyList<BenchmarkRunArtifactRecord>)[];
+             });
+        store.MarkJudgeSucceededAsync(Arg.Any<BenchmarkJudgeSuccessCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 Judge = JudgeView(BenchmarkRunJudgeStates.Succeeded),
+                 Version = 5
+             });
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), Substitute.For<IWorkerEventDispatcher>(),
+            Substitute.For<IInvocationRunner>(), pythonTests: PythonTestsVerifier("raw stdout ✓\n", "Traceback: candidate-controlled\n"), artifacts: artifacts);
+
+        await executor.ExecuteAsync(JudgeWork(run), CancellationToken.None);
+
+        var rows = AssertEx.NotNull(recorded);
+        AssertEx.Equal(2, rows.Count);
+        AssertEx.Equal(2, blobsBeforeRow.Count);
+        AssertEx.True(blobsBeforeRow.All(static status => status == BenchmarkRunArtifactBlobReadStatus.Found), "Every blob is on disk before its row is inserted.");
+        var stdout = rows.Single(static row => row.Kind == BenchmarkRunArtifactKinds.PythonTestsStdout);
+        var stderr = rows.Single(static row => row.Kind == BenchmarkRunArtifactKinds.PythonTestsStderr);
+        AssertEx.Equal("solution", stdout.CriterionId);
+        AssertEx.Equal("solution", stderr.CriterionId);
+        AssertEx.Equal("text/plain; charset=utf-8", stdout.MediaType);
+        var stdoutBytes = (await artifacts.ReadAsync(run.Id, stdout.Id, stdout.ContentHash, stdout.ByteCount)).Content;
+        var stderrBytes = (await artifacts.ReadAsync(run.Id, stderr.Id, stderr.ContentHash, stderr.ByteCount)).Content;
+        AssertEx.Equal("raw stdout ✓\n", Encoding.UTF8.GetString(stdoutBytes.Span));
+        AssertEx.Equal("Traceback: candidate-controlled\n", Encoding.UTF8.GetString(stderrBytes.Span));
+        _ = await store.Received(1).MarkJudgeSucceededAsync(Arg.Any<BenchmarkJudgeSuccessCommand>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Execute_WhenPythonTestsOutputExceedsTheArtifactCap_StoresATruncatedArtifactAndStillScores()
+    {
+        // A sandbox stream can be MiBs while a blob is capped: an oversized stream must not turn a scored run into a failed judging.
+        using var root = new TempDirectory("xe-judge-artifacts");
+        var artifacts = new BenchmarkRunArtifactBlobStore(new FakeNodeDataDirectory(root.Path), KeyHolder);
+        var installed = Installed();
+        var snapshot = Snapshot(installed);
+        var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
+        var store = Substitute.For<IBenchmarkStore>();
+        StubJudgeAttempt(store, installed, rubric: PythonTestsRubric(withLlmCriterion: false));
+        IReadOnlyList<BenchmarkRunArtifactCommand>? recorded = null;
+        store.AddRunArtifactsAsync(run.Id, AttemptId, Arg.Do<IReadOnlyList<BenchmarkRunArtifactCommand>>(value => recorded = value), Arg.Any<CancellationToken>())
+             .Returns([]);
+        BenchmarkJudgeSuccessCommand? success = null;
+        store.MarkJudgeSucceededAsync(Arg.Do<BenchmarkJudgeSuccessCommand>(value => success = value), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 Judge = JudgeView(BenchmarkRunJudgeStates.Succeeded),
+                 Version = 5
+             });
+        // A multi-byte character straddles the cut, so the head must back off to a UTF-8 boundary.
+        var stdout = new string('é', BenchmarkRunArtifactBlobStore.MaxArtifactBytes);
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), Substitute.For<IWorkerEventDispatcher>(),
+            Substitute.For<IInvocationRunner>(), pythonTests: PythonTestsVerifier(stdout, "err"), artifacts: artifacts);
+
+        await executor.ExecuteAsync(JudgeWork(run), CancellationToken.None);
+
+        AssertEx.Equal(100, AssertEx.NotNull(success, "The judging still succeeds and scores.").Score);
+        var row = AssertEx.NotNull(recorded).Single(static artifact => artifact.Kind == BenchmarkRunArtifactKinds.PythonTestsStdout);
+        AssertEx.True(row.ByteCount <= BenchmarkRunArtifactBlobStore.MaxArtifactBytes, $"stored {row.ByteCount} bytes");
+        var read = await artifacts.ReadAsync(run.Id, row.Id, row.ContentHash, row.ByteCount);
+        AssertEx.Equal(BenchmarkRunArtifactBlobReadStatus.Found, read.Status);
+        var text = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetString(read.Content.Span);
+        AssertEx.True(text.StartsWith("éé", StringComparison.Ordinal), "The head of the stream is kept.");
+        var omitted = Encoding.UTF8.GetByteCount(stdout) - Encoding.UTF8.GetByteCount(text[..text.IndexOf('\n', StringComparison.Ordinal)]);
+        AssertEx.True(text.EndsWith($"\n[truncated: {omitted} bytes omitted]\n", StringComparison.Ordinal), "The marker names what was cut.");
+    }
+
+    [Test]
+    public async Task Execute_WhenVerifierUnavailable_WritesNoArtifact()
+    {
+        using var root = new TempDirectory("xe-judge-artifacts");
+        var installed = Installed();
+        var snapshot = Snapshot(installed);
+        var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
+        var store = Substitute.For<IBenchmarkStore>();
+        StubJudgeAttempt(store, installed, rubric: PythonTestsRubric(withLlmCriterion: false));
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        string? failureMessage = null;
+        store.MarkJudgeFailedAsync(run.Id, Arg.Any<long>(), Arg.Do<string>(value => failureMessage = value), Arg.Any<long>(), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 Judge = JudgeView(BenchmarkRunJudgeStates.Failed),
+                 Version = 5
+             });
+        var verifier = Substitute.For<IBenchmarkPythonTestsVerifier>();
+        verifier.VerifyAsync(Arg.Any<BenchmarkJudgeRubricCriterionV1>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns<BenchmarkPythonTestsOutcome>(_ => throw new BenchmarkExecutionException(BenchmarkRunJudgeStates.VerifierUnavailablePrefix + "Compute is off."));
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), Substitute.For<IWorkerEventDispatcher>(),
+            Substitute.For<IInvocationRunner>(), pythonTests: verifier,
+            artifacts: new BenchmarkRunArtifactBlobStore(new FakeNodeDataDirectory(root.Path), KeyHolder));
+
+        await executor.ExecuteAsync(JudgeWork(run), CancellationToken.None);
+
+        AssertEx.True(AssertEx.NotNull(failureMessage).StartsWith(BenchmarkRunJudgeStates.VerifierUnavailablePrefix, StringComparison.Ordinal));
+        _ = await store.DidNotReceiveWithAnyArgs().AddRunArtifactsAsync(Guid.Empty, Guid.Empty, default!, default);
+        AssertEx.False(Directory.Exists(Path.Combine(root.Path, "benchmarks")), "A refusal produced no outcome, so no blob may exist.");
+    }
+
+    [Test]
+    public async Task Execute_WhenMixedRubricJudgeFails_KeepsTheArtifacts()
+    {
+        using var root = new TempDirectory("xe-judge-artifacts");
+        var artifacts = new BenchmarkRunArtifactBlobStore(new FakeNodeDataDirectory(root.Path), KeyHolder);
+        var installed = Installed();
+        var snapshot = Snapshot(installed);
+        var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
+        var store = Substitute.For<IBenchmarkStore>();
+        StubJudgeAttempt(store, installed, rubric: PythonTestsRubric(withLlmCriterion: true));
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        IReadOnlyList<BenchmarkRunArtifactCommand>? recorded = null;
+        store.AddRunArtifactsAsync(run.Id, AttemptId, Arg.Do<IReadOnlyList<BenchmarkRunArtifactCommand>>(value => recorded = value), Arg.Any<CancellationToken>())
+             .Returns([]);
+        store.MarkJudgeFailedAsync(run.Id, Arg.Any<long>(), Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 Judge = JudgeView(BenchmarkRunJudgeStates.Failed),
+                 Version = 5
+             });
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), Substitute.For<IWorkerEventDispatcher>(),
+            Substitute.For<IInvocationRunner>(), RefusingSupervisor(), pythonTests: PythonTestsVerifier("out", "err"), artifacts: artifacts);
+
+        await executor.ExecuteAsync(JudgeWork(run), CancellationToken.None);
+
+        _ = await store.Received(1).MarkJudgeFailedAsync(run.Id, Arg.Any<long>(), Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>());
+        _ = await store.DidNotReceiveWithAnyArgs().MarkJudgeSucceededAsync(default!, default);
+        var rows = AssertEx.NotNull(recorded, "The artifacts are recorded before the model step that failed.");
+        AssertEx.Equal(2, rows.Count);
+        foreach (var row in rows)
+        {
+            AssertEx.Equal(BenchmarkRunArtifactBlobReadStatus.Found, (await artifacts.ReadAsync(run.Id, row.Id, row.ContentHash, row.ByteCount)).Status);
+        }
+    }
+
+    private static BenchmarkClaimedWork JudgeWork(BenchmarkRunRecord run) =>
+        new()
+        {
+            QueueSequence = 2,
+            RunId = run.Id,
+            Kind = BenchmarkWorkKind.Judge,
+            Attempt = 1,
+            Version = 2,
+            Run = run,
+            JudgeAttemptId = AttemptId
+        };
+
+    private static BenchmarkJudgeRubricV1 PythonTestsRubric(bool withLlmCriterion)
+    {
+        var pythonTests = new BenchmarkJudgeRubricCriterionV1("solution", "Solution", "The code passes the hidden tests.", withLlmCriterion ? 60 : 100,
+            BenchmarkJudgeCriterionKinds.PythonTests, """{"testCode":"assert solve(1) == 2","exports":["solve"]}""");
+        return withLlmCriterion
+            ? new BenchmarkJudgeRubricV1(BenchmarkJudgePolicyVersions.RubricVersion,
+                [new BenchmarkJudgeRubricCriterionV1("correctness", "Correctness", "Is the answer right?", 40), pythonTests])
+            : new BenchmarkJudgeRubricV1(BenchmarkJudgePolicyVersions.RubricVersion, [pythonTests]);
+    }
+
+    private static IBenchmarkPythonTestsVerifier PythonTestsVerifier(string standardOutput, string standardError)
+    {
+        var verifier = Substitute.For<IBenchmarkPythonTestsVerifier>();
+        verifier.VerifyAsync(Arg.Any<BenchmarkJudgeRubricCriterionV1>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(call => new BenchmarkPythonTestsOutcome
+                {
+                    Result = new BenchmarkJudgeVerifierResultV1(call.ArgAt<BenchmarkJudgeRubricCriterionV1>(0).Id, BenchmarkJudgeCriterionKinds.PythonTests, Passed: true, "1 of 1"),
+                    StandardOutput = standardOutput,
+                    StandardError = standardError
+                });
+        return verifier;
+    }
+
     /// <summary>Every criterion decided server-side: one that passes on the fixture answer and one that does not.</summary>
     private static BenchmarkJudgeRubricV1 VerifiableRubric() =>
         new(BenchmarkJudgePolicyVersions.RubricVersion,
@@ -1027,7 +1225,8 @@ public sealed class BenchmarkJudgeExecutorTests
         IBenchmarkCancellationRegistry? cancellations = null,
         ILogger<BenchmarkJudgeExecutor>? logger = null,
         BenchmarkAdmissionRetry? admissionRetry = null,
-        IBenchmarkPythonTestsVerifier? pythonTests = null) =>
+        IBenchmarkPythonTestsVerifier? pythonTests = null,
+        BenchmarkRunArtifactBlobStore? artifacts = null) =>
         new(store,
             new FixedSnapshotFactory(snapshot),
             new FixedLeaseProvider(lease),
@@ -1049,7 +1248,12 @@ public sealed class BenchmarkJudgeExecutorTests
                 Interval = TimeSpan.Zero
             },
             pythonTests ?? Substitute.For<IBenchmarkPythonTestsVerifier>(),
+            artifacts ?? UnusedArtifactStore(),
             logger ?? NullLogger<BenchmarkJudgeExecutor>.Instance);
+
+    /// <summary>A store no test without a pythonTests criterion ever writes to.</summary>
+    private static BenchmarkRunArtifactBlobStore UnusedArtifactStore() =>
+        new(new FakeNodeDataDirectory(Path.Combine(Path.GetTempPath(), "xe-judge-artifacts-unused")), KeyHolder);
 
     /// <summary>
     ///     Wires the reads the executor makes before it spawns: the attempt it was handed and the policy revision that

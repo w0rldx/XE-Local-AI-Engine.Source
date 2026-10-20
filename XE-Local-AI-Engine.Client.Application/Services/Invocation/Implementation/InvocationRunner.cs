@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -959,6 +960,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         // The reviewed web results of THIS agent stream, read by the web tool handlers when the framework executes the approved calls.
         using var webReviewScope = WebReviewResultScope.BeginScope();
+
+        // Each tool call's execution time in THIS agent stream, recorded by the function invoker and read when the call completes.
+        using var toolTimingScope = ToolExecutionTimingScope.Open();
 
         // Whether the round after the last tool result produced text or a call. A turn that ends on a silent round would
         // otherwise complete as an empty "answer" the user cannot tell from a slow one.

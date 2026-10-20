@@ -21,9 +21,11 @@ import {
 	getBenchmarkProject,
 	getBenchmarkRubricPresets,
 	getBenchmarkRun,
+	getBenchmarkRunArtifact,
 	listBenchmarkCells,
 	listBenchmarkComparisons,
 	listBenchmarkProjects,
+	listBenchmarkReviews,
 	listBenchmarkTaskItems,
 	listEligibleBenchmarkModels,
 	rejudgeBenchmarkProject,
@@ -33,6 +35,7 @@ import {
 	startBenchmarkRun,
 	startBenchmarkRunBatch,
 	startBenchmarkRunFidelity,
+	submitBenchmarkRunReview,
 	updateBenchmarkJudgePolicy,
 	updateBenchmarkProject,
 	updateBenchmarkProjectFidelity,
@@ -48,10 +51,12 @@ import {
 	listBenchmarkCellsQueryKey,
 	listBenchmarkComparisonsQueryKey,
 	listBenchmarkProjectsQueryKey,
+	listBenchmarkReviewsQueryKey,
 	listBenchmarkRunsInfiniteOptions,
 	listBenchmarkTaskItemsQueryKey,
 	listEligibleBenchmarkModelsQueryKey,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { fileNameFromContentDisposition, saveBlob } from "@/core/api/utils/DownloadBlob";
 import type { BenchmarkCell, BenchmarkPairedDelta } from "@/features/benchmarks/models/BenchmarkCells";
 import { toBenchmarkCell, toBenchmarkPairedDelta } from "@/features/benchmarks/models/BenchmarkCells";
 import { isFidelityActive } from "@/features/benchmarks/models/BenchmarkFidelity";
@@ -77,12 +82,16 @@ import type {
 	BenchmarkProjectSummary,
 	BenchmarkRankCohort,
 	BenchmarkRepeatMode,
+	BenchmarkReviewQueue,
+	BenchmarkReviewQueueState,
+	BenchmarkReviewSubmission,
 	BenchmarkRubric,
+	BenchmarkRunArtifact,
 	BenchmarkRunDetail,
 	BenchmarkRunRef,
 	BenchmarkRunSummary,
 } from "@/features/benchmarks/models/BenchmarkModels";
-import { isJudgeActive } from "@/features/benchmarks/models/BenchmarkModels";
+import { benchmarkReviewPageSize, isJudgeActive, toBenchmarkReviewQueue } from "@/features/benchmarks/models/BenchmarkModels";
 import type { BenchmarkTaskItem, BenchmarkTaskItemDraft } from "@/features/benchmarks/models/BenchmarkTaskItems";
 import { pruneVerifierOverrides, toBenchmarkTaskItem } from "@/features/benchmarks/models/BenchmarkTaskItems";
 
@@ -380,10 +389,14 @@ export function useBenchmarkRubricPresets(enabled: boolean) {
 // nothing schedules another read. Every mutation therefore names the runs it touched.
 //
 // Everything else is the project list plus every project-addressed query of every project: details, runs, cells,
-// items (a freeze adds cells, an item edit unranks the answers to the old question), estimates and comparisons.
+// items (a freeze adds cells, an item edit unranks the answers to the old question), estimates and comparisons — and
+// the review inbox, which spans projects and changes with a judging, a policy change or a review alike.
 const isProjectQuery = (query: Query): boolean => {
 	const key = query.queryKey[0] as { _id?: string; tags?: readonly string[]; path?: { projectId?: string } } | undefined;
-	return key?.tags?.includes("Benchmarks") === true && (key._id === "listBenchmarkProjects" || key.path?.projectId !== undefined);
+	return (
+		key?.tags?.includes("Benchmarks") === true &&
+		(key._id === "listBenchmarkProjects" || key._id === "listBenchmarkReviews" || key.path?.projectId !== undefined)
+	);
 };
 
 function useBenchmarkInvalidation() {
@@ -423,6 +436,7 @@ const projectMutationBody = (draft: BenchmarkProjectDraft) => ({
 	// from the base model, and a caller-supplied one could make two incomparable figures compare equal.
 	...(draft.fidelityChunks === null ? {} : { fidelityChunks: draft.fidelityChunks }),
 	fidelityKldBaseModelName: draft.fidelityKldBaseModelName,
+	requiresReview: draft.requiresReview,
 });
 
 export function useCreateBenchmarkProject() {
@@ -736,6 +750,62 @@ export function useRejudgeBenchmarkRun() {
 			return toBenchmarkRunDetail(data);
 		},
 		onSuccess: (run) => invalidate(run.id),
+	});
+}
+
+/**
+ * A reviewer's decision on one scoring run of a review project; the latest one wins. The node refuses with 409
+ * `NotReviewable` while the judging has not succeeded under the current policy, and with `VersionConflict` when the run
+ * moved since it was read.
+ */
+export function useSubmitBenchmarkRunReview() {
+	const invalidate = useBenchmarkInvalidation();
+	return useMutation({
+		mutationFn: async ({ run, review }: { run: BenchmarkRunRef; review: BenchmarkReviewSubmission }) => {
+			const { data } = await submitBenchmarkRunReview({
+				path: { runId: run.id },
+				body: { ...review, expectedVersion: run.version },
+			});
+			return toBenchmarkRunDetail(data);
+		},
+		onSuccess: (run) => invalidate(run.id),
+	});
+}
+
+/**
+ * One page of the review inbox. No poll: nothing pushes review state, and every benchmark mutation already invalidates
+ * the inbox; a judging that lands in the background shows up on the next read (the inbox's own refresh button).
+ */
+export function useBenchmarkReviews(
+	state: BenchmarkReviewQueueState,
+	projectId: string | null,
+	page: number,
+	take: number = benchmarkReviewPageSize.default,
+) {
+	const query = { state, ...(projectId === null ? {} : { projectId }), page, take };
+	return useQuery<BenchmarkReviewQueue>({
+		queryKey: listBenchmarkReviewsQueryKey({ query }),
+		queryFn: async ({ signal }) => {
+			const { data } = await listBenchmarkReviews({ query, signal });
+			return toBenchmarkReviewQueue(data);
+		},
+	});
+}
+
+/**
+ * Downloads one verifier artifact. The bytes are the model's own code output, so they are saved as a text file and
+ * never rendered: the `blob` override keeps them out of the DOM exactly as the project export does.
+ */
+export function useBenchmarkRunArtifact() {
+	return useMutation({
+		mutationFn: async ({ runId, artifact }: { runId: string; artifact: Pick<BenchmarkRunArtifact, "id" | "kind"> }) => {
+			const response = await getBenchmarkRunArtifact({ path: { runId, artifactId: artifact.id }, responseType: "blob" });
+			saveBlob(
+				// The blob override changes the body axios returns, not the generated response type.
+				response.data as unknown as Blob,
+				fileNameFromContentDisposition(response.headers["content-disposition"]) ?? `${artifact.kind}-${artifact.id}.txt`,
+			);
+		},
 	});
 }
 

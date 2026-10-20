@@ -1378,6 +1378,102 @@ public sealed class BenchmarkStoreTests : IDisposable
         AssertEx.Equal(expected: 0, await store.CountRunsAsync(project.Id), "A refused group must leave nothing queued.");
     }
 
+    [Test]
+    public async Task MarkPrimarySucceeded_PersistsToolRollup()
+    {
+        var databasePath = GetDatabasePath("tool-rollup.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
+        var project = await store.CreateProjectAsync(CreateProject());
+        var run = await store.StartRunAsync(CreateRun(project));
+        var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
+
+        var succeeded = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+        {
+            RunId = run.Id,
+            ExpectedWorkVersion = claimed.Run.Version,
+            OutputPartsJson = Encoding.UTF8.GetBytes("[]"),
+            LastStreamSequence = 1,
+            EffectiveContextTokens = 4096,
+            DurationMs = 5000,
+            TotalTokens = null,
+            TokensPerSecond = null,
+            ToolCallCount = 3,
+            ToolTimeMs = 4100
+        });
+
+        AssertEx.Equal<int?>(3, succeeded.ToolCallCount);
+        AssertEx.Equal<long?>(4100, succeeded.ToolTimeMs);
+        var readBack = AssertEx.NotNull(await store.GetRunAsync(run.Id));
+        AssertEx.Equal<int?>(3, readBack.ToolCallCount, "The rollup is a flat column, read back without decrypting the parts.");
+        AssertEx.Equal<long?>(4100, readBack.ToolTimeMs);
+    }
+
+    [Test]
+    public async Task Page_CarriesTheToolRollup()
+    {
+        var databasePath = GetDatabasePath("tool-rollup-page.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
+        var project = await store.CreateProjectAsync(CreateProject());
+        var run = await store.StartRunAsync(CreateRun(project));
+        var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
+        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+        {
+            RunId = run.Id,
+            ExpectedWorkVersion = claimed.Run.Version,
+            OutputPartsJson = Encoding.UTF8.GetBytes("[]"),
+            LastStreamSequence = 1,
+            EffectiveContextTokens = 4096,
+            DurationMs = 5000,
+            TotalTokens = null,
+            TokensPerSecond = null,
+            ToolCallCount = 3,
+            ToolTimeMs = 500
+        });
+
+        var paged = (await store.ListRunsAsync(project.Id, skip: 0, take: 10)).Items.Single(item => item.Id == run.Id);
+        var exported = (await store.ListAllRunsAsync(project.Id)).Items.Single(item => item.Id == run.Id);
+
+        AssertEx.Equal<int?>(3, paged.ToolCallCount, "The paged projection is a hand-written column list; the rollup must be in it.");
+        AssertEx.Equal<long?>(500, paged.ToolTimeMs);
+        AssertEx.Equal<int?>(3, exported.ToolCallCount, "The CSV export reads the same projection.");
+        AssertEx.Equal<long?>(500, exported.ToolTimeMs);
+    }
+
+    [Test]
+    public async Task LegacyRun_ReadsNullToolRollup()
+    {
+        // A caller that predates the rollup names neither field: the run reads "not measured", never "no calls".
+        var databasePath = GetDatabasePath("tool-rollup-legacy.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
+        var project = await store.CreateProjectAsync(CreateProject());
+        var run = await store.StartRunAsync(CreateRun(project));
+        var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
+        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+        {
+            RunId = run.Id,
+            ExpectedWorkVersion = claimed.Run.Version,
+            OutputPartsJson = Encoding.UTF8.GetBytes("[]"),
+            LastStreamSequence = 1,
+            EffectiveContextTokens = 4096,
+            DurationMs = 5,
+            TotalTokens = null,
+            TokensPerSecond = null
+        });
+
+        var readBack = AssertEx.NotNull(await store.GetRunAsync(run.Id));
+        AssertEx.Null(readBack.ToolCallCount);
+        AssertEx.Null(readBack.ToolTimeMs);
+    }
+
     private NodeChatDbContext CreateContext(string path) =>
         AgentDefinitionTestContextFactory.Create(path, _keyHolder);
 

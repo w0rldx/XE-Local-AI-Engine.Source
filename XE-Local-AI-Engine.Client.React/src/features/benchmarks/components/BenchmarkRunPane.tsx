@@ -1,12 +1,15 @@
 import { Button, Card, Divider, Group, Loader, Stack, Text, Title } from "@mantine/core";
-import { IconPlugConnected, IconPlugConnectedX, IconSquare, IconTrash } from "@tabler/icons-react";
+import { IconDownload, IconPlugConnected, IconPlugConnectedX, IconSquare, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { humanizeBytes } from "@/core/formatting/BytesFormatting";
 import { formatDurationSeconds } from "@/core/formatting/TimeFormatting";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import { BenchmarkJudgePanel } from "@/features/benchmarks/components/BenchmarkJudgePanel";
 import { BenchmarkLaunchBadges } from "@/features/benchmarks/components/BenchmarkLaunchBadges";
 import { BenchmarkLaunchEvidencePanel } from "@/features/benchmarks/components/BenchmarkLaunchEvidencePanel";
+import { BenchmarkReviewForm } from "@/features/benchmarks/components/BenchmarkReviewForm";
 import { BenchmarkScorePicker } from "@/features/benchmarks/components/BenchmarkScorePicker";
 import {
 	BenchmarkIncompleteBadge,
@@ -14,8 +17,18 @@ import {
 	BenchmarkStatusBadge,
 	BenchmarkTruncatedBadge,
 } from "@/features/benchmarks/components/BenchmarkStatusBadge";
-import type { BenchmarkJudgeMode, BenchmarkOutputPart, BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
+import type {
+	BenchmarkJudgeMode,
+	BenchmarkOutputPart,
+	BenchmarkReviewSubmission,
+	BenchmarkRubricCriterion,
+	BenchmarkRunArtifact,
+	BenchmarkRunDetail,
+	BenchmarkScoreControl,
+} from "@/features/benchmarks/models/BenchmarkModels";
 import {
+	benchmarkToolCalls,
+	formatBenchmarkToolSeconds,
 	isBenchmarkRunIncomplete,
 	isBenchmarkRunReasoningExhausted,
 	isBenchmarkRunTruncated,
@@ -42,6 +55,102 @@ interface BenchmarkRunPaneProps {
 	onClearScore: () => void;
 	onRejudge: () => void;
 	onDelete: () => void;
+	/**
+	 * Set on a scoring run of a review project: the review form then REPLACES the score picker, because the node refuses
+	 * a plain operator score there (409 `ReviewRequired`). `criteria` is null when the project has no judge policy.
+	 */
+	review?: {
+		criteria: readonly BenchmarkRubricCriterion[] | null;
+		isSaving: boolean;
+		onSubmit: (review: BenchmarkReviewSubmission) => void;
+	} | null;
+	/**
+	 * Which score control to offer; see `benchmarkScoreControl`. `judgeOnly` renders a note instead of any control,
+	 * because in a review project the node refuses a plain score on every run and a review on the non-gated ones.
+	 */
+	scoreControl?: BenchmarkScoreControl;
+	isDownloadingArtifact?: boolean;
+	onDownloadArtifact?: (artifact: BenchmarkRunArtifact) => void;
+}
+
+// Per-call execution time, joined from the tool_result parts. The chat renderer has no slot for it, so the timing is a
+// list of its own; a call the node did not time renders nothing rather than "0 s".
+function ToolTiming({ run, parts }: { run: BenchmarkRunDetail; parts: readonly BenchmarkOutputPart[] }) {
+	const { t } = useTranslation();
+	const calls = benchmarkToolCalls(parts).filter((call) => call.durationMs !== null || call.repeated);
+	if (run.toolCallCount === null && calls.length === 0) {
+		return null;
+	}
+	return (
+		<Stack gap={2} data-testid="benchmark-tool-timing">
+			{run.toolCallCount === null ? null : (
+				<Text size="sm" data-testid="benchmark-tool-rollup">
+					{t("pages.benchmarks.tools.count", "{{count}} tool calls", { count: run.toolCallCount })}
+					{run.toolTimeMs === null ? "" : ` · ${formatBenchmarkToolSeconds(run.toolTimeMs)}`}
+				</Text>
+			)}
+			{calls.map((call) => (
+				<Group key={call.key} gap="xs" data-testid={`benchmark-tool-${call.id}`}>
+					<Text size="xs" ff="monospace">
+						{call.name}
+					</Text>
+					{call.durationMs === null ? null : (
+						<Text size="xs" c="dimmed" data-testid={`benchmark-tool-duration-${call.id}`}>
+							{formatBenchmarkToolSeconds(call.durationMs)}
+						</Text>
+					)}
+					{call.repeated ? (
+						<StatusBadge
+							color="yellow"
+							label={t("pages.benchmarks.tools.repeated", "repeated call")}
+							data-testid={`benchmark-tool-repeated-${call.id}`}
+						/>
+					) : null}
+				</Group>
+			))}
+		</Stack>
+	);
+}
+
+// Verifier evidence (the pythonTests streams). The bytes are the model's code output, so they are only ever downloaded.
+function ArtifactList({
+	run,
+	isDownloading,
+	onDownload,
+}: {
+	run: BenchmarkRunDetail;
+	isDownloading: boolean;
+	onDownload: (artifact: BenchmarkRunArtifact) => void;
+}) {
+	const { t } = useTranslation();
+	if (run.artifacts.length === 0) {
+		return null;
+	}
+	return (
+		<Stack gap={4} data-testid="benchmark-run-artifacts">
+			<Text size="sm" fw={600}>
+				{t("pages.benchmarks.artifacts.title", "Verifier evidence files")}
+			</Text>
+			{run.artifacts.map((artifact) => (
+				<Group key={artifact.id} gap="xs" justify="space-between" data-testid={`benchmark-artifact-${artifact.id}`}>
+					<Text size="xs">
+						{t(`pages.benchmarks.artifacts.kinds.${artifact.kind}`, artifact.kind)}
+						{artifact.criterionId === null ? "" : ` · ${artifact.criterionId}`} · {humanizeBytes(artifact.byteCount)}
+					</Text>
+					<Button
+						size="compact-xs"
+						variant="subtle"
+						leftSection={<IconDownload size={12} />}
+						disabled={isDownloading}
+						onClick={() => onDownload(artifact)}
+						data-testid={`benchmark-artifact-download-${artifact.id}`}
+					>
+						{t("pages.benchmarks.artifacts.download", "Download")}
+					</Button>
+				</Group>
+			))}
+		</Stack>
+	);
 }
 
 // The split behind the single tok/s figure above. Rendered only when the runtime actually reported it — a cloud run has
@@ -121,6 +230,10 @@ export function BenchmarkRunPane({
 	onClearScore,
 	onRejudge,
 	onDelete,
+	review = null,
+	scoreControl = "picker",
+	isDownloadingArtifact = false,
+	onDownloadArtifact,
 }: BenchmarkRunPaneProps) {
 	const { t } = useTranslation();
 	const active = isPrimaryActive(run.primaryStatus);
@@ -191,6 +304,7 @@ export function BenchmarkRunPane({
 					)}
 				</Group>
 				<ThroughputBreakdown run={run} />
+				<ToolTiming run={run} parts={parts} />
 				<Group gap="xs" c={isConnected ? "green" : "dimmed"}>
 					{isConnected ? <IconPlugConnected size={16} /> : <IconPlugConnectedX size={16} />}
 					<Text size="xs">
@@ -223,13 +337,30 @@ export function BenchmarkRunPane({
 						{t("pages.benchmarks.run.cancel", "Cancel run")}
 					</Button>
 				) : null}
-				<BenchmarkScorePicker
-					value={run.userScore}
-					disabled={run.primaryStatus !== "Succeeded"}
-					isSaving={isScoring}
-					onChange={onScore}
-					onClear={onClearScore}
-				/>
+				{review ? (
+					<BenchmarkReviewForm
+						// Re-seeded whenever the judging or the stored decision moves, so the pre-fill never shows stale scores. The
+						// judge state is in the key because an attempt that succeeds while the pane is open keeps its sequence; the
+						// remount discards nothing, since the form is locked until the judging succeeded.
+						key={`${run.id}-${run.judge.attemptSequence ?? 0}-${run.judge.state}-${run.review?.updatedAtUtc ?? 0}`}
+						run={run}
+						criteria={review.criteria}
+						isSaving={review.isSaving}
+						onSubmit={review.onSubmit}
+					/>
+				) : scoreControl === "judgeOnly" ? (
+					<Text size="sm" c="dimmed" data-testid="benchmark-score-judge-only">
+						{t("pages.benchmarks.review.judgeOnly", "Scored by its judge; this run is not reviewable.")}
+					</Text>
+				) : scoreControl === "picker" ? (
+					<BenchmarkScorePicker
+						value={run.userScore}
+						disabled={run.primaryStatus !== "Succeeded"}
+						isSaving={isScoring}
+						onChange={onScore}
+						onClear={onClearScore}
+					/>
+				) : null}
 				<BenchmarkJudgePanel
 					judge={run.judge}
 					mode={judgeMode}
@@ -243,6 +374,9 @@ export function BenchmarkRunPane({
 					onCancel={() => onCancel("Judge")}
 					onRejudge={onRejudge}
 				/>
+				{onDownloadArtifact ? (
+					<ArtifactList run={run} isDownloading={isDownloadingArtifact} onDownload={onDownloadArtifact} />
+				) : null}
 				<BenchmarkLaunchEvidencePanel run={run} />
 				{isRunTerminal(run) ? (
 					<Button variant="subtle" color="red" leftSection={<IconTrash size={14} />} loading={isDeleting} onClick={onDelete}>

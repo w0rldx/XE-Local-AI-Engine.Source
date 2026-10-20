@@ -126,6 +126,8 @@ public static class AgentServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
         services.TryAddSingleton<ITokenEstimatorCalibrationStore, TokenEstimatorCalibrationStore>();
+        // The tool-timing clock; the host's own registration wins, a bare harness gets the system clock.
+        services.TryAddSingleton(TimeProvider.System);
 
         _ = services.Decorate<IChatClient>((inner, serviceProvider) =>
         {
@@ -135,6 +137,7 @@ public static class AgentServiceCollectionExtensions
             var telemetryOptions = serviceProvider.GetService<IOptions<AgentTelemetryOptions>>()?.Value ?? new AgentTelemetryOptions();
             var toolRelevanceOptions = serviceProvider.GetService<IOptions<ToolRelevanceOptions>>()?.Value ?? new ToolRelevanceOptions();
             var toolRelevanceSelector = serviceProvider.GetService<IToolRelevanceSelector>() ?? new LexicalToolRelevanceSelector();
+            var timeProvider = serviceProvider.GetRequiredService<TimeProvider>();
 
             // Enabling sensitive-content capture is a privacy-sensitive, deliberate opt-in — surface it loudly once so an
             // operator can never leave full prompts/reasoning/completions flowing into telemetry unnoticed.
@@ -173,6 +176,9 @@ public static class AgentServiceCollectionExtensions
                                                                functionInvokingChatClient.IncludeDetailedErrors = false;
                                                                functionInvokingChatClient.AllowConcurrentInvocation = false;
                                                                functionInvokingChatClient.TerminateOnUnknownCalls = false;
+                                                               // The one point every tool (client-local, MCP, custom) passes through: times the tool alone, never the
+                                                               // model's streaming tail or a sibling call, into the invocation's ToolExecutionTimingScope.
+                                                               functionInvokingChatClient.FunctionInvoker = (context, cancellationToken) => InvokeTimedAsync(context, timeProvider, cancellationToken);
                                                            })
                                                        .Build();
 
@@ -181,5 +187,21 @@ public static class AgentServiceCollectionExtensions
         });
 
         return services;
+    }
+
+    // The documented default invocation plus a finally: exceptions propagate unchanged, so the framework's error handling and
+    // MaximumConsecutiveErrorsPerRequest still apply. A blank call id (an id-less provider) records nothing.
+    private static async ValueTask<object?> InvokeTimedAsync(FunctionInvocationContext context, TimeProvider timeProvider, CancellationToken cancellationToken)
+    {
+        var started = timeProvider.GetTimestamp();
+        try
+        {
+            return await context.Function.InvokeAsync(context.Arguments, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            ToolExecutionTimingScope.Record(FunctionInvokingChatClient.CurrentContext?.CallContent.CallId ?? context.CallContent.CallId,
+                (long)timeProvider.GetElapsedTime(started).TotalMilliseconds);
+        }
     }
 }

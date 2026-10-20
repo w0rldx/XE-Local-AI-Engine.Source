@@ -88,7 +88,7 @@ public sealed class BenchmarkExportEndpointTests
                           ], StringComparer.Ordinal),
             "The export root must retain its versioned wire schema and property ordering.");
         AssertEx.Equal(BenchmarkExportProjection.SchemaVersion, root.GetProperty("schemaVersion").GetInt32());
-        AssertEx.Equal(expected: 4, root.GetProperty("schemaVersion").GetInt32());
+        AssertEx.Equal(expected: 5, root.GetProperty("schemaVersion").GetInt32());
         AssertEx.Equal(expected: 0, root.GetProperty("taskItems").GetArrayLength());
         AssertEx.Equal(expected: 0, root.GetProperty("cells").GetArrayLength());
         AssertEx.Equal(expected: 0, root.GetProperty("scorableItemCount").GetInt32());
@@ -207,7 +207,7 @@ public sealed class BenchmarkExportEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var root = document.RootElement;
-        AssertEx.Equal(expected: 4, root.GetProperty("schemaVersion").GetInt32());
+        AssertEx.Equal(expected: 5, root.GetProperty("schemaVersion").GetInt32());
         AssertEx.Equal("Score this answer.", root.GetProperty("taskItems")[0].GetProperty("prompt").GetString());
         AssertEx.Equal("cell:model:1", root.GetProperty("cells")[0].GetProperty("cellKey").GetString());
         AssertEx.Equal(expected: 1, root.GetProperty("scorableItemCount").GetInt32());
@@ -274,7 +274,9 @@ public sealed class BenchmarkExportEndpointTests
                 IsWarmup = false,
                 RepeatMode = BenchmarkRepeatMode.AnswerVariance,
                 SamplingSeed = "3",
-                SamplingTemperature = 0.7d
+                SamplingTemperature = 0.7d,
+                ToolCallCount = 3,
+                ToolTimeMs = 1250
             });
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export.csv");
@@ -301,7 +303,8 @@ public sealed class BenchmarkExportEndpointTests
                        + "fidelityStatus,perplexityMean,perplexityStdErr,perplexityChunks,perplexityContextTokens,perplexityCorpusId,"
                        + "kldState,kldMean,kldP99,topTokenAgreement,kldBaseFingerprint,kldBaseLogitsDigest,"
                        + "pairwiseScore,pairwiseCiLow,pairwiseCiHigh,pairwiseComparisons,pairwiseFitKey,"
-                       + "taskItemId,taskItemIndex,cellKey,taskInputHash,taskItemSetHash,cellQuality",
+                       + "taskItemId,taskItemIndex,cellKey,taskInputHash,taskItemSetHash,cellQuality,"
+                       + "reviewState,toolCallCount,toolTimeMs",
             lines[0]);
 
         // pp is 123 tokens over 500 ms = 246, tg is 89 over 2000 ms = 44.5. The group key is the base model, so the
@@ -312,8 +315,8 @@ public sealed class BenchmarkExportEndpointTests
 
                        // A run with no fidelity attempt, no pairwise fit and no task item still writes every cell,
                        // empty. A short row is what breaks an index-reading consumer, which is the whole reason these
-                       // were appended.
-                       + new string(',', count: 23),
+                       // were appended. reviewState is empty outside a review project; the tool timing closes the row.
+                       + new string(',', count: 25) + "3,1250",
             lines[1]);
     }
 
@@ -346,7 +349,7 @@ public sealed class BenchmarkExportEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var row = body.Split("\r\n", StringSplitOptions.RemoveEmptyEntries)[1];
-        AssertEx.True(row.EndsWith("," + itemId.ToString("D") + ",\"'-1\",cell:80000000-0000-0000-0000-000000000008:1,v1:item,v1:set,75",
+        AssertEx.True(row.EndsWith("," + itemId.ToString("D") + ",\"'-1\",cell:80000000-0000-0000-0000-000000000008:1,v1:item,v1:set,75,,,",
                 StringComparison.Ordinal),
             "The four stamps and the cell mean close the row, and the index is escaped: " + row);
     }
@@ -531,6 +534,142 @@ public sealed class BenchmarkExportEndpointTests
             BootstrapReplicates = 1000,
             CreatedAtUtc = 99
         };
+
+    [Test]
+    public async Task ExportCsv_InAReviewProject_DerivesTheReviewStateFromTheRankedRow()
+    {
+        // The CSV reads the ranked listing, which carries the stored review state and its policy currency flat beside the exclusion reason: a decision under a
+        // superseded policy is stale, then the stored decision, then a pending reason.
+        await using var context = CreateContext();
+        ArrangeEmptySuite(context);
+        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project() with
+        {
+            RequiresReview = true
+        });
+        ArrangeRuns(context,
+            WithReason(Run(BenchmarkPrimaryStatus.Succeeded, runId: Guid.Parse("a0000000-0000-0000-0000-000000000001")), BenchmarkRunJudgeStates.ReasonReviewPending),
+            WithReason(Run(BenchmarkPrimaryStatus.Succeeded, runId: Guid.Parse("a0000000-0000-0000-0000-000000000002")), BenchmarkRunJudgeStates.ReasonReviewStale) with
+            {
+                ReviewState = BenchmarkReviewStates.Rejected,
+                ReviewPolicyCurrent = false
+            },
+            WithReason(Run(BenchmarkPrimaryStatus.Succeeded, runId: Guid.Parse("a0000000-0000-0000-0000-000000000003")), BenchmarkRunJudgeStates.ReasonReviewRejected) with
+            {
+                ReviewState = BenchmarkReviewStates.Rejected,
+                ReviewPolicyCurrent = true
+            },
+            Run(BenchmarkPrimaryStatus.Succeeded, runId: Guid.Parse("a0000000-0000-0000-0000-000000000004")) with
+            {
+                UserScore = 81,
+                ReviewState = BenchmarkReviewStates.Approved,
+                ReviewPolicyCurrent = true
+            },
+            Run(BenchmarkPrimaryStatus.Succeeded, runId: Guid.Parse("a0000000-0000-0000-0000-000000000005")),
+
+            // A stale approval still carries its user score, and the stale reason outranks it.
+            WithReason(Run(BenchmarkPrimaryStatus.Succeeded, runId: Guid.Parse("a0000000-0000-0000-0000-000000000006")), BenchmarkRunJudgeStates.ReasonReviewStale) with
+            {
+                UserScore = 64,
+                ReviewState = BenchmarkReviewStates.Approved,
+                ReviewPolicyCurrent = false
+            },
+
+            // An approval on a revised item is hidden by the item exclusion: neither approved nor any other review state.
+            WithReason(Run(BenchmarkPrimaryStatus.Succeeded, runId: Guid.Parse("a0000000-0000-0000-0000-000000000007")), BenchmarkRunJudgeStates.ReasonItemRevised) with
+            {
+                UserScore = 77,
+                ReviewState = BenchmarkReviewStates.Approved,
+                ReviewPolicyCurrent = true
+            },
+
+            // An approved run whose cell's other item is still pending carries the cell's review-pending reason: the stored decision wins.
+            WithReason(Run(BenchmarkPrimaryStatus.Succeeded, runId: Guid.Parse("a0000000-0000-0000-0000-000000000008")), BenchmarkRunJudgeStates.ReasonReviewPending) with
+            {
+                UserScore = 70,
+                ReviewState = BenchmarkReviewStates.Approved,
+                ReviewPolicyCurrent = true
+            },
+
+            // An approval under a superseded policy reads judge-pending until the re-judge succeeds: the stored decision is still stale.
+            WithReason(Run(BenchmarkPrimaryStatus.Succeeded, runId: Guid.Parse("a0000000-0000-0000-0000-000000000009")), BenchmarkRunJudgeStates.ReasonJudgePending) with
+            {
+                UserScore = 66,
+                ReviewState = BenchmarkReviewStates.Approved,
+                ReviewPolicyCurrent = false
+            });
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export.csv");
+
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var states = body.Split("\r\n", StringSplitOptions.RemoveEmptyEntries)
+                         .Skip(1)
+                         .Select(static row => row.Split(',')[^3])
+                         .ToArray();
+        AssertEx.True(states.SequenceEqual(["pending", "stale", "rejected", "approved", "", "stale", "", "approved", "stale"], StringComparer.Ordinal),
+            "reviewState, third from the end, per row: " + string.Join("|", states));
+    }
+
+    [Test]
+    public async Task ExportJson_SchemaFiveCarriesTheReviewArtifactMetadataAndToolTiming_NeverArtifactContent()
+    {
+        await using var context = CreateContext();
+        ArrangeProject(context);
+        var artifactId = Guid.Parse("b0000000-0000-0000-0000-000000000001");
+        ArrangeRuns(context, Run(BenchmarkPrimaryStatus.Succeeded, judgeAttemptId: Guid.Parse("b0000000-0000-0000-0000-000000000002")) with
+        {
+            ToolCallCount = 2,
+            ToolTimeMs = 640,
+            Review = new BenchmarkRunReviewRecord
+            {
+                Id = Guid.NewGuid(),
+                RunId = RunId,
+                State = BenchmarkReviewStates.Approved,
+                Score = 70,
+                Criteria = [],
+                PolicyRevisionId = null,
+                Notes = "fine",
+                Version = 1,
+                CreatedAtUtc = 30,
+                UpdatedAtUtc = 40
+            },
+            Artifacts =
+            [
+                new BenchmarkRunArtifactRecord
+                {
+                    Id = artifactId,
+                    RunId = RunId,
+                    JudgeAttemptId = Guid.Parse("b0000000-0000-0000-0000-000000000002"),
+                    CriterionId = "tests",
+                    Kind = BenchmarkRunArtifactKinds.PythonTestsStdout,
+                    MediaType = "text/plain; charset=utf-8",
+                    ByteCount = 12,
+                    ContentHash = "abc123",
+                    CreatedAtUtc = 35
+                }
+            ]
+        });
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export");
+
+        using var response = await client.SendAsync(request);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var run = document.RootElement.GetProperty("runs")[0];
+        AssertEx.Equal(expected: 2, run.GetProperty("toolCallCount").GetInt32());
+        AssertEx.Equal(expected: 640, run.GetProperty("toolTimeMs").GetInt64());
+        AssertEx.Equal("approved", run.GetProperty("review").GetProperty("state").GetString());
+        AssertEx.True(run.GetProperty("review").GetProperty("policyCurrent").GetBoolean(), "No policy then and now: the review is current.");
+        var artifact = run.GetProperty("artifacts")[0];
+        AssertEx.True(artifact.EnumerateObject()
+                              .Select(static property => property.Name)
+                              .SequenceEqual(["id", "kind", "criterionId", "judgeAttemptId", "byteCount", "contentHash"], StringComparer.Ordinal),
+            "Artifact metadata only: no content or media type rides the export.");
+        AssertEx.Equal(artifactId.ToString("D"), artifact.GetProperty("id").GetString());
+    }
 
     [Test]
     public async Task ExportCsv_ForAValueASpreadsheetWouldEvaluate_EscapesItAsText()
@@ -995,6 +1134,15 @@ public sealed class BenchmarkExportEndpointTests
                 PolicyCurrent = false,
                 ExecutionCurrent = false,
                 RankExclusionReason = null
+            }
+        };
+
+    private static BenchmarkRunRecord WithReason(BenchmarkRunRecord run, string reason) =>
+        run with
+        {
+            Judge = run.Judge! with
+            {
+                RankExclusionReason = reason
             }
         };
 

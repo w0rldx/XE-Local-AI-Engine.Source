@@ -43,7 +43,7 @@ public sealed class ExportBenchmarkProjectEndpoint : Endpoint<BenchmarkProjectRo
                          {
                              Rank = item.Summary.Rank,
                              CellQuality = item.Summary.CellQuality
-                         }).ToDetail(item.Verdict, export.Fidelity.ExpectedKldDigest))
+                         }).ToDetail(item.Verdict, export.Fidelity.ExpectedKldDigest, export.Project.CurrentJudgePolicyRevisionId))
                          .ToArray();
         var groups = BenchmarkExportStatistics.Groups(export.Summaries);
 

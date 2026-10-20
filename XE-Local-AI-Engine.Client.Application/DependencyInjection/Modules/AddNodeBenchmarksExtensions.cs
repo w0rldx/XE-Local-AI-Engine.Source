@@ -21,6 +21,7 @@ internal static class AddNodeBenchmarksExtensions
         // under the endpoint-dependency rule, and it holds nothing of its own between calls.
         builder.Services.AddScoped<BenchmarkRecordService>();
         builder.Services.AddScoped<BenchmarkComparisonService>();
+        builder.Services.AddScoped<IBenchmarkReviewService, BenchmarkReviewService>();
         builder.Services.AddScoped<IBenchmarkTaskItemService, BenchmarkTaskItemService>();
         builder.Services.AddScoped<IBenchmarkExportFactsResolver, BenchmarkExportFactsResolver>();
         builder.Services.AddScoped<IBenchmarkExportQuery, BenchmarkExportQuery>();
@@ -47,6 +48,7 @@ internal static class AddNodeBenchmarksExtensions
         builder.Services.AddSingleton(BenchmarkAdmissionRetry.Default);
         builder.Services.AddScoped<IBenchmarkRunExecutor, BenchmarkRunExecutor>();
         builder.Services.AddScoped<IBenchmarkPythonTestsVerifier, BenchmarkPythonTestsVerifier>();
+        builder.Services.AddSingleton<BenchmarkRunArtifactBlobStore>();
         builder.Services.AddScoped<IBenchmarkJudgeExecutor, BenchmarkJudgeExecutor>();
         builder.Services.AddScoped<IBenchmarkFidelityExecutor, BenchmarkFidelityExecutor>();
         builder.Services.AddScoped<IBenchmarkComparisonExecutor, BenchmarkComparisonExecutor>();

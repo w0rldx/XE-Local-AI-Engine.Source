@@ -28,6 +28,7 @@ public sealed partial class BenchmarkStore
             FidelityChunks = input.FidelityChunks,
             FidelityKldBaseModelName = input.FidelityKldBaseModelName,
             FidelityKldBaseFingerprint = input.FidelityKldBaseFingerprint,
+            RequiresReview = input.RequiresReview,
             Version = 1,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
@@ -115,6 +116,7 @@ public sealed partial class BenchmarkStore
         project.FidelityChunks = input.FidelityChunks;
         project.FidelityKldBaseModelName = input.FidelityKldBaseModelName;
         project.FidelityKldBaseFingerprint = input.FidelityKldBaseFingerprint;
+        project.RequiresReview = input.RequiresReview;
         project.Version++;
         project.UpdatedAtUtc = now;
         if (judgePolicyChange is not null)

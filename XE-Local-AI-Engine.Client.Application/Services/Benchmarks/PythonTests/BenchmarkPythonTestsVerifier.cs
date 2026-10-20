@@ -20,7 +20,7 @@ public interface IBenchmarkPythonTestsVerifier
     ///     run it, which fails the judging rather than scoring 0. A candidate that misbehaves inside a working sandbox
     ///     is a 0, and comes back as a normal failed result.
     /// </remarks>
-    Task<BenchmarkJudgeVerifierResultV1> VerifyAsync(BenchmarkJudgeRubricCriterionV1 criterion,
+    Task<BenchmarkPythonTestsOutcome> VerifyAsync(BenchmarkJudgeRubricCriterionV1 criterion,
         string answer,
         CancellationToken cancellationToken = default);
 }
@@ -50,7 +50,7 @@ internal sealed class BenchmarkPythonTestsVerifier : IBenchmarkPythonTestsVerifi
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<BenchmarkJudgeVerifierResultV1> VerifyAsync(BenchmarkJudgeRubricCriterionV1 criterion,
+    public async Task<BenchmarkPythonTestsOutcome> VerifyAsync(BenchmarkJudgeRubricCriterionV1 criterion,
         string answer,
         CancellationToken cancellationToken = default)
     {
@@ -113,17 +113,27 @@ internal sealed class BenchmarkPythonTestsVerifier : IBenchmarkPythonTestsVerifi
                 criterion.Id);
         }
 
-        return new BenchmarkJudgeVerifierResultV1(criterion.Id,
-            BenchmarkJudgeCriterionKinds.PythonTests,
-            verdict.Scored,
-            Detail(verdict, result, candidate, timeout));
+        return new BenchmarkPythonTestsOutcome
+        {
+            Result = new BenchmarkJudgeVerifierResultV1(criterion.Id,
+                BenchmarkJudgeCriterionKinds.PythonTests,
+                verdict.Scored,
+                Detail(verdict, result, candidate, timeout)),
+            StandardOutput = result.StandardOutput,
+            StandardError = result.StandardError
+        };
     }
 
-    private static BenchmarkJudgeVerifierResultV1 Fail(BenchmarkJudgeRubricCriterionV1 criterion, string reason, string candidate) =>
-        new(criterion.Id,
-            BenchmarkJudgeCriterionKinds.PythonTests,
-            Passed: false,
-            $"{reason} Extracted code ({candidate.Length} chars): {Bound(candidate, 512)}");
+    private static BenchmarkPythonTestsOutcome Fail(BenchmarkJudgeRubricCriterionV1 criterion, string reason, string candidate) =>
+        new()
+        {
+            Result = new BenchmarkJudgeVerifierResultV1(criterion.Id,
+                BenchmarkJudgeCriterionKinds.PythonTests,
+                Passed: false,
+                $"{reason} Extracted code ({candidate.Length} chars): {Bound(candidate, 512)}"),
+            StandardOutput = string.Empty,
+            StandardError = string.Empty
+        };
 
     private BenchmarkExecutionException Unavailable(BenchmarkJudgeRubricCriterionV1 criterion, string code, string message)
     {

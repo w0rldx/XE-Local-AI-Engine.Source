@@ -24,7 +24,10 @@ internal static class BenchmarkExportCsv
         + "fidelityStatus,perplexityMean,perplexityStdErr,perplexityChunks,perplexityContextTokens,perplexityCorpusId,"
         + "kldState,kldMean,kldP99,topTokenAgreement,kldBaseFingerprint,kldBaseLogitsDigest,"
         + "pairwiseScore,pairwiseCiLow,pairwiseCiHigh,pairwiseComparisons,pairwiseFitKey,"
-        + "taskItemId,taskItemIndex,cellKey,taskInputHash,taskItemSetHash,cellQuality";
+        + "taskItemId,taskItemIndex,cellKey,taskInputHash,taskItemSetHash,cellQuality,"
+
+        // Appended again. Tool timing is display-only; reviewState is derived from the ranked row, which carries no review record.
+        + "reviewState,toolCallCount,toolTimeMs";
 
     /// <summary>Renders the export rows, applying the same KLD comparability gate as the live read.</summary>
     /// <remarks>
@@ -34,17 +37,19 @@ internal static class BenchmarkExportCsv
     /// </remarks>
     /// <param name="expectedKldBaseLogitsDigest">The digest the project's CURRENT settings recompute.</param>
     /// <param name="pairwiseScores">The fit's parsed per-run scores; empty when there is no fit or its blob was unreadable.</param>
+    /// <param name="requiresReview">Whether the project requires review; without it every <c>reviewState</c> is empty.</param>
     public static string Render(IReadOnlyList<BenchmarkRunRecord> runs,
         string? expectedKldBaseLogitsDigest = null,
         BenchmarkPairwiseFitRecord? pairwiseFit = null,
-        IReadOnlyList<BenchmarkPairwiseScoreEntry>? pairwiseScores = null)
+        IReadOnlyList<BenchmarkPairwiseScoreEntry>? pairwiseScores = null,
+        bool requiresReview = false)
     {
         ArgumentNullException.ThrowIfNull(runs);
         var scores = BenchmarkExportPairwise.ByRun(pairwiseScores ?? []);
         var builder = new StringBuilder(Header).Append("\r\n");
         foreach (var run in runs)
         {
-            AppendRow(builder, run, expectedKldBaseLogitsDigest, pairwiseFit, scores);
+            AppendRow(builder, run, expectedKldBaseLogitsDigest, pairwiseFit, scores, requiresReview);
         }
 
         return builder.ToString();
@@ -80,7 +85,8 @@ internal static class BenchmarkExportCsv
         BenchmarkRunRecord run,
         string? expectedKldBaseLogitsDigest,
         BenchmarkPairwiseFitRecord? pairwiseFit,
-        IReadOnlyDictionary<Guid, BenchmarkPairwiseScoreEntry> scores)
+        IReadOnlyDictionary<Guid, BenchmarkPairwiseScoreEntry> scores,
+        bool requiresReview)
     {
         var intent = run.PrimaryLaunchIntent;
         var evidence = run.PrimaryLaunchEvidence;
@@ -175,6 +181,12 @@ internal static class BenchmarkExportCsv
                    .Append(Field(run.TaskItemSetHash))
                    .Append(',')
                    .Append(Number(run.CellQuality))
+                   .Append(',')
+                   .Append(Field(requiresReview ? ReviewState(run) : null))
+                   .Append(',')
+                   .Append(Number(run.ToolCallCount))
+                   .Append(',')
+                   .Append(Number(run.ToolTimeMs))
                    .Append("\r\n");
     }
 
@@ -230,6 +242,22 @@ internal static class BenchmarkExportCsv
                    // On every row of the cohort, not once at the top: a flat CSV has nowhere else to put it, and a
                    // reader filtering rows would otherwise lose which fit the numbers came from.
                    .Append(Field(entry is null ? null : pairwiseFit?.FitKey));
+    }
+
+    /// <summary>The run's review state: a stored decision under a superseded policy is stale, else the decision, else pending when a review is owed.</summary>
+    /// <remarks>
+    ///     Read from the stored row, not the exclusion reason: the ranking stamps a cell's review-pending onto an approved sibling, and a superseded approval reads
+    ///     judge-pending until the re-judge succeeds. The exclusions that outrank the review gate on the run itself (warm-up, a revised item or suite) export empty.
+    /// </remarks>
+    private static string? ReviewState(BenchmarkRunRecord run)
+    {
+        var reason = run.Judge?.RankExclusionReason;
+        return reason switch
+        {
+            BenchmarkRunJudgeStates.ReasonWarmup or BenchmarkRunJudgeStates.ReasonItemRevised or BenchmarkRunJudgeStates.ReasonItemSetRevised => null,
+            _ when run.ReviewState is not null && run.ReviewPolicyCurrent == false => BenchmarkReviewStates.Stale,
+            _ => run.ReviewState ?? (reason == BenchmarkRunJudgeStates.ReasonReviewPending ? BenchmarkReviewStates.Pending : null)
+        };
     }
 
     private static string Rate(double? value) =>

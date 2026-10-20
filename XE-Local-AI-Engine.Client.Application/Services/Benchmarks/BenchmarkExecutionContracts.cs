@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -139,7 +140,11 @@ public sealed record BenchmarkOutputPart(
     string? ToolName = null,
     string? Arguments = null,
     string? Result = null,
-    bool? IsError = null);
+    bool? IsError = null,
+    // The tool's own execution time on a tool_result part. Omitted when null, so an untimed part (and every judge copy,
+    // which BenchmarkOutputParts.ForJudge strips) serializes byte-identically to the shape before the field existed.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    long? DurationMs = null);
 
 public sealed class BenchmarkEligibleAgent
 {
@@ -245,6 +250,9 @@ public sealed record BenchmarkProjectDraft
     ///     resolves it from the eligible-model catalog, so a caller cannot claim a base identity the node does not have.
     /// </summary>
     public string? FidelityKldBaseModelName { get; init; }
+
+    /// <summary>Whether a scoring run ranks only on a reviewer's decision. Frozen with the project once runs exist.</summary>
+    public bool RequiresReview { get; init; }
 }
 
 public sealed class BenchmarkQueueOptions

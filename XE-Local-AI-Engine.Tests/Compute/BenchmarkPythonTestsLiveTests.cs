@@ -59,9 +59,11 @@ public sealed class BenchmarkPythonTestsLiveTests : IDisposable
     [Test]
     public async Task PythonTests_CorrectSolution_ScoresInTheRealJail()
     {
-        var result = await VerifyAsync("def solve(n):\n    return n * 2\n", DoublingTests);
+        var outcome = await VerifyOutcomeAsync("import sys\nprint('candidate-stderr', file=sys.stderr)\n\ndef solve(n):\n    return n * 2\n", DoublingTests);
 
-        AssertEx.True(result.Passed, $"a correct solution must score in the real jail; detail was: {result.Detail}");
+        AssertEx.True(outcome.Result.Passed, $"a correct solution must score in the real jail; detail was: {outcome.Result.Detail}");
+        AssertEx.Contains(outcome.StandardOutput, BenchmarkPythonTestsHarness.MarkerPrefix, message: "both raw streams come back for the artifacts");
+        AssertEx.Contains(outcome.StandardError, "candidate-stderr");
     }
 
     [Test]
@@ -280,6 +282,13 @@ public sealed class BenchmarkPythonTestsLiveTests : IDisposable
     }
 
     private async Task<BenchmarkJudgeVerifierResultV1> VerifyAsync(string candidate,
+        string testCode,
+        IReadOnlyList<string>? exports = null,
+        int criterionTimeoutSeconds = 20,
+        int computeTimeoutSeconds = 90) =>
+        (await VerifyOutcomeAsync(candidate, testCode, exports, criterionTimeoutSeconds, computeTimeoutSeconds)).Result;
+
+    private async Task<BenchmarkPythonTestsOutcome> VerifyOutcomeAsync(string candidate,
         string testCode,
         IReadOnlyList<string>? exports = null,
         int criterionTimeoutSeconds = 20,

@@ -111,6 +111,7 @@ const draft: BenchmarkProjectDraft = {
 	fidelityKldEnabled: false,
 	fidelityChunks: null,
 	fidelityKldBaseModelName: null,
+	requiresReview: false,
 };
 
 describe("benchmark queries over the real client", () => {

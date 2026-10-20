@@ -39,6 +39,9 @@ public sealed record BenchmarkProjectInput
     public string? FidelityKldBaseModelName { get; init; }
 
     public string? FidelityKldBaseFingerprint { get; init; }
+
+    /// <summary>Whether a scoring run ranks only on a reviewer's decision. Frozen with the project.</summary>
+    public bool RequiresReview { get; init; }
 }
 
 /// <summary>
@@ -101,4 +104,6 @@ public sealed record BenchmarkProjectRecord
     public string? FidelityKldBaseFingerprint { get; init; }
 
     public string? TaskItemSetHash { get; init; }
+
+    public bool RequiresReview { get; init; }
 }

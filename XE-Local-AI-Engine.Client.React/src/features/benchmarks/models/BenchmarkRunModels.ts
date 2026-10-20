@@ -2,6 +2,7 @@ import { ApiError } from "@/core/api/errors/ApiError";
 import { type KvCacheType, kvCacheTypes } from "@/core/models/KvCacheTypes";
 import type { BenchmarkRunFidelity } from "@/features/benchmarks/models/BenchmarkFidelityModels";
 import type { BenchmarkOrigin } from "@/features/benchmarks/models/BenchmarkProjectModels";
+import type { BenchmarkRunArtifact, BenchmarkRunReview } from "@/features/benchmarks/models/BenchmarkReviewModels";
 
 /**
  * The judging's own lifecycle, verbatim from the wire (lowercase). It belongs to the current judge ATTEMPT, not to the
@@ -36,6 +37,10 @@ export const benchmarkRankExclusionReasons = [
 	"item-set-revised",
 	"verifier-unavailable",
 	"override-unmatched",
+	// Review projects: a scoring run ranks only once a reviewer approved it under the current rubric.
+	"review-pending",
+	"review-stale",
+	"review-rejected",
 	// Pairwise: a fitted score is read THROUGH the active fit, so every way that read can fail is its own reason.
 	"pairwise-pending",
 	"pairwise-insufficient",
@@ -63,6 +68,8 @@ export interface BenchmarkOutputPart {
 	arguments?: string | null;
 	result?: string | null;
 	isError?: boolean | null;
+	/** How long the tool itself executed, on a `tool_result`. Absent for a call the node did not time, never 0 for it. */
+	durationMs?: number | null;
 }
 
 const benchmarkPrimaryStatuses = ["Queued", "Running", "CancelRequested", "Succeeded", "Failed", "Cancelled"] as const;
@@ -308,6 +315,12 @@ export interface BenchmarkRunSummary {
 	/** Null when the node has no fidelity row for this run at all — a project that never asked for one, or a legacy row. */
 	fidelity: BenchmarkRunFidelity | null;
 	userScore: number | null;
+	/** The task item this run answered, or null on a pre-suite run (which counts as scoring). */
+	taskItemId: string | null;
+	/** Tool calls the answer made, or null when the node did not measure them. 0 = no calls. Display only. */
+	toolCallCount: number | null;
+	/** Summed execution time of those calls, null when not measured. Display only, never a cell figure. */
+	toolTimeMs: number | null;
 	lastStreamSequence: number;
 	version: number;
 	createdAtUtc: number;
@@ -329,6 +342,10 @@ export interface BenchmarkRunDetail extends BenchmarkRunSummary {
 	 * thinking mode), which is why the run can look as if the budget did nothing; null for a legacy row.
 	 */
 	reasoningBudgetApplicable: boolean | null;
+	/** The reviewer's stored decision, or null when there is none (including every run of a project without review). */
+	review: BenchmarkRunReview | null;
+	/** Verifier evidence files of this run's judgings. Metadata only; the bytes are a separate download. */
+	artifacts: BenchmarkRunArtifact[];
 }
 
 /** Everything a write needs to address one run under optimistic concurrency. A detail or a summary row satisfies it. */

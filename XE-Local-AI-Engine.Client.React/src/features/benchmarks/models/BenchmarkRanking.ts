@@ -71,6 +71,7 @@ export type BenchmarkRankExclusionAction =
 	| "enable-compute"
 	| "fix-override"
 	| "remove-runs"
+	| "open-review"
 	| "none";
 
 export function rankExclusionAction(reason: BenchmarkRankExclusionReason): BenchmarkRankExclusionAction {
@@ -105,6 +106,12 @@ export function rankExclusionAction(reason: BenchmarkRankExclusionReason): Bench
 		// every re-judge refuses again until the item or the rubric is edited to agree.
 		case "override-unmatched":
 			return "fix-override";
+		// Review. A human decision is what is missing, never a measurement: re-running would only make another run that
+		// waits for the same review. Stale and rejected go back to the same form — a stale one under the new rubric.
+		case "review-pending":
+		case "review-stale":
+		case "review-rejected":
+			return "open-review";
 		// Pairwise. The node is already working (`pending`) or already fixing itself (`stale` refits on the next pass),
 		// so both are waits; the rest name what the operator has to change.
 		case "pairwise-pending":

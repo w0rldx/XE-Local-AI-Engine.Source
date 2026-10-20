@@ -176,6 +176,7 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
             throw new BenchmarkConflictException("VersionConflict");
         }
 
+        EnsureReviewCompatible(project.RequiresReview, draft);
         var current = await _benchmarkStore.GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken);
 
         // Changing the judge invalidates every score already given under the old one, so the operator confirms it explicitly rather than discovering a silently re-scored project. Both answers
@@ -395,6 +396,18 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
 
     private readonly record struct ValidatedProject(BenchmarkProjectInput Input, BenchmarkJudgePolicyV1? Policy);
 
+    /// <summary>
+    ///     Review and pairwise judging exclude each other: a review project never ranks a comparison, so its comparisons would run for hours for nothing. Refused
+    ///     before the judge model lease is taken.
+    /// </summary>
+    private static void EnsureReviewCompatible(bool requiresReview, BenchmarkJudgePolicyDraft? judge)
+    {
+        if (requiresReview && string.Equals(BenchmarkJudgePolicyModes.Normalize(judge?.Mode), BenchmarkJudgePolicyModes.Pairwise, StringComparison.Ordinal))
+        {
+            throw new BenchmarkValidationException("A project that requires review cannot judge pairwise.");
+        }
+    }
+
     private async Task<ValidatedProject> ValidateAsync(BenchmarkProjectDraft draft,
         CancellationToken cancellationToken)
     {
@@ -409,6 +422,7 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
             throw new BenchmarkValidationException($"The benchmark name must be at most {BenchmarkProjectInput.MaxNameLength} characters.");
         }
 
+        EnsureReviewCompatible(draft.RequiresReview, draft.Judge);
         ValidateContext(draft.ContextTokens, "primary");
         ValidateOutputBudget(draft.MaxOutputTokens, draft.ContextTokens);
         ValidateReasoningBudget(draft.ReasoningBudgetTokens, draft.MaxOutputTokens, draft.ContextTokens);
@@ -438,7 +452,8 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
                 FidelityKldEnabled = draft.FidelityKldEnabled,
                 FidelityChunks = draft.FidelityChunks,
                 FidelityKldBaseModelName = NormalizeModelName(draft.FidelityKldBaseModelName),
-                FidelityKldBaseFingerprint = baseFingerprint
+                FidelityKldBaseFingerprint = baseFingerprint,
+                RequiresReview = draft.RequiresReview
             },
             policy);
     }

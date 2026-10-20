@@ -1260,6 +1260,14 @@
 			"title": "Agent-Definitionen"
 		},
 		"benchmarks": {
+			"artifacts": {
+				"download": "Herunterladen",
+				"kinds": {
+					"pythonTestsStderr": "Python-Tests stderr",
+					"pythonTestsStdout": "Python-Tests stdout"
+				},
+				"title": "Nachweisdateien des Prüfverfahrens"
+			},
 			"cells": {
 				"cohort": "{{ranked}} von {{scored}} Kombinationen gewertet, jeweils über {{items}} bewertete Aufgaben",
 				"displayOnly": "Keine Aufgabe dieses Projekts zählt zur Bewertung, daher wird keine Kombination gewertet. Recall ist hier die Messung.",
@@ -1306,6 +1314,8 @@
 				"reconnecting": "Verbindung wird wiederhergestellt und abgeglichen…"
 			},
 			"errors": {
+				"artifact": "Diese Nachweisdatei konnte nicht heruntergeladen werden.",
+				"artifactCorrupt": "Diese Nachweisdatei hat die Integritätsprüfung nicht bestanden und wurde nicht heruntergeladen.",
 				"cancel": "Diese Laufphase konnte nicht abgebrochen werden.",
 				"contextRefused": "Das Modell konnte den angeforderten Kontext nicht bereitstellen.",
 				"delete": "Dieser abgeschlossene Lauf konnte nicht gelöscht werden.",
@@ -1314,11 +1324,16 @@
 				"judgeFailed": "Die automatische Bewertung ist fehlgeschlagen; das Primärergebnis bleibt verfügbar.",
 				"kvUnsupportedHint": "Wählen Sie ausdrücklich f16, um dieses Modell mit dieser Laufzeit auszuführen.",
 				"measureFidelity": "Es konnte keine Treuemessung eingereiht werden.",
+				"notReviewable": "Dieser Lauf kann noch nicht bewertet werden. Beurteilen Sie ihn zuerst unter der aktuellen Richtlinie erneut.",
 				"projectSave": "Das Projekt konnte nicht gespeichert werden.",
 				"projectsLoad": "Benchmark-Projekte konnten nicht geladen werden.",
 				"rejudgeProject": "Dieses Projekt konnte nicht neu bewertet werden.",
 				"rejudgeRun": "Dieser Lauf konnte nicht neu bewertet werden.",
 				"restartInterrupted": "Diese laufende Phase wurde durch einen Neustart des Nodes unterbrochen.",
+				"review": "Die Bewertung konnte nicht gespeichert werden.",
+				"reviewConflict": "Der Lauf hat sich geändert, bevor die Bewertung gespeichert wurde. Er wurde neu geladen.",
+				"reviewRequired": "Dieses Projekt verlangt eine Prüfung. Bewerten Sie den Lauf stattdessen über die Prüfung.",
+				"reviewsLoad": "Der Prüfeingang konnte nicht geladen werden.",
 				"runLoad": "Der Lauf konnte nicht geladen werden.",
 				"score": "Der Lauf wurde vor dem Speichern der Bewertung geändert und deshalb aktualisiert.",
 				"start": "Der Benchmark-Lauf konnte nicht gestartet werden."
@@ -1327,7 +1342,7 @@
 				"csv": "CSV exportieren (v{{version}})",
 				"error": "Dieses Benchmark-Projekt konnte nicht exportiert werden.",
 				"json": "JSON exportieren (v{{version}})",
-				"schemaHelp": "Schema {{version}}: jeder Lauf in voller Tiefe, dazu die Aufgaben des Projekts, die Aufgaben- und Kombinationsstempel jedes Laufs und die Kombinationstabelle."
+				"schemaHelp": "Schema {{version}}: jeder Lauf in voller Tiefe mit seiner Prüfung und der Werkzeugaufruf-Summe, dazu die Aufgaben des Projekts, die Aufgaben- und Kombinationsstempel jedes Laufs und die Kombinationstabelle."
 			},
 			"fidelity": {
 				"cacheClearError": "Die zwischengespeicherten Basis-Logits konnten nicht gelöscht werden.",
@@ -1629,6 +1644,10 @@
 				"rejudgeConfirmAll": "Alle {{count}} erfolgreichen Läufe werden mit der aktuellen Richtlinie neu bewertet, und die gewertete Kohorte wechselt auf die aktuelle Bewertungslaufzeit.",
 				"rejudgeConfirmPolicy": "Eine Änderung am Judge bewertet dieses Projekt neu. Alle {{count}} erfolgreichen Läufe werden neu bewertet und die Rangliste wird aus der neuen Kohorte aufgebaut.",
 				"rejudgeConfirmTitle": "Projekt neu bewerten?",
+				"requiresReview": "Vor der Wertung eine menschliche Prüfung verlangen",
+				"requiresReviewHelp": "Jeder gewertete Lauf wartet im Prüfeingang; erst eine freigegebene Prüfung bringt seine Wertung in die Rangliste.",
+				"requiresReviewPairwise": "Mit paarweiser Beurteilung nicht verfügbar: Sie ordnet Läufe gegeneinander, es gibt also keine Einzelwertung zum Prüfen.",
+				"reviewSection": "Menschliche Prüfung",
 				"runCount": "{{count}} Läufe",
 				"saveJudge": "Judge speichern",
 				"select": "Wählen Sie ein Benchmark-Projekt.",
@@ -1640,6 +1659,7 @@
 					"enable-compute": "Compute auf diesem Node aktivieren — auf einem Host, der die Sandbox begrenzen kann — und dann neu bewerten.",
 					"fix-override": "Die Überschreibung der Aufgabe oder das Bewertungsraster so bearbeiten, dass beide dasselbe Kriterium nennen — dann neu bewerten.",
 					"none": "Nichts zu tun — ein Aufwärmlauf soll außerhalb der Wertung stehen.",
+					"open-review": "Öffnen Sie die Bewertung — erst die Freigabe durch einen Prüfer bringt den Lauf in die Rangliste.",
 					"rejudge": "Neu bewerten, um ihn wieder in die Kohorte zu holen.",
 					"remove-runs": "Entfernen Sie Läufe, damit die Kohorte unter der Grenze liegt.",
 					"rerun": "Erneut starten — mit mehr Raum, falls er abgeschnitten wurde.",
@@ -1679,6 +1699,9 @@
 					"pairwise-stale": "aus einem älteren Vergleichssatz angepasst",
 					"pairwise-unfitted": "nicht in der aktiven Anpassung",
 					"policy-outdated": "Mit einer älteren Bewertungsrichtlinie bewertet.",
+					"review-pending": "Wartet auf eine menschliche Bewertung. Dieses Projekt wertet einen Lauf erst, wenn ein Prüfer ihn freigegeben hat.",
+					"review-rejected": "Ein Prüfer hat diese Antwort abgelehnt, daher hat sie keine Wertung.",
+					"review-stale": "Unter einer älteren Bewertungsvorlage geprüft. Die Entscheidung zählt nicht mehr, der Lauf ist zurück im Prüfeingang.",
 					"truncated": "Die Antwort wurde vom Token-Budget abgeschnitten und ist deshalb nicht mit einer vollständigen vergleichbar.",
 					"verifier-unavailable": "Ein deterministischer Prüfer konnte auf diesem Node nicht laufen, die Antwort wurde also nie geprüft. Das ist keine Null.",
 					"warmup": "Ein Aufwärmlauf. Er wird absichtlich ausgeschlossen, damit die folgenden Wiederholungen nicht gegen einen kalten Start bewertet werden."
@@ -1705,6 +1728,9 @@
 					"pairwise-stale": "wird neu angepasst",
 					"pairwise-unfitted": "nicht angepasst",
 					"policy-outdated": "Richtlinie veraltet",
+					"review-pending": "Prüfung ausstehend",
+					"review-rejected": "abgelehnt",
+					"review-stale": "Prüfung veraltet",
 					"truncated": "abgeschnitten",
 					"verifier-unavailable": "Prüfer nicht verfügbar",
 					"warmup": "Aufwärmlauf"
@@ -1729,6 +1755,46 @@
 				"status": "Status",
 				"userScore": "Betreiber",
 				"warmupBadge": "Aufwärmlauf"
+			},
+			"review": {
+				"approve": "Freigeben",
+				"blocked": {
+					"judge": "Eine Bewertung braucht eine erfolgreiche Beurteilung unter der aktuellen Richtlinie. Beurteilen Sie diesen Lauf zuerst erneut.",
+					"primary": "Nur ein erfolgreicher Lauf kann bewertet werden.",
+					"revised": "Die Aufgabe wurde nach diesem Lauf bearbeitet, daher kann die Antwort nicht mehr bewertet werden. Führen Sie die Aufgabe erneut aus."
+				},
+				"criterionHint": "0 bis 10, aus der Beurteilung vorausgefüllt",
+				"judgeOnly": "Vom Beurteiler gewertet; dieser Lauf kann nicht geprüft werden.",
+				"notes": "Notizen",
+				"overall": "Gesamtwertung, 0 bis 100",
+				"reject": "Ablehnen",
+				"states": {
+					"approved": "freigegeben",
+					"pending": "ausstehend",
+					"rejected": "abgelehnt",
+					"stale": "veraltet"
+				},
+				"storedScore": "{{score}} / 100",
+				"title": "Bewertung",
+				"verifierFailed": "nicht bestanden",
+				"verifierMissing": "kein Ergebnis",
+				"verifierPassed": "bestanden",
+				"verifierReadOnly": "Vom Prüfverfahren entschieden; eine Bewertung kann das nicht ändern."
+			},
+			"reviewInbox": {
+				"allProjects": "Alle Projekte mit Prüfung",
+				"completed": "Abgeschlossen",
+				"empty": {
+					"approved": "Noch kein Lauf wurde freigegeben.",
+					"pending": "Kein Lauf wartet auf eine Bewertung.",
+					"rejected": "Kein Lauf wurde abgelehnt.",
+					"stale": "Keine Bewertung ist veraltet."
+				},
+				"item": "Aufgabe",
+				"project": "Projekt",
+				"score": "Wertung",
+				"state": "Status",
+				"title": "Prüfeingang"
 			},
 			"rubric": {
 				"add": "Kriterium hinzufügen",
@@ -1806,6 +1872,11 @@
 			},
 			"subtitle": "Lokale Modelle mit derselben eingefrorenen Agentenaufgabe und optionaler unabhängiger Bewertung vergleichen.",
 			"title": "Lokale Modell-Benchmarks",
+			"tools": {
+				"count_one": "{{count}} Werkzeugaufruf",
+				"count_other": "{{count}} Werkzeugaufrufe",
+				"repeated": "wiederholter Aufruf"
+			},
 			"validation": {
 				"agent": "Wählen Sie einen Agenten.",
 				"context": "Der Kontext muss positiv sein.",

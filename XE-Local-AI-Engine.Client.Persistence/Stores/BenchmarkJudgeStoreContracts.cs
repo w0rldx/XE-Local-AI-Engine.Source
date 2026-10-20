@@ -273,4 +273,18 @@ public static class BenchmarkRunJudgeStates
     public const string ReasonItemRevised = "item-revised";
     public const string ReasonItemSetRevised = "item-set-revised";
     public const string ReasonItemIncomplete = "item-incomplete";
+
+    /// <summary>A scoring run of a review project with no decision yet; a cell whose only gaps are these reports it too.</summary>
+    public const string ReasonReviewPending = "review-pending";
+
+    /// <summary>The run's review was made under a judge-policy revision the project no longer judges under; it is back in the inbox.</summary>
+    public const string ReasonReviewStale = "review-stale";
+
+    public const string ReasonReviewRejected = "review-rejected";
+}
+
+/// <summary>Bounds on a reviewer's decision, mirrored by the host's request validator.</summary>
+public static class BenchmarkReviewLimits
+{
+    public const int MaxNotesCharacters = 8192;
 }

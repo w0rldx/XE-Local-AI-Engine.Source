@@ -336,6 +336,12 @@ public class BenchmarkRunSummaryResponse
     /// </summary>
     public int? SegmentCount { get; init; }
 
+    /// <summary>How many tool calls the primary made; null when not measured (runs before tool timing). Display only.</summary>
+    public int? ToolCallCount { get; init; }
+
+    /// <summary>The sum of the tools' own execution times in milliseconds; null when not measured. Display only, never a cell figure.</summary>
+    public long? ToolTimeMs { get; init; }
+
     public int? UserScore { get; init; }
     public long LastStreamSequence { get; init; }
     public long Version { get; init; }
@@ -403,6 +409,11 @@ public sealed class BenchmarkRunDetailResponse : BenchmarkRunSummaryResponse
 
     /// <summary>The decoded pre-launch environment capture (<c>RuntimeEnvironmentFactsV1</c>), or null.</summary>
     public JsonElement? PrimaryEnvironmentFacts { get; init; }
+
+    /// <summary>The reviewer's decision, or null when none was made.</summary>
+    public BenchmarkRunReviewResponse? Review { get; init; }
+
+    public IReadOnlyList<BenchmarkRunArtifactResponse> Artifacts { get; init; } = [];
 }
 
 public sealed class BenchmarkRankCohortResponse

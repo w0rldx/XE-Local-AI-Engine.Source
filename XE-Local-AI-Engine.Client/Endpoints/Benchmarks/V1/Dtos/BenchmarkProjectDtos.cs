@@ -50,6 +50,9 @@ public class BenchmarkProjectMutationRequest
     ///     server-side and is never accepted from a client — it is an input to the comparability digest.
     /// </summary>
     public string? FidelityKldBaseModelName { get; init; }
+
+    /// <summary>Scoring runs rank only on a reviewer's approval. Frozen with the project; refused with a pairwise judge.</summary>
+    public bool RequiresReview { get; init; }
 }
 
 public sealed class UpdateBenchmarkProjectRequest : BenchmarkProjectMutationRequest
@@ -86,6 +89,7 @@ public class BenchmarkProjectSummaryResponse
 
     public Guid AgentDefinitionId { get; init; }
     public bool JudgeEnabled { get; init; }
+    public bool RequiresReview { get; init; }
     public int RunCount { get; init; }
     public bool IsFrozen { get; init; }
     public long Version { get; init; }

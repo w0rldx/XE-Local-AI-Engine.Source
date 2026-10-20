@@ -440,6 +440,52 @@ public sealed class BenchmarkPythonTestsVerifierTests
     }
 
     [Test]
+    public async Task Verify_ReturnsBothRawStreams()
+    {
+        // Longer than the evidence cap, so a bounded copy cannot pass for the raw stream.
+        var stderr = new string('e', 5000) + "\n";
+        string? stdout = null;
+        var gateway = new StubGateway(program =>
+        {
+            stdout = "candidate noise\n" + Marker(program, """{"status":"verdict","collected":1,"passed":1,"failed":0,"phase":"tests"}""");
+            return ComputeExecutionOutcome.Executed(new SandboxCommandResult
+            {
+                ExecutionId = "x",
+                ExitCode = 0,
+                Completed = true,
+                StandardOutput = stdout,
+                StandardError = stderr
+            });
+        });
+
+        var outcome = await VerifyOutcomeAsync(gateway, Doubling, DoublingTests);
+
+        AssertEx.True(outcome.Result.Passed);
+        AssertEx.Equal(AssertEx.NotNull(stdout), outcome.StandardOutput);
+        AssertEx.Equal(stderr, outcome.StandardError);
+    }
+
+    [Test]
+    public async Task Verify_EvidenceDetailIsUnchanged()
+    {
+        var gateway = new StubGateway(program => ComputeExecutionOutcome.Executed(new SandboxCommandResult
+        {
+            ExecutionId = "x",
+            ExitCode = 0,
+            Completed = true,
+            StandardOutput = Marker(program, """{"status":"verdict","collected":2,"passed":1,"failed":1,"phase":"tests","error":"boom"}"""),
+            StandardError = "trace"
+        }));
+
+        var outcome = await VerifyOutcomeAsync(gateway, Doubling, DoublingTests);
+
+        var code = Doubling.Trim();
+        AssertEx.Equal($"1 of 2 collected cases passed (1 failed, phase 'tests'). First failure: boom Extracted code ({code.Length} chars): {code}"
+                       + " | harness and candidate stderr (candidate-controlled): trace",
+            outcome.Result.Detail);
+    }
+
+    [Test]
     public void CodeExtraction_FencedPythonBeforeAnyFenceBeforeWholeText()
     {
         const string TwoFences = """
@@ -526,6 +572,14 @@ public sealed class BenchmarkPythonTestsVerifierTests
     }
 
     private static async Task<BenchmarkJudgeVerifierResultV1> VerifyAsync(IComputeToolGateway gateway,
+        string candidate,
+        string testCode,
+        IReadOnlyList<string>? exports = null,
+        int timeoutSeconds = 20,
+        int computeTimeoutSeconds = 60) =>
+        (await VerifyOutcomeAsync(gateway, candidate, testCode, exports, timeoutSeconds, computeTimeoutSeconds)).Result;
+
+    private static async Task<BenchmarkPythonTestsOutcome> VerifyOutcomeAsync(IComputeToolGateway gateway,
         string candidate,
         string testCode,
         IReadOnlyList<string>? exports = null,

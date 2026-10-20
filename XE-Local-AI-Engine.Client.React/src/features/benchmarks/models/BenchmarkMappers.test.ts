@@ -34,6 +34,7 @@ describe("toBenchmarkProjectSummary", () => {
 			invocationTimeoutSeconds: null,
 			agentDefinitionId: "",
 			judgeEnabled: false,
+			requiresReview: false,
 			runCount: 0,
 			isFrozen: false,
 			version: 0,
@@ -573,5 +574,71 @@ describe("toBenchmarkRubric criterion verifier members", () => {
 		const rubric = toBenchmarkRubric({ version: 1, criteria: [{ id: "answer", title: "Answer", description: "", weight: 50 }] });
 
 		expect(rubric?.criteria[0]).toMatchObject({ kind: null, config: null });
+	});
+});
+
+// Review, artifacts and tool timing. Each default keeps "not measured" and "no decision" apart from a real zero or a
+// real decision: a stale or unknown review must never read as one that still counts.
+describe("review, artifact and tool-timing mapping", () => {
+	const base = { primaryModelName: "m", modelContentFingerprint: "v1", agentName: "a" };
+
+	it("reads requiresReview strictly", () => {
+		expect(toBenchmarkProjectSummary(partial({ name: "X", requiresReview: true })).requiresReview).toBe(true);
+		expect(toBenchmarkProjectSummary(partial({ name: "X", requiresReview: "yes" })).requiresReview).toBe(false);
+	});
+
+	it("keeps unmeasured tool timing null and a measured zero zero", () => {
+		expect(toBenchmarkRunSummary(partial(base))).toMatchObject({ taskItemId: null, toolCallCount: null, toolTimeMs: null });
+		expect(toBenchmarkRunSummary(partial({ ...base, taskItemId: "i", toolCallCount: 0, toolTimeMs: 0 }))).toMatchObject({
+			taskItemId: "i",
+			toolCallCount: 0,
+			toolTimeMs: 0,
+		});
+	});
+
+	it("maps a stored review and its artifacts", () => {
+		const mapped = toBenchmarkRunDetail(
+			partial({
+				...base,
+				review: {
+					state: "approved",
+					score: 72,
+					criteria: [{ criterionId: "accuracy", score: 7 }, { criterionId: "broken" }],
+					notes: "fine",
+					policyCurrent: true,
+					updatedAtUtc: 9,
+				},
+				artifacts: [
+					{ id: "art-1", kind: "pythonTestsStdout", criterionId: "tests", judgeAttemptId: "j", byteCount: 12, contentHash: "h" },
+				],
+			}),
+		);
+
+		expect(mapped.review).toEqual({
+			state: "approved",
+			score: 72,
+			// A criterion with no number is dropped rather than read as a zero the reviewer never gave.
+			criteria: [{ criterionId: "accuracy", score: 7 }],
+			notes: "fine",
+			policyCurrent: true,
+			updatedAtUtc: 9,
+		});
+		expect(mapped.artifacts).toEqual([
+			{ id: "art-1", kind: "pythonTestsStdout", criterionId: "tests", judgeAttemptId: "j", byteCount: 12, contentHash: "h" },
+		]);
+	});
+
+	it("fails a review closed: absent currency is stale, an unknown state is no decision", () => {
+		expect(toBenchmarkRunDetail(partial({ ...base, review: { state: "approved" } })).review?.policyCurrent).toBe(false);
+		expect(toBenchmarkRunDetail(partial({ ...base, review: { state: "pending" } })).review).toBeNull();
+		expect(toBenchmarkRunDetail(partial(base))).toMatchObject({ review: null, artifacts: [] });
+	});
+
+	it("passes a tool result's duration through untouched", () => {
+		const mapped = toBenchmarkRunDetail(
+			partial({ ...base, outputParts: [{ kind: "tool_result", toolCallId: "c1", result: "ok", durationMs: 1234 }] }),
+		);
+
+		expect(mapped.outputParts[0]?.durationMs).toBe(1234);
 	});
 });

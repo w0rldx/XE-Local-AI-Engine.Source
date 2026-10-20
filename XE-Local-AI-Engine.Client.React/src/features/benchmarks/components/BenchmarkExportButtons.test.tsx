@@ -81,7 +81,7 @@ describe("BenchmarkExportButtons schema", () => {
 	it("names the export schema on both buttons", () => {
 		renderWithProviders(<BenchmarkExportButtons projectId="project-1" />);
 
-		expect(screen.getByTestId("benchmark-export-json").textContent).toContain("v4");
-		expect(screen.getByTestId("benchmark-export-csv").textContent).toContain("v4");
+		expect(screen.getByTestId("benchmark-export-json").textContent).toContain("v5");
+		expect(screen.getByTestId("benchmark-export-csv").textContent).toContain("v5");
 	});
 });

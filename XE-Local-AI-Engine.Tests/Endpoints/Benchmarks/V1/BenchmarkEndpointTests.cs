@@ -35,6 +35,9 @@ public sealed class BenchmarkEndpointTests
     [Arguments("PUT", "/runs/00000000-0000-0000-0000-000000000002/score")]
     [Arguments("DELETE", "/runs/00000000-0000-0000-0000-000000000002/score")]
     [Arguments("POST", "/runs/00000000-0000-0000-0000-000000000002/rejudge")]
+    [Arguments("PUT", "/runs/00000000-0000-0000-0000-000000000002/review")]
+    [Arguments("GET", "/runs/00000000-0000-0000-0000-000000000002/artifacts/00000000-0000-0000-0000-000000000003")]
+    [Arguments("GET", "/reviews")]
     [Arguments("PUT", "/projects/00000000-0000-0000-0000-000000000001/judge")]
     [Arguments("PATCH", "/projects/00000000-0000-0000-0000-000000000001/fidelity")]
     [Arguments("POST", "/projects/00000000-0000-0000-0000-000000000001/rejudge")]
@@ -1152,6 +1155,21 @@ public sealed class BenchmarkEndpointTests
     public async Task DeleteProject_WithNoActiveRun_DeletesAtTheExpectedVersionAndAnswersNoContent()
     {
         await using var context = CreateContext();
+        // The delete reads the project's run ids first, to remove their artifact bytes once the rows are gone.
+        context.Store.ListAllRunsAsync(ProjectId, Arg.Any<CancellationToken>())
+               .Returns(new BenchmarkRunPage
+               {
+                   Items = [],
+                   TotalCount = 0,
+                   RankCohort = new BenchmarkRankCohort
+                   {
+                       PolicyRevision = null,
+                       ExecutionKey = null,
+                       CohortGeneration = null,
+                       RankedCount = 0,
+                       TotalScored = 0
+                   }
+               });
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Delete, Api + $"/projects/{ProjectId}", new
         {

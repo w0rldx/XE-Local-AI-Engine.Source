@@ -97,6 +97,45 @@ public sealed class BenchmarkOutputPartsTests
     }
 
     [Test]
+    public void ForJudge_StripsToolTiming_SoTheJudgePayloadIsByteIdentical()
+    {
+        BenchmarkOutputPart[] untimed =
+        [
+            new("output", Content: "Let me look that up."),
+            new("tool_call", ToolCallId: "call-1", ToolName: "search", Arguments: "{}"),
+            new("tool_result", ToolCallId: "call-1", ToolName: "search", Result: "ok", IsError: false),
+            new("output", Content: "It is 42.")
+        ];
+        var timed = untimed.Select(static part => part.Kind == "tool_result" ? part with { DurationMs = 1234 } : part).ToArray();
+
+        var timedPayload = BenchmarkExecutionSerialization.SerializeParts(BenchmarkOutputParts.ForJudge(timed, judgeContextTokens: 16384));
+        var untimedPayload = BenchmarkExecutionSerialization.SerializeParts(BenchmarkOutputParts.ForJudge(untimed, judgeContextTokens: 16384));
+
+        AssertEx.True(BenchmarkExecutionSerialization.SerializeParts(timed).AsSpan().IndexOf("\"durationMs\":1234"u8) >= 0,
+            "the stored transcript must carry the timing, or this test proves nothing");
+        AssertEx.True(timedPayload.AsSpan().SequenceEqual(untimedPayload), "a judge must see the same bytes whether or not the tools were timed");
+        AssertEx.True(timedPayload.AsSpan().IndexOf("durationMs"u8) < 0, "an untimed part omits the field rather than writing null");
+    }
+
+    [Test]
+    public void Coalesce_KeepsToolTimingOnToolParts()
+    {
+        BenchmarkOutputPart[] streamed =
+        [
+            new("output", Content: "a"),
+            new("tool_call", ToolCallId: "call-1", ToolName: "search", Arguments: "{}"),
+            new("tool_result", ToolCallId: "call-1", ToolName: "search", Result: "ok", IsError: false, DurationMs: 250),
+            new("output", Content: "b")
+        ];
+
+        var coalesced = BenchmarkOutputParts.Coalesce(streamed);
+
+        AssertEx.Equal(expected: 250L, coalesced.Single(static part => part.Kind == "tool_result").DurationMs);
+        var roundTripped = BenchmarkExecutionSerialization.DeserializeParts(BenchmarkExecutionSerialization.SerializeParts(coalesced));
+        AssertEx.Equal(expected: 250L, roundTripped.Single(static part => part.Kind == "tool_result").DurationMs);
+    }
+
+    [Test]
     public void IsUnanswered_SeparatesARealAnswerFromTheTwoSilentShapes()
     {
         BenchmarkOutputPart[] answered =

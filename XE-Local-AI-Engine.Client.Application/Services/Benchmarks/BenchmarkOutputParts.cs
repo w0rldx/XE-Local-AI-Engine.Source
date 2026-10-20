@@ -109,7 +109,10 @@ public static class BenchmarkOutputParts
         return parts.Count > 0 && string.Equals(parts[^1].Kind, ToolCallKind, StringComparison.Ordinal);
     }
 
-    /// <summary>The parts the judge is shown: <see cref="Coalesce" />d, with every <c>reasoning</c> part DROPPED.</summary>
+    /// <summary>
+    ///     The parts the judge is shown: <see cref="Coalesce" />d, with every <c>reasoning</c> part DROPPED and tool timing
+    ///     stripped.
+    /// </summary>
     /// <remarks>
     ///     Hidden chain-of-thought is not the graded answer — the rubric evaluates the visible output — and on a
     ///     thinking model the reasoning alone blew the judge context (measured: 107,192 estimated tokens against a
@@ -121,6 +124,8 @@ public static class BenchmarkOutputParts
     {
         var graded = Coalesce(parts)
                      .Where(static part => !string.Equals(part.Kind, ReasoningKind, StringComparison.Ordinal))
+                     // Tool timing is a display value, not the graded answer: cleared so a judge prompt is byte-identical timed or not.
+                     .Select(static part => part.DurationMs is null ? part : part with { DurationMs = null })
                      .ToArray();
         var allowance = Math.Max(MinimumJudgeTextChars, judgeContextTokens / 2 * EstimatedCharsPerToken);
         if (graded.Sum(static part => part.Content?.Length ?? 0) <= allowance)

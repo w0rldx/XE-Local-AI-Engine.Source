@@ -37,6 +37,7 @@ setupMswServer(
 		contextTokens: 4096,
 		agentDefinitionId: "cccccccc-0000-4000-8000-000000000003",
 		judgeEnabled: false,
+		judge: { enabled: false },
 		runCount: 1,
 		isFrozen: true,
 		version: 2,
@@ -210,5 +211,175 @@ describe("BenchmarkRunLivePane", () => {
 		fireEvent.click(await screen.findByRole("button", { name: "Re-judge run" }));
 
 		await waitFor(() => expect(observedBody).toEqual({ expectedVersion: 3, force: true }));
+	});
+
+	describe("in a review project", () => {
+		// No judge policy, so the form reviews one overall score; the run names no item, so it counts as scoring.
+		const reviewProject = () =>
+			server.use(
+				jsonRoute("get", `benchmarks/projects/${projectId}`, {
+					id: projectId,
+					name: "Reviewed",
+					coreTask: "Summarise the attached text.",
+					contextTokens: 4096,
+					agentDefinitionId: "cccccccc-0000-4000-8000-000000000003",
+					judgeEnabled: false,
+					requiresReview: true,
+					judge: { enabled: false },
+					runCount: 1,
+					isFrozen: true,
+					version: 2,
+					createdAtUtc: 1,
+					updatedAtUtc: 2,
+				}),
+				jsonRoute("get", `benchmarks/projects/${projectId}/items`, { items: [], projectVersion: 2 }),
+				http.get(localApiPath(`benchmarks/runs/${runId}`), () => HttpResponse.json(runRow())),
+			);
+
+		it("puts the review with the run's expected version instead of offering a plain score", async () => {
+			let observedBody: unknown;
+			reviewProject();
+			server.use(
+				http.put(localApiPath(`benchmarks/runs/${runId}/review`), async ({ request }) => {
+					observedBody = await request.json();
+					return HttpResponse.json(runRow({ version: 4 }));
+				}),
+			);
+
+			renderWithProviders(<BenchmarkRunLivePane runId={runId} />);
+
+			fireEvent.change(await screen.findByTestId("benchmark-review-overall"), { target: { value: "64" } });
+			expect(screen.queryByTestId("benchmark-score-save")).toBeNull();
+			fireEvent.click(screen.getByTestId("benchmark-review-approve"));
+
+			await waitFor(() => expect(observedBody).toEqual({ state: "approved", score: 64, notes: null, expectedVersion: 3 }));
+			expect(toastErrorMock).not.toHaveBeenCalled();
+		});
+
+		it("names a NotReviewable refusal rather than relaying a bare 409", async () => {
+			reviewProject();
+			server.use(
+				http.put(localApiPath(`benchmarks/runs/${runId}/review`), () =>
+					HttpResponse.json(
+						{
+							type: "about:blank",
+							title: "Conflict",
+							status: 409,
+							detail: "This run cannot be reviewed.",
+							code: "NotReviewable",
+						},
+						{ status: 409, headers: { "content-type": "application/problem+json" } },
+					),
+				),
+			);
+
+			let runReads = 0;
+			server.use(
+				http.get(localApiPath(`benchmarks/runs/${runId}`), () => {
+					runReads += 1;
+					return HttpResponse.json(runRow());
+				}),
+			);
+
+			renderWithProviders(<BenchmarkRunLivePane runId={runId} />);
+
+			fireEvent.click(await screen.findByTestId("benchmark-review-reject"));
+			// The judging moved under the pane, so the run is re-read rather than left showing an open form.
+			await waitFor(() => expect(runReads).toBe(2));
+
+			await waitFor(() =>
+				expect(toastErrorMock).toHaveBeenCalledWith(
+					"This run cannot be reviewed yet. Re-judge it under the current judge policy first.",
+				),
+			);
+		});
+
+		// A NIAH case keeps its judge path; the node refuses both a plain score and a review on it.
+		it("offers no score control on a non-scoring leaf", async () => {
+			reviewProject();
+			server.use(
+				jsonRoute("get", `benchmarks/projects/${projectId}/items`, {
+					items: [
+						{
+							id: "dddddddd-0000-4000-8000-000000000004",
+							projectId,
+							index: 0,
+							kind: "niahCase",
+							revision: 1,
+							inputHash: "v1:h",
+							isLeaf: true,
+							countsTowardScore: false,
+							prompt: "Find the needle.",
+						},
+					],
+					projectVersion: 2,
+				}),
+				http.get(localApiPath(`benchmarks/runs/${runId}`), () =>
+					HttpResponse.json(runRow({ taskItemId: "dddddddd-0000-4000-8000-000000000004" })),
+				),
+			);
+
+			renderWithProviders(<BenchmarkRunLivePane runId={runId} />);
+
+			expect((await screen.findByTestId("benchmark-score-judge-only")).textContent).toContain("not reviewable");
+			expect(screen.queryByTestId("benchmark-score-save")).toBeNull();
+			expect(screen.queryByTestId("benchmark-review-form")).toBeNull();
+		});
+
+		it("refetches the run and says so when the review loses a version race", async () => {
+			reviewProject();
+			let runReads = 0;
+			server.use(
+				http.get(localApiPath(`benchmarks/runs/${runId}`), () => {
+					runReads += 1;
+					return HttpResponse.json(runRow());
+				}),
+				http.put(localApiPath(`benchmarks/runs/${runId}/review`), () =>
+					HttpResponse.json(
+						{ type: "about:blank", title: "Conflict", status: 409, detail: "Stale version.", code: "VersionConflict" },
+						{ status: 409, headers: { "content-type": "application/problem+json" } },
+					),
+				),
+			);
+
+			renderWithProviders(<BenchmarkRunLivePane runId={runId} />);
+
+			fireEvent.click(await screen.findByTestId("benchmark-review-reject"));
+
+			await waitFor(() =>
+				expect(toastErrorMock).toHaveBeenCalledWith("The run changed before the review was saved. It has been refreshed."),
+			);
+			expect(runReads).toBe(2);
+		});
+
+		// A rejection clears the run's score: the pane re-reads the run and shows the decision with no score beside it.
+		it("shows a rejection with no score once the review is saved", async () => {
+			reviewProject();
+			let decided = false;
+			server.use(
+				http.get(localApiPath(`benchmarks/runs/${runId}`), () =>
+					HttpResponse.json(
+						decided
+							? runRow({
+									version: 4,
+									review: { state: "rejected", score: null, criteria: [], policyCurrent: true, updatedAtUtc: 5 },
+								})
+							: runRow({ userScore: 70, qualityScore: 70, qualityScoreSource: "user" }),
+					),
+				),
+				http.put(localApiPath(`benchmarks/runs/${runId}/review`), () => {
+					decided = true;
+					return HttpResponse.json(runRow({ version: 4 }));
+				}),
+			);
+
+			renderWithProviders(<BenchmarkRunLivePane runId={runId} />);
+			fireEvent.click(await screen.findByTestId("benchmark-review-reject"));
+
+			const stored = await screen.findByTestId("benchmark-review-stored");
+			expect(stored.textContent).toContain("rejected");
+			expect(stored.textContent).not.toContain("/ 100");
+			expect(document.body.textContent).toContain("Quality: —");
+		});
 	});
 });

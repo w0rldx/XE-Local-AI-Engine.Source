@@ -77,6 +77,7 @@ function draft(overrides: Partial<BenchmarkProjectDraft> = {}): BenchmarkProject
 		fidelityKldEnabled: false,
 		fidelityChunks: null,
 		fidelityKldBaseModelName: null,
+		requiresReview: false,
 		...overrides,
 	};
 }
@@ -370,5 +371,38 @@ describe("BenchmarkProjectForm", () => {
 		expect((screen.getByRole("textbox", { name: /Name/ }) as HTMLInputElement).value).toBe("What the operator typed");
 		// …and the late presets still stand in as the starting rubric, without an effect writing them into state.
 		expect(screen.getByTestId("benchmark-rubric-editor")).toBeTruthy();
+	});
+
+	describe("requiresReview switch", () => {
+		const reviewSwitch = () => screen.getByTestId("benchmark-requires-review") as HTMLInputElement;
+
+		it("is editable on an unfrozen pointwise project and carried into the draft", () => {
+			const { container, onSubmit } = renderForm(draft());
+
+			expect(reviewSwitch().disabled).toBe(false);
+			fireEvent.click(reviewSwitch());
+			save(container);
+
+			expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ requiresReview: true }));
+		});
+
+		// Frozen with the project: flipping it would re-rank every run already measured.
+		it("is locked with the frozen explanation once runs exist", () => {
+			renderForm(draft({ requiresReview: true }), { frozen: true });
+
+			expect(reviewSwitch().disabled).toBe(true);
+			expect(reviewSwitch().checked).toBe(true);
+			expect(
+				screen.getByText("This project is frozen while runs exist. Delete its terminal runs to edit it again."),
+			).toBeTruthy();
+		});
+
+		// The node refuses review together with pairwise judging: there is no per-run score to review.
+		it("is locked with an explanation under pairwise judging", () => {
+			renderForm(judgingDraft({ judgeMode: "pairwise" }));
+
+			expect(reviewSwitch().disabled).toBe(true);
+			expect(screen.getByText(/Not available with pairwise judging/)).toBeTruthy();
+		});
 	});
 });

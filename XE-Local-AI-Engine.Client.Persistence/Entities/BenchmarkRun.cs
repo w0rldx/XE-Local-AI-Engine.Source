@@ -60,6 +60,14 @@ internal sealed record class BenchmarkRun
     public int? SegmentCount { get; set; }
 
     /// <summary>
+    ///     How many tool calls the primary made, and the sum of their measured execution times. Display only, like
+    ///     <see cref="DurationMs" />. NULL means not measured (runs before the columns existed); 0 means no calls.
+    /// </summary>
+    public int? ToolCallCount { get; set; }
+
+    public long? ToolTimeMs { get; set; }
+
+    /// <summary>
     ///     Plaintext UTF-8 JSON while tracked; encrypted at rest with node-scoped AAD column
     ///     <c>benchmark_output_parts_json</c>.
     /// </summary>

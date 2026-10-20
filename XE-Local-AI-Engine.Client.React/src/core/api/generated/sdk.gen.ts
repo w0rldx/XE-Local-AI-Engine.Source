@@ -472,6 +472,9 @@ import type {
 	GetBenchmarkRubricPresetsData,
 	GetBenchmarkRubricPresetsErrors,
 	GetBenchmarkRubricPresetsResponses,
+	GetBenchmarkRunArtifactData,
+	GetBenchmarkRunArtifactErrors,
+	GetBenchmarkRunArtifactResponses,
 	GetBenchmarkRunData,
 	GetBenchmarkRunErrors,
 	GetBenchmarkRunResponses,
@@ -811,6 +814,9 @@ import type {
 	ListBenchmarkProjectsData,
 	ListBenchmarkProjectsErrors,
 	ListBenchmarkProjectsResponses,
+	ListBenchmarkReviewsData,
+	ListBenchmarkReviewsErrors,
+	ListBenchmarkReviewsResponses,
 	ListBenchmarkRunsData,
 	ListBenchmarkRunsErrors,
 	ListBenchmarkRunsResponses,
@@ -1303,6 +1309,9 @@ import type {
 	StopProcessCaptureData,
 	StopProcessCaptureErrors,
 	StopProcessCaptureResponses,
+	SubmitBenchmarkRunReviewData,
+	SubmitBenchmarkRunReviewErrors,
+	SubmitBenchmarkRunReviewResponses,
 	SuggestComparisonData,
 	SuggestComparisonErrors,
 	SuggestComparisonResponses,
@@ -1565,6 +1574,7 @@ import {
 	zGetBenchmarkPairwiseEstimateResponse,
 	zGetBenchmarkProjectResponse,
 	zGetBenchmarkRubricPresetsResponse,
+	zGetBenchmarkRunArtifactResponse,
 	zGetBenchmarkRunResponse,
 	zGetCloudSettingsResponse,
 	zGetComparisonResponse,
@@ -1678,6 +1688,7 @@ import {
 	zListBenchmarkCellsResponse,
 	zListBenchmarkComparisonsResponse,
 	zListBenchmarkProjectsResponse,
+	zListBenchmarkReviewsResponse,
 	zListBenchmarkRunsResponse,
 	zListBenchmarkTaskItemsResponse,
 	zListCaptureProcessesResponse,
@@ -1842,6 +1853,7 @@ import {
 	zSteerGraphWorkflowNodeRunResponse,
 	zStopExternalAppResponse,
 	zStopProcessCaptureResponse,
+	zSubmitBenchmarkRunReviewResponse,
 	zSuggestComparisonResponse,
 	zTriggerScheduledJobResponse,
 	zUnhandledExceptionProbeResponse,
@@ -3638,6 +3650,28 @@ export const startBenchmarkRunBatch = <ThrowOnError extends boolean = true>(
 		},
 	});
 
+export const listBenchmarkReviews = <ThrowOnError extends boolean = true>(
+	options: Options<ListBenchmarkReviewsData, ThrowOnError>,
+): RequestResult<ListBenchmarkReviewsResponses, ListBenchmarkReviewsErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListBenchmarkReviewsResponses, ListBenchmarkReviewsErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zListBenchmarkReviewsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/benchmarks/reviews",
+		...options,
+	});
+
 export const getBenchmarkRubricPresets = <ThrowOnError extends boolean = true>(
 	options?: Options<GetBenchmarkRubricPresetsData, ThrowOnError>,
 ): RequestResult<GetBenchmarkRubricPresetsResponses, GetBenchmarkRubricPresetsErrors, ThrowOnError> =>
@@ -3707,6 +3741,28 @@ export const getBenchmarkRun = <ThrowOnError extends boolean = true>(
 		...options,
 	});
 
+export const getBenchmarkRunArtifact = <ThrowOnError extends boolean = true>(
+	options: Options<GetBenchmarkRunArtifactData, ThrowOnError>,
+): RequestResult<GetBenchmarkRunArtifactResponses, GetBenchmarkRunArtifactErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetBenchmarkRunArtifactResponses, GetBenchmarkRunArtifactErrors, ThrowOnError>({
+		responseType: "text",
+		responseValidator: async (data) => await zGetBenchmarkRunArtifactResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/benchmarks/runs/{runId}/artifacts/{artifactId}",
+		...options,
+	});
+
 export const cancelBenchmarkRun = <ThrowOnError extends boolean = true>(
 	options: Options<CancelBenchmarkRunData, ThrowOnError>,
 ): RequestResult<CancelBenchmarkRunResponses, CancelBenchmarkRunErrors, ThrowOnError> =>
@@ -3773,6 +3829,32 @@ export const rejudgeBenchmarkRun = <ThrowOnError extends boolean = true>(
 			},
 		],
 		url: "/api/local/v1/benchmarks/runs/{runId}/rejudge",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const submitBenchmarkRunReview = <ThrowOnError extends boolean = true>(
+	options: Options<SubmitBenchmarkRunReviewData, ThrowOnError>,
+): RequestResult<SubmitBenchmarkRunReviewResponses, SubmitBenchmarkRunReviewErrors, ThrowOnError> =>
+	(options.client ?? client).put<SubmitBenchmarkRunReviewResponses, SubmitBenchmarkRunReviewErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zSubmitBenchmarkRunReviewResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/benchmarks/runs/{runId}/review",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

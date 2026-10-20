@@ -260,6 +260,24 @@ describe("BenchmarkCellsTable", () => {
 		await waitFor(() => expect(screen.getByTestId("benchmark-cell-recall-cell:probe").textContent).toBe("1 of 1 needles"));
 	});
 
+	// A cell held back only by missing reviews needs a reviewer, not another measurement: re-running would make one
+	// more run waiting for the same review.
+	it("sends a review-pending combination to its review, never to a re-run of an item", () => {
+		const awaiting = benchmarkCellFixture({
+			cellKey: "cell:review",
+			quality: null,
+			rank: null,
+			rankExclusionReason: "review-pending",
+		});
+		render({ cells: [awaiting], items: [benchmarkTaskItemFixture()], scorableItemCount: 1 });
+
+		expect(screen.getByTestId("benchmark-cell-exclusion-cell:review").textContent).toBe("awaiting review");
+		fireEvent.click(screen.getByTestId("benchmark-cell-toggle-cell:review"));
+		const action = screen.getByTestId("benchmark-cell-action-cell:review").textContent;
+		expect(action).toContain("Open its review");
+		expect(action).not.toContain("Run that task item again");
+	});
+
 	it("says so when a project has nothing measured yet", () => {
 		render({ cells: [] });
 

@@ -62,6 +62,7 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
     private readonly IRuntimeEnvironmentFactsProvider _environmentFacts;
     private readonly BenchmarkAdmissionRetry _admissionRetry;
     private readonly IBenchmarkPythonTestsVerifier _pythonTests;
+    private readonly BenchmarkRunArtifactBlobStore _artifacts;
     private readonly ILogger<BenchmarkJudgeExecutor> _logger;
 
     public BenchmarkJudgeExecutor(IBenchmarkStore store,
@@ -79,6 +80,7 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
         IRuntimeEnvironmentFactsProvider environmentFacts,
         BenchmarkAdmissionRetry admissionRetry,
         IBenchmarkPythonTestsVerifier pythonTests,
+        BenchmarkRunArtifactBlobStore artifacts,
         ILogger<BenchmarkJudgeExecutor> logger)
     {
         _store = store;
@@ -96,6 +98,7 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
         _environmentFacts = environmentFacts;
         _admissionRetry = admissionRetry;
         _pythonTests = pythonTests;
+        _artifacts = artifacts;
         _logger = logger;
     }
 
@@ -163,14 +166,24 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
             var verifiable = policy.Rubric.Criteria.Where(static criterion => BenchmarkJudgeCriterionKinds.IsVerifiable(criterion.Kind)).ToArray();
             var answerText = verifiable.Length == 0 ? string.Empty : BenchmarkJudgeVerifiers.AnswerText(graded);
             List<BenchmarkJudgeVerifierResultV1> verified = [];
+            List<BenchmarkPythonTestsOutcome> executed = [];
             foreach (var criterion in verifiable)
             {
                 // Two paths, because only one of them can be unscorable: a pure verifier is a function of the answer text, while
                 // pythonTests runs the answer's code in the compute sandbox and refuses fail-closed — run left unranked — on a host that cannot be trusted to run it.
-                verified.Add(BenchmarkJudgeCriterionKinds.IsExecutionVerified(criterion.Kind)
-                    ? await _pythonTests.VerifyAsync(criterion, answerText, token)
-                    : BenchmarkJudgeVerifiers.Verify(criterion, answerText));
+                if (BenchmarkJudgeCriterionKinds.IsExecutionVerified(criterion.Kind))
+                {
+                    var outcome = await _pythonTests.VerifyAsync(criterion, answerText, token);
+                    executed.Add(outcome);
+                    verified.Add(outcome.Result);
+                }
+                else
+                {
+                    verified.Add(BenchmarkJudgeVerifiers.Verify(criterion, answerText));
+                }
             }
+
+            await RecordPythonTestsArtifactsAsync(work.RunId, attemptId, executed, token);
 
             IReadOnlyList<BenchmarkJudgeVerifierResultV1> verifierResults = verified;
             if (verifiable.Length == policy.Rubric.Criteria.Count)
@@ -331,6 +344,73 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
                 environment);
         }
     }
+
+    /// <summary>Stores each pythonTests run's raw streams, blob first and row second, before any judging step can fail.</summary>
+    /// <remarks>
+    ///     Its own short transaction, so the evidence survives a later judging failure. A refusal threw before this,
+    ///     so it leaves none.
+    /// </remarks>
+    private async Task RecordPythonTestsArtifactsAsync(Guid runId,
+        Guid attemptId,
+        IReadOnlyList<BenchmarkPythonTestsOutcome> outcomes,
+        CancellationToken cancellationToken)
+    {
+        if (outcomes.Count == 0)
+        {
+            return;
+        }
+
+        List<BenchmarkRunArtifactCommand> artifacts = [];
+        foreach (var outcome in outcomes)
+        {
+            artifacts.Add(await WriteArtifactAsync(runId, outcome.Result.Id, BenchmarkRunArtifactKinds.PythonTestsStdout, outcome.StandardOutput, cancellationToken));
+            artifacts.Add(await WriteArtifactAsync(runId, outcome.Result.Id, BenchmarkRunArtifactKinds.PythonTestsStderr, outcome.StandardError, cancellationToken));
+        }
+
+        _ = await _store.AddRunArtifactsAsync(runId, attemptId, artifacts, cancellationToken);
+    }
+
+    private async Task<BenchmarkRunArtifactCommand> WriteArtifactAsync(Guid runId,
+        string criterionId,
+        string kind,
+        string content,
+        CancellationToken cancellationToken)
+    {
+        var id = Guid.NewGuid();
+        var bytes = FitToArtifactCap(Encoding.UTF8.GetBytes(content));
+        return new BenchmarkRunArtifactCommand
+        {
+            Id = id,
+            CriterionId = criterionId,
+            Kind = kind,
+            MediaType = "text/plain; charset=utf-8",
+            ByteCount = bytes.Length,
+            ContentHash = await _artifacts.WriteAsync(runId, id, bytes, cancellationToken)
+        };
+    }
+
+    /// <summary>Keeps the head of a stream on a UTF-8 boundary plus a marker line, so it never exceeds the artifact cap.</summary>
+    /// <remarks>Sandbox streams can run to MiBs; the verdict is read from the parsed markers, never from the artifact.</remarks>
+    internal static byte[] FitToArtifactCap(byte[] bytes)
+    {
+        if (bytes.Length <= BenchmarkRunArtifactBlobStore.MaxArtifactBytes)
+        {
+            return bytes;
+        }
+
+        // Sized for the largest possible omitted count, so the marker always fits whatever is finally cut.
+        var markerBudget = Encoding.UTF8.GetByteCount(TruncationMarker(bytes.Length));
+        var keep = BenchmarkRunArtifactBlobStore.MaxArtifactBytes - markerBudget;
+        while (keep > 0 && (bytes[keep] & 0xC0) == 0x80)
+        {
+            keep--;
+        }
+
+        return [.. bytes.AsSpan(0, keep), .. Encoding.UTF8.GetBytes(TruncationMarker(bytes.Length - keep))];
+    }
+
+    private static string TruncationMarker(long omittedBytes) =>
+        string.Create(CultureInfo.InvariantCulture, $"\n[truncated: {omittedBytes} bytes omitted]\n");
 
     /// <summary>
     ///     The policy as THIS run's task item asks it: each criterion's verifier config resolved as item override ??

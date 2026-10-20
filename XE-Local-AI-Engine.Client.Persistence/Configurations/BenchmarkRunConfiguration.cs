@@ -44,6 +44,8 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
         builder.Property(entity => entity.GenerationMs).HasColumnName("generation_ms");
         builder.Property(entity => entity.CachedPromptTokens).HasColumnName("cached_prompt_tokens");
         builder.Property(entity => entity.SegmentCount).HasColumnName("segment_count");
+        builder.Property(entity => entity.ToolCallCount).HasColumnName("tool_call_count");
+        builder.Property(entity => entity.ToolTimeMs).HasColumnName("tool_time_ms");
         builder.Property(entity => entity.OutputPartsJson).HasColumnName("output_parts_json");
         builder.Property(entity => entity.LastStreamSequence).HasColumnName("last_stream_sequence");
         builder.Property(entity => entity.UserScore).HasColumnName("user_score");

@@ -240,7 +240,10 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
                     // A generation cut off at the token budget still SUCCEEDS — the measurement is real — but the run has to carry why it stopped,
                     // or the ranking and the judge grade an incomplete answer as if it were a finished one.
                     PrimaryStopReason = stopReason,
-                    Throughput = throughput
+                    Throughput = throughput,
+                    // A plain sum: AllowConcurrentInvocation is false, so calls never overlap. An unmeasured call counts but adds no time; 0 and 0 = no calls.
+                    ToolCallCount = parts.Count(static part => part.Kind == BenchmarkOutputParts.ToolCallKind),
+                    ToolTimeMs = parts.Where(static part => part.Kind == BenchmarkOutputParts.ToolResultKind).Sum(static part => part.DurationMs ?? 0)
                 });
             _events.PublishReserved(metricsEvent);
             _events.PublishReserved(terminalEvent with

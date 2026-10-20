@@ -166,6 +166,7 @@ import {
 	getBenchmarkProject,
 	getBenchmarkRubricPresets,
 	getBenchmarkRun,
+	getBenchmarkRunArtifact,
 	getCloudSettings,
 	getComparison,
 	getCustomTool,
@@ -278,6 +279,7 @@ import {
 	listBenchmarkCells,
 	listBenchmarkComparisons,
 	listBenchmarkProjects,
+	listBenchmarkReviews,
 	listBenchmarkRuns,
 	listBenchmarkTaskItems,
 	listCaptureProcesses,
@@ -443,6 +445,7 @@ import {
 	steerGraphWorkflowNodeRun,
 	stopExternalApp,
 	stopProcessCapture,
+	submitBenchmarkRunReview,
 	suggestComparison,
 	triggerScheduledJob,
 	unhandledExceptionProbe,
@@ -878,6 +881,9 @@ import type {
 	GetBenchmarkProjectResponse,
 	GetBenchmarkRubricPresetsData,
 	GetBenchmarkRubricPresetsResponse,
+	GetBenchmarkRunArtifactData,
+	GetBenchmarkRunArtifactError,
+	GetBenchmarkRunArtifactResponse,
 	GetBenchmarkRunData,
 	GetBenchmarkRunError,
 	GetBenchmarkRunResponse,
@@ -1129,6 +1135,9 @@ import type {
 	ListBenchmarkComparisonsResponse,
 	ListBenchmarkProjectsData,
 	ListBenchmarkProjectsResponse,
+	ListBenchmarkReviewsData,
+	ListBenchmarkReviewsError,
+	ListBenchmarkReviewsResponse,
 	ListBenchmarkRunsData,
 	ListBenchmarkRunsError,
 	ListBenchmarkRunsResponse,
@@ -1550,6 +1559,9 @@ import type {
 	StopExternalAppResponse,
 	StopProcessCaptureData,
 	StopProcessCaptureResponse,
+	SubmitBenchmarkRunReviewData,
+	SubmitBenchmarkRunReviewError,
+	SubmitBenchmarkRunReviewResponse,
 	SuggestComparisonData,
 	SuggestComparisonError,
 	SuggestComparisonResponse,
@@ -3525,6 +3537,67 @@ export const startBenchmarkRunBatchMutation = (
 	return mutationOptions;
 };
 
+export const listBenchmarkReviewsQueryKey = (options: Options<ListBenchmarkReviewsData>) =>
+	createQueryKey("listBenchmarkReviews", options, false, ["Benchmarks"]);
+
+export const listBenchmarkReviewsOptions = (options: Options<ListBenchmarkReviewsData>) =>
+	queryOptions<
+		ListBenchmarkReviewsResponse,
+		AxiosError<ListBenchmarkReviewsError>,
+		ListBenchmarkReviewsResponse,
+		ReturnType<typeof listBenchmarkReviewsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listBenchmarkReviews({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listBenchmarkReviewsQueryKey(options),
+	});
+
+export const listBenchmarkReviewsInfiniteQueryKey = (
+	options: Options<ListBenchmarkReviewsData>,
+): QueryKey<Options<ListBenchmarkReviewsData>> => createQueryKey("listBenchmarkReviews", options, true, ["Benchmarks"]);
+
+export const listBenchmarkReviewsInfiniteOptions = (options: Options<ListBenchmarkReviewsData>) => {
+	const opts = infiniteQueryOptions<
+		ListBenchmarkReviewsResponse,
+		AxiosError<ListBenchmarkReviewsError>,
+		InfiniteData<ListBenchmarkReviewsResponse>,
+		QueryKey<Options<ListBenchmarkReviewsData>>,
+		number | Pick<QueryKey<Options<ListBenchmarkReviewsData>>[0], "body" | "headers" | "path" | "query">
+	>(
+		// @ts-ignore
+		{
+			queryFn: async ({ pageParam, queryKey, signal }) => {
+				// @ts-ignore
+				const page: Pick<QueryKey<Options<ListBenchmarkReviewsData>>[0], "body" | "headers" | "path" | "query"> =
+					typeof pageParam === "object"
+						? pageParam
+						: {
+								query: {
+									page: pageParam,
+								},
+							};
+				const params = createInfiniteParams(queryKey, page);
+				const { data } = await listBenchmarkReviews({
+					...options,
+					...params,
+					signal,
+					throwOnError: true,
+				});
+				return data;
+			},
+			queryKey: listBenchmarkReviewsInfiniteQueryKey(options),
+		},
+	);
+	return opts as Omit<typeof opts, "initialData">;
+};
+
 export const getBenchmarkRubricPresetsQueryKey = (options?: Options<GetBenchmarkRubricPresetsData>) =>
 	createQueryKey("getBenchmarkRubricPresets", options, false, ["Benchmarks"]);
 
@@ -3589,6 +3662,28 @@ export const getBenchmarkRunOptions = (options: Options<GetBenchmarkRunData>) =>
 		queryKey: getBenchmarkRunQueryKey(options),
 	});
 
+export const getBenchmarkRunArtifactQueryKey = (options: Options<GetBenchmarkRunArtifactData>) =>
+	createQueryKey("getBenchmarkRunArtifact", options, false, ["Benchmarks"]);
+
+export const getBenchmarkRunArtifactOptions = (options: Options<GetBenchmarkRunArtifactData>) =>
+	queryOptions<
+		GetBenchmarkRunArtifactResponse,
+		AxiosError<GetBenchmarkRunArtifactError>,
+		GetBenchmarkRunArtifactResponse,
+		ReturnType<typeof getBenchmarkRunArtifactQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getBenchmarkRunArtifact({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getBenchmarkRunArtifactQueryKey(options),
+	});
+
 export const cancelBenchmarkRunMutation = (
 	options?: Partial<Options<CancelBenchmarkRunData>>,
 ): UseMutationOptions<CancelBenchmarkRunResponse, AxiosError<CancelBenchmarkRunError>, Options<CancelBenchmarkRunData>> => {
@@ -3643,6 +3738,30 @@ export const rejudgeBenchmarkRunMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await rejudgeBenchmarkRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const submitBenchmarkRunReviewMutation = (
+	options?: Partial<Options<SubmitBenchmarkRunReviewData>>,
+): UseMutationOptions<
+	SubmitBenchmarkRunReviewResponse,
+	AxiosError<SubmitBenchmarkRunReviewError>,
+	Options<SubmitBenchmarkRunReviewData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		SubmitBenchmarkRunReviewResponse,
+		AxiosError<SubmitBenchmarkRunReviewError>,
+		Options<SubmitBenchmarkRunReviewData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await submitBenchmarkRunReview({
 				...options,
 				...fnOptions,
 				throwOnError: true,

@@ -6620,7 +6620,7 @@ public sealed class InvocationRunnerTests
         return dispatcher;
     }
 
-    private static InvocationRunner CreateRunner(IInvocationAgentFactory? invocationAgentFactory = null,
+    internal static InvocationRunner CreateRunner(IInvocationAgentFactory? invocationAgentFactory = null,
         IRuntimePackageValidator? validator = null,
         ICapabilityReporter? capabilityReporter = null,
         WorkerNodeOptions? workerOptions = null,
@@ -6777,7 +6777,7 @@ public sealed class InvocationRunnerTests
         return services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
     }
 
-    private static async Task RunAsync(InvocationRunner runner,
+    internal static async Task RunAsync(InvocationRunner runner,
         RuntimePackage package,
         IInvocationGenerationAdmissionPolicy? generationAdmissionPolicy = null,
         CancellationToken cancellationToken = default)

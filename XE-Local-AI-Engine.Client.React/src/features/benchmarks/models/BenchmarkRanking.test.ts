@@ -108,6 +108,7 @@ describe("rankExclusionAction", () => {
 			"enable-compute",
 			"fix-override",
 			"remove-runs",
+			"open-review",
 			"none",
 		]).toContain(rankExclusionAction(reason));
 	});
@@ -134,6 +135,10 @@ describe("rankExclusionAction", () => {
 		["incomplete", "rerun"],
 		// The one exclusion that is not a problem: a warm-up is excluded because that is what it is for.
 		["warmup", "none"],
+		// A human decision is what is missing: re-running only makes another run waiting for the same review.
+		["review-pending", "open-review"],
+		["review-stale", "open-review"],
+		["review-rejected", "open-review"],
 	] as const)("maps %s to %s", (reason, action) => {
 		expect(rankExclusionAction(reason)).toBe(action);
 	});

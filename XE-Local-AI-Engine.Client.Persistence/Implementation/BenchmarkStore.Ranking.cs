@@ -16,14 +16,22 @@ public sealed partial class BenchmarkStore
     /// </remarks>
     private async Task<BenchmarkRunRecord> ToRecordWithJudgeAsync(BenchmarkRun run, CancellationToken cancellationToken)
     {
-        return ToRecordWithJudge(run, await LoadJudgeViewsAsync([run.Id], cancellationToken));
+        var gates = await LoadReviewGatesAsync([run.Id], cancellationToken);
+        var review = await LoadReviewAsync(run.Id, cancellationToken);
+        return ToRecordWithJudge(run, await LoadJudgeViewsAsync([run.Id], cancellationToken), gates.GetValueOrDefault(run.Id)) with
+        {
+            ReviewState = review?.State,
+            ReviewPolicyCurrent = await LoadReviewPolicyCurrentAsync(run.ProjectId, review, cancellationToken),
+            Review = review,
+            Artifacts = await GetRunArtifactsAsync(run.Id, cancellationToken)
+        };
     }
 
     /// <summary>
     ///     The same record projection against views already loaded, so a batch can read every run's judge state in one
     ///     query and still produce records identical to the single-run path.
     /// </summary>
-    private static BenchmarkRunRecord ToRecordWithJudge(BenchmarkRun run, IReadOnlyDictionary<Guid, BenchmarkRunJudgeView> views)
+    private static BenchmarkRunRecord ToRecordWithJudge(BenchmarkRun run, IReadOnlyDictionary<Guid, BenchmarkRunJudgeView> views, ReviewGate review)
     {
         // The write paths that project a run they have just touched compare it against nothing: item edits are refused while any of the project's work is Queued or
         // Running, so a row a write just moved cannot be stale. The ranking read and the single-run read do the real comparison.
@@ -31,13 +39,62 @@ public sealed partial class BenchmarkStore
             run.UserScore,
             run.IsWarmup,
             run.PrimaryStopReason,
-            BenchmarkRunIdentity.Unstamped);
+            BenchmarkRunIdentity.Unstamped,
+            review);
         return ToRecord(run) with
         {
             Judge = judge,
             QualityScore = qualityScore,
             QualityScoreSource = qualityScoreSource
         };
+    }
+
+    /// <summary>
+    ///     Each run's place in its project's review phase, from flat columns only. A run absent from the result is <see cref="ReviewGate.NotApplicable" />.
+    /// </summary>
+    /// <remarks>
+    ///     The gate applies to succeeded scoring runs of a review project: a leaf that counts toward the score, or no item at all. A decision under a revision
+    ///     other than the project's current one (both NULL when there is no policy) is stale, whatever it decided.
+    /// </remarks>
+    private async Task<IReadOnlyDictionary<Guid, ReviewGate>> LoadReviewGatesAsync(IReadOnlyList<Guid> runIds, CancellationToken cancellationToken)
+    {
+        if (runIds.Count == 0)
+        {
+            return new Dictionary<Guid, ReviewGate>();
+        }
+
+        var rows = await (from run in _dbContext.BenchmarkRuns.AsNoTracking()
+            join project in _dbContext.BenchmarkProjects.AsNoTracking() on run.ProjectId equals project.Id
+            where runIds.Contains(run.Id)
+                  && project.RequiresReview
+                  && run.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded
+                  && (run.TaskItemId == null
+                      || _dbContext.BenchmarkTaskItems.Any(item => item.Id == run.TaskItemId
+                                                                  && item.Kind != BenchmarkTaskItemKinds.Niah
+                                                                  && item.CountsTowardScore))
+            join review in _dbContext.BenchmarkRunReviews.AsNoTracking() on run.Id equals review.RunId into reviews
+            from review in reviews.DefaultIfEmpty()
+            select new
+            {
+                run.Id,
+                ReviewState = review == null ? null : review.State,
+                Stale = review != null && review.PolicyRevisionId != project.CurrentJudgePolicyRevisionId,
+                JudgingCurrent = project.CurrentJudgePolicyRevisionId == null
+                                 || _dbContext.BenchmarkJudgeAttempts.Any(attempt => attempt.Id == run.CurrentJudgeAttemptId
+                                                                                    && attempt.Status == BenchmarkJudgeAttemptStatus.Succeeded
+                                                                                    && attempt.PolicyRevisionId == project.CurrentJudgePolicyRevisionId)
+            }).ToArrayAsync(cancellationToken);
+
+        // The same rule the review inbox and the review service apply: an open review waits for its judging to succeed under the current revision first.
+        return rows.ToDictionary(static row => row.Id,
+            static row => row switch
+            {
+                { ReviewState: null, JudgingCurrent: false } or { Stale: true, JudgingCurrent: false } => ReviewGate.AwaitingJudge,
+                { ReviewState: null } => ReviewGate.Pending,
+                { Stale: true } => ReviewGate.Stale,
+                { ReviewState: BenchmarkReviewStates.Approved } => ReviewGate.Approved,
+                _ => ReviewGate.Rejected
+            });
     }
 
     /// <summary>
@@ -117,6 +174,7 @@ public sealed partial class BenchmarkStore
                                              .FirstOrDefaultAsync(cancellationToken);
 
         var views = await LoadJudgeViewsAsync([.. scored.Select(static run => run.Id)], cancellationToken);
+        var gates = await LoadReviewGatesAsync([.. scored.Select(static run => run.Id)], cancellationToken);
         var current = await GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken);
         var pairwise = await LoadPairwiseRankingAsync(current, cancellationToken);
 
@@ -138,10 +196,15 @@ public sealed partial class BenchmarkStore
                 run.IsWarmup,
                 run.PrimaryStopReason,
                 identity,
+                gates.GetValueOrDefault(run.Id),
                 ToPairwiseRunView(pairwise, run.Id));
 
             rankable[run.Id] = runRankable;
-            anyScore[run.Id] = run.UserScore is not null || judge.Score is not null || PairwiseScoreFor(pairwise, run.Id)?.Score is not null;
+
+            // A gated run can only ever rank on its review, so a judge score must not make its cell look scored.
+            anyScore[run.Id] = gates.GetValueOrDefault(run.Id) == ReviewGate.NotApplicable
+                ? run.UserScore is not null || judge.Score is not null || PairwiseScoreFor(pairwise, run.Id)?.Score is not null
+                : run.UserScore is not null;
             if (identity.SetRevised)
             {
                 _ = setRevised.Add(run.Id);
@@ -156,6 +219,14 @@ public sealed partial class BenchmarkStore
                 CellQuality = null
             };
         }
+
+        // An open review closes the gap, including on a truncated answer: an approval's user score outranks truncation. A stale identity stamp it cannot close.
+        bool IsReviewGap(Guid runId) =>
+            gates.GetValueOrDefault(runId) is ReviewGate.Pending or ReviewGate.Stale
+            && runs[runId].Judge.RankExclusionReason is BenchmarkRunJudgeStates.ReasonReviewPending
+                or BenchmarkRunJudgeStates.ReasonReviewStale
+                or BenchmarkRunJudgeStates.ReasonTruncated
+                or BenchmarkRunJudgeStates.ReasonIncomplete;
 
         // Warm-ups are dropped BEFORE grouping: one sits at repeat index 0, so it forms a cell of its own that could only ever be complete if every leaf item also
         // got a warm-up run, and would then sit in the denominator forever. Not a contender at cell granularity, for the reason it is not one at run granularity.
@@ -210,10 +281,13 @@ public sealed partial class BenchmarkStore
                            && Array.TrueForAll(contributing, member => rankable[member.Id]);
             if (!complete)
             {
+                // Every item answered and every gap a review the operator still owes: the inbox closes it, a re-run would not. A missing item stays incomplete.
+                var reviewGapsOnly = scorableItemIds.All(covered.Contains)
+                                     && Array.TrueForAll(contributing, member => (rankable[member.Id] && runs[member.Id].QualityScore is not null) || IsReviewGap(member.Id));
                 cells[cell.Key] = new CellRanking
                 {
                     Quality = null,
-                    Reason = BenchmarkRunJudgeStates.ReasonItemIncomplete,
+                    Reason = reviewGapsOnly ? BenchmarkRunJudgeStates.ReasonReviewPending : BenchmarkRunJudgeStates.ReasonItemIncomplete,
                     Countable = false
                 };
                 continue;

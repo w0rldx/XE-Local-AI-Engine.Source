@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 
 using FastEndpoints;
-using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
@@ -36,7 +35,6 @@ public sealed class ScoreBenchmarkRunEndpoint : Endpoint<ScoreBenchmarkRunReques
         }
 
         var run = await _records.SetUserScoreAsync(req.RunId, score, req.ExpectedVersion, ct);
-        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct),
-            BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct))), ct);
+        await Send.OkAsync(await BenchmarkEndpointSupport.ToDetailAsync(_records, run, ct), ct);
     }
 }

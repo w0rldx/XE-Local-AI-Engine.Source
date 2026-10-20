@@ -239,6 +239,13 @@ public static class LocalApiRoutes
         public const string RunScore = "benchmarks/runs/{runId}/score";
         public const string RunRejudge = "benchmarks/runs/{runId}/rejudge";
 
+        // The reviewer's decision is its own sub-resource: in a review project it is the only writer of the run's user score, which the score route refuses there.
+        public const string RunReview = "benchmarks/runs/{runId}/review";
+
+        // The review inbox spans projects, so it hangs off the module root rather than one project.
+        public const string Reviews = "benchmarks/reviews";
+        public const string RunArtifactById = "benchmarks/runs/{runId}/artifacts/{artifactId}";
+
         // A project's task items are their own sub-resource, one level down from the project: a collection with its own lifecycle (add, edit, delete, reorder), and each
         // write recomputes the project's item-set hash, which is not something a field on the project PUT could express.
         public const string ProjectTaskItems = "benchmarks/projects/{projectId}/items";

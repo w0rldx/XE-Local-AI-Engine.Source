@@ -235,6 +235,160 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
         AssertEx.Equal(expected: 1, AssertEx.NotNull(page.RankCohort).RankedCount);
     }
 
+    [Test]
+    public async Task Cells_WhenOnlyGapsArePendingReviews_ReportReviewPending()
+    {
+        await using var context = await CreateDatabaseAsync("cell-review-pending.sqlite");
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
+        var project = await CreateSuiteAsync(store, itemCount: 2, requiresReview: true);
+        int? unscored = null;
+        var cell = await ScoredCellAsync(store, project.Id, unscored, unscored);
+        _ = await store.SubmitReviewAsync(Approve(AssertEx.NotNull(await store.GetRunAsync(cell[0])), score: 70));
+
+        var page = await store.ListCellsAsync(project.Id);
+
+        var only = page.Cells.Single();
+        AssertEx.Equal(BenchmarkRunJudgeStates.ReasonReviewPending, only.RankExclusionReason, "Every item answered: the inbox closes this cell, a re-run would not.");
+        AssertEx.Null(only.Quality);
+        AssertEx.Equal(BenchmarkRunJudgeStates.ReasonReviewPending, only.Items.Single(item => item.RunId == cell[1]).RankExclusionReason);
+        AssertEx.Equal<int?>(70, only.Items.Single(item => item.RunId == cell[0]).QualityScore, "The approved item keeps its own score.");
+        AssertEx.Equal(expected: 0, AssertEx.NotNull(page.RankCohort).TotalScored, "A cell waiting on a review is not yet scored.");
+    }
+
+    [Test]
+    public async Task Cells_WhenOnlyGapIsATruncatedPendingReview_ReportsReviewPending()
+    {
+        // An approval's user score outranks truncation, so the review still closes this cell; a re-run is not what it needs.
+        await using var context = await CreateDatabaseAsync("cell-review-truncated.sqlite");
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
+        var project = await CreateSuiteAsync(store, itemCount: 2, requiresReview: true);
+        var cell = await SucceededCellAsync(store, project.Id, "stop", "length");
+        _ = await store.SubmitReviewAsync(Approve(AssertEx.NotNull(await store.GetRunAsync(cell[0])), score: 70));
+
+        var page = await store.ListCellsAsync(project.Id);
+
+        var only = page.Cells.Single();
+        AssertEx.Equal(BenchmarkRunJudgeStates.ReasonTruncated, only.Items.Single(item => item.RunId == cell[1]).RankExclusionReason,
+            "The run keeps its own, more specific reason.");
+        AssertEx.Equal(BenchmarkRunJudgeStates.ReasonReviewPending, only.RankExclusionReason);
+    }
+
+    [Test]
+    public async Task Cells_WhenAnItemIsMissingAndAReviewPending_ReportItemIncomplete()
+    {
+        await using var context = await CreateDatabaseAsync("cell-review-missing.sqlite");
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
+        var project = await CreateSuiteAsync(store, itemCount: 2, requiresReview: true);
+        var first = (await store.ListTaskItemsAsync(project.Id)).Single(static item => item.Index == 0);
+        var run = await store.StartRunAsync(NewRun(project) with
+        {
+            TaskItemId = first.Id,
+            TaskItemIndex = first.Index,
+            CellKey = "cell:" + Guid.NewGuid().ToString("D") + ":1",
+            TaskInputHash = first.InputHash,
+            TaskItemSetHash = project.TaskItemSetHash
+        });
+        var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
+        _ = await store.MarkPrimarySucceededAsync(PrimarySuccess(run.Id, claimed.Run.Version) with { PrimaryStopReason = "stop" });
+
+        var page = await store.ListCellsAsync(project.Id);
+
+        AssertEx.Equal(BenchmarkRunJudgeStates.ReasonItemIncomplete, page.Cells.Single().RankExclusionReason,
+            "A review cannot supply an answer that was never produced.");
+    }
+
+    [Test]
+    public async Task Cohort_WhenReviewProject_TotalScoredIgnoresJudgeScores()
+    {
+        await using var context = await CreateDatabaseAsync("cell-review-cohort.sqlite");
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
+        var project = await CreateSuiteAsync(store, itemCount: 1, requiresReview: true);
+        var activation = await store.ActivateJudgePolicyAsync(project.Id, project.Version, Encoding.UTF8.GetBytes("""{"rubric":"a"}"""), new string('1', count: 64));
+        _ = await JudgedSingleItemCellAsync(store, project.Id, activation.Revision.Id, judgeScore: 90);
+        var approved = await JudgedSingleItemCellAsync(store, project.Id, activation.Revision.Id, judgeScore: 80);
+        _ = await store.SubmitReviewAsync(Approve(approved, score: 50) with { PolicyRevisionId = activation.Revision.Id });
+
+        var page = await store.ListCellsAsync(project.Id);
+
+        AssertEx.Equal(expected: 1, AssertEx.NotNull(page.RankCohort).RankedCount);
+        AssertEx.Equal(expected: 1, page.RankCohort.TotalScored, "Only the reviewed cell counts: a judge score alone is not a score in a review project.");
+        AssertEx.Equal<int?>(50, page.Cells.Single(cell => cell.Items.Single().RunId == approved.Id).Quality);
+    }
+
+    /// <summary>One freeze of the whole suite into one cell, every primary succeeded with the stop reason at its item's position and nothing scored.</summary>
+    private static async Task<IReadOnlyList<Guid>> SucceededCellAsync(BenchmarkStore store, Guid projectId, params string[] stopReasons)
+    {
+        var project = AssertEx.NotNull(await store.GetProjectAsync(projectId));
+        var items = await store.ListTaskItemsAsync(projectId);
+        var key = "cell:" + Guid.NewGuid().ToString("D") + ":1";
+        var runs = await store.StartRunsAsync([
+            .. items.Select(item => NewRun(project) with
+            {
+                TaskItemId = item.Id,
+                TaskItemIndex = item.Index,
+                CellKey = key,
+                TaskInputHash = item.InputHash,
+                TaskItemSetHash = project.TaskItemSetHash
+            })
+        ], project.Version);
+        for (var index = 0; index < runs.Count; index++)
+        {
+            var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
+            AssertEx.Equal(runs[index].Id, claimed.RunId, "The queue is FIFO by insert order.");
+            _ = await store.MarkPrimarySucceededAsync(PrimarySuccess(claimed.RunId, claimed.Run.Version) with { PrimaryStopReason = stopReasons[index] });
+        }
+
+        return [.. runs.Select(static run => run.Id)];
+    }
+
+    private static BenchmarkReviewCommand Approve(BenchmarkRunRecord run, int score) =>
+        new()
+        {
+            RunId = run.Id,
+            ExpectedRunVersion = run.Version,
+            State = BenchmarkReviewStates.Approved,
+            Score = score
+        };
+
+    /// <summary>One single-item cell, judged to <paramref name="judgeScore" /> in the live cohort and not reviewed.</summary>
+    private static async Task<BenchmarkRunRecord> JudgedSingleItemCellAsync(BenchmarkStore store, Guid projectId, Guid revisionId, int judgeScore)
+    {
+        var project = AssertEx.NotNull(await store.GetProjectAsync(projectId));
+        var item = (await store.ListTaskItemsAsync(projectId)).Single();
+        var run = await store.StartRunAsync(NewRun(project) with
+        {
+            TaskItemId = item.Id,
+            TaskItemIndex = item.Index,
+            CellKey = "cell:" + Guid.NewGuid().ToString("D") + ":1",
+            TaskInputHash = item.InputHash,
+            TaskItemSetHash = project.TaskItemSetHash
+        });
+        var primary = AssertEx.NotNull(await store.ClaimNextAsync());
+        _ = await store.MarkPrimarySucceededAsync(PrimarySuccess(run.Id, primary.Run.Version) with
+        {
+            PrimaryStopReason = "stop",
+            JudgeAttempt = new BenchmarkJudgeAttemptSeed
+            {
+                ExpectedJudgePolicyRevisionId = revisionId,
+                RuntimeJson = Encoding.UTF8.GetBytes("""{"judgeRuntime":1}""")
+            }
+        });
+        var judge = AssertEx.NotNull(await store.ClaimNextAsync());
+        return await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand
+        {
+            RunId = run.Id,
+            ExpectedWorkVersion = judge.Version,
+            JudgeResultJson = Encoding.UTF8.GetBytes("{}"),
+            LastStreamSequence = 5,
+            Score = judgeScore,
+            VerifiedExecutionKey = "verified"
+        });
+    }
+
+    private static async Task<BenchmarkProjectRecord> CreateSuiteAsync(BenchmarkStore store, int itemCount, bool requiresReview) =>
+        await store.CreateProjectAsync(NewProject() with { RequiresReview = requiresReview },
+            initialItems: [.. Enumerable.Range(0, itemCount).Select(index => Prompt("question " + index))]);
+
     private static async Task<BenchmarkProjectRecord> CreateSuiteAsync(BenchmarkStore store, int itemCount) =>
         await store.CreateProjectAsync(NewProject(),
             initialItems: [.. Enumerable.Range(0, itemCount).Select(index => Prompt("question " + index))]);

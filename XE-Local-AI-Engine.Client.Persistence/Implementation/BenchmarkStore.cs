@@ -198,7 +198,8 @@ public sealed partial class BenchmarkStore : IBenchmarkStore
             FidelityChunks = entity.FidelityChunks,
             FidelityKldBaseModelName = entity.FidelityKldBaseModelName,
             FidelityKldBaseFingerprint = entity.FidelityKldBaseFingerprint,
-            TaskItemSetHash = entity.TaskItemSetHash
+            TaskItemSetHash = entity.TaskItemSetHash,
+            RequiresReview = entity.RequiresReview
         };
 
     // One place writes the seven throughput columns, so the success path and the cancel-reset path can never disagree
@@ -281,7 +282,9 @@ public sealed partial class BenchmarkStore : IBenchmarkStore
             TaskItemIndex = entity.TaskItemIndex,
             CellKey = entity.CellKey,
             TaskInputHash = entity.TaskInputHash,
-            TaskItemSetHash = entity.TaskItemSetHash
+            TaskItemSetHash = entity.TaskItemSetHash,
+            ToolCallCount = entity.ToolCallCount,
+            ToolTimeMs = entity.ToolTimeMs
         };
 
     /// <summary>

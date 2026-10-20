@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 
 using FastEndpoints;
-using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
@@ -34,7 +33,6 @@ public sealed class GetBenchmarkRunEndpoint : Endpoint<BenchmarkRunRouteRequest,
         }
 
         // A detail response is the only place the verdict is decrypted: a list of runs must not decrypt one blob per row.
-        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct),
-            BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct))), ct);
+        await Send.OkAsync(await BenchmarkEndpointSupport.ToDetailAsync(_records, run, ct), ct);
     }
 }

@@ -3,16 +3,20 @@ import { useAgentDefinitions } from "@/features/agents/queries/useAgentDefinitio
 import { BenchmarkPageDialogs } from "@/features/benchmarks/components/BenchmarkPageDialogs";
 import { BenchmarkProjectEditorDialog } from "@/features/benchmarks/components/BenchmarkProjectEditorDialog";
 import { BenchmarkProjectWorkspace } from "@/features/benchmarks/components/BenchmarkProjectWorkspace";
+import { BenchmarkReviewInbox } from "@/features/benchmarks/components/BenchmarkReviewInbox";
 import { BenchmarkRunResults } from "@/features/benchmarks/components/BenchmarkRunResults";
 import { type BenchmarksPageProps, useBenchmarksPageController } from "@/features/benchmarks/hooks/useBenchmarksPageController";
 
 export function BenchmarksPage(props: BenchmarksPageProps = {}) {
 	const controller = useBenchmarksPageController(props);
 	const agentsQuery = useAgentDefinitions();
+	// Mounted only when some project asks for review, so a node without one never reads the inbox at all.
+	const reviewProjects = (controller.projectsQuery.data ?? []).filter((project) => project.requiresReview);
 	return (
 		<PageShell>
 			<BenchmarkProjectWorkspace controller={controller} />
 			<BenchmarkRunResults controller={controller} />
+			{reviewProjects.length > 0 ? <BenchmarkReviewInbox projects={reviewProjects} /> : null}
 			<BenchmarkProjectEditorDialog
 				key={`${controller.editorMode}-${controller.detail?.id ?? "new"}`}
 				mode={controller.editorMode}

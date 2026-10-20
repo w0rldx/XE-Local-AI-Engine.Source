@@ -148,3 +148,19 @@ log, not from the "total state size" of the save line. **Prevents:** a budget th
 because on hybrid models each entry also carries context checkpoints (a 668 MiB logged state was a 1266.8 MiB entry on
 the 27B, 2026-10-19). **Authority:** `LlamaServerSupervisorOptions.ChatCacheRamMiB`; the `--cache-ram` entry in
 `docs/wiki/reference/03-llama-server-launch-flags.md`.
+
+### Tool timing is stripped by `BenchmarkOutputParts.ForJudge` before any judge payload is built
+
+**Rule:** a benchmark output-part field that differs between two runs of the same answer (a duration, a timestamp) is
+cleared in `BenchmarkOutputParts.ForJudge`, every judge-facing projection of the parts goes through it, and the field
+is `[JsonIgnore(WhenWritingNull)]` so a cleared copy serializes as it did before the field existed. **Prevents:** a
+judge prompt that changes on every run of an identical answer, so judging is not reproducible and a re-judge disagrees
+with its own first pass. **Authority:** `BenchmarkOutputParts.ForJudge`; `BenchmarkOutputPartsTests`.
+
+### Tool execution time is measured in the function invoker, never from the lifecycle gap
+
+**Rule:** time a tool only in the `FunctionInvoker` set in `AgentServiceCollectionExtensions.DecorateChatClientPipeline`,
+record it in `ToolExecutionTimingScope`, and read it where the completed lifecycle event is built. Never subtract the
+`Requested` and `Completed` events of `InvocationRunner.StreamLoop`, and never read `ToolInvocationObservabilityChatClient`'s
+`tool.duration_ms` as execution time. **Prevents:** a tool time that includes the model's streaming tail and every sibling
+call of the round, so a fast tool reports seconds. **Authority:** `ToolExecutionTimingScope`; `ToolExecutionTimingTests`.

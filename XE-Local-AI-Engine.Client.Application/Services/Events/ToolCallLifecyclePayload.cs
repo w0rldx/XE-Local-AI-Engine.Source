@@ -37,6 +37,12 @@ public sealed record ToolCallLifecyclePayload
     ///     a placeholder. In-process only: never serialized onto the stream.
     /// </summary>
     public IReadOnlyList<DataContent> Media { get; init; } = [];
+
+    /// <summary>
+    ///     How long the tool itself executed, measured by the function invoker, for the completed phase. Null when nothing
+    ///     was measured (a provider-side or id-less call) and for the requested phase; never 0 as a stand-in.
+    /// </summary>
+    public long? DurationMs { get; init; }
 }
 
 /// <summary>

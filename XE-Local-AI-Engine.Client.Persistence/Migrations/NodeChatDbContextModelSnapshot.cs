@@ -1511,6 +1511,12 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("reasoning_budget_tokens");
 
+                    b.Property<bool>("RequiresReview")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("requires_review");
+
                     b.Property<string>("TaskItemSetHash")
                         .HasMaxLength(67)
                         .HasColumnType("TEXT")
@@ -1872,6 +1878,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("REAL")
                         .HasColumnName("tokens_per_second");
 
+                    b.Property<int?>("ToolCallCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("tool_call_count");
+
+                    b.Property<long?>("ToolTimeMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("tool_time_ms");
+
                     b.Property<double?>("TopTokenAgreement")
                         .HasColumnType("REAL")
                         .HasColumnName("top_token_agreement");
@@ -1921,6 +1935,135 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                             t.HasCheckConstraint("CK_benchmark_runs_requested_context", "requested_context_tokens > 0");
 
                             t.HasCheckConstraint("CK_benchmark_runs_user_score", "user_score IS NULL OR (user_score >= 0 AND user_score <= 100)");
+                        });
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkRunArtifact", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long>("ByteCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("byte_count");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("content_hash");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("CriterionId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("criterion_id");
+
+                    b.Property<Guid>("JudgeAttemptId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("judge_attempt_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("MediaType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("media_type");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("run_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId")
+                        .HasDatabaseName("ix_benchmark_run_artifacts_run_id");
+
+                    b.HasIndex("JudgeAttemptId", "CriterionId", "Kind")
+                        .IsUnique()
+                        .HasDatabaseName("ux_benchmark_run_artifacts_attempt_criterion_kind");
+
+                    b.ToTable("benchmark_run_artifacts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_benchmark_run_artifacts_byte_count", "byte_count >= 0");
+
+                            t.HasCheckConstraint("CK_benchmark_run_artifacts_kind", "kind IN ('pythonTestsStdout', 'pythonTestsStderr')");
+                        });
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkRunReview", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("CriteriaScoresJson")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("criteria_scores_json");
+
+                    b.Property<byte[]>("NotesJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("notes_json");
+
+                    b.Property<Guid?>("PolicyRevisionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("policy_revision_id");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("run_id");
+
+                    b.Property<int?>("Score")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("score");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("state");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PolicyRevisionId")
+                        .HasDatabaseName("ix_benchmark_run_reviews_policy_revision_id");
+
+                    b.HasIndex("RunId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_benchmark_run_reviews_run_id");
+
+                    b.ToTable("benchmark_run_reviews", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_benchmark_run_reviews_approved_score", "state = 'rejected' OR score IS NOT NULL");
+
+                            t.HasCheckConstraint("CK_benchmark_run_reviews_score", "score IS NULL OR (score >= 0 AND score <= 100)");
+
+                            t.HasCheckConstraint("CK_benchmark_run_reviews_state", "state IN ('approved', 'rejected')");
                         });
                 });
 
@@ -7593,6 +7736,30 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkProject", null)
                         .WithMany()
                         .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkRunArtifact", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkJudgeAttempt", null)
+                        .WithMany()
+                        .HasForeignKey("JudgeAttemptId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkRunReview", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

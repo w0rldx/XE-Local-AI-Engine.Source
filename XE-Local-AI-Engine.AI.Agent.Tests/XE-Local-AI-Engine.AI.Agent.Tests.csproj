@@ -29,6 +29,7 @@
     <Compile Include="..\XE-Local-AI-Engine.Tests\Testing\AssertionException.cs" Link="Testing\AssertionException.cs"/>
     <Compile Include="..\XE-Local-AI-Engine.Tests\Testing\AssertEx.cs" Link="Testing\AssertEx.cs"/>
     <Compile Include="..\XE-Local-AI-Engine.Client.Testing\Fakes\RecordingLogger.cs" Link="Testing\RecordingLogger.cs"/>
+    <Compile Include="..\XE-Local-AI-Engine.Client.Testing\Fakes\ManualTimeProvider.cs" Link="Testing\ManualTimeProvider.cs"/>
   </ItemGroup>
 
   <ItemGroup>

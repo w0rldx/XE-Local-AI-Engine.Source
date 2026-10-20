@@ -66,6 +66,12 @@ internal sealed record class BenchmarkProject
     /// </remarks>
     public string? TaskItemSetHash { get; set; }
 
+    /// <summary>
+    ///     Whether a scoring run ranks only on a reviewer's decision. Frozen with the rest of the project once runs
+    ///     exist. Plaintext, not sensitive.
+    /// </summary>
+    public bool RequiresReview { get; set; }
+
     public long Version { get; set; }
     public long CreatedAtUtc { get; set; }
     public long UpdatedAtUtc { get; set; }

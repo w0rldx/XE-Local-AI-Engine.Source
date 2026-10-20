@@ -91,6 +91,8 @@ export interface BenchmarkProjectSummary {
 	invocationTimeoutSeconds: number | null;
 	agentDefinitionId: string;
 	judgeEnabled: boolean;
+	/** Scoring runs rank only after a reviewer approved them. Frozen with the project once runs exist. */
+	requiresReview: boolean;
 	runCount: number;
 	isFrozen: boolean;
 	version: number;
@@ -125,6 +127,8 @@ export interface BenchmarkProjectDraft {
 	fidelityChunks: number | null;
 	/** A `modelName` from the eligible-models list. Required by the node whenever KLD is on. */
 	fidelityKldBaseModelName: string | null;
+	/** The node refuses it together with pairwise judging (400), and once the project has runs. */
+	requiresReview: boolean;
 }
 
 /** The four settable fidelity members, shared by the create request and the fidelity PATCH. */

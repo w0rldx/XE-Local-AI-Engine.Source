@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { BenchmarkRunPane } from "@/features/benchmarks/components/BenchmarkRunPane";
 import type { BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
 import { benchmarkJudgeFixture, benchmarkRunDetailFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
-import { renderWithProviders } from "@/test/RenderWithProviders";
+import { createProvidersWrapper, renderWithProviders } from "@/test/RenderWithProviders";
 
 afterEach(cleanup);
 
@@ -20,6 +20,7 @@ function renderPane(value: BenchmarkRunDetail) {
 		onCancel: vi.fn(),
 		onRejudge: vi.fn(),
 		onDelete: vi.fn(),
+		onDownloadArtifact: vi.fn(),
 	};
 	const view = renderWithProviders(
 		<BenchmarkRunPane run={value} parts={value.outputParts} isConnected={false} isReconnecting={false} {...handlers} />,
@@ -166,5 +167,171 @@ describe("BenchmarkRunPane", () => {
 
 		expect(screen.getByTestId("benchmark-run-sampling").textContent).toContain("2048");
 		expect(screen.queryByTestId("benchmark-run-budget-not-applicable")).toBeNull();
+	});
+
+	// Evidence is a download, never inline content: the bytes are the model's own code output.
+	it("lists each verifier artifact and downloads it on request", () => {
+		const artifact = {
+			id: "art-1",
+			kind: "pythonTestsStdout",
+			criterionId: "tests",
+			judgeAttemptId: "attempt-1",
+			byteCount: 2048,
+			contentHash: "sha256:abc",
+		};
+		const { onDownloadArtifact } = renderPane(run({ artifacts: [artifact] }));
+
+		const row = screen.getByTestId("benchmark-artifact-art-1");
+		expect(row.textContent).toContain("Python tests stdout");
+		expect(row.textContent).toContain("tests");
+		expect(row.textContent).toContain("2 KB");
+		fireEvent.click(screen.getByTestId("benchmark-artifact-download-art-1"));
+
+		expect(onDownloadArtifact).toHaveBeenCalledExactlyOnceWith(artifact);
+	});
+
+	it("renders no artifact list for a run without evidence", () => {
+		renderPane(run());
+
+		expect(screen.queryByTestId("benchmark-run-artifacts")).toBeNull();
+	});
+
+	it("shows each timed tool call, the rollup and a repeated identical call", () => {
+		const parts = [
+			{ kind: "tool_call", toolCallId: "c1", toolName: "search", arguments: '{"q":"x"}' },
+			{ kind: "tool_result", toolCallId: "c1", result: "a", durationMs: 1234 },
+			{ kind: "tool_call", toolCallId: "c2", toolName: "search", arguments: '{"q":"x"}' },
+			{ kind: "tool_result", toolCallId: "c2", result: "a", durationMs: 900 },
+		];
+		renderPane(run({ outputParts: parts, toolCallCount: 2, toolTimeMs: 2134 }));
+
+		expect(screen.getByTestId("benchmark-tool-rollup").textContent).toBe("2 tool calls · 2.1 s");
+		expect(screen.getByTestId("benchmark-tool-duration-c1").textContent).toBe("1.2 s");
+		expect(screen.queryByTestId("benchmark-tool-repeated-c1")).toBeNull();
+		expect(screen.getByTestId("benchmark-tool-repeated-c2")).toBeTruthy();
+	});
+
+	// Not measured is not zero: a run the node did not time says nothing about tools at all.
+	it("renders no tool timing when nothing was measured", () => {
+		renderPane(
+			run({
+				outputParts: [
+					{ kind: "tool_call", toolCallId: "c1", toolName: "search", arguments: "{}" },
+					{ kind: "tool_result", toolCallId: "c1", result: "a" },
+				],
+			}),
+		);
+
+		expect(screen.queryByTestId("benchmark-tool-timing")).toBeNull();
+	});
+
+	// A review project's scoring run takes its score through the review; the node refuses a plain override there.
+	it("replaces the score picker with the review form on a review-gated run", () => {
+		const view = renderWithProviders(
+			<BenchmarkRunPane
+				run={run()}
+				parts={[]}
+				isConnected={false}
+				isReconnecting={false}
+				onScore={vi.fn()}
+				onClearScore={vi.fn()}
+				onCancel={vi.fn()}
+				onRejudge={vi.fn()}
+				onDelete={vi.fn()}
+				review={{ criteria: null, isSaving: false, onSubmit: vi.fn() }}
+			/>,
+		);
+
+		expect(screen.getByTestId("benchmark-review-form")).toBeTruthy();
+		expect(screen.queryByTestId("benchmark-score-save")).toBeNull();
+		view.unmount();
+	});
+
+	// The pane stays open while the judging runs: the verdict arriving must pre-fill the form, but a later unrelated
+	// update must not wipe what the reviewer typed.
+	it("re-seeds the review form when the judging completes, and only then", () => {
+		const criteria = [{ id: "accuracy", title: "Accuracy", description: "", weight: 100, kind: null }];
+		const judging = (state: "running" | "succeeded") =>
+			benchmarkJudgeFixture({
+				state,
+				attemptSequence: 1,
+				policyCurrent: true,
+				executionCurrent: true,
+				criteria: state === "succeeded" ? [{ id: "accuracy", score: 6, rationale: "" }] : [],
+			});
+		const pane = (value: BenchmarkRunDetail) => (
+			<BenchmarkRunPane
+				run={value}
+				parts={value.outputParts}
+				isConnected={false}
+				isReconnecting={false}
+				onScore={vi.fn()}
+				onClearScore={vi.fn()}
+				onCancel={vi.fn()}
+				onRejudge={vi.fn()}
+				onDelete={vi.fn()}
+				review={{ criteria, isSaving: false, onSubmit: vi.fn() }}
+			/>
+		);
+		const accuracy = () => screen.getByTestId("benchmark-review-criterion-accuracy") as HTMLInputElement;
+		const approve = () => screen.getByTestId("benchmark-review-approve") as HTMLButtonElement;
+		// RTL `rerender` keeps a `wrapper`, unlike a tree renderWithProviders wrapped itself.
+		const view = render(pane(run({ judge: judging("running") })), { wrapper: createProvidersWrapper().wrapper });
+		expect(accuracy().value).toBe("");
+		expect(approve().disabled).toBe(true);
+
+		view.rerender(pane(run({ judge: judging("succeeded") })));
+		expect(accuracy().value).toBe("6");
+		expect(approve().disabled).toBe(false);
+
+		fireEvent.change(accuracy(), { target: { value: "9" } });
+		view.rerender(pane(run({ judge: judging("succeeded"), toolCallCount: 4, toolTimeMs: 900 })));
+		expect(accuracy().value).toBe("9");
+	});
+
+	it.each([
+		["judgeOnly", true],
+		["loading", false],
+	] as const)("renders no score control while it is %s", (scoreControl, note) => {
+		renderWithProviders(
+			<BenchmarkRunPane
+				run={run()}
+				parts={[]}
+				isConnected={false}
+				isReconnecting={false}
+				onScore={vi.fn()}
+				onClearScore={vi.fn()}
+				onCancel={vi.fn()}
+				onRejudge={vi.fn()}
+				onDelete={vi.fn()}
+				scoreControl={scoreControl}
+			/>,
+		);
+
+		expect(screen.queryByTestId("benchmark-score-save")).toBeNull();
+		expect(screen.queryByTestId("benchmark-review-form")).toBeNull();
+		expect(screen.queryByTestId("benchmark-score-judge-only") !== null).toBe(note);
+	});
+
+	it("counts a single tool call in the singular", () => {
+		renderPane(run({ toolCallCount: 1, toolTimeMs: 400 }));
+
+		expect(screen.getByTestId("benchmark-tool-rollup").textContent).toBe("1 tool call · 0.4 s");
+	});
+
+	// The call id is model-supplied; a repeat must not collapse two rows (timing or transcript) into one React key.
+	it("keeps two tool calls apart when the model reused a call id", () => {
+		const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+		const parts = [
+			{ kind: "tool_call", toolCallId: "dup", toolName: "search", arguments: '{"q":"a"}' },
+			{ kind: "tool_result", toolCallId: "dup", result: "a", durationMs: 100 },
+			{ kind: "tool_call", toolCallId: "dup", toolName: "search", arguments: '{"q":"b"}' },
+			{ kind: "tool_result", toolCallId: "dup", result: "b", durationMs: 200 },
+		];
+		renderPane(run({ outputParts: parts }));
+
+		expect(screen.getAllByTestId("benchmark-tool-dup")).toHaveLength(2);
+		expect(consoleError.mock.calls.some((call) => String(call[0]).includes("same key"))).toBe(false);
+		consoleError.mockRestore();
 	});
 });

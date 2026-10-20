@@ -1,4 +1,4 @@
-import { Button, Checkbox, Divider, Group, NumberInput, Select, Stack, Text, Textarea, TextInput } from "@mantine/core";
+import { Button, Checkbox, Divider, Group, NumberInput, Select, Stack, Switch, Text, Textarea, TextInput } from "@mantine/core";
 import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -288,6 +288,35 @@ export function BenchmarkProjectForm({
 						/>
 					</Stack>
 				) : null}
+				<Divider label={t("pages.benchmarks.project.reviewSection", "Human review")} labelPosition="left" />
+				{/* Frozen with the rest of the project: flipping it would re-rank every run already measured. Refused with
+				    pairwise by the node — comparisons in a review project would run for hours and never rank. */}
+				<Switch
+					label={t("pages.benchmarks.project.requiresReview", "Require a human review before a run ranks")}
+					description={
+						frozen
+							? t(
+									"pages.benchmarks.project.frozenExplanation",
+									"This project is frozen while runs exist. Delete its terminal runs to edit it again.",
+								)
+							: values.judgeEnabled && values.judgeMode === "pairwise"
+								? t(
+										"pages.benchmarks.project.requiresReviewPairwise",
+										"Not available with pairwise judging: pairwise ranks runs against each other, so there is no per-run score to review.",
+									)
+								: t(
+										"pages.benchmarks.project.requiresReviewHelp",
+										"Each scoring run waits in the review inbox; only an approved review puts its score in the ranking.",
+									)
+					}
+					checked={values.requiresReview}
+					disabled={frozen || (values.judgeEnabled && values.judgeMode === "pairwise")}
+					onChange={(event) => {
+						const checked = event.currentTarget.checked;
+						setValues((current) => ({ ...current, requiresReview: checked }));
+					}}
+					data-testid="benchmark-requires-review"
+				/>
 				<Group justify="flex-end">
 					{onCancel ? (
 						<Button variant="default" onClick={onCancel}>

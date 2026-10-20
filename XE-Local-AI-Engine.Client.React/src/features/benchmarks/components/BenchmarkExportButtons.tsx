@@ -12,13 +12,14 @@ interface BenchmarkExportButtonsProps {
 }
 
 /** What the node currently writes. Named on the buttons so a downloaded file's shape is known before it is opened. */
-const benchmarkExportSchemaVersion = 4;
+const benchmarkExportSchemaVersion = 5;
 
 /**
  * Downloads one project's whole benchmark record. JSON carries every run at full detail — transcript, launch receipt
  * and judge verdict — so a result can be re-read outside this app; CSV is the same runs as flat rows for a spreadsheet.
  *
- * Schema 4 is the suite one: the task items, the per-run item and cell stamps, and a combinations section. The version
+ * Schema 5 adds each run's review decision, its verifier artifact metadata (never the bytes) and the tool-call rollup on
+ * top of schema 4's task items, per-run item and cell stamps and combinations section. The version
  * is on the buttons because a consumer of an exported file has to know which shape it got, and the file itself is
  * usually read by something other than a person.
  *
@@ -42,7 +43,7 @@ export function BenchmarkExportButtons({ projectId }: BenchmarkExportButtonsProp
 			<Tooltip
 				label={t(
 					"pages.benchmarks.export.schemaHelp",
-					"Schema {{version}}: every run at full detail, plus the project's task items, each run's item and combination stamps, and the combination table.",
+					"Schema {{version}}: every run at full detail with its review and tool-call rollup, plus the project's task items, each run's item and combination stamps, and the combination table.",
 					{ version: benchmarkExportSchemaVersion },
 				)}
 				multiline={true}

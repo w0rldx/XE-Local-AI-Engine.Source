@@ -7,17 +7,23 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     An endpoint may not take a persistence store (the endpoint-dependency rule), so its reads and ownerless row writes
 ///     arrive here unchanged. A pass-through (no state, validation, ordering or defaulting; the store's own parameters)
 ///     so the store keeps deciding not-found and version conflicts and the endpoints keep the 404/400/409 wording; the
-///     one composite read is <see cref="GetProjectDetailAsync" />. Domain operations stay on their own services: see
+///     one composite read is <see cref="GetProjectDetailAsync" />; the deletes also drop artifact bytes. Domain operations stay on their own services: see
 ///     docs/wiki/20-benchmarks.md ("Where things live").
 /// </remarks>
 public sealed class BenchmarkRecordService
 {
+    private readonly BenchmarkRunArtifactBlobStore _artifactBlobs;
+    private readonly ILogger<BenchmarkRecordService> _logger;
     private readonly IBenchmarkStore _store;
 
-    public BenchmarkRecordService(IBenchmarkStore store)
+    public BenchmarkRecordService(IBenchmarkStore store, BenchmarkRunArtifactBlobStore artifactBlobs, ILogger<BenchmarkRecordService> logger)
     {
         ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(artifactBlobs);
+        ArgumentNullException.ThrowIfNull(logger);
         _store = store;
+        _artifactBlobs = artifactBlobs;
+        _logger = logger;
     }
 
     /// <summary>One project by id, or null when it is gone — the 404 check in front of almost every Benchmarks read.</summary>
@@ -65,10 +71,19 @@ public sealed class BenchmarkRecordService
         return _store.CountRunsByProjectAsync(cancellationToken);
     }
 
-    /// <summary>Deletes a project against the version the operator saw.</summary>
-    public Task DeleteProjectAsync(Guid projectId, long expectedVersion, CancellationToken cancellationToken = default)
+    /// <summary>Deletes a project against the version the operator saw, then its runs' artifact bytes.</summary>
+    /// <remarks>
+    ///     The run ids are read BEFORE the delete: a run created after the read is Queued, so the store refuses the delete with <c>ActiveRun</c> and
+    ///     no row it took is missed here. An orphan left by a failed directory delete is the retention sweep's to reclaim.
+    /// </remarks>
+    public async Task DeleteProjectAsync(Guid projectId, long expectedVersion, CancellationToken cancellationToken = default)
     {
-        return _store.DeleteProjectAsync(projectId, expectedVersion, cancellationToken);
+        var runs = await _store.ListAllRunsAsync(projectId, cancellationToken);
+        await _store.DeleteProjectAsync(projectId, expectedVersion, cancellationToken);
+        foreach (var run in runs.Items)
+        {
+            DeleteArtifactBytes(run.Id);
+        }
     }
 
     /// <summary>One run by id, payloads included, or null when it is gone.</summary>
@@ -88,10 +103,11 @@ public sealed class BenchmarkRecordService
         return _store.ListRunsAsync(projectId, skip, take, modelContentFingerprint, includeUnscored, cancellationToken);
     }
 
-    /// <summary>Removes a terminal run and everything that pointed at it, against the version the operator saw.</summary>
-    public Task DeleteRunAsync(Guid runId, long expectedRunVersion, CancellationToken cancellationToken = default)
+    /// <summary>Removes a terminal run and everything that pointed at it, against the version the operator saw, then its artifact bytes.</summary>
+    public async Task DeleteRunAsync(Guid runId, long expectedRunVersion, CancellationToken cancellationToken = default)
     {
-        return _store.DeleteRunAsync(runId, expectedRunVersion, cancellationToken);
+        await _store.DeleteRunAsync(runId, expectedRunVersion, cancellationToken);
+        DeleteArtifactBytes(runId);
     }
 
     /// <summary>Sets or clears the operator's 0..100 override; null clears it.</summary>
@@ -118,9 +134,34 @@ public sealed class BenchmarkRecordService
         return _store.EnqueueFidelityAsync(runId, kind, cancellationToken);
     }
 
+    /// <summary>One page of the review inbox, from flat columns only.</summary>
+    public Task<BenchmarkReviewQueuePage> ListReviewQueueAsync(BenchmarkReviewQuery query, CancellationToken cancellationToken = default)
+    {
+        return _store.ListReviewQueueAsync(query, cancellationToken);
+    }
+
+    /// <summary>Metadata of every artifact the run's judgings produced — the artifact download's 404 check.</summary>
+    public Task<IReadOnlyList<BenchmarkRunArtifactRecord>> GetRunArtifactsAsync(Guid runId, CancellationToken cancellationToken = default)
+    {
+        return _store.GetRunArtifactsAsync(runId, cancellationToken);
+    }
+
     /// <summary>Whether any fidelity work item is queued or running — the guard on clearing the base cache.</summary>
     public Task<bool> HasLiveFidelityWorkAsync(CancellationToken cancellationToken = default)
     {
         return _store.HasLiveFidelityWorkAsync(cancellationToken);
+    }
+
+    // Best-effort after the rows committed: leftover bytes must never turn a successful delete into a failure.
+    private void DeleteArtifactBytes(Guid runId)
+    {
+        try
+        {
+            _artifactBlobs.DeleteRun(runId);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "The artifact bytes of benchmark run {RunId} outlived its row; the retention sweep reclaims them.", runId);
+        }
     }
 }

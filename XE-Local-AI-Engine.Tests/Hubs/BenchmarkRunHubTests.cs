@@ -4,14 +4,17 @@ using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
+using XE_Local_AI_Engine.Client.Testing.Fakes;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
@@ -167,7 +170,10 @@ public sealed class BenchmarkRunHubTests
         // The real pass-through service over the substituted store: the hub's door onto the run row is
         // BenchmarkRecordService, and wrapping rather than substituting it keeps every assertion below on the
         // store call the hub actually causes.
-        var hub = new BenchmarkRunHub(new BenchmarkRecordService(store), events)
+        // The hub never deletes, so the artifact blob store is never asked to touch its (absent) directory.
+        var artifactBlobs = new BenchmarkRunArtifactBlobStore(new FakeNodeDataDirectory(Path.Combine(Path.GetTempPath(), "xe-benchmark-hub-unused")),
+            new NullNodeSqliteKeyHolder());
+        var hub = new BenchmarkRunHub(new BenchmarkRecordService(store, artifactBlobs, NullLogger<BenchmarkRecordService>.Instance), events)
         {
             Context = context,
             Groups = groups,

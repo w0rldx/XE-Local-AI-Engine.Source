@@ -73,6 +73,9 @@ export function benchmarkRunSummaryFixture(overrides: Partial<BenchmarkRunSummar
 		},
 		fidelity: null,
 		userScore: null,
+		taskItemId: null,
+		toolCallCount: null,
+		toolTimeMs: null,
 		lastStreamSequence: 2,
 		version: 3,
 		createdAtUtc: 1,
@@ -93,6 +96,8 @@ export function benchmarkRunDetailFixture(overrides: Partial<BenchmarkRunDetail>
 		primaryCompletedAtUtc: 2,
 		reasoningBudgetTokens: null,
 		reasoningBudgetApplicable: null,
+		review: null,
+		artifacts: [],
 		...overrides,
 	};
 }

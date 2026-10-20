@@ -5,6 +5,7 @@ export * from "@/features/benchmarks/models/BenchmarkFidelityModels";
 export * from "@/features/benchmarks/models/BenchmarkLiveStreamModels";
 export * from "@/features/benchmarks/models/BenchmarkProjectModels";
 export * from "@/features/benchmarks/models/BenchmarkRankingModels";
+export * from "@/features/benchmarks/models/BenchmarkReviewModels";
 export * from "@/features/benchmarks/models/BenchmarkRunModels";
 
 /** One launch-matrix submission: every model x KV-cache combination the operator picked, plus the shared run knobs. */
@@ -36,8 +37,11 @@ export function toChatMessageParts(parts: readonly BenchmarkOutputPart[]): ChatM
 			continue;
 		}
 		if (part.kind === "tool_call") {
-			const id = part.toolCallId || `benchmark-tool-${sequence}`;
-			tools.set(id, rendered.length);
+			const callId = part.toolCallId || `benchmark-tool-${sequence}`;
+			// A model-supplied id can repeat within one answer. The result pairs with the LATEST call of that id, but the
+			// rendered part needs an id of its own, or the transcript collapses two calls into one React key.
+			const id = tools.has(callId) ? `${callId}-${sequence}` : callId;
+			tools.set(callId, rendered.length);
 			rendered.push({
 				kind: "tool",
 				id,
@@ -74,3 +78,41 @@ export function toChatMessageParts(parts: readonly BenchmarkOutputPart[]): ChatM
 	}
 	return rendered.sort((left, right) => left.sequence - right.sequence);
 }
+
+/** One tool call of a run with its measured execution time, for the run pane's timing list. */
+export interface BenchmarkToolCall {
+	/** Unique within the answer: position plus call id, since the model-supplied id can repeat. */
+	key: string;
+	id: string;
+	name: string;
+	/** Execution time from the `tool_result`, or null when the node did not time the call. */
+	durationMs: number | null;
+	/** The same tool with byte-identical arguments was already called earlier in this answer. */
+	repeated: boolean;
+}
+
+/**
+ * The run's tool calls in call order, each joined to its result's duration. A repeat is detected here rather than
+ * stored: the node keeps no attempt counter, and an identical (name, arguments) pair is visible from the parts alone.
+ */
+export function benchmarkToolCalls(parts: readonly BenchmarkOutputPart[]): BenchmarkToolCall[] {
+	const durations = new Map<string, number>();
+	for (const part of parts) {
+		if (part.kind === "tool_result" && part.toolCallId && typeof part.durationMs === "number") {
+			durations.set(part.toolCallId, part.durationMs);
+		}
+	}
+	const seen = new Set<string>();
+	return parts
+		.filter((part) => part.kind === "tool_call")
+		.map((part, index) => {
+			const signature = JSON.stringify([part.toolName ?? "", part.arguments ?? ""]);
+			const repeated = seen.has(signature);
+			seen.add(signature);
+			const id = part.toolCallId || `benchmark-tool-${index}`;
+			return { key: `${index}:${id}`, id, name: part.toolName || "tool", durationMs: durations.get(id) ?? null, repeated };
+		});
+}
+
+/** A tool execution time as the run pane prints it: one decimal of seconds. */
+export const formatBenchmarkToolSeconds = (milliseconds: number): string => `${(milliseconds / 1000).toFixed(1)} s`;

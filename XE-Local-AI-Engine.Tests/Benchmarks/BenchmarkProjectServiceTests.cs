@@ -676,6 +676,61 @@ public sealed class BenchmarkProjectServiceTests
         };
 
     [Test]
+    public async Task Create_WhenRequiresReviewAndPairwise_Rejects()
+    {
+        var context = new ServiceContext();
+
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => context.Service.CreateAsync(Draft(context) with
+        {
+            RequiresReview = true,
+            Judge = PairwiseJudge()
+        }));
+
+        _ = context.Models.DidNotReceive().AcquireAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        _ = context.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(),
+            Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Update_WhenRequiresReviewAndPairwise_Rejects()
+    {
+        var context = new ServiceContext();
+
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => context.Service.UpdateAsync(ProjectId, 1, Draft(context) with
+        {
+            RequiresReview = true,
+            Judge = PairwiseJudge()
+        }));
+
+        _ = context.Models.DidNotReceive().AcquireAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        _ = context.Store.DidNotReceive().UpdateProjectAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<BenchmarkProjectInput>(),
+            Arg.Any<BenchmarkJudgePolicyChangeInput?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task UpdateJudgePolicy_WhenReviewProjectSwitchesToPairwise_Rejects()
+    {
+        // Comparisons in a review project would run for hours and never rank: refused before the verifying lease re-hashes the judge model.
+        var context = new ServiceContext();
+        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(ServiceContext.CurrentProject() with { RequiresReview = true });
+
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
+            context.Service.UpdateJudgePolicyAsync(ProjectId, 1, PairwiseJudge(), confirmRejudge: true));
+
+        _ = context.Models.DidNotReceive().AcquireAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        _ = context.Store.DidNotReceive().ActivateJudgePolicyAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<string>(),
+            Arg.Any<BenchmarkJudgeAttemptSeed?>(), Arg.Any<CancellationToken>());
+    }
+
+    private static BenchmarkJudgePolicyDraft PairwiseJudge() =>
+        new()
+        {
+            ModelName = "judge-model",
+            ContextTokens = 4096,
+            Mode = BenchmarkJudgePolicyModes.Pairwise
+        };
+
+    [Test]
     public async Task UpdateJudgePolicy_InPairwiseMode_ActivatesLikeAnyOtherMode()
     {
         // The mode is inside the policy hash, so switching to it mints a revision and re-judges the project — which is

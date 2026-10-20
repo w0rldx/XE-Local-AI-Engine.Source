@@ -45,6 +45,8 @@ import {
 	toBenchmarkQualityScoreSource,
 	toBenchmarkRankExclusionReason,
 	toBenchmarkRepeatMode,
+	toBenchmarkRunArtifact,
+	toBenchmarkRunReview,
 	toBenchmarkVerdict,
 } from "@/features/benchmarks/models/BenchmarkModels";
 
@@ -65,6 +67,7 @@ export function toBenchmarkProjectSummary(value: ProjectSummaryResponse): Benchm
 		invocationTimeoutSeconds: value.invocationTimeoutSeconds ?? null,
 		agentDefinitionId: value.agentDefinitionId ?? "",
 		judgeEnabled: value.judgeEnabled === true,
+		requiresReview: value.requiresReview === true,
 		runCount: numberValue(value.runCount),
 		isFrozen: value.isFrozen === true,
 		version: numberValue(value.version),
@@ -345,6 +348,9 @@ export function toBenchmarkRunSummary(value: RunSummaryResponse): BenchmarkRunSu
 			segmentCount: value.segmentCount ?? null,
 		},
 		userScore: value.userScore ?? null,
+		taskItemId: value.taskItemId ?? null,
+		toolCallCount: value.toolCallCount ?? null,
+		toolTimeMs: value.toolTimeMs ?? null,
 		lastStreamSequence: numberValue(value.lastStreamSequence),
 		version: numberValue(value.version),
 		createdAtUtc: numberValue(value.createdAtUtc),
@@ -370,6 +376,8 @@ export function toBenchmarkRunDetail(value: RunDetailResponse): BenchmarkRunDeta
 		primaryCompletedAtUtc: value.primaryCompletedAtUtc ?? null,
 		reasoningBudgetTokens: value.reasoningBudgetTokens ?? null,
 		reasoningBudgetApplicable: value.reasoningBudgetApplicable ?? null,
+		review: toBenchmarkRunReview(value.review),
+		artifacts: (value.artifacts ?? []).map(toBenchmarkRunArtifact),
 	};
 }
 

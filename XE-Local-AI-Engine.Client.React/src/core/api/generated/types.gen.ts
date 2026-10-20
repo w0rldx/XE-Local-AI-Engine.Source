@@ -984,6 +984,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectMutationRe
 	fidelityKldEnabled?: boolean;
 	fidelityChunks?: number | null;
 	fidelityKldBaseModelName?: string | null;
+	requiresReview?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectRouteRequest = {
@@ -999,6 +1000,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryRes
 	invocationTimeoutSeconds?: number | null;
 	agentDefinitionId?: string;
 	judgeEnabled?: boolean;
+	requiresReview?: boolean;
 	runCount?: number;
 	isFrozen?: boolean;
 	version?: number;
@@ -1012,6 +1014,24 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortRespons
 	cohortGeneration?: number | null;
 	rankedCount?: number;
 	totalScored?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkReviewCriterionScoreDto = {
+	criterionId?: string;
+	score?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkReviewQueueItemResponse = {
+	runId?: string;
+	projectId?: string;
+	runVersion?: number;
+	primaryModelName: string;
+	taskItemId?: string | null;
+	taskItemIndex?: number | null;
+	primaryCompletedAtUtc?: number | null;
+	state: string;
+	reviewScore?: number | null;
+	reviewedAtUtc?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricCriterionDto = {
@@ -1036,6 +1056,19 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricPresetsResp
 	codeExecution: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto;
 };
 
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunArtifactResponse = {
+	id?: string;
+	kind: string;
+	criterionId?: string | null;
+	judgeAttemptId?: string;
+	byteCount?: number;
+	contentHash: string;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunArtifactRouteRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse =
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryResponse & {
 		outputParts?: unknown;
@@ -1047,6 +1080,8 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse
 		primaryCompletedAtUtc?: number | null;
 		primaryLaunchReceipt?: unknown;
 		primaryEnvironmentFacts?: unknown;
+		review?: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunReviewResponse | null;
+		artifacts?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunArtifactResponse>;
 	};
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunJudgeResponse = {
@@ -1062,6 +1097,16 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunJudgeResponse 
 	summary?: string | null;
 	criteria?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgeCriterionScoreResponse> | null;
 	verifiers?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgeVerifierResponse> | null;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunReviewResponse = {
+	state: string;
+	score?: number | null;
+	criteria?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkReviewCriterionScoreDto>;
+	notes?: string | null;
+	policyRevisionId?: string | null;
+	policyCurrent?: boolean;
+	updatedAtUtc?: number;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunRouteRequest = {
@@ -1109,6 +1154,8 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryRespons
 	generationTokensPerSecond?: number | null;
 	cachedPromptTokens?: number | null;
 	segmentCount?: number | null;
+	toolCallCount?: number | null;
+	toolTimeMs?: number | null;
 	userScore?: number | null;
 	lastStreamSequence?: number;
 	version?: number;
@@ -1275,6 +1322,17 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkProjectsRespo
 	items?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse>;
 };
 
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkReviewsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkReviewsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkReviewQueueItemResponse>;
+	totalCount?: number;
+	page?: number;
+	take?: number;
+};
+
 export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkRunsRequest = {
 	[key: string]: never;
 };
@@ -1364,6 +1422,14 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1StartedBenchmarkRunBatchIt
 	modelName: string;
 	kvCacheType?: string | null;
 	runIds?: Array<string>;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1SubmitBenchmarkRunReviewRequest = {
+	state?: string;
+	criteria?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkReviewCriterionScoreDto> | null;
+	score?: number | null;
+	notes?: string | null;
+	expectedVersion?: number;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkJudgePolicyRequest = {
@@ -9724,6 +9790,44 @@ export type StartBenchmarkRunBatchResponses = {
 
 export type StartBenchmarkRunBatchResponse = StartBenchmarkRunBatchResponses[keyof StartBenchmarkRunBatchResponses];
 
+export type ListBenchmarkReviewsData = {
+	body?: never;
+	path?: never;
+	query: {
+		state: string;
+		projectId?: string | null;
+		page: number;
+		take: number;
+	};
+	url: "/api/local/v1/benchmarks/reviews";
+};
+
+export type ListBenchmarkReviewsErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListBenchmarkReviewsError = ListBenchmarkReviewsErrors[keyof ListBenchmarkReviewsErrors];
+
+export type ListBenchmarkReviewsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkReviewsResponse;
+};
+
+export type ListBenchmarkReviewsResponse = ListBenchmarkReviewsResponses[keyof ListBenchmarkReviewsResponses];
+
 export type GetBenchmarkRubricPresetsData = {
 	body?: never;
 	path?: never;
@@ -9825,6 +9929,43 @@ export type GetBenchmarkRunResponses = {
 };
 
 export type GetBenchmarkRunResponse = GetBenchmarkRunResponses[keyof GetBenchmarkRunResponses];
+
+export type GetBenchmarkRunArtifactData = {
+	body?: never;
+	path: {
+		runId: string;
+		artifactId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/runs/{runId}/artifacts/{artifactId}";
+};
+
+export type GetBenchmarkRunArtifactErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type GetBenchmarkRunArtifactError = GetBenchmarkRunArtifactErrors[keyof GetBenchmarkRunArtifactErrors];
+
+export type GetBenchmarkRunArtifactResponses = {
+	/**
+	 * Success
+	 */
+	200: string;
+};
+
+export type GetBenchmarkRunArtifactResponse = GetBenchmarkRunArtifactResponses[keyof GetBenchmarkRunArtifactResponses];
 
 export type CancelBenchmarkRunData = {
 	body: XeLocalAiEngineClientEndpointsBenchmarksV1CancelBenchmarkRunRequest;
@@ -9941,6 +10082,46 @@ export type RejudgeBenchmarkRunResponses = {
 };
 
 export type RejudgeBenchmarkRunResponse = RejudgeBenchmarkRunResponses[keyof RejudgeBenchmarkRunResponses];
+
+export type SubmitBenchmarkRunReviewData = {
+	body: XeLocalAiEngineClientEndpointsBenchmarksV1SubmitBenchmarkRunReviewRequest;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/runs/{runId}/review";
+};
+
+export type SubmitBenchmarkRunReviewErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type SubmitBenchmarkRunReviewError = SubmitBenchmarkRunReviewErrors[keyof SubmitBenchmarkRunReviewErrors];
+
+export type SubmitBenchmarkRunReviewResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse;
+};
+
+export type SubmitBenchmarkRunReviewResponse = SubmitBenchmarkRunReviewResponses[keyof SubmitBenchmarkRunReviewResponses];
 
 export type ClearBenchmarkRunScoreData = {
 	body: XeLocalAiEngineClientEndpointsBenchmarksV1ClearBenchmarkRunScoreRequest;

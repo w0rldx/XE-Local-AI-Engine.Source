@@ -92,6 +92,12 @@ public sealed record BenchmarkPrimarySuccessCommand
 
     /// <summary>The separated throughput measurement, or <see langword="null" /> when the runtime reported none.</summary>
     public BenchmarkRunThroughput? Throughput { get; init; }
+
+    /// <summary>How many tool calls the primary made, or <see langword="null" /> when not measured; 0 means none.</summary>
+    public int? ToolCallCount { get; init; }
+
+    /// <summary>The sum of the measured tool execution times, or <see langword="null" /> when not measured.</summary>
+    public long? ToolTimeMs { get; init; }
 }
 
 /// <summary>
@@ -229,6 +235,178 @@ public sealed record BenchmarkRunRecord
     public string? TaskItemSetHash { get; init; }
 
     public int? CellQuality { get; init; }
+
+    public int? ToolCallCount { get; init; }
+
+    public long? ToolTimeMs { get; init; }
+
+    /// <summary>
+    ///     The stored review row's state (<see cref="BenchmarkReviewStates.Approved" /> or <see cref="BenchmarkReviewStates.Rejected" />), or
+    ///     <see langword="null" /> when no row exists. Flat, so the listing carries it without loading the review.
+    /// </summary>
+    public string? ReviewState { get; init; }
+
+    /// <summary>
+    ///     Whether the stored review was made under the project's current judge-policy revision (both NULL counts as current), or <see langword="null" /> when
+    ///     no row exists. A decision under a superseded revision is stale whatever the ranking reason says.
+    /// </summary>
+    public bool? ReviewPolicyCurrent { get; init; }
+
+    /// <summary>The reviewer's decision, or <see langword="null" /> when none was made. Populated by the single-run reads and the write paths.</summary>
+    public BenchmarkRunReviewRecord? Review { get; init; }
+
+    /// <summary>Metadata of every artifact the run's judgings produced. Populated by the single-run reads and the write paths.</summary>
+    public IReadOnlyList<BenchmarkRunArtifactRecord> Artifacts { get; init; } = [];
+}
+
+/// <summary>A review's stored states, plus the two derived queue states that are never stored.</summary>
+public static class BenchmarkReviewStates
+{
+    public const string Approved = "approved";
+    public const string Rejected = "rejected";
+
+    /// <summary>Derived: no decision, or a decision under a superseded policy revision.</summary>
+    public const string Pending = "pending";
+
+    /// <summary>Derived: a decision made under a policy revision the project no longer judges under.</summary>
+    public const string Stale = "stale";
+}
+
+/// <summary>One rubric criterion's reviewer score, 0..10.</summary>
+public sealed record BenchmarkReviewCriterionScore
+{
+    public required string CriterionId { get; init; }
+
+    public required int Score { get; init; }
+}
+
+/// <summary>
+///     A reviewer's decision, already validated against the rubric by the application layer. The store enforces only
+///     what it can see: the run is a reviewable scoring run of a review project, the version matches, and the numbers
+///     are in range.
+/// </summary>
+public sealed record BenchmarkReviewCommand
+{
+    public required Guid RunId { get; init; }
+
+    public required long ExpectedRunVersion { get; init; }
+
+    /// <summary><see cref="BenchmarkReviewStates.Approved" /> or <see cref="BenchmarkReviewStates.Rejected" />.</summary>
+    public required string State { get; init; }
+
+    /// <summary>The 0..100 overall score; required when approving, ignored (stored NULL) when rejecting.</summary>
+    public int? Score { get; init; }
+
+    public IReadOnlyList<BenchmarkReviewCriterionScore>? Criteria { get; init; }
+
+    /// <summary>The project's current judge-policy revision the decision was made under, NULL for a project without one.</summary>
+    public Guid? PolicyRevisionId { get; init; }
+
+    public string? Notes { get; init; }
+}
+
+public sealed record BenchmarkRunReviewRecord
+{
+    public required Guid Id { get; init; }
+
+    public required Guid RunId { get; init; }
+
+    public required string State { get; init; }
+
+    public required int? Score { get; init; }
+
+    public required IReadOnlyList<BenchmarkReviewCriterionScore> Criteria { get; init; }
+
+    public required Guid? PolicyRevisionId { get; init; }
+
+    public required string? Notes { get; init; }
+
+    public required long Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
+
+/// <summary>A page of the review queue. <see cref="State" /> is one of the four <see cref="BenchmarkReviewStates" />.</summary>
+public sealed record BenchmarkReviewQuery
+{
+    public required string State { get; init; }
+
+    public Guid? ProjectId { get; init; }
+
+    public int Skip { get; init; }
+
+    public int Take { get; init; } = 50;
+}
+
+/// <summary>One queue row, from flat columns only: nothing here decrypts.</summary>
+public sealed record BenchmarkReviewQueueEntry
+{
+    public required Guid RunId { get; init; }
+
+    public required Guid ProjectId { get; init; }
+
+    public required long RunVersion { get; init; }
+
+    public required string PrimaryModelName { get; init; }
+
+    public required Guid? TaskItemId { get; init; }
+
+    public required int? TaskItemIndex { get; init; }
+
+    public required long? PrimaryCompletedAtUtc { get; init; }
+
+    /// <summary>The derived queue state of this row.</summary>
+    public required string State { get; init; }
+
+    public required int? ReviewScore { get; init; }
+
+    public required long? ReviewedAtUtc { get; init; }
+}
+
+public sealed record BenchmarkReviewQueuePage
+{
+    public required IReadOnlyList<BenchmarkReviewQueueEntry> Items { get; init; }
+
+    public required int TotalCount { get; init; }
+}
+
+/// <summary>One artifact whose blob was already written under <see cref="Id" />.</summary>
+public sealed record BenchmarkRunArtifactCommand
+{
+    public required Guid Id { get; init; }
+
+    public required string? CriterionId { get; init; }
+
+    public required string Kind { get; init; }
+
+    public required string MediaType { get; init; }
+
+    public required long ByteCount { get; init; }
+
+    public required string ContentHash { get; init; }
+}
+
+public sealed record BenchmarkRunArtifactRecord
+{
+    public required Guid Id { get; init; }
+
+    public required Guid RunId { get; init; }
+
+    public required Guid JudgeAttemptId { get; init; }
+
+    public required string? CriterionId { get; init; }
+
+    public required string Kind { get; init; }
+
+    public required string MediaType { get; init; }
+
+    public required long ByteCount { get; init; }
+
+    public required string ContentHash { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
 }
 
 /// <summary>

@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -183,7 +184,7 @@ public sealed class RetentionSweeperService : BackgroundService
         }
     }
 
-    /// <summary>Reclaims the artifact bytes of a work session or a workflow run whose owning row is gone.</summary>
+    /// <summary>Reclaims the artifact bytes of a work session, a workflow run or a benchmark run whose owning row is gone.</summary>
     /// <remarks>
     ///     The state a crash between the row commit and the best-effort <c>DeleteSession</c>/<c>DeleteRun</c> beside
     ///     it leaves for good. Scope-keyed, never blob-keyed: a writer commits the blob BEFORE its row, so a blob id
@@ -214,6 +215,18 @@ public sealed class RetentionSweeperService : BackgroundService
                 runBlobs.ListRunIdsLastWrittenBefore(cutoffUtc),
                 runBlobs.DeleteRun,
                 "development workflow run",
+                cancellationToken);
+        }
+
+        // Accepted ceiling: run-keyed, so a blob (each at most MaxArtifactBytes) orphaned inside a LIVE run's scope by a crash
+        // between blob write and row insert lives until the run is deleted; add a blob-keyed check against benchmark_run_artifacts if that ever matters.
+        if (scope.ServiceProvider.GetService<BenchmarkRunArtifactBlobStore>() is { } benchmarkBlobs)
+        {
+            await PurgeOrphanedScopesAsync(scope,
+                "SELECT id FROM benchmark_runs WHERE id = {0}",
+                benchmarkBlobs.ListRunIdsLastWrittenBefore(cutoffUtc),
+                benchmarkBlobs.DeleteRun,
+                "benchmark run",
                 cancellationToken);
         }
     }

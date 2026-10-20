@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 
 using FastEndpoints;
-using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
@@ -35,7 +34,6 @@ public sealed class RejudgeBenchmarkRunEndpoint : Endpoint<RejudgeBenchmarkRunRe
         _ = await _projects.RejudgeRunAsync(req.RunId, req.ExpectedVersion, req.Force, ct);
         var run = await _records.GetRunAsync(req.RunId, ct)
                   ?? throw new BenchmarkNotFoundException("Benchmark run was not found.");
-        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct),
-            BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct))), ct);
+        await Send.OkAsync(await BenchmarkEndpointSupport.ToDetailAsync(_records, run, ct), ct);
     }
 }

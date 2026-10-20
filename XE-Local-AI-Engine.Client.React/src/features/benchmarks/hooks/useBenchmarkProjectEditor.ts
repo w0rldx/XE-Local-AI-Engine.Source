@@ -39,6 +39,7 @@ const emptyProject: BenchmarkProjectDraft = {
 	fidelityKldEnabled: false,
 	fidelityChunks: null,
 	fidelityKldBaseModelName: null,
+	requiresReview: false,
 };
 
 export type EditorMode = "create" | "edit" | null;
@@ -93,6 +94,7 @@ export function useBenchmarkProjectEditor({ detail, runs, onProjectCreated }: Be
 						fidelityKldEnabled: detail.fidelity.kldEnabled,
 						fidelityChunks: detail.fidelity.chunks,
 						fidelityKldBaseModelName: detail.fidelity.kldBaseModelName,
+						requiresReview: detail.requiresReview,
 					}
 				: emptyProject,
 		[detail],

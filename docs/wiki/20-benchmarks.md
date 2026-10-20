@@ -1,6 +1,6 @@
 # Benchmarks — Task Suites, Frozen Runs, Discriminating Scores
 
-> Reviewed: 2026-10-02 · Code-grounded.
+> Reviewed: 2026-10-19 · Code-grounded.
 
 **What this page covers.** The benchmark module: a project asks a frozen suite of questions of many local models, a
 launch fans out over them, and the ranked unit is a cell (a combination of model settings), not a single run. Four
@@ -32,7 +32,7 @@ The **benchmark** module measures a frozen suite of questions against many local
 
 Four rules govern everything below and are worth stating before the mechanics:
 
-- **Quality-only ranking.** Throughput, perplexity, KL divergence, top-token agreement and NIAH recall are **display axes**. None of them ever reaches `Rank` (`BenchmarkStore.LoadRankingAsync` applying the pure `BenchmarkRankingPolicy`).
+- **Quality-only ranking.** Throughput, tool timing, perplexity, KL divergence, top-token agreement and NIAH recall are **display axes**. None of them ever reaches `Rank` (`BenchmarkStore.LoadRankingAsync` applying the pure `BenchmarkRankingPolicy`).
 - **A number is shown only while it is comparable.** Every display axis carries its own comparability key, and a figure whose key no longer matches the project's current one is **withheld**, not flagged. A number a reader can still see is a number they will still compare.
 - **A partial measurement is not a small measurement.** A cell missing one item, a cell measured under a different item set, and a verifier that could not run are all *unranked with a reason* — never scored low.
 - **Identity is stamped at freeze, never re-derived at read time.** What a run was asked, and what the whole question set was when it was asked, are copied onto the run. A read compares the copies against what the project holds now.
@@ -48,6 +48,8 @@ Four rules govern everything below and are worth stating before the mechanics:
 | **Cell** | One *combination of settings* measured over the whole item suite — one model × one KV-cache type × one repeat. **The cell is the unit that ranks.** The UI calls it a *combination* |
 | **Run** (`BenchmarkRun`) | One model answering one item once, under a byte-identical runtime snapshot |
 | **Judging** | A pointwise attempt, a pairwise comparison, or no model at all (§5.2) |
+| **Review** (`BenchmarkRunReview`) | A reviewer's decision on one scoring run of a project that sets `requiresReview`. One row per run; *pending* is derived, never stored (§4.4) |
+| **Run artifact** (`BenchmarkRunArtifact`) | The raw stdout/stderr of one `pythonTests` verification, as an encrypted blob plus a metadata row (§5.2.4) |
 
 A cell's score is the **mean of its runs' quality scores over the project's scorable items**; a run's own `qualityScore` stays its own and is still shown beside it.
 
@@ -139,7 +141,7 @@ Three are NOT NULL because a missing stamp would read as "belongs with everythin
 
 ## 4. Ranking — the cell is the unit
 
-`BenchmarkQualityScoreSources`: `user` > `judge` | `pairwise` > `none`. An operator override always ranks; a judge score ranks only under the project's current policy revision, in that revision's live cohort generation, with the execution key the cohort was claimed with. Anything else is honestly unranked with a reason the UI can act on (`BenchmarkRunJudgeStates`).
+`BenchmarkQualityScoreSources`: `user` > `judge` | `pairwise` > `none`. An operator override always ranks (in a review project the override IS the approved review, §4.4); a judge score ranks only under the project's current policy revision, in that revision's live cohort generation, with the execution key the cohort was claimed with. Anything else is honestly unranked with a reason the UI can act on (`BenchmarkRunJudgeStates`).
 
 The whole rank read is a **flat-column scan** across four tables — nothing is decrypted to answer "is this run ranked?".
 
@@ -157,11 +159,13 @@ The whole rank read is a **flat-column scan** across four tables — nothing is 
 
 A **display-only leaf** (`countsTowardScore = false`) is kept out of the mean by intersecting with the scorable id set — it does **not** null the run's `QualityScore`, because the recall axis reads it. **Every other quality aggregate has to apply the same intersection itself**, or it silently ranks on a NIAH recall figure (§5.4 is the one that had to).
 
+**Review gaps in a cell.** `LoadRankingAsync` loads each run's review gate from flat columns and applies it inside `BenchmarkRankingPolicy.ApplyRunExclusions`. A cell that fails completeness reports `review-pending`, not `item-incomplete`, only when every scorable item has an answer and every gap is an open review: a pending or stale review whose reason is `review-pending`, `review-stale`, `truncated` or `incomplete`. A truncated or incomplete answer awaiting review counts as a gap because an approval's user score outranks truncation. A re-run would not close such a gap, the inbox does. A missing item stays `item-incomplete`. So does a run whose judging has not yet succeeded under the current revision (the `AwaitingJudge` gate, §4.4), a rejected review, and a run with a stale identity stamp. In a review project only a user score counts toward `TotalScored`, so a judge score on a gated run never makes its cell look scored. A run whose primary did not succeed is outside the gate and keeps its old reasons.
+
 ### 4.2 Exclusion precedence
 
-**warm-up > `item-revised` > `item-set-revised` > user score > (truncated | incomplete) > judge reasons.**
+**warm-up > `item-revised` > `item-set-revised` > `review-stale` > `review-rejected` > user score > (truncated | incomplete) > `review-pending` > judge reasons.** A run whose judging is not yet current is the exception (§4.4): it keeps its judge reason.
 
-The two stale stamps sit **above** the operator's user-score override; truncation still sits below it. An operator who read a truncated answer and scored it anyway overruled the machine about a fact they could see; an operator who scored an answer to a question that has since been edited, or to one item of a suite whose membership has since changed, has not — they had no way to notice either moved. The more specific cause wins, so `item-revised` beats `item-set-revised`.
+The two stale stamps sit **above** the operator's user-score override; truncation still sits below it. An operator who read a truncated answer and scored it anyway overruled the machine about a fact they could see; an operator who scored an answer to a question that has since been edited, or to one item of a suite whose membership has since changed, has not — they had no way to notice either moved. The more specific cause wins, so `item-revised` beats `item-set-revised`. The three review reasons apply only to a gated run (§4.4) and replace the judge reasons for it. A stale or rejected review sits above the user score because an approval is what writes the user score, and a decision that no longer binds must not rank; `review-pending` sits below truncation, so a truncated or incomplete answer keeps naming that until the reviewer scores it anyway (an approval ranks a truncated answer exactly as a user score does).
 
 | Reason | Meaning |
 |---|---|
@@ -169,6 +173,9 @@ The two stale stamps sit **above** the operator's user-score override; truncatio
 | `item-revised` | the item's input hash moved: the answer is to a question the project no longer asks |
 | `item-set-revised` | the project's set hash moved: the cell was scored against a suite the project no longer has |
 | `item-incomplete` | at least one scorable item of this cell has no rankable answer |
+| `review-stale` | the run's review was made under a judge-policy revision the project no longer judges under, and its judging under the current revision has succeeded; the run is back in the inbox |
+| `review-rejected` | the reviewer rejected the answer; it never ranks |
+| `review-pending` | a scoring run of a review project whose judging has succeeded under the current revision has no decision yet (§4.4). A cell whose only gaps are open reviews reports it too |
 | `no-score` | nothing in this project counts toward a score |
 | `verifier-unavailable` | a deterministic verifier could not run on this node — the answer was never checked (§5.2) |
 | `override-unmatched` | the item's verifier override names a rubric criterion that no longer exists, so nothing it asked for was applied |
@@ -182,6 +189,20 @@ The two stale stamps sit **above** the operator's user-score override; truncatio
 `GET benchmarks/projects/{projectId}/cells` is its own route, not a shape on the run listing: a run list cannot say which items a cell is **missing**, and the absence is the answer. It also carries `scorableItemCount`, which is not derivable from the cells alone. `ListCellsAsync` skips a run present in the run query but absent from the ranking map rather than throwing, so a freeze landing between the two reads is ordinary rather than a 500.
 
 The per-run write paths compare against `BenchmarkRunIdentity.Unstamped`: `ToRecordWithJudge` projects a row a write has just touched, and item edits are refused while work is live, so such a row cannot be stale. `GetRunAsync` and `LoadRankingAsync` do the real comparison.
+
+### 4.4 The review phase
+
+A project with `requiresReview` ranks a scoring run on a reviewer's decision alone. The judge still runs; its verdict is what the reviewer starts from, and it never ranks by itself.
+
+- **Frozen, and exclusive with pairwise.** `requiresReview` is a project field frozen with the rest once runs exist (`ProjectFrozen`). `BenchmarkProjectService.EnsureReviewCompatible` refuses a pairwise judge policy on a review project, on create, on edit and on a judge change, with a 400 before the judge model lease is taken: a comparison of a review project never ranks, so it would run for hours for nothing.
+- **What the gate covers.** A succeeded, non-warm-up run that answered a leaf counting toward the score, or that names no item. A NIAH case keeps its judge path because the recall axis reads it. A warm-up and a run on a revised item or item set stay under their §4.2 reasons.
+- **Pending is derived, there is no row for it.** A run is pending when it has no review, and stale when its review was made under a judge-policy revision other than the project's current one (both NULL when there is no policy). A stale review stays on the row and is shown, but ranks as `review-stale` until the reviewer decides again.
+- **A review opens only on a current judging.** Under a policy, a pending or stale run is open for review only once its current judge attempt has succeeded under the current revision (`JudgingCurrent` in `LoadReviewGatesAsync` and `ListReviewQueueAsync`; with no policy the judging is always current). Until then `ReviewGate.AwaitingJudge` applies: the run is not in the inbox, it keeps its judge reason (`judge-pending`, `judge-failed`, `judge-cancelled`, `policy-outdated`, or truncation first), and its cell is `item-incomplete`. A rejected or approved review under the current revision is not affected.
+- **Approval writes the existing user score.** `BenchmarkStore.SubmitReviewAsync` upserts the review row, sets the run's `UserScore` to the approved overall (a rejection clears it) and bumps the run version in one transaction, so ranking reads the `user` source it already knows. It reserves SQLite's single writer with the run-version compare-and-swap first: two racing reviewers serialize there and the loser gets `VersionConflict`, not a unique-index failure.
+- **The review is the only writer of that score.** The score and clear-score routes answer 409 `ReviewRequired` on a review project, because a direct write would rank a run no reviewer approved and a clear would undo an approval.
+- **What the reviewer scores.** Under a judge policy an approval scores every `llm` criterion 0..10 and the overall is computed in `BenchmarkReviewService` with the rubric's weights; the request's own `score` is ignored. A rejection computes no overall, so it may score some, none or all `llm` criteria. A verifiable criterion is read-only: the stored verifier result is used, omitting it or repeating that value is accepted, and a differing value is a 400. A rubric of verifiable criteria alone has nothing to score, so it is approved on the verifier values with an empty criteria list; any other approval without scores is a 400. Without a policy the reviewer gives one overall 0..100 and a criteria list is a 400. A table CHECK requires a score on every approved review. Notes are free text, encrypted (`benchmark_run_review_notes_json`), and capped at `BenchmarkReviewLimits.MaxNotesCharacters` (8192), enforced in `BenchmarkStore.SubmitReviewAsync` and in the request validator.
+- **When a review is refused (`NotReviewable`, 409).** The project does not require review, the run did not succeed, is a warm-up, answered a non-scoring leaf, or sits on a revised item or item set (a stale identity stamp); or, under a policy, the run's current judging has not succeeded under the current revision. Two reviewers submitting against one run version serialize on the run-version check and the second gets `VersionConflict`. A human does not overrule a deterministic check, and a judging under an older revision graded a rubric the reviewer is no longer scoring.
+- **Routes.** `PUT benchmarks/runs/{runId}/review` records a decision and answers the run detail, whose `review` carries `policyCurrent`. `GET benchmarks/reviews` is the cross-project inbox (`state` is `pending`, `approved`, `rejected` or `stale`; optional `projectId`; paged), read from flat columns and limited to runs the submit would accept. Both are Operator-gated.
 
 ---
 
@@ -273,6 +294,16 @@ Why not one interpreter with a "trusted harness" namespace: **a namespace is not
 **Unscorable vs. zero.** The verifier calls `ExecuteDetailedAsync(request, requireResourceLimits: true, ct)` — stricter than the `run_python` tool, which passes `false`, because this is operator code executed unattended. Every refusal (`compute-disabled`, `invalid-request`, `no-isolation`, `no-resource-limits`, `no-jail-root`, `environment-unavailable`, `containment-unavailable`, or a failed `PR_SET_DUMPABLE`) fails the judging with the `verifier-unavailable: ` prefix, which `BenchmarkStore.RankExclusionReason` turns into the `verifier-unavailable` exclusion — telling the operator to fix the node. A **timeout** is the opposite: the code ran and did not finish, which is a real result about the code, so it scores 0.
 
 The `codeExecution` rubric preset (`GET benchmarks/rubric-presets`) ships this as one criterion at full weight, with the test code and exported names as placeholders to edit. The compute boundary itself — the bwrap jail, the venv, the isolation refusals — is [Compute Tools](19-compute-tools.md).
+
+#### 5.2.4 `pythonTests` stdout and stderr artifacts
+
+`BenchmarkPythonTestsVerifier.VerifyAsync` returns a `BenchmarkPythonTestsOutcome`: the persisted verdict plus both raw sandbox streams (empty when nothing ran). `BenchmarkJudgeExecutor` keeps the streams as run artifacts of kind `pythonTestsStdout` and `pythonTestsStderr`, one of each per `pythonTests` criterion per judge attempt; a second of the same kind for the same criterion of the same attempt is refused by a unique index. The streams are candidate-controlled, and stdout still carries the spent nonce marker.
+
+- **Blob first, row second.** `BenchmarkRunArtifactBlobStore.WriteAsync` writes `{data root}/benchmarks/artifacts/{runId:N}/{artifactId:N}.blob`, encrypted under the node key with the run id, the artifact id and the AAD column name `benchmark_run_artifact_blob` bound in. It returns the SHA-256 of the content, which the row records beside the byte count. `IBenchmarkStore.AddRunArtifactsAsync` then inserts every row of the judging in one transaction. This runs right after the verifier loop and before any later judging step can fail, so the evidence survives a failed judging; a refused verification threw earlier and leaves none.
+- **Capped at 256 KiB per stream, cut by the producer.** `BenchmarkRunArtifactBlobStore.MaxArtifactBytes` is the per-artifact cap and the raw sandbox streams can reach MiBs. `BenchmarkJudgeExecutor.FitToArtifactCap` keeps the head on a UTF-8 boundary and appends a `[truncated: n bytes omitted]` line, sized so the marker always fits. The verdict is read from the parsed markers, never from the artifact. The blob store itself still throws on an over-cap write.
+- **Served as an attachment, never inline.** `GET benchmarks/runs/{runId}/artifacts/{artifactId}` answers `text/plain; charset=utf-8` with `X-Content-Type-Options: nosniff` and a `Content-Disposition` attachment, because the bytes are candidate-controlled. An unknown artifact is 404. A row whose blob is gone is 404 `ArtifactMissing`. Bytes that fail decryption or no longer match the row's hash or size are 409 `ArtifactCorrupt` and are never served. The run detail and the JSON export list artifact metadata (id, kind, criterion, judge attempt, byte count, hash), never content, and only for the run's CURRENT judge attempt. An earlier attempt's rows stay stored and downloadable by id. `criterion_id` is NOT NULL.
+- **Cleanup has two layers.** `BenchmarkRecordService.DeleteRunAsync` and `DeleteProjectAsync` delete the run's blob directory after the rows commit, best-effort: a failure is logged at Warning and never fails the delete. The project delete reads its run ids before deleting; a run created after that read is queued, so the store refuses the delete with `ActiveRun` and no committed run is missed. `RetentionSweeperService` then removes any benchmark artifact directory older than its cutoff whose run row is gone.
+- **Accepted ceiling.** The sweep is keyed by run, not by blob. A blob orphaned inside a live run's directory, by a crash between the blob write and the row insert, stays until that run is deleted; each is at most `MaxArtifactBytes`. The upgrade path is a blob-keyed check against `benchmark_run_artifacts` in the sweep.
 
 ### 5.3 Pairwise judging and Bradley–Terry
 
@@ -396,6 +427,8 @@ The base model's **fingerprint is never client-writable**: it is an input to the
 
 Both deletions are refused by **one** definition of "in play", `BenchmarkStore.IsRunActiveAsync`: a run whose primary status is not terminal (`Queued`, `Running`, `CancelRequested`), or that still holds a **Queued or Running** work item, judge attempt or comparison on either side of a pair. `DeleteRunAsync` asks it about one run; `DeleteProjectAsync` asks it about every run of the project.
 
+**The delete order is the delete.** `DeleteRunCoreAsync` clears the run's pointer to its current judge attempt, then deletes comparisons, work items, artifacts, the review, judge attempts and fidelity attempts, then the run. Foreign keys are enforced and the run's children declare `Restrict`, so an out-of-order delete is rejected; artifacts go before judge attempts because they name an attempt. A pending review is not "in play" and never blocks a delete: only queued or running work does. The artifact bytes on disk are removed after the rows commit (§5.2.4).
+
 **`DELETE benchmarks/projects/{projectId}` takes the project's runs with it.** It is not "delete an empty project": the project, every run, and everything scoped to those runs go in **one transaction**, and the call is refused whole — `409` `ActiveRun`, nothing deleted — if *any* run is still in play. Per run it performs exactly the same deletion as the single-run path (`DeleteRunCoreAsync`, shared by both so the order cannot drift), then deletes the project-scoped rows that outlive every run: **task items** (encrypted prompts, reference answers, verifier overrides), **pairwise fits** (only *deactivated* by a run deletion) and **judge-policy revisions**, and finally the project row.
 
 > **The project version is bumped as the FIRST write, before the run set is read.** That reserves SQLite's single writer — the same idiom as `AcquireWorkCompletionAsync` — so a run started concurrently is either already committed and therefore seen by the guard, or blocked behind this write and then refused by its own compare-and-swap in `StartRunsAsync`, which reads the project version inside its own transaction. Reading the run set first and writing afterwards is what would let a run land in the gap and survive as an orphan. A refusal rolls the bump back with everything else.
@@ -422,6 +455,14 @@ Both are decided in `BenchmarkRunExecutor.ResolveStopReason` from the **coalesce
 
 The event buffer keeps a tombstone per terminal run — an emptied entry still turns a late `Subscribe` replay into a reset rather than silence. Past `MaxRetainedTerminalRuns` (256) the oldest drop and the hub resets off the persisted `LastStreamSequence`. Queue membership is its **own** flag: a run is evicted once per terminal *phase* and has two, so keying the queue off the eviction flag enqueued each run twice.
 
+### 7.2 Tool timing
+
+A primary run records how long its tools executed, as a display axis beside throughput. It never reaches `Rank`.
+
+- **Per call.** Each `tool_result` output part carries `DurationMs`, the tool's own execution time, copied from `ToolCallLifecyclePayload.DurationMs` by `BenchmarkInvocationCapture` (the requested phase carries none). The field is omitted from the stored JSON when null, so an untimed part serializes byte-identically to the shape before it existed. A provider-side call, an id-less call or an old run has no value; it is null, never 0.
+- **Per run.** `BenchmarkRunExecutor` rolls the parts up onto two nullable run columns when the primary succeeds: `ToolCallCount`, the number of `tool_call` parts, and `ToolTimeMs`, the sum of the measured `DurationMs` values. A call without a measurement counts but adds no time, and the sum is plain because the agent runs tools one at a time. NULL means the run predates the columns or was not measured; 0 means it made no calls. A primary cancelled mid-run clears both.
+- **Where it is measured.** In the function invoker of the agent's function-calling client, never from the gap between the requested and completed lifecycle events (§11). The mechanism is documented in [Chat](05-chat.md).
+
 ---
 
 ## 8. Scheduling
@@ -442,16 +483,18 @@ Full detail: [Scheduler](06-scheduler.md) and [Training](18-training.md).
 
 ## 9. Export
 
-`GET benchmarks/projects/{projectId}/export` (JSON) and `.../export.csv`, both Operator-gated. `BenchmarkExportProjection.SchemaVersion` is **4**.
+`GET benchmarks/projects/{projectId}/export` (JSON) and `.../export.csv`, both Operator-gated. `BenchmarkExportProjection.SchemaVersion` is **5**.
 
 | Version | Added |
 |---|---|
 | 2 | `repeatGroups`, `llamaBench` |
 | 3 | a fidelity block on every run, and the pairwise fit |
 | 4 | task suites — `taskItems[]` and `cells[]` as top-level sections, and `taskItemId`/`taskItemIndex`/`cellKey`/`taskInputHash`/`taskItemSetHash`/`cellQuality` on every run row |
+| 5 | review and tool timing — each run's `review` (state, score, per-criterion scores, notes, `policyCurrent`), `artifacts[]` metadata (never content), `toolCallCount` and `toolTimeMs`; CSV columns `reviewState`, `toolCallCount`, `toolTimeMs` |
 
 - **JSON** reuses `BenchmarkRunDetailResponse` verbatim — the same shape `GET benchmarks/runs/{runId}` returns — so an export and a live read of one run can never disagree. `pairwiseFit` is ONE object: a fit is a single immutable row whose key covers the whole comparison set, so smearing it over the runs would say something untrue.
 - **CSV** is flat and its columns are **appended, never inserted**. Consumers read this export by column index, and an inserted column silently turns a sampling seed into a token count. The snapshot test pins the whole header line plus one whole row, *including* the trailing empty cells — a short row is what actually breaks an index reader. `taskItemIndex` goes through the formula guard even though it is numeric, because a leading `-` is what a spreadsheet evaluates. The CSV repeats the pairwise fit key on every row of the cohort, having nowhere else to put it.
+- **`reviewState` is derived from the ranked row, which carries no review record.** On a review project it is the row's `review-pending` / `review-stale` / `review-rejected` exclusion reason, else `approved` when the row is ranked with a user score (in a review project only an approval writes one), else empty. A project that does not require review exports it empty on every row. A state hidden by a higher-precedence exclusion (warm-up, a revised item) also exports empty, so the JSON `review` is the full record. `toolCallCount` and `toolTimeMs` are empty for runs measured before the columns existed (§7.2).
 - **A run's `rank` is its CELL's rank**, and `cellQuality` is the cell's mean. The JSON export re-reads each run through `GetRunAsync`, which computes neither, so both must be re-attached from the ranked summary.
 - The export applies the **same** KLD comparability gate as the live read: a stale figure exports as `kldState=kld-stale` with its three cells empty and its digest still written, because the digest is the evidence for the withholding. Any new caller of `ToDetail`/`ToSummary`/`ToFidelity` has to pass `BenchmarkEndpointSupport.ExpectedKldDigest(project)`.
 - Fidelity numbers use a six-decimal formatter, not the throughput formatter's three: the measured Q4_K_M/UD-Q3_K_XL gap is 6.7977 vs 6.9497 at standard errors near 0.074, so three decimals throws away exactly the digits that decide whether two quants separate.
@@ -470,7 +513,10 @@ Full detail: [Scheduler](06-scheduler.md) and [Training](18-training.md).
 | `BenchmarkPairedDelta` | `A − B = δ [low, high]`, separated / not separated |
 | `BenchmarkVerifierEditor` | the criterion kinds including `pythonTests` (test code, exports, timeout, extraction mode) |
 | `BenchmarkRunEstimate` | what a launch is about to cost, before the operator commits |
-| `BenchmarkExportButtons` | names the schema version on the buttons that produce it |
+| `BenchmarkExportButtons` | names the schema version on the buttons that produce it (5) |
+| `BenchmarkReviewInbox` | the cross-project review inbox: a state filter (pending, stale, approved, rejected), an optional project filter, a pager, and a row that opens the run pane below it |
+| `BenchmarkReviewForm` | the reviewer's decision on one run: a 0..10 field per `llm` criterion (or one overall 0..100 without a policy), notes, Approve and Reject |
+| `BenchmarkRunPane` | the run detail, which hosts the review form or the score picker, the verifier evidence download list and the tool-timing list |
 
 Rules the UI is built on, all of them consequences of the backend contracts above:
 
@@ -478,7 +524,12 @@ Rules the UI is built on, all of them consequences of the backend contracts abov
 - **The launch estimate is runs, not time, unless the project has history.** `benchmarkRunEstimate` multiplies cells × leaf items × (repeats + warm-up); `estimatedMs` is null when there is no completed run to extrapolate from — omitted rather than guessed, and coarse when it exists (`1h 12m`, never seconds of an hour). Warm-ups are excluded from the median: they are the slow launch the repeats after them are measured without. Over `maxRunsPerRequest` the message is a **refusal**, not a warning, because the node refuses the whole freeze.
 - **A missing `pairedDeltas` entry renders "too few shared items"; `separated: false` renders "not separated by this suite".** Neither is re-derived from the bounds (§5.4).
 - **`no-score` gets its own copy**, not the `item-incomplete` action chip. Telling an operator to re-run an item on a pure-probe project sends them looking for a question nobody asked.
-- Every exclusion reason has a long form (why the cell is unranked) and a short badge, plus an action where one exists — `rerun-cell`, `rerun-item`, `enable-compute`.
+- Every exclusion reason has a long form (why the cell is unranked) and a short badge, plus an action where one exists — `rerun-cell`, `rerun-item`, `enable-compute`, and `open-review` for `review-pending`, `review-stale` and `review-rejected`: a human decision is what is missing, and a re-run would only make another run waiting for the same review.
+- **Exactly one score control per run, chosen by `benchmarkScoreControl`.** `review` for a non-warm-up run on a scoring item of a review project, where the form replaces the picker because the node refuses a plain score there (`ReviewRequired`); `judgeOnly` for every other run of a review project (a warm-up, a non-scoring leaf), which shows a note and no control; `picker` for a project without review; `loading` until the project and its items are read, so the wrong control never flashes.
+- **The form mirrors the node's review rules.** Verifiable criteria are shown with their verifier's verdict, read-only, and never sent; only `llm` criteria are in the payload. Approve and Reject are locked, with the reason beside them, while `benchmarkReviewBlocker` says the run is not reviewable (primary not succeeded, revised item, or no current succeeded judging under a policy). A rejection sends no scores. Notes are limited to `benchmarkReviewNotesMaxLength`, a copy of `BenchmarkReviewLimits.MaxNotesCharacters`. The form remounts when the run's judging or stored decision moves, so its pre-fill is never stale. `NotReviewable` and `VersionConflict` refresh the run and name what to do next.
+- **The inbox mounts only when a project requires review**, so a node without one never reads it. It is read on demand: a Refresh button, no polling. It steps back a page when reviewing the last row shrinks the total under the current page. `benchmarkReviewPageSize` copies the node's 1..200 take bounds. The project form's review switch is disabled once the project is frozen and while pairwise judging is selected.
+- **Tool timing is a list the benchmark pane owns**, because the chat renderer has no slot for it: the run's call count and total, then one row per timed or repeated call, with a repeated-call badge. A call the node did not time renders no duration, never `0 s`.
+- **Evidence files are only downloaded.** The pane lists the run's artifacts and downloads them through the artifact route; a 409 `ArtifactCorrupt` is named in the error toast.
 - The FE's mirrored limits (`benchmarkTaskItemLimits`, `benchmarkNiahLimits`, `benchmarkPythonTestsLimits`, `maxVerifierPatternLength`) are copies of backend constants and are verified against them: 20 leaves, 100 runs per request, 512-token probe floor, 4 000-char test code, 16 exports, 600 s timeout, 512-char pattern. Change one side and the other becomes a form that accepts what the node refuses.
 
 ---
@@ -496,6 +547,8 @@ Rules the UI is built on, all of them consequences of the backend contracts abov
 - **A shared worktree means a shared git index**, and `pnpm run openapi:check` diffs the worktree against the **index**. After a private-index commit HEAD moves and the shared index does not, so the check reports drift on a tree that exactly matches HEAD.
 - **`scripts/dev-start.sh` points the node's GGUF registry at `${XDG_DATA_HOME:-$HOME/.local/share}/XE-Local-AI-Engine/models`.** A dev-stack live gate with a scratch `XDG_DATA_HOME` must export `HuggingFace__ModelsDirectory` at a populated store before `scripts/dev-start.sh`, or `benchmarks/eligible-models` is silently empty. A multimodal GGUF cannot be the judge even when the rubric never spawns one.
 - **`pgrep -f "dotnet (build|test)"` matches its own wrapper** — a wait-for-no-build loop waits on itself forever. Use `pgrep -f "dotnet-root/dotnet (build|test)"`, and prefer `scripts/with-build-lock.sh`, which makes the collision impossible. A concurrent build swapping DLLs mid-run produces results that are neither pass nor fail.
+- **Tool timing must be stripped by `BenchmarkOutputParts.ForJudge` before any judge payload is built.** `DurationMs` on a `tool_result` part differs on every run of the same answer. Left in, the judge prompt changes per run: the judge sees noise, an identical answer is no longer judged byte-identically, and a re-judge cannot reproduce. `ForJudge` clears it with the reasoning drop; a new judge-facing projection of the parts has to go through it.
+- **Tool execution time is measured in the function invoker, never from the lifecycle gap.** In `InvocationRunner.StreamLoop` the `Requested` event fires when the call is discovered in the stream and `Completed` when its result is read, so the gap spans the model's streaming tail and every sibling call of the round, and `ToolInvocationObservabilityChatClient`'s completion span measures that same request-to-result latency. Only the function invoker set in `AgentServiceCollectionExtensions.DecorateChatClientPipeline` times the tool alone; it writes into `ToolExecutionTimingScope`, and `StreamLoop` reads it when the call completes.
 
 ---
 
@@ -505,11 +558,14 @@ Rules the UI is built on, all of them consequences of the backend contracts abov
 |---|---|
 | Executors, freeze, planner, fitter, bootstrap, NIAH generator, contracts | `XE-Local-AI-Engine.Client.Application/Services/Benchmarks/` |
 | Scheduled matrix handler | `…Client.Application/Services/Scheduler/Handlers/RunBenchmarkBatchHandler.cs` |
-| Endpoints' door onto the store (endpoint-dependency rule) | `XE-Local-AI-Engine.Client.Application/Services/Benchmarks/Implementation/BenchmarkRecordService.cs` — pass-through over the thirteen `IBenchmarkStore` members the project, run, cell and fidelity endpoints read, plus `GetProjectDetailAsync`, the one read every project-detail response is built from; the twenty-two of them inject it, never the store. Domain writes stay on `IBenchmarkProjectService` (projects and the judge policy), `IBenchmarkTaskItemService`, `IBenchmarkRunFreezeService` and `IBenchmarkRunBatchService` (starting and freezing runs), `IBenchmarkCancellationService` and `IBenchmarkExportQuery` (export) — as does every store member only the queue and the executors drive |
+| Endpoints' door onto the store (endpoint-dependency rule) | `XE-Local-AI-Engine.Client.Application/Services/Benchmarks/Implementation/BenchmarkRecordService.cs` — pass-through over the fifteen `IBenchmarkStore` members the project, run, cell, fidelity, review-inbox and artifact endpoints read, plus `GetProjectDetailAsync`, the one read every project-detail response is built from; the twenty-five of them inject it, never the store. Domain writes stay on `IBenchmarkProjectService` (projects and the judge policy), `IBenchmarkTaskItemService`, `IBenchmarkRunFreezeService` and `IBenchmarkRunBatchService` (starting and freezing runs), `IBenchmarkCancellationService` and `IBenchmarkExportQuery` (export) — as does every store member only the queue and the executors drive |
 | Comparison read model | `…Client.Application/Services/Benchmarks/Implementation/BenchmarkComparisonService.cs` — the compare endpoint's paired cell deltas and the comparisons listing; the store's ranking (run list, cells), both exports and the listing read a fit's `ScoresJson` through `Client.Persistence/Stores/BenchmarkPairwiseFitScores.cs`, where an unreadable blob is served as no pairwise score, null entries are skipped and the first entry wins for a run named twice, each defect logged once at Warning. Export formatters (`BenchmarkExportCsv`, `BenchmarkExportPairwise`) are pure mappers under `Endpoints/Benchmarks/V1/Mappers/`; `BenchmarkFidelityKldGate` derives `kldState` for the API and both exports |
 | Entities, configurations, hashing, store | `XE-Local-AI-Engine.Client.Persistence/{Entities,Configurations,Implementation,Stores}/` |
 | Endpoints, DTOs, mappers | `XE-Local-AI-Engine.Client/Endpoints/Benchmarks/V1/` |
-| Routes | `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs` (`LocalApiRoutes.Benchmarks`) |
+| Routes | `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs` (`LocalApiRoutes.Benchmarks`; the review phase and artifacts add `RunReview`, `Reviews` and `RunArtifactById`) |
+| Review phase | `…Client.Application/Services/Benchmarks/Implementation/BenchmarkReviewService.cs` (rubric scoring, the read-only verifier check, the judging-currency refusal) and `Client.Persistence/Implementation/BenchmarkStore.Reviews.cs` (submit, the inbox, store-side reviewability); the ranking gate is `BenchmarkRankingPolicy.ApplyReviewGate` fed by `LoadReviewGatesAsync` in `BenchmarkStore.Ranking.cs`; endpoints `SubmitBenchmarkRunReviewEndpoint` and `ListBenchmarkReviewsEndpoint` (§4.4) |
+| Run artifacts | `…Client.Application/Services/Benchmarks/Implementation/BenchmarkRunArtifactBlobStore.cs` over `Services/Blobs/ManagedEncryptedBlobStore.cs`, rows in `Client.Persistence/Implementation/BenchmarkStore.Artifacts.cs`, download in `GetBenchmarkRunArtifactEndpoint`, orphan sweep in `RetentionSweeperService` (§5.2.4) |
+| Tool timing | `XE-Local-AI-Engine.AI.Agent/Tools/Implementation/ToolExecutionTimingScope.cs`, the invoker in `AgentServiceCollectionExtensions`, `ToolCallLifecyclePayload.DurationMs` (§7.2) |
 | Run-progress SignalR hub | `XE-Local-AI-Engine.Client/Hubs/BenchmarkRunHub.cs` (`BenchmarkRunHub`, mapped at `/api/local/v1/benchmarks/hub`) |
 | React feature | `XE-Local-AI-Engine.Client.React/src/features/benchmarks/` |
 | Fidelity + NIAH corpus and licence | `tools/benchmark/corpus/`, `third-party/data/` |

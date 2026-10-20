@@ -7,10 +7,10 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 internal static class BenchmarkExportProjection
 {
     /// <summary>
-    ///     Current export schema version. Version 4 adds task items, measurement cells and per-run task/cell identity
-    ///     while preserving every field from version 3.
+    ///     Current export schema version. Version 5 adds each run's <c>review</c>, artifact metadata (never content),
+    ///     <c>toolCallCount</c> and <c>toolTimeMs</c> while preserving every field from version 4.
     /// </summary>
-    public const int SchemaVersion = 4;
+    public const int SchemaVersion = 5;
 
     public static BenchmarkExportPairwiseFitResponse? ToResponse(BenchmarkPairwiseFitRecord? fit, IReadOnlyList<BenchmarkPairwiseScoreEntry> scores) =>
         fit is null

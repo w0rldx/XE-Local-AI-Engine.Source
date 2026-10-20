@@ -13,6 +13,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
@@ -370,6 +371,37 @@ public sealed class RetentionSweeperServiceTests : IDisposable
 
         AssertEx.True(Directory.Exists(failingScope), "The scope whose delete threw is left for the next start.");
         AssertEx.False(Directory.Exists(secondOrphan), "A failure on one scope must not stop the sweep reclaiming the rest.");
+    }
+
+    [Test]
+    public async Task OrphanResweep_DeletesArtifactScopesOfDeletedBenchmarkRuns()
+    {
+        await using var provider = await BuildProviderAsync("orphan-benchmark-scopes.sqlite", RegisterBenchmarkRunArtifactBlobStore);
+        var orphanedRun = SeedArtifactScope("benchmarks", Guid.NewGuid(), AgedWriteTimeUtc());
+
+        using var sweeper = CreateSweeper(provider, enabled: false, timeProvider: new ManualTimeProvider(FixedNowUtc));
+        await sweeper.RunOrphanResweepOnceAsync(CancellationToken.None);
+
+        AssertEx.False(Directory.Exists(orphanedRun), "A benchmark-run artifact directory with no benchmark_runs row must be reclaimed.");
+    }
+
+    [Test]
+    public async Task OrphanResweep_KeepsScopesInsideTheGrace()
+    {
+        await using var provider = await BuildProviderAsync("orphan-benchmark-grace.sqlite", RegisterBenchmarkRunArtifactBlobStore);
+        var freshScope = SeedArtifactScope("benchmarks", Guid.NewGuid(), FreshWriteTimeUtc());
+        var agedScope = SeedArtifactScope("benchmarks", Guid.NewGuid(), AgedWriteTimeUtc());
+
+        using var sweeper = CreateSweeper(provider, enabled: false, timeProvider: new ManualTimeProvider(FixedNowUtc));
+        await sweeper.RunOrphanResweepOnceAsync(CancellationToken.None);
+
+        AssertEx.True(Directory.Exists(freshScope), "A run scope written inside the grace window may still be racing its row.");
+        AssertEx.False(Directory.Exists(agedScope), "The aged peer proves the sweep ran, so the spared scope is not spared by a no-op.");
+    }
+
+    private static void RegisterBenchmarkRunArtifactBlobStore(ServiceCollection services)
+    {
+        services.AddSingleton<BenchmarkRunArtifactBlobStore>();
     }
 
     private static void RegisterDevWorkflowArtifactBlobStore(ServiceCollection services)

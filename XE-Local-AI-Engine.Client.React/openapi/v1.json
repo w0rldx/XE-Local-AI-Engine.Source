@@ -4506,6 +4506,87 @@
         ]
       }
     },
+    "/api/local/v1/benchmarks/reviews": {
+      "get": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "listBenchmarkReviews",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "guid",
+              "nullable": true
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "take",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkReviewsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/benchmarks/rubric-presets": {
       "get": {
         "tags": [
@@ -4660,6 +4741,80 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/benchmarks/runs/{runId}/artifacts/{artifactId}": {
+      "get": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "getBenchmarkRunArtifact",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4872,6 +5027,94 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/benchmarks/runs/{runId}/review": {
+      "put": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "submitBenchmarkRunReview",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "SubmitBenchmarkRunReviewRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1SubmitBenchmarkRunReviewRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -29219,6 +29462,9 @@
           "fidelityKldBaseModelName": {
             "type": "string",
             "nullable": true
+          },
+          "requiresReview": {
+            "type": "boolean"
           }
         }
       },
@@ -29266,6 +29512,9 @@
           "judgeEnabled": {
             "type": "boolean"
           },
+          "requiresReview": {
+            "type": "boolean"
+          },
           "runCount": {
             "type": "integer",
             "format": "int32"
@@ -29309,6 +29558,70 @@
           "totalScored": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkReviewCriterionScoreDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "criterionId": {
+            "type": "string"
+          },
+          "score": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkReviewQueueItemResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "primaryModelName",
+          "state"
+        ],
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "runVersion": {
+            "type": "integer"
+          },
+          "primaryModelName": {
+            "type": "string"
+          },
+          "taskItemId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "taskItemIndex": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "primaryCompletedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "state": {
+            "type": "string"
+          },
+          "reviewScore": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "reviewedAtUtc": {
+            "type": "integer",
+            "nullable": true
           }
         }
       },
@@ -29383,6 +29696,41 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRunArtifactResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "contentHash"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "criterionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "judgeAttemptId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "byteCount": {
+            "type": "integer"
+          },
+          "contentHash": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRunArtifactRouteRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
       "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse": {
         "allOf": [
           {
@@ -29424,6 +29772,20 @@
               },
               "primaryEnvironmentFacts": {
                 "nullable": true
+              },
+              "review": {
+                "nullable": true,
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRunReviewResponse"
+                  }
+                ]
+              },
+              "artifacts": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRunArtifactResponse"
+                }
               }
             }
           }
@@ -29490,6 +29852,44 @@
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkJudgeVerifierResponse"
             }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRunReviewResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state"
+        ],
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "score": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "criteria": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkReviewCriterionScoreDto"
+            }
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "policyRevisionId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "policyCurrent": {
+            "type": "boolean"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
           }
         }
       },
@@ -29683,6 +30083,15 @@
           "segmentCount": {
             "type": "integer",
             "format": "int32",
+            "nullable": true
+          },
+          "toolCallCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "toolTimeMs": {
+            "type": "integer",
             "nullable": true
           },
           "userScore": {
@@ -30187,6 +30596,34 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkReviewsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkReviewsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkReviewQueueItemResponse"
+            }
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "take": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkRunsRequest": {
         "type": "object",
         "additionalProperties": false
@@ -30465,6 +30902,36 @@
               "type": "string",
               "format": "guid"
             }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1SubmitBenchmarkRunReviewRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "criteria": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkReviewCriterionScoreDto"
+            }
+          },
+          "score": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
           }
         }
       },

@@ -1260,6 +1260,14 @@
 			"title": "Agent definitions"
 		},
 		"benchmarks": {
+			"artifacts": {
+				"download": "Download",
+				"kinds": {
+					"pythonTestsStderr": "Python tests stderr",
+					"pythonTestsStdout": "Python tests stdout"
+				},
+				"title": "Verifier evidence files"
+			},
 			"cells": {
 				"cohort": "{{ranked}} of {{scored}} combinations ranked, each over {{items}} scored items",
 				"displayOnly": "No task item of this project counts toward a score, so no combination is ranked. Recall is the measurement here.",
@@ -1306,6 +1314,8 @@
 				"reconnecting": "Reconnecting and reconciling…"
 			},
 			"errors": {
+				"artifact": "Could not download this evidence file.",
+				"artifactCorrupt": "This evidence file failed its integrity check and was not downloaded.",
 				"cancel": "Could not cancel this run phase.",
 				"contextRefused": "The model could not provide the requested context.",
 				"delete": "Could not delete this terminal run.",
@@ -1314,11 +1324,16 @@
 				"judgeFailed": "The automated judge failed; the primary result is still available.",
 				"kvUnsupportedHint": "Pick f16 explicitly to run this model on this runtime.",
 				"measureFidelity": "Could not queue a fidelity measurement.",
+				"notReviewable": "This run cannot be reviewed yet. Re-judge it under the current judge policy first.",
 				"projectSave": "Could not save the project.",
 				"projectsLoad": "Could not load benchmark projects.",
 				"rejudgeProject": "Could not re-judge this project.",
 				"rejudgeRun": "Could not re-judge this run.",
 				"restartInterrupted": "This running phase was interrupted by a node restart.",
+				"review": "Could not save the review.",
+				"reviewConflict": "The run changed before the review was saved. It has been refreshed.",
+				"reviewRequired": "This project requires review. Score the run through its review instead.",
+				"reviewsLoad": "Could not load the review inbox.",
 				"runLoad": "Could not load the run.",
 				"score": "The run changed before the score was saved. It has been refreshed.",
 				"start": "Could not start the benchmark run."
@@ -1327,7 +1342,7 @@
 				"csv": "Export CSV (v{{version}})",
 				"error": "Could not export this benchmark project.",
 				"json": "Export JSON (v{{version}})",
-				"schemaHelp": "Schema {{version}}: every run at full detail, plus the project's task items, each run's item and combination stamps, and the combination table."
+				"schemaHelp": "Schema {{version}}: every run at full detail with its review and tool-call rollup, plus the project's task items, each run's item and combination stamps, and the combination table."
 			},
 			"fidelity": {
 				"cacheClearError": "Could not delete the cached base logits.",
@@ -1629,6 +1644,10 @@
 				"rejudgeConfirmAll": "All {{count}} succeeded runs will be re-judged under the current policy, and the ranked cohort moves to the current judge runtime.",
 				"rejudgeConfirmPolicy": "Changing the judge re-scores this project. All {{count}} succeeded runs will be re-judged and the ranking is rebuilt from the new cohort.",
 				"rejudgeConfirmTitle": "Re-judge this project?",
+				"requiresReview": "Require a human review before a run ranks",
+				"requiresReviewHelp": "Each scoring run waits in the review inbox; only an approved review puts its score in the ranking.",
+				"requiresReviewPairwise": "Not available with pairwise judging: pairwise ranks runs against each other, so there is no per-run score to review.",
+				"reviewSection": "Human review",
 				"runCount": "{{count}} runs",
 				"saveJudge": "Save judge",
 				"select": "Select a benchmark project.",
@@ -1640,6 +1659,7 @@
 					"enable-compute": "Enable Compute on this node — and give it a host where the sandbox can be bounded — then re-judge.",
 					"fix-override": "Edit the task item's override, or the rubric, so the two name the same criterion — then re-judge.",
 					"none": "Nothing to do — a warm-up is meant to sit outside the ranking.",
+					"open-review": "Open its review — a reviewer's approval is what ranks it.",
 					"rejudge": "Re-judge to bring it back into the cohort.",
 					"remove-runs": "Remove runs to bring the cohort under the cap.",
 					"rerun": "Rerun it — with more room when it was cut off.",
@@ -1679,6 +1699,9 @@
 					"pairwise-stale": "fitted from an older comparison set",
 					"pairwise-unfitted": "not in the active fit",
 					"policy-outdated": "Judged under an older judge policy.",
+					"review-pending": "Waiting for a human review. This project ranks a scoring run only once a reviewer approved it.",
+					"review-rejected": "A reviewer rejected this answer, so it carries no score.",
+					"review-stale": "Reviewed under an older rubric. The decision no longer counts and the run is back in the review inbox.",
 					"truncated": "The answer was cut off by the token budget, so it is not comparable to a complete one.",
 					"verifier-unavailable": "A deterministic verifier could not run on this node, so the answer was never checked. That is not a zero.",
 					"warmup": "A warm-up run. It is excluded on purpose so the repeats after it are not judged against a cold launch."
@@ -1705,6 +1728,9 @@
 					"pairwise-stale": "refitting",
 					"pairwise-unfitted": "unfitted",
 					"policy-outdated": "policy outdated",
+					"review-pending": "awaiting review",
+					"review-rejected": "rejected",
+					"review-stale": "review outdated",
 					"truncated": "truncated",
 					"verifier-unavailable": "verifier unavailable",
 					"warmup": "warm-up"
@@ -1729,6 +1755,46 @@
 				"status": "Status",
 				"userScore": "Operator",
 				"warmupBadge": "warm-up"
+			},
+			"review": {
+				"approve": "Approve",
+				"blocked": {
+					"judge": "Review needs a succeeded judging under the current judge policy. Re-judge this run first.",
+					"primary": "Only a succeeded run can be reviewed.",
+					"revised": "The task item was edited after this run, so its answer can no longer be reviewed. Run the item again."
+				},
+				"criterionHint": "0 to 10, pre-filled from the judging",
+				"judgeOnly": "Scored by its judge; this run is not reviewable.",
+				"notes": "Notes",
+				"overall": "Overall score, 0 to 100",
+				"reject": "Reject",
+				"states": {
+					"approved": "approved",
+					"pending": "pending",
+					"rejected": "rejected",
+					"stale": "stale"
+				},
+				"storedScore": "{{score}} / 100",
+				"title": "Review",
+				"verifierFailed": "failed",
+				"verifierMissing": "no verdict",
+				"verifierPassed": "passed",
+				"verifierReadOnly": "Decided by its verifier; a review cannot change it."
+			},
+			"reviewInbox": {
+				"allProjects": "All review projects",
+				"completed": "Completed",
+				"empty": {
+					"approved": "No run has been approved yet.",
+					"pending": "No run is waiting for review.",
+					"rejected": "No run has been rejected.",
+					"stale": "No review is outdated."
+				},
+				"item": "Item",
+				"project": "Project",
+				"score": "Score",
+				"state": "State",
+				"title": "Review inbox"
 			},
 			"rubric": {
 				"add": "Add criterion",
@@ -1806,6 +1872,11 @@
 			},
 			"subtitle": "Compare local models against one frozen agent task, with optional independent judging.",
 			"title": "Local model benchmarks",
+			"tools": {
+				"count_one": "{{count}} tool call",
+				"count_other": "{{count}} tool calls",
+				"repeated": "repeated call"
+			},
 			"validation": {
 				"agent": "Select an agent.",
 				"context": "Context must be positive.",

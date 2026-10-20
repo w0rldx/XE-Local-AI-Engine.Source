@@ -43,7 +43,8 @@ public sealed class ExportBenchmarkProjectCsvEndpoint : Endpoint<BenchmarkProjec
         var csv = BenchmarkExportCsv.Render(export.Runs,
             export.Fidelity.ExpectedKldDigest,
             export.PairwiseFit,
-            export.PairwiseScores);
+            export.PairwiseScores,
+            export.Project.RequiresReview);
         await Send.BytesAsync(Encoding.UTF8.GetBytes(csv),
             BenchmarkExportProjection.FileName(export.Project.Name, now, "csv"),
             "text/csv",

@@ -135,7 +135,8 @@ public sealed partial class BenchmarkStore
         // One judge read for the whole group, not one per run: the batch was inserted in a single round trip precisely
         // so a repeat group does not pay N of them, and materializing it per run gave that back.
         var views = await LoadJudgeViewsAsync([.. runs.Select(static run => run.Id)], cancellationToken);
-        return [.. runs.Select(run => ToRecordWithJudge(run, views))];
+        // A just-frozen run is Queued, so it cannot have reached the review phase.
+        return [.. runs.Select(run => ToRecordWithJudge(run, views, ReviewGate.NotApplicable))];
     }
 
     public async Task<BenchmarkRunRecord?> GetRunAsync(Guid runId, CancellationToken cancellationToken = default)
@@ -146,16 +147,23 @@ public sealed partial class BenchmarkStore
         }
 
         var views = await LoadJudgeViewsAsync([runId], cancellationToken);
+        var gates = await LoadReviewGatesAsync([runId], cancellationToken);
         var (judge, qualityScore, qualityScoreSource, _) = ApplyRunExclusions(JudgeViewFor(views, runId, entity.UserScore),
             entity.UserScore,
             entity.IsWarmup,
             entity.PrimaryStopReason,
-            await LoadRunIdentityAsync(entity, cancellationToken));
+            await LoadRunIdentityAsync(entity, cancellationToken),
+            gates.GetValueOrDefault(runId));
+        var review = await LoadReviewAsync(runId, cancellationToken);
         return ToRecord(entity) with
         {
             Judge = judge,
             QualityScore = qualityScore,
-            QualityScoreSource = qualityScoreSource
+            QualityScoreSource = qualityScoreSource,
+            ReviewState = review?.State,
+            ReviewPolicyCurrent = await LoadReviewPolicyCurrentAsync(entity.ProjectId, review, cancellationToken),
+            Review = review,
+            Artifacts = await GetRunArtifactsAsync(runId, cancellationToken)
         };
     }
 
@@ -323,7 +331,19 @@ public sealed partial class BenchmarkStore
                                   TaskItemIndex = entity.TaskItemIndex,
                                   CellKey = entity.CellKey,
                                   TaskInputHash = entity.TaskInputHash,
-                                  TaskItemSetHash = entity.TaskItemSetHash
+                                  TaskItemSetHash = entity.TaskItemSetHash,
+                                  ToolCallCount = entity.ToolCallCount,
+                                  ToolTimeMs = entity.ToolTimeMs,
+                                  ReviewState = _dbContext.BenchmarkRunReviews.Where(review => review.RunId == entity.Id)
+                                                          .Select(static review => review.State)
+                                                          .FirstOrDefault(),
+                                  ReviewPolicyCurrent = _dbContext.BenchmarkRunReviews.Where(review => review.RunId == entity.Id)
+                                                                  .Select(review => (bool?)(review.PolicyRevisionId
+                                                                                            == _dbContext.BenchmarkProjects
+                                                                                                         .Where(project => project.Id == entity.ProjectId)
+                                                                                                         .Select(static project => project.CurrentJudgePolicyRevisionId)
+                                                                                                         .FirstOrDefault()))
+                                                                  .FirstOrDefault()
                               })
                               .ToArrayAsync(cancellationToken);
 

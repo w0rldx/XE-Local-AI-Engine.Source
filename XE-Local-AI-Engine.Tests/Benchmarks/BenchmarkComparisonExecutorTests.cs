@@ -103,6 +103,102 @@ public sealed class BenchmarkComparisonExecutorTests
         AssertEx.Equal("policy reference", seen[ItemOne]);
     }
 
+    [Test]
+    public async Task Payload_WithTimedParts_EqualsPayloadWithUntimedParts()
+    {
+        BenchmarkOutputPart[] untimed =
+        [
+            new("output", Content: "Let me look that up."),
+            new("tool_call", ToolCallId: "call-1", ToolName: "search", Arguments: "{}"),
+            new("tool_result", ToolCallId: "call-1", ToolName: "search", Result: "ok", IsError: false),
+            new("output", Content: "It is 42.")
+        ];
+        var timed = untimed.Select(static part => part.Kind == "tool_result" ? part with { DurationMs = 1234 } : part).ToArray();
+
+        var timedPayloads = await JudgePayloadsAsync(timed);
+        var untimedPayloads = await JudgePayloadsAsync(untimed);
+
+        AssertEx.NotEmpty(timedPayloads);
+        AssertEx.Contains(timedPayloads[0], "It is 42.", message: "the payload must carry the answer, or the comparison proves nothing");
+        AssertEx.True(timedPayloads.SequenceEqual(untimedPayloads, StringComparer.Ordinal), "stored tool timing must never change a pairwise judge prompt");
+    }
+
+    /// <summary>Judges every comparison of a one-item, two-model suite whose runs both stored <paramref name="parts" />; returns each judge prompt's user payload.</summary>
+    private static async Task<List<string>> JudgePayloadsAsync(IReadOnlyList<BenchmarkOutputPart> parts)
+    {
+        var installed = BenchmarkJudgeExecutorTests.Installed();
+        var snapshot = BenchmarkJudgeExecutorTests.Snapshot(installed);
+        var storedParts = BenchmarkExecutionSerialization.SerializeParts(parts);
+        BenchmarkRunRecord[] runs =
+        [
+            BenchmarkPairwiseSuiteEndToEndTests.SuiteRun(snapshot, ItemZero, "cell-27b", "unused") with { OutputPartsJson = storedParts },
+            BenchmarkPairwiseSuiteEndToEndTests.SuiteRun(snapshot, ItemZero, "cell-9b", "unused") with { OutputPartsJson = storedParts }
+        ];
+        var plan = BenchmarkPairwisePlanner.Plan([
+            .. runs.Select(static run => new BenchmarkPairwiseCandidate
+            {
+                RunId = run.Id,
+                TaskCaseId = run.TaskItemId,
+                TaskInputHash = run.TaskInputHash!,
+                ModelName = run.PrimaryModelName
+            })
+        ], BenchmarkPairwisePolicy.MaximumRuns);
+        var comparisons = plan.Slots.Select((slot, index) => BenchmarkPairwiseSuiteEndToEndTests.Comparison(slot, order: 0, installed, index + 1)).ToArray();
+
+        var store = Substitute.For<IBenchmarkStore>();
+        store.GetJudgePolicyRevisionAsync(BenchmarkPairwiseSuiteEndToEndTests.RevisionId, Arg.Any<CancellationToken>())
+             .Returns(BenchmarkPairwiseSuiteEndToEndTests.Revision("policy reference"));
+        store.ListTaskItemsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns([Item(ItemZero, 0, "reference zero")]);
+        foreach (var run in runs)
+        {
+            store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        }
+
+        foreach (var comparison in comparisons)
+        {
+            store.GetComparisonAsync(comparison.Id, Arg.Any<CancellationToken>()).Returns(comparison);
+        }
+
+        List<string> failures = [];
+        store.MarkComparisonFailedAsync(Arg.Any<long>(), Arg.Any<long>(), Arg.Do<string>(failures.Add), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>())
+                  .Returns(_ => new BenchmarkJudgeExecutorTests.TrackingAsyncDisposable());
+        var payloads = new List<string>();
+        var runner = Substitute.For<IInvocationRunner>();
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(call =>
+              {
+                  var package = call.Arg<InvocationExecutionContext>().Package;
+                  payloads.Add(package.ConversationContext[0].Content);
+                  dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
+                      new InvocationStateChangedEventArgs(BenchmarkJudgeExecutorTests.State(package.InvocationId,
+                          """{"schemaVersion":1,"verdict":"a","rationale":"A."}""")));
+                  return Task.CompletedTask;
+              });
+        await using var lease = new BenchmarkJudgeExecutorTests.FakeLease(installed);
+        var executor = BenchmarkPairwiseSuiteEndToEndTests.Executor(store, snapshot, lease, dispatcher, runner);
+
+        foreach (var comparison in comparisons)
+        {
+            var runA = runs.Single(run => run.Id == comparison.RunAId);
+            await executor.ExecuteAsync(new BenchmarkClaimedWork
+            {
+                QueueSequence = comparison.Sequence,
+                RunId = runA.Id,
+                Kind = BenchmarkWorkKind.Comparison,
+                Attempt = 1,
+                Version = 1,
+                Run = runA,
+                ComparisonId = comparison.Id
+            }, CancellationToken.None);
+        }
+
+        AssertEx.Empty(failures, "Every comparison reaches its judge.");
+        return payloads;
+    }
+
     /// <summary>Judges one comparison per item of a two-item, two-model suite and returns the reference each judge prompt carried, by item.</summary>
     private static async Task<Dictionary<Guid, string?>> JudgeOnePairPerItemAsync(string? policyReference, string? zeroReference, string? oneReference)
     {

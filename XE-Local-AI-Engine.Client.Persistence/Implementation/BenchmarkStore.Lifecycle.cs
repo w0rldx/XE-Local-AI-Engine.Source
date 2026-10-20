@@ -173,6 +173,13 @@ public sealed partial class BenchmarkStore
             throw new BenchmarkConflictException("PrimaryNotSucceeded");
         }
 
+        // In a review project the review is the only writer of the user score: a direct write would rank a run no
+        // reviewer approved, and a clear would silently undo an approval.
+        if (await _dbContext.BenchmarkProjects.AnyAsync(entity => entity.Id == run.ProjectId && entity.RequiresReview, cancellationToken))
+        {
+            throw new BenchmarkConflictException("ReviewRequired");
+        }
+
         run.UserScore = score;
         run.Version++;
         run.UpdatedAtUtc = Now();
@@ -336,14 +343,16 @@ public sealed partial class BenchmarkStore
     /// </remarks>
     private async Task DeleteRunCoreAsync(BenchmarkRun run, CancellationToken cancellationToken)
     {
-        // The order below IS the delete: the run stops pointing at its attempt, then comparisons, work items, judge and fidelity attempts, then the run. Foreign keys are
-        // enforced and the children declare Restrict, so an out-of-order delete is rejected; comparisons declare no relationship to the runs they name — omit one here and it outlives its run.
+        // The order below IS the delete: the run stops pointing at its attempt, then comparisons, work items, artifacts (they name an attempt), the review, judge and
+        // fidelity attempts, the run. Foreign keys are enforced and children declare Restrict, so an out-of-order delete is rejected; comparisons declare no relationship to the runs they name — omit one here and it outlives its run.
         var runId = run.Id;
         var projectId = run.ProjectId;
         run.CurrentJudgeAttemptId = null;
         await SaveAsync(cancellationToken);
         await DeleteComparisonsOfAsync(runId, projectId, cancellationToken);
         await _dbContext.BenchmarkWorkItems.Where(entity => entity.RunId == runId).ExecuteDeleteAsync(cancellationToken);
+        await _dbContext.BenchmarkRunArtifacts.Where(entity => entity.RunId == runId).ExecuteDeleteAsync(cancellationToken);
+        await _dbContext.BenchmarkRunReviews.Where(entity => entity.RunId == runId).ExecuteDeleteAsync(cancellationToken);
         await _dbContext.BenchmarkJudgeAttempts.Where(entity => entity.RunId == runId).ExecuteDeleteAsync(cancellationToken);
         await _dbContext.BenchmarkFidelityAttempts.Where(entity => entity.RunId == runId).ExecuteDeleteAsync(cancellationToken);
         // The deletes intentionally bypass the tracker: this scope may have materialized the required work/run relationship earlier, and mixing ExecuteDelete for

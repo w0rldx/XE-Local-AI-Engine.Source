@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 
+using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
@@ -36,6 +37,15 @@ internal static class BenchmarkEndpointSupport
 
         var attempt = await records.GetJudgeAttemptAsync(attemptId, ct);
         return BenchmarkJudgeSerialization.DeserializeResult(attempt?.ResultJson);
+    }
+
+    /// <summary>The run detail every run-returning endpoint answers with: verdict, KLD gate and review currency read against the run's project.</summary>
+    public static async Task<BenchmarkRunDetailResponse> ToDetailAsync(BenchmarkRecordService records, BenchmarkRunRecord run, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        ArgumentNullException.ThrowIfNull(run);
+        var project = await records.GetProjectAsync(run.ProjectId, ct);
+        return run.ToDetail(await ReadVerdictAsync(records, run, ct), ExpectedKldDigest(project), project?.CurrentJudgePolicyRevisionId);
     }
 
     /// <summary>
@@ -114,6 +124,9 @@ internal static class BenchmarkEndpointSupport
             "JudgePolicyAlreadyApplied" => BenchmarkErrorCode.JudgePolicyAlreadyApplied,
             "JudgeDisabled" => BenchmarkErrorCode.JudgeDisabled,
             "PrimaryNotSucceeded" => BenchmarkErrorCode.PrimaryNotSucceeded,
+            "ReviewRequired" => BenchmarkErrorCode.ReviewRequired,
+            "NotReviewable" => BenchmarkErrorCode.NotReviewable,
+            "ArtifactCorrupt" => BenchmarkErrorCode.ArtifactCorrupt,
             _ => BenchmarkErrorCode.InvalidLifecycleTransition
         };
 
@@ -133,6 +146,9 @@ internal static class BenchmarkEndpointSupport
             "JudgePolicyAlreadyApplied" => "This run is already judged under the current policy and judge runtime.",
             "JudgeDisabled" => "This project has no judge policy to judge under.",
             "PrimaryNotSucceeded" => "The benchmark run has no stored output to judge.",
+            "ReviewRequired" => "This project requires review. Score the run through its review instead.",
+            "NotReviewable" => "This run cannot be reviewed. Only a succeeded scoring run whose current judging succeeded under the current policy can be.",
+            "ArtifactCorrupt" => "The artifact failed its integrity check and is not served.",
             _ => "The benchmark lifecycle transition is not allowed."
         };
 }

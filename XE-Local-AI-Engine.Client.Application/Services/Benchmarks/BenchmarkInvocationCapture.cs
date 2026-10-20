@@ -103,7 +103,8 @@ internal sealed class BenchmarkInvocationCapture : IDisposable
                 ToolName: payload.ToolName,
                 Arguments: requested ? payload.Arguments : null,
                 Result: requested ? null : payload.Result,
-                IsError: requested ? null : payload.IsError));
+                IsError: requested ? null : payload.IsError,
+                DurationMs: requested ? null : payload.DurationMs));
             _events.Append(_runId,
                 requested ? BenchmarkRunStreamEventKind.ToolCall : BenchmarkRunStreamEventKind.ToolResult,
                 new BenchmarkRunStreamPayload

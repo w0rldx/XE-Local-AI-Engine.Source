@@ -9,6 +9,7 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
@@ -350,7 +351,8 @@ public sealed partial class InvocationRunner
             Phase = ToolCallLifecyclePhase.Completed,
             Result = toolResultText,
             IsError = functionResult.Exception is not null || ToolFailureText.TryGetCode(functionResult.Result) is not null,
-            Media = ToolResultMedia.Get(functionResult.Result)
+            Media = ToolResultMedia.Get(functionResult.Result),
+            DurationMs = ToolExecutionTimingScope.TryGet(resultCallId)
         });
 
         // ToolArgumentRepairAIFunction returns this structured result instead of throwing once repeated invalid-argument calls disable

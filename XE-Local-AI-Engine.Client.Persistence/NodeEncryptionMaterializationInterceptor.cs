@@ -187,6 +187,13 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                     taskItem.Id,
                     "benchmark_task_item_generator_json");
                 break;
+            case BenchmarkRunReview review:
+                review.NotesJson = DecryptIfPresent(review.NotesJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    review.Id,
+                    "benchmark_run_review_notes_json");
+                break;
             case BenchmarkRun benchmarkRun:
                 benchmarkRun.RuntimeSnapshotJson = NodePayloadProtector.Decrypt(benchmarkRun.RuntimeSnapshotJson,
                     context.NodeEncryptionKey.Span,

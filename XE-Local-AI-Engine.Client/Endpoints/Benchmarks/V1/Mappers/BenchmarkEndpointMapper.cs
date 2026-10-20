@@ -31,7 +31,8 @@ internal static class BenchmarkEndpointMapper
             FidelityEnabled = request.FidelityEnabled,
             FidelityKldEnabled = request.FidelityKldEnabled,
             FidelityChunks = request.FidelityChunks,
-            FidelityKldBaseModelName = request.FidelityKldBaseModelName
+            FidelityKldBaseModelName = request.FidelityKldBaseModelName,
+            RequiresReview = request.RequiresReview
         };
 
     public static BenchmarkTaskItemDraft ToDraft(this BenchmarkTaskItemMutationRequest request) =>
@@ -85,6 +86,7 @@ internal static class BenchmarkEndpointMapper
             InvocationTimeoutSeconds = project.InvocationTimeoutSeconds,
             AgentDefinitionId = project.AgentDefinitionId,
             JudgeEnabled = project.JudgeEnabled,
+            RequiresReview = project.RequiresReview,
             RunCount = runCount,
             IsFrozen = project.IsFrozen,
             Version = project.Version,
@@ -122,6 +124,7 @@ internal static class BenchmarkEndpointMapper
             InvocationTimeoutSeconds = project.InvocationTimeoutSeconds,
             AgentDefinitionId = project.AgentDefinitionId,
             JudgeEnabled = project.JudgeEnabled,
+            RequiresReview = project.RequiresReview,
             Judge = judge ?? new BenchmarkJudgePolicyResponse
             {
                 Enabled = project.JudgeEnabled
@@ -190,6 +193,8 @@ internal static class BenchmarkEndpointMapper
             GenerationTokensPerSecond = run.Throughput?.GenerationTokensPerSecond,
             CachedPromptTokens = run.Throughput?.CachedPromptTokens,
             SegmentCount = run.Throughput?.SegmentCount,
+            ToolCallCount = run.ToolCallCount,
+            ToolTimeMs = run.ToolTimeMs,
             UserScore = run.UserScore,
             LastStreamSequence = run.LastStreamSequence,
             Version = run.Version,
@@ -240,9 +245,11 @@ internal static class BenchmarkEndpointMapper
     }
 
     /// <param name="verdict">The decrypted rubric verdict of the run's current attempt, or null when it has none.</param>
+    /// <param name="currentJudgePolicyRevisionId">The project's current judge-policy revision; a review made under another one is not current.</param>
     public static BenchmarkRunDetailResponse ToDetail(this BenchmarkRunRecord run,
         BenchmarkJudgeResultV2? verdict = null,
-        string? expectedKldBaseLogitsDigest = null)
+        string? expectedKldBaseLogitsDigest = null,
+        Guid? currentJudgePolicyRevisionId = null)
     {
         var (reasoningBudgetTokens, reasoningBudgetApplicable) = ReadReasoningBudget(run.RuntimeSnapshotJson);
         var detail = new BenchmarkRunDetailResponse
@@ -288,6 +295,8 @@ internal static class BenchmarkEndpointMapper
             CachedPromptTokens = run.Throughput?.CachedPromptTokens,
             SegmentCount = run.Throughput?.SegmentCount,
             OutputParts = ParseJson(run.OutputPartsJson),
+            ToolCallCount = run.ToolCallCount,
+            ToolTimeMs = run.ToolTimeMs,
             UserScore = run.UserScore,
             LastStreamSequence = run.LastStreamSequence,
             PrimaryErrorMessage = run.PrimaryErrorMessage,
@@ -299,11 +308,40 @@ internal static class BenchmarkEndpointMapper
             PrimaryLaunchReceipt = ParseJson(run.PrimaryLaunchEvidence?.ReceiptJson),
             PrimaryEnvironmentFacts = ParseJson(run.PrimaryLaunchEvidence?.EnvironmentFactsJson),
             ReasoningBudgetTokens = reasoningBudgetTokens,
-            ReasoningBudgetApplicable = reasoningBudgetApplicable
+            ReasoningBudgetApplicable = reasoningBudgetApplicable,
+            Review = run.Review is { } review ? ToReview(review, currentJudgePolicyRevisionId) : null,
+            // The detail describes the current judging: an earlier attempt's artifacts stay stored and downloadable by id, never listed here.
+            Artifacts = [.. run.Artifacts.Where(artifact => run.Judge?.AttemptId is { } attemptId && artifact.JudgeAttemptId == attemptId)
+                              .Select(static artifact => new BenchmarkRunArtifactResponse
+            {
+                Id = artifact.Id,
+                Kind = artifact.Kind,
+                CriterionId = artifact.CriterionId,
+                JudgeAttemptId = artifact.JudgeAttemptId,
+                ByteCount = artifact.ByteCount,
+                ContentHash = artifact.ContentHash
+            })]
         };
         ApplyLaunchEvidence(detail, run);
         return detail;
     }
+
+    /// <summary>A review is current under the same comparison the store's review gate makes: both revisions NULL when there is no policy.</summary>
+    private static BenchmarkRunReviewResponse ToReview(BenchmarkRunReviewRecord review, Guid? currentJudgePolicyRevisionId) =>
+        new()
+        {
+            State = review.State,
+            Score = review.Score,
+            Criteria = [.. review.Criteria.Select(static criterion => new BenchmarkReviewCriterionScoreDto
+            {
+                CriterionId = criterion.CriterionId,
+                Score = criterion.Score
+            })],
+            Notes = review.Notes,
+            PolicyRevisionId = review.PolicyRevisionId,
+            PolicyCurrent = review.PolicyRevisionId == currentJudgePolicyRevisionId,
+            UpdatedAtUtc = review.UpdatedAtUtc
+        };
 
     public static EligibleBenchmarkAgentResponse ToResponse(this BenchmarkEligibleAgent agent) =>
         new()

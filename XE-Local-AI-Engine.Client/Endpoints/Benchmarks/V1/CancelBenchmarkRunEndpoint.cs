@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 
 using FastEndpoints;
-using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
@@ -31,7 +30,6 @@ public sealed class CancelBenchmarkRunEndpoint : Endpoint<CancelBenchmarkRunRequ
     public override async Task HandleAsync(CancelBenchmarkRunRequest req, CancellationToken ct)
     {
         var run = await _cancellation.CancelAsync(req.RunId, req.ExpectedVersion, req.Target, ct);
-        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct),
-            BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct))), ct);
+        await Send.OkAsync(await BenchmarkEndpointSupport.ToDetailAsync(_records, run, ct), ct);
     }
 }

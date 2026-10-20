@@ -389,4 +389,19 @@ describe("BenchmarkRunsTable fidelity column", () => {
 
 		expect(onMeasureFidelity).not.toHaveBeenCalled();
 	});
+
+	// A run waiting for a reviewer needs the review, not another measurement: the chip's tooltip says so.
+	it("points a review-pending run at its review, never at a re-run", async () => {
+		renderTable([
+			benchmarkRunSummaryFixture({ id: "awaiting", rank: null, rankExclusionReason: "review-pending", qualityScore: null }),
+		]);
+
+		const chip = screen.getByTestId("benchmark-rank-exclusion-awaiting");
+		expect(chip.textContent).toBe("awaiting review");
+		fireEvent.mouseEnter(chip.parentElement as HTMLElement);
+
+		const tooltip = await screen.findByText(/Open its review/);
+		expect(tooltip.textContent).toContain("Waiting for a human review.");
+		expect(tooltip.textContent).not.toContain("Run that task item again");
+	});
 });
