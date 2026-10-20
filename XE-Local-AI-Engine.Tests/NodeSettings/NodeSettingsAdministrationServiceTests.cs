@@ -455,7 +455,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         });
 
         var message = result.ValidationErrors.Single().Message;
-        AssertEx.Contains(message, "null clears the pin");
+        AssertEx.Contains(message, "null clears the pin only while no document is indexed");
         AssertEx.False(message.Contains("blank", StringComparison.Ordinal), "the message must not offer a blank value.");
     }
 

@@ -110,7 +110,7 @@ internal static class KnowledgeChatContextComposer
             var bodyBudget = remaining - PartSeparator.Length - fenceOverhead;
             var body = hit.Content.Length > bodyBudget ? hit.Content[..bodyBudget] : hit.Content;
             builder.Append(PartSeparator).Append(UntrustedContentFraming.WrapDocument(body, metadata));
-            sources.Add(new NodeChatMessageSource(hit.DocumentId, hit.ChunkId, hit.Title, hit.Section, hit.Score, hit.ScoreKind));
+            sources.Add(TurnKnowledgeSourceCollector.ToSource(hit));
 
             if (hit.Content.Length > bodyBudget)
             {

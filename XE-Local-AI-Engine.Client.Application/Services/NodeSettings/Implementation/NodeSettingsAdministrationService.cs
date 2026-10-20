@@ -22,7 +22,7 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         "The model must be an installed node-local model (a GGUF model or an Ollama model on this machine), or blank to use the default model.";
 
     private const string EmbeddingModelNotInstalledMessage =
-        "The knowledge-base embedding model must name an installed embedding model; null clears the pin.";
+        "The knowledge-base embedding model must name an installed embedding model; null clears the pin only while no document is indexed.";
 
     /// <summary>
     ///     How many times a save re-validates against a record that changed under it before it gives up and refuses.

@@ -325,6 +325,8 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
                 memoryHook,
                 ChatCompactionTriggerHook.Build(_conversationMaintenanceDispatcher, conversation.ConversationId));
 
+            // Seeded before both tasks start, so the run's search-tool hits reach the pump's terminal row as sources.
+            using var knowledgeSourceScope = TurnKnowledgeSourceCollector.BeginScope();
             pumpTask = _invocationStatePump.PumpAsync(stateChannel.Reader,
                 eventSink,
                 correlation,

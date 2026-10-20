@@ -2081,6 +2081,41 @@ public sealed partial class NodeChatStreamServiceTests
     }
 
     [Test]
+    public async Task SendMessageAsync_WhenTheRunsSearchToolReturnsHits_MergesThemAfterThePreTurnSources()
+    {
+        // W2-04: the agent tool path persisted no sources. Hits recorded inside the run reach the terminal row after the
+        // pre-turn grounding, with a chunk both paths returned listed once.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        NodeChatTerminalizeMessageRequest? terminalRequest = null;
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, request => terminalRequest = request);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var preTurnHit = KnowledgeHit("Runbook", "Restart the service with the eject command.", score: 0.91);
+        var toolHit = KnowledgeHit("Manual", "The eject command lives in the toolbar.", score: 0.5);
+        var runner = new ContextCapturingInvocationRunner(dispatcher)
+        {
+            ToolHits = [toolHit, preTurnHit]
+        };
+        var service = CreateServiceWithScopeFactory(persistence, runner, dispatcher, CreateKnowledgeScopeFactory(preTurnHit));
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "how do I restart the service?",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseKnowledgeBase: true)))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        var sources = AssertEx.NotNull(AssertEx.NotNull(terminalRequest).Sources);
+        AssertEx.Equal($"{preTurnHit.ChunkId},{toolHit.ChunkId}", string.Join(',', sources.Select(static source => source.ChunkId)));
+        AssertEx.Empty(TurnKnowledgeSourceCollector.Snapshot(), "the turn's scope must not leak into the caller's flow");
+    }
+
+    [Test]
     public async Task SendMessageAsync_WhenKnowledgeBaseRetrievalEmpty_ProceedsWithoutContextOrSources()
     {
         // Degrade gracefully: no matching chunks means no KB context and no sources, but the turn still runs.
@@ -6415,12 +6450,20 @@ public sealed partial class NodeChatStreamServiceTests
 
         public List<ChatStreamEvent> Events { get; } = [];
 
+        // Hits the run records the way search_knowledge_base does inside the tool loop, so a test sees the tool path's sources.
+        public IReadOnlyList<KnowledgeSearchHit> ToolHits { get; init; } = [];
+
         public int ActiveInvocationCount => 0;
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             CapturedContext = context.Package.ConversationContext;
             CaptureObserved = true;
+            foreach (var hit in ToolHits)
+            {
+                TurnKnowledgeSourceCollector.Add(hit);
+            }
+
             await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
             await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
         }

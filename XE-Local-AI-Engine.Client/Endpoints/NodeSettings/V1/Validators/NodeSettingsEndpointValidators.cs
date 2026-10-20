@@ -43,7 +43,8 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
         NotBlank(RuleFor(static request => request.ContainerRuntimeSelection));
         NotBlank(RuleFor(static request => request.SpeculativeDraftModelName));
         NotBlank(RuleFor(static request => request.RerankerModelName));
-        NotBlank(RuleFor(static request => request.KnowledgeEmbeddingModelName));
+        NotBlank(RuleFor(static request => request.KnowledgeEmbeddingModelName),
+            "'{PropertyName}' cannot be blank; null clears the pin only while no document is indexed.");
         NotBlank(RuleFor(static request => request.AutoEffortFastModelName));
         NotBlank(RuleFor(static request => request.DefaultVoiceProfile));
         NotBlank(RuleFor(static request => request.IntentRouterDefinitionId));
@@ -421,10 +422,10 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
     }
 
     // "" and whitespace used to clear a text setting; null is now the only clear signal, so a blank value is refused.
-    private static void NotBlank(IRuleBuilder<SaveNodeSettingsRequest, string?> rule)
+    private static void NotBlank(IRuleBuilder<SaveNodeSettingsRequest, string?> rule, string message = "'{PropertyName}' cannot be blank; send null to clear it.")
     {
         rule.Must(static value => value is null || !string.IsNullOrWhiteSpace(value))
-            .WithMessage("'{PropertyName}' cannot be blank; send null to clear it.");
+            .WithMessage(message);
     }
 
     private static void NotClearable(IRuleBuilder<SaveNodeSettingsRequest, string?> rule, string member)

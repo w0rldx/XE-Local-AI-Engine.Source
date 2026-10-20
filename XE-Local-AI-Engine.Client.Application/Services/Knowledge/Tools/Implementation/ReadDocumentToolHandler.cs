@@ -81,12 +81,15 @@ internal sealed class ReadDocumentToolHandler : IClientLocalToolHandler
                 SerializerOptions);
         }
 
-        var chunks = new List<object>(detail.Chunks.Count);
+        // Offset is a position in the ordered chunk list; the char cap stays the outer bound under the per-call limit.
+        var offset = Math.Max(request.Offset ?? 0, 0);
+        var limit = Math.Clamp(request.Limit ?? ReadDocumentToolDefinition.DefaultLimit, 1, ReadDocumentToolDefinition.MaxLimit);
+        var chunks = new List<object>(limit);
         var usedChars = 0;
         var truncated = false;
-        foreach (var chunk in detail.Chunks)
+        foreach (var chunk in detail.Chunks.Skip(offset).Take(limit))
         {
-            if (usedChars + chunk.Content.Length > MaxContentChars)
+            if (chunks.Count > 0 && usedChars + chunk.Content.Length > MaxContentChars)
             {
                 truncated = true;
                 break;
@@ -107,13 +110,16 @@ internal sealed class ReadDocumentToolHandler : IClientLocalToolHandler
             });
         }
 
+        var next = offset + chunks.Count;
         var payload = new
         {
             documentId = detail.DocumentId,
             collectionId = detail.CollectionId,
             status = detail.Status.ToString(),
-            chunkCount = detail.ChunkCount,
+            totalChunks = detail.Chunks.Count,
+            offset,
             returnedChunks = chunks.Count,
+            nextOffset = next < detail.Chunks.Count ? next : (int?)null,
             truncated,
             chunks
         };

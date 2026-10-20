@@ -18,9 +18,6 @@ internal sealed class ReadSurroundingChunksToolHandler : IClientLocalToolHandler
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private const int DefaultNeighbors = 1;
-    private const int MaxNeighbors = 5;
-
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly INodeRuntimeSettings _runtimeSettings;
 
@@ -74,8 +71,8 @@ internal sealed class ReadSurroundingChunksToolHandler : IClientLocalToolHandler
             return "read_surrounding_chunks requires a non-negative 'chunkIndex'.";
         }
 
-        var before = Math.Clamp(request.Before ?? DefaultNeighbors, 0, MaxNeighbors);
-        var after = Math.Clamp(request.After ?? DefaultNeighbors, 0, MaxNeighbors);
+        var before = Math.Clamp(request.Before ?? ReadSurroundingChunksToolDefinition.DefaultNeighbors, 0, ReadSurroundingChunksToolDefinition.MaxNeighbors);
+        var after = Math.Clamp(request.After ?? ReadSurroundingChunksToolDefinition.DefaultNeighbors, 0, ReadSurroundingChunksToolDefinition.MaxNeighbors);
 
         // ExpandAsync uses a symmetric window; fetch the wider side and then trim to the requested asymmetric bounds.
         var window = Math.Max(before, after);

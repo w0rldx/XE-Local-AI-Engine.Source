@@ -283,6 +283,11 @@ excerpts actually placed in context are persisted as metadata-only sources. Reac
 collapsed **Sources** strip under the assistant answer; selecting a source opens its knowledge-document
 drawer. Legacy, ungrounded, and empty-result turns render no strip.
 
+An agent-path turn (`useLocalTools`) grounds through `search_knowledge_base` instead, and its hits become sources too:
+`TurnKnowledgeSourceCollector` is an ambient per-turn holder that the stream and regeneration services seed before the
+pump and the run start. The search handler records exactly the hits it serialized, and the pump's terminalize persists
+pre-turn sources first, then tool hits, deduplicated by chunk id and capped at `MaxPersistedSources`.
+
 A grounded turn that passes that gate on a node with **no embedding model** carries a `KnowledgeUnavailable`
 notice, on send and on regenerate (model-matrix F13): without one no upload is indexed, so the turn cannot be grounded.
 "No embedding model" is `IChatTurnContextBuilder.IsKnowledgeEmbeddingAvailableAsync`, the same

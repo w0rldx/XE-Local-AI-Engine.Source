@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Tests.Testing;
 
 // The durable run ledger: NodeChatInvocationPump no longer writes the envelope itself — it hands the
@@ -757,6 +758,55 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
 
         var request = (NodeChatTerminalizeMessageRequest)persistence.ReceivedCalls().Single().GetArguments()[0]!;
         AssertEx.Equal(expected, request.FailureCategory);
+    }
+
+    [Test]
+    public async Task TerminalizeAsync_AppendsTheTurnsCollectedToolSourcesAfterThePreTurnOnes()
+    {
+        var persistence = CreatePersistence();
+        var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = correlation.ConversationId,
+            Status = InvocationStatus.Completed,
+            ModelUsed = "llama-3.1"
+        };
+        var preTurn = new NodeChatMessageSource(Guid.NewGuid(), Guid.NewGuid(), "pre", Section: null, Score: 0.9);
+        var toolHit = new KnowledgeSearchHit
+        {
+            DocumentId = Guid.NewGuid(),
+            ChunkId = Guid.NewGuid(),
+            Title = "tool",
+            Section = null,
+            Content = "body",
+            Source = "knowledge-base",
+            Score = 0.4,
+            ChunkIndex = 0,
+            DocumentStatus = KnowledgeDocumentStatus.Indexed,
+            ServingLastKnownGood = false
+        };
+
+        using (TurnKnowledgeSourceCollector.BeginScope())
+        {
+            TurnKnowledgeSourceCollector.Add(toolHit);
+            _ = await pump.TerminalizeAsync(correlation, state, "requested-model", sources: [preTurn]);
+        }
+
+        _ = await pump.TerminalizeAsync(correlation, state, "requested-model", sources: []);
+
+        var requests = persistence.ReceivedCalls()
+                                  .Select(static call => call.GetArguments()[0])
+                                  .OfType<NodeChatTerminalizeMessageRequest>()
+                                  .ToList();
+        AssertEx.Equal("pre,tool", string.Join(',', AssertEx.NotNull(requests[0].Sources).Select(static source => source.Title)));
+        AssertEx.Null(requests[1].Sources, "a turn with no sources on either path must leave the persisted ones untouched");
     }
 
     private static INodeChatPersistenceService CreatePersistence()

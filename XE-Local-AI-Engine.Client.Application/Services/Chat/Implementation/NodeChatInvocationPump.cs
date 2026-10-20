@@ -161,9 +161,9 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
                 // Whole-turn wall-clock duration from the runner; null for legacy/platform turns that did not report it.
                 GenerationDurationMs = state.GenerationDurationMs,
                 Envelope = envelope,
-                // KB sources that grounded this turn; null when the turn used no knowledge base, which
-                // preserves any existing persisted sources on the row.
-                Sources = sources,
+                // Pre-turn grounding plus the hits the search tool returned; null when neither exists,
+                // which preserves any existing persisted sources on the row.
+                Sources = TurnKnowledgeSourceCollector.Merge(sources, TurnKnowledgeSourceCollector.Snapshot()),
                 ContextWindow = state.ContextSnapshot is { } snapshot ? MapContextWindow(snapshot, state) : null,
                 // Only a failed turn keeps its category on the row; a cancel is an outcome, not a failure, as with Error above.
                 FailureCategory = terminalStatus == NodeChatMessageStatusValues.Failed ? state.FailureCategory : null

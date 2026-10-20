@@ -2869,6 +2869,7 @@ public sealed class NodeSettingsEndpointTests
     [Arguments("defaultReasoningEffort", "\"\"", "'defaultReasoningEffort' cannot be blank; send null to clear it.")]
     [Arguments("chatOutputCapMode", "\" \"", "'chatOutputCapMode' cannot be blank; send null to clear it.")]
     [Arguments("updateChannel", "\"\"", "'updateChannel' cannot be blank; send null to clear it.")]
+    [Arguments("knowledgeEmbeddingModelName", "\"\"", "'knowledgeEmbeddingModelName' cannot be blank; null clears the pin only while no document is indexed.")]
     [Arguments("externalAccessProfile", "null", "'externalAccessProfile' cannot be cleared.")]
     [Arguments("uiMode", "null", "'uiMode' cannot be cleared.")]
     [Arguments("sandboxSecurityProfile", "null", "'sandboxSecurityProfile' cannot be cleared.")]

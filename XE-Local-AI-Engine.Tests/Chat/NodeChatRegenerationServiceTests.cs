@@ -473,6 +473,39 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     }
 
     [Test]
+    public async Task RegenerateAsync_WhenTheRunsSearchToolReturnsHits_RecordsThemAsTheVariantsSources()
+    {
+        // W2-04 parity with the send path: hits the rerun's search tool returned land on the regenerated variant.
+        await using var provider = await BuildProviderAsync("regeneration-kb-tool-sources.sqlite");
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
+        var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var toolHit = KnowledgeHit("Manual", "The eject command lives in the toolbar.", score: 0.5);
+        var runner = new RegenContextCapturingRunner(dispatcher)
+        {
+            ToolHits = [toolHit, toolHit]
+        };
+        var service = CreateServiceWithScopeFactory(persistence, runner, dispatcher, CreateKnowledgeScopeFactory());
+
+        ChatStreamEvent? completed = null;
+        await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId, reasoningEffort: null, useLocalTools: false, useKnowledgeBase: false))
+        {
+            if (streamEvent.Type == ChatStreamEventTypes.AssistantCompleted)
+            {
+                completed = streamEvent;
+            }
+        }
+
+        var variantId = AssertEx.NotNull(completed).MessageId;
+        var reloaded = await persistence.GetConversationAsync(conversation.ConversationId);
+        var variant = AssertEx.NotNull(reloaded).Messages.Single(message => message.MessageId == variantId);
+        var source = AssertEx.NotNull(variant.Sources).Single();
+        AssertEx.Equal(toolHit.ChunkId, source.ChunkId);
+        AssertEx.Equal("Manual", source.Title);
+    }
+
+    [Test]
     public async Task RegenerateAsync_WhenKnowledgeBaseRetrievalEmpty_ProceedsWithoutContextOrSources()
     {
         // Degrade gracefully (mirrors the send path): no matching chunks means no KB context and no sources on the
@@ -4021,10 +4054,19 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         public SamplingOptions? LastSamplingOptions { get; private set; }
 
         public bool LastAutoAcceptWebContent { get; private set; }
+
+        // Hits the run records the way search_knowledge_base does inside the tool loop.
+        public IReadOnlyList<KnowledgeSearchHit> ToolHits { get; init; } = [];
+
         public int ActiveInvocationCount => 0;
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
+            foreach (var hit in ToolHits)
+            {
+                TurnKnowledgeSourceCollector.Add(hit);
+            }
+
             LastAutoAcceptWebContent = context.Package.AutoAcceptWebContent;
             LastContext = context.Package.ConversationContext;
             LastReasoningEffort = context.Package.ReasoningEffort;

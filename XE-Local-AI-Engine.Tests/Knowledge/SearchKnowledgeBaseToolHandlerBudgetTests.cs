@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Tools.Implementation;
@@ -50,6 +51,41 @@ public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
         AssertEx.True(returned < 5, "some low-scored hits must be trimmed");
         AssertEx.True(returned >= 1, "at least the top hit must be returned");
         AssertEx.Equal(returned, root.GetProperty("results").GetArrayLength());
+    }
+
+    [Test]
+    public async Task ExecuteAsync_RecordsExactlyTheSerializedHitsAsTheChatTurnsSources()
+    {
+        var hits = Enumerable.Range(0, 5)
+                             .Select(index => new KnowledgeSearchHit
+                             {
+                                 DocumentId = Guid.NewGuid(),
+                                 ChunkId = Guid.NewGuid(),
+                                 Title = $"doc-{index}",
+                                 Section = "Intro",
+                                 Content = new string('x', 20_000),
+                                 Source = "knowledge-base",
+                                 Score = 1.0 - (index * 0.1),
+                                 ScoreKind = KnowledgeScoreKind.Rerank,
+                                 ChunkIndex = index,
+                                 DocumentStatus = KnowledgeDocumentStatus.Indexed,
+                                 ServingLastKnownGood = false
+                             })
+                             .ToList();
+        var handler = CreateHandler(new KnowledgeSearchResult
+        {
+            Results = hits
+        });
+
+        using var scope = TurnKnowledgeSourceCollector.BeginScope();
+        var json = await handler.ExecuteAsync("""{"query":"anything"}""");
+
+        using var document = JsonDocument.Parse(json);
+        var served = document.RootElement.GetProperty("results").EnumerateArray().Select(static hit => hit.GetProperty("chunkId").GetGuid()).ToList();
+        var recorded = TurnKnowledgeSourceCollector.Snapshot();
+        AssertEx.True(served.Count < hits.Count, "the budget must trim some hits for this test to prove anything");
+        AssertEx.Equal(string.Join(',', served), string.Join(',', recorded.Select(static source => source.ChunkId)));
+        AssertEx.Equal(TurnKnowledgeSourceCollector.ToSource(hits[0]), recorded[0]);
     }
 
     /// <summary>

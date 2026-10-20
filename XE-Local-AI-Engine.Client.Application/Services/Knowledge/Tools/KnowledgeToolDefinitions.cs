@@ -25,8 +25,10 @@ internal static class SearchKnowledgeBaseToolDefinition
         + "documents: rely solely on the retrieved passages for document-grounded claims; do not invent what the documents "
         + "say; if the results do not contain enough information to answer, say so plainly instead of guessing. Questions "
         + "that are not about the operator's documents are answered as usual, from general knowledge. Typical flow: search "
-        + "first (omit limit to get the node's default page of hits), then pass the returned collectionId to read_surrounding_chunks around a promising hit, or to "
-        + "read_document to read a whole document. Returns compact JSON hits with collectionId, documentId, chunkId, content, score, "
+        + "first (omit limit to get the node's default page of hits) and start here for any question about the documents; "
+        + "then pass the returned collectionId and chunkIndex to read_surrounding_chunks with a small window around the best "
+        + "hit. Use read_document only for a short document or to page deliberately through a long one with offset. Returns "
+        + "compact JSON hits with collectionId, documentId, chunkId, content, score, "
         + "scoreKind (Fusion or Rerank: the scale of score, comparable only within one result, not a probability), and "
         + "chunkIndex; an empty result set means the knowledge base has nothing matching the query.";
 
@@ -61,14 +63,21 @@ internal static class ReadDocumentToolDefinition
 {
     public const string ToolName = "read_document";
 
-    public const string Description =
-        "Read a single knowledge-base document end to end by its documentId and collectionId (usually obtained from a "
-        + "search_knowledge_base hit). Returns the document's non-sensitive metadata plus its ordered chunks. The content "
-        + "is bounded: a very large document is truncated and the result flags that truncation, so read the specific "
-        + "sections you need rather than assuming the whole document is present. Use the returned passages only to ground "
-        + "document-specific claims; do not invent content that is not present.";
+    /// <summary>Chunks returned when the model omits <c>limit</c>.</summary>
+    public const int DefaultLimit = 6;
 
-    /// <summary>documentId and collectionId are required to preserve the collection namespace boundary.</summary>
+    /// <summary>Ceiling on chunks per call, so one call cannot pull a whole book into context.</summary>
+    public const int MaxLimit = 12;
+
+    public const string Description =
+        "Read one page of a knowledge-base document's ordered chunks by its documentId and collectionId (usually from a "
+        + "search_knowledge_base hit). Use it only for a short document, or to page deliberately through a long one: pass "
+        + "offset (default 0) and limit, then the returned nextOffset to continue; nextOffset is null at the end and "
+        + "totalChunks gives the document length. For a specific question, search first and use read_surrounding_chunks "
+        + "around the best hit instead. Use the returned passages only to ground document-specific claims; do not invent "
+        + "content that is not present.";
+
+    /// <summary>documentId and collectionId are required to preserve the collection namespace boundary; offset and limit page.</summary>
     public static readonly string ParameterSchema = $$"""
                                                       {
                                                         "type": "object",
@@ -76,7 +85,9 @@ internal static class ReadDocumentToolDefinition
                                                         "required": ["documentId", "collectionId"],
                                                         "properties": {
                                                           "documentId": { "type": "string", "minLength": 1, "maxLength": 64 },
-                                                          "collectionId": { "type": "string", "minLength": 1, "maxLength": {{KnowledgeCollectionScope.MaxLength}} }
+                                                          "collectionId": { "type": "string", "minLength": 1, "maxLength": {{KnowledgeCollectionScope.MaxLength}} },
+                                                          "offset": { "type": "integer", "minimum": 0, "description": "Position of the first chunk to return; default 0. Pass the previous nextOffset to continue." },
+                                                          "limit": { "type": "integer", "minimum": 1, "maximum": {{MaxLimit}}, "description": "Chunks to return; default {{DefaultLimit}}." }
                                                         }
                                                       }
                                                       """;
@@ -87,13 +98,19 @@ internal static class ReadSurroundingChunksToolDefinition
 {
     public const string ToolName = "read_surrounding_chunks";
 
+    /// <summary>Neighbors on each side when the model omits <c>before</c> or <c>after</c>.</summary>
+    public const int DefaultNeighbors = 2;
+
+    /// <summary>Ceiling on neighbors per side, so the widest window is seven chunks.</summary>
+    public const int MaxNeighbors = 3;
+
     public const string Description =
         "Read the chunks surrounding a specific chunk within a document, to recover context that straddles a chunk "
-        + "boundary. Identify the target by its documentId, collectionId, and the chunkIndex of a search_knowledge_base hit, and request "
-        + "how many chunks to include before and after it. Returns the neighbor window in document order. Use the returned "
-        + "passages only to ground document-specific claims.";
+        + "boundary. Identify the target by its documentId, collectionId, and the chunkIndex of a search_knowledge_base hit. "
+        + "Use a small window: before and after default to 2; widen only when the passage is still cut off. Returns the "
+        + "neighbor window in document order. Use the returned passages only to ground document-specific claims.";
 
-    /// <summary>documentId + collectionId + chunkIndex identify the anchor; before/after default to 1 and are clamped to at most 5 each.</summary>
+    /// <summary>documentId + collectionId + chunkIndex identify the anchor; before/after default to 2 and are clamped to at most 3 each.</summary>
     public static readonly string ParameterSchema = $$"""
                                                       {
                                                         "type": "object",
@@ -103,8 +120,8 @@ internal static class ReadSurroundingChunksToolDefinition
                                                           "documentId": { "type": "string", "minLength": 1, "maxLength": 64 },
                                                           "collectionId": { "type": "string", "minLength": 1, "maxLength": {{KnowledgeCollectionScope.MaxLength}} },
                                                           "chunkIndex": { "type": "integer", "minimum": 0 },
-                                                          "before": { "type": "integer", "minimum": 0, "maximum": 5 },
-                                                          "after": { "type": "integer", "minimum": 0, "maximum": 5 }
+                                                          "before": { "type": "integer", "minimum": 0, "maximum": {{MaxNeighbors}}, "description": "Chunks before the anchor; default {{DefaultNeighbors}}." },
+                                                          "after": { "type": "integer", "minimum": 0, "maximum": {{MaxNeighbors}}, "description": "Chunks after the anchor; default {{DefaultNeighbors}}." }
                                                         }
                                                       }
                                                       """;

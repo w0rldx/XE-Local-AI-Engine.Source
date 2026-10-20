@@ -23,6 +23,10 @@ internal sealed record ReadDocumentToolRequest
     public string? DocumentId { get; init; }
 
     public string? CollectionId { get; init; }
+
+    public int? Offset { get; init; }
+
+    public int? Limit { get; init; }
 }
 
 /// <summary>Typed projection of the <c>read_surrounding_chunks</c> JSON arguments.</summary>

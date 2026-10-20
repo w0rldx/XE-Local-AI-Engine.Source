@@ -141,9 +141,11 @@ Without an embedding model installed the knowledge base cannot index **anything*
 
 The knowledge base is exposed to the agent loop as tools:
 
-- **`SearchKnowledgeBaseToolHandler`** — the agent issues a collection-scoped query and receives fused, hydrated hits (the same `IKnowledgeSearchService` path), including the `collectionId` needed for follow-up reads.
-- **`ReadDocumentToolHandler`** — the agent reads one bounded document only when both its document id and collection id match.
-- **`ReadSurroundingChunksToolHandler`** — the agent expands a specific hit with its neighboring chunks only inside the hit's collection.
+- **`SearchKnowledgeBaseToolHandler`** — the agent issues a collection-scoped query and receives fused, hydrated hits (the same `IKnowledgeSearchService` path), including the `collectionId` needed for follow-up reads. In a chat turn the hits it serialized are recorded on `TurnKnowledgeSourceCollector` and persist as the answer's sources, so the Sources strip works on the agent path too ([Chat](05-chat.md)).
+- **`ReadDocumentToolHandler`** — the agent reads one page of a document only when both its document id and collection id match. `offset` (default 0) and `limit` (default `ReadDocumentToolDefinition.DefaultLimit`, at most `MaxLimit`) page the ordered chunks; the response carries `totalChunks` and `nextOffset` (null at the end), and the 50,000-character cap stays the outer bound. Without paging the 9B read a 181-chunk book whole for a one-chunk answer.
+- **`ReadSurroundingChunksToolHandler`** — the agent expands a specific hit with its neighboring chunks only inside the hit's collection; `before`/`after` default to `ReadSurroundingChunksToolDefinition.DefaultNeighbors` and are clamped to `MaxNeighbors` per side.
+
+The three descriptions steer the order: search first, then `read_surrounding_chunks` with a small window around the best hit, and `read_document` only for a short document or deliberate paging with `offset`.
 
 These make the KB a **retrieval-augmented generation (RAG)** source the agent can consult mid-conversation. See [Agent Mode](04-agent-mode.md) for the tool registry.
 

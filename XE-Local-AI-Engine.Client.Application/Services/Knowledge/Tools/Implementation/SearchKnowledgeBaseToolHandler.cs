@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge.Tools.Implementation;
 using System.Globalization;
 using System.Text.Json;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
@@ -153,6 +154,8 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
             }
 
             usedChars += hit.Content.Length;
+            // Only the hits the model is actually given become the chat turn's sources; a no-op outside a chat turn.
+            TurnKnowledgeSourceCollector.Add(hit);
             hits.Add(new
             {
                 collectionId = hit.CollectionId,

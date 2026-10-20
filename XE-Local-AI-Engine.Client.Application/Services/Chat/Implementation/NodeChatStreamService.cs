@@ -242,6 +242,8 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         Task pumpTask;
         Task runTask;
         using var invocationScope = staging?.Preparation?.EnterInvocationScope();
+        // Seeded before both tasks start, so the run's search-tool hits reach the pump's terminal row as sources.
+        using var knowledgeSourceScope = TurnKnowledgeSourceCollector.BeginScope();
         pumpTask = _invocationStatePump.PumpAsync(stateChannel.Reader,
             eventSink,
             correlation,
