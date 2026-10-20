@@ -250,11 +250,13 @@ export function TaskItemForm({
 								<Text size="xs" c="dimmed">
 									{t(
 										"pages.benchmarks.items.overridesHelp",
-										"Give one criterion a different expected answer for this item. Left empty, the judge policy's own configuration is used.",
+										"Give one criterion a different expected answer for this item. Left empty, the judge policy's own configuration is used; a 3D scene with every rule cleared accepts any valid scene until the policy's configuration is chosen again.",
 									)}
 								</Text>
 								{criteria.map((criterion) => (
-									<Card key={criterion.id} withBorder={true} padding="xs">
+									// Keyed by the edited item too: an editor with local text (the sceneSpec relations) must not carry
+									// item A's input into item B when Edit is clicked on B while the form is open.
+									<Card key={`${editing}-${criterion.id}`} withBorder={true} padding="xs">
 										<Stack gap={4}>
 											<Text size="xs" fw={600}>
 												{criterion.title}
@@ -267,6 +269,17 @@ export function TaskItemForm({
 												onChange={(patch) => writeOverride(criterion.id, patch.config)}
 												testId={`benchmark-item-override-${criterion.id}`}
 											/>
+											{verifierOverride(draft, criterion.id) === null ? null : (
+												<Button
+													variant="subtle"
+													size="compact-xs"
+													style={{ alignSelf: "flex-start" }}
+													onClick={() => writeOverride(criterion.id, null)}
+													data-testid={`benchmark-item-override-${criterion.id}-reset`}
+												>
+													{t("pages.benchmarks.items.overrideReset", "Use the policy's configuration")}
+												</Button>
+											)}
 										</Stack>
 									</Card>
 								))}

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.PythonTests;
@@ -19,6 +20,9 @@ public static class BenchmarkJudgeVerifierConfig
 
     /// <summary>The ceiling a pythonTests criterion's own timeout is validated against; the node clamps it further.</summary>
     public const int MaximumTimeoutSeconds = 600;
+
+    /// <summary>How many spatial relations a sceneSpec criterion may check.</summary>
+    public const int MaximumSceneRelations = 16;
 
     /// <summary>How long one regex match may run before it is abandoned — belt beside <c>NonBacktracking</c>'s braces.</summary>
     public static readonly TimeSpan MatchTimeout = TimeSpan.FromMilliseconds(250);
@@ -78,7 +82,9 @@ public static class BenchmarkJudgeVerifierConfig
                 BenchmarkJudgeCriterionKinds.JsonSchema => ParseJsonSchema(configJson),
                 BenchmarkJudgeCriterionKinds.MathAnswer => ParseMathAnswer(configJson),
                 BenchmarkJudgeCriterionKinds.PythonTests => ParsePythonTests(configJson),
-                _ => ParseConstraint(configJson)
+                BenchmarkJudgeCriterionKinds.SceneSpec => ParseSceneSpec(configJson),
+                BenchmarkJudgeCriterionKinds.Constraint => ParseConstraint(configJson),
+                _ => throw new UnreachableException(resolved)
             };
         }
         catch (JsonException exception)
@@ -354,6 +360,53 @@ public static class BenchmarkJudgeVerifierConfig
             {
                 Exports = exports
             }
+        };
+    }
+
+    private static BenchmarkVerifierSpec ParseSceneSpec(string configJson)
+    {
+        var config = JsonSerializer.Deserialize<BenchmarkSceneSpecConfigV1>(configJson, ConfigOptions)
+                     ?? throw Invalid(BenchmarkJudgePolicyValidationCodes.CriterionConfigInvalid, "The sceneSpec criterion configuration is empty.");
+        if (config.ObjectCount is { } count
+            && (count.Min is < 1 or > BenchmarkSceneSpec.MaximumObjects
+                || count.Max is < 1 or > BenchmarkSceneSpec.MaximumObjects
+                || (count.Min is { } min && count.Max is { } max && min > max)))
+        {
+            throw Invalid(BenchmarkJudgePolicyValidationCodes.CriterionConfigInvalid,
+                $"A sceneSpec objectCount must lie within 1 to {BenchmarkSceneSpec.MaximumObjects}, with min at or below max.");
+        }
+
+        var primitives = config.RequiresPrimitive ?? [];
+        if (primitives.Count > BenchmarkSceneSpec.Primitives.Count
+            || primitives.Any(static primitive => !BenchmarkSceneSpec.Primitives.Contains(primitive, StringComparer.Ordinal)))
+        {
+            throw Invalid(BenchmarkJudgePolicyValidationCodes.CriterionConfigInvalid,
+                $"A sceneSpec requiresPrimitive names at most {BenchmarkSceneSpec.Primitives.Count} of: {string.Join(", ", BenchmarkSceneSpec.Primitives)}.");
+        }
+
+        var relations = config.Relations ?? [];
+        if (relations.Count > MaximumSceneRelations)
+        {
+            throw Invalid(BenchmarkJudgePolicyValidationCodes.CriterionConfigInvalid,
+                $"A sceneSpec criterion may check at most {MaximumSceneRelations} relations.");
+        }
+
+        if (relations.Any(static relation => relation is null
+                                             || relation.Kind is not (BenchmarkSceneSpecConfigV1.RelationAbove
+                                                 or BenchmarkSceneSpecConfigV1.RelationLeftOf
+                                                 or BenchmarkSceneSpecConfigV1.RelationInside)
+                                             || string.IsNullOrEmpty(relation.A)
+                                             || string.IsNullOrEmpty(relation.B)
+                                             || string.Equals(relation.A, relation.B, StringComparison.Ordinal)))
+        {
+            throw Invalid(BenchmarkJudgePolicyValidationCodes.CriterionConfigInvalid,
+                "A sceneSpec relation needs a kind of above, leftOf or inside and two different object ids.");
+        }
+
+        return new BenchmarkVerifierSpec
+        {
+            Kind = BenchmarkJudgeCriterionKinds.SceneSpec,
+            SceneSpec = config
         };
     }
 

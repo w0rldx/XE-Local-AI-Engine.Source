@@ -12,6 +12,7 @@ import {
 	benchmarkErrorCode,
 	benchmarkScoreControl,
 } from "@/features/benchmarks/models/BenchmarkModels";
+import { toBenchmarkCriterionKind } from "@/features/benchmarks/models/BenchmarkVerifier";
 import {
 	useBenchmarkProject,
 	useBenchmarkRun,
@@ -113,6 +114,9 @@ export function BenchmarkRunLivePane({ runId }: { runId: string }) {
 			judgeMode={project?.judge.mode}
 			review={review}
 			scoreControl={scoreControl}
+			showSceneViewer={
+				project?.judge.rubric?.criteria.some((criterion) => toBenchmarkCriterionKind(criterion.kind) === "sceneSpec") ?? false
+			}
 			isDownloadingArtifact={downloadArtifact.isPending}
 			onDownloadArtifact={(artifact) =>
 				downloadArtifact.mutate(

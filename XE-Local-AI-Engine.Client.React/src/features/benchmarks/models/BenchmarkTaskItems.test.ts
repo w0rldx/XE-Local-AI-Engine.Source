@@ -205,12 +205,12 @@ describe("niahCaseCriterionId", () => {
 });
 
 describe("pruneVerifierOverrides", () => {
-	it("drops a criterion whose override was emptied", () => {
-		expect(pruneVerifierOverrides({ a: {}, b: { expected: "x" } })).toEqual({ b: { expected: "x" } });
+	it("keeps an empty criterion override, which is a valid sceneSpec configuration", () => {
+		expect(pruneVerifierOverrides({ a: {}, b: { expected: "x" } })).toEqual({ a: {}, b: { expected: "x" } });
 	});
 
-	it("reads an all-empty map as no overrides", () => {
-		expect(pruneVerifierOverrides({ a: {} })).toBeNull();
+	it("reads an empty map as no overrides", () => {
+		expect(pruneVerifierOverrides({})).toBeNull();
 		expect(pruneVerifierOverrides(null)).toBeNull();
 	});
 });

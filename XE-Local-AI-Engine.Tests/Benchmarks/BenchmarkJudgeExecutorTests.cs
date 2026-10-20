@@ -731,6 +731,56 @@ public sealed class BenchmarkJudgeExecutorTests
     }
 
     [Test]
+    public async Task Execute_WhenEveryCriterionIsVerifiableIncludingASceneSpec_ScoresTheSceneWithoutASpawn()
+    {
+        var installed = Installed();
+        var snapshot = Snapshot(installed);
+        var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
+        var store = Substitute.For<IBenchmarkStore>();
+        StubJudgeAttempt(store, installed, rubric: new BenchmarkJudgeRubricV1(BenchmarkJudgePolicyVersions.RubricVersion,
+        [
+            new BenchmarkJudgeRubricCriterionV1("exact_answer", "Exact", "The answer text is exact.", 40,
+                BenchmarkJudgeCriterionKinds.Exact, """{"expected":"answer"}"""),
+            new BenchmarkJudgeRubricCriterionV1("scene", "Scene", "The answer is a valid scene.", 60,
+                BenchmarkJudgeCriterionKinds.SceneSpec, "{}")
+        ]));
+        BenchmarkJudgeSuccessCommand? command = null;
+        store.MarkJudgeSucceededAsync(Arg.Do<BenchmarkJudgeSuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 Judge = JudgeView(BenchmarkRunJudgeStates.Succeeded),
+                 Version = 5
+             });
+        var runner = Substitute.For<IInvocationRunner>();
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), Substitute.For<IWorkerEventDispatcher>(), runner,
+            PassthroughSupervisor());
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork
+        {
+            QueueSequence = 2,
+            RunId = run.Id,
+            Kind = BenchmarkWorkKind.Judge,
+            Attempt = 1,
+            Version = 2,
+            Run = run,
+            JudgeAttemptId = AttemptId
+        }, CancellationToken.None);
+
+        _ = runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default);
+        var success = AssertEx.NotNull(command);
+        AssertEx.Equal(BenchmarkJudgeExecutionKey.VerifiedSentinel, success.VerifiedExecutionKey);
+
+        // exact(40) passes on "answer"; "answer" is no scene, so sceneSpec(60) fails: 40*10*10 / 100 = 40.
+        AssertEx.Equal(40, success.Score);
+        var scene = AssertEx.NotNull(BenchmarkJudgeSerialization.DeserializeResult(success.JudgeResultJson)?.Verifiers)
+                            .Single(static verifier => verifier.Id == "scene");
+        AssertEx.Equal(BenchmarkJudgeCriterionKinds.SceneSpec, scene.Kind);
+        AssertEx.False(scene.Passed);
+        AssertEx.Equal("The answer is not valid JSON.", scene.Detail);
+    }
+
+    [Test]
     public async Task Execute_ForAMixedRubric_ShowsTheModelOnlyItsOwnCriteriaAndMergesTheRest()
     {
         var installed = Installed();

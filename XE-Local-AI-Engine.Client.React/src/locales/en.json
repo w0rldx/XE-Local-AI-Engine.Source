@@ -1433,8 +1433,9 @@
 				"niahSeed": "Seed",
 				"niahSummary": "Expands into {{count}} cases — {{count}} runs per combination, and {{count}} against the item cap.",
 				"notScored": "own axis",
+				"overrideReset": "Use the policy's configuration",
 				"overrides": "Verifier overrides",
-				"overridesHelp": "Give one criterion a different expected answer for this item. Left empty, the judge policy's own configuration is used.",
+				"overridesHelp": "Give one criterion a different expected answer for this item. Left empty, the judge policy's own configuration is used; a 3D scene with every rule cleared accepts any valid scene until the policy's configuration is chosen again.",
 				"prompt": "Prompt",
 				"referenceAnswer": "Reference answer (optional)",
 				"referenceAnswerHelp": "Overrides the judge policy's reference answer for this item only.",
@@ -1847,6 +1848,12 @@
 				"waiting": "Waiting for model output…"
 			},
 			"runs": "Runs",
+			"scene": {
+				"invalid": "Not a valid scene: {{reason}}",
+				"label": "3D scene with {{objects}} objects",
+				"loading": "Loading 3D preview…",
+				"unavailable": "3D preview unavailable in this browser."
+			},
 			"score": {
 				"clear": "Clear override",
 				"current": "Override: {{score}} / 100",
@@ -1925,6 +1932,10 @@
 					"patternInvalid": "That is not a valid regular expression.",
 					"patternRequired": "State a pattern.",
 					"patternTooLong": "A pattern may be at most 512 characters.",
+					"sceneConfigRequired": "A scene spec needs a configuration; an empty one checks only that the scene is valid.",
+					"sceneObjectCount": "Object counts are whole numbers from 1 to 64, and the minimum is not above the maximum.",
+					"scenePrimitives": "Required primitives are box, sphere, cylinder, cone or plane.",
+					"sceneRelations": "Relations are a JSON array of at most 16 entries, each with kind above, leftOf or inside and two different ids a and b.",
 					"schemaInvalidJson": "That is not valid JSON.",
 					"schemaKeyword": "This build enforces only type, properties, required, items, enum, const and additionalProperties.",
 					"schemaRequired": "State a schema object.",
@@ -1943,7 +1954,8 @@
 					"llm": "The judge model",
 					"mathAnswer": "Numeric answer",
 					"pythonTests": "Running the code against tests",
-					"regex": "Regular expression"
+					"regex": "Regular expression",
+					"sceneSpec": "3D scene spec"
 				},
 				"maxWords": "Maximum words",
 				"minWords": "Minimum words",
@@ -1960,6 +1972,14 @@
 				"patternHelp": "Matched in linear time: lookaround, backreferences and atomic groups are refused when the judge is saved.",
 				"pythonTestsHelp": "The answer's code runs in an untrusted child process inside the compute sandbox; these tests run in the parent, which never executes it. All tests pass = 10, anything else = 0. The tests reach the answer as candidate.name(...), or as bare names you list under Exports.",
 				"relativeTolerance": "Relative tolerance",
+				"requiresPrimitive": "Required primitives",
+				"sceneObjects": {
+					"max": "Max. objects",
+					"min": "Min. objects"
+				},
+				"sceneRelations": "Relations",
+				"sceneRelationsHelp": "A JSON array of at most {{max}} entries such as {\"kind\": \"above\", \"a\": \"ball\", \"b\": \"floor\"}; kind is above, leftOf or inside. Rotation is ignored.",
+				"sceneSpecHelp": "The answer must be a version 1 scene as JSON, fenced or bare. A valid scene that meets every rule below = 10, anything else = 0.",
 				"schema": "Schema",
 				"schemaHelp": "Enforced keywords: {{keywords}}. Anything else is refused.",
 				"testCode": "Test code",

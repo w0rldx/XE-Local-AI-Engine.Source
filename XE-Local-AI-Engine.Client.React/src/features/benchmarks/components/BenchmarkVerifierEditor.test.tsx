@@ -35,6 +35,52 @@ function renderEditor(kind: BenchmarkCriterionKind, config: string | null, issue
 }
 
 describe("BenchmarkVerifierEditor", () => {
+	it("offers the sceneSpec kind and writes the object count through", () => {
+		const onChange = renderEditor("sceneSpec", "{}");
+
+		expect((screen.getByTestId("verifier-kind") as HTMLInputElement).value).toBe("3D scene spec");
+		fireEvent.change(screen.getByTestId("verifier-objects-min"), { target: { value: "2" } });
+
+		expect(onChange).toHaveBeenCalledWith({ kind: "sceneSpec", config: '{"objectCount":{"min":2}}' });
+	});
+
+	// `{}` is a real sceneSpec check, and no config at all is refused, so clearing the last rule must leave `{}`.
+	it("keeps {} once the last sceneSpec rule is cleared", () => {
+		const onChange = renderEditor("sceneSpec", '{"objectCount":{"max":4}}');
+
+		fireEvent.change(screen.getByTestId("verifier-objects-max"), { target: { value: "" } });
+
+		expect(onChange).toHaveBeenCalledWith({ kind: "sceneSpec", config: "{}" });
+	});
+
+	it("adds a required primitive and ignores anything that is not one", () => {
+		const onChange = renderEditor("sceneSpec", "{}");
+		const input = screen.getByTestId("verifier-primitives");
+
+		fireEvent.click(input);
+		fireEvent.change(input, { target: { value: "torus" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+		fireEvent.change(input, { target: { value: "sphere" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+
+		expect(onChange).toHaveBeenLastCalledWith({ kind: "sceneSpec", config: '{"requiresPrimitive":["sphere"]}' });
+	});
+
+	// Half-typed JSON is kept as a string so the pre-check blocks the save, rather than the old relations being saved.
+	it("writes relations as an array once they parse, and as text until then", () => {
+		const onChange = renderEditor("sceneSpec", "{}");
+		const input = screen.getByTestId("verifier-relations");
+
+		fireEvent.change(input, { target: { value: '[{"kind":"above"' } });
+		expect(onChange).toHaveBeenLastCalledWith({ kind: "sceneSpec", config: JSON.stringify({ relations: '[{"kind":"above"' }) });
+
+		fireEvent.change(input, { target: { value: '[{"kind":"above","a":"ball","b":"floor"}]' } });
+		expect(onChange).toHaveBeenLastCalledWith({
+			kind: "sceneSpec",
+			config: '{"relations":[{"kind":"above","a":"ball","b":"floor"}]}',
+		});
+	});
+
 	it("offers every kind the node accepts", () => {
 		renderEditor("llm", null);
 

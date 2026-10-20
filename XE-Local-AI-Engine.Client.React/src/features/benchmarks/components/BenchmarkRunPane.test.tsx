@@ -3,6 +3,11 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+// The viewer pulls in `three` and needs WebGL; what is under test here is only WHEN the pane mounts it.
+vi.mock("@/features/benchmarks/components/BenchmarkSceneViewer", () => ({
+	default: ({ answer }: { answer: string }) => <div data-testid="scene-viewer-stub">{answer}</div>,
+}));
+
 import { BenchmarkRunPane } from "@/features/benchmarks/components/BenchmarkRunPane";
 import type { BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
 import { benchmarkJudgeFixture, benchmarkRunDetailFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
@@ -13,7 +18,7 @@ afterEach(cleanup);
 const run = (overrides: Partial<BenchmarkRunDetail> = {}): BenchmarkRunDetail =>
 	benchmarkRunDetailFixture({ outputParts: [{ kind: "output", content: "Answer" }], ...overrides });
 
-function renderPane(value: BenchmarkRunDetail) {
+function renderPane(value: BenchmarkRunDetail, showSceneViewer?: boolean) {
 	const handlers = {
 		onScore: vi.fn(),
 		onClearScore: vi.fn(),
@@ -23,12 +28,49 @@ function renderPane(value: BenchmarkRunDetail) {
 		onDownloadArtifact: vi.fn(),
 	};
 	const view = renderWithProviders(
-		<BenchmarkRunPane run={value} parts={value.outputParts} isConnected={false} isReconnecting={false} {...handlers} />,
+		<BenchmarkRunPane
+			run={value}
+			parts={value.outputParts}
+			isConnected={false}
+			isReconnecting={false}
+			showSceneViewer={showSceneViewer}
+			{...handlers}
+		/>,
 	);
 	return { ...view, ...handlers };
 }
 
 describe("BenchmarkRunPane", () => {
+	it("draws the finished answer as a scene for a sceneSpec rubric", async () => {
+		renderPane(
+			run({
+				outputParts: [
+					{ kind: "reasoning", content: "plan" },
+					{ kind: "output", content: '{"version"' },
+					{ kind: "output", content: ":1}" },
+				],
+			}),
+			true,
+		);
+
+		expect((await screen.findByTestId("scene-viewer-stub")).textContent).toBe('{"version":1}');
+	});
+
+	it("mounts no viewer without a sceneSpec criterion", () => {
+		renderPane(run());
+
+		expect(screen.queryByText("Loading 3D preview…")).toBeNull();
+		expect(screen.queryByTestId("scene-viewer-stub")).toBeNull();
+	});
+
+	// A half-streamed scene is never valid JSON; the viewer waits for the final answer.
+	it("mounts no viewer while the primary is still running", () => {
+		renderPane(run({ primaryStatus: "Running" }), true);
+
+		expect(screen.queryByText("Loading 3D preview…")).toBeNull();
+		expect(screen.queryByTestId("scene-viewer-stub")).toBeNull();
+	});
+
 	it("renders persisted output, nullable provenance and metrics", () => {
 		renderPane(run());
 

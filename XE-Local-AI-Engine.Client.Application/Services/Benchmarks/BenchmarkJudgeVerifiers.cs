@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -94,7 +95,9 @@ public static class BenchmarkJudgeVerifiers
                 BenchmarkJudgeCriterionKinds.Regex => VerifyRegex(spec, bounded),
                 BenchmarkJudgeCriterionKinds.JsonSchema => VerifyJsonSchema(spec, bounded),
                 BenchmarkJudgeCriterionKinds.MathAnswer => VerifyMathAnswer(spec, bounded),
-                _ => VerifyConstraint(spec, bounded)
+                BenchmarkJudgeCriterionKinds.SceneSpec => VerifySceneSpec(spec, bounded),
+                BenchmarkJudgeCriterionKinds.Constraint => VerifyConstraint(spec, bounded),
+                _ => throw new UnreachableException(kind)
             };
             return new BenchmarkJudgeVerifierResultV1(criterion.Id, kind, passed, Bound(detail));
         }
@@ -214,6 +217,50 @@ public static class BenchmarkJudgeVerifiers
                 : Pass($"The answer is plain text and satisfies every constraint ({words} words)."),
             _ => Pass($"The answer satisfies every constraint ({words} words).")
         };
+    }
+
+    private static VerifierOutcome VerifySceneSpec(BenchmarkVerifierSpec spec, string answer)
+    {
+        var config = spec.SceneSpec ?? throw new BenchmarkExecutionException("The sceneSpec criterion has no configuration.");
+        if (!BenchmarkSceneSpec.TryParse(ExtractJson(answer), out var scene, out var reason))
+        {
+            return Fail(reason);
+        }
+
+        var objects = scene.Objects;
+        if (config.ObjectCount?.Min is { } minimum && objects.Count < minimum)
+        {
+            return Fail($"The scene has {objects.Count} objects, fewer than the required {minimum}.");
+        }
+
+        if (config.ObjectCount?.Max is { } maximum && objects.Count > maximum)
+        {
+            return Fail($"The scene has {objects.Count} objects, more than the permitted {maximum}.");
+        }
+
+        if (config.RequiresPrimitive?.FirstOrDefault(primitive => !objects.Any(item => string.Equals(item.Primitive, primitive, StringComparison.Ordinal)))
+            is { } absent)
+        {
+            return Fail($"The scene has no {absent}.");
+        }
+
+        foreach (var relation in config.Relations ?? [])
+        {
+            var a = objects.FirstOrDefault(item => string.Equals(item.Id, relation.A, StringComparison.Ordinal));
+            var b = objects.FirstOrDefault(item => string.Equals(item.Id, relation.B, StringComparison.Ordinal));
+            if (a is null || b is null)
+            {
+                var unknown = (a is null ? relation.A : relation.B) ?? string.Empty;
+                return Fail($"The relation {relation.Kind} names '{Bound(unknown, 64)}', which is not in the scene.");
+            }
+
+            if (!BenchmarkSceneSpec.Holds(relation.Kind ?? string.Empty, a, b))
+            {
+                return Fail($"'{a.Id}' is not {relation.Kind} '{b.Id}'.");
+            }
+        }
+
+        return Pass($"scene: {objects.Count} objects");
     }
 
     private static bool IsJson(string answer)

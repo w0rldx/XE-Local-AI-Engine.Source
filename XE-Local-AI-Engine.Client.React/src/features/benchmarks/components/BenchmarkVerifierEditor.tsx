@@ -1,8 +1,10 @@
 import { Checkbox, Group, JsonInput, NumberInput, Select, Stack, Switch, TagsInput, Text, TextInput } from "@mantine/core";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
 
+import { benchmarkSceneLimits, benchmarkScenePrimitives } from "@/features/benchmarks/models/BenchmarkSceneSpec";
 import type {
 	BenchmarkCriterionKind,
 	BenchmarkVerifierConfig,
@@ -42,6 +44,69 @@ const readNumber = (config: BenchmarkVerifierConfig, key: string): number | "" =
 const readList = (config: BenchmarkVerifierConfig, key: string): string[] =>
 	Array.isArray(config[key]) ? (config[key] as unknown[]).filter((entry): entry is string => typeof entry === "string") : [];
 
+const relationsText = (value: unknown): string =>
+	value === undefined ? "" : typeof value === "string" ? value : JSON.stringify(value, null, 2);
+
+/**
+ * The `sceneSpec` relations as raw JSON. Text that does not parse yet is stored as a STRING, which the pre-check
+ * refuses, so a half-typed array blocks the save instead of the previous relations being saved silently.
+ */
+function SceneRelationsInput({
+	value,
+	error,
+	onChange,
+	testId,
+}: {
+	value: unknown;
+	error: string | undefined;
+	onChange: (relations: unknown) => void;
+	testId: string;
+}) {
+	const { t } = useTranslation();
+	const [text, setText] = useState(() => relationsText(value));
+	// The text is local so a half-typed array survives re-renders, but a value this input did not emit (the item
+	// editor's "use the policy's configuration" reset) must show: re-derive the text when the value stops matching
+	// what was last sent up. Own edits round-trip through the parent unchanged, so typing is never disturbed.
+	const [emitted, setEmitted] = useState(() => relationsText(value));
+	if (relationsText(value) !== emitted) {
+		setEmitted(relationsText(value));
+		setText(relationsText(value));
+	}
+	const emit = (relations: unknown): void => {
+		setEmitted(relationsText(relations));
+		onChange(relations);
+	};
+	return (
+		<JsonInput
+			label={t("pages.benchmarks.verifier.sceneRelations", "Relations")}
+			description={t(
+				"pages.benchmarks.verifier.sceneRelationsHelp",
+				'A JSON array of at most {{max}} entries such as {"kind": "above", "a": "ball", "b": "floor"}; kind is above, leftOf or inside. Rotation is ignored.',
+				{ max: benchmarkSceneLimits.maxRelations },
+			)}
+			autosize={true}
+			minRows={3}
+			formatOnBlur={true}
+			validationError={t("pages.benchmarks.verifier.issues.schemaInvalidJson", "That is not valid JSON.")}
+			value={text}
+			error={error}
+			onChange={(next) => {
+				setText(next);
+				if (next.trim() === "") {
+					emit(undefined);
+					return;
+				}
+				try {
+					emit(JSON.parse(next));
+				} catch {
+					emit(next);
+				}
+			}}
+			data-testid={testId}
+		/>
+	);
+}
+
 /**
  * How one rubric criterion is decided, and the configuration that way of deciding needs. `llm` is the default and
  * costs a model turn; every other kind is checked server-side against the graded answer with no inference at all — a
@@ -76,7 +141,8 @@ export function BenchmarkVerifierEditor({
 				delete next[key];
 			}
 		}
-		onChange({ kind, config: serializeVerifierConfig(next) });
+		// `sceneSpec` is the one kind whose empty config is valid, and the node refuses it with no config at all.
+		onChange({ kind, config: serializeVerifierConfig(next) ?? (kind === "sceneSpec" ? "{}" : null) });
 	};
 
 	return (
@@ -271,6 +337,63 @@ export function BenchmarkVerifierEditor({
 							data-testid={`${testId}-extract`}
 						/>
 					</Group>
+				</Stack>
+			) : null}
+
+			{kind === "sceneSpec" ? (
+				<Stack gap={4} data-testid={`${testId}-scene`}>
+					<Text size="xs" c="dimmed">
+						{t(
+							"pages.benchmarks.verifier.sceneSpecHelp",
+							"The answer must be a version 1 scene as JSON, fenced or bare. A valid scene that meets every rule below = 10, anything else = 0.",
+						)}
+					</Text>
+					<Group gap="sm" align="flex-start">
+						{(["min", "max"] as const).map((key) => {
+							const count = parseVerifierConfig(JSON.stringify(parsed["objectCount"] ?? {}));
+							return (
+								<NumberInput
+									key={key}
+									w={160}
+									min={1}
+									max={benchmarkSceneLimits.maxObjects}
+									allowDecimal={false}
+									label={t(`pages.benchmarks.verifier.sceneObjects.${key}`, key)}
+									value={readNumber(count, key)}
+									error={message("sceneObjectCount")}
+									onChange={(value) => {
+										const next = { ...count, [key]: value === "" ? undefined : Number(value) };
+										write({ objectCount: next["min"] === undefined && next["max"] === undefined ? undefined : next });
+									}}
+									data-testid={`${testId}-objects-${key}`}
+								/>
+							);
+						})}
+					</Group>
+					<TagsInput
+						label={t("pages.benchmarks.verifier.requiresPrimitive", "Required primitives")}
+						data={[...benchmarkScenePrimitives]}
+						maxTags={benchmarkScenePrimitives.length}
+						value={readList(parsed, "requiresPrimitive")}
+						error={message("scenePrimitives")}
+						onChange={(value) =>
+							write({
+								requiresPrimitive: value.filter((entry) => benchmarkScenePrimitives.some((primitive) => primitive === entry)),
+							})
+						}
+						data-testid={`${testId}-primitives`}
+					/>
+					<SceneRelationsInput
+						value={parsed["relations"]}
+						error={message("sceneRelations")}
+						onChange={(relations) => write({ relations })}
+						testId={`${testId}-relations`}
+					/>
+					{message("sceneConfigRequired") === undefined ? null : (
+						<Text size="xs" c="red" data-testid={`${testId}-scene-config`}>
+							{message("sceneConfigRequired")}
+						</Text>
+					)}
 				</Stack>
 			) : null}
 

@@ -1,5 +1,6 @@
 import { Button, Card, Divider, Group, Loader, Stack, Text, Title } from "@mantine/core";
 import { IconDownload, IconPlugConnected, IconPlugConnectedX, IconSquare, IconTrash } from "@tabler/icons-react";
+import { lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 
 import { humanizeBytes } from "@/core/formatting/BytesFormatting";
@@ -36,8 +37,12 @@ import {
 	isRunTerminal,
 	toChatMessageParts,
 } from "@/features/benchmarks/models/BenchmarkModels";
+import { answerText } from "@/features/benchmarks/models/BenchmarkSceneSpec";
 import { formatLatencyMs, formatTokensPerSecond, hasThroughputBreakdown } from "@/features/benchmarks/models/BenchmarkThroughput";
 import { MessageParts } from "@/features/chat/components/MessageParts";
+
+// `three` is its own chunk, fetched only when a run of a `sceneSpec` rubric is opened.
+const BenchmarkSceneViewer = lazy(() => import("@/features/benchmarks/components/BenchmarkSceneViewer"));
 
 interface BenchmarkRunPaneProps {
 	run: BenchmarkRunDetail;
@@ -71,6 +76,8 @@ interface BenchmarkRunPaneProps {
 	scoreControl?: BenchmarkScoreControl;
 	isDownloadingArtifact?: boolean;
 	onDownloadArtifact?: (artifact: BenchmarkRunArtifact) => void;
+	/** The project's rubric has a `sceneSpec` criterion: the finished answer is also drawn as a 3D scene. */
+	showSceneViewer?: boolean;
 }
 
 // Per-call execution time, joined from the tool_result parts. The chat renderer has no slot for it, so the timing is a
@@ -234,6 +241,7 @@ export function BenchmarkRunPane({
 	scoreControl = "picker",
 	isDownloadingArtifact = false,
 	onDownloadArtifact,
+	showSceneViewer = false,
 }: BenchmarkRunPaneProps) {
 	const { t } = useTranslation();
 	const active = isPrimaryActive(run.primaryStatus);
@@ -323,6 +331,19 @@ export function BenchmarkRunPane({
 					</Group>
 				) : null}
 				<MessageParts parts={messageParts} isStreaming={run.primaryStatus === "Running"} />
+				{/* Parsed once the answer is final: a half-streamed scene is never valid JSON. */}
+				{showSceneViewer && !active ? (
+					<Suspense
+						fallback={
+							<Group gap="sm">
+								<Loader size="sm" />
+								<Text c="dimmed">{t("pages.benchmarks.scene.loading", "Loading 3D preview…")}</Text>
+							</Group>
+						}
+					>
+						<BenchmarkSceneViewer answer={answerText(parts)} />
+					</Suspense>
+				) : null}
 				{run.primaryStatus === "Failed" && run.primaryErrorMessage ? (
 					<InlineErrorAlert message={run.primaryErrorMessage} />
 				) : null}

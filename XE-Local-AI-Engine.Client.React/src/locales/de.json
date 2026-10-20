@@ -1433,8 +1433,9 @@
 				"niahSeed": "Seed",
 				"niahSummary": "Ergibt {{count}} Fälle: {{count}} Läufe je Kombination, und {{count}} zählen gegen die Aufgabengrenze.",
 				"notScored": "eigene Achse",
+				"overrideReset": "Konfiguration der Richtlinie verwenden",
 				"overrides": "Prüfer-Überschreibungen",
-				"overridesHelp": "Geben Sie einem Kriterium für diese Aufgabe eine andere erwartete Antwort. Bleibt das Feld leer, gilt die Konfiguration der Judge-Richtlinie.",
+				"overridesHelp": "Geben Sie einem Kriterium für diese Aufgabe eine andere erwartete Antwort. Bleibt das Feld leer, gilt die Konfiguration der Judge-Richtlinie; eine 3D-Szene ohne jede Regel akzeptiert jede gültige Szene, bis wieder die Konfiguration der Richtlinie gewählt wird.",
 				"prompt": "Prompt",
 				"referenceAnswer": "Musterantwort (optional)",
 				"referenceAnswerHelp": "Überschreibt die Musterantwort der Judge-Richtlinie nur für diese Aufgabe.",
@@ -1847,6 +1848,12 @@
 				"waiting": "Warten auf Modellausgabe…"
 			},
 			"runs": "Läufe",
+			"scene": {
+				"invalid": "Keine gültige Szene: {{reason}}",
+				"label": "3D-Szene mit {{objects}} Objekten",
+				"loading": "3D-Vorschau wird geladen…",
+				"unavailable": "Die 3D-Vorschau ist in diesem Browser nicht verfügbar."
+			},
 			"score": {
 				"clear": "Vorgabe entfernen",
 				"current": "Vorgabe: {{score}} / 100",
@@ -1925,6 +1932,10 @@
 					"patternInvalid": "Das ist kein gültiger regulärer Ausdruck.",
 					"patternRequired": "Geben Sie ein Muster an.",
 					"patternTooLong": "Ein Muster darf höchstens 512 Zeichen lang sein.",
+					"sceneConfigRequired": "Eine Szenenbeschreibung braucht eine Konfiguration; eine leere prüft nur, ob die Szene gültig ist.",
+					"sceneObjectCount": "Objektanzahlen sind ganze Zahlen von 1 bis 64, und das Minimum liegt nicht über dem Maximum.",
+					"scenePrimitives": "Erforderliche Grundkörper sind box, sphere, cylinder, cone oder plane.",
+					"sceneRelations": "Beziehungen sind ein JSON-Array mit höchstens 16 Einträgen, jeweils mit kind above, leftOf oder inside und zwei verschiedenen IDs a und b.",
 					"schemaInvalidJson": "Das ist kein gültiges JSON.",
 					"schemaKeyword": "Dieser Build setzt nur type, properties, required, items, enum, const und additionalProperties durch.",
 					"schemaRequired": "Geben Sie ein Schema-Objekt an.",
@@ -1943,7 +1954,8 @@
 					"llm": "Das Judge-Modell",
 					"mathAnswer": "Numerische Antwort",
 					"pythonTests": "Ausführen des Codes gegen Tests",
-					"regex": "Regulärer Ausdruck"
+					"regex": "Regulärer Ausdruck",
+					"sceneSpec": "3D-Szenenbeschreibung"
 				},
 				"maxWords": "Höchstanzahl Wörter",
 				"minWords": "Mindestanzahl Wörter",
@@ -1960,6 +1972,14 @@
 				"patternHelp": "Wird in linearer Zeit ausgewertet: Lookaround, Rückwärtsverweise und atomare Gruppen werden beim Speichern des Judge abgelehnt.",
 				"pythonTestsHelp": "Der Code der Antwort läuft in einem nicht vertrauenswürdigen Kindprozess in der Compute-Sandbox; diese Tests laufen im Elternprozess, der ihn nie ausführt. Alle Tests bestanden = 10, sonst 0. Die Tests erreichen die Antwort über candidate.name(...) oder über die unter Exports genannten Namen.",
 				"relativeTolerance": "Relative Toleranz",
+				"requiresPrimitive": "Erforderliche Grundkörper",
+				"sceneObjects": {
+					"max": "Max. Objekte",
+					"min": "Min. Objekte"
+				},
+				"sceneRelations": "Beziehungen",
+				"sceneRelationsHelp": "Ein JSON-Array mit höchstens {{max}} Einträgen wie {\"kind\": \"above\", \"a\": \"ball\", \"b\": \"floor\"}; kind ist above, leftOf oder inside. Die Rotation wird ignoriert.",
+				"sceneSpecHelp": "Die Antwort muss eine Szene der Version 1 als JSON sein, mit oder ohne Codeblock. Eine gültige Szene, die jede Regel unten erfüllt = 10, alles andere = 0.",
 				"schema": "Schema",
 				"schemaHelp": "Durchgesetzte Schlüsselwörter: {{keywords}}. Alles andere wird abgelehnt.",
 				"testCode": "Testcode",

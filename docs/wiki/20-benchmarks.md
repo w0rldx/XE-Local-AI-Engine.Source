@@ -233,6 +233,7 @@ A rubric criterion carries a `Kind` and a `Config` (`BenchmarkJudgeVerifierContr
 | `mathAnswer` | the final number, extracted in a documented order |
 | `constraint` | IFEval-style word counts, substrings, format |
 | `pythonTests` | **running the answer's code** against the operator's hidden tests in the compute sandbox (§5.2.3) |
+| `sceneSpec` | a fenced JSON 3D scene checked against scene schema v1 and the criterion's spatial config, server-side, no model and no sandbox |
 
 `BenchmarkJudgeVerifierConfig.Parse` is the **one** parser, called by the policy validator at activation *and* by `BenchmarkJudgeVerifiers` at execution. A second parser is how an activation-time check and a run-time check drift into disagreeing about the same config.
 
@@ -242,6 +243,14 @@ A rubric criterion carries a `Kind` and a `Config` (`BenchmarkJudgeVerifierContr
 - The JSON-schema check **refuses every keyword outside its subset**. Accepting `minLength` and not enforcing it would ship a criterion that silently passes answers it should fail; refusing keeps "accepted" and "enforced" the same set. No JSON-Schema dependency was added.
 - **A verifier that cannot run throws and fails the judging. It never scores 0.** 0 is a score an answer can genuinely earn, so spelling "unmeasurable" that way is a lie the ranking then acts on.
 - `mathAnswer` extraction order is `\boxed{}` → `####` → an "answer is" phrase → the last number, most explicit first and the last occurrence of each. A model that shows its working leaves several numbers behind and the final one it wrote is not reliably the one it meant. The value keeps thousands separators through the capture and is cleaned afterwards (excluding them read `$1,234,567` as 1). `\boxed{1/2}` and `\boxed{\frac{1}{2}}` both equal `0.5`.
+
+**`sceneSpec` — scene schema v1** (`BenchmarkSceneSpec`). Binary like `jsonSchema`: the scene passes the config or it does not.
+
+- The scene is `{"version": 1, "objects": [...]}` with 1 to 64 objects. Root and object member sets are **closed**: an unknown member is refused, never ignored, and a repeated key is refused (a last-wins parser would let a duplicate `position` hide the one a reader sees). Object ids are unique.
+- An object has `id`, `primitive` (`box`, `sphere`, `cylinder`, `cone` or `plane`) and a required `position`. `rotation` (degrees) defaults to `[0,0,0]`, `scale` to `[1,1,1]` and `color` to `#808080`; ranges are capped (position ±1000, rotation ±360, scale in (0, 1000], `#rrggbb` only).
+- Relations are decided on **axis-aligned bounds**: `position ± scale / 2` per axis, a plane with no thickness. **Rotation is ignored.** Accepted ceiling: a rotated object is checked by its unrotated box, and an oriented-box test is the upgrade if an operator needs one. `above`, `leftOf` and `inside` are all bounds comparisons.
+- Config: optional `objectCount` (`min`, `max`), `requiresPrimitive` and `relations` (`kind` plus two different object ids); `{}` means "a valid v1 scene". **A malformed scene scores 0 with the reason in the detail; a bad config is refused at activation** by the single parser above. Unlike an unrunnable verifier, a malformed answer is something the model genuinely earned 0 for.
+- The two dispatch switches (`BenchmarkJudgeVerifierConfig.Parse` and `BenchmarkJudgeVerifiers.Verify`) name `constraint` explicitly and end in `UnreachableException`. The former default silently graded any new verifiable kind as a constraint; a kind without a case now throws instead.
 
 #### 5.2.1 Per-item overrides
 
@@ -517,6 +526,7 @@ Full detail: [Scheduler](06-scheduler.md) and [Training](18-training.md).
 | `BenchmarkReviewInbox` | the cross-project review inbox: a state filter (pending, stale, approved, rejected), an optional project filter, a pager, and a row that opens the run pane below it |
 | `BenchmarkReviewForm` | the reviewer's decision on one run: a 0..10 field per `llm` criterion (or one overall 0..100 without a policy), notes, Approve and Reject |
 | `BenchmarkRunPane` | the run detail, which hosts the review form or the score picker, the verifier evidence download list and the tool-timing list |
+| `BenchmarkSceneViewer` | the finished answer's `sceneSpec` scene drawn with `three`: fixed lighting, auto-framed camera, orbit controls; display only |
 
 Rules the UI is built on, all of them consequences of the backend contracts above:
 
@@ -528,6 +538,7 @@ Rules the UI is built on, all of them consequences of the backend contracts abov
 - **Exactly one score control per run, chosen by `benchmarkScoreControl`.** `review` for a non-warm-up run on a scoring item of a review project, where the form replaces the picker because the node refuses a plain score there (`ReviewRequired`); `judgeOnly` for every other run of a review project (a warm-up, a non-scoring leaf), which shows a note and no control; `picker` for a project without review; `loading` until the project and its items are read, so the wrong control never flashes.
 - **The form mirrors the node's review rules.** Verifiable criteria are shown with their verifier's verdict, read-only, and never sent; only `llm` criteria are in the payload. Approve and Reject are locked, with the reason beside them, while `benchmarkReviewBlocker` says the run is not reviewable (primary not succeeded, revised item, or no current succeeded judging under a policy). A rejection sends no scores. Notes are limited to `benchmarkReviewNotesMaxLength`, a copy of `BenchmarkReviewLimits.MaxNotesCharacters`. The form remounts when the run's judging or stored decision moves, so its pre-fill is never stale. `NotReviewable` and `VersionConflict` refresh the run and name what to do next.
 - **The inbox mounts only when a project requires review**, so a node without one never reads it. It is read on demand: a Refresh button, no polling. It steps back a page when reviewing the last row shrinks the total under the current page. `benchmarkReviewPageSize` copies the node's 1..200 take bounds. The project form's review switch is disabled once the project is frozen and while pairwise judging is selected.
+- **`BenchmarkSceneViewer` draws and never scores.** It is a lazy chunk (`three` ships in its own `three-*` chunk with its own lazy-scene-viewer bundle budget, outside the application budget), mounted by `BenchmarkRunPane` only for a rubric with a `sceneSpec` criterion and a terminal run, because a half-streamed scene is never valid JSON. Without WebGL it degrades to text. `models/BenchmarkSceneSpec.ts` mirrors the verifier's parser so the viewer can draw, but the score is always the node's verdict, and a scene the TS parser accepts that the verifier refuses is still 0.
 - **Tool timing is a list the benchmark pane owns**, because the chat renderer has no slot for it: the run's call count and total, then one row per timed or repeated call, with a repeated-call badge. A call the node did not time renders no duration, never `0 s`.
 - **Evidence files are only downloaded.** The pane lists the run's artifacts and downloads them through the artifact route; a 409 `ArtifactCorrupt` is named in the error toast.
 - The FE's mirrored limits (`benchmarkTaskItemLimits`, `benchmarkNiahLimits`, `benchmarkPythonTestsLimits`, `maxVerifierPatternLength`) are copies of backend constants and are verified against them: 20 leaves, 100 runs per request, 512-token probe floor, 4 000-char test code, 16 exports, 600 s timeout, 512-char pattern. Change one side and the other becomes a form that accepts what the node refuses.
@@ -566,6 +577,7 @@ Rules the UI is built on, all of them consequences of the backend contracts abov
 | Review phase | `…Client.Application/Services/Benchmarks/Implementation/BenchmarkReviewService.cs` (rubric scoring, the read-only verifier check, the judging-currency refusal) and `Client.Persistence/Implementation/BenchmarkStore.Reviews.cs` (submit, the inbox, store-side reviewability); the ranking gate is `BenchmarkRankingPolicy.ApplyReviewGate` fed by `LoadReviewGatesAsync` in `BenchmarkStore.Ranking.cs`; endpoints `SubmitBenchmarkRunReviewEndpoint` and `ListBenchmarkReviewsEndpoint` (§4.4) |
 | Run artifacts | `…Client.Application/Services/Benchmarks/Implementation/BenchmarkRunArtifactBlobStore.cs` over `Services/Blobs/ManagedEncryptedBlobStore.cs`, rows in `Client.Persistence/Implementation/BenchmarkStore.Artifacts.cs`, download in `GetBenchmarkRunArtifactEndpoint`, orphan sweep in `RetentionSweeperService` (§5.2.4) |
 | Tool timing | `XE-Local-AI-Engine.AI.Agent/Tools/Implementation/ToolExecutionTimingScope.cs`, the invoker in `AgentServiceCollectionExtensions`, `ToolCallLifecyclePayload.DurationMs` (§7.2) |
+| Scene verifier | `…Client.Application/Services/Benchmarks/BenchmarkSceneSpec.cs` (schema, bounds, relations), the `SceneSpec` cases in `BenchmarkJudgeVerifierConfig.cs` and `BenchmarkJudgeVerifiers.cs`, config contract in `BenchmarkJudgeVerifierContracts.cs`; viewer and mirror parser under the React feature's `components/BenchmarkSceneViewer.tsx` and `models/BenchmarkSceneSpec.ts` (§5.2, §10) |
 | Run-progress SignalR hub | `XE-Local-AI-Engine.Client/Hubs/BenchmarkRunHub.cs` (`BenchmarkRunHub`, mapped at `/api/local/v1/benchmarks/hub`) |
 | React feature | `XE-Local-AI-Engine.Client.React/src/features/benchmarks/` |
 | Fidelity + NIAH corpus and licence | `tools/benchmark/corpus/`, `third-party/data/` |

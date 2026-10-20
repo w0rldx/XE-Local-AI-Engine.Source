@@ -3930,6 +3930,14 @@
 			"source": "frontend"
 		},
 		{
+			"id": "frontend:three@0.186.1",
+			"name": "three",
+			"version": "0.186.1",
+			"license": "MIT",
+			"homepageUrl": "https://threejs.org/",
+			"source": "frontend"
+		},
+		{
 			"id": "backend:TimeZoneConverter@7.2.0",
 			"name": "TimeZoneConverter",
 			"version": "7.2.0",

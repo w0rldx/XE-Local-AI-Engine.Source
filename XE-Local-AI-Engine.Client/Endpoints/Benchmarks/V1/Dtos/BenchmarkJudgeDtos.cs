@@ -39,7 +39,7 @@ public sealed class BenchmarkRubricCriterionDto
 
     /// <summary>
     ///     How the criterion is decided: <c>llm</c> (the default an omitted value takes), <c>exact</c>, <c>regex</c>,
-    ///     <c>jsonSchema</c>, <c>mathAnswer</c>, <c>constraint</c> or <c>pythonTests</c>.
+    ///     <c>jsonSchema</c>, <c>mathAnswer</c>, <c>constraint</c>, <c>pythonTests</c> or <c>sceneSpec</c>.
     /// </summary>
     /// <remarks>
     ///     Optional on the way in, so a caller that names no kind keeps working unchanged; always present on the way

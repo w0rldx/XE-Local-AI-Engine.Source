@@ -111,16 +111,16 @@ export function BenchmarkTaskItemEditor({ projectId, projectContextTokens, hasRu
 			{ onError: mutationFailure(t("pages.benchmarks.items.errors.reorder", "Could not reorder the task items.")) },
 		);
 
-	// A verifier override is one criterion's CONFIG, keyed by criterion id. Emptying it removes the key, which is how
-	// the item goes back to the policy's own configuration for that criterion.
+	// A verifier override is one criterion's CONFIG, keyed by criterion id. The editor sends null when the kind has
+	// nothing left to say, which removes the key and returns the item to the policy's own configuration. An empty
+	// object is NOT that: for `sceneSpec` it is the valid "any valid scene" configuration, and it stays as written.
 	const writeOverride = (criterionId: string, config: string | null): void =>
 		setDraft((current) => {
 			const next = { ...(current.verifierConfig ?? {}) };
-			const parsed = config === null ? {} : parseVerifierConfig(config);
-			if (Object.keys(parsed).length === 0) {
+			if (config === null) {
 				delete next[criterionId];
 			} else {
-				next[criterionId] = parsed;
+				next[criterionId] = parseVerifierConfig(config);
 			}
 			return { ...current, verifierConfig: Object.keys(next).length === 0 ? null : next };
 		});

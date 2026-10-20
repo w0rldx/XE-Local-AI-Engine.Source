@@ -180,6 +180,88 @@ public sealed class BenchmarkJudgeVerifiersTests
         AssertEx.Equal(first.Kind, second.Kind);
     }
 
+    private const string SceneAnswer =
+        """
+        Here is the scene:
+        ```json
+        {"version":1,"objects":[
+          {"id":"floor","primitive":"plane","position":[0,0,0],"scale":[10,1,10]},
+          {"id":"ball","primitive":"sphere","position":[0,0.5,0],"color":"#ff0000"},
+          {"id":"crate","primitive":"box","position":[-2,0.5,0]},
+          {"id":"room","primitive":"box","position":[0,2,0],"scale":[20,4,20]}
+        ]}
+        ```
+        """;
+
+    [Test]
+    public void SceneSpec_PassesAFencedValidScene()
+    {
+        var result = Verify(BenchmarkJudgeCriterionKinds.SceneSpec, "{}", SceneAnswer);
+
+        AssertEx.True(result.Passed, result.Detail);
+        AssertEx.Equal("scene: 4 objects", result.Detail);
+        AssertEx.Equal(BenchmarkJudgeCriterionKinds.SceneSpec, result.Kind);
+    }
+
+    [Test]
+    public void SceneSpec_FailsAMalformedSceneWithTheReason()
+    {
+        var notJson = Verify(BenchmarkJudgeCriterionKinds.SceneSpec, "{}", "```json\n{\"version\":1,\n```");
+        var unknown = Verify(BenchmarkJudgeCriterionKinds.SceneSpec, "{}",
+            """{"version":1,"objects":[{"id":"a","primitive":"box","position":[0,0,0]},{"id":"b","primitive":"box","position":[0,0,0],"texture":"x.png"}]}""");
+
+        AssertEx.False(notJson.Passed);
+        AssertEx.Equal("The answer is not valid JSON.", notJson.Detail);
+        AssertEx.False(unknown.Passed);
+        AssertEx.Equal("object 2: unknown member 'texture'.", unknown.Detail);
+    }
+
+    [Test]
+    public void SceneSpec_ChecksObjectCountAndRequiredPrimitives()
+    {
+        AssertEx.True(Verify(BenchmarkJudgeCriterionKinds.SceneSpec, """{"objectCount":{"min":4,"max":4}}""", SceneAnswer).Passed);
+        AssertEx.Contains(Verify(BenchmarkJudgeCriterionKinds.SceneSpec, """{"objectCount":{"min":5}}""", SceneAnswer).Detail, "fewer than the required 5");
+        AssertEx.Contains(Verify(BenchmarkJudgeCriterionKinds.SceneSpec, """{"objectCount":{"max":3}}""", SceneAnswer).Detail, "more than the permitted 3");
+        AssertEx.True(Verify(BenchmarkJudgeCriterionKinds.SceneSpec, """{"requiresPrimitive":["box","sphere","plane"]}""", SceneAnswer).Passed);
+        var missing = Verify(BenchmarkJudgeCriterionKinds.SceneSpec, """{"requiresPrimitive":["sphere","cone"]}""", SceneAnswer);
+        AssertEx.False(missing.Passed);
+        AssertEx.Equal("The scene has no cone.", missing.Detail);
+    }
+
+    [Test]
+    public void SceneSpec_DecidesEachRelation_AndNamesAnIdTheSceneLacks()
+    {
+        AssertEx.True(Verify(BenchmarkJudgeCriterionKinds.SceneSpec, Relation("above", "ball", "floor"), SceneAnswer).Passed);
+        AssertEx.Equal("'floor' is not above 'ball'.", Verify(BenchmarkJudgeCriterionKinds.SceneSpec, Relation("above", "floor", "ball"), SceneAnswer).Detail);
+        AssertEx.True(Verify(BenchmarkJudgeCriterionKinds.SceneSpec, Relation("leftOf", "crate", "ball"), SceneAnswer).Passed);
+        AssertEx.False(Verify(BenchmarkJudgeCriterionKinds.SceneSpec, Relation("leftOf", "ball", "crate"), SceneAnswer).Passed);
+        AssertEx.True(Verify(BenchmarkJudgeCriterionKinds.SceneSpec, Relation("inside", "ball", "room"), SceneAnswer).Passed);
+        AssertEx.False(Verify(BenchmarkJudgeCriterionKinds.SceneSpec, Relation("inside", "room", "ball"), SceneAnswer).Passed);
+        AssertEx.Equal("The relation above names 'lamp', which is not in the scene.",
+            Verify(BenchmarkJudgeCriterionKinds.SceneSpec, Relation("above", "lamp", "floor"), SceneAnswer).Detail);
+    }
+
+    [Test]
+    public void SceneSpec_IsDeterministic()
+    {
+        var first = Verify(BenchmarkJudgeCriterionKinds.SceneSpec, Relation("above", "floor", "ball"), SceneAnswer);
+        var second = Verify(BenchmarkJudgeCriterionKinds.SceneSpec, Relation("above", "floor", "ball"), SceneAnswer);
+
+        AssertEx.Equal(first, second);
+    }
+
+    [Test]
+    public void SceneSpec_WithABrokenConfig_ThrowsRatherThanScoringZero()
+    {
+        var broken = AssertEx.Throws<BenchmarkExecutionException>(() =>
+            Verify(BenchmarkJudgeCriterionKinds.SceneSpec, """{"objectCount":{"min":3,"max":1}}""", SceneAnswer));
+
+        AssertEx.Contains(broken.Message, "cannot be verified");
+    }
+
+    private static string Relation(string kind, string a, string b) =>
+        $$"""{"relations":[{"kind":"{{kind}}","a":"{{a}}","b":"{{b}}"}]}""";
+
     private static string Expected(double value) =>
         $$"""{"expected":{{value.ToString(CultureInfo.InvariantCulture)}}}""";
 

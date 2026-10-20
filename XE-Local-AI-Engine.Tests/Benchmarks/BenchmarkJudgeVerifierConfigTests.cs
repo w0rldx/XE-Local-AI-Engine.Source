@@ -98,7 +98,8 @@ public sealed class BenchmarkJudgeVerifierConfigTests
                      BenchmarkJudgeCriterionKinds.Regex,
                      BenchmarkJudgeCriterionKinds.JsonSchema,
                      BenchmarkJudgeCriterionKinds.MathAnswer,
-                     BenchmarkJudgeCriterionKinds.Constraint
+                     BenchmarkJudgeCriterionKinds.Constraint,
+                     BenchmarkJudgeCriterionKinds.SceneSpec
                  })
         {
             var missing = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() => BenchmarkJudgeVerifierConfig.Parse(kind, configJson: null));
@@ -183,6 +184,45 @@ public sealed class BenchmarkJudgeVerifierConfigTests
         AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.CriterionConfigInvalid, badFormat.Code);
         AssertEx.NotNull(BenchmarkJudgeVerifierConfig.Parse(BenchmarkJudgeCriterionKinds.Constraint,
             """{"minWords":5,"maxWords":50,"mustContain":["ok"],"format":"noMarkdown"}"""));
+    }
+
+    [Test]
+    public void Parse_SceneSpec_RefusesUnknownMembersBadPrimitivesInvertedCountsAndSelfRelations()
+    {
+        foreach (var refused in new[]
+                 {
+                     """{"objectCount":{"min":1},"lights":2}""",
+                     """{"objectCount":{"min":1,"mean":3}}""",
+                     """{"relations":[{"kind":"above","a":"x","b":"y","margin":1}]}""",
+                     """{"requiresPrimitive":["torus"]}""",
+                     """{"requiresPrimitive":["Box"]}""",
+                     """{"requiresPrimitive":["box","box","box","box","box","box"]}""",
+                     """{"objectCount":{"min":5,"max":2}}""",
+                     """{"objectCount":{"min":0}}""",
+                     """{"objectCount":{"max":65}}""",
+                     """{"relations":[{"kind":"above","a":"ball","b":"ball"}]}""",
+                     """{"relations":[{"kind":"below","a":"ball","b":"floor"}]}""",
+                     """{"relations":[{"kind":"above","a":"","b":"floor"}]}""",
+                     """{"relations":[null]}""",
+                     JsonSerializer.Serialize(new
+                     {
+                         relations = Enumerable.Range(0, BenchmarkJudgeVerifierConfig.MaximumSceneRelations + 1)
+                                               .Select(static index => new { kind = "above", a = $"a{index}", b = "floor" })
+                     })
+                 })
+        {
+            var refusal = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() =>
+                BenchmarkJudgeVerifierConfig.Parse(BenchmarkJudgeCriterionKinds.SceneSpec, refused));
+            AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.CriterionConfigInvalid, refusal.Code, refused);
+        }
+
+        var empty = AssertEx.NotNull(BenchmarkJudgeVerifierConfig.Parse(BenchmarkJudgeCriterionKinds.SceneSpec, "{}"));
+        AssertEx.Equal(BenchmarkJudgeCriterionKinds.SceneSpec, empty.Kind);
+        AssertEx.NotNull(empty.SceneSpec, "{} is a valid config meaning \"a valid v1 scene\".");
+        var full = AssertEx.NotNull(AssertEx.NotNull(BenchmarkJudgeVerifierConfig.Parse(BenchmarkJudgeCriterionKinds.SceneSpec,
+            """{"objectCount":{"min":2,"max":10},"requiresPrimitive":["box","sphere"],"relations":[{"kind":"above","a":"ball","b":"floor"}]}""")).SceneSpec);
+        AssertEx.Equal(2, AssertEx.NotNull(full.ObjectCount).Min);
+        AssertEx.Equal("ball", AssertEx.NotNull(full.Relations).Single().A);
     }
 
     [Test]

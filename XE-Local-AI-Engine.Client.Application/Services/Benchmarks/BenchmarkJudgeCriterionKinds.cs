@@ -14,6 +14,9 @@ public static class BenchmarkJudgeCriterionKinds
     public const string MathAnswer = "mathAnswer";
     public const string Constraint = "constraint";
 
+    /// <summary>A 3D scene answered as fenced JSON, checked against scene schema v1 and the criterion's relations.</summary>
+    public const string SceneSpec = "sceneSpec";
+
     /// <summary>
     ///     Execution scoring: the answer's code is run against the operator's tests in the compute sandbox, and the
     ///     criterion passes iff every collected case passed.
@@ -26,7 +29,7 @@ public static class BenchmarkJudgeCriterionKinds
 
     /// <summary>Whether this kind is decided server-side rather than by a model.</summary>
     public static bool IsVerifiable(string? kind) =>
-        kind is Exact or Regex or JsonSchema or MathAnswer or Constraint or PythonTests;
+        kind is Exact or Regex or JsonSchema or MathAnswer or Constraint or PythonTests or SceneSpec;
 
     /// <summary>
     ///     Whether deciding this kind means EXECUTING something. Pure kinds go through

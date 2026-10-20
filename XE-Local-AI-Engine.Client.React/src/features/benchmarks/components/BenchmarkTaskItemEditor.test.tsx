@@ -231,4 +231,64 @@ describe("BenchmarkTaskItemEditor", () => {
 			),
 		);
 	});
+
+	// `{}` is a valid sceneSpec configuration ("any valid scene"), so clearing the last rule must not be read as
+	// "back to the policy" — that is an explicit action, and it is the only way to drop the override.
+	describe("sceneSpec overrides", () => {
+		const sceneCriteria: BenchmarkRubricCriterion[] = [
+			{ id: "scene", title: "Scene", description: "d", weight: 1, kind: "sceneSpec", config: '{"objectCount":{"min":2}}' },
+		];
+		const overridden = () => item({ verifierConfig: { scene: { objectCount: { min: 1 } } } });
+
+		it("keeps an emptied scene override as an explicit any-valid-scene configuration", async () => {
+			listMock.mockResolvedValue({ data: { items: [overridden()] } });
+			render({ criteria: sceneCriteria });
+			fireEvent.click(await screen.findByTestId("benchmark-item-edit-item-1"));
+
+			fireEvent.change(screen.getByTestId("benchmark-item-override-scene-objects-min"), { target: { value: "" } });
+			fireEvent.click(screen.getByTestId("benchmark-item-save"));
+
+			await waitFor(() =>
+				expect(updateMock).toHaveBeenCalledWith(
+					expect.objectContaining({ body: expect.objectContaining({ verifierConfig: { scene: {} } }) }),
+				),
+			);
+		});
+
+		it("drops the override only when the policy's configuration is chosen", async () => {
+			listMock.mockResolvedValue({ data: { items: [overridden()] } });
+			render({ criteria: sceneCriteria });
+			fireEvent.click(await screen.findByTestId("benchmark-item-edit-item-1"));
+
+			fireEvent.click(screen.getByTestId("benchmark-item-override-scene-reset"));
+			expect(screen.queryByTestId("benchmark-item-override-scene-reset")).toBeNull();
+			fireEvent.click(screen.getByTestId("benchmark-item-save"));
+
+			await waitFor(() => expect(updateMock).toHaveBeenCalledOnce());
+			expect(updateMock.mock.calls[0]?.[0]?.body).not.toHaveProperty("verifierConfig");
+		});
+
+		// The relations editor keeps its text locally; a reset is the one change it did not make itself, and what it
+		// shows afterwards must be what the next save sends.
+		it("clears the relations text on reset so a later edit does not save the discarded rules", async () => {
+			const relations = [{ kind: "above", a: "ball", b: "floor" }];
+			listMock.mockResolvedValue({ data: { items: [item({ verifierConfig: { scene: { relations } } })] } });
+			render({ criteria: sceneCriteria });
+			fireEvent.click(await screen.findByTestId("benchmark-item-edit-item-1"));
+			const input = screen.getByTestId("benchmark-item-override-scene-relations") as HTMLTextAreaElement;
+			expect(input.value).toContain("above");
+
+			fireEvent.click(screen.getByTestId("benchmark-item-override-scene-reset"));
+			expect(input.value).toBe("");
+
+			fireEvent.change(screen.getByTestId("benchmark-item-override-scene-objects-min"), { target: { value: "1" } });
+			fireEvent.click(screen.getByTestId("benchmark-item-save"));
+
+			await waitFor(() =>
+				expect(updateMock).toHaveBeenCalledWith(
+					expect.objectContaining({ body: expect.objectContaining({ verifierConfig: { scene: { objectCount: { min: 1 } } } }) }),
+				),
+			);
+		});
+	});
 });

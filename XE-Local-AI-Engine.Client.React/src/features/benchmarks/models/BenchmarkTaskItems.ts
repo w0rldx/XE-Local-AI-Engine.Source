@@ -285,16 +285,14 @@ export const toBenchmarkTaskItemDraft = (item: BenchmarkTaskItem): BenchmarkTask
 	countsTowardScore: item.countsTowardScore,
 });
 
-/** Empty is not the same as absent: an empty override map is "no overrides", which the node reads as a null blob. */
+/**
+ * An empty override MAP is "no overrides", which the node reads as a null blob. An empty override inside it is kept:
+ * for `sceneSpec` it is the valid "any valid scene" configuration, and the editor is what removes an override.
+ */
 export const pruneVerifierOverrides = (
 	overrides: Record<string, BenchmarkVerifierConfig> | null,
-): Record<string, BenchmarkVerifierConfig> | null => {
-	if (overrides === null) {
-		return null;
-	}
-	const kept = Object.entries(overrides).filter(([, config]) => Object.keys(config).length > 0);
-	return kept.length === 0 ? null : Object.fromEntries(kept);
-};
+): Record<string, BenchmarkVerifierConfig> | null =>
+	overrides === null || Object.keys(overrides).length === 0 ? null : overrides;
 
 /**
  * Authored items in index order, each immediately followed by the cases it expanded into. This is the unit an

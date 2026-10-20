@@ -3,6 +3,8 @@
 // rather than by a 400 after a save that also costs a forced re-judge. The node stays the authority: everything here
 // is a pre-check, never a substitute for its validation.
 
+import { benchmarkSceneLimits, benchmarkScenePrimitives } from "@/features/benchmarks/models/BenchmarkSceneSpec";
+
 /**
  * `llm` is the compatibility default for criteria without an explicit kind and the only kind that costs a model turn;
  * every other kind is checked server-side against the graded answer with no inference at all.
@@ -15,6 +17,7 @@ export const benchmarkCriterionKinds = [
 	"mathAnswer",
 	"constraint",
 	"pythonTests",
+	"sceneSpec",
 ] as const;
 export type BenchmarkCriterionKind = (typeof benchmarkCriterionKinds)[number];
 
@@ -85,6 +88,9 @@ export function defaultVerifierConfig(kind: BenchmarkCriterionKind): string | nu
 			return JSON.stringify({});
 		case "pythonTests":
 			return JSON.stringify({ testCode: "" });
+		// The one kind whose empty config is a real check: "the answer is a valid v1 scene".
+		case "sceneSpec":
+			return JSON.stringify({});
 		default:
 			return JSON.stringify({ expected: "" });
 	}
@@ -114,7 +120,11 @@ export type BenchmarkVerifierIssue =
 	| "exportsInvalid"
 	| "exportsCap"
 	| "timeoutRange"
-	| "extractInvalid";
+	| "extractInvalid"
+	| "sceneConfigRequired"
+	| "sceneObjectCount"
+	| "scenePrimitives"
+	| "sceneRelations";
 
 const isObject = (value: unknown): value is BenchmarkVerifierConfig =>
 	typeof value === "object" && value !== null && !Array.isArray(value);
@@ -215,6 +225,54 @@ function pythonTestsIssue(config: BenchmarkVerifierConfig): BenchmarkVerifierIss
 		: null;
 }
 
+const sceneRelationKinds = ["above", "leftOf", "inside"];
+const sceneCount = (value: unknown): boolean =>
+	value === undefined ||
+	(typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= benchmarkSceneLimits.maxObjects);
+
+/** The node's `ParseSceneSpec`, re-checked. Every member is optional; `{}` asks only for a valid v1 scene. */
+function sceneSpecIssue(config: BenchmarkVerifierConfig): BenchmarkVerifierIssue | null {
+	const { objectCount, requiresPrimitive, relations } = config as {
+		objectCount?: unknown;
+		requiresPrimitive?: unknown;
+		relations?: unknown;
+	};
+	if (objectCount !== undefined) {
+		if (!isObject(objectCount) || !sceneCount(objectCount["min"]) || !sceneCount(objectCount["max"])) {
+			return "sceneObjectCount";
+		}
+		const { min, max } = objectCount as { min?: number; max?: number };
+		if (min !== undefined && max !== undefined && min > max) {
+			return "sceneObjectCount";
+		}
+	}
+	if (
+		requiresPrimitive !== undefined &&
+		(!Array.isArray(requiresPrimitive) ||
+			requiresPrimitive.length > benchmarkScenePrimitives.length ||
+			requiresPrimitive.some((value) => !benchmarkScenePrimitives.some((primitive) => primitive === value)))
+	) {
+		return "scenePrimitives";
+	}
+	if (
+		relations !== undefined &&
+		(!Array.isArray(relations) ||
+			relations.length > benchmarkSceneLimits.maxRelations ||
+			relations.some(
+				(relation) =>
+					!isObject(relation) ||
+					Object.keys(relation).some((key) => !["kind", "a", "b"].includes(key)) ||
+					!sceneRelationKinds.includes(relation["kind"] as string) ||
+					!nonEmptyString(relation["a"]) ||
+					!nonEmptyString(relation["b"]) ||
+					relation["a"] === relation["b"],
+			))
+	) {
+		return "sceneRelations";
+	}
+	return null;
+}
+
 function constraintIssue(config: BenchmarkVerifierConfig): BenchmarkVerifierIssue | null {
 	const { minWords, maxWords, mustContain, mustNotContain, format } = config as {
 		minWords?: unknown;
@@ -290,6 +348,9 @@ export function verifierConfigIssue(
 				: schemaIssue(parsed["schema"]);
 		case "pythonTests":
 			return pythonTestsIssue(parsed);
+		case "sceneSpec":
+			// No config at all is refused by the node; `{}` is the smallest accepted one.
+			return config === null || config === undefined ? "sceneConfigRequired" : sceneSpecIssue(parsed);
 		case "mathAnswer": {
 			if (parseMathAnswerNumber(parsed["expected"]) === null) {
 				return "mathExpected";

@@ -1,4 +1,5 @@
 {
 	"applicationJavaScriptBytes": 6000000,
-	"lazyEditorJavaScriptBytes": 3450000
+	"lazyEditorJavaScriptBytes": 3450000,
+	"lazySceneViewerJavaScriptBytes": 700000
 }

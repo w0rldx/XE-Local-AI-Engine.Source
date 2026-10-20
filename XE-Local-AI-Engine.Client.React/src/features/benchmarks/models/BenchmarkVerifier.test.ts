@@ -209,3 +209,42 @@ describe("pythonTests configuration", () => {
 		expect(verifierConfigIssue("pythonTests", started)).toBe("testCodeRequired");
 	});
 });
+
+describe("sceneSpec config", () => {
+	it("starts as {}, the smallest config the node accepts", () => {
+		expect(defaultVerifierConfig("sceneSpec")).toBe("{}");
+		expect(verifierConfigIssue("sceneSpec", "{}")).toBeNull();
+	});
+
+	it("refuses no config at all", () => {
+		expect(verifierConfigIssue("sceneSpec", null)).toBe("sceneConfigRequired");
+	});
+
+	it("accepts a config using every rule", () => {
+		const config = {
+			objectCount: { min: 2, max: 10 },
+			requiresPrimitive: ["box", "sphere"],
+			relations: [{ kind: "above", a: "ball", b: "floor" }],
+		};
+		expect(verifierConfigIssue("sceneSpec", JSON.stringify(config))).toBeNull();
+	});
+
+	it.each([
+		[{ objectCount: { min: 0 } }, "sceneObjectCount"],
+		[{ objectCount: { max: 65 } }, "sceneObjectCount"],
+		[{ objectCount: { min: 1.5 } }, "sceneObjectCount"],
+		[{ objectCount: { min: 5, max: 4 } }, "sceneObjectCount"],
+		[{ objectCount: 3 }, "sceneObjectCount"],
+		[{ requiresPrimitive: ["torus"] }, "scenePrimitives"],
+		[{ requiresPrimitive: ["box", "box", "box", "box", "box", "box"] }, "scenePrimitives"],
+		[{ requiresPrimitive: "box" }, "scenePrimitives"],
+		[{ relations: "[" }, "sceneRelations"],
+		[{ relations: [{ kind: "below", a: "x", b: "y" }] }, "sceneRelations"],
+		[{ relations: [{ kind: "above", a: "x", b: "x" }] }, "sceneRelations"],
+		[{ relations: [{ kind: "above", a: "", b: "y" }] }, "sceneRelations"],
+		[{ relations: [{ kind: "above", a: "x", b: "y", weight: 1 }] }, "sceneRelations"],
+		[{ relations: Array.from({ length: 17 }, () => ({ kind: "inside", a: "x", b: "y" })) }, "sceneRelations"],
+	])("refuses %j with %s", (config, issue) => {
+		expect(verifierConfigIssue("sceneSpec", JSON.stringify(config))).toBe(issue);
+	});
+});

@@ -153,6 +153,9 @@ export default defineConfig(({ command, mode }) => {
 							// `monaco-editor-*`, which is only fetched when CodeEditor first mounts. `scripts/CheckBundleBudget.mjs`
 							// measures that name (plus the editor worker) under `lazyEditorJavaScriptBytes` instead of the app budget.
 							{ name: "monaco-editor", test: /node_modules[\\/]monaco-editor[\\/]/ },
+							// `three` likewise lands in ONE `three-*` chunk, fetched only when BenchmarkSceneViewer first mounts, and is
+							// measured under `lazySceneViewerJavaScriptBytes`.
+							{ name: "three", test: /node_modules[\\/]three[\\/]/ },
 						],
 					},
 				},
