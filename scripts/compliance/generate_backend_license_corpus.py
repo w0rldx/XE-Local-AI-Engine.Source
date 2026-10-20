@@ -31,23 +31,23 @@ STANDARD_LICENSE_TEXTS = {
     "ISC": (Path("nuget/standard/ISC.txt"), Path("nuget/standard/ISC.source.txt")),
 }
 SPECIAL_LICENSE_TEXTS = {
-    ("utf.unknown", "2.7.0", "MPL-1.1"): (
-        Path("nuget/UTF.Unknown-2.7.0-MPL-1.1.txt"),
-        Path("nuget/UTF.Unknown-2.7.0-MPL-1.1.txt.source.txt"),
+    ("utf.unknown", "2.8.0", "MPL-1.1"): (
+        Path("nuget/UTF.Unknown-2.8.0-MPL-1.1.txt"),
+        Path("nuget/UTF.Unknown-2.8.0-MPL-1.1.txt.source.txt"),
     ),
 }
-UTF_UNKNOWN_SOURCE_COMMIT = "404ca51e057ff299934cabc485ae80122410f56b"
+UTF_UNKNOWN_SOURCE_COMMIT = "4654fbf0cdb47705e74a2c74bae20d486eb23fa8"
 SPECIAL_SOURCE_AVAILABILITY: dict[tuple[str, str, str], dict[str, Any]] = {
-    ("utf.unknown", "2.7.0", "MPL-1.1"): {
+    ("utf.unknown", "2.8.0", "MPL-1.1"): {
         "licenseBasis": "MPL-1.1",
         "notice": (
-            Path("nuget/UTF.Unknown-2.7.0-SOURCE-AVAILABILITY.txt"),
-            Path("nuget/UTF.Unknown-2.7.0-SOURCE-AVAILABILITY.txt.source.txt"),
+            Path("nuget/UTF.Unknown-2.8.0-SOURCE-AVAILABILITY.txt"),
+            Path("nuget/UTF.Unknown-2.8.0-SOURCE-AVAILABILITY.txt.source.txt"),
         ),
         "sourceArchive": (f"https://github.com/CharsetDetector/UTF-unknown/archive/{UTF_UNKNOWN_SOURCE_COMMIT}.tar.gz"),
         "sourceCommit": UTF_UNKNOWN_SOURCE_COMMIT,
         "sourceRepository": "https://github.com/CharsetDetector/UTF-unknown",
-        "upstreamTag": "v2.7",
+        "upstreamTag": "v2.8",
     }
 }
 # Third-party assets that ship in every RID payload but are NOT NuGet packages, so nothing above can discover them.

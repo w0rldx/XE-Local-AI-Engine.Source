@@ -1,7 +1,7 @@
 [
   {
     "Id": "UTF.Unknown",
-    "Version": "2.7.0",
+    "Version": "2.8.0",
     "License": "MPL-1.1",
     "Authors": "UTF.Unknown contributors",
     "ProjectUrl": "https://github.com/CharsetDetector/UTF-unknown",
@@ -9,10 +9,10 @@
   },
   {
     "Id": "Microsoft.Mxc.Sdk",
-    "Version": "1.0.0",
+    "Version": "1.0.1",
     "License": "MIT",
     "Authors": "Microsoft",
     "ProjectUrl": "https://github.com/microsoft/mxc",
-    "LicenseUrl": "https://github.com/microsoft/mxc/blob/v1.0.0/LICENSE.md"
+    "LicenseUrl": "https://github.com/microsoft/mxc/blob/v1.0.1/LICENSE.md"
   }
 ]

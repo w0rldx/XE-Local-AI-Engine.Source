@@ -97,7 +97,7 @@ Do not assume these exist or "restore" retired designs.
 - **Sandbox providers:** fake, process, opt-in Development Docker. OpenSandbox is not built and nothing selects it;
   Development Docker is interim, not a hard security boundary (ADR 0004,
   `docs/roadmaps/development-mode-container-status.md`).
-- **MXC is a Windows launch mechanism, not a provider** (ADR 0019): `Microsoft.Mxc.Sdk` 1.0.0 (NuGet, net8.0, natives
+- **MXC is a Windows launch mechanism, not a provider** (ADR 0019): `Microsoft.Mxc.Sdk` 1.0.1 (NuGet, net8.0, natives
   bundled) inside `ProcessSandboxRuntimeProvider`, Preview maturity, served only while the Operator-only
   `ExecutionPreviewsEnabled` setting is on and only to `Filesystem`-floor workloads (Sandboxed MCP and `run_python`). No
   ceilings on Windows (timeout only), so the `high` sandbox security profile refuses its roles (ADR 0020); the Linux bwrap chain is not moved behind MXC. No hardcoded OS floor: availability is

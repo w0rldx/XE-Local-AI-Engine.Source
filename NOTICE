@@ -80,7 +80,7 @@ components detected in a particular build.
    at the exact pinned upstream commit, satisfying the MPL-1.1 source-
    availability obligation.
 
-   - UTF.Unknown 2.6.0 — MPL-1.1 — https://github.com/CharsetDetector/UTF-unknown
-     Source at tag v2.6 = commit 7e69ebbdd6ef96a3625fcaf39df42429b8eb0463.
+   - UTF.Unknown 2.8.0 — MPL-1.1 — https://github.com/CharsetDetector/UTF-unknown
+     Source at tag v2.8 = commit 4654fbf0cdb47705e74a2c74bae20d486eb23fa8.
      License: https://github.com/CharsetDetector/UTF-unknown/blob/master/license/MPL-1.1.txt
      See docs/compliance/utf-unknown-mpl-source-availability.md.

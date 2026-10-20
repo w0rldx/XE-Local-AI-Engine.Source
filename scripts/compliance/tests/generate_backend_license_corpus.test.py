@@ -76,10 +76,10 @@ class BackendLicenseCorpusTests(unittest.TestCase):
             self.write_provenance(standard / f"{name}.source.txt", text_path)
         nuget = self.license_root / "nuget"
         for filename, contents in (
-            ("UTF.Unknown-2.7.0-MPL-1.1.txt", "MPL 1.1\n"),
+            ("UTF.Unknown-2.8.0-MPL-1.1.txt", "MPL 1.1\n"),
             (
-                "UTF.Unknown-2.7.0-SOURCE-AVAILABILITY.txt",
-                "UTF.Unknown 2.7.0 covered source is available at immutable commit 404ca51.\n",
+                "UTF.Unknown-2.8.0-SOURCE-AVAILABILITY.txt",
+                "UTF.Unknown 2.8.0 covered source is available at immutable commit 4654fbf.\n",
             ),
         ):
             text_path = nuget / filename
@@ -353,20 +353,20 @@ class BackendLicenseCorpusTests(unittest.TestCase):
     def test_maps_special_licenses_only_to_exact_reviewed_packages(self) -> None:
         document = deps(
             "linux-x64",
-            {"UTF.Unknown/2.7.0": {"runtime": {"UtfUnknown.dll": {}}}},
+            {"UTF.Unknown/2.8.0": {"runtime": {"UtfUnknown.dll": {}}}},
         )
-        output = self.generate([package("UTF.Unknown", "2.7.0", "MPL-1.1")], document)
+        output = self.generate([package("UTF.Unknown", "2.8.0", "MPL-1.1")], document)
         packages = json.loads((output / "backend-components.json").read_text())["packages"]
         paths = {entry["name"]: entry["licenseTextPath"] for entry in packages}
-        self.assertIn("UTF.Unknown-2.7.0-MPL-1.1.txt", paths["UTF.Unknown"])
+        self.assertIn("UTF.Unknown-2.8.0-MPL-1.1.txt", paths["UTF.Unknown"])
         utf_unknown = next(entry for entry in packages if entry["name"] == "UTF.Unknown")
         self.assertEqual(
             {
                 "licenseBasis": "MPL-1.1",
-                "sourceArchive": "https://github.com/CharsetDetector/UTF-unknown/archive/404ca51e057ff299934cabc485ae80122410f56b.tar.gz",
-                "sourceCommit": "404ca51e057ff299934cabc485ae80122410f56b",
+                "sourceArchive": "https://github.com/CharsetDetector/UTF-unknown/archive/4654fbf0cdb47705e74a2c74bae20d486eb23fa8.tar.gz",
+                "sourceCommit": "4654fbf0cdb47705e74a2c74bae20d486eb23fa8",
                 "sourceRepository": "https://github.com/CharsetDetector/UTF-unknown",
-                "upstreamTag": "v2.7",
+                "upstreamTag": "v2.8",
             },
             utf_unknown["sourceAvailability"],
         )
@@ -376,7 +376,7 @@ class BackendLicenseCorpusTests(unittest.TestCase):
         self.assertEqual("notice", source_notice["role"])
         notices = (output / "THIRD-PARTY-NOTICES.md").read_text()
         self.assertIn("Covered source availability", notices)
-        self.assertIn("404ca51e057ff299934cabc485ae80122410f56b", notices)
+        self.assertIn("4654fbf0cdb47705e74a2c74bae20d486eb23fa8", notices)
 
         wrong = deps("linux-x64", {"Not.UTF.Unknown/1.0.0": {"runtime": {"Other.dll": {}}}})
         with self.assertRaisesRegex(ValueError, "unsupported special license mapping"):
