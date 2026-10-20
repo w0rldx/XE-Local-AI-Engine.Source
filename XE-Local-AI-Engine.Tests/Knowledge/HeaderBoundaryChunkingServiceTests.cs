@@ -177,10 +177,42 @@ public sealed class HeaderBoundaryChunkingServiceTests
         AssertEx.Equal(first, second);
     }
 
+    [Test]
+    public void Chunk_WhenASectionSpansPages_EachChunkCarriesThePageOfItsOwnText()
+    {
+        // Two 41-char paragraphs on pages 3 and 5 under one header; a 45-char ceiling with no overlap puts each paragraph
+        // in its own chunk, so the second chunk must report page 5, not the section's first page.
+        var document = BuildDocument(Header("Chapter", level: 1, page: 3),
+            Paragraph(string.Join(" ", Enumerable.Repeat("alpha", count: 7)), page: 3),
+            Paragraph(string.Join(" ", Enumerable.Repeat("bravo", count: 7)), page: 5));
+        var service = CreateService(maxChars: 45, overlap: 0);
+
+        var result = service.Chunk(document);
+
+        AssertEx.Equal("3,5", string.Join(",", result.Chunks.Select(chunk => chunk.PageNumber)));
+        AssertEx.Equal(3, result.Sections.Single().PageNumber ?? -1);
+        AssertEx.Equal(Fingerprint(result), Fingerprint(service.Chunk(document)));
+    }
+
+    [Test]
+    public void Chunk_WhenOverlapWouldStartMidWord_SnapsTheNextWindowToAWordBoundary()
+    {
+        var words = Enumerable.Range(0, 40).Select(index => $"word{index:D2}").ToArray();
+        var body = string.Join(" ", words);
+
+        var result = CreateService(maxChars: 30, overlap: 9).Chunk(BuildDocument(Paragraph(body)));
+
+        AssertEx.True(result.Chunks.Count > 1, "The body should split into several windows.");
+        AssertEx.True(result.Chunks.All(chunk => words.Contains(chunk.Content.Split(' ')[0])),
+            "Every window must open on a whole word, never on the tail of the previous window's last word.");
+        AssertEx.True(result.Chunks.Skip(1).All(chunk => chunk.StartOffset > 0 && body[chunk.StartOffset - 1] == ' '),
+            "Every later window must start right after a space.");
+    }
+
     private static string Fingerprint(KnowledgeChunkingResult result)
     {
         return string.Join("", result.Chunks.Select(chunk =>
-            $"{chunk.ChunkIndex}|{chunk.SectionOrdinal}|{chunk.HeadingPath}|{chunk.Content}|{chunk.ContextualContent}"));
+            $"{chunk.ChunkIndex}|{chunk.SectionOrdinal}|{chunk.HeadingPath}|{chunk.PageNumber}|{chunk.StartOffset}|{chunk.Content}|{chunk.ContextualContent}"));
     }
 
     // A CJK ideograph (U+4E00) — token-dense content whose per-character token cost is ~4x an ASCII character's. Written
@@ -210,20 +242,22 @@ public sealed class HeaderBoundaryChunkingServiceTests
         return document;
     }
 
-    private static IngestionDocumentHeader Header(string text, int level)
+    private static IngestionDocumentHeader Header(string text, int level, int? page = null)
     {
         return new IngestionDocumentHeader(text)
         {
             Text = text,
-            Level = level
+            Level = level,
+            PageNumber = page
         };
     }
 
-    private static IngestionDocumentParagraph Paragraph(string text)
+    private static IngestionDocumentParagraph Paragraph(string text, int? page = null)
     {
         return new IngestionDocumentParagraph(text)
         {
-            Text = text
+            Text = text,
+            PageNumber = page
         };
     }
 }

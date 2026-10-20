@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.DataIngestion;
@@ -66,7 +67,9 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
                 PageNumber = build.PageNumber
             });
 
-            var body = build.Body.ToString().Trim();
+            var rawBody = build.Body.ToString();
+            var body = rawBody.Trim();
+            var trimmedLead = rawBody.Length - rawBody.TrimStart().Length;
             if (body.Length == 0)
             {
                 continue;
@@ -93,7 +96,7 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
                     ContextualContent = contextual,
                     HeadingPath = build.HeadingPath,
                     TokenCount = ChunkTokenApproximation.EstimateTokens(window.Content),
-                    PageNumber = build.PageNumber,
+                    PageNumber = build.PageAt(window.StartOffset + trimmedLead),
                     StartOffset = window.StartOffset,
                     EndOffset = window.EndOffset,
                     ContentHash = Hash(window.Content),
@@ -178,6 +181,11 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
                 current = implicitSection;
             }
 
+            if (element.PageNumber is int page)
+            {
+                current.PageMarks.Add(new PageMark(current.Body.Length, page));
+            }
+
             _ = current.Body.Append(text).Append("\n\n");
         }
 
@@ -222,6 +230,20 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
             }
 
             var nextStart = end - overlap;
+
+            // Snap the overlap start forward to a word boundary so no window opens mid-word; a run with no whitespace in
+            // the overlap keeps the unsnapped start rather than losing its overlap.
+            var snapped = nextStart;
+            while (snapped > start && snapped < end && !char.IsWhiteSpace(text[snapped - 1]))
+            {
+                snapped++;
+            }
+
+            if (snapped < end)
+            {
+                nextStart = snapped;
+            }
+
             if (nextStart <= start)
             {
                 nextStart = end;
@@ -288,6 +310,9 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
 
     private readonly record struct HeadingFrame(int Level, string Text);
 
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct PageMark(int Offset, int Page);
+
     private readonly record struct ChunkWindow(string Content, int StartOffset, int EndOffset);
 
     private static string Hash(string content)
@@ -306,5 +331,24 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
         public required int? PageNumber { get; init; }
 
         public StringBuilder Body { get; } = new();
+
+        // (body offset, page) recorded as paged elements are appended, so a chunk reports the page its own text starts on.
+        public List<PageMark> PageMarks { get; } = [];
+
+        public int? PageAt(int bodyOffset)
+        {
+            var page = PageNumber;
+            foreach (var (offset, markPage) in PageMarks)
+            {
+                if (offset > bodyOffset)
+                {
+                    break;
+                }
+
+                page = markPage;
+            }
+
+            return page;
+        }
     }
 }

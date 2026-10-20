@@ -7,7 +7,13 @@ using System.Text;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
+using Microsoft.Extensions.DataIngestion;
 using Microsoft.Extensions.Logging.Abstractions;
+using UglyToad.PdfPig.Core;
+using UglyToad.PdfPig.Fonts.Standard14Fonts;
+using UglyToad.PdfPig.Outline;
+using UglyToad.PdfPig.Outline.Destinations;
+using UglyToad.PdfPig.Writer;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Extraction;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Implementation;
@@ -38,6 +44,50 @@ public sealed class DocumentTextExtractorTests
         var markdown = AssertEx.NotNull(result.Markdown);
         AssertEx.Contains(markdown, expected);
         AssertEx.Equal(markdown.Length, result.ExtractedChars ?? -1);
+    }
+
+    [Test]
+    public async Task Extractor_WhenPdfHasOutline_EmitsEachBookmarkAsAHeaderBeforeItsPage()
+    {
+        using var stream = new MemoryStream(BuildOutlinedPdf());
+
+        var result = await CreateExtractor().ExtractStructuredAsync(stream, "book.pdf", ".pdf", CancellationToken.None);
+
+        AssertEx.Equal(DocumentExtractionStatus.Extracted, result.Status);
+        var elements = AssertEx.NotNull(result.Document).EnumerateContent().ToList();
+        var trail = string.Join("|", elements.Select(element => element is IngestionDocumentHeader header
+            ? $"H{header.Level}@{header.PageNumber}:{header.Text}"
+            : $"P@{element.PageNumber}:{element.Text?.Trim()}"));
+        // Levels are PdfPig's 0-based level + 1, titles are whitespace-collapsed, and the URI bookmark and the
+        // empty-titled bookmark are skipped.
+        AssertEx.Equal("H1@1:# Chapter One|P@1:Body one|H2@2:## Section 1.1|P@2:Body two|H1@3:# Chapter Two|P@3:Body three",
+            trail);
+    }
+
+    [Test]
+    public async Task Extractor_WhenPdfOutlineIsPresent_MarkdownCarriesTheHeadings()
+    {
+        using var stream = new MemoryStream(BuildOutlinedPdf());
+
+        var result = await CreateExtractor().ExtractAsync(stream, "book.pdf", ".pdf", CancellationToken.None);
+
+        var markdown = AssertEx.NotNull(result.Markdown);
+        AssertEx.Contains(markdown, "# Chapter One");
+        AssertEx.Contains(markdown, "## Section 1.1");
+    }
+
+    [Test]
+    public async Task Extractor_WhenPdfTextHasReplacementCharacterRuns_CollapsesEachRunToOneSpace()
+    {
+        // Byte 0x80 maps to the glyph name uniFFFD, so PdfPig yields U+FFFD for each, as it does for unmapped leader dots.
+        const string font = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding << /Type /Encoding /Differences [128 /uniFFFD] >> >>";
+        using var stream = new MemoryStream(BuildSingleLinePdf(@"Intro\200\200\200\2003 and\200end", font));
+
+        var result = await CreateExtractor().ExtractAsync(stream, "toc.pdf", ".pdf", CancellationToken.None);
+
+        var markdown = AssertEx.NotNull(result.Markdown);
+        AssertEx.False(markdown.Contains('\uFFFD', StringComparison.Ordinal), "No U+FFFD may survive extraction.");
+        AssertEx.Contains(markdown, "Intro 3 and end");
     }
 
     [Test]
@@ -572,14 +622,14 @@ public sealed class DocumentTextExtractorTests
 
     // PdfPig is read-only, so the fixture is a minimal hand-authored single-page PDF with correct xref byte offsets
     // and a single text-showing operator. ~600 bytes, fully ASCII.
-    private static byte[] BuildSingleLinePdf(string text)
+    private static byte[] BuildSingleLinePdf(string text, string font = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
     {
         var objects = new[]
         {
             "<< /Type /Catalog /Pages 2 0 R >>",
             "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
             "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
+            font
         };
 
         var content = "BT /F1 24 Tf 72 700 Td (" + text + ") Tj ET";
@@ -613,5 +663,33 @@ public sealed class DocumentTextExtractorTests
         builder.Append("trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n").Append(startxref).Append("\n%%EOF");
 
         return Encoding.ASCII.GetBytes(builder.ToString());
+    }
+
+    // Three pages with an outline: Chapter One (page 1) > Section 1.1 (page 2), Chapter Two (page 3), plus a URI
+    // bookmark and an empty-titled page bookmark that must both be skipped. Built with PdfPig's writer.
+    private static byte[] BuildOutlinedPdf()
+    {
+        using var builder = new PdfDocumentBuilder();
+        var font = builder.AddStandard14Font(Standard14Font.Helvetica);
+        foreach (var body in new[] { "Body one", "Body two", "Body three" })
+        {
+            _ = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4).AddText(body, 12, new PdfPoint(72, 700), font);
+        }
+
+        static ExplicitDestination PageDestination(int page) =>
+            new(page, ExplicitDestinationType.FitPage, ExplicitDestinationCoordinates.Empty);
+
+        builder.Bookmarks = new Bookmarks(
+        [
+            new DocumentBookmarkNode("Chapter  One", 0, PageDestination(1),
+            [
+                new DocumentBookmarkNode("Section\t1.1", 1, PageDestination(2), [])
+            ]),
+            new UriBookmarkNode("Website", 0, "https://example.org", []),
+            new DocumentBookmarkNode("  ", 0, PageDestination(3), []),
+            new DocumentBookmarkNode("Chapter Two", 0, PageDestination(3), [])
+        ]);
+
+        return builder.Build();
     }
 }
