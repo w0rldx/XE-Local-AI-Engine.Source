@@ -275,8 +275,10 @@ finally:
     _disarm()
     sys.stdout = _stdout
     if _BOUNDARY is not None:
-        _child_stdout, _child_stderr = _BOUNDARY.transcript()
+        # close() first: it ends the child and joins the reader threads, so the transcript is complete. Read before
+        # it, the stderr artifact raced the drain and was usually just the header.
         _BOUNDARY.close()
+        _child_stdout, _child_stderr = _BOUNDARY.transcript()
         sys.stderr.write("\n--- candidate stderr ---\n" + _child_stderr + "\n")
         if _child_stdout:
             sys.stderr.write("--- candidate stdout ---\n" + _child_stdout + "\n")
