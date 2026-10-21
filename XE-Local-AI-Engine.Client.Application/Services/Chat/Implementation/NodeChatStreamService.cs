@@ -256,7 +256,8 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             runCancellation.Token,
             // KB sources that grounded this turn land on the terminal row's metadata_json; null when
             // the turn used no knowledge base.
-            prepared.KnowledgeSources);
+            prepared.KnowledgeSources,
+            request.ExecutionParent);
         // The sandbox is touched only by the run's tool calls, so the workspace goes back when the run ends rather than
         // when this stream unwinds; the lease never queues, so holding it longer fails the next turn as "busy".
         runTask = ReleaseSandboxAfterAsync(RunInvocationAsync(prepared.Package,

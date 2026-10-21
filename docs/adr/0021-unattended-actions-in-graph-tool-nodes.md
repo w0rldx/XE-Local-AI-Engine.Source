@@ -1,6 +1,6 @@
 # ADR 0021: Unattended actions are flagged custom tools inside the graph Tool node, audited before the side effect, with a per-tool private-host egress exception
 
-- **Status:** Accepted — operator decisions of 2026-10-15 (plan approval); the design is not yet implemented.
+- **Status:** Accepted — operator decisions of 2026-10-15 (plan approval); the design is implemented on `develop` (landed 2026-10-15 with the voice-to-action round and its follow-ups: `ToolInvocationService.InvokeActionAsync`, `GraphWorkflowToolGate`, `IUnattendedApprovalAuditRecorder.GraphAction`).
 - **Date:** 2026-10-15
 - **Scope:** How a saved Graph Workflow may perform a real-world side effect with nobody present to approve it: which
   tools may do so, how a definition opts in, what is audited and when, how retries are prevented, how an operator-

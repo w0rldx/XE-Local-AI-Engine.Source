@@ -161,7 +161,7 @@ public static class AgentRunEnvelope
     ///     What each version added, and which columns therefore read null on an older row:
     ///     docs/wiki/08-data-and-persistence.md ("Run-envelope schema versions").
     /// </remarks>
-    public const int CurrentSchemaVersion = 6;
+    public const int CurrentSchemaVersion = 7;
 }
 
 /// <summary>
@@ -324,6 +324,12 @@ public sealed class AgentRunEnvelopeRecord
     // How much of DurationMs was the LOCAL runtime warm (llama-server launch + model load) rather than generation. Null when nothing warmed locally and on every
     // pre-migration row; DurationMs minus this is the warm-equivalent turn time, the only way an arm measured cold compares with one measured warm.
     public long? ModelReadinessMs { get; init; }
+
+    // The engine execution that drove this turn: a work-session step's StepStarted operation id or an integration execution id, under its kind label.
+    // Both null on a turn nothing drove, on a thin envelope and on every pre-migration row.
+    public string? ParentExecutionKind { get; init; }
+
+    public Guid? ParentExecutionId { get; init; }
 }
 
 /// <summary>

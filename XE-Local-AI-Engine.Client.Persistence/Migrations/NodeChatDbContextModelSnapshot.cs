@@ -15,7 +15,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentDefinition", b =>
                 {
@@ -208,6 +208,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<long?>("ModelReadinessMs")
                         .HasColumnType("INTEGER")
                         .HasColumnName("model_readiness_ms");
+
+                    b.Property<Guid?>("ParentExecutionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("parent_execution_id");
+
+                    b.Property<string>("ParentExecutionKind")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("parent_execution_kind");
 
                     b.Property<int?>("PromptTokens")
                         .HasColumnType("INTEGER")

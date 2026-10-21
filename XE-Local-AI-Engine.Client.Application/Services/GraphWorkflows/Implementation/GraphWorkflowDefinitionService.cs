@@ -274,8 +274,7 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
                     warnings.Add(NotInstalledWarning(node.NodeKey, model, IsNativeDecisionNode(node.Config) ? "decision" : "chat"));
                 }
             }
-            else if (!(await _trust.ResolveCloudGrantsAsync(model, cancellationToken)).UnattendedRuns
-                     && !await _runtimeSettings.GetAllowCloudModelUnattendedRunsAsync(cancellationToken))
+            else if (await CloudUnattendedGate.WithholdsAsync(leavesNode: true, await _trust.ResolveCloudGrantsAsync(model, cancellationToken), _runtimeSettings, cancellationToken))
             {
                 warnings.Add(new GraphWorkflowValidationError(node.NodeKey,
                     $"Node '{node.NodeKey}' pins model '{model}', which is not a node-local model, so a run will refuse this node. Turn on "

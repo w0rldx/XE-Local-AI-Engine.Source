@@ -118,7 +118,32 @@ public sealed record NodeChatStreamRequest(
     // which has no operator. See docs/wiki/05-chat.md, "Withdrawing operator tools from a workflow-owned session".
     bool SuppressOperatorTools = false,
     // The conversation's web result review mode: true skips the review card (ADR 0017). Absent means review.
-    bool AutoAcceptWebContent = false);
+    bool AutoAcceptWebContent = false,
+    // The engine execution driving this turn, stamped on its run envelope. SERVER-set: the chat hub clears it.
+    ExecutionParent? ExecutionParent = null);
+
+/// <summary>
+///     The engine execution that drove a chat turn, recorded on the turn's run envelope so a reader can join the
+///     envelope to that engine's own journal.
+/// </summary>
+public sealed record ExecutionParent
+{
+    /// <summary>One of <see cref="ExecutionParentKinds" />.</summary>
+    public required string Kind { get; init; }
+
+    /// <summary>The execution's id in that engine's journal.</summary>
+    public required Guid Id { get; init; }
+}
+
+/// <summary>The closed vocabulary of <see cref="ExecutionParent.Kind" />.</summary>
+public static class ExecutionParentKinds
+{
+    /// <summary>A work-session step; the id is the step's <c>StepStarted</c> operation id, written whatever the step's outcome.</summary>
+    public const string WorkSessionStep = "work-session-step";
+
+    /// <summary>An external-integration execution; the id is the integration execution id.</summary>
+    public const string IntegrationExecution = "integration-execution";
+}
 
 public sealed record ChatStreamEvent
 {

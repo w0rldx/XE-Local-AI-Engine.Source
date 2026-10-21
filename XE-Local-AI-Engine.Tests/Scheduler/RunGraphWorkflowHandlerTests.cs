@@ -278,6 +278,7 @@ public sealed class RunGraphWorkflowHandlerTests
         new()
         {
             ScheduledJobId = Guid.NewGuid(),
+            RunId = Guid.NewGuid(),
             TemplateId = RunGraphWorkflowHandler.TemplateIdValue,
             DisplayName = "Evening lights",
             Parameters = parametersJson,

@@ -152,4 +152,18 @@ internal sealed record class AgentExecutionLog
     ///     is the warm-equivalent turn time and the only way a cold arm compares with a warm one.
     /// </remarks>
     public long? ModelReadinessMs { get; set; }
+
+    /// <summary>
+    ///     What kind of engine execution drove this chat turn (<c>work-session-step</c> or
+    ///     <c>integration-execution</c>), or <c>null</c> for a turn someone typed, a thin envelope and every
+    ///     pre-migration row. A closed-vocabulary label. Plaintext (structural).
+    /// </summary>
+    public string? ParentExecutionKind { get; set; }
+
+    /// <summary>
+    ///     The id of the engine execution named by <see cref="ParentExecutionKind" />: a work-session step's
+    ///     <c>StepEnded</c> operation id, or an integration execution id. <c>null</c> exactly when the kind is.
+    ///     Plaintext (structural).
+    /// </summary>
+    public Guid? ParentExecutionId { get; set; }
 }

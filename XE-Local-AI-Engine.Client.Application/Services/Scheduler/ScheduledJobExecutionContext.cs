@@ -11,6 +11,13 @@ public sealed class ScheduledJobExecutionContext
     /// <summary>Primary key of the <c>scheduled_job_definitions</c> row that triggered this run.</summary>
     public required Guid ScheduledJobId { get; init; }
 
+    /// <summary>Primary key of the <c>scheduled_job_runs</c> row recording this fire.</summary>
+    /// <remarks>
+    ///     A handler that runs one headless agent invocation uses it AS that invocation's id, so the run row is the
+    ///     invocation's parent link with no column of its own. Other handlers ignore it.
+    /// </remarks>
+    public required Guid RunId { get; init; }
+
     /// <summary>Template identifier, copied from the job definition.</summary>
     public required string TemplateId { get; init; }
 

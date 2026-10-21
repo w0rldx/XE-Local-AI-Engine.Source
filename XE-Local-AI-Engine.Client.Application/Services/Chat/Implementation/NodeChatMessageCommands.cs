@@ -67,14 +67,16 @@ internal sealed class NodeChatMessageCommands
                                            (id, record_kind, schema_version, agent_definition_id, conversation_id, message_id, invocation_id, request_id,
                                             model_name, provider, config_hash, terminal_status, latency_ms, prompt_tokens, completion_tokens, reasoning_tokens, total_tokens,
                                             content_chunk_count, reasoning_chunk_count, trace_id, started_at_utc, tool_schema_tokens, max_tool_schema_tokens,
-                                            dispatched_tier, authored_effort, model_readiness_ms, success, error_class, created_at_utc)
+                                            dispatched_tier, authored_effort, model_readiness_ms, success, error_class, created_at_utc,
+                                            parent_execution_kind, parent_execution_id)
                                            """;
 
     private const string EnvelopeValues = """
                                           $id, $record_kind, $schema_version, $agent_definition_id, $conversation_id, $message_id, $invocation_id, $request_id,
                                           $model_name, $provider, $config_hash, $terminal_status, $latency_ms, $prompt_tokens, $completion_tokens, $reasoning_tokens, $total_tokens,
                                           $content_chunk_count, $reasoning_chunk_count, $trace_id, $started_at_utc, $tool_schema_tokens, $max_tool_schema_tokens,
-                                          $dispatched_tier, $authored_effort, $model_readiness_ms, $success, $error_class, $created_at_utc
+                                          $dispatched_tier, $authored_effort, $model_readiness_ms, $success, $error_class, $created_at_utc,
+                                          $parent_execution_kind, $parent_execution_id
                                           """;
 
     // InsertIfAbsent: the WHERE NOT EXISTS on (record_kind, message_id) makes the write a no-op when the message already
@@ -122,7 +124,9 @@ internal sealed class NodeChatMessageCommands
                                                   model_readiness_ms = excluded.model_readiness_ms,
                                                   success = excluded.success,
                                                   error_class = excluded.error_class,
-                                                  created_at_utc = excluded.created_at_utc;
+                                                  created_at_utc = excluded.created_at_utc,
+                                                  parent_execution_kind = excluded.parent_execution_kind,
+                                                  parent_execution_id = excluded.parent_execution_id;
                                               """;
 
     private readonly NodeChatPersistenceWriter _writer;
@@ -819,6 +823,8 @@ internal sealed class NodeChatMessageCommands
         AddParameter(command, "$success", string.Equals(terminalStatus, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal) ? 1 : 0);
         AddParameter(command, "$error_class", envelope.FailureCategory);
         AddParameter(command, "$created_at_utc", createdAtUtc);
+        AddParameter(command, "$parent_execution_kind", envelope.Parent?.Kind);
+        AddParameter(command, "$parent_execution_id", envelope.Parent?.Id);
 
         await OpenIfNeededAsync(command.Connection, cancellationToken);
         _ = await command.ExecuteNonQueryAsync(cancellationToken);

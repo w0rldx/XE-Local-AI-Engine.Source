@@ -387,8 +387,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             // 3. LOCALITY GATE. Classified on the EFFECTIVE model and refused before capacity and before any invocation: a graph workflow run is
             //    unattended by construction, so its content reaches a cloud model only while the operator lets cloud models run unattended.
             var capabilities = await services.GetRequiredService<IModelCapabilityResolver>().ResolveAsync(effectiveModel, cancellationToken);
-            if (capabilities.IsCloud && !capabilities.CloudGrants.UnattendedRuns
-                                     && !await services.GetRequiredService<INodeRuntimeSettings>().GetAllowCloudModelUnattendedRunsAsync(cancellationToken))
+            if (await CloudUnattendedGate.WithholdsAsync(capabilities.IsCloud, capabilities.CloudGrants, services.GetRequiredService<INodeRuntimeSettings>(), cancellationToken))
             {
                 _logger.LogInformation("Graph workflow run {RunId} refused node '{NodeKey}': its effective model is cloud-hosted and AllowCloudModelUnattendedRuns is off.",
                     runId,
@@ -546,8 +545,10 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                     return Invalid($"Graph workflow {callName} nodes require a model classified for chat.");
                 }
             }
-            else if (!(await services.GetRequiredService<IModelTrustResolver>().ResolveCloudGrantsAsync(effectiveModel, cancellationToken)).UnattendedRuns
-                     && !await services.GetRequiredService<INodeRuntimeSettings>().GetAllowCloudModelUnattendedRunsAsync(cancellationToken))
+            else if (await CloudUnattendedGate.WithholdsAsync(leavesNode: true,
+                         await services.GetRequiredService<IModelTrustResolver>().ResolveCloudGrantsAsync(effectiveModel, cancellationToken),
+                         services.GetRequiredService<INodeRuntimeSettings>(),
+                         cancellationToken))
             {
                 _logger.LogInformation("Graph workflow run {RunId} refused node '{NodeKey}': its effective model is cloud-hosted and AllowCloudModelUnattendedRuns is off.",
                     runId,

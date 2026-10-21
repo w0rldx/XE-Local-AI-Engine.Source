@@ -172,6 +172,7 @@ public sealed class ModelRecommendationCheckHandlerTests
         return new ScheduledJobExecutionContext
         {
             ScheduledJobId = Guid.NewGuid(),
+            RunId = Guid.NewGuid(),
             TemplateId = ModelRecommendationCheckHandler.TemplateIdValue,
             DisplayName = "Model recommendation check",
             Parameters = parametersJson,

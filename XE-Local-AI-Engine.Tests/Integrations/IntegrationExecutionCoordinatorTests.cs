@@ -469,6 +469,23 @@ public sealed class IntegrationExecutionCoordinatorTests
     }
 
     [Test]
+    public async Task Run_NamesTheIntegrationExecutionAsTheEnvelopesParent()
+    {
+        using var harness = new Harness();
+        var executionId = harness.SeedAccepted();
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        var envelope = (harness.TerminalizeRequest ?? throw new AssertionException("The assistant turn was never terminalized.")).Envelope
+                       ?? throw new AssertionException("The run wrote no envelope.");
+        AssertEx.Equal(new ExecutionParent
+        {
+            Kind = ExecutionParentKinds.IntegrationExecution,
+            Id = executionId
+        }, envelope.Parent);
+    }
+
+    [Test]
     public async Task Run_ProducesExactlyOneTerminalEventAndOneAuditRowAtTheHighestSequence()
     {
         using var harness = new Harness();

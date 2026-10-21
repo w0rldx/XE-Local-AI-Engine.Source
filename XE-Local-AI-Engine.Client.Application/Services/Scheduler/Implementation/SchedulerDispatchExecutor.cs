@@ -149,6 +149,7 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
         var context = new ScheduledJobExecutionContext
         {
             ScheduledJobId = definition.Id,
+            RunId = run.Id,
             TemplateId = definition.TemplateId,
             DisplayName = definition.DisplayName,
             Parameters = effectiveParameters,

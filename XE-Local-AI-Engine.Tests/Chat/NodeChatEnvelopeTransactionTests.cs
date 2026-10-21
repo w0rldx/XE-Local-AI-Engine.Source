@@ -419,6 +419,76 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
     }
 
     [Test]
+    public async Task TerminalizeAsync_WithAnExecutionParent_RoundTripsItThroughTheEnvelopeRecord()
+    {
+        await using var provider = await BuildProviderAsync("envelope-execution-parent.sqlite");
+        var persistence = CreateService(provider);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Parent",
+            UserId = "node",
+            CreatedAtUtc = 1
+        });
+        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
+        var parentId = Guid.NewGuid();
+
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = correlation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = 3,
+            Content = "answer",
+            Envelope = new AgentRunEnvelopeMetadata
+            {
+                InvocationId = Guid.NewGuid(),
+                DurationMs = 5L,
+                Parent = new ExecutionParent
+                {
+                    Kind = ExecutionParentKinds.WorkSessionStep,
+                    Id = parentId
+                }
+            }
+        });
+
+        var envelope = await ReadEnvelopeRecordAsync(provider, conversation.ConversationId);
+        AssertEx.Equal(ExecutionParentKinds.WorkSessionStep, envelope.ParentExecutionKind);
+        AssertEx.Equal<Guid?>(parentId, envelope.ParentExecutionId);
+    }
+
+    [Test]
+    public async Task TerminalizeAsync_WithoutAnExecutionParent_LeavesBothParentFieldsNull()
+    {
+        await using var provider = await BuildProviderAsync("envelope-execution-parent-null.sqlite");
+        var persistence = CreateService(provider);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "No parent",
+            UserId = "node",
+            CreatedAtUtc = 1
+        });
+        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
+
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = correlation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = 3,
+            Content = "answer",
+            Envelope = new AgentRunEnvelopeMetadata
+            {
+                InvocationId = Guid.NewGuid(),
+                DurationMs = 5L
+            }
+        });
+
+        var envelope = await ReadEnvelopeRecordAsync(provider, conversation.ConversationId);
+        AssertEx.Null(envelope.ParentExecutionKind);
+        AssertEx.Null(envelope.ParentExecutionId);
+    }
+
+    [Test]
     public async Task TerminalizeAsync_WritesTheToolSchemaTokenEstimateOntoTheEnvelopeRow()
     {
         // The cumulative estimate is a long end to end — its source counter is one, and a whole session's worth of these
@@ -637,6 +707,16 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
             ToolSchemaTokens = await reader.IsDBNullAsync(1) ? null : reader.GetInt64(1),
             MaxToolSchemaTokens = await reader.IsDBNullAsync(2) ? null : reader.GetInt64(2)
         };
+    }
+
+    // Reads through the store's own projection, so the test covers the column -> entity -> record mapping as well as the write.
+    private static async Task<AgentRunEnvelopeRecord> ReadEnvelopeRecordAsync(ServiceProvider provider, Guid conversationId)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var store = new AgentExecutionLogStore(scope.ServiceProvider.GetRequiredService<NodeChatDbContext>(), TimeProvider.System);
+        var envelopes = await store.ListRunEnvelopesAsync(conversationId, limit: 10);
+        AssertEx.Equal(expected: 1, envelopes.Count);
+        return envelopes[0];
     }
 
     private sealed record EnvelopeTelemetry

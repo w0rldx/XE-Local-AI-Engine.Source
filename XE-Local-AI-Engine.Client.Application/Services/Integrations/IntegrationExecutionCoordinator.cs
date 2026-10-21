@@ -492,7 +492,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         var capabilities = await services.GetRequiredService<IModelCapabilityResolver>().ResolveAsync(effectiveModel, runToken);
         var (supportsThinking, supportsTools, effectiveModelIsCloud) = capabilities;
         var runtimeSettings = services.GetRequiredService<INodeRuntimeSettings>();
-        if (effectiveModelIsCloud && !capabilities.CloudGrants.UnattendedRuns && !await runtimeSettings.GetAllowCloudModelUnattendedRunsAsync(runToken))
+        if (await CloudUnattendedGate.WithholdsAsync(effectiveModelIsCloud, capabilities.CloudGrants, runtimeSettings, runToken))
         {
             await TerminalizeBeforeRunAsync(context,
                 IntegrationFailureCategories.CloudModelRejected,
@@ -1061,7 +1061,12 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                 TurnInputTokens = state.TurnInputTokens,
                 TurnOutputTokens = state.TurnOutputTokens,
                 TurnTotalTokens = state.TurnTotalTokens,
-                TurnReasoningTokens = state.TurnReasoningTokens
+                TurnReasoningTokens = state.TurnReasoningTokens,
+                Parent = new ExecutionParent
+                {
+                    Kind = ExecutionParentKinds.IntegrationExecution,
+                    Id = context.ExecutionId
+                }
             };
 
             // Carried to the terminal event: `execution.completed` is `{tokens?, durationMs}`, and this is the one

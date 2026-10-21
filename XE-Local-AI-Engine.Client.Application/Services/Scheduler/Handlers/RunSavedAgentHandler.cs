@@ -136,7 +136,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         //    unless the operator lets cloud models run unattended. The offer below is then built with the real cloud flag.
         var capabilities = await modelCapabilityResolver.ResolveAsync(effectiveModel, cancellationToken);
         var (supportsThinking, supportsTools, effectiveModelIsCloud) = capabilities;
-        if (effectiveModelIsCloud && !capabilities.CloudGrants.UnattendedRuns && !await nodeRuntimeSettings.GetAllowCloudModelUnattendedRunsAsync(cancellationToken))
+        if (await CloudUnattendedGate.WithholdsAsync(effectiveModelIsCloud, capabilities.CloudGrants, nodeRuntimeSettings, cancellationToken))
         {
             _logger.LogInformation("Scheduled agent run for definition {AgentDefinitionId} was rejected: its effective model is cloud-hosted and AllowCloudModelUnattendedRuns is off.",
                 definition.Id);
@@ -176,6 +176,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         }
 
         var package = BuildPackage(packageBuilder,
+            context.RunId,
             resolved,
             effectiveModel,
             parameters,
@@ -212,6 +213,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
     ///     to the node default, and the whole-turn deadline is the node "Maximum message request timeout".
     /// </remarks>
     private RuntimePackage BuildPackage(ILocalChatRuntimePackageBuilder packageBuilder,
+        Guid runId,
         ResolvedAgentRuntime resolved,
         string effectiveModel,
         RunSavedAgentParameters parameters,
@@ -246,7 +248,8 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
 
         return packageBuilder.Build(new LocalChatRuntimePackageRequest
         {
-            InvocationId = Guid.NewGuid(),
+            // The scheduled run's id, which makes the run row this invocation's parent link (ScheduledJobExecutionContext.RunId).
+            InvocationId = runId,
             ConversationId = Guid.NewGuid(),
             ResolvedSystemPrompt = resolved.ResolvedSystemPrompt,
             ConversationContext = [seedTurn],

@@ -423,7 +423,14 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             RefuseUndeclaredWrites: run.Runtime?.RefuseUndeclaredWrites == true,
             // No operator is attached to a workflow-owned session, and its embedded chat is read-only, so an ask_user
             // question or a web result review could only ever go unanswered — see the flag's own comment.
-            SuppressOperatorTools: state.Session.Kind == AgentWorkSessionKind.Workflow);
+            SuppressOperatorTools: state.Session.Kind == AgentWorkSessionKind.Workflow,
+            // The turn's run envelope names this step by the StepStarted row recorded above, the one row every sent step
+            // writes whatever its outcome (a failed, cancelled or interrupted step writes no StepEnded), so the join is exact.
+            ExecutionParent: new ExecutionParent
+            {
+                Kind = ExecutionParentKinds.WorkSessionStep,
+                Id = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Started, attempt)
+            });
 
         // Seeded BEFORE the enumeration so it flows into the invocation's async context. The node-wide budget is larger
         // than read_document's 50,000-character cap, so without this nothing clips a knowledge-base read.

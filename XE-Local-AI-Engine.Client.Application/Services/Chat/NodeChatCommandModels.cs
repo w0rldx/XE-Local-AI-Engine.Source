@@ -242,6 +242,9 @@ public sealed class AgentRunEnvelopeMetadata
     public int? TurnTotalTokens { get; init; }
 
     public int? TurnReasoningTokens { get; init; }
+
+    // The engine execution that drove the turn, or null for a turn nothing drove and on every thin envelope.
+    public ExecutionParent? Parent { get; init; }
 }
 
 public sealed class NodeChatCancelRequest

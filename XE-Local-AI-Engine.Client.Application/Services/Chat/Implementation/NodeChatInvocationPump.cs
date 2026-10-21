@@ -98,7 +98,8 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
         InvocationState state,
         string? requestedModel,
         IReadOnlyList<NodeChatMessagePart>? parts = null,
-        IReadOnlyList<NodeChatMessageSource>? sources = null)
+        IReadOnlyList<NodeChatMessageSource>? sources = null,
+        ExecutionParent? parent = null)
     {
         ArgumentNullException.ThrowIfNull(state);
 
@@ -135,7 +136,8 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
             TurnInputTokens = state.TurnInputTokens,
             TurnOutputTokens = state.TurnOutputTokens,
             TurnTotalTokens = state.TurnTotalTokens,
-            TurnReasoningTokens = state.TurnReasoningTokens
+            TurnReasoningTokens = state.TurnReasoningTokens,
+            Parent = parent
         };
 
         // A cancelled turn persists NO error text: a user cancel or an operator eject is an outcome, not a failure, so

@@ -543,7 +543,8 @@ public sealed class ChatInvocationStatePumpTests
             InvocationState state,
             string? requestedModel,
             IReadOnlyList<NodeChatMessagePart>? parts = null,
-            IReadOnlyList<NodeChatMessageSource>? sources = null)
+            IReadOnlyList<NodeChatMessageSource>? sources = null,
+            ExecutionParent? parent = null)
         {
             TerminalState = state;
             TerminalParts = parts;

@@ -51,7 +51,9 @@ public sealed class ChatInvocationStatePump
         CancellationToken cancellationToken,
         // KB sources that grounded this turn, computed up front by the send path so they land on the terminal row's
         // metadata_json. Null or empty for a turn that used no knowledge base, preserving any persisted sources.
-        IReadOnlyList<NodeChatMessageSource>? sources = null)
+        IReadOnlyList<NodeChatMessageSource>? sources = null,
+        // The engine execution driving the turn, stamped on the full envelope only; the thin interrupted one leaves it null.
+        ExecutionParent? parent = null)
     {
         // How much has been WRITTEN, and how much has been SENT. They advance independently — see the class remarks.
         var persistCursor = NodeChatPumpCursor.Empty;
@@ -180,7 +182,7 @@ public sealed class ChatInvocationStatePump
                     // call goes into the parts and the row's Content keeps only the answer.
                     var snapshot = parts.HasParts ? parts.Snapshot(latest.StreamedContent) : null;
                     var terminalState = WithFinalContent(latest, parts);
-                    var terminal = await _invocationPump.TerminalizeAsync(correlation, terminalState, requestedModel, snapshot, sources);
+                    var terminal = await _invocationPump.TerminalizeAsync(correlation, terminalState, requestedModel, snapshot, sources, parent);
                     terminalPersisted = true;
 
                     // Post-run adaptive memory: the just-persisted terminal goes to the fire-and-forget extraction hook
@@ -241,7 +243,7 @@ public sealed class ChatInvocationStatePump
         {
             // A persistence fault would otherwise propagate while the finally ends the writer NORMALLY, leaving the row
             // streaming until the next reconcile. The atomic status guard makes this Failed terminalize a safe no-op.
-            await TerminalizeFaultedStreamAsync(eventSink, correlation, requestedModel, persistCursor, parts, sequence.Next(), sources);
+            await TerminalizeFaultedStreamAsync(eventSink, correlation, requestedModel, persistCursor, parts, sequence.Next(), sources, parent);
             throw;
         }
         finally
@@ -258,7 +260,8 @@ public sealed class ChatInvocationStatePump
         NodeChatPumpCursor cursor,
         NodeChatPartAccumulator parts,
         long sequence,
-        IReadOnlyList<NodeChatMessageSource>? sources = null)
+        IReadOnlyList<NodeChatMessageSource>? sources = null,
+        ExecutionParent? parent = null)
     {
         try
         {
@@ -276,7 +279,7 @@ public sealed class ChatInvocationStatePump
             };
 
             var snapshot = parts.HasParts ? parts.Snapshot(cursor.Content) : null;
-            var terminal = await _invocationPump.TerminalizeAsync(correlation, faultedState, requestedModel, snapshot, sources);
+            var terminal = await _invocationPump.TerminalizeAsync(correlation, faultedState, requestedModel, snapshot, sources, parent);
 
             await eventSink.WriteAsync(ChatStreamEventMapper.MessageEvent(terminal.EventType, correlation, terminal.Persisted, NowUnixMilliseconds(), sequence), CancellationToken.None);
         }

@@ -306,7 +306,9 @@ public sealed class AgentExecutionLogStore : IAgentExecutionLogStore
             MaxToolSchemaTokens = entity.MaxToolSchemaTokens,
             DispatchedTier = entity.DispatchedTier,
             AuthoredEffort = entity.AuthoredEffort,
-            ModelReadinessMs = entity.ModelReadinessMs
+            ModelReadinessMs = entity.ModelReadinessMs,
+            ParentExecutionKind = entity.ParentExecutionKind,
+            ParentExecutionId = entity.ParentExecutionId
         };
     }
 }

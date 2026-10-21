@@ -513,6 +513,18 @@ public sealed class RunSavedAgentHandlerTests
     }
 
     [Test]
+    public async Task ExecuteAsync_UsesTheScheduledRunIdAsTheInvocationId()
+    {
+        // The run row IS the invocation's parent link: no column records it, so the ids must be the same value.
+        using var harness = new Harness();
+        var context = Context(ValidParams());
+
+        await harness.Handler.ExecuteAsync(context, CancellationToken.None);
+
+        AssertEx.Equal(context.RunId, harness.CapturedPackage!.InvocationId);
+    }
+
+    [Test]
     public async Task ExecuteAsync_AppliesOperatorMaxMessageRequestTimeoutToRuntimePackage()
     {
         // Send/regenerate parity: the operator's node-level "Maximum message request timeout" (900s here) must
@@ -581,6 +593,7 @@ public sealed class RunSavedAgentHandlerTests
         return new ScheduledJobExecutionContext
         {
             ScheduledJobId = Guid.NewGuid(),
+            RunId = Guid.NewGuid(),
             TemplateId = RunSavedAgentHandler.TemplateIdValue,
             DisplayName = "Nightly log summary",
             Parameters = parametersJson,

@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 internal sealed record class ScheduledJobRun
 {
+    /// <summary>The run's id, which is also the invocation id of the headless agent run a run-agent fire starts. Plaintext (structural).</summary>
     public Guid Id { get; set; }
 
     /// <summary>

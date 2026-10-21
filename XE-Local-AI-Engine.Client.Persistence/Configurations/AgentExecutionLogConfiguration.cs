@@ -112,6 +112,13 @@ internal sealed class AgentExecutionLogConfiguration : IEntityTypeConfiguration<
         builder.Property(entity => entity.ModelReadinessMs)
                .HasColumnName("model_readiness_ms");
 
+        // The engine execution that drove the turn, nullable with no backfill and no index: a later run inspector joins on it, nothing queries it today.
+        builder.Property(entity => entity.ParentExecutionKind)
+               .HasColumnName("parent_execution_kind");
+
+        builder.Property(entity => entity.ParentExecutionId)
+               .HasColumnName("parent_execution_id");
+
         // The paged list-by-agent read filters by agent and orders newest-first, so index the pair. No FK to agent_definitions: a run log is diagnostic telemetry
         // that should outlive the definition (mirroring the no-FK conversation->definition choice), so deleting an agent must not cascade-delete its history.
         builder.HasIndex(entity => new

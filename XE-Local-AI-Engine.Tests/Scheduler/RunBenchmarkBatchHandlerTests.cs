@@ -373,6 +373,7 @@ public sealed class RunBenchmarkBatchHandlerTests
             return new ScheduledJobExecutionContext
             {
                 ScheduledJobId = Guid.NewGuid(),
+                RunId = Guid.NewGuid(),
                 TemplateId = RunBenchmarkBatchHandler.TemplateIdValue,
                 DisplayName = "Nightly quant matrix",
                 Parameters = parametersJson,

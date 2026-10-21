@@ -288,9 +288,10 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
             InvocationState state,
             string? requestedModel,
             IReadOnlyList<NodeChatMessagePart>? parts = null,
-            IReadOnlyList<NodeChatMessageSource>? sources = null)
+            IReadOnlyList<NodeChatMessageSource>? sources = null,
+            ExecutionParent? parent = null)
         {
-            return _inner.TerminalizeAsync(correlation, state, requestedModel, parts, sources);
+            return _inner.TerminalizeAsync(correlation, state, requestedModel, parts, sources, parent);
         }
 
         public Task<NodeChatPumpTerminalResult> TerminalizeInterruptedAsync(NodeChatMessageCorrelation correlation,

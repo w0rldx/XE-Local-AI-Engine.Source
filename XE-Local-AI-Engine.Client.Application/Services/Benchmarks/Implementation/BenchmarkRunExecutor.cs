@@ -132,7 +132,7 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
                 token);
 
             using var reservation = decision.Reservation;
-            var package = BuildPrimaryPackage(snapshot, work.Run.InvocationTimeoutSeconds);
+            var package = BuildPrimaryPackage(snapshot, work.Run.InvocationTimeoutSeconds, work.RunId);
             var admission = new BenchmarkContextAdmissionPolicy(snapshot.RequestedContextTokens);
             using var capture = new BenchmarkInvocationCapture(work.RunId, package.InvocationId, _dispatcher, _events);
             _events.Append(work.RunId,
@@ -397,7 +397,7 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
         }
     }
 
-    private RuntimePackage BuildPrimaryPackage(BenchmarkRuntimeSnapshotV1 snapshot, int? invocationTimeoutSeconds)
+    private RuntimePackage BuildPrimaryPackage(BenchmarkRuntimeSnapshotV1 snapshot, int? invocationTimeoutSeconds, Guid runId)
     {
         return BuildPrimaryPackage(_packageBuilder,
             snapshot.ResolvedRuntime,
@@ -405,25 +405,31 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
             snapshot.PrimaryModel.ModelName,
             snapshot.PrimarySampling,
             snapshot.RequestedContextTokens,
-            invocationTimeoutSeconds);
+            invocationTimeoutSeconds,
+            runId);
     }
 
     /// <summary>The primary invocation's package, built from the frozen pieces rather than the serialized snapshot.</summary>
-    /// <remarks>The freeze budgets this same package before it queues a run, so its pre-flight refusal and the run's hard stop cannot drift.</remarks>
+    /// <remarks>
+    ///     The freeze budgets this same package before it queues a run, so its pre-flight refusal and the run's hard stop cannot drift. The executor
+    ///     passes the run's id as <paramref name="invocationId" />: a run row launches its primary at most once, so the row IS the invocation's parent
+    ///     link. The freeze, which launches nothing, leaves it null for a fresh id.
+    /// </remarks>
     internal static RuntimePackage BuildPrimaryPackage(ILocalChatRuntimePackageBuilder packageBuilder,
         ResolvedAgentRuntime runtime,
         string coreTask,
         string modelName,
         BenchmarkSamplingSnapshotV1 sampling,
         int requestedContextTokens,
-        int? invocationTimeoutSeconds)
+        int? invocationTimeoutSeconds,
+        Guid? invocationId = null)
     {
         ArgumentNullException.ThrowIfNull(packageBuilder);
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(sampling);
         return packageBuilder.Build(new LocalChatRuntimePackageRequest
         {
-            InvocationId = Guid.NewGuid(),
+            InvocationId = invocationId ?? Guid.NewGuid(),
             ConversationId = Guid.NewGuid(),
             ResolvedSystemPrompt = runtime.ResolvedSystemPrompt,
             ConversationContext =

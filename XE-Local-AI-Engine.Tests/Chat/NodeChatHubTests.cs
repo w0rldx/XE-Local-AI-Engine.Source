@@ -227,6 +227,41 @@ public sealed class NodeChatHubTests
             "a client may not arm GRAPH-C4-2's runtime half on a turn no workflow node is driving.");
     }
 
+    /// <summary>
+    ///     <c>ExecutionParent</c> is server-set the same way: an engine stamps it on the requests it builds, and a
+    ///     client-supplied one would forge a link from its own turn's run envelope to an engine journal.
+    /// </summary>
+    [Test]
+    public async Task SendMessage_WhenAClientNamesAnExecutionParent_ClearsItBeforeTheStreamService()
+    {
+        var recorder = new RecordingNodeChatStreamService();
+        await using var factory = new TestServerWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<INodeChatStreamService>();
+                services.AddSingleton<INodeChatStreamService>(recorder);
+            }
+        };
+        await using var connection = CreateHubConnection(factory);
+        await connection.StartAsync();
+
+        await foreach (var _ in connection.StreamAsync<ChatStreamEvent>("SendMessage",
+                           new NodeChatStreamRequest(Guid.NewGuid(),
+                               "hello",
+                               ExecutionParent: new ExecutionParent
+                               {
+                                   Kind = ExecutionParentKinds.WorkSessionStep,
+                                   Id = Guid.NewGuid()
+                               })))
+        {
+            // The scrub is what this pins; the stream itself is the recorder's fixed single event.
+        }
+
+        AssertEx.True(recorder.Invoked, "the send itself is not rejected — only the field is dropped.");
+        AssertEx.Null(AssertEx.NotNull(recorder.LastRequest).ExecutionParent, "a client may not link its own turn to an engine execution.");
+    }
+
     [Test]
     public async Task SendMessage_WhenTheOperatorLowersTheCap_RejectsAtTheConfiguredLimit()
     {

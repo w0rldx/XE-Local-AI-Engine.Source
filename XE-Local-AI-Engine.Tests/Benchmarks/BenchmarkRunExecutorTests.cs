@@ -539,6 +539,16 @@ public sealed class BenchmarkRunExecutorTests
         AssertEx.Equal(expected: 0L, persisted.ToolTimeMs);
     }
 
+    [Test]
+    public async Task Execute_UsesTheRunIdAsThePrimaryInvocationId()
+    {
+        // A run launches its primary once, so the run row IS the invocation's parent link: no column records it.
+        Guid? invocationId = null;
+        var persisted = await ExecuteCapturingSuccessAsync((_, id) => invocationId = id);
+
+        AssertEx.Equal<Guid?>(persisted.RunId, invocationId);
+    }
+
     private static void RaiseToolCall(IWorkerEventDispatcher dispatcher, Guid invocationId, string callId, long? durationMs)
     {
         dispatcher.ToolCallLifecycleChanged += Raise.EventWith(dispatcher,

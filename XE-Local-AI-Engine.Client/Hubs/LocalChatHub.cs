@@ -45,13 +45,14 @@ public sealed class LocalChatHub : Hub
         ArgumentNullException.ThrowIfNull(request);
         EnsureMessageWithinSizeCap(request.Content);
 
-        // RefuseUndeclaredWrites is a SERVER-set field the development-workflow runtime puts on its own requests; nothing on
-        // this wire may arm it. Cleared, not rejected: a browser gains nothing by setting it, and rejecting would add a failure mode on a field no client knows about. Copied only when set.
-        if (request.RefuseUndeclaredWrites)
+        // RefuseUndeclaredWrites and ExecutionParent are SERVER-set fields an engine puts on its own requests; nothing on
+        // this wire may arm them. Cleared, not rejected: a browser gains nothing by setting them, and rejecting would add a failure mode on fields no client knows about. Copied only when set.
+        if (request.RefuseUndeclaredWrites || request.ExecutionParent is not null)
         {
             request = request with
             {
-                RefuseUndeclaredWrites = false
+                RefuseUndeclaredWrites = false,
+                ExecutionParent = null
             };
         }
 

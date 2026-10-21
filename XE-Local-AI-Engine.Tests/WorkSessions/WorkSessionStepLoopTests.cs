@@ -427,8 +427,12 @@ public sealed class WorkSessionStepLoopTests
         var settled = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Failed);
 
         AssertEx.Equal(expected: 0, settled.StepCount, "A failed turn is not a completed step.");
-        AssertEx.Contains(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId),
-            entry => entry.EventType == WorkSessionEventTypes.StepFailed);
+        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId);
+        AssertEx.Contains(events, entry => entry.EventType == WorkSessionEventTypes.StepFailed);
+        // A failed step writes no StepEnded row, so its envelope's parent must still name a row that exists: the StepStarted one.
+        var started = AssertEx.NotNull(events.FirstOrDefault(entry => entry.EventType == WorkSessionEventTypes.StepStarted));
+        var parent = AssertEx.NotNull(fake.Requests[0].ExecutionParent, "A failed step still names its parent execution.");
+        AssertEx.Equal<Guid?>(started.OperationId, parent.Id);
     }
 
     [Test]
@@ -1321,6 +1325,39 @@ public sealed class WorkSessionStepLoopTests
         AssertEx.Equal(expected: 2, consumption.ToolCallsCompleted);
         AssertEx.Equal(expected: 6, consumption.ProviderCallCap, "The cap the step was seeded with rides along, so the calls can be sized against it.");
         AssertEx.Equal(expected: 1, consumption.AttachedBudgets, "One invocation ran, which is what makes the calls a ratio against the cap.");
+    }
+
+    [Test]
+    public async Task Loop_SendsEveryStepWithTheOperationIdOfItsOwnStepStartedRowAsItsExecutionParent()
+    {
+        // The turn's run envelope carries this parent, so the envelope joins the session's journal on the StepStarted row's operation id exactly.
+        var sessionId = Guid.NewGuid();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                new RecordingWorkSessionEventPublisher())
+        };
+
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var fake = ResolveStream(factory, ref stream);
+        fake.Enqueue(new StepScript
+        {
+            EventTypes = [ChatStreamEventTypes.AssistantCompleted],
+            DuringTurn = DeclareCompleteAsync
+        });
+
+        AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Completed);
+
+        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId);
+        var started = AssertEx.NotNull(events.FirstOrDefault(entry => entry.EventType == WorkSessionEventTypes.StepStarted));
+        AssertEx.Equal(expected: 1, fake.Requests.Count);
+        var parent = AssertEx.NotNull(fake.Requests[0].ExecutionParent, "A supervised step must name its parent execution.");
+        AssertEx.Equal(ExecutionParentKinds.WorkSessionStep, parent.Kind);
+        AssertEx.Equal<Guid?>(started.OperationId, parent.Id);
     }
 
     [Test]

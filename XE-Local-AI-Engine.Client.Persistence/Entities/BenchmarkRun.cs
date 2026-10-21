@@ -4,6 +4,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 internal sealed record class BenchmarkRun
 {
+    /// <summary>The run's id, which is also its primary invocation's id: a run launches its primary at most once. Plaintext (structural).</summary>
     public Guid Id { get; set; }
     public Guid ProjectId { get; set; }
 
