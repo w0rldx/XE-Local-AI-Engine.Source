@@ -86,6 +86,9 @@ public sealed record ExternalProviderModelDescriptor
     ///     unspecified.
     /// </remarks>
     public string? DefaultReasoningEffort { get; init; }
+
+    /// <summary>The API surface the model is sent on; <see cref="ExternalProviderApiSurface.ChatCompletions" /> unless declared.</summary>
+    public ExternalProviderApiSurface ApiSurface { get; init; }
 }
 
 /// <summary>

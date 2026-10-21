@@ -27,6 +27,10 @@
     <!-- INodeDataDirectory: the shared per-node runtime-state root. Lives in the lowest shared layer so this provider
          can co-locate codex-oauth-tokens.enc under the per-user data dir instead of the shipped install/ContentRoot dir. -->
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj" />
+    <!-- The shared OpenAI-compatible wire layer, for the ONE stateless Responses options builder the external provider
+         also uses. A deliberate, reviewed edge: it is a leaf transport library with no project references of its own,
+         not a sibling provider, so the "providers never reach across to each other" rule is unaffected. -->
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.OpenAICompatible.Core\XE-Local-AI-Engine.Providers.OpenAICompatible.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

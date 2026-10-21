@@ -156,7 +156,13 @@ public sealed class LayerDependencyTests
             ["XE-Local-AI-Engine.ServiceDefaults"] = ["XE-Local-AI-Engine.AI.Contracts"],
             ["XE-Local-AI-Engine.Providers.Abstractions"] = [],
             ["XE-Local-AI-Engine.Providers.Capabilities"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
-            ["XE-Local-AI-Engine.Providers.CodexOAuth"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
+            // DELIBERATE, reviewed leaf edge (2026-10-21): Codex and the external provider share ONE stateless Responses
+            // options builder in OpenAICompatible.Core. Still a leaf, so Codex reaches no sibling provider.
+            ["XE-Local-AI-Engine.Providers.CodexOAuth"] =
+            [
+                "XE-Local-AI-Engine.Providers.Abstractions",
+                "XE-Local-AI-Engine.Providers.OpenAICompatible.Core"
+            ],
             ["XE-Local-AI-Engine.Providers.HuggingFace"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             // DELIBERATE, reviewed second edge (2026-08-27): both OpenAI-compatible providers build on the shared wire
             // layer instead of each carrying a private copy of the client construction and the request-body patch
@@ -473,7 +479,11 @@ public sealed class LayerDependencyTests
             [DesktopAssembly] = [],
             [AbstractionsAssembly] = [],
             [CapabilitiesAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
-            [CodexOAuthAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
+            [CodexOAuthAssembly] =
+            [
+                "XE-Local-AI-Engine.Providers.Abstractions",
+                "XE-Local-AI-Engine.Providers.OpenAICompatible.Core"
+            ],
             [HuggingFaceAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             [LlamaServerAssembly] =
             [

@@ -233,6 +233,76 @@ public sealed class ExternalProviderStoreTests : IDisposable
     }
 
     [Test]
+    public async Task LoadAsync_AModelStoredWithoutAnApiSurface_ReadsAsChatCompletions()
+    {
+        using var store = CreateStore();
+        var stored = JsonSerializer.SerializeToNode(new StoredExternalProviderConfig
+        {
+            Revision = "r",
+            Connections =
+            [
+                new StoredExternalProviderConnection
+                {
+                    Id = "unsloth-box",
+                    DisplayName = "Unsloth box",
+                    BaseUrl = "http://127.0.0.1:18099/v1/",
+                    Locality = ExternalProviderLocality.Local,
+                    Models =
+                    [
+                        new StoredExternalProviderModel
+                        {
+                            WireId = "qwen3"
+                        }
+                    ]
+                }
+            ]
+        }, RawSerializerOptions)!;
+        AssertEx.True(stored["connections"]![0]!["models"]![0]!.AsObject().Remove("apiSurface"), "the fixture must predate the field");
+        await File.WriteAllBytesAsync(StorePath, new MockDataProtector().Protect(Encoding.UTF8.GetBytes(stored.ToJsonString())));
+
+        var registration = AssertEx.NotNull(await new ExternalProviderRegistry(store).TryResolveAsync("ext:unsloth-box/qwen3", CancellationToken.None));
+
+        AssertEx.Equal(ExternalProviderApiSurface.ChatCompletions, registration.Model.ApiSurface);
+    }
+
+    [Test]
+    public async Task SaveConnectionAsync_AResponsesModel_RoundTripsToTheRegistry()
+    {
+        using var store = CreateStore();
+
+        _ = await SaveAsync(store, Request(models:
+        [
+            Model("gpt-5.6-terra") with
+            {
+                ApiSurface = ExternalProviderApiSurface.Responses
+            },
+            Model("qwen3")
+        ]));
+
+        var registry = new ExternalProviderRegistry(store);
+        var responses = AssertEx.NotNull(await registry.TryResolveAsync("ext:unsloth-box/gpt-5.6-terra", CancellationToken.None));
+        var chat = AssertEx.NotNull(await registry.TryResolveAsync("ext:unsloth-box/qwen3", CancellationToken.None));
+        AssertEx.Equal(ExternalProviderApiSurface.Responses, responses.Model.ApiSurface);
+        AssertEx.Equal(ExternalProviderApiSurface.ChatCompletions, chat.Model.ApiSurface);
+    }
+
+    [Test]
+    public async Task SaveConnectionAsync_WithAnUndefinedApiSurface_IsRejected()
+    {
+        using var store = CreateStore();
+
+        _ = await AssertEx.ThrowsAsync<ExternalProviderValidationException>(async () =>
+            await SaveAsync(store, Request(models:
+            [
+                Model("qwen3") with
+                {
+                    ApiSurface = (ExternalProviderApiSurface)7
+                }
+            ])));
+        AssertEx.Empty((await store.LoadAsync()).Connections);
+    }
+
+    [Test]
     public async Task SaveConnectionAsync_WithAnUnrecognizedDefaultEffort_IsRejected()
     {
         using var store = CreateStore();

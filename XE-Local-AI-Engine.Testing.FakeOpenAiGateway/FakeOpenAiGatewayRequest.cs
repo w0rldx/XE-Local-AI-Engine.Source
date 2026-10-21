@@ -15,6 +15,9 @@ public sealed record FakeOpenAiGatewayRequest
 
     public int ToolCount { get; init; }
 
+    /// <summary>The raw request body as received, or null for a request without one.</summary>
+    public string? Body { get; init; }
+
     /// <summary>Every request header, name to value, compared case-insensitively; values are verbatim.</summary>
     public required IReadOnlyDictionary<string, string> Headers { get; init; }
 }

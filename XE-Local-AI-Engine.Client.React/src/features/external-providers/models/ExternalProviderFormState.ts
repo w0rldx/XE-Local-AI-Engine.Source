@@ -15,6 +15,7 @@ import {
 } from "@/core/http-headers/CustomHeaders";
 import type { ReasoningEffort } from "@/core/models/ReasoningEffort";
 import {
+	type ExternalProviderApiSurface,
 	type ExternalProviderCloudGrant,
 	type ExternalProviderFormValues,
 	type ExternalProviderLocality,
@@ -72,6 +73,7 @@ export const emptyModelDraft: ExternalProviderModelDraft = {
 	supportsReasoning: null,
 	supportsReasoningEffort: null,
 	defaultReasoningEffort: "",
+	apiSurface: "ChatCompletions",
 };
 
 export const emptyFormValues: ExternalProviderFormValues = {
@@ -125,6 +127,7 @@ export function connectionToFormValues(connection: ExternalProviderConnectionDto
 			supportsReasoning: model.supportsReasoning ?? null,
 			supportsReasoningEffort: model.supportsReasoningEffort ?? null,
 			defaultReasoningEffort: (model.defaultReasoningEffort ?? "") as ReasoningEffort | "",
+			apiSurface: model.apiSurface === "Responses" ? "Responses" : "ChatCompletions",
 		}),
 	);
 
@@ -196,6 +199,7 @@ export function toSaveRequestBody(values: ExternalProviderFormValues, expectedRe
 					supportsReasoningEffort: model.supportsReasoning === true ? model.supportsReasoningEffort : model.supportsReasoning,
 					defaultReasoningEffort:
 						effortDeclared && model.defaultReasoningEffort.length > 0 ? model.defaultReasoningEffort : undefined,
+					apiSurface: model.apiSurface,
 				};
 			}),
 		expectedRevision,
@@ -290,6 +294,7 @@ export type ExternalProviderFormAction =
 	| { type: "setModelField"; index: number; field: "wireId" | "displayName" | "contextLength"; value: string }
 	| { type: "setModelFlag"; index: number; flag: ExternalProviderModelFlag; value: boolean | null }
 	| { type: "setModelEffort"; index: number; value: ReasoningEffort | "" }
+	| { type: "setModelApiSurface"; index: number; value: ExternalProviderApiSurface }
 	| { type: "addHeader"; rowId: string }
 	| { type: "removeHeader"; index: number }
 	| { type: "setHeaderField"; index: number; field: "name" | "value"; value: string }
@@ -379,6 +384,8 @@ function reduceForm(state: ExternalProviderFormState, action: ExternalProviderFo
 			return mapModel(state, action.index, (model) => withCoherentReasoning({ ...model, [action.flag]: action.value }));
 		case "setModelEffort":
 			return mapModel(state, action.index, (model) => ({ ...model, defaultReasoningEffort: action.value }));
+		case "setModelApiSurface":
+			return mapModel(state, action.index, (model) => ({ ...model, apiSurface: action.value }));
 		case "addProbedModel": {
 			const wireId = action.wireId.trim();
 			// The probe list stays clickable after a pick, so adding the same id twice has to be a no-op rather than a

@@ -18,6 +18,7 @@ internal static class FakeOpenAiGatewayEndpointMapper
         var api = app.MapGroup("/" + state.Options.BasePath.Trim('/'));
         api.MapGet("models", (Delegate)((HttpContext context) => ModelsEndpoint.HandleAsync(context, state)));
         api.MapPost("chat/completions", (Delegate)((HttpContext context) => ChatCompletionsEndpoint.HandleAsync(context, state)));
+        api.MapPost("responses", (Delegate)((HttpContext context) => ResponsesEndpoint.HandleAsync(context, state)));
 
         app.MapPost("/test/failures", (Delegate)((HttpContext context) => TestControlEndpoints.EnqueueFailureAsync(context, state)));
         app.MapDelete("/test/failures", (HttpContext context) => TestControlEndpoints.ClearFailures(context, state));
@@ -28,7 +29,13 @@ internal static class FakeOpenAiGatewayEndpointMapper
 
     /// <summary>Record the request, then run the bearer, header and fault gates in that order.</summary>
     /// <returns>True when a gate already answered and the endpoint must stop.</returns>
-    internal static async Task<bool> TryRejectAsync(HttpContext context, FakeOpenAiGatewayState state, string? model, bool stream, int messageCount, int toolCount)
+    internal static async Task<bool> TryRejectAsync(HttpContext context,
+        FakeOpenAiGatewayState state,
+        string? model,
+        bool stream,
+        int messageCount,
+        int toolCount,
+        string? body = null)
     {
         state.Record(new FakeOpenAiGatewayRequest
         {
@@ -38,6 +45,7 @@ internal static class FakeOpenAiGatewayEndpointMapper
             Stream = stream,
             MessageCount = messageCount,
             ToolCount = toolCount,
+            Body = body,
             Headers = context.Request.Headers.ToDictionary(header => header.Key, header => header.Value.ToString(), StringComparer.OrdinalIgnoreCase)
         });
 
@@ -59,6 +67,13 @@ internal static class FakeOpenAiGatewayEndpointMapper
         }
 
         return await TryApplyFailureAsync(context, state, model);
+    }
+
+    /// <summary>The raw request body as text, so the log keeps it verbatim and the endpoint parses the same bytes.</summary>
+    internal static async Task<string> ReadBodyAsync(HttpContext context)
+    {
+        using var reader = new StreamReader(context.Request.Body);
+        return await reader.ReadToEndAsync(context.RequestAborted);
     }
 
     internal static Task WriteErrorAsync(HttpContext context, int statusCode, string message, string type, string? code)

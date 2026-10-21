@@ -11,8 +11,10 @@ import {
 	nextExternalRowId,
 } from "@/features/external-providers/models/ExternalProviderFormState";
 import {
+	type ExternalProviderApiSurface,
 	type ExternalProviderFormErrors,
 	type ExternalProviderFormValues,
+	externalProviderApiSurfaces,
 	externalReasoningEfforts,
 } from "@/features/external-providers/models/ExternalProviderModel";
 
@@ -44,6 +46,15 @@ export function ExternalProviderModelFields({ values, errors, modelRowIds, dispa
 				label: t(`pages.externalProviders.models.effortOptions.${effort}`, effort),
 			})),
 		],
+		[t],
+	);
+
+	const surfaceData = useMemo(
+		() =>
+			externalProviderApiSurfaces.map((surface) => ({
+				value: surface,
+				label: t(`pages.externalProviders.models.apiSurfaceOptions.${surface}`, surface),
+			})),
 		[t],
 	);
 
@@ -163,7 +174,25 @@ export function ExternalProviderModelFields({ values, errors, modelRowIds, dispa
 								value={model.defaultReasoningEffort}
 								onChange={(value) => dispatch({ type: "setModelEffort", index, value: (value ?? "") as ReasoningEffort | "" })}
 							/>
+							<Select
+								size="xs"
+								style={{ width: "12rem" }}
+								allowDeselect={false}
+								data-testid={`external-provider-model-api-surface-${index}`}
+								aria-label={t("pages.externalProviders.models.apiSurfaceLabel", "API surface")}
+								data={surfaceData}
+								value={model.apiSurface}
+								onChange={(value) => {
+									if (value !== null) {
+										dispatch({ type: "setModelApiSurface", index, value: value as ExternalProviderApiSurface });
+									}
+								}}
+							/>
 						</Group>
+
+						<Text size="xs" c="dimmed">
+							{t("pages.externalProviders.models.apiSurfaceHelp")}
+						</Text>
 
 						{/* D6: the tool declaration is not scoped to chat. A model declared tool-capable joins the node's
 						    tool-capable allow-list, which the Agents page reads too. */}

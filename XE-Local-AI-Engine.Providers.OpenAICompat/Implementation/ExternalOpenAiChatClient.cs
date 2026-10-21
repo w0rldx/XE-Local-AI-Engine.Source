@@ -175,17 +175,34 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
             options.ModelId = model.WireId;
         }
 
-        return ExternalReasoningEffort.Apply(options, model);
+        var patched = ExternalReasoningEffort.Apply(options, model);
+        if (model.ApiSurface != ExternalProviderApiSurface.Responses)
+        {
+            return patched;
+        }
+
+        // The effort moves into the raw Responses options and leaves ChatOptions.Reasoning, so one source decides it.
+        var responses = patched?.Clone() ?? new ChatOptions();
+        var effort = ExternalReasoningEffort.ToResponsesEffort(responses.Reasoning?.Effort);
+        responses.Reasoning = null;
+        return OpenAICompatibleResponsesRequest.Stateless(responses, model.SupportsReasoning, effort, parallelToolCalls: null);
     }
 
-    // Assembles the per-connection stack: hardened transport, endpoint guard, custom headers, chat-completions adapter,
-    // reasoning rewriting. Every disposable transfers into the returned ResolvedEndpoint, an ownership CA2000 cannot follow.
+    // Assembles the per-connection stack: hardened transport, endpoint guard, custom headers, then the adapter for the
+    // model's API surface. Every disposable transfers into the returned ResolvedEndpoint, an ownership CA2000 cannot follow.
 #pragma warning disable CA2000
     private ResolvedEndpoint Build(ExternalProviderModelRegistration registration,
         string? apiKey,
         IReadOnlyList<KeyValuePair<string, string>> headers,
         EndpointIdentity identity)
     {
+        // Refused before anything is built: a surface this client cannot speak is never sent as Chat Completions instead.
+        var surface = registration.Model.ApiSurface;
+        if (surface is not (ExternalProviderApiSurface.ChatCompletions or ExternalProviderApiSurface.Responses))
+        {
+            throw new NotSupportedException($"The external model's API surface '{surface}' has no chat client.");
+        }
+
         var baseAddress = OpenAICompatibleBaseAddress.Normalize(registration.Connection.BaseUrl);
         var inner = _transportHandlerFactory?.Invoke()
                     ?? new SocketsHttpHandler
@@ -205,13 +222,16 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
             Timeout = Timeout.InfiniteTimeSpan
         };
 
-        var adapter = OpenAICompatibleClientFactory.CreateChatClient(baseAddress,
-            registration.Model.WireId,
-            apiKey,
-            registration.Connection.Timeout ?? DefaultNetworkTimeout,
-            new HttpClientPipelineTransport(httpClient));
+        var transport = new HttpClientPipelineTransport(httpClient);
+        var timeout = registration.Connection.Timeout ?? DefaultNetworkTimeout;
 
-        return new ResolvedEndpoint(identity, new ExternalReasoningRewritingChatClient(adapter), httpClient);
+        // The reasoning rewriting reads Chat Completions payloads only; the Responses adapter maps reasoning items itself.
+        var client = surface == ExternalProviderApiSurface.Responses
+            ? OpenAICompatibleClientFactory.CreateResponsesChatClient(baseAddress, registration.Model.WireId, apiKey, timeout, transport)
+            : new ExternalReasoningRewritingChatClient(
+                OpenAICompatibleClientFactory.CreateChatClient(baseAddress, registration.Model.WireId, apiKey, timeout, transport));
+
+        return new ResolvedEndpoint(identity, client, httpClient);
     }
 #pragma warning restore CA2000
 
@@ -225,7 +245,13 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
     ///     else happened to evict it, which an operator experiences as "I fixed the key and it still fails". The custom
     ///     headers join by VALUE (one joined string, not the list reference) for the same reason: a gateway token rotates too.
     /// </remarks>
-    private readonly record struct EndpointIdentity(string BaseUrl, string WireId, TimeSpan Timeout, string? ApiKey, string Headers)
+    private readonly record struct EndpointIdentity(
+        string BaseUrl,
+        string WireId,
+        ExternalProviderApiSurface ApiSurface,
+        TimeSpan Timeout,
+        string? ApiKey,
+        string Headers)
     {
         public static EndpointIdentity From(ExternalProviderModelRegistration registration,
             string? apiKey,
@@ -233,6 +259,7 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
         {
             return new EndpointIdentity(registration.Connection.BaseUrl.AbsoluteUri,
                 registration.Model.WireId,
+                registration.Model.ApiSurface,
                 registration.Connection.Timeout ?? DefaultNetworkTimeout,
                 apiKey,
                 string.Join('\n', headers.Select(static header => header.Key + "\0" + header.Value)));

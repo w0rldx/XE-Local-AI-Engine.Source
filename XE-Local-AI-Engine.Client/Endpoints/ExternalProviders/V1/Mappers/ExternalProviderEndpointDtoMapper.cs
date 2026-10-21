@@ -154,7 +154,8 @@ internal static class ExternalProviderEndpointDtoMapper
             SupportsVision = model.SupportsVision,
             SupportsReasoning = model.SupportsReasoning,
             SupportsReasoningEffort = model.SupportsReasoningEffort,
-            DefaultReasoningEffort = model.DefaultReasoningEffort
+            DefaultReasoningEffort = model.DefaultReasoningEffort,
+            ApiSurface = model.ApiSurface.ToString()
         };
     }
 
@@ -169,7 +170,11 @@ internal static class ExternalProviderEndpointDtoMapper
             SupportsVision = model.SupportsVision,
             SupportsReasoning = model.SupportsReasoning,
             SupportsReasoningEffort = model.SupportsReasoningEffort,
-            DefaultReasoningEffort = string.IsNullOrWhiteSpace(model.DefaultReasoningEffort) ? null : model.DefaultReasoningEffort.Trim()
+            DefaultReasoningEffort = string.IsNullOrWhiteSpace(model.DefaultReasoningEffort) ? null : model.DefaultReasoningEffort.Trim(),
+            // The validator has already refused anything that does not name a defined surface.
+            ApiSurface = string.IsNullOrWhiteSpace(model.ApiSurface)
+                ? ExternalProviderApiSurface.ChatCompletions
+                : Enum.Parse<ExternalProviderApiSurface>(model.ApiSurface.Trim(), ignoreCase: true)
         };
     }
 

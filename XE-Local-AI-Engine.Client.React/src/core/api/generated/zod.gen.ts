@@ -3156,6 +3156,7 @@ export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderM
 	supportsReasoning: z.boolean().nullable(),
 	supportsReasoningEffort: z.boolean().nullable(),
 	defaultReasoningEffort: z.string().nullish(),
+	apiSurface: z.string(),
 });
 
 export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionResponse = z.object({
@@ -3222,6 +3223,7 @@ export const zXeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProvi
 	supportsReasoning: z.boolean().nullish(),
 	supportsReasoningEffort: z.boolean().nullish(),
 	defaultReasoningEffort: z.string().nullish(),
+	apiSurface: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProviderConnectionRequest = z.object({

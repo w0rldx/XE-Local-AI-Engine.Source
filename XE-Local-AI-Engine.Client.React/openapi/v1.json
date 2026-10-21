@@ -36251,7 +36251,8 @@
           "supportsTools",
           "supportsVision",
           "supportsReasoning",
-          "supportsReasoningEffort"
+          "supportsReasoningEffort",
+          "apiSurface"
         ],
         "properties": {
           "wireId": {
@@ -36288,6 +36289,9 @@
           "defaultReasoningEffort": {
             "type": "string",
             "nullable": true
+          },
+          "apiSurface": {
+            "type": "string"
           }
         }
       },
@@ -36461,6 +36465,10 @@
             "nullable": true
           },
           "defaultReasoningEffort": {
+            "type": "string",
+            "nullable": true
+          },
+          "apiSurface": {
             "type": "string",
             "nullable": true
           }

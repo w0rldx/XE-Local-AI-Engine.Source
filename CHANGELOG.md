@@ -24,6 +24,11 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Added
 
+- **Per-model API surface for external connections** — each model registered on an OpenAI-compatible external
+  connection declares whether it answers on Chat Completions (default) or the Responses API, chosen in the model row of
+  the connection editor. Responses models run statelessly (`store=false`, encrypted reasoning replayed from memory in
+  tool loops, reasoning parameters only for models declared reasoning-capable), so one gateway connection can mix
+  models that support only one of the two endpoints. The Codex provider shares the same request builder.
 - Windows portable build ships `uninstall-xe-local-ai-engine.ps1` next to the app; it stops the node (and stops if a process survives), refuses a data folder that contains the extracted app or is a junction or symlink, and removes the data folder only on confirmation, with a typed `delete key` when `node.key` is present. The installer page and FAQ point at it.
 
 - **Native decision models in graph workflows** — a `DecisionModel` node can name the new `systemone` provider and run

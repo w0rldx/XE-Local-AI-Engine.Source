@@ -469,6 +469,105 @@ public sealed class ExternalProviderEndpointTests
     }
 
     [Test]
+    public async Task SaveConnection_CarriesTheApiSurfaceBothWays()
+    {
+        var administrationService = Substitute.For<IExternalProviderAdministrationService>();
+        var stored = CreateConfig();
+        var storedConnection = stored.Connections.Single();
+        administrationService.SaveConnectionAsync(Arg.Any<ExternalProviderConnectionSaveRequest>(), Arg.Any<CancellationToken>())
+                             .Returns(new ExternalProviderWriteResult.Committed(stored with
+                             {
+                                 Connections =
+                                 [
+                                     storedConnection with
+                                     {
+                                         Models =
+                                         [
+                                             storedConnection.Models.Single() with
+                                             {
+                                                 ApiSurface = ExternalProviderApiSurface.Responses
+                                             }
+                                         ]
+                                     }
+                                 ]
+                             }, Changed: true));
+        await using var factory = CreateFactory(administrationService: administrationService);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, ConnectionRoute);
+        request.Content = JsonContent.Create(ValidSaveRequest() with
+        {
+            Models =
+            [
+                new SaveExternalProviderModelRequest
+                {
+                    WireId = "qwen3-27b",
+                    ApiSurface = "responses"
+                },
+                new SaveExternalProviderModelRequest
+                {
+                    WireId = "qwen3-8b"
+                }
+            ]
+        });
+        using var response = await client.SendAsync(request);
+        var model = (await ReadJsonAsync<ExternalProviderConnectionsResponse>(response)).Connections.Single().Models.Single();
+
+        // The name parses case-insensitively, absence means Chat Completions, and the response spells the enum name.
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await administrationService.Received(1).SaveConnectionAsync(Arg.Is<ExternalProviderConnectionSaveRequest>(saved =>
+                saved.Models[0].ApiSurface == ExternalProviderApiSurface.Responses && saved.Models[1].ApiSurface == ExternalProviderApiSurface.ChatCompletions),
+            Arg.Any<CancellationToken>());
+        AssertEx.Equal("Responses", model.ApiSurface);
+    }
+
+    [Test]
+    public async Task ListConnections_AModelStoredWithoutASurface_ReportsChatCompletions()
+    {
+        var store = Substitute.For<IExternalProviderStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(CreateConfig());
+        await using var factory = CreateFactory(store);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Get, ConnectionsRoute);
+        using var response = await client.SendAsync(request);
+        var model = (await ReadJsonAsync<ExternalProviderConnectionsResponse>(response)).Connections.Single().Models.Single();
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal("ChatCompletions", model.ApiSurface);
+    }
+
+    [Test]
+    [Arguments("SystemOne")]
+    [Arguments("7")]
+    [Arguments("chat")]
+    public async Task SaveConnection_WithAnUnknownApiSurface_Returns400WithoutReachingTheStore(string apiSurface)
+    {
+        var administrationService = Substitute.For<IExternalProviderAdministrationService>();
+        await using var factory = CreateFactory(administrationService: administrationService);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, ConnectionRoute);
+        request.Content = JsonContent.Create(ValidSaveRequest() with
+        {
+            Models =
+            [
+                new SaveExternalProviderModelRequest
+                {
+                    WireId = "qwen3-27b",
+                    ApiSurface = apiSurface
+                }
+            ]
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "ChatCompletions, Responses");
+        await administrationService.DidNotReceiveWithAnyArgs()
+                                   .SaveConnectionAsync(Arg.Any<ExternalProviderConnectionSaveRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task SaveConnection_CarriesCloudGrantsBothWays()
     {
         var grants = new ExternalProviderCloudGrants

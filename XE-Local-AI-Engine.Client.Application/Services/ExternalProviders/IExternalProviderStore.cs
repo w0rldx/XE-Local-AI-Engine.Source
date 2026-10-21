@@ -201,6 +201,9 @@ public sealed record ExternalProviderModelSaveRequest
 
     /// <summary>The effort applied when the turn selects none; validated against the chat reasoning vocabulary.</summary>
     public string? DefaultReasoningEffort { get; init; }
+
+    /// <summary>The API surface the model is sent on; an undefined value is refused.</summary>
+    public ExternalProviderApiSurface ApiSurface { get; init; }
 }
 
 /// <summary>

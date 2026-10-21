@@ -4217,6 +4217,12 @@
 				"answerNo": "Nein",
 				"answerUnknown": "Unbekannt",
 				"answerYes": "Ja",
+				"apiSurfaceHelp": "Welchen Endpunkt dieses Modell bedient; der Gateway-Katalog gibt das nicht an, fragen Sie den Anbieter.",
+				"apiSurfaceLabel": "API-Oberfläche",
+				"apiSurfaceOptions": {
+					"ChatCompletions": "Chat Completions",
+					"Responses": "Responses"
+				},
 				"contextLengthLabel": "Kontextlänge",
 				"contextLengthPlaceholder": "32768",
 				"defaultEffortLabel": "Standard-Reasoning-Aufwand",

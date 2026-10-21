@@ -64,6 +64,7 @@ function connection(overrides: Partial<ExternalProviderConnectionDto> = {}): Ext
 				supportsReasoning: false,
 				supportsReasoningEffort: false,
 				defaultReasoningEffort: null,
+				apiSurface: "ChatCompletions",
 			},
 		],
 		...overrides,
@@ -125,6 +126,21 @@ describe("ExternalProviders page", () => {
 		expect("apiKey" in call.body).toBe(false);
 		expect(call.body["clearApiKey"]).toBeUndefined();
 		expect(call.body["expectedRevision"]).toBe("rev-1");
+	});
+
+	it("shows the stored API surface and sends a changed one in the save body", async () => {
+		await openStoredEditor();
+
+		const surface = screen.getByTestId("external-provider-model-api-surface-0") as HTMLInputElement;
+		expect(surface.value).toBe("Chat Completions");
+		fireEvent.click(surface);
+		const listbox = screen.getByRole("listbox", { name: "API surface", hidden: true });
+		fireEvent.click(within(listbox).getByRole("option", { name: "Responses", hidden: true }));
+		fireEvent.click(screen.getByTestId("external-provider-save"));
+
+		await waitFor(() => expect(generatedMock.saveFn).toHaveBeenCalledTimes(1));
+		const [call] = generatedMock.saveFn.mock.calls[0] as [{ body: { models: Record<string, unknown>[] } }];
+		expect(call.body.models[0]).toMatchObject({ wireId: "qwen3-27b", apiSurface: "Responses" });
 	});
 
 	it("answers each capability Yes, No or Unknown, and sends Unknown as null", async () => {

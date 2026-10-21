@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.OpenAICompat.Implementation;
 
 using Microsoft.Extensions.AI;
+using OpenAI.Responses;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 /// <summary>
@@ -73,6 +74,21 @@ internal static class ExternalReasoningEffort
             _ => null
         };
     }
+
+    /// <summary>Maps an applied wire effort onto the Responses level, or <see langword="null" /> when none applies.</summary>
+#pragma warning disable OPENAI001 // The Responses option types are experimental in the pinned OpenAI SDK.
+    internal static ResponseReasoningEffortLevel? ToResponsesEffort(ReasoningEffort? effort)
+    {
+        return effort switch
+        {
+            ReasoningEffort.Low => ResponseReasoningEffortLevel.Low,
+            ReasoningEffort.Medium => ResponseReasoningEffortLevel.Medium,
+            ReasoningEffort.High => ResponseReasoningEffortLevel.High,
+            // Typed, or the bare null would convert through the SDK's implicit string operator and throw.
+            _ => (ResponseReasoningEffortLevel?)null
+        };
+    }
+#pragma warning restore OPENAI001
 
     private static string? ReadSelectedEffort(ChatOptions? options)
     {

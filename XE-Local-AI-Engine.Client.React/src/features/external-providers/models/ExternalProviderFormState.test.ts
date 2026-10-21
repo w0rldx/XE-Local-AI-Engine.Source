@@ -44,6 +44,7 @@ function storedConnection(overrides: Partial<ExternalProviderConnectionDto> = {}
 				supportsReasoning: true,
 				supportsReasoningEffort: true,
 				defaultReasoningEffort: "medium",
+				apiSurface: "ChatCompletions",
 			},
 		],
 		...overrides,
@@ -87,6 +88,16 @@ describe("connectionToFormValues", () => {
 			supportsReasoningEffort: true,
 			defaultReasoningEffort: "medium",
 		});
+	});
+
+	it("loads a model's declared API surface", () => {
+		const [stored] = storedConnection().models ?? [];
+		if (stored === undefined) {
+			throw new Error("expected a stored model");
+		}
+		const [model] = connectionToFormValues(storedConnection({ models: [{ ...stored, apiSurface: "Responses" }] })).models;
+
+		expect(model?.apiSurface).toBe("Responses");
 	});
 
 	it("gives a connection with no registered models one blank row to type into", () => {
@@ -366,6 +377,23 @@ describe("formReducer", () => {
 	});
 });
 
+describe("formReducer — API surface", () => {
+	it("starts a new model row on Chat Completions", () => {
+		expect(emptyModelDraft.apiSurface).toBe("ChatCompletions");
+		const [model] = toSaveRequestBody({ ...emptyFormValues, models: [{ ...emptyModelDraft, wireId: "m" }] }, undefined).models;
+
+		expect(model?.apiSurface).toBe("ChatCompletions");
+	});
+
+	it("sends the chosen surface in the save payload", () => {
+		const state = stateWith(connectionToFormValues(storedConnection()));
+		const changed = formReducer(state, { type: "setModelApiSurface", index: 0, value: "Responses" });
+		const [model] = toSaveRequestBody(changed.values, "rev-1").models;
+
+		expect(model?.apiSurface).toBe("Responses");
+	});
+});
+
 describe("formReducer — contradictory reasoning declarations", () => {
 	function reasoningModel(): ExternalProviderFormState {
 		return stateWith(connectionToFormValues(storedConnection()));
@@ -412,6 +440,7 @@ describe("formReducer — contradictory reasoning declarations", () => {
 						supportsReasoning: false,
 						supportsReasoningEffort: true,
 						defaultReasoningEffort: "high",
+						apiSurface: "ChatCompletions",
 					},
 				],
 			}),

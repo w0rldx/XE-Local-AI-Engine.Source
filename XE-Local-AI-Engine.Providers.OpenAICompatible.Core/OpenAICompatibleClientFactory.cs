@@ -11,11 +11,10 @@ using OpenAI;
 ///     external connection (vLLM, LM Studio, a hosted OpenAI-compatible API).
 /// </summary>
 /// <remarks>
-///     Built on the CHAT-COMPLETIONS surface, not the Responses surface the Codex provider uses, because only
-///     <c>POST /v1/chat/completions</c> is universal across OpenAI-compatible servers. Auth is two branches rather than
-///     one sentinel — a supplied key rides the standard bearer credential and NO key means no header at all (see
-///     <see cref="UnauthenticatedPipelinePolicy" />) — since this factory also serves endpoints that validate what
-///     they are sent. The transport policy is pinned explicitly, never left to the System.ClientModel defaults.
+///     Chat Completions is the default because only <c>POST /v1/chat/completions</c> is universal across
+///     OpenAI-compatible servers; <see cref="CreateResponsesChatClient" /> serves a model declared Responses-only. Auth is
+///     two branches: a key rides the bearer credential and NO key sends no header (see
+///     <see cref="UnauthenticatedPipelinePolicy" />). The transport policy is pinned, never left to SDK defaults.
 /// </remarks>
 public static class OpenAICompatibleClientFactory
 {
@@ -38,6 +37,29 @@ public static class OpenAICompatibleClientFactory
 
         var openAiClient = CreateClient(baseAddress, apiKey, networkTimeout, transport);
         return openAiClient.GetChatClient(modelId).AsIChatClient();
+    }
+
+    /// <summary>
+    ///     Creates a Responses-surface chat client for <paramref name="modelId" />, on the same transport and auth
+    ///     contract as <see cref="CreateChatClient" />.
+    /// </summary>
+    /// <remarks>
+    ///     Statelessness is per call, not per client: pair every send with
+    ///     <see cref="OpenAICompatibleResponsesRequest.Stateless" />.
+    /// </remarks>
+    public static IChatClient CreateResponsesChatClient(Uri baseAddress,
+        string modelId,
+        string? apiKey,
+        TimeSpan networkTimeout,
+        PipelineTransport? transport = null)
+    {
+        ArgumentNullException.ThrowIfNull(baseAddress);
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
+
+        var openAiClient = CreateClient(baseAddress, apiKey, networkTimeout, transport);
+#pragma warning disable OPENAI001 // GetResponsesClient is experimental in the pinned OpenAI SDK.
+        return openAiClient.GetResponsesClient().AsIChatClient(modelId);
+#pragma warning restore OPENAI001
     }
 
     /// <summary>

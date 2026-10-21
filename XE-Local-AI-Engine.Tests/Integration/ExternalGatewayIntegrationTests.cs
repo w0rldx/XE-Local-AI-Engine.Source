@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Integration;
 
+using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -27,6 +28,8 @@ public sealed class ExternalGatewayIntegrationTests
     private const string ConnectionId = "demo-gateway";
     private const string WireId = "gateway-demo-model";
     private const string ModelId = $"ext:{ConnectionId}/{WireId}";
+    private const string ResponsesWireId = "gateway-responses-model";
+    private const string ResponsesModelId = $"ext:{ConnectionId}/{ResponsesWireId}";
     private const string Token = "demo-bearer-token";
     private const string PlainHeader = "X-Demo-Tenant";
     private const string PlainValue = "demo-tenant";
@@ -144,6 +147,102 @@ public sealed class ExternalGatewayIntegrationTests
     }
 
     [Test]
+    public async Task ResponsesModel_BesideAChatCompletionsModel_RoutesPerSurfaceAndReplaysReasoningStatelessly()
+    {
+        IReadOnlyList<StoredExternalProviderHeader> headers = [Plain(PlainValue), Secret(SecretValue)];
+        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions
+        {
+            RequiredBearerToken = Token,
+            RequiredHeaders = new Dictionary<string, string>
+            {
+                [PlainHeader] = PlainValue,
+                [SecretHeader] = SecretValue
+            },
+            Models =
+            [
+                new FakeOpenAiGatewayModel
+                {
+                    Id = WireId,
+                    ContextLength = 32768
+                },
+                new FakeOpenAiGatewayModel
+                {
+                    Id = ResponsesWireId,
+                    ContextLength = 32768
+                }
+            ]
+        }, Token, headers, TwoModels(ExternalProviderApiSurface.Responses));
+        using var deadline = new CancellationTokenSource(TestBudgets.Contended);
+        var ct = deadline.Token;
+        using var chatClient = new ExternalOpenAiChatClient(rig.Registry, ModelId);
+        using var responsesClient = new ExternalOpenAiChatClient(rig.Registry, ResponsesModelId);
+
+        AssertEx.Equal("Hello from the fake gateway.", (await chatClient.GetResponseAsync("hello", cancellationToken: ct)).Text);
+        AssertEx.Equal("Hello from the fake gateway.", (await responsesClient.GetResponseAsync("hello", cancellationToken: ct)).Text);
+
+        var streamed = new List<string>();
+        await foreach (var update in responsesClient.GetStreamingResponseAsync("hello", cancellationToken: ct))
+        {
+            streamed.Add(update.Text);
+        }
+
+        AssertEx.Equal("Hello from the fake gateway.", string.Concat(streamed));
+
+        // The tool loop is stateless: the second request must carry the reasoning item back, ahead of the tool result.
+        rig.Gateway.State.SetScript(new FakeOpenAiGatewayScript
+        {
+            ToolCall = new FakeOpenAiGatewayToolCall
+            {
+                Name = "calculator",
+                Arguments = """{"expression":"12*9"}"""
+            }
+        });
+        using var toolLoop = new FunctionInvokingChatClient(responsesClient);
+        var toolTurn = await toolLoop.GetResponseAsync("what is 12*9?", new ChatOptions
+        {
+            Tools = [AIFunctionFactory.Create((string expression) => expression == "12*9" ? "108" : "?", "calculator")]
+        }, ct);
+        AssertEx.Equal("Hello from the fake gateway.", toolTurn.Text);
+
+        // Flipping the declared surface back must rebuild the cached endpoint, so the same client now speaks Chat Completions.
+        var flipped = await rig.Administration.SaveConnectionAsync(Request(rig.Gateway, apiKey: null, headers, TwoModels(ExternalProviderApiSurface.ChatCompletions)), ct);
+        AssertEx.True(flipped is ExternalProviderWriteResult.Committed, $"The surface flip was not committed: {flipped}");
+        AssertEx.Equal("Hello from the fake gateway.", (await responsesClient.GetResponseAsync("hello", cancellationToken: ct)).Text);
+
+        var requests = rig.Gateway.RecordedRequests;
+        AssertEx.Equal("/v1/chat/completions,/v1/responses,/v1/responses,/v1/responses,/v1/responses,/v1/chat/completions",
+            string.Join(',', requests.Select(request => request.Path)));
+        AssertEx.Equal($"{WireId},{ResponsesWireId},{ResponsesWireId},{ResponsesWireId},{ResponsesWireId},{ResponsesWireId}",
+            string.Join(',', requests.Select(request => request.Model)));
+        AssertEx.Equal("False,False,True,False,False,False", string.Join(',', requests.Select(request => request.Stream)));
+        foreach (var request in requests)
+        {
+            AssertEx.Equal("Bearer " + Token, request.Headers.GetValueOrDefault("Authorization"), $"{request.Path} lost the bearer.");
+            AssertEx.Equal(PlainValue, request.Headers.GetValueOrDefault(PlainHeader), $"{request.Path} lost the plain header.");
+            AssertEx.Equal(SecretValue, request.Headers.GetValueOrDefault(SecretHeader), $"{request.Path} lost the secret header.");
+        }
+
+        foreach (var request in requests.Where(request => request.Path == "/v1/responses"))
+        {
+            using var body = JsonDocument.Parse(AssertEx.NotNull(request.Body));
+            AssertEx.Equal(JsonValueKind.False, body.RootElement.GetProperty("store").ValueKind, "every Responses send must be stateless.");
+            AssertEx.Contains(body.RootElement.GetProperty("include").EnumerateArray().Select(item => item.GetString()), "reasoning.encrypted_content");
+            AssertEx.False(body.RootElement.TryGetProperty("previous_response_id", out _), "a stateless send must not reference a stored response.");
+        }
+
+        using var replay = JsonDocument.Parse(AssertEx.NotNull(requests[4].Body));
+        var input = replay.RootElement.GetProperty("input").EnumerateArray().ToList();
+        var reasoningAt = input.FindIndex(item => item.GetProperty("type").GetString() == "reasoning"
+                                                  && item.TryGetProperty("encrypted_content", out var blob)
+                                                  && blob.GetString() == FakeOpenAiGatewayServer.EncryptedReasoning);
+        var outputAt = input.FindIndex(item => item.GetProperty("type").GetString() == "function_call_output");
+        AssertEx.True(reasoningAt >= 0, $"The tool turn did not replay the encrypted reasoning: {requests[4].Body}");
+        AssertEx.True(outputAt > reasoningAt, $"The replayed reasoning must precede the tool result: {requests[4].Body}");
+        // MEAI JSON-encodes a string tool result, so the wire carries "108" with its quotes.
+        AssertEx.Contains(input[outputAt].GetProperty("output").GetString(), "108");
+    }
+
+    [Test]
     [Arguments(FakeOpenAiGatewayFailure.Unauthorized, FailureCategory.ProviderAuthFailed, null)]
     [Arguments(FakeOpenAiGatewayFailure.UnknownModel, FailureCategory.ModelUnavailable, null)]
     [Arguments(FakeOpenAiGatewayFailure.RateLimited, FailureCategory.ProviderRateLimited, "retry after 7")]
@@ -189,9 +288,31 @@ public sealed class ExternalGatewayIntegrationTests
         };
     }
 
+    private static IReadOnlyList<ExternalProviderModelSaveRequest> TwoModels(ExternalProviderApiSurface responsesModelSurface)
+    {
+        return
+        [
+            new ExternalProviderModelSaveRequest
+            {
+                WireId = WireId,
+                SupportsTools = true,
+                ContextLength = 32768
+            },
+            new ExternalProviderModelSaveRequest
+            {
+                WireId = ResponsesWireId,
+                SupportsTools = true,
+                SupportsReasoning = true,
+                ContextLength = 32768,
+                ApiSurface = responsesModelSurface
+            }
+        ];
+    }
+
     private static ExternalProviderConnectionSaveRequest Request(FakeOpenAiGatewayServer gateway,
         string? apiKey,
-        IReadOnlyList<StoredExternalProviderHeader> headers)
+        IReadOnlyList<StoredExternalProviderHeader> headers,
+        IReadOnlyList<ExternalProviderModelSaveRequest>? models = null)
     {
         return new ExternalProviderConnectionSaveRequest
         {
@@ -200,15 +321,16 @@ public sealed class ExternalGatewayIntegrationTests
             BaseUrl = gateway.BaseAddress.AbsoluteUri,
             Locality = ExternalProviderLocality.Cloud,
             ApiKey = apiKey,
-            Models =
-            [
-                new ExternalProviderModelSaveRequest
-                {
-                    WireId = WireId,
-                    SupportsTools = true,
-                    ContextLength = 32768
-                }
-            ],
+            Models = models
+                     ??
+                     [
+                         new ExternalProviderModelSaveRequest
+                         {
+                             WireId = WireId,
+                             SupportsTools = true,
+                             ContextLength = 32768
+                         }
+                     ],
             Headers = headers
         };
     }
@@ -241,13 +363,16 @@ public sealed class ExternalGatewayIntegrationTests
 
         public ExternalProviderAdministrationService Administration { get; }
 
-        public static async Task<Rig> StartAsync(FakeOpenAiGatewayOptions options, string? apiKey, IReadOnlyList<StoredExternalProviderHeader> headers)
+        public static async Task<Rig> StartAsync(FakeOpenAiGatewayOptions options,
+            string? apiKey,
+            IReadOnlyList<StoredExternalProviderHeader> headers,
+            IReadOnlyList<ExternalProviderModelSaveRequest>? models = null)
         {
             var gateway = await FakeOpenAiGatewayServer.StartAsync(options);
             var rig = new Rig(gateway, new TempDirectory("xe-gateway"));
             try
             {
-                var saved = await rig.Administration.SaveConnectionAsync(Request(gateway, apiKey, headers));
+                var saved = await rig.Administration.SaveConnectionAsync(Request(gateway, apiKey, headers, models));
                 AssertEx.True(saved is ExternalProviderWriteResult.Committed, $"The connection was not saved: {saved}");
                 return rig;
             }

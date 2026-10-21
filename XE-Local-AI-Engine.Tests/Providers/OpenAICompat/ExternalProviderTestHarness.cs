@@ -36,10 +36,12 @@ internal static class ExternalProviderTestData
         int? contextLength = null,
         bool supportsTools = false,
         bool supportsVision = false,
-        bool supportsReasoning = false)
+        bool supportsReasoning = false,
+        ExternalProviderApiSurface apiSurface = ExternalProviderApiSurface.ChatCompletions)
     {
         return new ExternalProviderModelDescriptor
         {
+            ApiSurface = apiSurface,
             WireId = WireId,
             DisplayName = "Qwen3.8 27B",
             ContextLength = contextLength,
@@ -175,6 +177,18 @@ internal sealed class OpenAiWireRecorder
         var extra = extraMessageJson is null ? string.Empty : "," + extraMessageJson;
         var payload = "{\"id\":\"c\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"m\","
                       + $"\"choices\":[{{\"index\":0,\"message\":{{\"role\":\"assistant\",\"content\":{JsonString(content)}{extra}}},\"finish_reason\":\"stop\"}}]}}";
+        return new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(payload, Encoding.UTF8, "application/json")
+        };
+    }
+
+    /// <summary>A canned non-streaming Responses reply carrying one assistant message.</summary>
+    public static HttpResponseMessage ResponsesResult(string text)
+    {
+        var payload = "{\"id\":\"resp_1\",\"object\":\"response\",\"created_at\":0,\"status\":\"completed\",\"model\":\"m\","
+                      + "\"output\":[{\"type\":\"message\",\"id\":\"msg_1\",\"status\":\"completed\",\"role\":\"assistant\","
+                      + $"\"content\":[{{\"type\":\"output_text\",\"text\":{JsonString(text)},\"annotations\":[]}}]}}]}}";
         return new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(payload, Encoding.UTF8, "application/json")

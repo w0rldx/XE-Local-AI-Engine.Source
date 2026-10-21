@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 
 using Microsoft.Extensions.AI;
 using OpenAI.Responses;
+using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 
 /// <summary>Forces <c>store=false</c> on the Codex Responses transport.</summary>
 /// <remarks>
@@ -32,54 +33,19 @@ public static class CodexResponseStoreDisabling
     private const string OllamaThinkKey = "think";
 
     /// <summary>
-    ///     Returns <paramref name="options" />, or a new instance, with a
-    ///     <see cref="ChatOptions.RawRepresentationFactory" /> that disables service-side stored output AND requests
-    ///     reasoning summaries at the supplied <paramref name="reasoningEffort" />.
+    ///     Returns <paramref name="options" />, or a new instance, sending <c>store=false</c>, an auto reasoning summary at
+    ///     <paramref name="reasoningEffort" />, the encrypted-reasoning include, and <c>parallel_tool_calls:false</c>.
     /// </summary>
     /// <remarks>
-    ///     MEAI's Responses mapper uses the returned object as the base <see cref="CreateResponseOptions" />, so
-    ///     <see cref="CreateResponseOptions.StoredOutputEnabled" /> false, with
-    ///     <see cref="CreateResponseOptions.PreviousResponseId" /> and <c>ConversationOptions</c> left unset, yields a
-    ///     body that omits service-side state. Summaries ride the response output and do NOT require
-    ///     <c>store=true</c>, so that invariant holds.
+    ///     The shared stateless builder owns the shape; Codex always requests reasoning, and disables parallel tool calls
+    ///     because its capability matrix declares <c>SupportsParallelToolCalls=false</c>.
     /// </remarks>
     /// <param name="options">The per-call options to decorate (cloned upstream); a new instance when null.</param>
     /// <param name="reasoningEffort">The resolved per-send effort, or <see langword="null" /> to omit it and use the model's default.</param>
     public static ChatOptions WithStoredOutputDisabled(ChatOptions? options = null,
         ResponseReasoningEffortLevel? reasoningEffort = null)
     {
-        var result = options ?? new ChatOptions();
-        result.RawRepresentationFactory = _ =>
-        {
-            var responseOptions = new CreateResponseOptions
-            {
-                StoredOutputEnabled = false,
-                ReasoningOptions = new ResponseReasoningOptions
-                {
-                    // Summary verbosity is FIXED to Auto (≈ detailed for gpt-5.x). Requesting summaries is what
-                    // makes reasoning text flow back as TextReasoningContent for the React reasoning pipeline.
-                    ReasoningSummaryVerbosity = ResponseReasoningSummaryVerbosity.Auto
-                },
-                // include:[reasoning.encrypted_content], REQUIRED for the stateless store=false tool loop: each
-                // follow-up turn replays the prior reasoning item with its blob before its function_call.
-                IncludedProperties =
-                {
-                    IncludedResponseProperty.ReasoningEncryptedContent
-                },
-
-                // parallel_tool_calls:false on the wire — the request-level enforcement of the capability matrix's
-                // SupportsParallelToolCalls=false, so the model emits at most one tool call per turn.
-                ParallelToolCallsEnabled = false
-            };
-
-            if (reasoningEffort is { } effort)
-            {
-                responseOptions.ReasoningOptions.ReasoningEffortLevel = effort;
-            }
-
-            return responseOptions;
-        };
-        return result;
+        return OpenAICompatibleResponsesRequest.Stateless(options, includeReasoning: true, reasoningEffort, parallelToolCalls: false);
     }
 
     /// <summary>

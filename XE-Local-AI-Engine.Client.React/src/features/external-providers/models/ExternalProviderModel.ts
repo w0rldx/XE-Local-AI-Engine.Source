@@ -67,6 +67,8 @@ export interface ExternalProviderModelDraft {
 	// "" = unspecified. Only meaningful with supportsReasoning AND supportsReasoningEffort both Yes; the editor disables
 	// the select otherwise and the save mapper drops the value, so a stale effort cannot survive changing either answer.
 	defaultReasoningEffort: ReasoningEffort | "";
+	// Which endpoint the model answers on. The gateway catalog does not say, so the operator declares it.
+	apiSurface: ExternalProviderApiSurface;
 }
 
 export interface ExternalProviderFormValues {
@@ -95,6 +97,9 @@ export interface ExternalProviderFormValues {
 export type ExternalProviderFormErrors = Partial<Record<Exclude<keyof ExternalProviderFormValues, "headers">, string>> & {
 	headers?: CustomHeaderError;
 };
+
+export const externalProviderApiSurfaces = ["ChatCompletions", "Responses"] as const;
+export type ExternalProviderApiSurface = (typeof externalProviderApiSurfaces)[number];
 
 // The full canonical effort vocabulary the node's normalizer accepts. Unlike the chat composer — which narrows the set
 // per model so it can never SEND a level the active model rejects — this is a declaration of what the operator's own

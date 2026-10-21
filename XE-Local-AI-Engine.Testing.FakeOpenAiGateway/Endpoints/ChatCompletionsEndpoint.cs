@@ -11,14 +11,15 @@ internal static class ChatCompletionsEndpoint
 
     public static async Task<IResult> HandleAsync(HttpContext context, FakeOpenAiGatewayState state)
     {
+        var raw = await FakeOpenAiGatewayEndpointMapper.ReadBodyAsync(context);
         JsonDocument body;
         try
         {
-            body = await JsonDocument.ParseAsync(context.Request.Body, cancellationToken: context.RequestAborted);
+            body = JsonDocument.Parse(raw);
         }
         catch (JsonException)
         {
-            if (await FakeOpenAiGatewayEndpointMapper.TryRejectAsync(context, state, model: null, stream: false, messageCount: 0, toolCount: 0))
+            if (await FakeOpenAiGatewayEndpointMapper.TryRejectAsync(context, state, model: null, stream: false, messageCount: 0, toolCount: 0, raw))
             {
                 return Results.Empty;
             }
@@ -35,7 +36,7 @@ internal static class ChatCompletionsEndpoint
             var stream = root.TryGetProperty("stream", out var streamFlag) && streamFlag.ValueKind == JsonValueKind.True;
             var messageCount = FakeOpenAiGatewayEndpointMapper.ArrayLength(root, "messages");
 
-            if (await FakeOpenAiGatewayEndpointMapper.TryRejectAsync(context, state, model, stream, messageCount, FakeOpenAiGatewayEndpointMapper.ArrayLength(root, "tools")))
+            if (await FakeOpenAiGatewayEndpointMapper.TryRejectAsync(context, state, model, stream, messageCount, FakeOpenAiGatewayEndpointMapper.ArrayLength(root, "tools"), raw))
             {
                 return Results.Empty;
             }

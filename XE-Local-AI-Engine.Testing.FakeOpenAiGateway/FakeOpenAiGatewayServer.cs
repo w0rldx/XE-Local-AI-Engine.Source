@@ -10,12 +10,15 @@ using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Testing.FakeOpenAiGateway.Endpoints;
 
 /// <summary>
-///     A loopback OpenAI-compatible gateway: <c>GET models</c> and <c>POST chat/completions</c> behind a bearer and
+///     A loopback OpenAI-compatible gateway: <c>GET models</c>, <c>POST chat/completions</c> and <c>POST responses</c> behind a bearer and
 ///     required-header check, with a fault queue and a request log, so a test drives the real external-connection
 ///     client over a socket.
 /// </summary>
 public sealed class FakeOpenAiGatewayServer : IAsyncDisposable
 {
+    /// <summary>The opaque <c>encrypted_content</c> of the reasoning item every <c>responses</c> answer leads with.</summary>
+    public const string EncryptedReasoning = "fake-encrypted-reasoning";
+
     private readonly WebApplication _app;
 
     private FakeOpenAiGatewayServer(WebApplication app, Uri baseAddress, FakeOpenAiGatewayState state)

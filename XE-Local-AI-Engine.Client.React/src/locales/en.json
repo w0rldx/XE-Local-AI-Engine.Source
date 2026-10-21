@@ -4217,6 +4217,12 @@
 				"answerNo": "No",
 				"answerUnknown": "Unknown",
 				"answerYes": "Yes",
+				"apiSurfaceHelp": "Which endpoint this model answers on; the gateway catalog does not say, ask the provider.",
+				"apiSurfaceLabel": "API surface",
+				"apiSurfaceOptions": {
+					"ChatCompletions": "Chat Completions",
+					"Responses": "Responses"
+				},
 				"contextLengthLabel": "Context length",
 				"contextLengthPlaceholder": "32768",
 				"defaultEffortLabel": "Default reasoning effort",

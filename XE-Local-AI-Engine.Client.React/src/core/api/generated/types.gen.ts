@@ -2834,6 +2834,7 @@ export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderMod
 	supportsReasoning: boolean | null;
 	supportsReasoningEffort: boolean | null;
 	defaultReasoningEffort?: string | null;
+	apiSurface: string;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeModelResponse = {
@@ -2882,6 +2883,7 @@ export type XeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProvide
 	supportsReasoning?: boolean | null;
 	supportsReasoningEffort?: boolean | null;
 	defaultReasoningEffort?: string | null;
+	apiSurface?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1CreateGraphWorkflowDefinitionRequest = {

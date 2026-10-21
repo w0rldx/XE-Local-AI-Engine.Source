@@ -193,7 +193,8 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
             SupportsVision = model.SupportsVision == true,
             SupportsReasoning = model.SupportsReasoning == true,
             SupportsReasoningEffort = model.SupportsReasoningEffort == true,
-            DefaultReasoningEffort = model.DefaultReasoningEffort
+            DefaultReasoningEffort = model.DefaultReasoningEffort,
+            ApiSurface = model.ApiSurface
         };
     }
 
@@ -497,6 +498,12 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
                     $"The external model '{wireId}' declares a default reasoning effort but not graded effort support. Enable effort support, or remove the default.");
             }
 
+            // The store serializes enums as numbers, so a hand-built request carrying an undefined value would otherwise persist.
+            if (!Enum.IsDefined(model.ApiSurface))
+            {
+                throw new ExternalProviderValidationException($"The external model '{wireId}' declares an unsupported API surface.");
+            }
+
             var displayName = model.DisplayName?.Trim();
             if (displayName is { Length: > ExternalProviderStoreSchema.MaxDisplayNameLength })
             {
@@ -512,7 +519,8 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
                 SupportsVision = model.SupportsVision,
                 SupportsReasoning = model.SupportsReasoning,
                 SupportsReasoningEffort = model.SupportsReasoningEffort,
-                DefaultReasoningEffort = ReasoningEffortNormalizer.Normalize(model.DefaultReasoningEffort)
+                DefaultReasoningEffort = ReasoningEffortNormalizer.Normalize(model.DefaultReasoningEffort),
+                ApiSurface = model.ApiSurface
             });
         }
 

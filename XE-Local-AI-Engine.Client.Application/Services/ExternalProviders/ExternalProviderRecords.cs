@@ -139,6 +139,9 @@ public sealed record StoredExternalProviderModel
 
     /// <summary>The effort applied when the turn selects none, in the canonical lowercase vocabulary.</summary>
     public string? DefaultReasoningEffort { get; init; }
+
+    /// <summary>The API surface the model is sent on. Absent in a file written before it, so it reads Chat Completions.</summary>
+    public ExternalProviderApiSurface ApiSurface { get; init; }
 }
 
 /// <summary>Schema constants for the encrypted external-provider store.</summary>
@@ -148,7 +151,11 @@ public static class ExternalProviderStoreSchema
     ///     The schema version this build writes. Version 2 made the model capability flags tri-state (a version-1 file is
     ///     lifted on read); version 3 added custom headers, so an older build refuses a file that carries them.
     /// </summary>
-    /// <remarks>Cloud grants added no version: an older build ignores them, which only withholds more.</remarks>
+    /// <remarks>
+    ///     Cloud grants added no version: an older build ignores them, which only withholds more. The API surface added
+    ///     no version: an older build ignores it and sends Chat Completions, which fails loudly for a Responses-only model
+    ///     and never widens what is sent.
+    /// </remarks>
     public const int CurrentVersion = 3;
 
     /// <summary>Upper bound on configured connections — a guard against a hand-edited or corrupted payload, not a product limit.</summary>

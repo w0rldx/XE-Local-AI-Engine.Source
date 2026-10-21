@@ -38,7 +38,9 @@ public sealed class SaveExternalProviderConnectionRequestValidator : Validator<S
             .NotNull()
             .WithMessage("Models is required (send an empty list to register none).")
             .Must(static models => models is null || models.All(static model => !string.IsNullOrWhiteSpace(model.WireId)))
-            .WithMessage("Every registered model needs a non-blank WireId.");
+            .WithMessage("Every registered model needs a non-blank WireId.")
+            .Must(static models => models is null || models.All(static model => IsApiSurface(model.ApiSurface)))
+            .WithMessage($"Every registered model's ApiSurface must be absent or one of: {string.Join(", ", Enum.GetNames<ExternalProviderApiSurface>())}.");
 
         RuleFor(static request => request.Headers)
             .Custom(static (headers, context) => AddHeaderViolations(headers, context.AddFailure));
@@ -51,6 +53,12 @@ public sealed class SaveExternalProviderConnectionRequestValidator : Validator<S
         {
             addFailure(violation);
         }
+    }
+
+    private static bool IsApiSurface(string? apiSurface)
+    {
+        return string.IsNullOrWhiteSpace(apiSurface)
+               || (Enum.TryParse<ExternalProviderApiSurface>(apiSurface.Trim(), ignoreCase: true, out var parsed) && Enum.IsDefined(parsed));
     }
 }
 

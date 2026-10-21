@@ -171,6 +171,9 @@ public sealed record ExternalProviderModelResponse
 
     /// <summary>The effort applied when the turn selects none, in the canonical lowercase vocabulary.</summary>
     public string? DefaultReasoningEffort { get; init; }
+
+    /// <summary>The API surface as the <see cref="ExternalProviderApiSurface" /> enum name (<c>ChatCompletions</c> | <c>Responses</c>).</summary>
+    public required string ApiSurface { get; init; }
 }
 
 /// <summary>Request DTO for reading or deleting one connection. <see cref="ConnectionId" /> is bound from the route.</summary>
@@ -266,6 +269,9 @@ public sealed record SaveExternalProviderModelRequest
 
     /// <summary>The effort applied when the turn selects none; validated against the chat reasoning vocabulary on save.</summary>
     public string? DefaultReasoningEffort { get; init; }
+
+    /// <summary>A case-insensitive <see cref="ExternalProviderApiSurface" /> enum name; absent means <c>ChatCompletions</c>.</summary>
+    public string? ApiSurface { get; init; }
 }
 
 /// <summary>
