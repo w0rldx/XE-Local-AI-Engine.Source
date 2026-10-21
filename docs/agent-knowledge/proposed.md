@@ -13,15 +13,16 @@ exists in the worktree, passes `RuntimeLicensePackagingTests` and local publishe
 clean checkout publish without the RID, self-contained and single-file settings (the `xe` client, 2026-10-17; caught by
 review, not by a gate). **Authority:** the `*.pubxml` rule and its per-project exceptions in `.gitignore`.
 
-### A `Directory.Packages.props` addition also runs `pnpm run licenses:check`
+### A `Directory.Packages.props` or `nuget-license-overrides.json` change also runs `pnpm run licenses:check`
 
-**Rule:** after adding or bumping any `<PackageVersion>`, run `( cd XE-Local-AI-Engine.Client.React && pnpm run
+**Rule:** after adding or bumping any `<PackageVersion>`, or re-keying an entry in
+`scripts/compliance/nuget-license-overrides.json` (an override IS the license the generator writes), run `( cd XE-Local-AI-Engine.Client.React && pnpm run
 licenses:generate )` and commit `src/features/about/data/third-party-licenses.generated.json` in the same commit;
 `pnpm run acceptance` does not include `licenses:check`, and the routing table sends a `Directory.Packages.props`
 change to build-and-analyzers, where the license rule (frontend-and-api, "`openapi:check` and `licenses:check` diff
 the working tree against the INDEX") is never read. **Prevents:** a backend-only package addition that passes the
 backend gate and the frontend acceptance locally and turns the CI `licenses:check` step red (the `xe` client's two
-packages, 2026-10-17; caught by review). **Authority:** `licenses:check` in `XE-Local-AI-Engine.Client.React/package.json`;
+packages, 2026-10-17; caught by review; the Mxc.Sdk 1.0.1 override re-key, 2026-10-21, turned develop red). **Authority:** `licenses:check` in `XE-Local-AI-Engine.Client.React/package.json`;
 `.github/workflows/build-and-test.yml`.
 
 ### A test console built with `AnsiConsole.Create` opts out of Spectre's profile enrichers

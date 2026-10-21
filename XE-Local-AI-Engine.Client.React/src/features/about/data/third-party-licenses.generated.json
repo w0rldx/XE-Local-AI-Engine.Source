@@ -2733,7 +2733,7 @@
 			"id": "backend:Microsoft.Mxc.Sdk@1.0.1",
 			"name": "Microsoft.Mxc.Sdk",
 			"version": "1.0.1",
-			"license": "LICENSE.md",
+			"license": "MIT",
 			"homepageUrl": "https://github.com/microsoft/mxc",
 			"source": "backend"
 		},
