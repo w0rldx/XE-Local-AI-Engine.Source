@@ -33,19 +33,30 @@ internal static class BenchmarkModelEligibility
 
     /// <summary>The judge is held to a stricter rule than the primary.</summary>
     /// <remarks>
-    ///     A model carrying an auxiliary asset (a projector, and by extension any adapter or draft companion) launches
-    ///     with <c>--mmproj</c>/<c>--lora</c>/<c>-md</c>, and the launch receipt records only THAT something extra was
-    ///     loaded, never which file. Such a judging can never be shown to be the same execution as another, so it
-    ///     could never join a rank cohort — refuse it at the policy instead of letting every run it scores come out
-    ///     permanently unranked.
+    ///     A model carrying an auxiliary asset (projector, adapter or draft companion) launches with
+    ///     <c>--mmproj</c>/<c>--lora</c>/<c>-md</c>, and the launch receipt records only THAT something extra was loaded,
+    ///     never which file, so its judgings could never join a rank cohort: refused at the policy, not left unranked.
+    ///     A rubric of verifiable criteria only never spawns the judge, so the policy passes <paramref name="judgeWillRun" />
+    ///     false and the rule is not applied to a model that will not run.
     /// </remarks>
-    public static void ValidateJudge(InstalledModelSnapshot snapshot, ModelClassificationRecord? classification, string? decisionType = null)
+    public static void ValidateJudge(InstalledModelSnapshot snapshot, ModelClassificationRecord? classification, string? decisionType = null, bool judgeWillRun = true)
     {
         Validate(snapshot, classification, "judge", decisionType);
-        if (snapshot.Members.Any(static member => member.Role == InstalledModelPhysicalMemberRole.Projector))
+        if (judgeWillRun && snapshot.Members.Any(static member => member.Role == InstalledModelPhysicalMemberRole.Projector))
         {
             throw new BenchmarkEligibilityException(
                 "The selected judge model carries an auxiliary asset (projector, adapter or draft model). Judgings from such a model cannot be ranked; pick a plain text GGUF.");
         }
     }
+
+    /// <summary>Whether a policy ever spawns its judge model.</summary>
+    /// <remarks>
+    ///     Always for pairwise judging (the comparison executor has no verifier path), otherwise when any criterion is
+    ///     model-decided. A malformed rubric (null list or entry) answers true, so the strict rule holds until
+    ///     <see cref="BenchmarkJudgePolicyValidator" /> rejects the rubric itself.
+    /// </remarks>
+    public static bool JudgeWillRun(BenchmarkJudgeRubricV1? rubric, string? mode) =>
+        string.Equals(BenchmarkJudgePolicyModes.Normalize(mode), BenchmarkJudgePolicyModes.Pairwise, StringComparison.Ordinal)
+        || rubric?.Criteria is null
+        || rubric.Criteria.Any(static criterion => criterion is null || !BenchmarkJudgeCriterionKinds.IsVerifiable(criterion.Kind));
 }

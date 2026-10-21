@@ -608,18 +608,21 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         }
 
         ValidateContext(draft.ContextTokens, "judge");
+        var rubric = draft.Rubric ?? BenchmarkJudgeRubricDefaults.Default();
         try
         {
             await using var lease = await _installedModels.AcquireAsync(modelName, cancellationToken);
+            // The auxiliary-asset rule guards the judge's spawn, so it applies exactly when this policy would spawn it.
             BenchmarkModelEligibility.ValidateJudge(lease.Snapshot,
                 await _classifications.GetByNameAsync(lease.Snapshot.ModelName, cancellationToken),
-                await LocalGgufModelKindClassifier.ReadDecisionTypeAsync(_ggufModels, lease.Snapshot.ModelName, cancellationToken));
+                await LocalGgufModelKindClassifier.ReadDecisionTypeAsync(_ggufModels, lease.Snapshot.ModelName, cancellationToken),
+                BenchmarkModelEligibility.JudgeWillRun(rubric, draft.Mode));
             var policy = new BenchmarkJudgePolicyV1(BenchmarkJudgePolicyModelV1.FromSnapshot(BenchmarkInstalledModelSnapshotMapper.ToSnapshot(lease.Snapshot)),
                 draft.ContextTokens,
                 BenchmarkJudgePolicyVersions.PromptVersion,
                 BenchmarkJudgePolicyVersions.OutputSchemaVersion,
                 BenchmarkJudgePolicySamplingV1.FromSnapshot(BenchmarkFrozenPolicies.DeterministicSampling()),
-                draft.Rubric ?? BenchmarkJudgeRubricDefaults.Default(),
+                rubric,
                 NormalizeReferenceAnswer(draft.ReferenceAnswer),
                 BenchmarkJudgePolicyModes.Normalize(draft.Mode));
             BenchmarkJudgePolicyValidator.Validate(policy);

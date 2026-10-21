@@ -4,7 +4,8 @@
 #
 # Offline, no host, no network. The scripts under test are copied into a temp checkout; every Python driver in
 # that copy is a dispatcher: the subcommands that talk to a node (auth, settings-ensure, model-ensure, download,
-# first-turn) print scripted records, everything else (snapshot-key, manifest, base-url) execs the REAL driver.
+# first-turn) print scripted records, everything else (snapshot-key, manifest, base-url, model-link) execs the REAL
+# driver.
 # dev-start/dev-status/dev-stop, aspire and curl are fakes driven by files in ${CTL}. HOME and XDG point into the
 # temp tree, so the xdg mirror never touches the real home.
 
@@ -97,7 +98,7 @@ FAKE = ("auth", "settings-ensure", "model-ensure", "download", "first-turn")
 
 def main():
     name = os.path.basename(sys.argv[0])
-    sub = next((a for a in sys.argv[1:] if a in FAKE + ("snapshot-key", "manifest", "base-url")), "")
+    sub = next((a for a in sys.argv[1:] if a in FAKE + ("snapshot-key", "manifest", "base-url", "model-link")), "")
     with open(os.path.join(ctl, "calls.log"), "a", encoding="utf-8") as log:
         log.write(sub + "\n")
     with open(os.path.join(ctl, f"{sub}.argv"), "w", encoding="utf-8") as log:
@@ -197,7 +198,7 @@ exit "$(cat "${LAB_TEST_CTL}/curl-exit" 2>/dev/null || echo 0)"
 SH
 chmod 755 "${REPO}/scripts/"*.sh "${REPO}/scripts/"*.py "${BIN}/"*
 
-TEST_ENV=(env -u GIT_DIR -u GIT_WORK_TREE -u XE_LAB_PLAN -u XE_ASPIRE_APPHOST -u XE_NODE_OPERATOR_SECRET_FILE -u XE_LLAMACPP_VARIANT -u XE_LLAMACPP_SERVER_PATH -u LAB_TEST_PROFILE_ONLY
+TEST_ENV=(env -u XE_LAB_MODEL_SOURCE_DIR -u GIT_DIR -u GIT_WORK_TREE -u XE_LAB_PLAN -u XE_ASPIRE_APPHOST -u XE_NODE_OPERATOR_SECRET_FILE -u XE_LLAMACPP_VARIANT -u XE_LLAMACPP_SERVER_PATH -u LAB_TEST_PROFILE_ONLY
   -u XDG_DATA_HOME HOME="${FAKE_HOME}" PATH="${BIN}:${PATH}" LAB_TEST_CTL="${CTL}" LAB_TEST_REAL="${REAL}"
   LAB_READY_TIMEOUT_SECONDS=5 LAB_PASSWORD="${PASSWORD}")
 
@@ -388,6 +389,8 @@ ctl model-ensure.out "installed\tfalse\n"
 run_lab --
 check "missing model without --download exits 2" "2" "${STATUS}"
 check_contains "missing model names --download" "--download" "${ERR}"
+check_contains "missing model names the failed link attempt" "could not be linked" "${ERR}"
+check "the link was attempted against the (empty) user store" "1" "$(calls model-link)"
 check "no download attempted" "0" "$(calls download)"
 ctl download.out "model\t${MODEL}\ntoken\ttok-renewed-opaque\ntokenRenewals\t1\ndownloaded\ttrue\nphase\tCompleted\n"
 ctl model-ensure.2.out "installed\ttrue\npreviouslySelected\t${MODEL}\nselected\t${MODEL}\nresident\tfalse\n"
@@ -427,6 +430,63 @@ run_lab -- --download --model "org/Unknown-GGUF:Q4_0"
 check "OTHER with no download source => exit 2" "2" "${STATUS}"
 check "no download attempted for an unknown source" "0" "$(calls download)"
 check_contains "the unknown model is named" "org/Unknown-GGUF:Q4_0" "${ERR}"
+rm -f "${CTL}/model-ensure.2.out"
+
+echo "== 7b. missing model linked from the user-level store =="
+STORE="${FAKE_HOME}/.local/share/XE-Local-AI-Engine/models"
+LAB_MODELS="${REPO}/.tmp/lab/models"
+WEIGHT="org-model-gguf-Q4_K_M-0123.gguf"
+PROJECTOR="org-model-gguf-projector-0123.gguf"
+mkdir -p "${STORE}"
+printf 'weights' >"${STORE}/${WEIGHT}"
+printf 'projector' >"${STORE}/${PROJECTOR}"
+echo '{"SchemaVersion":2,"LocalFileName":"'"${WEIGHT}"'"}' >"${STORE}/${WEIGHT}.xe-model.json"
+cat >"${STORE}/index.json" <<JSON
+{ "Models": [ { "ModelName": "${MODEL}", "FileName": "${WEIGHT}", "LocalPath": "${STORE}/${WEIGHT}",
+  "SizeBytes": 7, "Sha256": "$(printf 'weights' | sha256sum | cut -d' ' -f1)",
+  "ProjectorLocalPath": "${STORE}/${PROJECTOR}", "ProjectorSizeBytes": 9,
+  "ProjectorSha256": "$(printf 'projector' | sha256sum | cut -d' ' -f1)" } ] }
+JSON
+STORE_INDEX="$(cat "${STORE}/index.json")"
+lab_index() {
+  python3 -c 'import json, sys; m = json.load(open(sys.argv[1]))["Models"]; print(len(m), m[0]["LocalPath"], m[0]["ProjectorLocalPath"])' \
+    "${LAB_MODELS}/index.json" 2>/dev/null || echo "<no lab index>"
+}
+ctl model-ensure.out "installed\tfalse\n"
+ctl model-ensure.2.out "installed\ttrue\npreviouslySelected\t${MODEL}\nselected\t${MODEL}\nresident\tfalse\n"
+run_lab --
+check "linked from the store exits 0" "0" "${STATUS}"
+check "link: model ran" "ran" "$(mf phases.model.status)"
+check_contains "link: reason names the store" "linked from ${STORE}" "$(mf phases.model.reason)"
+check "link: one model-link call" "1" "$(calls model-link)"
+check "link: model-ensure re-run after the link" "2" "$(calls model-ensure)"
+check "link: no download" "0" "$(calls download)"
+check "link: the weights are a hard link (same inode)" "$(stat -c %i "${STORE}/${WEIGHT}")" "$(stat -c %i "${LAB_MODELS}/${WEIGHT}" 2>/dev/null)"
+check "link: the projector is a hard link (same inode)" "$(stat -c %i "${STORE}/${PROJECTOR}")" \
+  "$(stat -c %i "${LAB_MODELS}/${PROJECTOR}" 2>/dev/null)"
+CHECKS=$((CHECKS + 1))
+if [[ ! -f "${LAB_MODELS}/${WEIGHT}.xe-model.json" || "$(stat -c %i "${LAB_MODELS}/${WEIGHT}.xe-model.json")" == "$(stat -c %i "${STORE}/${WEIGHT}.xe-model.json")" ]]; then
+  echo "  FAIL: link: the sidecar must be a copy, not a link" >&2; FAILED=$((FAILED + 1))
+fi
+check "link: the lab index names the lab paths" "1 ${LAB_MODELS}/${WEIGHT} ${LAB_MODELS}/${PROJECTOR}" "$(lab_index)"
+check_contains "link: the driver reports two members linked" "$(printf 'members\t2')" "$(cat "${LAB}/evidence/lab-up.log")"
+check "link: the store index is untouched" "${STORE_INDEX}" "$(cat "${STORE}/index.json")"
+INODE="$(stat -c %i "${LAB_MODELS}/${WEIGHT}")"
+run_lab --
+check "link again: idempotent rerun exits 0" "0" "${STATUS}"
+check "link again: same inode" "${INODE}" "$(stat -c %i "${LAB_MODELS}/${WEIGHT}" 2>/dev/null)"
+check "link again: still one index entry" "1 ${LAB_MODELS}/${WEIGHT} ${LAB_MODELS}/${PROJECTOR}" "$(lab_index)"
+run_lab -- --no-link
+check "--no-link exits 2" "2" "${STATUS}"
+check "--no-link: no link attempted" "0" "$(calls model-link)"
+check_contains "--no-link names --download" "--download" "${ERR}"
+run_lab -- --model "org/Absent-GGUF:Q4_0"
+check "a model the store lacks exits 2" "2" "${STATUS}"
+check_contains "a model the store lacks names --download" "--download" "${ERR}"
+check "a model the store lacks: link attempted once" "1" "$(calls model-link)"
+run_lab XE_LAB_MODEL_SOURCE_DIR="${TEMP_ROOT}/no-store" --
+check "XE_LAB_MODEL_SOURCE_DIR without an index exits 2" "2" "${STATUS}"
+check_contains "XE_LAB_MODEL_SOURCE_DIR is the dir that was tried" "${TEMP_ROOT}/no-store" "${ERR}"
 rm -f "${CTL}/model-ensure.2.out"
 
 echo "== 8. settings not verified =="

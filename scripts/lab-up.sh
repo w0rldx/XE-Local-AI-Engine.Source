@@ -16,6 +16,8 @@
 #   auth        always: first-run setup if required, then login; the token goes to .tmp/lab/<profile>/token.
 #   settings    PUT only the node settings that differ from the profile's `settings`.
 #   model       the model is installed, selected as default, the others ejected; resident is reported honestly.
+#               A model missing from the lab's models dir is first hard-linked from the user-level store when that
+#               store has it (lab-driver.py model-link; reason `linked from <dir>`), unless --download or --no-link.
 #   first-turn  opt-in (--until first-turn): one canned prompt, transcript in the evidence dir.
 #   The host is left running: this is a lab. Stop it with scripts/dev-stop.sh.
 #
@@ -30,6 +32,7 @@
 #   --fresh          Start from a clean node: delete this checkout's node state (refused while its host runs).
 #   --snapshot       After settings: stop the host, save the node state to .tmp/lab/<profile>/snapshot, restart.
 #   --download       Install a missing model through the node from the profile's `modelSource`.
+#   --no-link        Do not hard-link a missing model from the user-level store (XE_LAB_MODEL_SOURCE_DIR).
 #   --no-build       Pass --no-build to dev-start.sh.
 #   --cpu            Accept the node's managed llama.cpp runtime. Without this flag the caller must export the
 #                    bring-your-own CUDA llama-server (XE_LLAMACPP_SERVER_PATH), or the run is refused (exit 2):
@@ -46,14 +49,16 @@
 # nothing here deletes a lab.
 #
 # Environment: LAB_EMAIL / LAB_PASSWORD (default admin@localhost.test / !Demo1234567), LAB_READY_TIMEOUT_SECONDS
-# (default 240). Every driver call is appended to .tmp/lab/<profile>/evidence/lab-up.log, password and token redacted.
+# (default 240), XE_LAB_MODEL_SOURCE_DIR (the models dir a missing model is linked from; default
+# ~/.local/share/XE-Local-AI-Engine/models). Every driver call is appended to .tmp/lab/<profile>/evidence/lab-up.log, password and token redacted.
 #
 # Prerequisites: python3 and curl on PATH; aspire for the host phase (dev-start.sh checks it).
 #
 # Exit codes:
 #   0   — the requested phases are in place; the manifest was written
-#   1   — an interaction failed (transport, auth, contract, settings not verified, download)
-#   2   — prerequisite missing / usage error (no XE_LLAMACPP_SERVER_PATH without --cpu, profile missing, model absent without --download, lab owned by
+#   1   — an interaction failed (transport, auth, contract, settings not verified, download, model link)
+#   2   — prerequisite missing / usage error (no XE_LLAMACPP_SERVER_PATH without --cpu, profile missing, model absent without --download and not
+#         linkable from XE_LAB_MODEL_SOURCE_DIR, lab owned by
 #         another plan without --take-over, XE_ASPIRE_APPHOST
 #         naming another checkout's AppHost, XE_NODE_OPERATOR_SECRET_FILE outside this checkout's .data)
 #   3   — this checkout's host is running but not for this lab (its environment differs), or --fresh while it runs
@@ -104,6 +109,7 @@ UNTIL=""
 FRESH="false"
 SNAPSHOT_REQ="false"
 DOWNLOAD="false"
+LINK="true"
 NO_BUILD="false"
 CPU="false"
 JSON="false"
@@ -121,6 +127,7 @@ while [[ $# -gt 0 ]]; do
     --fresh)    FRESH="true"; shift ;;
     --snapshot) SNAPSHOT_REQ="true"; shift ;;
     --download) DOWNLOAD="true"; shift ;;
+    --no-link)  LINK="false"; shift ;;
     --no-build) NO_BUILD="true"; shift ;;
     --cpu)      CPU="true"; shift ;;
     --json)     JSON="true"; shift ;;
@@ -233,6 +240,7 @@ PROFILE_MODEL="$(record_value profileModel "${PROFILE_RECORDS}")"
 UNTIL="${UNTIL:-$(record_value stop "${PROFILE_RECORDS}")}"
 MODELS_DIR="$(record_value modelsDir "${PROFILE_RECORDS}")"
 [[ "${MODELS_DIR}" == /* ]] || MODELS_DIR="${ROOT}/${MODELS_DIR}"
+MODEL_SOURCE_DIR="${XE_LAB_MODEL_SOURCE_DIR:-${HOME}/.local/share/XE-Local-AI-Engine/models}"
 FIRST_TURN_PROMPT="$(record_value firstTurnPrompt "${PROFILE_RECORDS}")"
 SOURCE_REPO="$(record_value sourceRepo "${PROFILE_RECORDS}")"
 SOURCE_FILE="$(record_value sourceFile "${PROFILE_RECORDS}")"
@@ -515,15 +523,37 @@ ensure_model() {
   node_drive model-ensure --model "${MODEL}" --eject-others
 }
 
+# Hard-links MODEL from the user-level store into the lab's models dir. 0 = linked and now installed, 3 = the store
+# has no usable entry; any other failure dies.
+link_model() {
+  local out status=0
+  out="$(run_driver python3 "${LAB_DRIVER}" model-link --model "${MODEL}" --from "${MODEL_SOURCE_DIR}" \
+    --into "${MODELS_DIR}")" || status=$?
+  [[ "${status}" -eq 3 ]] && return 3
+  [[ "${status}" -eq 0 ]] || die 1 "linking ${MODEL} from ${MODEL_SOURCE_DIR} failed (see ${DRIVER_LOG})."
+  [[ "$(record_value method "${out}")" != "copy" ]] || log "the models dirs are on different filesystems: ${MODEL} was copied, not linked."
+}
+
 phase_model() {
-  local records downloaded="false"
+  local records downloaded="false" linked="false" link_note="--no-link"
   records="$(ensure_model)" || die 1 "model-ensure failed (see ${DRIVER_LOG})."
+  if [[ "$(record_value installed "${records}")" != "true" && "${DOWNLOAD}" != "true" && "${LINK}" == "true" ]]; then
+    link_note="not in ${MODEL_SOURCE_DIR}"
+    if link_model; then
+      log "linked ${MODEL} from ${MODEL_SOURCE_DIR}"
+      records="$(ensure_model)" || die 1 "model-ensure failed after the link (see ${DRIVER_LOG})."
+      [[ "$(record_value installed "${records}")" == "true" ]] \
+        || die 1 "model ${MODEL} is still not installed after linking it from ${MODEL_SOURCE_DIR} (see the host log)."
+      linked="true"
+    fi
+  fi
   if [[ "$(record_value installed "${records}")" != "true" ]]; then
     local provider_error
     provider_error="$(record_value providerError "${records}")"
     [[ -z "${provider_error}" ]] \
       || log "the node lists no GGUF at all (${provider_error}); a models dir of symlinks is rejected, use hard links or copies."
-    [[ "${DOWNLOAD}" == "true" ]] || die 2 "model ${MODEL} is not installed; re-run with --download to install it."
+    [[ "${DOWNLOAD}" == "true" ]] \
+      || die 2 "model ${MODEL} is not installed and could not be linked (${link_note}); re-run with --download to install it."
     resolve_download_source
     log "downloading ${SOURCE_REPO}/${SOURCE_FILE} through the node"
     records="$(node_drive download --model "${MODEL}" --repo "${SOURCE_REPO}" --file "${SOURCE_FILE}" \
@@ -553,6 +583,7 @@ phase_model() {
   local changes=()
   [[ "$(record_value previouslySelected "${records}")" == "${MODEL}" ]] || changes+=(selected)
   [[ "${downloaded}" == "false" ]] || changes+=(downloaded)
+  [[ "${linked}" == "false" ]] || changes+=("linked from ${MODEL_SOURCE_DIR}")
   [[ -z "${ejected}" ]] || changes+=("ejected=${ejected}")
   if [[ "${#changes[@]}" -eq 0 ]]; then
     PHASE_STATE[model]="skipped:already installed and selected, nothing to eject, resident=${MODEL_RESIDENT}"

@@ -3,7 +3,8 @@
 
 Like scripts/gpu-smoke-driver.py, whose REST and SignalR client it loads by import, this module does the *talking*
 and none of the *judging*. Every subcommand prints TAB-separated ``key<TAB>value`` records and exits non-zero only
-when an interaction failed (transport, auth, a response off-contract): 1 for that, 2 for a missing prerequisite.
+when an interaction failed (transport, auth, a response off-contract): 1 for that, 2 for a missing prerequisite, 3 when
+model-link finds no usable entry for the model in its source dir.
 "Not installed" or "not resident" are verdicts, reported as records for lab-up.sh to judge.
 
 Subcommands:
@@ -14,6 +15,8 @@ Subcommands:
   download         install a GGUF through the node's own model-fit/download and poll it to a terminal phase
   first-turn       one canned chat turn over the chat hub; wire events and the answer land in the evidence dir
   manifest         write the handoff manifest JSON (pure file I/O)
+  model-link       hard-link an installed model (weights, projector, sidecars) from another models dir, typically the
+                   user-level store, into the lab's and merge its index.json entry; exit 3 when the source lacks it
 
 Every REST call is appended to ``<evidence>/http.jsonl`` when it happens (hub long polls excepted, like the model
 matrix driver). Request bodies have password fields redacted. Selecting a model writes the node default only; it does
@@ -24,9 +27,12 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import errno
 import hashlib
 import importlib.util
 import json
+import os
+import shutil
 import sys
 import time
 import urllib.parse
@@ -46,6 +52,10 @@ DOWNLOAD_ACTIVE = ("running", "queued", "pending", "starting", "verifying", "fin
 
 class PrerequisiteError(RuntimeError):
     """Something the step needs is missing; nothing was talked to or judged."""
+
+
+class NotInSourceError(RuntimeError):
+    """model-link: the source models dir has no usable entry for the model (exit 3; lab-up.sh asks for --download)."""
 
 
 def now() -> str:
@@ -342,6 +352,86 @@ def command_manifest(args: argparse.Namespace) -> int:
     return 0
 
 
+# The registry entry fields naming a member file, each with the entry fields that record its size and SHA-256
+# (GgufModelRegistryEntry). Paths in the sidecar are relative, so a sidecar copy stays valid in another models dir.
+LINK_MEMBERS = (("LocalPath", "SizeBytes", "Sha256"), ("ProjectorLocalPath", "ProjectorSizeBytes", "ProjectorSha256"))
+
+
+def sha256_of(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def already_linked(source: Path, target: Path, size: object, sha: object) -> bool:
+    if not target.exists():
+        return False
+    if os.path.samefile(source, target):
+        return True
+    # A copy (cross-device fallback) is kept when it still matches the entry's recorded size and hash.
+    return isinstance(sha, str) and target.stat().st_size == size and sha256_of(target) == sha.lower()
+
+
+def link_or_copy(source: Path, target: Path) -> str:
+    target.unlink(missing_ok=True)
+    try:
+        os.link(source, target)
+        return "link"
+    except OSError as error:
+        if error.errno != errno.EXDEV:  # the two dirs are on different filesystems
+            raise
+    shutil.copy2(source, target)
+    return "copy"
+
+
+def command_model_link(args: argparse.Namespace) -> int:
+    """The node rejects a models dir of symlinks (sidecar check): members are hard links, or copies across devices."""
+    source_dir, target_dir = Path(args.source), Path(args.into)
+    try:
+        models = json.loads((source_dir / "index.json").read_text(encoding="utf-8")).get("Models") or []
+    except FileNotFoundError as error:
+        raise NotInSourceError(f"{source_dir}/index.json does not exist") from error
+    except (OSError, json.JSONDecodeError, AttributeError) as error:
+        raise NotInSourceError(f"{source_dir}/index.json is not a readable registry manifest: {error}") from error
+    entry = next((m for m in models if isinstance(m, dict) and m.get("ModelName") == args.model), None)
+    if entry is None:
+        raise NotInSourceError(f"{source_dir}/index.json has no entry named {args.model}")
+    members = [
+        (key, Path(entry[key]), entry.get(size), entry.get(sha)) for key, size, sha in LINK_MEMBERS if entry.get(key)
+    ]
+    for key, path, _, _ in members:
+        if not path.is_file():
+            raise NotInSourceError(f"{args.model}: {key} {path} is missing from the source")
+    target_dir.mkdir(parents=True, exist_ok=True)
+    linked = dict(entry)
+    methods: set[str] = set()
+    for key, path, size, sha in members:
+        target = target_dir / path.name
+        if already_linked(path, target, size, sha):
+            methods.add("existing")
+        else:
+            methods.add(link_or_copy(path, target))
+        linked[key] = str(target)
+        # The sidecar is copied, never linked: the registry may rewrite it in place.
+        sidecar = path.with_name(path.name + ".xe-model.json")
+        if sidecar.is_file():
+            shutil.copyfile(sidecar, target_dir / sidecar.name)
+    index = target_dir / "index.json"
+    document = json.loads(index.read_text(encoding="utf-8")) if index.exists() else {"Models": []}
+    document["Models"] = [m for m in document.get("Models") or [] if m.get("ModelName") != args.model] + [linked]
+    staged = index.with_name("index.json.lab-link.tmp")
+    staged.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    staged.replace(index)
+    if "copy" in methods:
+        print(f"[lab-driver] model-link: {source_dir} and {target_dir} are on different filesystems; copied instead.")
+    emit("linked", args.model)
+    emit("members", len(members))
+    emit("method", "copy" if "copy" in methods else "link")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -355,6 +445,12 @@ def build_parser() -> argparse.ArgumentParser:
     manifest.add_argument("--set", action="append", default=[], metavar="KEY=VALUE")
     manifest.add_argument("--phase", action="append", default=[], metavar="NAME=STATUS:REASON")
     manifest.set_defaults(func=command_manifest)
+
+    link = sub.add_parser("model-link")
+    link.add_argument("--model", required=True)
+    link.add_argument("--from", dest="source", required=True)
+    link.add_argument("--into", required=True)
+    link.set_defaults(func=command_model_link)
 
     def node(name: str, func) -> argparse.ArgumentParser:
         parser_ = sub.add_parser(name)
@@ -387,6 +483,9 @@ def main(argv: list[str]) -> int:
     args = build_parser().parse_args(argv)
     try:
         return args.func(args)
+    except NotInSourceError as error:
+        print(f"[lab-driver] {args.command}: {error}", file=sys.stderr)
+        return 3
     except PrerequisiteError as error:
         print(f"[lab-driver] PREREQUISITE: {error}", file=sys.stderr)
         return 2

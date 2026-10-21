@@ -25,7 +25,10 @@ public sealed class BenchmarkJudgeRuntimeResolver : IBenchmarkJudgeRuntimeResolv
     {
         ArgumentNullException.ThrowIfNull(policy);
         await using var lease = await _installedModels.AcquireAsync(policy.Model.ModelName, cancellationToken);
-        BenchmarkModelEligibility.ValidateJudge(lease.Snapshot, await _classifications.GetByNameAsync(lease.Snapshot.ModelName, cancellationToken));
+        // The same decision the policy was saved under: a rubric of verifiable criteria only never spawns this model.
+        BenchmarkModelEligibility.ValidateJudge(lease.Snapshot,
+            await _classifications.GetByNameAsync(lease.Snapshot.ModelName, cancellationToken),
+            judgeWillRun: BenchmarkModelEligibility.JudgeWillRun(policy.Rubric, policy.Mode));
         if (!string.Equals(lease.Snapshot.ModelContentFingerprint, policy.Model.ModelContentFingerprint, StringComparison.Ordinal))
         {
             throw new BenchmarkEligibilityException("The installed judge model changed after the judge policy was created.");

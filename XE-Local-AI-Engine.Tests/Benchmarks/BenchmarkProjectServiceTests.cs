@@ -369,6 +369,100 @@ public sealed class BenchmarkProjectServiceTests
     }
 
     [Test]
+    public async Task Create_WithAnAuxiliaryAssetJudgeModel_AndAnAllVerifiableRubric_IsAccepted()
+    {
+        var context = new ServiceContext(judgeCarriesProjector: true);
+
+        _ = await context.Service.CreateAsync(new BenchmarkProjectDraft
+        {
+            Id = ProjectId,
+            Name = "Benchmark",
+            CoreTask = "task",
+            ContextTokens = 4096,
+            AgentDefinitionId = context.AgentId,
+            Judge = new BenchmarkJudgePolicyDraft
+            {
+                ModelName = "judge-model",
+                ContextTokens = 4096,
+                Rubric = BenchmarkJudgeRubricDefaults.Verifiable()
+            }
+        });
+
+        // Verifiable criteria never spawn the judge, so the model that would not run is not held to the rank-cohort rule.
+        AssertEx.NotNull(context.CreatedPolicy, "An all-verifiable rubric on an aux-asset judge model is accepted.");
+    }
+
+    [Test]
+    public async Task Create_WithAnAuxiliaryAssetJudgeModel_AndAPairwiseVerifiableRubric_IsRefused()
+    {
+        var context = new ServiceContext(judgeCarriesProjector: true);
+
+        var exception = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => context.Service.CreateAsync(new BenchmarkProjectDraft
+        {
+            Id = ProjectId,
+            Name = "Benchmark",
+            CoreTask = "task",
+            ContextTokens = 4096,
+            AgentDefinitionId = context.AgentId,
+            Judge = new BenchmarkJudgePolicyDraft
+            {
+                ModelName = "judge-model",
+                ContextTokens = 4096,
+                Rubric = BenchmarkJudgeRubricDefaults.Verifiable(),
+                Mode = BenchmarkJudgePolicyModes.Pairwise
+            }
+        }));
+
+        // Pairwise judging always spawns the judge, whatever the rubric says, so the rank-cohort rule applies.
+        AssertEx.True(exception.Message.Contains("auxiliary asset", StringComparison.Ordinal), exception.Message);
+    }
+
+    [Test]
+    public async Task Create_WithARubricWithoutCriteria_IsAValidationError()
+    {
+        var context = new ServiceContext();
+
+        var exception = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => context.Service.CreateAsync(new BenchmarkProjectDraft
+        {
+            Id = ProjectId,
+            Name = "Benchmark",
+            CoreTask = "task",
+            ContextTokens = 4096,
+            AgentDefinitionId = context.AgentId,
+            Judge = new BenchmarkJudgePolicyDraft
+            {
+                ModelName = "judge-model",
+                ContextTokens = 4096,
+                Rubric = new BenchmarkJudgeRubricV1(BenchmarkJudgePolicyVersions.RubricVersion, null!)
+            }
+        }));
+
+        // A malformed rubric reads as "the judge will run" before the validator refuses it as the validation error it always was, never a crash.
+        AssertEx.False(exception.Message.Contains("auxiliary asset", StringComparison.Ordinal), exception.Message);
+    }
+
+    [Test]
+    public async Task UpdateJudgePolicy_WithAnAuxiliaryAssetJudgeModel_AndAModelDecidedCriterion_IsRefused()
+    {
+        var context = new ServiceContext(judgeCarriesProjector: true);
+
+        var exception = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => context.Service.UpdateJudgePolicyAsync(ProjectId,
+            1,
+            new BenchmarkJudgePolicyDraft
+            {
+                ModelName = "judge-model",
+                ContextTokens = 4096,
+                Rubric = BenchmarkJudgeRubricDefaults.Default()
+            },
+            confirmRejudge: false));
+
+        // The default rubric is model-decided, so the judge would spawn: the rule applies the moment it is reachable.
+        AssertEx.True(exception.Message.Contains("auxiliary asset", StringComparison.Ordinal), exception.Message);
+        _ = context.Store.DidNotReceive().ActivateJudgePolicyAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<string>(),
+            Arg.Any<BenchmarkJudgeAttemptSeed?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task Create_WithAMissingOrIncompleteJudge_IsRejectedBeforePersistence()
     {
         var missing = new ServiceContext(judgeModelInstalled: false);
