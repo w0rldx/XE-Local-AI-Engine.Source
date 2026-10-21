@@ -245,6 +245,7 @@ public sealed partial class BenchmarkStore : IBenchmarkStore
             PrimaryModelOrigin = entity.PrimaryModelOrigin,
             ModelContentFingerprint = entity.ModelContentFingerprint,
             AgentName = entity.AgentName,
+            AgentDefinitionId = entity.AgentDefinitionId,
             AgentVersion = entity.AgentVersion,
             RequestedContextTokens = entity.RequestedContextTokens,
             PrimaryStatus = entity.PrimaryStatus,

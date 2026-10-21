@@ -23,6 +23,9 @@ public sealed record BenchmarkStartRunCommand
 
     public required long AgentVersion { get; init; }
 
+    /// <summary>The agent definition the run was frozen against, or <see langword="null" /> to stamp the project's agent.</summary>
+    public Guid? AgentDefinitionId { get; init; }
+
     public required int RequestedContextTokens { get; init; }
 
     public IBenchmarkFreezeCommitGuard? FreezeCommitGuard { get; init; }
@@ -155,6 +158,8 @@ public sealed record BenchmarkRunRecord
     public required string ModelContentFingerprint { get; init; }
 
     public required string AgentName { get; init; }
+
+    public required Guid AgentDefinitionId { get; init; }
 
     public required long AgentVersion { get; init; }
 

@@ -278,6 +278,12 @@ public sealed record BenchmarkRunStartRequest
     public required long ExpectedProjectVersion { get; init; }
 
     /// <summary>
+    ///     The agent variant to freeze, or <see langword="null" /> for the project's agent. Must name an existing Single
+    ///     agent definition; the runs of each variant form their own cells.
+    /// </summary>
+    public Guid? AgentDefinitionId { get; init; }
+
+    /// <summary>
     ///     The KV-cache type the run asked for, or <see langword="null" /> for Auto (freeze picks). Must already be
     ///     canonical — see <see cref="BenchmarkKvCacheType.TryNormalize" />.
     /// </summary>
@@ -349,6 +355,9 @@ public sealed class BenchmarkRunBatchItem
     public required string ModelName { get; init; }
 
     public required string? KvCacheType { get; init; }
+
+    /// <summary>The agent variant of this cell, or <see langword="null" /> for the project's agent.</summary>
+    public Guid? AgentDefinitionId { get; init; }
 }
 
 public sealed class BenchmarkRunBatchStartedItem
@@ -356,6 +365,9 @@ public sealed class BenchmarkRunBatchStartedItem
     public required string ModelName { get; init; }
 
     public required string? KvCacheType { get; init; }
+
+    /// <summary>The agent variant of this cell, or <see langword="null" /> for the project's agent.</summary>
+    public Guid? AgentDefinitionId { get; init; }
 
     public required IReadOnlyList<Guid> RunIds { get; init; }
 }
@@ -372,6 +384,9 @@ public sealed class BenchmarkRunBatchRejectedItem
     public required string ModelName { get; init; }
 
     public required string? KvCacheType { get; init; }
+
+    /// <summary>The agent variant of this cell, or <see langword="null" /> for the project's agent.</summary>
+    public Guid? AgentDefinitionId { get; init; }
 
     public required BenchmarkRunBatchRejectionKind Kind { get; init; }
 

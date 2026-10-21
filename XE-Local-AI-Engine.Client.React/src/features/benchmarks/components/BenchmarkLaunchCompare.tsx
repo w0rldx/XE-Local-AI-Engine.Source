@@ -19,17 +19,22 @@ import { useBenchmarkRunDetails } from "@/features/benchmarks/queries/useBenchma
 const maxListedFields = 6;
 
 /**
- * The run's model name, disambiguated by id only where the name repeats — which it does exactly when the operator is
- * comparing repeats of one build, the case where a bare name would make every column look the same.
+ * The run's model name, with its agent when the compared runs froze more than one agent variant, disambiguated by id
+ * only where that label repeats — which it does exactly when the operator is comparing repeats of one build, the case
+ * where a bare name would make every column look the same.
  */
 function columnLabels(runs: readonly BenchmarkRunDetail[]): string[] {
+	const agentOf = (run: BenchmarkRunDetail): string => `${run.agentName} v${run.agentVersion}`;
+	const withAgent = new Set(runs.map(agentOf)).size > 1;
+	const names = runs.map((run) => (withAgent ? `${run.primaryModelName} · ${agentOf(run)}` : run.primaryModelName));
 	const nameCounts = new Map<string, number>();
-	for (const run of runs) {
-		nameCounts.set(run.primaryModelName, (nameCounts.get(run.primaryModelName) ?? 0) + 1);
+	for (const name of names) {
+		nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
 	}
-	return runs.map((run) =>
-		(nameCounts.get(run.primaryModelName) ?? 0) > 1 ? `${run.primaryModelName} · ${run.id.slice(0, 8)}` : run.primaryModelName,
-	);
+	return runs.map((run, index) => {
+		const name = names[index] ?? run.primaryModelName;
+		return (nameCounts.get(name) ?? 0) > 1 ? `${name} · ${run.id.slice(0, 8)}` : name;
+	});
 }
 
 const primaryRows = (runs: readonly BenchmarkRunDetail[]): BenchmarkEvidenceDiffRow[] =>

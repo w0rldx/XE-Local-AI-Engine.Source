@@ -73,21 +73,24 @@ public sealed class BenchmarkPairwiseTests
                 RunId = RunA,
                 TaskCaseId = null,
                 TaskInputHash = "hash-one",
-                ModelName = "model-a"
+                ModelName = "model-a",
+                AgentDefinitionId = Guid.Empty
             },
             new()
             {
                 RunId = RunB,
                 TaskCaseId = null,
                 TaskInputHash = "hash-one",
-                ModelName = "model-b"
+                ModelName = "model-b",
+                AgentDefinitionId = Guid.Empty
             },
             new()
             {
                 RunId = RunC,
                 TaskCaseId = null,
                 TaskInputHash = "hash-two",
-                ModelName = "model-c"
+                ModelName = "model-c",
+                AgentDefinitionId = Guid.Empty
             }
         ];
 
@@ -95,6 +98,25 @@ public sealed class BenchmarkPairwiseTests
 
         AssertEx.Equal(expected: 1, plan.Slots.Count);
         AssertEx.True(plan.Slots.All(static slot => slot.RunAId != RunC && slot.RunBId != RunC), "A run answering another case is in another group.");
+    }
+
+    [Test]
+    public void Plan_TwoAgentVariantsOfOneModel_ArePairedButOneVariantsRepeatsAreNot()
+    {
+        var projectAgent = new Guid("88888888-0000-0000-0000-000000000000");
+        var variant = new Guid("99999999-0000-0000-0000-000000000000");
+        BenchmarkPairwiseCandidate[] candidates =
+        [
+            Candidate(RunA, ItemZero, "model-9b", projectAgent),
+            Candidate(RunB, ItemZero, "model-9b", variant),
+            Candidate(RunC, ItemZero, "model-9b", variant)
+        ];
+
+        var plan = BenchmarkPairwisePlanner.Plan(candidates, BenchmarkPairwisePolicy.MaximumRuns);
+
+        // The skip key is (model, agent): A pairs with each variant run, and the variant's two repeats never pair.
+        AssertEx.Equal(expected: 2, plan.Slots.Count);
+        AssertEx.True(plan.Slots.All(static slot => slot.RunAId == RunA || slot.RunBId == RunA), "Every pair must cross the two agent variants.");
     }
 
     [Test]
@@ -434,13 +456,14 @@ public sealed class BenchmarkPairwiseTests
             Version = 1
         };
 
-    private static BenchmarkPairwiseCandidate Candidate(Guid run, Guid item, string cell) =>
+    private static BenchmarkPairwiseCandidate Candidate(Guid run, Guid item, string cell, Guid agent = default) =>
         new()
         {
             RunId = run,
             TaskCaseId = item,
             TaskInputHash = "hash-" + item,
-            ModelName = cell
+            ModelName = cell,
+            AgentDefinitionId = agent
         };
 
     /// <summary>Item 0: RunA (27B) and RunB (9B); item 1: RunC (27B) and RunD (9B).</summary>
@@ -478,7 +501,8 @@ public sealed class BenchmarkPairwiseTests
             RunId = run,
             TaskCaseId = null,
             TaskInputHash = string.Empty,
-            ModelName = "model-" + run
+            ModelName = "model-" + run,
+            AgentDefinitionId = Guid.Empty
         })
     ];
 

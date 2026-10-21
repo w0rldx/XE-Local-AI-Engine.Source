@@ -3,7 +3,13 @@ import { BenchmarkConfirmationDialog } from "@/features/benchmarks/components/Be
 import { BenchmarkLaunchMatrix } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
 import type { BenchmarksPageController } from "@/features/benchmarks/hooks/useBenchmarksPageController";
 
-export function BenchmarkPageDialogs({ controller }: { readonly controller: BenchmarksPageController }) {
+interface BenchmarkPageDialogsProps {
+	readonly controller: BenchmarksPageController;
+	/** The agent definitions a benchmark may run, for the matrix's agent-variant axis. */
+	readonly agents: readonly { id: string; name: string }[];
+}
+
+export function BenchmarkPageDialogs({ controller, agents }: BenchmarkPageDialogsProps) {
 	const {
 		t,
 		detail,
@@ -33,6 +39,8 @@ export function BenchmarkPageDialogs({ controller }: { readonly controller: Benc
 			>
 				<BenchmarkLaunchMatrix
 					models={modelsQuery.data ?? []}
+					agents={agents}
+					projectAgentId={detail?.agentDefinitionId ?? ""}
 					leafItemCount={leafItemCount}
 					medianRunMs={medianRunMs}
 					rejected={matrixRejections}

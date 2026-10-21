@@ -136,6 +136,10 @@ export function useBenchmarkRunActions({ detail, selectedProjectId, runs, select
 				modelName: cell.primaryModelName,
 				expectedProjectVersion: detail.version,
 				kvCacheType: benchmarkKvCacheTypes.find((type) => type === cell.kvCacheType) ?? null,
+				// A variant cell re-runs its own variant; re-running it on the project's agent would measure another cell.
+				...(cell.agentDefinitionId === "" || cell.agentDefinitionId === detail.agentDefinitionId
+					? {}
+					: { agentDefinitionId: cell.agentDefinitionId }),
 				repeatMode,
 				answerVarianceTemperature: repeatMode === "AnswerVariance" ? answerVarianceTemperature : null,
 			},

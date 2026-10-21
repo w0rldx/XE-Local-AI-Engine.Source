@@ -28,6 +28,10 @@ export interface BenchmarkCell {
 	primaryModelName: string;
 	modelContentFingerprint: string;
 	kvCacheType: string | null;
+	/** The agent definition the cell's runs froze: the project's own agent, or a launch-time variant of it. */
+	agentDefinitionId: string;
+	agentName: string;
+	agentVersion: number | null;
 	repeatGroupId: string | null;
 	repeatIndex: number | null;
 	/** The mean over the scorable items, or null when the cell is excluded. */
@@ -51,6 +55,9 @@ export const toBenchmarkCell = (value: CellResponse): BenchmarkCell => ({
 	primaryModelName: value.primaryModelName,
 	modelContentFingerprint: value.modelContentFingerprint,
 	kvCacheType: value.kvCacheType ?? null,
+	agentDefinitionId: value.agentDefinitionId ?? "",
+	agentName: value.agentName,
+	agentVersion: value.agentVersion ?? null,
 	repeatGroupId: value.repeatGroupId ?? null,
 	repeatIndex: value.repeatIndex ?? null,
 	quality: value.quality ?? null,
@@ -187,10 +194,22 @@ export function benchmarkPairedDeltaFor(
 /** `+6.2` / `−1.4`: the sign is the whole reading, so it is always printed. */
 export const formatBenchmarkDelta = (value: number): string => `${value >= 0 ? "+" : "−"}${Math.abs(value).toFixed(1)}`;
 
-/** `owner/Repo Q4_K_M · q8_0` — enough to tell two cells of one project apart in a picker. */
-export const benchmarkCellLabel = (cell: BenchmarkCell, autoLabel: string): string => {
+/**
+ * Whether the listed cells ran more than one agent definition. Only then does a cell need its agent named: a project
+ * that never launched a variant reads exactly as it did before agent variants existed.
+ */
+export const hasBenchmarkAgentVariants = (cells: readonly BenchmarkCell[]): boolean =>
+	new Set(cells.map((cell) => cell.agentDefinitionId)).size > 1;
+
+/** `Summariser v3`, or the bare name when the node reported no version. */
+export const benchmarkCellAgentLabel = (cell: BenchmarkCell): string =>
+	cell.agentVersion === null ? cell.agentName : `${cell.agentName} v${cell.agentVersion}`;
+
+/** `owner/Repo Q4_K_M · q8_0` — enough to tell two cells of one project apart in a picker; `withAgent` adds the variant. */
+export const benchmarkCellLabel = (cell: BenchmarkCell, autoLabel: string, withAgent = false): string => {
 	const repeat = cell.repeatIndex === null ? "" : ` #${cell.repeatIndex}`;
-	return `${cell.primaryModelName} · ${cell.kvCacheType ?? autoLabel}${repeat}`;
+	const agent = withAgent ? ` · ${benchmarkCellAgentLabel(cell)}` : "";
+	return `${cell.primaryModelName} · ${cell.kvCacheType ?? autoLabel}${agent}${repeat}`;
 };
 
 /**

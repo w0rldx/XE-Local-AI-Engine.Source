@@ -34,6 +34,9 @@ public sealed class StartBenchmarkRunRequest
     public string ModelName { get; init; } = string.Empty;
     public long ExpectedProjectVersion { get; init; }
 
+    /// <summary>The agent variant to run, or omitted for the project's agent. Must name an existing Single agent definition.</summary>
+    public Guid? AgentDefinitionId { get; init; }
+
     /// <summary><c>f16</c>, <c>q8_0</c>, <c>q4_0</c>, or <see langword="null" /> for Auto (the node picks).</summary>
     public string? KvCacheType { get; init; }
 
@@ -55,13 +58,16 @@ public sealed class StartBenchmarkRunRequest
     public double? AnswerVarianceTemperature { get; init; }
 }
 
-/// <summary>One cell of the launch matrix: a model, optionally pinned to a KV-cache type.</summary>
+/// <summary>One cell of the launch matrix: a model, optionally pinned to a KV-cache type and an agent variant.</summary>
 public sealed class StartBenchmarkRunBatchItem
 {
     public string ModelName { get; init; } = string.Empty;
 
     /// <summary><c>f16</c>, <c>q8_0</c>, <c>q4_0</c>, or <see langword="null" /> for Auto.</summary>
     public string? KvCacheType { get; init; }
+
+    /// <inheritdoc cref="StartBenchmarkRunRequest.AgentDefinitionId" />
+    public Guid? AgentDefinitionId { get; init; }
 }
 
 /// <summary>Enqueues a whole model × KV-type matrix in one call.</summary>
@@ -97,6 +103,9 @@ public sealed class StartedBenchmarkRunBatchItemResponse
     public required string ModelName { get; init; }
     public string? KvCacheType { get; init; }
 
+    /// <summary>The agent variant the item named, echoed; null for the project's agent.</summary>
+    public Guid? AgentDefinitionId { get; init; }
+
     /// <summary>Warm-up first when one was requested, then the measured repeats.</summary>
     public IReadOnlyList<Guid> RunIds { get; init; } = [];
 }
@@ -106,6 +115,9 @@ public sealed class RejectedBenchmarkRunBatchItemResponse
 {
     public required string ModelName { get; init; }
     public string? KvCacheType { get; init; }
+
+    /// <inheritdoc cref="StartedBenchmarkRunBatchItemResponse.AgentDefinitionId" />
+    public Guid? AgentDefinitionId { get; init; }
 
     /// <summary>A <see cref="BenchmarkErrorCode" /> name — the same vocabulary a single-run failure uses.</summary>
     public required string Code { get; init; }
@@ -184,6 +196,10 @@ public class BenchmarkRunSummaryResponse
     public LocalModelOrigin? PrimaryModelOrigin { get; init; }
     public required string ModelContentFingerprint { get; init; }
     public required string AgentName { get; init; }
+
+    /// <summary>The agent definition the run was frozen against; two agent variants of one model differ only here.</summary>
+    public Guid AgentDefinitionId { get; init; }
+
     public long AgentVersion { get; init; }
     public int RequestedContextTokens { get; init; }
     public BenchmarkPrimaryStatus PrimaryStatus { get; init; }

@@ -26,6 +26,11 @@ function renderMatrix(props: Partial<React.ComponentProps<typeof BenchmarkLaunch
 	const view = renderWithProviders(
 		<BenchmarkLaunchMatrix
 			models={[model("owner/Repo:Q4_K_M"), model("owner/Repo:Q8_0")]}
+			agents={[
+				{ id: "agent-variant", name: "Assistant (terse)" },
+				{ id: "agent-project", name: "Assistant" },
+			]}
+			projectAgentId="agent-project"
 			leafItemCount={1}
 			medianRunMs={null}
 			rejected={[]}
@@ -125,11 +130,90 @@ describe("BenchmarkLaunchMatrix", () => {
 	it("lists the combinations the node refused", () => {
 		renderMatrix({
 			rejected: [
-				{ modelName: "owner/Repo:Q8_0", kvCacheType: "q4_0", code: "UnsupportedKvCacheType", message: "Needs a GPU build." },
+				{
+					modelName: "owner/Repo:Q8_0",
+					kvCacheType: "q4_0",
+					agentDefinitionId: null,
+					code: "UnsupportedKvCacheType",
+					message: "Needs a GPU build.",
+				},
 			],
 		});
 
 		expect(screen.getByTestId("benchmark-matrix-rejected").textContent).toContain("owner/Repo:Q8_0 · q4_0 — Needs a GPU build.");
+	});
+
+	// The project's agent is the default variant: preselected, listed first, and the last one standing.
+	it("preselects the project's agent first and never lets the agent axis go empty", () => {
+		renderMatrix();
+
+		const agentBoxes = screen.getAllByTestId(/^benchmark-matrix-agent-/).map((box) => box.getAttribute("data-testid"));
+		expect(agentBoxes).toEqual(["benchmark-matrix-agent-agent-project", "benchmark-matrix-agent-agent-variant"]);
+		const projectAgent = screen.getByTestId("benchmark-matrix-agent-agent-project") as HTMLInputElement;
+		expect(projectAgent.checked).toBe(true);
+
+		fireEvent.click(projectAgent);
+
+		expect(projectAgent.checked).toBe(true);
+	});
+
+	// Each extra agent runs every model × KV combination again, so the count and the request both multiply by it.
+	it("multiplies the combinations by the agent variants and names a variant only when it is not the project's agent", () => {
+		const { onSubmit } = renderMatrix({ leafItemCount: 2 });
+
+		fireEvent.click(screen.getByTestId("benchmark-matrix-model-owner/Repo:Q4_K_M"));
+		fireEvent.click(screen.getByTestId("benchmark-matrix-model-owner/Repo:Q8_0"));
+		fireEvent.click(screen.getByTestId("benchmark-matrix-kv-f16"));
+		fireEvent.click(screen.getByTestId("benchmark-matrix-agent-agent-variant"));
+
+		expect(screen.getByTestId("benchmark-matrix-summary").textContent).toBe("8 combinations × 2 task items × 1 runs = 16 runs");
+
+		fireEvent.click(screen.getByTestId("benchmark-matrix-start"));
+
+		// Two models × (Auto, f16) × (project agent, variant). The project's agent rides as an OMITTED id, which the node
+		// reads as the project's own agent.
+		expect(onSubmit.mock.calls[0]?.[0].items).toEqual([
+			{ modelName: "owner/Repo:Q4_K_M" },
+			{ modelName: "owner/Repo:Q4_K_M", agentDefinitionId: "agent-variant" },
+			{ modelName: "owner/Repo:Q4_K_M", kvCacheType: "f16" },
+			{ modelName: "owner/Repo:Q4_K_M", kvCacheType: "f16", agentDefinitionId: "agent-variant" },
+			{ modelName: "owner/Repo:Q8_0" },
+			{ modelName: "owner/Repo:Q8_0", agentDefinitionId: "agent-variant" },
+			{ modelName: "owner/Repo:Q8_0", kvCacheType: "f16" },
+			{ modelName: "owner/Repo:Q8_0", kvCacheType: "f16", agentDefinitionId: "agent-variant" },
+		]);
+	});
+
+	// A second agent doubles the runs, so a matrix under the cap with one agent can cross it with two.
+	it("counts the agent variants against the node's per-request run cap", () => {
+		renderMatrix({ leafItemCount: 20 });
+
+		fireEvent.click(screen.getByTestId("benchmark-matrix-model-owner/Repo:Q4_K_M"));
+		fireEvent.change(screen.getByTestId("benchmark-matrix-repeat-count"), { target: { value: "3" } });
+		expect(screen.queryByTestId("benchmark-matrix-over-cap")).toBeNull();
+
+		fireEvent.click(screen.getByTestId("benchmark-matrix-agent-agent-variant"));
+
+		expect(screen.getByTestId("benchmark-matrix-over-cap").textContent).toContain("agent variants");
+		expect((screen.getByTestId("benchmark-matrix-start") as HTMLButtonElement).disabled).toBe(true);
+	});
+
+	it("names the agent variant of a refused combination", () => {
+		renderMatrix({
+			rejected: [
+				{
+					modelName: "owner/Repo:Q8_0",
+					kvCacheType: null,
+					agentDefinitionId: "agent-variant",
+					code: "InvalidRequest",
+					message: "Not a single agent.",
+				},
+			],
+		});
+
+		expect(screen.getByTestId("benchmark-matrix-rejected").textContent).toContain(
+			"owner/Repo:Q8_0 · auto · Assistant (terse) — Not a single agent.",
+		);
 	});
 
 	// Answer variance is a different experiment, not a flag on the same one: the request carries the mode, and the

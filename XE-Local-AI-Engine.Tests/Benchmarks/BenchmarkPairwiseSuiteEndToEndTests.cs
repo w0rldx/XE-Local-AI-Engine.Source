@@ -48,7 +48,8 @@ public sealed class BenchmarkPairwiseSuiteEndToEndTests
                                  RunId = run.Id,
                                  TaskCaseId = run.TaskItemId,
                                  TaskInputHash = run.TaskInputHash!,
-                                 ModelName = run.PrimaryModelName
+                                 ModelName = run.PrimaryModelName,
+                                 AgentDefinitionId = Guid.Empty
                              })
                              .ToArray();
 
@@ -175,7 +176,8 @@ public sealed class BenchmarkPairwiseSuiteEndToEndTests
                          RunId = run.Id,
                          TaskCaseId = run.TaskItemId,
                          TaskInputHash = run.TaskInputHash!,
-                         ModelName = run.PrimaryModelName
+                         ModelName = run.PrimaryModelName,
+                         AgentDefinitionId = Guid.Empty
                      })
                  ],
                  Comparisons = []

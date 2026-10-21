@@ -142,6 +142,7 @@ public sealed class BenchmarkRunBatchServiceTests
             PrimaryModelOrigin = LocalModelOrigin.Imported,
             ModelContentFingerprint = "fingerprint",
             AgentName = "agent",
+            AgentDefinitionId = Guid.Empty,
             AgentVersion = 1,
             RequestedContextTokens = 4096,
             PrimaryStatus = BenchmarkPrimaryStatus.Queued,

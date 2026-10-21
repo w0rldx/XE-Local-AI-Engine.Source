@@ -324,6 +324,7 @@ export function toBenchmarkRunSummary(value: RunSummaryResponse): BenchmarkRunSu
 		samplingSeed: value.samplingSeed ?? null,
 		samplingTemperature: value.samplingTemperature ?? null,
 		agentName: value.agentName,
+		agentDefinitionId: value.agentDefinitionId ?? "",
 		agentVersion: numberValue(value.agentVersion),
 		requestedContextTokens: numberValue(value.requestedContextTokens),
 		primaryStatus: primaryStatus(value.primaryStatus),

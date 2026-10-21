@@ -538,6 +538,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
                 PrimaryModelOrigin = snapshot.PrimaryModel.Origin,
                 ModelContentFingerprint = snapshot.PrimaryModel.ModelContentFingerprint,
                 AgentName = "Agent",
+                AgentDefinitionId = Guid.Empty,
                 AgentVersion = 1,
                 RequestedContextTokens = 4096,
                 PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,

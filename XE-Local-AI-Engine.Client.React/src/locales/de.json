@@ -1269,6 +1269,7 @@
 				"title": "Nachweisdateien des Prüfverfahrens"
 			},
 			"cells": {
+				"agent": "Agent",
 				"cohort": "{{ranked}} von {{scored}} Kombinationen gewertet, jeweils über {{items}} bewertete Aufgaben",
 				"displayOnly": "Keine Aufgabe dieses Projekts zählt zur Bewertung, daher wird keine Kombination gewertet. Recall ist hier die Messung.",
 				"displayOnlyCell": "Hier zählt nichts zur Bewertung, also gibt es nichts zu werten.",
@@ -1508,12 +1509,15 @@
 				"projects": "Benchmark-Projekte werden geladen…"
 			},
 			"matrix": {
+				"agents": "Agent-Varianten",
+				"agentsHelp": "Der Agent des Projekts ist vorausgewählt. Jeder weitere Agent führt jede Kombination erneut aus, sodass sein Harness wie ein Modell verglichen wird.",
 				"estimate": "etwa {{duration}}",
 				"models": "Modelle",
-				"modelsHelp": "Jedes ausgewählte Modell läuft mit jedem ausgewählten KV-Typ.",
+				"modelsHelp": "Jedes ausgewählte Modell läuft mit jedem ausgewählten KV-Typ und jeder ausgewählten Agent-Variante.",
 				"open": "Mehrere Läufe…",
-				"overCap": "Der Node lehnt mehr als {{max}} Läufe in einer Anfrage ab. Wählen Sie weniger Kombinationen oder Wiederholungen, oder teilen Sie die Matrix auf.",
+				"overCap": "Der Node lehnt mehr als {{max}} Läufe in einer Anfrage ab. Wählen Sie weniger Modelle, KV-Typen, Agent-Varianten oder Wiederholungen, oder teilen Sie die Matrix auf.",
 				"progress": "Stapel: {{done}} von {{total}} fertig ({{running}} laufend, {{queued}} wartend, {{failed}} fehlgeschlagen)",
+				"projectAgent": "Projekt-Agent",
 				"rejected": "{{count}} Kombinationen wurden nicht gestartet",
 				"repeatCount": "Wiederholungen je Kombination",
 				"repeatCountHelp": "Das Sampling ist deterministisch, Wiederholungen ändern die Antwort also nicht — sie messen, wie stark die Geschwindigkeit zwischen Starts schwankt. Jede Wiederholung lädt das Modell erneut.",

@@ -291,6 +291,8 @@ export interface BenchmarkRunSummary {
 	/** The temperature the run actually sampled at. Null for legacy rows; 0 for a throughput repeat. */
 	samplingTemperature: number | null;
 	agentName: string;
+	/** The agent definition the run was frozen against: two agent variants of one model differ only here. */
+	agentDefinitionId: string;
 	agentVersion: number;
 	requestedContextTokens: number;
 	primaryStatus: BenchmarkPrimaryStatus;

@@ -48,6 +48,7 @@ public sealed class StartBenchmarkRunEndpoint : Endpoint<StartBenchmarkRunReques
                 ProjectId = req.ProjectId,
                 PrimaryModelName = req.ModelName,
                 ExpectedProjectVersion = req.ExpectedProjectVersion,
+                AgentDefinitionId = req.AgentDefinitionId,
                 KvCacheType = kvCacheType,
                 RepeatCount = req.RepeatCount,
                 Warmup = req.Warmup,

@@ -150,6 +150,18 @@ describe("BenchmarkLaunchCompare across more than two runs", () => {
 
 	const thirdId = "cccccccc-0000-4000-8000-000000000003";
 
+	// Two agent variants of one model would otherwise get the same column heading, told apart only by run id.
+	it("names each run's agent when the compared runs froze more than one", () => {
+		const shared = { primaryModelName: "model.gguf" };
+		renderCompare(
+			detail(leftId, { ...shared, agentName: "Assistant", agentVersion: 1 }),
+			detail(rightId, { ...shared, agentName: "Assistant (terse)", agentVersion: 2 }),
+		);
+
+		expect(screen.getByText("model.gguf · Assistant v1")).toBeTruthy();
+		expect(screen.getByText("model.gguf · Assistant (terse) v2")).toBeTruthy();
+	});
+
 	it("renders one column per compared run and says how many are being compared", () => {
 		renderCompare(detail(leftId), detail(rightId), detail(thirdId));
 

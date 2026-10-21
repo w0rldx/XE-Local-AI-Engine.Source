@@ -64,6 +64,31 @@ public sealed class BenchmarkCompareEndpointTests
     }
 
     [Test]
+    public async Task Compare_TwoAgentVariantsOfOneModel_DiffLikeTwoModels()
+    {
+        var variant = Guid.Parse("30000000-0000-0000-0000-000000000003");
+        await using var context = Seeded([
+            Cell("cell:project-agent", 76, [Item(0, 76), Item(1, 66), Item(2, 86), Item(3, 56)]),
+            Cell("cell:variant", 70, [Item(0, 70), Item(1, 60), Item(2, 80), Item(3, 50)], agentDefinitionId: variant)
+        ]);
+
+        var (status, content) = await GetAsync(context, "cellKeys=cell:project-agent&cellKeys=cell:variant");
+
+        AssertEx.Equal(HttpStatusCode.OK, status);
+        using var document = JsonDocument.Parse(content);
+        var root = document.RootElement;
+        var cells = root.GetProperty("cells");
+        AssertEx.Equal("model.gguf", cells[1].GetProperty("primaryModelName").GetString(), "Both cells are the same model.");
+        AssertEx.Equal(AgentId.ToString("D"), cells[0].GetProperty("agentDefinitionId").GetString());
+        AssertEx.Equal(variant.ToString("D"), cells[1].GetProperty("agentDefinitionId").GetString());
+        AssertEx.Equal("Variant", cells[1].GetProperty("agentName").GetString());
+        var delta = root.GetProperty("pairedDeltas")[0];
+        AssertEx.Equal(4, delta.GetProperty("sharedItemCount").GetInt32());
+        AssertEx.Equal(6d, delta.GetProperty("delta").GetDouble());
+        AssertEx.True(delta.GetProperty("separated").GetBoolean(), "Two variants of one model diff exactly as two models do.");
+    }
+
+    [Test]
     public async Task Compare_ExcludedRuns_LeaveTheirItemsOutOfTheSharedSet()
     {
         // Item 3 was excluded in A (item-revised) and item 0 in B. A shared item needs a rankable score on BOTH
@@ -397,13 +422,20 @@ public sealed class BenchmarkCompareEndpointTests
         return (response.StatusCode, await response.Content.ReadAsStringAsync());
     }
 
-    private static BenchmarkCellRecord Cell(string key, int? quality, IReadOnlyList<BenchmarkCellItemRecord> items, string? exclusion = null) =>
+    private static BenchmarkCellRecord Cell(string key,
+        int? quality,
+        IReadOnlyList<BenchmarkCellItemRecord> items,
+        string? exclusion = null,
+        Guid? agentDefinitionId = null) =>
         new()
         {
             CellKey = key,
             PrimaryModelName = "model.gguf",
             ModelContentFingerprint = "v1:fp",
             KvCacheType = "q8_0",
+            AgentDefinitionId = agentDefinitionId ?? AgentId,
+            AgentName = agentDefinitionId is null ? "Agent" : "Variant",
+            AgentVersion = 1,
             RepeatGroupId = null,
             RepeatIndex = null,
             Quality = quality,

@@ -185,6 +185,7 @@ public sealed class BenchmarkExportQueryTests
             PrimaryModelOrigin = LocalModelOrigin.Imported,
             ModelContentFingerprint = $"fingerprint-{ordinal}",
             AgentName = "agent",
+            AgentDefinitionId = Guid.Parse("60000000-0000-0000-0000-000000000001"),
             AgentVersion = 1,
             RequestedContextTokens = 4096,
             PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,

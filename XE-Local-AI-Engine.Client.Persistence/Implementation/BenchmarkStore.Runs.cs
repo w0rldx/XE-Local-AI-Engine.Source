@@ -93,6 +93,7 @@ public sealed partial class BenchmarkStore
             run.CellKey = string.IsNullOrEmpty(command.CellKey) ? SingletonCellKey(run.Id) : command.CellKey;
             run.TaskInputHash = command.TaskInputHash ?? LegacyTaskHash;
             run.TaskItemSetHash = command.TaskItemSetHash ?? project.TaskItemSetHash ?? LegacyTaskHash;
+            run.AgentDefinitionId = command.AgentDefinitionId ?? project.AgentDefinitionId;
 
             // Added in caller order, and the queue sequence is assigned in insert order, which is what makes a repeat
             // group run back-to-back — warm-up first, then 1..N — rather than interleaved with whatever else is queued.
@@ -230,6 +231,7 @@ public sealed partial class BenchmarkStore
                                   PrimaryModelOrigin = entity.PrimaryModelOrigin,
                                   ModelContentFingerprint = entity.ModelContentFingerprint,
                                   AgentName = entity.AgentName,
+                                  AgentDefinitionId = entity.AgentDefinitionId,
                                   AgentVersion = entity.AgentVersion,
                                   RequestedContextTokens = entity.RequestedContextTokens,
                                   PrimaryStatus = entity.PrimaryStatus,

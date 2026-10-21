@@ -617,6 +617,7 @@ export function useStartBenchmarkRun() {
 			modelName,
 			expectedProjectVersion,
 			kvCacheType,
+			agentDefinitionId,
 			repeatMode,
 			answerVarianceTemperature,
 		}: {
@@ -625,6 +626,8 @@ export function useStartBenchmarkRun() {
 			expectedProjectVersion: number;
 			/** null = Auto: the member is omitted so the node applies its own rule at freeze. */
 			kvCacheType: BenchmarkKvCacheType | null;
+			/** An agent variant to run instead of the project's agent; omitted = the project's agent. */
+			agentDefinitionId?: string;
 			repeatMode: BenchmarkRepeatMode;
 			/** null = the node's default (0.7). Never sent in throughput mode, which the node samples at 0. */
 			answerVarianceTemperature: number | null;
@@ -633,6 +636,7 @@ export function useStartBenchmarkRun() {
 				modelName,
 				expectedProjectVersion,
 				...(kvCacheType === null ? {} : { kvCacheType }),
+				...(agentDefinitionId === undefined ? {} : { agentDefinitionId }),
 				repeatMode,
 				...(repeatMode === "AnswerVariance" && answerVarianceTemperature !== null ? { answerVarianceTemperature } : {}),
 			};
@@ -647,6 +651,8 @@ export function useStartBenchmarkRun() {
 export interface BenchmarkBatchRejection {
 	modelName: string;
 	kvCacheType: string | null;
+	/** The variant the refused cell asked for; null = the project's own agent. */
+	agentDefinitionId: string | null;
 	code: string;
 	message: string;
 }
@@ -699,6 +705,7 @@ export function useStartBenchmarkRunBatch() {
 				rejected: (data.rejected ?? []).map((item) => ({
 					modelName: item.modelName,
 					kvCacheType: item.kvCacheType ?? null,
+					agentDefinitionId: item.agentDefinitionId ?? null,
 					code: item.code,
 					message: item.message,
 				})),

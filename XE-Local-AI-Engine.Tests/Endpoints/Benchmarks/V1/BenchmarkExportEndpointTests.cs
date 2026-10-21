@@ -88,7 +88,7 @@ public sealed class BenchmarkExportEndpointTests
                           ], StringComparer.Ordinal),
             "The export root must retain its versioned wire schema and property ordering.");
         AssertEx.Equal(BenchmarkExportProjection.SchemaVersion, root.GetProperty("schemaVersion").GetInt32());
-        AssertEx.Equal(expected: 5, root.GetProperty("schemaVersion").GetInt32());
+        AssertEx.Equal(expected: 6, root.GetProperty("schemaVersion").GetInt32());
         AssertEx.Equal(expected: 0, root.GetProperty("taskItems").GetArrayLength());
         AssertEx.Equal(expected: 0, root.GetProperty("cells").GetArrayLength());
         AssertEx.Equal(expected: 0, root.GetProperty("scorableItemCount").GetInt32());
@@ -170,6 +170,9 @@ public sealed class BenchmarkExportEndpointTests
                            PrimaryModelName = "model",
                            ModelContentFingerprint = "v1:aggregate",
                            KvCacheType = null,
+                           AgentDefinitionId = Guid.Parse("00000000-0000-0000-0000-0000000000dd"),
+                           AgentName = "Export agent",
+                           AgentVersion = 4,
                            RepeatGroupId = null,
                            RepeatIndex = null,
                            Quality = 84,
@@ -207,9 +210,13 @@ public sealed class BenchmarkExportEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var root = document.RootElement;
-        AssertEx.Equal(expected: 5, root.GetProperty("schemaVersion").GetInt32());
+        AssertEx.Equal(expected: 6, root.GetProperty("schemaVersion").GetInt32());
         AssertEx.Equal("Score this answer.", root.GetProperty("taskItems")[0].GetProperty("prompt").GetString());
         AssertEx.Equal("cell:model:1", root.GetProperty("cells")[0].GetProperty("cellKey").GetString());
+        AssertEx.Equal("00000000-0000-0000-0000-0000000000dd", root.GetProperty("cells")[0].GetProperty("agentDefinitionId").GetString(),
+            "Schema 6 carries each cell's agent variant.");
+        AssertEx.Equal("Export agent", root.GetProperty("cells")[0].GetProperty("agentName").GetString());
+        AssertEx.Equal(expected: 4L, root.GetProperty("cells")[0].GetProperty("agentVersion").GetInt64());
         AssertEx.Equal(expected: 1, root.GetProperty("scorableItemCount").GetInt32());
         AssertEx.Equal(expected: 84, root.GetProperty("runs")[0].GetProperty("cellQuality").GetInt32(),
             "The export must reattach cell quality from the ranking summary rather than the full-run record.");
@@ -304,7 +311,8 @@ public sealed class BenchmarkExportEndpointTests
                        + "kldState,kldMean,kldP99,topTokenAgreement,kldBaseFingerprint,kldBaseLogitsDigest,"
                        + "pairwiseScore,pairwiseCiLow,pairwiseCiHigh,pairwiseComparisons,pairwiseFitKey,"
                        + "taskItemId,taskItemIndex,cellKey,taskInputHash,taskItemSetHash,cellQuality,"
-                       + "reviewState,toolCallCount,toolTimeMs",
+                       + "reviewState,toolCallCount,toolTimeMs,"
+                       + "agentDefinitionId,agentName,agentVersion",
             lines[0]);
 
         // pp is 123 tokens over 500 ms = 246, tg is 89 over 2000 ms = 44.5. The group key is the base model, so the
@@ -316,7 +324,7 @@ public sealed class BenchmarkExportEndpointTests
                        // A run with no fidelity attempt, no pairwise fit and no task item still writes every cell,
                        // empty. A short row is what breaks an index-reading consumer, which is the whole reason these
                        // were appended. reviewState is empty outside a review project; the tool timing closes the row.
-                       + new string(',', count: 25) + "3,1250",
+                       + new string(',', count: 25) + "3,1250,00000000-0000-0000-0000-000000000000,Agent,2",
             lines[1]);
     }
 
@@ -349,9 +357,38 @@ public sealed class BenchmarkExportEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var row = body.Split("\r\n", StringSplitOptions.RemoveEmptyEntries)[1];
-        AssertEx.True(row.EndsWith("," + itemId.ToString("D") + ",\"'-1\",cell:80000000-0000-0000-0000-000000000008:1,v1:item,v1:set,75,,,",
+        AssertEx.True(row.EndsWith("," + itemId.ToString("D") + ",\"'-1\",cell:80000000-0000-0000-0000-000000000008:1,v1:item,v1:set,75,,,,00000000-0000-0000-0000-000000000000,Agent,2",
                 StringComparison.Ordinal),
-            "The four stamps and the cell mean close the row, and the index is escaped: " + row);
+            "The four stamps, the cell mean and the agent identity close the row, and the index is escaped: " + row);
+    }
+
+    [Test]
+    public async Task ExportCsv_TwoAgentVariantsOfOneModel_NameTheirAgentOnEachRow()
+    {
+        await using var context = CreateContext();
+        ArrangeProject(context);
+        var variantId = Guid.Parse("90000000-0000-0000-0000-000000000009");
+        ArrangeRuns(context,
+            Run(BenchmarkPrimaryStatus.Succeeded, runId: Guid.Parse("a0000000-0000-0000-0000-00000000000a")) with { CellKey = "cell:a" },
+            Run(BenchmarkPrimaryStatus.Succeeded, runId: Guid.Parse("b0000000-0000-0000-0000-00000000000b")) with
+            {
+                CellKey = "cell:b",
+                AgentDefinitionId = variantId,
+                AgentName = "Terse, variant",
+                AgentVersion = 5
+            });
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export.csv");
+
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var rows = body.Split("\r\n", StringSplitOptions.RemoveEmptyEntries).Skip(1).ToArray();
+        AssertEx.Equal(expected: 2, rows.Length);
+        // Same model, same KV type: only the three appended agent columns tell the two rows apart, so both endings are pinned.
+        AssertEx.Contains(rows, candidate => candidate.EndsWith(",00000000-0000-0000-0000-000000000000,Agent,2", StringComparison.Ordinal));
+        AssertEx.Contains(rows, candidate => candidate.EndsWith("," + variantId.ToString("D") + ",\"Terse, variant\",5", StringComparison.Ordinal));
     }
 
     [Test]
@@ -606,10 +643,11 @@ public sealed class BenchmarkExportEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var states = body.Split("\r\n", StringSplitOptions.RemoveEmptyEntries)
                          .Skip(1)
-                         .Select(static row => row.Split(',')[^3])
+                         // Sixth from the end: the tool timing and the three agent columns are appended after it.
+                         .Select(static row => row.Split(',')[^6])
                          .ToArray();
         AssertEx.True(states.SequenceEqual(["pending", "stale", "rejected", "approved", "", "stale", "", "approved", "stale"], StringComparer.Ordinal),
-            "reviewState, third from the end, per row: " + string.Join("|", states));
+            "reviewState, sixth from the end, per row: " + string.Join("|", states));
     }
 
     [Test]
@@ -1104,6 +1142,7 @@ public sealed class BenchmarkExportEndpointTests
             PrimaryModelOrigin = LocalModelOrigin.Imported,
             ModelContentFingerprint = "v1:aggregate",
             AgentName = "Agent",
+            AgentDefinitionId = Guid.Empty,
             AgentVersion = 2,
             RequestedContextTokens = 4096,
             PrimaryStatus = primary,

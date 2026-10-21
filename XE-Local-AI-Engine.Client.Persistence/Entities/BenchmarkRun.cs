@@ -19,6 +19,9 @@ internal sealed record class BenchmarkRun
     public string ModelContentFingerprint { get; set; } = string.Empty;
     public string AgentName { get; set; } = string.Empty;
     public long AgentVersion { get; set; }
+
+    /// <summary>The agent definition the run was frozen against: the project's agent, or the variant its launch named. Plaintext (structural).</summary>
+    public Guid AgentDefinitionId { get; set; }
     public int RequestedContextTokens { get; set; }
 
     /// <summary>

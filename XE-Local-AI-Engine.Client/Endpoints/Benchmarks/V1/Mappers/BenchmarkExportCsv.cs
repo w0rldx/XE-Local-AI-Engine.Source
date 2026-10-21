@@ -27,7 +27,10 @@ internal static class BenchmarkExportCsv
         + "taskItemId,taskItemIndex,cellKey,taskInputHash,taskItemSetHash,cellQuality,"
 
         // Appended again. Tool timing is display-only; reviewState is derived from the ranked row, which carries no review record.
-        + "reviewState,toolCallCount,toolTimeMs";
+        + "reviewState,toolCallCount,toolTimeMs,"
+
+        // Appended again. Two agent variants of one model and KV type differ only here; cellKey is opaque and cannot say which.
+        + "agentDefinitionId,agentName,agentVersion";
 
     /// <summary>Renders the export rows, applying the same KLD comparability gate as the live read.</summary>
     /// <remarks>
@@ -187,6 +190,12 @@ internal static class BenchmarkExportCsv
                    .Append(Number(run.ToolCallCount))
                    .Append(',')
                    .Append(Number(run.ToolTimeMs))
+                   .Append(',')
+                   .Append(run.AgentDefinitionId.ToString("D"))
+                   .Append(',')
+                   .Append(Field(run.AgentName))
+                   .Append(',')
+                   .Append(run.AgentVersion.ToString(CultureInfo.InvariantCulture))
                    .Append("\r\n");
     }
 

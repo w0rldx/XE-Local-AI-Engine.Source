@@ -79,6 +79,9 @@ public sealed class BenchmarkEndpointTests
                            PrimaryModelName = "model.gguf",
                            ModelContentFingerprint = "v1:fp",
                            KvCacheType = "q8_0",
+                           AgentDefinitionId = Guid.Parse("00000000-0000-0000-0000-0000000000cc"),
+                           AgentName = "Variant agent",
+                           AgentVersion = 7,
                            RepeatGroupId = null,
                            RepeatIndex = null,
                            Quality = 72,
@@ -120,6 +123,11 @@ public sealed class BenchmarkEndpointTests
         // Not derivable from the cells alone, and it is what makes an item-incomplete badge readable.
         AssertEx.Contains(body, "\"scorableItemCount\":3", StringComparison.Ordinal);
         AssertEx.Contains(body, "\"taskItemId\":\"" + itemId.ToString("D") + "\"", StringComparison.Ordinal);
+
+        // The agent variant is a cell axis: a reader tells two variants of one model apart by these three fields.
+        AssertEx.Contains(body, "\"agentDefinitionId\":\"00000000-0000-0000-0000-0000000000cc\"", StringComparison.Ordinal);
+        AssertEx.Contains(body, "\"agentName\":\"Variant agent\"", StringComparison.Ordinal);
+        AssertEx.Contains(body, "\"agentVersion\":7", StringComparison.Ordinal);
     }
 
     [Test]
@@ -203,6 +211,7 @@ public sealed class BenchmarkEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Contains(body, "\"outputParts\"", StringComparison.Ordinal);
         AssertEx.Contains(body, "\"text\":\"ok\"", StringComparison.Ordinal);
+        AssertEx.Contains(body, $"\"agentDefinitionId\":\"{AgentId}\"", StringComparison.Ordinal);
         AssertEx.False(body.Contains("runtimeSnapshot", StringComparison.OrdinalIgnoreCase));
         AssertEx.False(body.Contains("secret-runtime", StringComparison.Ordinal));
     }
@@ -350,6 +359,78 @@ public sealed class BenchmarkEndpointTests
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
         AssertEx.Contains(body, "\"modelContentFingerprint\":\"v1:aggregate\"", StringComparison.Ordinal);
         AssertEx.False(body.Contains("runtimeSnapshot", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Test]
+    public async Task StartRun_WithAnAgentVariant_PassesItToTheFreeze()
+    {
+        await using var context = CreateContext();
+        var variant = Guid.Parse("50000000-0000-0000-0000-000000000005");
+        context.RunFreeze.StartAsync(new BenchmarkRunStartRequest
+            {
+                ProjectId = ProjectId,
+                PrimaryModelName = "model",
+                ExpectedProjectVersion = 4,
+                AgentDefinitionId = variant,
+                KvCacheType = null,
+                RepeatCount = 1,
+                Warmup = false
+            },
+            Arg.Any<BenchmarkFreezeScope?>(),
+            Arg.Any<CancellationToken>()).Returns(Runs());
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs",
+            new
+            {
+                modelName = "model",
+                expectedProjectVersion = 4,
+                agentDefinitionId = variant
+            });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode, "The freeze stub answers only the request that carries the variant.");
+    }
+
+    [Test]
+    public async Task StartRunBatch_WithAgentVariants_PassesEachItemsVariantAndEchoesIt()
+    {
+        await using var context = CreateContext();
+        var variant = Guid.Parse("50000000-0000-0000-0000-000000000005");
+        context.RunFreeze.StartAsync(Arg.Any<BenchmarkRunStartRequest>(), Arg.Any<BenchmarkFreezeScope?>(), Arg.Any<CancellationToken>())
+               .Returns(Runs(Run()));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs/batch",
+            new
+            {
+                expectedProjectVersion = 4,
+                items = new object[]
+                {
+                    new
+                    {
+                        modelName = "model-a"
+                    },
+                    new
+                    {
+                        modelName = "model-a",
+                        agentDefinitionId = variant
+                    }
+                }
+            });
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, body);
+        using var document = JsonDocument.Parse(body);
+        var started = document.RootElement.GetProperty("started");
+        AssertEx.Equal(expected: 2, started.GetArrayLength());
+        AssertEx.Equal(JsonValueKind.Null, started[0].GetProperty("agentDefinitionId").ValueKind, "An item naming no variant runs the project's agent.");
+        AssertEx.Equal(variant.ToString("D"), started[1].GetProperty("agentDefinitionId").GetString());
+        _ = context.RunFreeze.Received(1).StartAsync(Arg.Is<BenchmarkRunStartRequest>(start => start.AgentDefinitionId == null && start.ExpectedProjectVersion == 4),
+            Arg.Any<BenchmarkFreezeScope?>(),
+            Arg.Any<CancellationToken>());
+        _ = context.RunFreeze.Received(1).StartAsync(Arg.Is<BenchmarkRunStartRequest>(start => start.AgentDefinitionId == variant && start.ExpectedProjectVersion == 5),
+            Arg.Any<BenchmarkFreezeScope?>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -1513,6 +1594,7 @@ public sealed class BenchmarkEndpointTests
             PrimaryModelOrigin = LocalModelOrigin.Imported,
             ModelContentFingerprint = "v1:aggregate",
             AgentName = "Agent",
+            AgentDefinitionId = AgentId,
             AgentVersion = 2,
             RequestedContextTokens = 4096,
             PrimaryStatus = primary,

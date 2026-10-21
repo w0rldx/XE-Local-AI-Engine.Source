@@ -389,6 +389,7 @@ public sealed class BenchmarkReviewEndpointTests
             PrimaryModelOrigin = LocalModelOrigin.Imported,
             ModelContentFingerprint = "v1:aggregate",
             AgentName = "Agent",
+            AgentDefinitionId = Guid.Empty,
             AgentVersion = 2,
             RequestedContextTokens = 4096,
             PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,

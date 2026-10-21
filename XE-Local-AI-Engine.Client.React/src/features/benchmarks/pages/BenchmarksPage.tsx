@@ -10,6 +10,7 @@ import { type BenchmarksPageProps, useBenchmarksPageController } from "@/feature
 export function BenchmarksPage(props: BenchmarksPageProps = {}) {
 	const controller = useBenchmarksPageController(props);
 	const agentsQuery = useAgentDefinitions();
+	const singleAgents = (agentsQuery.data ?? []).filter((agent) => agent.kind === "Single");
 	// Mounted only when some project asks for review, so a node without one never reads the inbox at all.
 	const reviewProjects = (controller.projectsQuery.data ?? []).filter((project) => project.requiresReview);
 	return (
@@ -28,7 +29,7 @@ export function BenchmarksPage(props: BenchmarksPageProps = {}) {
 				formProps={{
 					initialValues: controller.editorDraft,
 					projectId: controller.editorMode === "edit" ? controller.detail?.id : undefined,
-					agents: (agentsQuery.data ?? []).filter((agent) => agent.kind === "Single"),
+					agents: singleAgents,
 					models: controller.allModelsQuery.data ?? [],
 					presets: controller.presetsQuery.data,
 					frozen: controller.editorMode === "edit" && controller.detail?.isFrozen,
@@ -38,7 +39,7 @@ export function BenchmarksPage(props: BenchmarksPageProps = {}) {
 					onCancel: () => controller.setEditorMode(null),
 				}}
 			/>
-			<BenchmarkPageDialogs controller={controller} />
+			<BenchmarkPageDialogs controller={controller} agents={singleAgents} />
 		</PageShell>
 	);
 }

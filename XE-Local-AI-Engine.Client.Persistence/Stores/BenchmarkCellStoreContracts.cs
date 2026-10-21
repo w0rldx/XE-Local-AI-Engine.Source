@@ -14,6 +14,15 @@ public sealed class BenchmarkCellRecord
 
     public required string? KvCacheType { get; init; }
 
+    /// <summary>The agent definition the cell's runs were frozen against; two variants of one model are two cells.</summary>
+    public required Guid AgentDefinitionId { get; init; }
+
+    /// <summary>The frozen agent's name, read from the cell's first run like the model name.</summary>
+    public required string AgentName { get; init; }
+
+    /// <summary>The frozen agent's definition version, read from the cell's first run.</summary>
+    public required long AgentVersion { get; init; }
+
     public required Guid? RepeatGroupId { get; init; }
 
     public required int? RepeatIndex { get; init; }

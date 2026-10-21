@@ -29,11 +29,11 @@ public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
         _logger = logger;
     }
 
-    /// <summary>Every unordered pair of the eligible set, formed ONLY inside one task case and only between different models.</summary>
+    /// <summary>Every unordered pair of the eligible set, formed ONLY inside one task case and only between different (model, agent) arms.</summary>
     /// <remarks>
     ///     Two answers to different questions were never comparable, so a candidate whose case identity differs is in
-    ///     a different group and is never paired across. Two runs of one model answering the same question, repeats
-    ///     included, rank nothing against each other, so a model is never paired with itself.
+    ///     a different group and is never paired across. Two runs of one model AND one agent definition answering the
+    ///     same question, repeats included, rank nothing against each other; two agent variants of one model do pair.
     /// </remarks>
     /// <param name="maximumRuns">The cohort cap; candidates past it are returned as capped and never paired.</param>
     public static BenchmarkPairwisePlan Plan(IReadOnlyList<BenchmarkPairwiseCandidate> candidates, int maximumRuns)
@@ -52,7 +52,8 @@ public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
             {
                 for (var second = first + 1; second < members.Length; second++)
                 {
-                    if (string.Equals(members[first].ModelName, members[second].ModelName, StringComparison.Ordinal))
+                    if (string.Equals(members[first].ModelName, members[second].ModelName, StringComparison.Ordinal)
+                        && members[first].AgentDefinitionId == members[second].AgentDefinitionId)
                     {
                         continue;
                     }

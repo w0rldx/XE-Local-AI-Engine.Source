@@ -1628,6 +1628,7 @@ public sealed class BenchmarkRunExecutorTests
             PrimaryModelOrigin = LocalModelOrigin.Imported,
             ModelContentFingerprint = V1('a'),
             AgentName = "Agent",
+            AgentDefinitionId = Guid.Empty,
             AgentVersion = 1,
             RequestedContextTokens = 8192,
             PrimaryStatus = status,

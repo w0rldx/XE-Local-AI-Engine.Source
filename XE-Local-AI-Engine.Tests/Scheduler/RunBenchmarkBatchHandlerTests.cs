@@ -395,6 +395,7 @@ public sealed class RunBenchmarkBatchHandlerTests
                 PrimaryModelOrigin = null,
                 ModelContentFingerprint = "fingerprint",
                 AgentName = "agent",
+                AgentDefinitionId = Guid.Empty,
                 AgentVersion = 1,
                 RequestedContextTokens = 4096,
                 PrimaryStatus = status,

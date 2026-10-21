@@ -30,6 +30,16 @@ public sealed class BenchmarkCellResponse
     public required string PrimaryModelName { get; init; }
     public required string ModelContentFingerprint { get; init; }
     public string? KvCacheType { get; init; }
+
+    /// <summary>The agent definition the cell was frozen against; two variants of one model are two cells.</summary>
+    public Guid AgentDefinitionId { get; init; }
+
+    /// <summary>The frozen agent's name.</summary>
+    public required string AgentName { get; init; }
+
+    /// <summary>The frozen agent's definition version.</summary>
+    public long AgentVersion { get; init; }
+
     public Guid? RepeatGroupId { get; init; }
     public int? RepeatIndex { get; init; }
 

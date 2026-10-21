@@ -277,10 +277,14 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
 
         // The judge is no longer part of the freeze: its runtime is resolved per attempt, against the policy
         // revision that attempt is judged under, so a judge change never re-freezes a run.
-        var definition = await _agentDefinitions.GetByIdAsync(project.AgentDefinitionId, cancellationToken);
+        var agentDefinitionId = request.AgentDefinitionId ?? project.AgentDefinitionId;
+        var definition = await _agentDefinitions.GetByIdAsync(agentDefinitionId, cancellationToken);
         if (definition is null || definition.Kind != AgentDefinitionKind.Single)
         {
-            throw new BenchmarkEligibilityException("The selected Single agent definition no longer exists.");
+            // A variant the request named is the caller's input (400, like the project's own agent check); the project's agent vanishing is eligibility (422).
+            throw request.AgentDefinitionId is { } variantId
+                ? new BenchmarkValidationException($"Agent definition '{variantId}' is not an existing Single agent definition.")
+                : new BenchmarkEligibilityException("The selected Single agent definition no longer exists.");
         }
 
         var capabilities = await _modelCapabilities.TryResolveAsync(primary.ModelName, cancellationToken)
@@ -343,7 +347,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         foreach (var item in leafItems)
         {
             var itemCoreTask = BenchmarkTaskItemService.DecodePrompt(item.PromptJson.Span);
-            var resolved = await _agentResolver.ResolveAsync(project.AgentDefinitionId,
+            var resolved = await _agentResolver.ResolveAsync(agentDefinitionId,
                                primaryModelName,
                                itemCoreTask,
                                capabilities.SupportsTools,
@@ -353,7 +357,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
                            ?? throw new BenchmarkEligibilityException("The selected agent definition no longer exists.");
             var eligible = _eligibilityPolicy.Apply(resolved);
             EnsureTaskFitsContext(project, eligible, item.Index, itemCoreTask, primary.ModelName, primarySampling, defaultContextTokens);
-            var dependencySet = await _dependencies.CaptureAsync(project.AgentDefinitionId,
+            var dependencySet = await _dependencies.CaptureAsync(agentDefinitionId,
                 eligible,
                 primaryModelName,
                 judgeModelName: null,
@@ -363,7 +367,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
                 Item = item,
                 CoreTask = itemCoreTask,
                 Eligible = eligible,
-                Guard = new FreezeCommitGuard(_dependencies, dependencySet, project.AgentDefinitionId, eligible, primaryModelName, judgeModelName: null),
+                Guard = new FreezeCommitGuard(_dependencies, dependencySet, agentDefinitionId, eligible, primaryModelName, judgeModelName: null),
                 Dependencies = dependencySet
             });
         }
@@ -430,6 +434,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
                            ModelContentFingerprint = primary.ModelContentFingerprint,
                            AgentName = item.Eligible.AgentName,
                            AgentVersion = item.Eligible.AgentDefinitionVersion,
+                           AgentDefinitionId = agentDefinitionId,
                            RequestedContextTokens = project.ContextTokens,
                            FreezeCommitGuard = item.Guard,
                            PrimaryLaunchIntent = primaryLaunch.Intent,

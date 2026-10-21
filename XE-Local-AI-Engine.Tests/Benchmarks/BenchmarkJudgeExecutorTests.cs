@@ -1429,6 +1429,7 @@ public sealed class BenchmarkJudgeExecutorTests
             PrimaryModelOrigin = snapshot.PrimaryModel.Origin,
             ModelContentFingerprint = snapshot.PrimaryModel.ModelContentFingerprint,
             AgentName = "Agent",
+            AgentDefinitionId = Guid.Empty,
             AgentVersion = 1,
             RequestedContextTokens = snapshot.RequestedContextTokens,
             PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,

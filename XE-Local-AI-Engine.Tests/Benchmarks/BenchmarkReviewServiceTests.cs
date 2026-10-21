@@ -265,6 +265,7 @@ public sealed class BenchmarkReviewServiceTests
                 PrimaryModelOrigin = LocalModelOrigin.Imported,
                 ModelContentFingerprint = $"v1:{new string('a', count: 64)}",
                 AgentName = "Agent",
+                AgentDefinitionId = Guid.Empty,
                 AgentVersion = 1,
                 RequestedContextTokens = 4096,
                 PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,

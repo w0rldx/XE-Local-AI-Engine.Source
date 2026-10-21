@@ -740,6 +740,9 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellResponse = {
 	primaryModelName: string;
 	modelContentFingerprint: string;
 	kvCacheType?: string | null;
+	agentDefinitionId?: string;
+	agentName: string;
+	agentVersion?: number;
 	repeatGroupId?: string | null;
 	repeatIndex?: number | null;
 	quality?: number | null;
@@ -1120,6 +1123,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryRespons
 	primaryModelOrigin?: XeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin | null;
 	modelContentFingerprint: string;
 	agentName: string;
+	agentDefinitionId?: string;
 	agentVersion?: number;
 	requestedContextTokens?: number;
 	primaryStatus?: XeLocalAiEngineClientPersistenceEntitiesBenchmarkPrimaryStatus;
@@ -1362,6 +1366,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1ListEligibleBenchmarkModel
 export type XeLocalAiEngineClientEndpointsBenchmarksV1RejectedBenchmarkRunBatchItemResponse = {
 	modelName: string;
 	kvCacheType?: string | null;
+	agentDefinitionId?: string | null;
 	code: string;
 	message: string;
 };
@@ -1387,6 +1392,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1ScoreBenchmarkRunRequest =
 export type XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunBatchItem = {
 	modelName?: string;
 	kvCacheType?: string | null;
+	agentDefinitionId?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunBatchRequest = {
@@ -1407,6 +1413,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunBatchResp
 export type XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest = {
 	modelName?: string;
 	expectedProjectVersion?: number;
+	agentDefinitionId?: string | null;
 	kvCacheType?: string | null;
 	repeatCount?: number;
 	warmup?: boolean;
@@ -1421,6 +1428,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1StartRunFidelityRequest = 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1StartedBenchmarkRunBatchItemResponse = {
 	modelName: string;
 	kvCacheType?: string | null;
+	agentDefinitionId?: string | null;
 	runIds?: Array<string>;
 };
 

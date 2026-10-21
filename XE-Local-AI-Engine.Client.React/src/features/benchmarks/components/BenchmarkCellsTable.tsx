@@ -7,7 +7,13 @@ import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import { BenchmarkItemBreakdown } from "@/features/benchmarks/components/BenchmarkItemBreakdown";
 import type { BenchmarkCell, BenchmarkNiahRecall } from "@/features/benchmarks/models/BenchmarkCells";
-import { benchmarkNiahRecall, missingBenchmarkCellItems, sortBenchmarkCells } from "@/features/benchmarks/models/BenchmarkCells";
+import {
+	benchmarkCellAgentLabel,
+	benchmarkNiahRecall,
+	hasBenchmarkAgentVariants,
+	missingBenchmarkCellItems,
+	sortBenchmarkCells,
+} from "@/features/benchmarks/models/BenchmarkCells";
 import type { BenchmarkRankCohort } from "@/features/benchmarks/models/BenchmarkModels";
 import { benchmarkBaseModelLabel, benchmarkQuantTag } from "@/features/benchmarks/models/BenchmarkModels";
 import { rankExclusionAction } from "@/features/benchmarks/models/BenchmarkRanking";
@@ -108,6 +114,8 @@ export function BenchmarkCellsTable({
 	// node excludes its cells as `no-score`. The ordinary reading of that reason ("set an operator score") is wrong
 	// here: no score an operator could give would enter a mean that does not exist. The recall column IS the reading.
 	const displayOnly = scorableItemCount === 0;
+	// The agent column appears only once the cells ran more than one agent definition; otherwise it repeats one name.
+	const showAgent = hasBenchmarkAgentVariants(cells);
 
 	if (cells.length === 0) {
 		return <EmptyState message={t("pages.benchmarks.cells.empty", "No measured combinations yet.")} size="sm" />;
@@ -137,6 +145,7 @@ export function BenchmarkCellsTable({
 							<Table.Th />
 							<Table.Th>{t("pages.benchmarks.rank.rank", "Rank")}</Table.Th>
 							<Table.Th>{t("pages.benchmarks.rank.model", "Model")}</Table.Th>
+							{showAgent ? <Table.Th>{t("pages.benchmarks.cells.agent", "Agent")}</Table.Th> : null}
 							<Table.Th>{t("pages.benchmarks.cells.quality", "Suite mean")}</Table.Th>
 							<Table.Th>{t("pages.benchmarks.cells.items", "Items")}</Table.Th>
 							<Table.Th>{t("pages.benchmarks.cells.recall", "Recall")}</Table.Th>
@@ -236,6 +245,13 @@ export function BenchmarkCellsTable({
 												</Group>
 											</Stack>
 										</Table.Td>
+										{showAgent ? (
+											<Table.Td>
+												<Text size="sm" data-testid={`benchmark-cell-agent-${cell.cellKey}`}>
+													{benchmarkCellAgentLabel(cell)}
+												</Text>
+											</Table.Td>
+										) : null}
 										<Table.Td>
 											<Text size="sm" fw={700} data-testid={`benchmark-cell-quality-${cell.cellKey}`}>
 												{cell.quality ?? "—"}
@@ -268,7 +284,7 @@ export function BenchmarkCellsTable({
 									</Table.Tr>
 									{isOpen ? (
 										<Table.Tr>
-											<Table.Td colSpan={7}>
+											<Table.Td colSpan={showAgent ? 8 : 7}>
 												<BenchmarkItemBreakdown
 													cell={cell}
 													items={items}

@@ -278,6 +278,22 @@ describe("BenchmarkCellsTable", () => {
 		expect(action).not.toContain("Run that task item again");
 	});
 
+	// Two agent variants of one model are two cells that would otherwise read identically; one agent adds nothing.
+	it("names each combination's agent only when the cells ran more than one", () => {
+		render({ cells: [complete, { ...incomplete, agentDefinitionId: "agent-2", agentName: "Terse", agentVersion: 4 }] });
+
+		expect(screen.getByRole("columnheader", { name: "Agent" })).toBeTruthy();
+		expect(screen.getByTestId("benchmark-cell-agent-cell:one:1").textContent).toBe("agent v1");
+		expect(screen.getByTestId("benchmark-cell-agent-cell:two:1").textContent).toBe("Terse v4");
+	});
+
+	it("keeps the table as it was when every cell ran the project's agent", () => {
+		render();
+
+		expect(screen.queryByRole("columnheader", { name: "Agent" })).toBeNull();
+		expect(screen.queryByTestId("benchmark-cell-agent-cell:one:1")).toBeNull();
+	});
+
 	it("says so when a project has nothing measured yet", () => {
 		render({ cells: [] });
 

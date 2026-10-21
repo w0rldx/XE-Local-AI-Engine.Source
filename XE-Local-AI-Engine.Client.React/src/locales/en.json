@@ -1269,6 +1269,7 @@
 				"title": "Verifier evidence files"
 			},
 			"cells": {
+				"agent": "Agent",
 				"cohort": "{{ranked}} of {{scored}} combinations ranked, each over {{items}} scored items",
 				"displayOnly": "No task item of this project counts toward a score, so no combination is ranked. Recall is the measurement here.",
 				"displayOnlyCell": "Nothing here counts toward a score, so there is nothing to rank.",
@@ -1508,12 +1509,15 @@
 				"projects": "Loading benchmark projects…"
 			},
 			"matrix": {
+				"agents": "Agent variants",
+				"agentsHelp": "The project's agent is preselected. Each extra agent runs every combination again, so its harness is compared like a model.",
 				"estimate": "about {{duration}}",
 				"models": "Models",
-				"modelsHelp": "Every selected model runs against every selected KV type.",
+				"modelsHelp": "Every selected model runs against every selected KV type and agent variant.",
 				"open": "Batch runs…",
-				"overCap": "The node refuses more than {{max}} runs in one request. Pick fewer combinations, fewer repeats, or split the matrix.",
+				"overCap": "The node refuses more than {{max}} runs in one request. Pick fewer models, KV types, agent variants or repeats, or split the matrix.",
 				"progress": "Batch: {{done}} of {{total}} done ({{running}} running, {{queued}} queued, {{failed}} failed)",
+				"projectAgent": "project agent",
 				"rejected": "{{count}} combinations were not started",
 				"repeatCount": "Repeats per combination",
 				"repeatCountHelp": "Sampling is deterministic, so repeats do not change the answer — they measure how much the speed moves between launches. Each repeat is its own model load.",

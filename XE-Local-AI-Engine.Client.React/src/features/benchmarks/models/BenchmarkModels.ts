@@ -8,9 +8,12 @@ export * from "@/features/benchmarks/models/BenchmarkRankingModels";
 export * from "@/features/benchmarks/models/BenchmarkReviewModels";
 export * from "@/features/benchmarks/models/BenchmarkRunModels";
 
-/** One launch-matrix submission: every model x KV-cache combination the operator picked, plus the shared run knobs. */
+/**
+ * One launch-matrix submission: every model x KV-cache x agent-variant combination the operator picked, plus the shared
+ * run knobs. An item without `agentDefinitionId` runs the project's own agent.
+ */
 export interface BenchmarkMatrixSelection {
-	items: { modelName: string; kvCacheType?: string }[];
+	items: { modelName: string; kvCacheType?: string; agentDefinitionId?: string }[];
 	repeatCount: number;
 	warmup: boolean;
 	repeatMode: BenchmarkRepeatMode;

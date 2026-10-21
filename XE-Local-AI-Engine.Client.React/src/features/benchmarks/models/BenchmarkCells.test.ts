@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	benchmarkCellLabel,
 	benchmarkNiahRecall,
 	canComparePairedDeltas,
+	hasBenchmarkAgentVariants,
 	missingBenchmarkCellItems,
 	scorableCellItems,
 	sortBenchmarkCells,
@@ -16,6 +18,7 @@ describe("toBenchmarkCell", () => {
 			cellKey: "cell:g:1",
 			primaryModelName: "m",
 			modelContentFingerprint: "v1:m",
+			agentName: "a",
 			items: [
 				{ runId: "r2", taskItemId: "b", taskItemIndex: 2 },
 				{ runId: "r0", taskItemId: "a", taskItemIndex: 0 },
@@ -32,13 +35,55 @@ describe("toBenchmarkCell", () => {
 				cellKey: "c",
 				primaryModelName: "m",
 				modelContentFingerprint: "f",
+				agentName: "a",
 				rankExclusionReason: "item-incomplete",
 			}).rankExclusionReason,
 		).toBe("item-incomplete");
 		expect(
-			toBenchmarkCell({ cellKey: "c", primaryModelName: "m", modelContentFingerprint: "f", rankExclusionReason: "brand-new" })
-				.rankExclusionReason,
+			toBenchmarkCell({
+				cellKey: "c",
+				primaryModelName: "m",
+				modelContentFingerprint: "f",
+				agentName: "a",
+				rankExclusionReason: "brand-new",
+			}).rankExclusionReason,
 		).toBeNull();
+	});
+
+	// The agent is part of what a cell measured once a project launches variants, so the mapper must carry all three
+	// facts; a missing version is unknown, never version 0.
+	it("carries the cell's agent definition, name and version", () => {
+		const cell = toBenchmarkCell({
+			cellKey: "c",
+			primaryModelName: "m",
+			modelContentFingerprint: "f",
+			agentDefinitionId: "agent-b",
+			agentName: "Summariser",
+			agentVersion: 3,
+		});
+
+		expect(cell).toMatchObject({ agentDefinitionId: "agent-b", agentName: "Summariser", agentVersion: 3 });
+		expect(
+			toBenchmarkCell({ cellKey: "c", primaryModelName: "m", modelContentFingerprint: "f", agentName: "a" }).agentVersion,
+		).toBeNull();
+	});
+});
+
+describe("benchmarkCellLabel", () => {
+	// Two variants of one model at one KV type would otherwise read as the same entry in the paired-delta picker.
+	it("names the agent only when asked to", () => {
+		const cell = benchmarkCellFixture({ primaryModelName: "m", kvCacheType: "f16", agentName: "Summariser", agentVersion: 2 });
+
+		expect(benchmarkCellLabel(cell, "Auto")).toBe("m · f16");
+		expect(benchmarkCellLabel(cell, "Auto", true)).toBe("m · f16 · Summariser v2");
+	});
+
+	it("counts variants by agent definition, not by name", () => {
+		const a = benchmarkCellFixture({ cellKey: "a", agentDefinitionId: "agent-1", agentName: "Same" });
+		const b = benchmarkCellFixture({ cellKey: "b", agentDefinitionId: "agent-2", agentName: "Same" });
+
+		expect(hasBenchmarkAgentVariants([a, benchmarkCellFixture({ cellKey: "c" })])).toBe(false);
+		expect(hasBenchmarkAgentVariants([a, b])).toBe(true);
 	});
 });
 

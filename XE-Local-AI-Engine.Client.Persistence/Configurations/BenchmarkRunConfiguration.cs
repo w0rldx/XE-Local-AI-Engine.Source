@@ -28,6 +28,7 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
         builder.Property(entity => entity.ModelContentFingerprint).HasColumnName("model_content_fingerprint").HasMaxLength(67).IsRequired();
         builder.Property(entity => entity.AgentName).HasColumnName("agent_name").HasMaxLength(200).IsRequired();
         builder.Property(entity => entity.AgentVersion).HasColumnName("agent_version");
+        builder.Property(entity => entity.AgentDefinitionId).HasColumnName("agent_definition_id");
         builder.Property(entity => entity.RequestedContextTokens).HasColumnName("requested_context_tokens");
         builder.Property(entity => entity.InvocationTimeoutSeconds).HasColumnName("invocation_timeout_seconds");
         builder.Property(entity => entity.PrimaryStatus).HasColumnName("primary_status").HasConversion<string>().HasMaxLength(32);

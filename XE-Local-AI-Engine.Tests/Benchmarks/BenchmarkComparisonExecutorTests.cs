@@ -140,7 +140,8 @@ public sealed class BenchmarkComparisonExecutorTests
                 RunId = run.Id,
                 TaskCaseId = run.TaskItemId,
                 TaskInputHash = run.TaskInputHash!,
-                ModelName = run.PrimaryModelName
+                ModelName = run.PrimaryModelName,
+                AgentDefinitionId = Guid.Empty
             })
         ], BenchmarkPairwisePolicy.MaximumRuns);
         var comparisons = plan.Slots.Select((slot, index) => BenchmarkPairwiseSuiteEndToEndTests.Comparison(slot, order: 0, installed, index + 1)).ToArray();
@@ -217,7 +218,8 @@ public sealed class BenchmarkComparisonExecutorTests
                 RunId = run.Id,
                 TaskCaseId = run.TaskItemId,
                 TaskInputHash = run.TaskInputHash!,
-                ModelName = run.PrimaryModelName
+                ModelName = run.PrimaryModelName,
+                AgentDefinitionId = Guid.Empty
             })
         ], BenchmarkPairwisePolicy.MaximumRuns);
         var comparisons = plan.Slots.Select((slot, index) => BenchmarkPairwiseSuiteEndToEndTests.Comparison(slot, order: 0, installed, index + 1)).ToArray();
@@ -374,6 +376,7 @@ public sealed class BenchmarkComparisonExecutorTests
             PrimaryModelOrigin = LocalModelOrigin.Imported,
             ModelContentFingerprint = $"v1:{new string('a', 64)}",
             AgentName = "Agent",
+            AgentDefinitionId = Guid.Empty,
             AgentVersion = 1,
             RequestedContextTokens = 8192,
             PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,

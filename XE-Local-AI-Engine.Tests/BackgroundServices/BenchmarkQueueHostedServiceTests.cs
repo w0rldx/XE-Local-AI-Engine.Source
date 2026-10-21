@@ -328,6 +328,7 @@ public sealed class BenchmarkQueueHostedServiceTests
             PrimaryModelOrigin = null,
             ModelContentFingerprint = "v1:fingerprint",
             AgentName = "agent",
+            AgentDefinitionId = Guid.Empty,
             AgentVersion = 1,
             RequestedContextTokens = 4096,
             PrimaryStatus = BenchmarkPrimaryStatus.Queued,

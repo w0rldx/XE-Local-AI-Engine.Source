@@ -337,6 +337,7 @@ public sealed class BenchmarkExecutionPrimitivesTests
             PrimaryModelOrigin = null,
             ModelContentFingerprint = $"v1:{new string('a', 64)}",
             AgentName = "Agent",
+            AgentDefinitionId = Guid.Empty,
             AgentVersion = 1,
             RequestedContextTokens = 8192,
             PrimaryStatus = primary,

@@ -7,7 +7,12 @@ import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import type { BenchmarkCell } from "@/features/benchmarks/models/BenchmarkCells";
-import { benchmarkCellLabel, benchmarkPairedDeltaFor, formatBenchmarkDelta } from "@/features/benchmarks/models/BenchmarkCells";
+import {
+	benchmarkCellLabel,
+	benchmarkPairedDeltaFor,
+	formatBenchmarkDelta,
+	hasBenchmarkAgentVariants,
+} from "@/features/benchmarks/models/BenchmarkCells";
 import { useBenchmarkCellComparison } from "@/features/benchmarks/queries/useBenchmarks";
 
 interface BenchmarkPairedDeltaProps {
@@ -37,7 +42,9 @@ export function BenchmarkPairedDelta({ projectId, cells }: BenchmarkPairedDeltaP
 	const distinct = selection.length === 2 && aCellKey !== bCellKey;
 	const comparison = useBenchmarkCellComparison(projectId, distinct ? selection : []);
 	const autoLabel = t("pages.benchmarks.run.kvCacheTypeAuto", "Auto");
-	const options = cells.map((cell) => ({ value: cell.cellKey, label: benchmarkCellLabel(cell, autoLabel) }));
+	// Two variants of one model at one KV type are two cells; without the agent their labels would be identical.
+	const withAgent = hasBenchmarkAgentVariants(cells);
+	const options = cells.map((cell) => ({ value: cell.cellKey, label: benchmarkCellLabel(cell, autoLabel, withAgent) }));
 	const delta =
 		distinct && comparison.data
 			? benchmarkPairedDeltaFor(comparison.data.pairedDeltas, aCellKey as string, bCellKey as string)

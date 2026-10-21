@@ -12,14 +12,15 @@ interface BenchmarkExportButtonsProps {
 }
 
 /** What the node currently writes. Named on the buttons so a downloaded file's shape is known before it is opened. */
-const benchmarkExportSchemaVersion = 5;
+const benchmarkExportSchemaVersion = 6;
 
 /**
  * Downloads one project's whole benchmark record. JSON carries every run at full detail — transcript, launch receipt
  * and judge verdict — so a result can be re-read outside this app; CSV is the same runs as flat rows for a spreadsheet.
  *
- * Schema 5 adds each run's review decision, its verifier artifact metadata (never the bytes) and the tool-call rollup on
- * top of schema 4's task items, per-run item and cell stamps and combinations section. The version
+ * Schema 6 adds each cell's agent definition, name and version, so two agent variants of one model read as two cells,
+ * on top of schema 5's review decisions, verifier artifact metadata (never the bytes) and tool-call rollup and schema 4's
+ * task items, per-run item and cell stamps and combinations section. The version
  * is on the buttons because a consumer of an exported file has to know which shape it got, and the file itself is
  * usually read by something other than a person.
  *

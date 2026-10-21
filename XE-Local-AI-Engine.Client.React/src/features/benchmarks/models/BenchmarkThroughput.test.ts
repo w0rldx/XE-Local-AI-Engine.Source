@@ -66,6 +66,16 @@ describe("benchmarkRepeatStats", () => {
 			...overrides,
 		});
 
+	it("keeps two agent variants of one model in different cohorts", () => {
+		const terse = (id: string, tokensPerSecond: number) => measured(id, tokensPerSecond, { agentDefinitionId: "agent-2" });
+
+		const stats = benchmarkRepeatStats([measured("a", 80), measured("b", 82), terse("c", 40), terse("d", 42)]);
+
+		expect(stats.size).toBe(2);
+		expect(stats.get(benchmarkRepeatCohortKey(measured("a", 80)))?.tokensPerSecond?.mean).toBe(81);
+		expect(stats.get(benchmarkRepeatCohortKey(terse("c", 40)))?.tokensPerSecond?.mean).toBe(41);
+	});
+
 	it("averages a cohort and reports its sample spread", () => {
 		const stats = benchmarkRepeatStats([measured("a", 80), measured("b", 82), measured("c", 84)]);
 

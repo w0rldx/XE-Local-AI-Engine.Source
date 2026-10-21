@@ -129,6 +129,7 @@ public sealed class BenchmarkFidelityDisplayGateTests
             PrimaryModelOrigin = LocalModelOrigin.Imported,
             ModelContentFingerprint = "v1:" + new string('e', 64),
             AgentName = "Agent",
+            AgentDefinitionId = Guid.Empty,
             AgentVersion = 1,
             RequestedContextTokens = 4096,
             PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,

@@ -714,6 +714,9 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellResponse = 
 	primaryModelName: z.string(),
 	modelContentFingerprint: z.string(),
 	kvCacheType: z.string().nullish(),
+	agentDefinitionId: z.guid().optional(),
+	agentName: z.string(),
+	agentVersion: z.int().optional(),
 	repeatGroupId: z.guid().nullish(),
 	repeatIndex: z
 		.int()
@@ -1539,6 +1542,7 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1ListEligibleBenchmarkAge
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1RejectedBenchmarkRunBatchItemResponse = z.object({
 	modelName: z.string(),
 	kvCacheType: z.string().nullish(),
+	agentDefinitionId: z.guid().nullish(),
 	code: z.string(),
 	message: z.string(),
 });
@@ -1568,6 +1572,7 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1ScoreBenchmarkRunRequest
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunBatchItem = z.object({
 	modelName: z.string().optional(),
 	kvCacheType: z.string().nullish(),
+	agentDefinitionId: z.guid().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1StartRunFidelityRequest = z.record(z.string(), z.never());
@@ -1575,6 +1580,7 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1StartRunFidelityRequest 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1StartedBenchmarkRunBatchItemResponse = z.object({
 	modelName: z.string(),
 	kvCacheType: z.string().nullish(),
+	agentDefinitionId: z.guid().nullish(),
 	runIds: z.array(z.guid()).optional(),
 });
 
@@ -6716,6 +6722,7 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunBatchRe
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest = z.object({
 	modelName: z.string().optional(),
 	expectedProjectVersion: z.int().gt(0).optional(),
+	agentDefinitionId: z.guid().nullish(),
 	kvCacheType: z.string().nullish(),
 	repeatCount: z
 		.int()
@@ -9428,6 +9435,7 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryRespo
 	primaryModelOrigin: zXeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin.nullish(),
 	modelContentFingerprint: z.string(),
 	agentName: z.string(),
+	agentDefinitionId: z.guid().optional(),
 	agentVersion: z.int().optional(),
 	requestedContextTokens: z
 		.int()

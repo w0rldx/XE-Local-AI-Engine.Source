@@ -62,6 +62,7 @@ public sealed class BenchmarkRunBatchService : IBenchmarkRunBatchService
                     ProjectId = request.ProjectId,
                     PrimaryModelName = item.ModelName,
                     ExpectedProjectVersion = expectedVersion,
+                    AgentDefinitionId = item.AgentDefinitionId,
                     KvCacheType = kvCacheType,
                     RepeatCount = request.RepeatCount,
                     Warmup = request.Warmup,
@@ -73,6 +74,7 @@ public sealed class BenchmarkRunBatchService : IBenchmarkRunBatchService
                 {
                     ModelName = item.ModelName,
                     KvCacheType = kvCacheType,
+                    AgentDefinitionId = item.AgentDefinitionId,
                     RunIds = [.. created.Select(static run => run.Id)]
                 });
             }
@@ -115,6 +117,7 @@ public sealed class BenchmarkRunBatchService : IBenchmarkRunBatchService
         {
             ModelName = item.ModelName,
             KvCacheType = item.KvCacheType,
+            AgentDefinitionId = item.AgentDefinitionId,
             Kind = BenchmarkRunBatchRejectionKind.Failure,
             Message = exception.Message,
             Failure = exception
@@ -133,6 +136,7 @@ public sealed class BenchmarkRunBatchService : IBenchmarkRunBatchService
             {
                 ModelName = item.ModelName,
                 KvCacheType = item.KvCacheType,
+                AgentDefinitionId = item.AgentDefinitionId,
                 Kind = kind,
                 Message = message
             });

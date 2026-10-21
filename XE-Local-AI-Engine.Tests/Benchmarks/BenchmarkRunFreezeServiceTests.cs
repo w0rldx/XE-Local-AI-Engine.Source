@@ -498,6 +498,62 @@ public sealed class BenchmarkRunFreezeServiceTests
     }
 
     [Test]
+    public async Task Start_WithAnAgentVariant_FreezesTheVariantsPromptDependenciesAndStamp()
+    {
+        var harness = new FreezeHarness();
+
+        _ = await harness.StartAsync(harness.VariantId);
+
+        var command = AssertEx.NotNull(harness.Command);
+        AssertEx.Equal<Guid?>(harness.VariantId, command.AgentDefinitionId);
+        AssertEx.Equal("Variant", command.AgentName);
+        AssertEx.Equal(7L, command.AgentVersion);
+        var snapshot = AssertEx.NotNull(harness.SnapshotInput);
+        AssertEx.Equal(harness.VariantId, snapshot.AgentDefinitionId);
+        AssertEx.Equal(7L, snapshot.AgentVersion);
+        AssertEx.Equal("variant prompt", snapshot.ResolvedRuntime.ResolvedSystemPrompt);
+        _ = harness.DependencyService.Received(1)
+                   .CaptureAsync(harness.VariantId, Arg.Any<ResolvedAgentRuntime>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+        _ = harness.Resolver.DidNotReceive()
+                   .ResolveAsync(harness.AgentId, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Start_WithNoAgentVariant_StampsTheProjectAgent()
+    {
+        var harness = new FreezeHarness();
+
+        _ = await harness.StartAsync();
+
+        AssertEx.Equal<Guid?>(harness.AgentId, AssertEx.NotNull(harness.Command).AgentDefinitionId);
+        AssertEx.Equal(harness.AgentId, AssertEx.NotNull(harness.SnapshotInput).AgentDefinitionId);
+    }
+
+    [Test]
+    public async Task Start_WithAnUnknownAgentVariant_IsRefusedAsInvalidNamingTheId()
+    {
+        var harness = new FreezeHarness();
+        var unknown = Guid.NewGuid();
+
+        var exception = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => harness.StartAsync(unknown));
+
+        AssertEx.True(exception.Message.Contains(unknown.ToString(), StringComparison.Ordinal), $"The refusal must name the id; got '{exception.Message}'.");
+        AssertEx.Null(harness.Command);
+    }
+
+    [Test]
+    public async Task Start_WithAnOrchestratorAgentVariant_IsRefusedAsInvalid()
+    {
+        var harness = new FreezeHarness();
+
+        var exception = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => harness.StartAsync(harness.OrchestratorId));
+
+        AssertEx.True(exception.Message.Contains(harness.OrchestratorId.ToString(), StringComparison.Ordinal),
+            $"The refusal must name the id; got '{exception.Message}'.");
+        AssertEx.Null(harness.Command);
+    }
+
+    [Test]
     public async Task Start_OnASingleItemProject_FreezesExactlyWhatItAlwaysDid()
     {
         var harness = new FreezeHarness();
@@ -867,10 +923,23 @@ public sealed class BenchmarkRunFreezeServiceTests
 
             var definitions = Substitute.For<IAgentDefinitionStore>();
             definitions.GetByIdAsync(AgentId, Arg.Any<CancellationToken>()).Returns(Definition(AgentId));
+            VariantId = Guid.NewGuid();
+            definitions.GetByIdAsync(VariantId, Arg.Any<CancellationToken>()).Returns(Definition(VariantId) with
+            {
+                Name = "Variant",
+                Version = 7
+            });
+            OrchestratorId = Guid.NewGuid();
+            definitions.GetByIdAsync(OrchestratorId, Arg.Any<CancellationToken>()).Returns(Definition(OrchestratorId) with
+            {
+                Kind = AgentDefinitionKind.Orchestrator
+            });
             Resolver = Substitute.For<IAgentDefinitionResolver>();
             // The task text is the RETRIEVAL QUERY, so it differs per item; the resolution itself is held constant.
             Resolver.ResolveAsync(AgentId, Arg.Any<string>(), Arg.Any<string>(), true, false, false, Arg.Any<CancellationToken>())
                     .Returns(Runtime(AgentId, agentSystemPrompt));
+            Resolver.ResolveAsync(VariantId, Arg.Any<string>(), Arg.Any<string>(), true, false, false, Arg.Any<CancellationToken>())
+                    .Returns(new ResolvedAgentRuntime("variant prompt", [], null, null, 7, VariantId, "Variant", Kind: AgentDefinitionKind.Single));
             var capabilities = Substitute.For<IGgufModelCapabilityResolver>();
             // ReasoningBudgetEnforceable is left at its own default (true) on purpose: it is the inert answer for a
             // model nothing was detected about, and freezing it ALONE is what claimed enforceability for a model that
@@ -889,6 +958,7 @@ public sealed class BenchmarkRunFreezeServiceTests
 
             LeaseProvider = new RecordingLeaseProvider(models, unverifiableModel);
             var dependencies = Substitute.For<IBenchmarkFreezeDependencyService>();
+            DependencyService = dependencies;
             dependencies.CaptureAsync(Arg.Any<Guid>(), Arg.Any<ResolvedAgentRuntime>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
                         .Returns(Dependencies("initial"));
             var snapshots = Substitute.For<IBenchmarkRuntimeSnapshotFactory>();
@@ -928,6 +998,14 @@ public sealed class BenchmarkRunFreezeServiceTests
 
         public Guid AgentId { get; }
 
+        /// <summary>A second Single agent definition a launch can name instead of the project's.</summary>
+        public Guid VariantId { get; }
+
+        /// <summary>An existing agent definition of the wrong kind for a benchmark.</summary>
+        public Guid OrchestratorId { get; }
+
+        public IBenchmarkFreezeDependencyService DependencyService { get; }
+
         /// <summary>The project's leaf items, in index order — what the freeze fans out over.</summary>
         public IReadOnlyList<BenchmarkTaskItemRecord> TaskItems { get; }
 
@@ -961,6 +1039,15 @@ public sealed class BenchmarkRunFreezeServiceTests
                 PrimaryModelName = _primaryModel,
                 ExpectedProjectVersion = _project.Version,
                 KvCacheType = kvCacheType
+            }))[0];
+
+        public async Task<BenchmarkRunRecord> StartAsync(Guid agentDefinitionId) =>
+            (await _service.StartAsync(new BenchmarkRunStartRequest
+            {
+                ProjectId = _project.Id,
+                PrimaryModelName = _primaryModel,
+                ExpectedProjectVersion = _project.Version,
+                AgentDefinitionId = agentDefinitionId
             }))[0];
 
         public Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(int repeatCount, bool warmup) =>
@@ -1226,6 +1313,7 @@ public sealed class BenchmarkRunFreezeServiceTests
                 PrimaryModelOrigin = command.PrimaryModelOrigin,
                 ModelContentFingerprint = command.ModelContentFingerprint,
                 AgentName = command.AgentName,
+                AgentDefinitionId = command.AgentDefinitionId ?? Guid.Empty,
                 AgentVersion = command.AgentVersion,
                 RequestedContextTokens = command.RequestedContextTokens,
                 PrimaryStatus = BenchmarkPrimaryStatus.Queued,

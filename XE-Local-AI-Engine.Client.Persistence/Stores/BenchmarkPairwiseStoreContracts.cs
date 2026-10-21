@@ -21,6 +21,9 @@ public sealed class BenchmarkPairwiseCandidate
 
     /// <summary>The run's model: pairwise compares different models on one item, never a model with its own repeats.</summary>
     public required string ModelName { get; init; }
+
+    /// <summary>The run's agent definition: two agent variants of one model are a pair, not a model with its own repeats.</summary>
+    public required Guid AgentDefinitionId { get; init; }
 }
 
 /// <summary>One unordered pair to compare, canonical (<see cref="RunAId" /> &lt; <see cref="RunBId" />).</summary>

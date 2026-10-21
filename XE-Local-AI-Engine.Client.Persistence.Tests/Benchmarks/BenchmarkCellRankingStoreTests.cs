@@ -90,6 +90,32 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
     }
 
     [Test]
+    public async Task TwoAgentVariantsOfOneModel_AreTwoCells_BothRankedAndEachNamingItsAgent()
+    {
+        await using var context = await CreateDatabaseAsync("cell-agent-variants.sqlite");
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
+        var project = await CreateSuiteAsync(store, itemCount: 2);
+        var variant = Guid.NewGuid();
+
+        var projectAgentCell = await ScoredCellAsync(store, project.Id, 80, 80);
+        var variantCell = await VariantCellAsync(store, project.Id, variant, "Variant", 40, 40);
+
+        var page = await store.ListCellsAsync(project.Id);
+
+        AssertEx.Equal(expected: 2, page.Cells.Count, "One model run under two agent variants is two cells.");
+        var first = page.Cells.Single(cell => cell.Items.Any(item => item.RunId == projectAgentCell[0]));
+        var second = page.Cells.Single(cell => cell.Items.Any(item => item.RunId == variantCell[0]));
+        AssertEx.Equal(project.AgentDefinitionId, first.AgentDefinitionId, "A command naming no agent is stamped with the project's.");
+        AssertEx.Equal("Agent", first.AgentName);
+        AssertEx.Equal(variant, second.AgentDefinitionId);
+        AssertEx.Equal("Variant", second.AgentName);
+        AssertEx.Equal(first.PrimaryModelName, second.PrimaryModelName);
+        AssertEx.Equal<int?>(1, first.Rank);
+        AssertEx.Equal<int?>(2, second.Rank);
+        AssertEx.Equal(expected: 2, AssertEx.NotNull(page.RankCohort).RankedCount);
+    }
+
+    [Test]
     public async Task WarmupRuns_AreNotGroupedIntoACell_NorCounted()
     {
         // A warm-up sits at repeat index 0, so it forms a cell that could only ever complete if every leaf item also
@@ -394,7 +420,11 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
             initialItems: [.. Enumerable.Range(0, itemCount).Select(index => Prompt("question " + index))]);
 
     private static Task<IReadOnlyList<Guid>> ScoredCellAsync(BenchmarkStore store, Guid projectId, params int?[] scores) =>
-        ScoredCellAsync(store, projectId, [.. scores.Select(static score => (score, "stop"))]);
+        VariantCellAsync(store, projectId, agentDefinitionId: null, agentName: "Agent", scores);
+
+    /// <summary>A scored cell frozen against <paramref name="agentDefinitionId" />, or the project's agent when null.</summary>
+    private static Task<IReadOnlyList<Guid>> VariantCellAsync(BenchmarkStore store, Guid projectId, Guid? agentDefinitionId, string agentName, params int?[] scores) =>
+        ScoredCellAsync(store, projectId, [.. scores.Select(static score => (score, "stop"))], agentDefinitionId: agentDefinitionId, agentName: agentName);
 
     /// <summary>
     ///     One freeze of the whole suite into one cell, drained and scored in insert order. The stamps are exactly the
@@ -405,7 +435,9 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
         IReadOnlyList<(int? Score, string StopReason)> outcomes,
         string? cellKey = null,
         bool warmup = false,
-        int? itemLimit = null)
+        int? itemLimit = null,
+        Guid? agentDefinitionId = null,
+        string agentName = "Agent")
     {
         var project = AssertEx.NotNull(await store.GetProjectAsync(projectId));
         var items = await store.ListTaskItemsAsync(projectId);
@@ -421,7 +453,9 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
                 TaskItemSetHash = project.TaskItemSetHash,
                 IsWarmup = warmup,
                 RepeatGroupId = warmup ? Guid.NewGuid() : null,
-                RepeatIndex = warmup ? 0 : null
+                RepeatIndex = warmup ? 0 : null,
+                AgentDefinitionId = agentDefinitionId,
+                AgentName = agentName
             })
         ], project.Version);
 

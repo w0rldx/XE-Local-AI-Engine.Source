@@ -28492,7 +28492,8 @@
         "required": [
           "cellKey",
           "primaryModelName",
-          "modelContentFingerprint"
+          "modelContentFingerprint",
+          "agentName"
         ],
         "properties": {
           "cellKey": {
@@ -28507,6 +28508,16 @@
           "kvCacheType": {
             "type": "string",
             "nullable": true
+          },
+          "agentDefinitionId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "agentName": {
+            "type": "string"
+          },
+          "agentVersion": {
+            "type": "integer"
           },
           "repeatGroupId": {
             "type": "string",
@@ -29934,6 +29945,10 @@
           "agentName": {
             "type": "string"
           },
+          "agentDefinitionId": {
+            "type": "string",
+            "format": "guid"
+          },
           "agentVersion": {
             "type": "integer"
           },
@@ -30717,6 +30732,11 @@
             "type": "string",
             "nullable": true
           },
+          "agentDefinitionId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
           "code": {
             "type": "string"
           },
@@ -30789,6 +30809,11 @@
           "kvCacheType": {
             "type": "string",
             "nullable": true
+          },
+          "agentDefinitionId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
           }
         }
       },
@@ -30857,6 +30882,11 @@
             "minimum": 0,
             "exclusiveMinimum": true
           },
+          "agentDefinitionId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
           "kvCacheType": {
             "type": "string",
             "nullable": true
@@ -30894,6 +30924,11 @@
           },
           "kvCacheType": {
             "type": "string",
+            "nullable": true
+          },
+          "agentDefinitionId": {
+            "type": "string",
+            "format": "guid",
             "nullable": true
           },
           "runIds": {

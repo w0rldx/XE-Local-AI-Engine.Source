@@ -117,7 +117,8 @@ public sealed partial class BenchmarkStore
                                        entity.PrimaryStopReason,
                                        entity.TaskItemId,
                                        entity.TaskInputHash,
-                                       entity.PrimaryModelName
+                                       entity.PrimaryModelName,
+                                       entity.AgentDefinitionId
                                    })
                                    .ToArrayAsync(cancellationToken);
         var candidates = runs.Where(static run => !BenchmarkPrimaryStopReasons.IsTruncated(run.PrimaryStopReason)
@@ -127,7 +128,8 @@ public sealed partial class BenchmarkStore
                                  RunId = run.Id,
                                  TaskCaseId = run.TaskItemId,
                                  TaskInputHash = run.TaskInputHash,
-                                 ModelName = run.PrimaryModelName
+                                 ModelName = run.PrimaryModelName,
+                                 AgentDefinitionId = run.AgentDefinitionId
                              })
                              .ToArray();
         var comparisons = await ProjectComparisons(_dbContext.BenchmarkComparisons.AsNoTracking()

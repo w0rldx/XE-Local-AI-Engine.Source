@@ -1563,6 +1563,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
 
+                    b.Property<Guid>("AgentDefinitionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("agent_definition_id");
+
                     b.Property<string>("AgentName")
                         .IsRequired()
                         .HasMaxLength(200)

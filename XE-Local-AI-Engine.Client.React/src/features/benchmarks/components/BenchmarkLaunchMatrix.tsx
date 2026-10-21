@@ -26,6 +26,10 @@ const repeatCountLimits = { min: 1, max: 10 } as const;
 
 interface BenchmarkLaunchMatrixProps {
 	models: readonly BenchmarkEligibleModel[];
+	/** The agent definitions a benchmark may run; the agent-variant axis picks from these. */
+	agents: readonly { id: string; name: string }[];
+	/** The project's own agent: preselected, listed first, and sent as an omitted `agentDefinitionId`. */
+	projectAgentId: string;
 	/** The project's leaf task items. Every combination runs each of them, so this multiplies the whole matrix. */
 	leafItemCount: number;
 	/** The project's median completed run, for the time estimate. Null when it has none to extrapolate from. */
@@ -38,8 +42,8 @@ interface BenchmarkLaunchMatrixProps {
 }
 
 /**
- * The launch matrix: pick several models and several KV-cache types, and every combination is enqueued as its own run
- * group. It exists because the single-run control makes an operator start twelve runs by hand to answer one question
+ * The launch matrix: pick several models, several KV-cache types and several agent variants, and every combination is
+ * enqueued as its own run group. It exists because the single-run control makes an operator start twelve runs by hand to answer one question
  * ("which quant of this model, at which KV type, on this machine"), and each of those twelve is a separate chance to pick
  * the wrong project version.
  *
@@ -48,6 +52,8 @@ interface BenchmarkLaunchMatrixProps {
  */
 export function BenchmarkLaunchMatrix({
 	models,
+	agents,
+	projectAgentId,
 	leafItemCount,
 	medianRunMs,
 	rejected,
@@ -58,12 +64,13 @@ export function BenchmarkLaunchMatrix({
 	const { t } = useTranslation();
 	const [selectedModels, setSelectedModels] = useState<string[]>([]);
 	const [selectedKvTypes, setSelectedKvTypes] = useState<string[]>([autoKvCacheType]);
+	const [selectedAgents, setSelectedAgents] = useState<string[]>([projectAgentId]);
 	const [repeatCount, setRepeatCount] = useState<number>(repeatCountLimits.min);
 	const [warmup, setWarmup] = useState(false);
 	const [repeatMode, setRepeatMode] = useState<BenchmarkRepeatMode>("Throughput");
 	const [answerVarianceTemperature, setAnswerVarianceTemperature] = useState<number | null>(null);
 
-	const cellCount = selectedModels.length * selectedKvTypes.length;
+	const cellCount = selectedModels.length * selectedKvTypes.length * selectedAgents.length;
 	const estimate = benchmarkRunEstimate({ cellCount, leafItemCount, repeatCount, warmup }, medianRunMs);
 	const totalRuns = estimate.totalRuns;
 	// The node refuses the whole freeze above its per-request cap, so the dialog refuses it here rather than sending a
@@ -81,12 +88,27 @@ export function BenchmarkLaunchMatrix({
 		[models],
 	);
 
+	// The project's agent first, always listed even when the eligible list no longer carries it, then the others by name.
+	const agentOptions = useMemo(() => {
+		const projectAgent = agents.find((agent) => agent.id === projectAgentId) ?? { id: projectAgentId, name: projectAgentId };
+		const variants = agents
+			.filter((agent) => agent.id !== projectAgentId)
+			.sort((left, right) => left.name.localeCompare(right.name));
+		return [projectAgent, ...variants];
+	}, [agents, projectAgentId]);
+	const agentName = (id: string): string => agentOptions.find((agent) => agent.id === id)?.name ?? id;
+
 	const submit = (): void => {
 		onSubmit({
 			items: selectedModels.flatMap((modelName) =>
-				selectedKvTypes.map((kvCacheType) =>
-					// Omitted rather than sent as null: an absent type is Auto, which the node resolves at freeze.
-					kvCacheType === autoKvCacheType ? { modelName } : { modelName, kvCacheType },
+				selectedKvTypes.flatMap((kvCacheType) =>
+					selectedAgents.map((agentDefinitionId) => ({
+						modelName,
+						// Omitted rather than sent as null: an absent type is Auto, which the node resolves at freeze.
+						...(kvCacheType === autoKvCacheType ? {} : { kvCacheType }),
+						// Omitted for the project's own agent, which is what the node runs when no variant is named.
+						...(agentDefinitionId === projectAgentId ? {} : { agentDefinitionId }),
+					})),
 				),
 			),
 			repeatCount,
@@ -102,7 +124,10 @@ export function BenchmarkLaunchMatrix({
 				value={selectedModels}
 				onChange={setSelectedModels}
 				label={t("pages.benchmarks.matrix.models", "Models")}
-				description={t("pages.benchmarks.matrix.modelsHelp", "Every selected model runs against every selected KV type.")}
+				description={t(
+					"pages.benchmarks.matrix.modelsHelp",
+					"Every selected model runs against every selected KV type and agent variant.",
+				)}
 			>
 				<ScrollArea.Autosize mah={260} mt="xs">
 					<Stack gap={6}>
@@ -145,6 +170,39 @@ export function BenchmarkLaunchMatrix({
 						/>
 					))}
 				</Group>
+			</Checkbox.Group>
+
+			<Checkbox.Group
+				value={selectedAgents}
+				// At least one agent always runs: unticking the last one is ignored rather than leaving an empty matrix.
+				onChange={(value) => {
+					if (value.length > 0) {
+						setSelectedAgents(value);
+					}
+				}}
+				label={t("pages.benchmarks.matrix.agents", "Agent variants")}
+				description={t(
+					"pages.benchmarks.matrix.agentsHelp",
+					"The project's agent is preselected. Each extra agent runs every combination again, so its harness is compared like a model.",
+				)}
+			>
+				<Stack gap={6} mt="xs">
+					{agentOptions.map((agent) => (
+						<Checkbox
+							key={agent.id}
+							value={agent.id}
+							label={
+								<Group gap={6} wrap="nowrap">
+									<Text size="sm">{agent.name}</Text>
+									{agent.id === projectAgentId ? (
+										<StatusBadge color="gray" label={t("pages.benchmarks.matrix.projectAgent", "project agent")} />
+									) : null}
+								</Group>
+							}
+							data-testid={`benchmark-matrix-agent-${agent.id}`}
+						/>
+					))}
+				</Stack>
 			</Checkbox.Group>
 
 			<BenchmarkRepeatModePicker
@@ -208,7 +266,7 @@ export function BenchmarkLaunchMatrix({
 					<Text size="sm" c="red" data-testid="benchmark-matrix-over-cap">
 						{t(
 							"pages.benchmarks.matrix.overCap",
-							"The node refuses more than {{max}} runs in one request. Pick fewer combinations, fewer repeats, or split the matrix.",
+							"The node refuses more than {{max}} runs in one request. Pick fewer models, KV types, agent variants or repeats, or split the matrix.",
 							{ max: benchmarkTaskItemLimits.maxRunsPerRequest },
 						)}
 					</Text>
@@ -222,8 +280,13 @@ export function BenchmarkLaunchMatrix({
 							{t("pages.benchmarks.matrix.rejected", "{{count}} combinations were not started", { count: rejected.length })}
 						</Text>
 						{rejected.map((item) => (
-							<Text key={`${item.modelName}-${item.kvCacheType ?? autoKvCacheType}`} size="xs">
-								{`${item.modelName} · ${item.kvCacheType ?? autoKvCacheType} — ${item.message}`}
+							<Text
+								key={`${item.modelName}-${item.kvCacheType ?? autoKvCacheType}-${item.agentDefinitionId ?? projectAgentId}`}
+								size="xs"
+							>
+								{`${item.modelName} · ${item.kvCacheType ?? autoKvCacheType}${
+									item.agentDefinitionId === null ? "" : ` · ${agentName(item.agentDefinitionId)}`
+								} — ${item.message}`}
 							</Text>
 						))}
 					</Stack>

@@ -43,10 +43,11 @@ Four rules govern everything below and are worth stating before the mechanics:
 
 | Thing | What it is |
 |---|---|
-| **Project** | The frozen measurement: 1..N task items, a context window, an agent, a judge policy, fidelity settings |
+| **Project** | The frozen measurement: 1..N task items, a context window, an agent (the default variant), a judge policy, fidelity settings |
 | **Task item** (`BenchmarkTaskItem`) | One question. Kind `prompt`, or the generator `niah` and its generated `niahCase` leaves |
-| **Cell** | One *combination of settings* measured over the whole item suite — one model × one KV-cache type × one repeat. **The cell is the unit that ranks.** The UI calls it a *combination* |
-| **Run** (`BenchmarkRun`) | One model answering one item once, under a byte-identical runtime snapshot |
+| **Cell** | One *combination of settings* measured over the whole item suite — one model × one KV-cache type × one repeat × one agent variant. **The cell is the unit that ranks.** The UI calls it a *combination* |
+| **Agent variant** | The agent definition a launch freezes: the project's agent unless the start request names another Single definition (`agentDefinitionId`). Two variants of one model are two cells, ranked and compared like two models |
+| **Run** (`BenchmarkRun`) | One model and one agent definition answering one item once, under a byte-identical runtime snapshot |
 | **Judging** | A pointwise attempt, a pairwise comparison, or no model at all (§5.2) |
 | **Review** (`BenchmarkRunReview`) | A reviewer's decision on one scoring run of a project that sets `requiresReview`. One row per run; *pending* is derived, never stored (§4.4) |
 | **Run artifact** (`BenchmarkRunArtifact`) | The raw stdout/stderr of one `pythonTests` verification, as an encrypted blob plus a metadata row (§5.2.4) |
@@ -103,9 +104,10 @@ Not built, deliberately: multi-needle, retrieval-order and aggregation variants 
 
 `BenchmarkRunFreezeService` turns a project plus a model choice into runs that are already fully described before any of them starts.
 
+- **The agent is the request's, else the project's.** `BenchmarkRunStartRequest.AgentDefinitionId` (null = the project's agent) is the one id read for the definition, the resolver, the dependency capture and the `FreezeCommitGuard`. A variant that is missing or not `Single` is a 400 `BenchmarkValidationException` naming the id; the project's own agent vanishing stays the 422 eligibility refusal. `runs/batch` takes the variant per item, so a launch matrix is models × KV types × variants.
 - The binary probe and the llama-server variant selection are memoized for the whole launch through `BenchmarkFreezeScope`, so a launch matrix compares cells that saw **one** runtime, not N. A second binary inspection could straddle a runtime swap and freeze two different launch answers into one measurement.
 - **The agent runtime is resolved once per LEAF ITEM.** The task text is `IAgentDefinitionResolver`'s retrieval query, so the resolved system prompt and the skills behind it can legitimately differ per item, and the dependency set guarding the commit derives from that resolution — hence one `FreezeCommitGuard` per item (the store de-duplicates guards by reference).
-- Every run stores a **`BenchmarkRuntimeSnapshotV1`** — model identity and member hashes, resolved launch arguments, KV-cache types, sampling. The record is **frozen at schema v1 and validated by re-hashing its own serialized bytes** against an embedded `ConfigurationHash`. Adding a member to it, or to any nested record, makes every stored run fail to deserialize. Per-run facts go in **flat columns** instead — that is why `RepeatGroupId`, `RepeatIndex`, `RepeatMode`, the four identity stamps and the whole fidelity projection are columns rather than snapshot members.
+- Every run stores a **`BenchmarkRuntimeSnapshotV1`** — model identity and member hashes, resolved launch arguments, KV-cache types, sampling. The record is **frozen at schema v1 and validated by re-hashing its own serialized bytes** against an embedded `ConfigurationHash`. Adding a member to it, or to any nested record, makes every stored run fail to deserialize. Per-run facts go in **flat columns** instead — that is why `RepeatGroupId`, `RepeatIndex`, `RepeatMode`, the five identity stamps and the whole fidelity projection are columns rather than snapshot members.
 - **The snapshot cache is keyed `(itemId, seedValue)`, not on the seed alone.** Answer-variance repeats already require a per-seed dictionary; suite fan-out also requires the item id in that key. Without it, every item receives the *first* item's snapshot — every run answers item 0's prompt while its `task_item_id` column claims otherwise, and nothing fails loudly. `Start_WithThreeItems_FreezesThreeDistinctCoreTasks` is the guard.
 - **Commands are built repeat-major, item-minor.** A partially drained queue then yields whole comparable cells rather than one item spread across every cell.
 - **`POST benchmarks/projects/{id}/runs` answers 202 with the FIRST run of the group by design** — it is the one that starts, so it is the one an operator's live pane opens on; its siblings are reachable through its `repeatGroupId`, and `runs/batch` is the route whose response carries every created run id (`StartBenchmarkRunEndpoint`, `StartBenchmarkRunBatchEndpoint`).
@@ -124,9 +126,9 @@ cell_key    = "cell:" + cellGroupId + ":" + (repeatIndex ?? 1)
 
 Two singleton forms exist and both rank on their own run: `cell:<runId>` (a one-item, one-repeat freeze) and `run:<id>` (backfilled by the migration onto every pre-suite run).
 
-### 3.2 The four stamps
+### 3.2 The five stamps
 
-Every run is stamped at freeze with four immutable identities on `benchmark_runs`:
+Every run is stamped at freeze with five immutable identities on `benchmark_runs`:
 
 | Column | What it pins |
 |---|---|
@@ -134,8 +136,9 @@ Every run is stamped at freeze with four immutable identities on `benchmark_runs
 | `cell_key` | **NOT NULL** — which measurement cell its per-item score aggregates into |
 | `task_input_hash` | a copy of the item's input hash: *exactly what it was asked* |
 | `task_item_set_hash` | a copy of the project's: *what the whole question set was when this cell was measured* |
+| `agent_definition_id` | **NOT NULL** — the agent definition the run was frozen against: the launch's variant, else the project's agent (`AddBenchmarkRunAgentDefinition` backfilled every earlier run with its project's agent, which is what a freeze always read before variants). `agent_name`/`agent_version` stay informational copies |
 
-Three are NOT NULL because a missing stamp would read as "belongs with everything else": a null `cell_key` would drop every ungrouped run of a project into one anonymous bucket and average their scores together, silently. The two hash columns default to `'v1:legacy'`, which is also what a legacy run is compared **against**, so it is never read as stale.
+`cell_key` and the two hashes are NOT NULL because a missing stamp would read as "belongs with everything else": a null `cell_key` would drop every ungrouped run of a project into one anonymous bucket and average their scores together, silently. The two hash columns default to `'v1:legacy'`, which is also what a legacy run is compared **against**, so it is never read as stale.
 
 ---
 
@@ -320,7 +323,7 @@ Opt-in per project via the policy's `Mode`. Pointwise stays the default.
 
 `BenchmarkPairwisePolicy`: `MaximumRuns = 12` per cohort (12·11 = **132** judge calls), a UI warning from `WarnAtRuns = 8`, and `MaximumTruncatedShare = 0.20` — a cohort in which more than a fifth of verdicts had a truncated side refuses to aggregate rather than publishing a biased score.
 
-- **Pairs form within a task case, never across one, and only between different models.** `BenchmarkStore.GetPairwiseCohortAsync` gives each candidate its run's leaf task item, input hash and model; `BenchmarkPairwisePlanner.Plan` pairs only inside one `(TaskCaseId, TaskInputHash)` group and skips two runs of the same model, repeats included: "which answer is better" is meaningless when the two answers are to different questions, and a model against its own repeat ranks nothing. A suite of N items with M models (one run each) plans N·M(M−1)/2 pairs. A cohort that plans no pair (one model only) publishes a `pairwise-insufficient` refusal row straight from `EnsurePairsAsync`, not only at the next startup reconciliation.
+- **Pairs form within a task case, never across one, and only between different arms.** `BenchmarkStore.GetPairwiseCohortAsync` gives each candidate its run's leaf task item, input hash, model and agent definition; `BenchmarkPairwisePlanner.Plan` pairs only inside one `(TaskCaseId, TaskInputHash)` group and skips two runs whose `(ModelName, AgentDefinitionId)` is equal, repeats included: "which answer is better" is meaningless when the two answers are to different questions, and an arm against its own repeat ranks nothing. Two agent variants of one model do pair. A suite of N items with M models (one run each) plans N·M(M−1)/2 pairs. A cohort that plans no pair (one model only) publishes a `pairwise-insufficient` refusal row straight from `EnsurePairsAsync`, not only at the next startup reconciliation.
 - **One Bradley–Terry fit per task case.** `BenchmarkPairwiseFitter` fits only the comparisons the current plan forms, grouped by case, and concatenates the scores into the one fit row: runs of different cases are never compared, so a single fit over all of them would see a disconnected graph and score only its largest component. A comparison stored before pairing respected task items stays in the cohort but is never fitted; the fit key carries the pairing rule, so a fit published under the old rule is superseded at the next reconciliation.
 - Both presentation orders of every unordered pair are enqueued; position swap is what removes position bias, and the swap bookkeeping lives in exactly one place (`BenchmarkPairwiseResultParser.ToCanonicalVerdict`). Getting it backwards inverts exactly half of every cohort's verdicts. Live, two of six pairs split 1–1 across the orders.
 - Creation is **one transaction, idempotent** — a `UNIQUE` violation from a concurrent caller is swallowed, re-read and returned. `ReconcilePairwiseAsync` re-runs it at startup, healing a crash between "a primary succeeded" and "its pairs were enqueued".
@@ -492,7 +495,7 @@ Full detail: [Scheduler](06-scheduler.md) and [Training](18-training.md).
 
 ## 9. Export
 
-`GET benchmarks/projects/{projectId}/export` (JSON) and `.../export.csv`, both Operator-gated. `BenchmarkExportProjection.SchemaVersion` is **5**.
+`GET benchmarks/projects/{projectId}/export` (JSON) and `.../export.csv`, both Operator-gated. `BenchmarkExportProjection.SchemaVersion` is **6**.
 
 | Version | Added |
 |---|---|
@@ -500,6 +503,7 @@ Full detail: [Scheduler](06-scheduler.md) and [Training](18-training.md).
 | 3 | a fidelity block on every run, and the pairwise fit |
 | 4 | task suites — `taskItems[]` and `cells[]` as top-level sections, and `taskItemId`/`taskItemIndex`/`cellKey`/`taskInputHash`/`taskItemSetHash`/`cellQuality` on every run row |
 | 5 | review and tool timing — each run's `review` (state, score, per-criterion scores, notes, `policyCurrent`), `artifacts[]` metadata (never content), `toolCallCount` and `toolTimeMs`; CSV columns `reviewState`, `toolCallCount`, `toolTimeMs` |
+| 6 | agent variants — each `cells[]` entry's `agentDefinitionId`, `agentName` and `agentVersion`; runs and their details gain `agentDefinitionId` (they already carried `agentName`/`agentVersion`); CSV columns `agentDefinitionId`, `agentName`, `agentVersion` appended |
 
 - **JSON** reuses `BenchmarkRunDetailResponse` verbatim — the same shape `GET benchmarks/runs/{runId}` returns — so an export and a live read of one run can never disagree. `pairwiseFit` is ONE object: a fit is a single immutable row whose key covers the whole comparison set, so smearing it over the runs would say something untrue.
 - **CSV** is flat and its columns are **appended, never inserted**. Consumers read this export by column index, and an inserted column silently turns a sampling seed into a token count. The snapshot test pins the whole header line plus one whole row, *including* the trailing empty cells — a short row is what actually breaks an index reader. `taskItemIndex` goes through the formula guard even though it is numeric, because a leading `-` is what a spreadsheet evaluates. The CSV repeats the pairwise fit key on every row of the cohort, having nowhere else to put it.
@@ -517,12 +521,13 @@ Full detail: [Scheduler](06-scheduler.md) and [Training](18-training.md).
 | Component / model | What it shows |
 |---|---|
 | `BenchmarkTaskItemEditor` | add / edit / reorder / delete items, the NIAH probe form, per-item verifier overrides |
-| `BenchmarkCellsTable` | the combination table: suite mean, rank, items answered, the missing ones by name, recall |
+| `BenchmarkLaunchMatrix` | the batch launch: models × KV types × agent variants (the project's agent preselected and listed first, at least one always ticked); an item names `agentDefinitionId` only for a non-project agent |
+| `BenchmarkCellsTable` | the combination table: suite mean, rank, items answered, the missing ones by name, recall, and an Agent column once the cells name more than one agent definition |
 | `BenchmarkItemBreakdown` | one combination item by item, each row linking to its run |
-| `BenchmarkPairedDelta` | `A − B = δ [low, high]`, separated / not separated |
+| `BenchmarkPairedDelta` | `A − B = δ [low, high]`, separated / not separated; the pickers name the agent when the cells ran more than one |
 | `BenchmarkVerifierEditor` | the criterion kinds including `pythonTests` (test code, exports, timeout, extraction mode) |
 | `BenchmarkRunEstimate` | what a launch is about to cost, before the operator commits |
-| `BenchmarkExportButtons` | names the schema version on the buttons that produce it (5) |
+| `BenchmarkExportButtons` | names the schema version on the buttons that produce it (6) |
 | `BenchmarkReviewInbox` | the cross-project review inbox: a state filter (pending, stale, approved, rejected), an optional project filter, a pager, and a row that opens the run pane below it |
 | `BenchmarkReviewForm` | the reviewer's decision on one run: a 0..10 field per `llm` criterion (or one overall 0..100 without a policy), notes, Approve and Reject |
 | `BenchmarkRunPane` | the run detail, which hosts the review form or the score picker, the verifier evidence download list and the tool-timing list |
