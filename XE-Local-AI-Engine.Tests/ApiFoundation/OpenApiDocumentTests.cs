@@ -212,6 +212,7 @@ public sealed class OpenApiDocumentTests
         AssertResponses(paths, "/api/local/v1/model-fit/llamacpp/source-build/remove", "post", ["200", "409"]);
         AssertResponses(paths, "/api/local/v1/model-fit/llamacpp/version", "post", ["200", "400", "409"]);
         AssertResponses(paths, "/api/local/v1/model-fit/llamacpp/update", "post", ["200", "400", "409"]);
+        AssertResponses(paths, "/api/local/v1/model-fit/llamacpp/variant/automatic", "post", ["200", "409"]);
 
         var requestSchema = FindSchema(schemas, "StartLlamaCppSourceBuildRequest");
         AssertEx.True(requestSchema.GetProperty("required").EnumerateArray()

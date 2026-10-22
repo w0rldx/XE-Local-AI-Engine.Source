@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
@@ -36,7 +37,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         supervisor.CountRunningProcesses().Returns(0);
         var completion = new TaskCompletionSource<LlamaBinary>(TaskCreationOptions.RunContinuationsAsynchronously);
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
-        binaryManager.AcquireBinaryAsync(GpuVariant.Cpu, Arg.Any<CancellationToken>())
+        binaryManager.AcquireBinaryAsync(GpuVariant.Cpu, pinVariant: true, Arg.Any<CancellationToken>())
                      .Returns(_ =>
                      {
                          calls.Add("ensure");
@@ -75,7 +76,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         AssertEx.False(result.Accepted);
         AssertEx.Equal(1, result.RunningProcessCount);
         await binaryManager.DidNotReceiveWithAnyArgs()
-                           .AcquireBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
+                           .AcquireBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -100,7 +101,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         AssertEx.Contains(result.DisplayMessage!, "source-built", StringComparison.Ordinal);
         await lease.Disposed;
         await binaryManager.DidNotReceiveWithAnyArgs()
-                           .AcquireBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
+                           .AcquireBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -124,7 +125,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         AssertEx.Contains(result.DisplayMessage!, "active", StringComparison.Ordinal);
         await lease.Disposed;
         await binaryManager.DidNotReceiveWithAnyArgs()
-                           .AcquireBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
+                           .AcquireBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -220,7 +221,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         AssertEx.Equal(LlamaCppReleasePins.MissingPrebuiltMessage(OSPlatform.Linux, RuntimeInformation.OSArchitecture, GpuVariant.Cuda), result.DisplayMessage);
         await releaseCatalog.DidNotReceiveWithAnyArgs().ResolveAssetAsync(default!, default, default, default, default);
         await supervisor.DidNotReceiveWithAnyArgs().TryAcquireRuntimeMutationLeaseAsync(default);
-        await binaryManager.DidNotReceiveWithAnyArgs().InstallTagAsync(default!, default!, default!, default, default, default!, default);
+        await binaryManager.DidNotReceiveWithAnyArgs().InstallTagAsync(default!, default!, default!, default, default, default, default!, default);
     }
 
     [Test]
@@ -240,7 +241,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.Busy, result.Failure);
         AssertEx.Equal("Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime.", result.DisplayMessage);
         await releaseCatalog.DidNotReceiveWithAnyArgs().ResolveAssetAsync(default!, default, default, default, default);
-        await binaryManager.DidNotReceiveWithAnyArgs().InstallTagAsync(default!, default!, default!, default, default, default!, default);
+        await binaryManager.DidNotReceiveWithAnyArgs().InstallTagAsync(default!, default!, default!, default, default, default, default!, default);
     }
 
     [Test]
@@ -402,7 +403,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.Busy, result.Failure);
         AssertEx.Equal("Stop or eject all running llama.cpp models before updating the runtime.", result.DisplayMessage);
         AssertEx.Equal(1, result.RunningProcessCount);
-        await binaryManager.DidNotReceiveWithAnyArgs().InstallTagAsync(default!, default!, default!, default, default, default!, default);
+        await binaryManager.DidNotReceiveWithAnyArgs().InstallTagAsync(default!, default!, default!, default, default, default, default!, default);
     }
 
     [Test]
@@ -419,6 +420,70 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
 
         AssertEx.Equal(GpuVariant.Cuda, (await withOverride.GetStatusAsync()).OverrideVariant);
         AssertEx.Null((await withoutOverride.GetStatusAsync()).OverrideVariant);
+    }
+
+    [Test]
+    public async Task UseAutomaticVariantAsync_ClearsThePinThroughTheBinaryManager()
+    {
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        var service = CreateService(binaryManager, Substitute.For<ILlamaServerProcessSupervisor>());
+
+        AssertEx.Null(await service.UseAutomaticVariantAsync());
+        await binaryManager.Received(1).ClearVariantPinAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task UseAutomaticVariantAsync_UnderAnOverride_RefusesWithoutTouchingThePin()
+    {
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        var service = CreateService(binaryManager,
+            Substitute.For<ILlamaServerProcessSupervisor>(),
+            overrideOptions: new LlamaServerRuntimeOverrideOptions
+            {
+                ServerPath = "/opt/llama/build/bin/llama-server",
+                Variant = GpuVariant.Cuda
+            });
+
+        AssertEx.Contains(await service.UseAutomaticVariantAsync() ?? "", "override", StringComparison.Ordinal);
+        await binaryManager.DidNotReceiveWithAnyArgs().ClearVariantPinAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetStatusAsync_ReportsTheSelectedVariantAndTheOperatorPin()
+    {
+        var installedStore = Substitute.For<IInstalledRuntimeStore>();
+        installedStore.ReadAsync(Arg.Any<CancellationToken>())
+                      .Returns(new InstalledRuntimeState("b1", "asset", "sha", GpuVariant.Vulkan, DateTimeOffset.UtcNow, OperatorSelected: true));
+        var selector = Substitute.For<IGpuVariantSelector>();
+        selector.SelectVariantAsync(Arg.Any<CancellationToken>()).Returns(GpuVariant.Vulkan);
+        var service = CreateService(Substitute.For<ILlamaCppBinaryManager>(), Substitute.For<ILlamaServerProcessSupervisor>(), installedStore,
+            variantSelector: selector);
+
+        var status = await service.GetStatusAsync();
+
+        AssertEx.Equal(GpuVariant.Vulkan, status.SelectedVariant);
+        AssertEx.True(AssertEx.NotNull(status.Installed).OperatorSelected);
+    }
+
+    [Test]
+    [Arguments(false, true)]
+    [Arguments(true, false)]
+    public async Task GetStatusAsync_ReportsAProcessHeldPin_ButNotAnActiveSourceBuild(bool sourceBuild, bool expectedPinned)
+    {
+        var installedStore = Substitute.For<IInstalledRuntimeStore>();
+        installedStore.ReadAsync(Arg.Any<CancellationToken>())
+                      .Returns(new InstalledRuntimeState("b1", "asset", "sha", GpuVariant.Cpu, DateTimeOffset.UtcNow, sourceBuild ? "/managed/source" : null));
+        var signal = new CudaManagedBuildSignal();
+        signal.SetActive(GpuVariant.Vulkan);
+        var selector = Substitute.For<IGpuVariantSelector>();
+        selector.SelectVariantAsync(Arg.Any<CancellationToken>()).Returns(GpuVariant.Vulkan);
+        var service = CreateService(Substitute.For<ILlamaCppBinaryManager>(), Substitute.For<ILlamaServerProcessSupervisor>(), installedStore,
+            variantSelector: selector, activeVariantSignal: signal);
+
+        var status = await service.GetStatusAsync();
+
+        AssertEx.Equal(expectedPinned, AssertEx.NotNull(status.Installed).OperatorSelected);
+        AssertEx.Equal(GpuVariant.Vulkan, status.SelectedVariant);
     }
 
     [Test]
@@ -465,7 +530,8 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         INodeRuntimeSettings? runtimeSettings = null,
         ILlamaCppReleaseCatalog? releaseCatalog = null,
         IGpuVariantSelector? variantSelector = null,
-        LlamaServerRuntimeOverrideOptions? overrideOptions = null)
+        LlamaServerRuntimeOverrideOptions? overrideOptions = null,
+        ICudaManagedBuildSignal? activeVariantSignal = null)
     {
         if (runtimeSettings is null)
         {
@@ -510,7 +576,8 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
             lifetime,
             NullLogger<LlamaCppRuntimeAdministrationService>.Instance,
             TimeProvider.System,
-            Substitute.For<IRuntimeDeviceAudit>());
+            Substitute.For<IRuntimeDeviceAudit>(),
+            activeVariantSignal ?? new CudaManagedBuildSignal());
     }
 
     private sealed class RecordingLease : ILlamaServerRuntimeMutationLease

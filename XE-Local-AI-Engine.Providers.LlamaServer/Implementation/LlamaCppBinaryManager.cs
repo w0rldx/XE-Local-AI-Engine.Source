@@ -169,16 +169,54 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     /// <inheritdoc />
     public Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct)
     {
-        return EnsureCoreAsync(variant, operatorRequested: false, ct);
+        return EnsureCoreAsync(variant, operatorRequested: false, pinVariant: false, ct);
     }
 
     /// <inheritdoc />
     public Task<LlamaBinary> AcquireBinaryAsync(GpuVariant variant, CancellationToken ct)
     {
-        return EnsureCoreAsync(variant, operatorRequested: true, ct);
+        return EnsureCoreAsync(variant, operatorRequested: true, pinVariant: true, ct);
     }
 
-    private async Task<LlamaBinary> EnsureCoreAsync(GpuVariant variant, bool operatorRequested, CancellationToken ct)
+    /// <inheritdoc />
+    public Task<LlamaBinary> AcquireBinaryAsync(GpuVariant variant, bool pinVariant, CancellationToken ct)
+    {
+        return EnsureCoreAsync(variant, operatorRequested: true, pinVariant, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task ClearVariantPinAsync(CancellationToken ct)
+    {
+        if (_installedRuntimeStore is null)
+        {
+            return;
+        }
+
+        await _sourceMutationGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            using var recordLock = await _installedRuntimeStore.AcquireAsync(ct).ConfigureAwait(false);
+            var current = await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
+            if (current?.SourceBuildPath is { Length: > 0 })
+            {
+                return;
+            }
+
+            if (current is { OperatorSelected: true })
+            {
+                await _installedRuntimeStore.WriteAsync(current with { OperatorSelected = false }, ct).ConfigureAwait(false);
+            }
+
+            // Cleared even without a flagged record: a pin this process could not persist lives only in the signal.
+            _managedCudaSignal?.Clear();
+        }
+        finally
+        {
+            _sourceMutationGate.Release();
+        }
+    }
+
+    private async Task<LlamaBinary> EnsureCoreAsync(GpuVariant variant, bool operatorRequested, bool pinVariant, CancellationToken ct)
     {
         // An active operator bring-your-own override short-circuits ALL acquisition and is served as the override's OWN variant, never the caller's; broken, it
         // throws rather than run silently on CPU. It precedes the pinned-floor resolve, which would throw for a (Linux, X64, Cuda) request that has no prebuilt.
@@ -241,7 +279,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         await acquisitionLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            return await EnsureVariantDirAsync(variant, resolvedTag, pin, isPinnedFallback, variantDir, reporter, refusal, ct).ConfigureAwait(false);
+            return await EnsureVariantDirAsync(variant, resolvedTag, pin, isPinnedFallback, variantDir, reporter, refusal, pinVariant, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -257,9 +295,10 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     /// <summary>
     ///     The acquisition body of <see cref="EnsureBinaryAsync(GpuVariant, CancellationToken)" />, run under that variant dir's single-flight lock. A non-null
     ///     <paramref name="refusal" /> (the implicit-acquisition policy said no) makes it request nothing: no build download and no companion repair.
+    ///     <paramref name="pinVariant" /> records the variant as the operator's pin.
     /// </summary>
     private async Task<LlamaBinary> EnsureVariantDirAsync(GpuVariant variant, string resolvedTag, LlamaCppAssetPin pin, bool isPinnedFallback, string variantDir,
-        AcquisitionReporter reporter, string? refusal, CancellationToken ct)
+        AcquisitionReporter reporter, string? refusal, bool pinVariant, CancellationToken ct)
     {
         try
         {
@@ -272,7 +311,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                                    && (refusal is not null
                                        ? RefuseCudaCompanionRepair(resolvedTag, reporter)
                                        : !await TryRepairCudaCompanionSetAsync(resolvedTag, pin, isPinnedFallback, cachedServer, reporter, ct).ConfigureAwait(false));
-                await RecordResolvedRuntimeAsync(resolvedTag, pin, variant, ct).ConfigureAwait(false);
+                await RecordResolvedRuntimeAsync(resolvedTag, pin, variant, pinVariant, ct).ConfigureAwait(false);
 
                 // Silent on a pure cache hit — this runs on every model spawn, so a Completed here would flood the hub. A failed repair keeps its Failed; a set
                 // confirmed complete clears only the Failed an earlier repair of this same runtime wrote (completed elsewhere, e.g. by another node).
@@ -325,7 +364,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             var serverPath = ResolveServerPath(variantDir, pin)
                              ?? throw new LlamaRuntimeException("The downloaded llama.cpp runtime did not contain the expected server executable.");
 
-            await RecordResolvedRuntimeAsync(resolvedTag, pin, variant, ct).ConfigureAwait(false);
+            await RecordResolvedRuntimeAsync(resolvedTag, pin, variant, pinVariant, ct).ConfigureAwait(false);
 
             // A NEW binary is on disk (the cached-serve branch above deliberately does not do this — it runs on every
             // model spawn): bump the stamp so the device audit re-probes instead of serving a memo taken mid-download.
@@ -474,7 +513,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     ///     pinned tag, the one bootstrap case where the binary is on disk yet no <see cref="InstallTagAsync(string, string, string, long, GpuVariant, CancellationToken)" /> ever ran.
     ///     A non-pinned tag came from an existing install record, the only writer of one, whose values the pin would corrupt.
     /// </remarks>
-    private async Task RecordResolvedRuntimeAsync(string resolvedTag, LlamaCppAssetPin pin, GpuVariant variant, CancellationToken ct)
+    private async Task RecordResolvedRuntimeAsync(string resolvedTag, LlamaCppAssetPin pin, GpuVariant variant, bool pinVariant, CancellationToken ct)
     {
         if (_installedRuntimeStore is null)
         {
@@ -494,6 +533,12 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                 throw new LlamaRuntimeException(ManagedSourceBuildUnavailableMessage);
             }
 
+            if (pinVariant)
+            {
+                await RecordOperatorPinAsync(current, resolvedTag, pin, variant, ct).ConfigureAwait(false);
+                return;
+            }
+
             // Only the pinned floor carries a tag whose asset/digest match the pin we are about to record. A non-pinned
             // resolvedTag came from an existing InstallTagAsync record (already correct) — never overwrite it with pin data.
             if (!string.Equals(resolvedTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal))
@@ -502,8 +547,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             }
 
             // A record already exists for this variant, pinning either the same tag (steady state) or a newer explicitly-installed one, and the pinned floor must not
-            // overwrite it — so a write happens only on a first pinned-floor ensure with no matching record, and a steady-state ensure never rewrites.
-            if (current is { } existing && existing.Variant == variant)
+            // overwrite it — so a write happens only on a first pinned-floor ensure with no matching record, and neither a steady-state ensure nor an operator pin is rewritten.
+            if (current is { } existing && (existing.Variant == variant || existing.OperatorSelected))
             {
                 return;
             }
@@ -515,6 +560,26 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         {
             _sourceMutationGate.Release();
         }
+    }
+
+    // Caller holds the record lock. A non-pinned tag whose record names another variant has no truthful asset or digest to record, so only this process's signal
+    // carries that pin, until restart.
+    private async Task RecordOperatorPinAsync(InstalledRuntimeState? current, string resolvedTag, LlamaCppAssetPin pin, GpuVariant variant, CancellationToken ct)
+    {
+        if (current is { } existing && existing.Variant == variant && string.Equals(existing.Tag, resolvedTag, StringComparison.Ordinal))
+        {
+            if (!existing.OperatorSelected)
+            {
+                await _installedRuntimeStore!.WriteAsync(existing with { OperatorSelected = true }, ct).ConfigureAwait(false);
+            }
+        }
+        else if (string.Equals(resolvedTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal))
+        {
+            var state = new InstalledRuntimeState(resolvedTag, pin.AssetName, pin.Sha256, variant, _timeProvider.GetUtcNow(), OperatorSelected: true);
+            await _installedRuntimeStore!.WriteAsync(state, ct).ConfigureAwait(false);
+        }
+
+        _managedCudaSignal?.SetActive(variant);
     }
 
     // The installed tag, then the pinned floor, whichever has a server on disk for the variant; null when neither does.
@@ -563,7 +628,13 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     }
 
     /// <inheritdoc />
-    public async Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, CancellationToken ct)
+    public Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, CancellationToken ct)
+    {
+        return InstallTagCoreLockedAsync(tag, assetName, digestSha256, expectedSize, variant, pinVariant: false, ct);
+    }
+
+    private async Task<LlamaBinary> InstallTagCoreLockedAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, bool pinVariant,
+        CancellationToken ct)
     {
         // The tag becomes a path segment of the lock key, so it is checked before the directory is composed.
         if (!IsValidTag(tag))
@@ -586,7 +657,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                     throw new LlamaRuntimeException(SourceBuildInstalledMessage);
                 }
 
-                return await InstallTagCoreAsync(tag, assetName, digestSha256, expectedSize, variant, ct).ConfigureAwait(false);
+                return await InstallTagCoreAsync(tag, assetName, digestSha256, expectedSize, variant, pinVariant, ct).ConfigureAwait(false);
             }
             finally
             {
@@ -612,7 +683,22 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         return InstallTagAsync(tag, assetName, digestSha256, expectedSize, variant, ct);
     }
 
-    private async Task<LlamaBinary> InstallTagCoreAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, CancellationToken ct)
+    /// <inheritdoc />
+    public Task<LlamaBinary> InstallTagAsync(string tag,
+        string assetName,
+        string digestSha256,
+        long expectedSize,
+        GpuVariant variant,
+        bool pinVariant,
+        ILlamaServerRuntimeMutationLease mutationLease,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(mutationLease);
+        return InstallTagCoreLockedAsync(tag, assetName, digestSha256, expectedSize, variant, pinVariant, ct);
+    }
+
+    private async Task<LlamaBinary> InstallTagCoreAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, bool pinVariant,
+        CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(assetName);
 
@@ -684,13 +770,20 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                 // InstallTagAsync's top guard ran BEFORE a minutes-long download, and the lock is deliberately not held across it (that would block every other node
                 // for the transfer), so re-check here under the record lock. The binary stays under its own versioned dir; only the record is refused, with a reason.
                 using var recordLock = await _installedRuntimeStore.AcquireAsync(ct).ConfigureAwait(false);
-                if ((await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false))?.SourceBuildPath is { Length: > 0 })
+                var previous = await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
+                if (previous?.SourceBuildPath is { Length: > 0 })
                 {
                     throw new LlamaRuntimeException(SourceBuildInstalledMessage);
                 }
 
-                var state = new InstalledRuntimeState(tag, assetName, expectedDigest, variant, _timeProvider.GetUtcNow());
+                // A named variant pins it; an unnamed one keeps the previous record's pin.
+                var operatorSelected = pinVariant || previous is { OperatorSelected: true };
+                var state = new InstalledRuntimeState(tag, assetName, expectedDigest, variant, _timeProvider.GetUtcNow(), OperatorSelected: operatorSelected);
                 await _installedRuntimeStore.WriteAsync(state, ct).ConfigureAwait(false);
+                if (operatorSelected)
+                {
+                    _managedCudaSignal?.SetActive(variant);
+                }
             }
 
             // Same reason as EnsureBinaryAsync: the operator-initiated install replaced the binary the audit was memoized against.

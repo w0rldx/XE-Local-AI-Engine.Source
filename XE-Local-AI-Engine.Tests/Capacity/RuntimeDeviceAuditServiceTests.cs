@@ -60,8 +60,23 @@ public sealed class RuntimeDeviceAuditServiceTests
         AssertEx.Equal("cpu", state.InferenceBackend);
         AssertEx.True(state.Reason!.Contains("Vulkan", StringComparison.Ordinal));
         AssertEx.True(state.Reason.Contains("WSL2", StringComparison.Ordinal));
-        AssertEx.True(state.Remediation!.Contains("build", StringComparison.OrdinalIgnoreCase));
+        AssertEx.True(state.Remediation!.StartsWith("In Node Settings, use automatic variant selection", StringComparison.Ordinal), state.Remediation);
+        AssertEx.True(state.Remediation.Contains("build", StringComparison.OrdinalIgnoreCase));
         AssertEx.True(state.Remediation.Contains("XE_LLAMACPP_SERVER_PATH", StringComparison.Ordinal));
+    }
+
+    [Test]
+    [Arguments(GpuVendor.Amd)]
+    [Arguments(GpuVendor.Intel)]
+    public void BuildState_OnLinuxWithANonNvidiaGpu_RemediationNeverMentionsCuda(GpuVendor vendor)
+    {
+        var state = RuntimeDeviceAuditService.BuildState(GpuProfile(vendor), GpuVariant.Vulkan, LlamaDeviceInventory.Empty(GpuVariant.Vulkan), isWindows: false);
+
+        AssertEx.True(state.CpuFallback);
+        var remediation = AssertEx.NotNull(state.Remediation);
+        AssertEx.True(remediation.StartsWith("In Node Settings, use automatic variant selection if a variant was pinned", StringComparison.Ordinal), remediation);
+        AssertEx.False(remediation.Contains("CUDA", StringComparison.Ordinal), remediation);
+        AssertEx.True(remediation.Contains("XE_LLAMACPP_SERVER_PATH", StringComparison.Ordinal));
     }
 
     [Test]
@@ -86,11 +101,12 @@ public sealed class RuntimeDeviceAuditServiceTests
     [Test]
     public void BuildState_GpuExpected_CpuVariantSelected_IsFallback()
     {
-        var state = RuntimeDeviceAuditService.BuildState(GpuProfile(GpuVendor.Nvidia), GpuVariant.Cpu, LlamaDeviceInventory.Empty(GpuVariant.Cpu));
+        var state = RuntimeDeviceAuditService.BuildState(GpuProfile(GpuVendor.Nvidia), GpuVariant.Cpu, LlamaDeviceInventory.Empty(GpuVariant.Cpu), isWindows: false);
 
         AssertEx.True(state.CpuFallback);
         AssertEx.Equal("cpu", state.InferenceBackend);
         AssertEx.True(state.Reason!.Contains("CPU", StringComparison.Ordinal));
+        AssertEx.True(state.Remediation!.StartsWith("In Node Settings, use automatic variant selection", StringComparison.Ordinal), state.Remediation);
     }
 
     [Test]

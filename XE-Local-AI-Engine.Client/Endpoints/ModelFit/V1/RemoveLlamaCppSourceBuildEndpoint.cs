@@ -66,6 +66,7 @@ public sealed class RemoveLlamaCppSourceBuildEndpoint : EndpointWithoutRequest<L
         await Send.OkAsync(_runtime.CurrentUpdateSnapshot.ToRuntimeStatusResponse(installed,
             recommendedTag,
             runningProcessCount,
-            _runtime.OverrideVariant), ct);
+            _runtime.OverrideVariant,
+            await _runtime.SelectGpuVariantAsync(ct)), ct);
     }
 }

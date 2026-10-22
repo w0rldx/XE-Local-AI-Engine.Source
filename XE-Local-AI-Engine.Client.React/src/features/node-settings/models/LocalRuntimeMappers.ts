@@ -18,6 +18,7 @@ export function toLlamaCppRuntimeStatus(
 						asset: installed.asset ?? "",
 						installedAtUtc: installed.installedAtUtc ?? undefined,
 						isSourceBuild: installed.isSourceBuild ?? false,
+						operatorSelected: installed.operatorSelected,
 						sourceRepository: installed.sourceRepository ?? null,
 						sourceCommit: installed.sourceCommit ?? null,
 						sourceSelection: installed.sourceSelection ?? null,
@@ -35,5 +36,6 @@ export function toLlamaCppRuntimeStatus(
 		isSourceBuild: dto.isSourceBuild ?? false,
 		rebuildAvailable: dto.rebuildAvailable ?? false,
 		overrideVariant: dto.overrideVariant ?? null,
+		selectedVariant: dto.selectedVariant,
 	};
 }

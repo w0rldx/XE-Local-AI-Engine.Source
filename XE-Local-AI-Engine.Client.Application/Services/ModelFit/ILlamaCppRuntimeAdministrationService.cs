@@ -28,6 +28,9 @@ public sealed class LlamaCppRuntimeStatus
 
     /// <summary>The variant a bring-your-own <c>llama-server</c> override serves with; <see langword="null" /> when none is set.</summary>
     public GpuVariant? OverrideVariant { get; init; }
+
+    /// <summary>The variant the next spawn selects: the override, else an operator pin or source build, else the vendor rule.</summary>
+    public required GpuVariant SelectedVariant { get; init; }
 }
 
 public sealed class LlamaCppRuntimeMutationResult
@@ -111,6 +114,9 @@ public sealed class LlamaCppInstalledRuntimeView
     public required string? SourceRequestedCommit { get; init; }
 
     public required int? SourceSelection { get; init; }
+
+    /// <summary>True while an operator pin is in effect (recorded, or held by this process).</summary>
+    public bool OperatorSelected { get; init; }
 }
 
 public sealed class LlamaCppRuntimeAcquisitionStatus
@@ -149,4 +155,10 @@ public interface ILlamaCppRuntimeAdministrationService
 
     Task<LlamaCppRuntimeAcquisitionStartResult> StartAcquisitionAsync(GpuVariant? variant = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Drops an operator variant pin so the next spawn follows the vendor rule again; a recorded source build is left
+    ///     as it is. Returns the refusal message while a bring-your-own override is active, otherwise null.
+    /// </summary>
+    Task<string?> UseAutomaticVariantAsync(CancellationToken cancellationToken = default);
 }

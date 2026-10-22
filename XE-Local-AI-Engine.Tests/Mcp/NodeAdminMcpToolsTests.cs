@@ -169,7 +169,8 @@ public sealed class NodeAdminMcpToolsTests
             IsOffline = false,
             RunningProcessCount = 2,
             CheckedAtUtc = null,
-            OverrideVariant = GpuVariant.Cuda
+            OverrideVariant = GpuVariant.Cuda,
+            SelectedVariant = GpuVariant.Cuda
         });
         harness.Runtime.GetAcquisitionStatus().Returns(new LlamaCppRuntimeAcquisitionStatus
         {
@@ -765,7 +766,8 @@ public sealed class NodeAdminMcpToolsTests
             UpdateAvailable = false,
             IsOffline = false,
             RunningProcessCount = 0,
-            CheckedAtUtc = null
+            CheckedAtUtc = null,
+            SelectedVariant = GpuVariant.Cpu
         });
         harness.Runtime.StartAcquisitionAsync(null, Arg.Any<CancellationToken>()).Returns(new LlamaCppRuntimeAcquisitionStartResult
         {

@@ -259,7 +259,8 @@ internal static class ModelFitMapper
         InstalledRuntimeState? installed,
         string recommendedTag,
         int runningProcessCount,
-        GpuVariant? overrideVariant)
+        GpuVariant? overrideVariant,
+        GpuVariant selectedVariant)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentException.ThrowIfNullOrWhiteSpace(recommendedTag);
@@ -282,7 +283,8 @@ internal static class ModelFitMapper
             IsSourceBuild = isSourceBuild,
             RebuildAvailable = rebuildAvailable,
             CheckedAtUtc = snapshot.CheckedAtUtc?.ToUnixTimeMilliseconds(),
-            OverrideVariant = overrideVariant?.ToWireString()
+            OverrideVariant = overrideVariant?.ToWireString(),
+            SelectedVariant = selectedVariant.ToWireString()
         };
     }
 
@@ -303,7 +305,8 @@ internal static class ModelFitMapper
                                && status.Installed is not null
                                && !string.Equals(status.Installed.Tag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal),
             CheckedAtUtc = status.CheckedAtUtc?.ToUnixTimeMilliseconds(),
-            OverrideVariant = status.OverrideVariant?.ToWireString()
+            OverrideVariant = status.OverrideVariant?.ToWireString(),
+            SelectedVariant = status.SelectedVariant.ToWireString()
         };
     }
 
@@ -315,6 +318,7 @@ internal static class ModelFitMapper
             Asset = state.Asset,
             InstalledAtUtc = state.InstalledAtUnixTimeMilliseconds,
             IsSourceBuild = state.IsSourceBuild,
+            OperatorSelected = state.OperatorSelected,
             SourceRepository = state.SourceRepository,
             SourceCommit = state.SourceCommit,
             SourceSelection = state.SourceSelection is null ? null : (LlamaCppSourceSelectionDto)state.SourceSelection.Value,
@@ -331,6 +335,7 @@ internal static class ModelFitMapper
             Asset = state.Asset,
             InstalledAtUtc = state.InstalledAtUtc.ToUnixTimeMilliseconds(),
             IsSourceBuild = state.SourceBuildPath is { Length: > 0 },
+            OperatorSelected = state.OperatorSelected,
             SourceRepository = state.SourceRepository,
             SourceCommit = state.SourceCommit,
             SourceSelection = state.SourceSelection is null ? null : (LlamaCppSourceSelectionDto)(int)state.SourceSelection.Value,

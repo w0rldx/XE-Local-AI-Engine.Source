@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { XeLocalAiEngineClientEndpointsModelFitV1RuntimeAcquisitionStatusResponse } from "@/core/api/generated";
 import {
+	// Aliased: the generated name carries a hook prefix, but it is a plain options factory called inside mutationFn.
+	useAutomaticLlamaCppVariantMutation as automaticLlamaCppVariantMutation,
 	cancelLlamaCppSourceBuildMutation,
 	ensureLlamaCppBinaryMutation,
 	getHardwareProfileOptions,
@@ -113,6 +115,20 @@ export function useUpdateLlamaCppRuntime() {
 		mutationFn: async (variables: { tag: string; variant?: LlamaCppVariant }) => {
 			const options = updateLlamaCppRuntimeMutation();
 			return await options.mutationFn?.({ body: { tag: variables.tag, variant: variables.variant ?? null } }, undefined as never);
+		},
+		onSuccess: () => invalidate(queryClient, localRuntimeQueryIds.llamaCppRuntime),
+	});
+}
+
+// Drops the operator's variant pin so the node chooses the variant automatically again. A 409 (a bring-your-own override
+// is active) rejects with the server's message; the caller toasts both outcomes.
+export function useRestoreAutomaticLlamaCppVariant() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async () => {
+			const options = automaticLlamaCppVariantMutation();
+			return await options.mutationFn?.({}, undefined as never);
 		},
 		onSuccess: () => invalidate(queryClient, localRuntimeQueryIds.llamaCppRuntime),
 	});

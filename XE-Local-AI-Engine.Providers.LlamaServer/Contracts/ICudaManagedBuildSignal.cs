@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     A tiny process-wide cached flag: a managed source-built CUDA runtime is recorded and was present at the last
-///     check.
+///     A tiny process-wide cached flag: the variant the installed-runtime record pins, either a managed source build
+///     present at the last check or a prebuilt the operator explicitly installed.
 /// </summary>
 /// <remarks>
 ///     It exists so <see cref="IGpuVariantSelector" /> can decide CUDA versus Vulkan on a Linux NVIDIA machine WITHOUT a

@@ -34,6 +34,7 @@ const { hooksMock, devModeMock } = vi.hoisted(() => ({
 		refresh: vi.fn(() => Promise.resolve()),
 		mutate: vi.fn(),
 		ensureMutate: vi.fn(),
+		automaticMutate: vi.fn(),
 		isPending: false,
 		sourceBuildRunning: false,
 	},
@@ -50,6 +51,7 @@ vi.mock("@/features/node-settings/queries/useLocalRuntime", () => ({
 	useUpdateLlamaCppRuntime: () => ({ mutate: hooksMock.mutate, isPending: hooksMock.isPending }),
 	useEnsureLlamaCppBinary: () => ({ mutate: hooksMock.ensureMutate, isPending: false }),
 	useRefreshLlamaCppRuntime: () => hooksMock.refresh,
+	useRestoreAutomaticLlamaCppVariant: () => ({ mutate: hooksMock.automaticMutate, isPending: false }),
 	useSourceBuildStatus: () => ({ data: { isRunning: hooksMock.sourceBuildRunning } }),
 }));
 
@@ -98,6 +100,7 @@ function installJsdomEnvironmentMocks(): void {
 	});
 }
 
+import { toast } from "@/core/ui/notifications/Toast";
 import { LlamaCppUpdaterPanel } from "@/features/node-settings/components/LlamaCppUpdaterPanel";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
@@ -120,6 +123,7 @@ describe("LlamaCppUpdaterPanel", () => {
 		devModeMock.developerMode = false;
 		vi.clearAllMocks();
 		hooksMock.mutate.mockReset();
+		hooksMock.automaticMutate.mockReset();
 	});
 
 	afterEach(() => cleanup());
@@ -429,5 +433,74 @@ describe("LlamaCppUpdaterPanel", () => {
 
 		expect(screen.getByTestId("llamacpp-updater-offline")).toBeTruthy();
 		expect(screen.queryByTestId("llamacpp-updater-state-notchecked")).toBeNull();
+	});
+
+	function variantStatus(overrides: Partial<LlamaCppRuntimeStatus>, operatorSelected: boolean): LlamaCppRuntimeStatus {
+		return {
+			installed: { tag: "b9700", variant: "vulkan", asset: "a", installedAtUtc: 0, operatorSelected },
+			recommendedTag: "b9700",
+			upstreamLatestTag: null,
+			updateAvailable: false,
+			isOffline: false,
+			runningProcessCount: 0,
+			checkedAtUtc: 1,
+			selectedVariant: "vulkan",
+			...overrides,
+		};
+	}
+
+	it("says the variant is chosen automatically and offers no way back when nothing is pinned", () => {
+		hooksMock.statusData = variantStatus({ selectedVariant: "cuda" }, false);
+
+		renderPanel();
+
+		expect(screen.getByTestId("llamacpp-updater-selection").textContent).toBe("Automatic: cuda");
+		expect(screen.queryByTestId("llamacpp-updater-use-automatic-button")).toBeNull();
+	});
+
+	it("says the operator pinned the installed variant and offers automatic selection", () => {
+		hooksMock.statusData = variantStatus({}, true);
+
+		renderPanel();
+
+		expect(screen.getByTestId("llamacpp-updater-selection").textContent).toBe("Pinned by you: vulkan");
+		expect((screen.getByTestId("llamacpp-updater-use-automatic-button") as HTMLButtonElement).disabled).toBe(false);
+		expect(screen.getByText("Installing a variant pins it for this node until you restore automatic selection.")).toBeTruthy();
+	});
+
+	it("hides the automatic action behind the override notice while a bring-your-own runtime serves", () => {
+		hooksMock.statusData = variantStatus({ selectedVariant: "cuda", overrideVariant: "cuda" }, true);
+
+		renderPanel();
+
+		expect(screen.getByTestId("llamacpp-updater-override-notice")).toBeTruthy();
+		expect(screen.queryByTestId("llamacpp-updater-use-automatic-button")).toBeNull();
+	});
+
+	it("toasts success after restoring automatic selection", () => {
+		hooksMock.statusData = variantStatus({}, true);
+		hooksMock.automaticMutate.mockImplementation((_vars: unknown, options?: { onSuccess?: () => void }) =>
+			options?.onSuccess?.(),
+		);
+
+		renderPanel();
+		fireEvent.click(screen.getByTestId("llamacpp-updater-use-automatic-button"));
+
+		expect(hooksMock.automaticMutate).toHaveBeenCalledTimes(1);
+		expect(toast.success).toHaveBeenCalledWith("Automatic variant selection restored.");
+		expect(toast.error).not.toHaveBeenCalled();
+	});
+
+	it("shows the node's refusal when restoring automatic selection is blocked", () => {
+		hooksMock.statusData = variantStatus({}, true);
+		hooksMock.automaticMutate.mockImplementation((_vars: unknown, options?: { onError?: (error: unknown) => void }) =>
+			options?.onError?.(new Error("A bring-your-own llama-server override is active.")),
+		);
+
+		renderPanel();
+		fireEvent.click(screen.getByTestId("llamacpp-updater-use-automatic-button"));
+
+		expect(toast.error).toHaveBeenCalledWith("A bring-your-own llama-server override is active.");
+		expect(toast.success).not.toHaveBeenCalled();
 	});
 });

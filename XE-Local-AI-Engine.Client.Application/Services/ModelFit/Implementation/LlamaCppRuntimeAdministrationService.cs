@@ -17,6 +17,9 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
     private const string KeepModelWarmBlockedMessage =
         "Disable Keep Model Warm before changing the llama.cpp runtime, then eject any running models and retry.";
 
+    private const string OverrideActiveMessage =
+        "Runtime updates are disabled while a bring-your-own llama-server override is active; the operator manages the binary.";
+
     private const string EjectRunningModelsMessage =
         "Stop or eject all running llama.cpp models before updating the runtime.";
 
@@ -37,6 +40,7 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
     private readonly IHostApplicationLifetime _applicationLifetime;
     private readonly ILogger<LlamaCppRuntimeAdministrationService> _logger;
     private readonly IRuntimeDeviceAudit _deviceAudit;
+    private readonly ICudaManagedBuildSignal _activeVariantSignal;
     private Task? _ownedAcquisitionTask;
 
     public LlamaCppRuntimeAdministrationService(ILlamaCppBinaryManager binaryManager,
@@ -53,11 +57,14 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
         IHostApplicationLifetime applicationLifetime,
         ILogger<LlamaCppRuntimeAdministrationService> logger,
         TimeProvider timeProvider,
-        IRuntimeDeviceAudit deviceAudit)
+        IRuntimeDeviceAudit deviceAudit,
+        ICudaManagedBuildSignal activeVariantSignal)
     {
         ArgumentNullException.ThrowIfNull(timeProvider);
         ArgumentNullException.ThrowIfNull(deviceAudit);
+        ArgumentNullException.ThrowIfNull(activeVariantSignal);
         _deviceAudit = deviceAudit;
+        _activeVariantSignal = activeVariantSignal;
         _binaryManager = binaryManager;
         _releaseCatalog = releaseCatalog;
         _variantSelector = variantSelector;
@@ -97,15 +104,27 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
 
         return new LlamaCppRuntimeStatus
         {
-            Installed = installed is null ? null : ToView(installed),
+            Installed = installed is null ? null : ToView(installed, IsPinInEffect(installed)),
             RecommendedTag = recommendedTag,
             UpstreamLatestTag = snapshot.UpstreamLatestTag,
             UpdateAvailable = snapshot.UpdateAvailable,
             IsOffline = snapshot.IsOffline,
             RunningProcessCount = _processSupervisor.CountRunningProcesses(),
             CheckedAtUtc = snapshot.CheckedAtUtc,
-            OverrideVariant = _overrideOptions.IsActive ? _overrideOptions.Variant : null
+            OverrideVariant = _overrideOptions.IsActive ? _overrideOptions.Variant : null,
+            SelectedVariant = await _variantSelector.SelectVariantAsync(cancellationToken)
         };
+    }
+
+    public async Task<string?> UseAutomaticVariantAsync(CancellationToken cancellationToken = default)
+    {
+        if (_overrideOptions.IsActive)
+        {
+            return OverrideActiveMessage;
+        }
+
+        await _binaryManager.ClearVariantPinAsync(cancellationToken);
+        return null;
     }
 
     public LlamaCppRuntimeAcquisitionStatus GetAcquisitionStatus()
@@ -166,8 +185,7 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
     {
         if (_overrideOptions.IsActive)
         {
-            return LlamaCppRuntimeMutationResult.Rejected(LlamaCppRuntimeAdministrationFailure.Busy,
-                "Runtime updates are disabled while a bring-your-own llama-server override is active; the operator manages the binary.");
+            return LlamaCppRuntimeMutationResult.Rejected(LlamaCppRuntimeAdministrationFailure.Busy, OverrideActiveMessage);
         }
 
         if (!StoredNodeSettings.IsValidRecommendedLlamaCppTag(tag))
@@ -230,6 +248,7 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
                 asset.Asset.Digest,
                 asset.Asset.Size,
                 selectedVariant,
+                pinVariant: variant is not null,
                 lease,
                 cancellationToken);
             _localChatClientCacheInvalidator.ClearClientCache();
@@ -273,7 +292,7 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
         Task ownedTask;
         lock (_taskGate)
         {
-            ownedTask = RunOwnedAcquisitionAsync(selectedVariant, admission.Lease, _applicationLifetime.ApplicationStopping);
+            ownedTask = RunOwnedAcquisitionAsync(selectedVariant, pinVariant: variant is not null, admission.Lease, _applicationLifetime.ApplicationStopping);
             _ownedAcquisitionTask = ownedTask;
         }
 
@@ -371,13 +390,15 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
             : null;
     }
 
+    // A start that let the selector choose does not pin the variant.
     private async Task RunOwnedAcquisitionAsync(GpuVariant variant,
+        bool pinVariant,
         ILlamaServerRuntimeMutationLease lease,
         CancellationToken applicationStopping)
     {
         await using (lease)
         {
-            await _binaryManager.AcquireBinaryAsync(variant, applicationStopping);
+            await _binaryManager.AcquireBinaryAsync(variant, pinVariant, applicationStopping);
         }
 
         await RuntimeDeviceAuditWarmup.WarmAsync(_deviceAudit, variant, _logger, applicationStopping);
@@ -474,7 +495,11 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
             IsPinnedFallback = binary.IsPinnedFallback
         };
 
-    private static LlamaCppInstalledRuntimeView ToView(InstalledRuntimeState installed) =>
+    // A pin this process could not persist lives only in the signal; an active signal on a source-build record is that build, not a pin.
+    private bool IsPinInEffect(InstalledRuntimeState installed) =>
+        installed.OperatorSelected || (_activeVariantSignal.ActiveVariant is not null && installed.SourceBuildPath is not { Length: > 0 });
+
+    private static LlamaCppInstalledRuntimeView ToView(InstalledRuntimeState installed, bool operatorSelected) =>
         new()
         {
             Tag = installed.Tag,
@@ -486,7 +511,8 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
             SourceCommit = installed.SourceCommit,
             SourceRevisionMode = installed.SourceRevisionMode is null ? null : (int)installed.SourceRevisionMode.Value,
             SourceRequestedCommit = installed.SourceRequestedCommit,
-            SourceSelection = installed.SourceSelection is null ? null : (int)installed.SourceSelection.Value
+            SourceSelection = installed.SourceSelection is null ? null : (int)installed.SourceSelection.Value,
+            OperatorSelected = operatorSelected
         };
 
     private static string ToWireString(GpuVariant variant) =>

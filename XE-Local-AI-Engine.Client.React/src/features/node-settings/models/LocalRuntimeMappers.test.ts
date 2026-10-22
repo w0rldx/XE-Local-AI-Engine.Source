@@ -12,6 +12,7 @@ describe("toLlamaCppRuntimeStatus", () => {
 				asset: "asset.zip",
 				installedAtUtc: 1700000000000,
 				isSourceBuild: true,
+				operatorSelected: true,
 				sourceRepository: "https://github.com/example/fork",
 				sourceCommit: "a".repeat(40),
 				sourceSelection: "custom",
@@ -25,6 +26,7 @@ describe("toLlamaCppRuntimeStatus", () => {
 			runningProcessCount: 0,
 			isSourceBuild: true,
 			rebuildAvailable: false,
+			selectedVariant: "vulkan",
 		};
 
 		const status = toLlamaCppRuntimeStatus(dto);
@@ -35,6 +37,7 @@ describe("toLlamaCppRuntimeStatus", () => {
 			asset: "asset.zip",
 			installedAtUtc: 1700000000000,
 			isSourceBuild: true,
+			operatorSelected: true,
 			sourceRepository: "https://github.com/example/fork",
 			sourceCommit: "a".repeat(40),
 			sourceSelection: "custom",
@@ -45,6 +48,8 @@ describe("toLlamaCppRuntimeStatus", () => {
 		expect(status.upstreamLatestTag).toBe("b9999");
 		expect(status.updateAvailable).toBe(true);
 		expect(status.isOffline).toBe(false);
+		// The selector's answer can differ from the installed variant (an override or source build wins over a pin).
+		expect(status.selectedVariant).toBe("vulkan");
 	});
 
 	it("coalesces absent fields: null installed, no upstream, offline defaults", () => {
@@ -56,6 +61,7 @@ describe("toLlamaCppRuntimeStatus", () => {
 			runningProcessCount: 0,
 			isSourceBuild: false,
 			rebuildAvailable: false,
+			selectedVariant: "cpu",
 		});
 
 		expect(status.installed).toBeNull();
@@ -76,6 +82,7 @@ describe("toLlamaCppRuntimeStatus", () => {
 			isSourceBuild: false,
 			rebuildAvailable: false,
 			checkedAtUtc: 1700000000000,
+			selectedVariant: "cpu",
 		});
 
 		expect(status.checkedAtUtc).toBe(1700000000000);
@@ -90,6 +97,7 @@ describe("toLlamaCppRuntimeStatus", () => {
 			runningProcessCount: 0,
 			isSourceBuild: false,
 			rebuildAvailable: false,
+			selectedVariant: "cpu",
 		});
 
 		expect(status.checkedAtUtc).toBeNull();

@@ -123,6 +123,7 @@ describe("RuntimeAcquisitionBanner", () => {
 			runningProcessCount: 0,
 			isSourceBuild: false,
 			rebuildAvailable: false,
+			selectedVariant: "cpu",
 		});
 		expect(queryClient.getQueryState(runtimeKey)?.isInvalidated).toBe(false);
 

@@ -4866,6 +4866,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppInstalledRuntimeRe
 	asset: z.string(),
 	installedAtUtc: z.int(),
 	isSourceBuild: z.boolean(),
+	operatorSelected: z.boolean(),
 	sourceRepository: z.string().nullish(),
 	sourceCommit: z.string().nullish(),
 	sourceSelection: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto.nullish(),
@@ -4887,6 +4888,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusRespo
 	rebuildAvailable: z.boolean(),
 	checkedAtUtc: z.int().nullish(),
 	overrideVariant: z.string().nullish(),
+	selectedVariant: z.string(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildDescriptorResponse = z.object({
@@ -12606,6 +12608,11 @@ export const zUpdateLlamaCppRuntimeBody = zXeLocalAiEngineClientEndpointsModelFi
  * Success
  */
 export const zUpdateLlamaCppRuntimeResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse;
+
+/**
+ * Success
+ */
+export const zUseAutomaticLlamaCppVariantResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse;
 
 export const zEnsureLlamaCppBinaryBody = zXeLocalAiEngineClientEndpointsModelFitV1EnsureLlamaCppBinaryRequest;
 

@@ -1408,6 +1408,9 @@ import type {
 	UploadTranscriptionAudioData,
 	UploadTranscriptionAudioErrors,
 	UploadTranscriptionAudioResponses,
+	UseAutomaticLlamaCppVariantData,
+	UseAutomaticLlamaCppVariantErrors,
+	UseAutomaticLlamaCppVariantResponses,
 	ValidateExecutableData,
 	ValidateExecutableErrors,
 	ValidateExecutableResponses,
@@ -1886,6 +1889,7 @@ import {
 	zUploadImageResponse,
 	zUploadKnowledgeDocumentResponse,
 	zUploadTranscriptionAudioResponse,
+	zUseAutomaticLlamaCppVariantResponse,
 	zValidateExecutableResponse,
 	zValidateGraphWorkflowDefinitionResponse,
 	zValidationProblemProbeResponse,
@@ -9303,6 +9307,28 @@ export const updateLlamaCppRuntime = <ThrowOnError extends boolean = true>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const useAutomaticLlamaCppVariant = <ThrowOnError extends boolean = true>(
+	options?: Options<UseAutomaticLlamaCppVariantData, ThrowOnError>,
+): RequestResult<UseAutomaticLlamaCppVariantResponses, UseAutomaticLlamaCppVariantErrors, ThrowOnError> =>
+	(options?.client ?? client).post<UseAutomaticLlamaCppVariantResponses, UseAutomaticLlamaCppVariantErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zUseAutomaticLlamaCppVariantResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-fit/llamacpp/variant/automatic",
+		...options,
 	});
 
 export const ensureLlamaCppBinary = <ThrowOnError extends boolean = true>(

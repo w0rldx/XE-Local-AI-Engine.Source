@@ -20,6 +20,9 @@ export interface LlamaCppInstalledRuntime {
 	readonly sourceSelection?: "official" | "custom" | null;
 	readonly sourceRevisionMode?: "enginePinned" | "defaultBranch" | "explicitCommit" | null;
 	readonly sourceRequestedCommit?: string | null;
+	// True when the operator installed this variant explicitly, which pins it for the node until automatic selection is
+	// restored. Optional so payloads/test fixtures predating the field read as automatic.
+	readonly operatorSelected?: boolean;
 }
 
 // Domain view-model for the read-only runtime status (GET model-fit/llamacpp/runtime). Drives the updater panel and
@@ -48,4 +51,7 @@ export interface LlamaCppRuntimeStatus {
 	// The variant of an operator bring-your-own llama-server that serves instead of `installed`; null when none is set.
 	// The node never sends the override's path.
 	readonly overrideVariant?: string | null;
+	// The variant the node's selector answers right now (override, then source build, then pin, then hardware). It can
+	// differ from `installed.variant` when an override or a source build takes precedence over the pin.
+	readonly selectedVariant?: string;
 }

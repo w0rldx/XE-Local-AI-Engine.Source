@@ -23,11 +23,34 @@ public interface ILlamaCppBinaryManager
 
     /// <summary>
     ///     <see cref="EnsureBinaryAsync(GpuVariant, CancellationToken)" /> for an explicit operator install: it downloads even
-    ///     where <see cref="ILlamaCppImplicitAcquisitionPolicy" /> refuses an implicit download.
+    ///     where <see cref="ILlamaCppImplicitAcquisitionPolicy" /> refuses an implicit download, and pins variant selection
+    ///     to <paramref name="variant" /> (<see cref="InstalledRuntimeState.OperatorSelected" />).
     /// </summary>
     Task<LlamaBinary> AcquireBinaryAsync(GpuVariant variant, CancellationToken ct)
     {
         return EnsureBinaryAsync(variant, ct);
+    }
+
+    /// <summary>
+    ///     <see cref="AcquireBinaryAsync(GpuVariant, CancellationToken)" /> that pins the variant only when
+    ///     <paramref name="pinVariant" /> is true: an operator start that let the selector choose stays automatic.
+    /// </summary>
+    Task<LlamaBinary> AcquireBinaryAsync(GpuVariant variant, bool pinVariant, CancellationToken ct)
+    {
+        return AcquireBinaryAsync(variant, ct);
+    }
+
+    /// <summary>
+    ///     Restores automatic variant selection: rewrites an operator-pinned prebuilt record with
+    ///     <see cref="InstalledRuntimeState.OperatorSelected" /> false and clears the cached pin, keeping the binary and tag.
+    /// </summary>
+    /// <remarks>
+    ///     A recorded source build is left untouched: it stays authoritative until it is removed. Takes effect on the
+    ///     next spawn; a running server keeps its binary.
+    /// </remarks>
+    Task ClearVariantPinAsync(CancellationToken ct)
+    {
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -99,6 +122,22 @@ public interface ILlamaCppBinaryManager
     {
         ArgumentNullException.ThrowIfNull(mutationLease);
         return InstallTagAsync(tag, assetName, digestSha256, expectedSize, variant, ct);
+    }
+
+    /// <summary>
+    ///     The lease-bearing install that pins <paramref name="variant" /> when <paramref name="pinVariant" /> is true (the
+    ///     caller named it); false keeps the record's current pin.
+    /// </summary>
+    Task<LlamaBinary> InstallTagAsync(string tag,
+        string assetName,
+        string digestSha256,
+        long expectedSize,
+        GpuVariant variant,
+        bool pinVariant,
+        ILlamaServerRuntimeMutationLease mutationLease,
+        CancellationToken ct)
+    {
+        return InstallTagAsync(tag, assetName, digestSha256, expectedSize, variant, mutationLease, ct);
     }
 
     /// <summary>

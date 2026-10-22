@@ -1,15 +1,13 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
-/// <summary>
-///     The authoritative record of the llama.cpp runtime that is actually installed on disk — written only after a
-///     verified, smoke-tested install. Tier 2 of the 3-tier resolve (live API → this state → pinned floor).
-/// </summary>
+/// <summary>The authoritative record of the llama.cpp runtime installed on disk, written only after a verified, smoke-tested install; tier 2 of the tag resolve.</summary>
 /// <param name="Tag">The installed release tag (for example <c>b9700</c>).</param>
 /// <param name="Asset">The installed asset file name.</param>
 /// <param name="Sha256">The lowercase hex SHA256 the installed archive was verified against.</param>
 /// <param name="Variant">The acceleration variant of the installed binary.</param>
 /// <param name="InstalledAtUtc">When the install completed (UTC).</param>
 /// <param name="SourceBuildPath">Absolute directory of a source-built runtime, or <see langword="null" /> for a prebuilt.</param>
+/// <param name="OperatorSelected">True when the operator explicitly installed this prebuilt variant, pinning selection to it.</param>
 /// <remarks>
 ///     <see cref="SourceBuildPath" /> presence is the single signal that a record describes a <em>managed source
 ///     build</em>: readers key off it, or off the wire <c>isSourceBuild</c> flag, never parsing the sentinel
@@ -26,7 +24,8 @@ public sealed record InstalledRuntimeState(
     string? SourceCommit = null,
     LlamaCppSourceRevisionMode? SourceRevisionMode = null,
     string? SourceRequestedCommit = null,
-    LlamaCppSourceSelection? SourceSelection = null);
+    LlamaCppSourceSelection? SourceSelection = null,
+    bool OperatorSelected = false);
 
 /// <summary>
 ///     Reads/writes <c>installed-runtime.json</c> under the cache root (sibling to <c>llama.cpp/</c>). The single record

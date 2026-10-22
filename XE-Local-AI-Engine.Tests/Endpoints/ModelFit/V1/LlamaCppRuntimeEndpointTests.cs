@@ -360,6 +360,78 @@ public sealed class LlamaCppRuntimeEndpointTests
     }
 
     [Test]
+    public async Task RuntimeStatus_WithAnOperatorPinnedRecord_ReportsThePinAsTheSelectedVariant()
+    {
+        var pinned = InstalledAt("b9692") with
+        {
+            Variant = GpuVariant.Vulkan,
+            OperatorSelected = true
+        };
+        await using var factory = CreateFactory(Substitute.For<ILlamaCppBinaryManager>(), new LlamaCppUpdateState(), installedRuntime: pinned);
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/llamacpp/runtime");
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.Equal("vulkan", doc.RootElement.GetProperty("selectedVariant").GetString());
+        AssertEx.True(doc.RootElement.GetProperty("installed").GetProperty("operatorSelected").GetBoolean());
+    }
+
+    [Test]
+    public async Task UseAutomaticVariant_ClearsThePin_AndAnswersTheRuntimeStatus()
+    {
+        // The default test host keeps the real binary manager over a per-test installed-runtime store, so the whole clear runs.
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+        var store = factory.Services.GetRequiredService<IInstalledRuntimeStore>();
+        var signal = factory.Services.GetRequiredService<ICudaManagedBuildSignal>();
+        await store.WriteAsync(InstalledAt("b9692") with
+        {
+            Variant = GpuVariant.Vulkan,
+            OperatorSelected = true
+        }, CancellationToken.None);
+        signal.SetActive(GpuVariant.Vulkan);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/model-fit/llamacpp/variant/automatic");
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var installed = doc.RootElement.GetProperty("installed");
+        AssertEx.False(installed.GetProperty("operatorSelected").GetBoolean());
+        AssertEx.Equal("b9692", installed.GetProperty("tag").GetString());
+        AssertEx.Null(signal.ActiveVariant);
+        var vendorRule = await factory.Services.GetRequiredService<IGpuVariantSelector>().SelectVariantAsync(CancellationToken.None);
+        AssertEx.True(string.Equals(vendorRule.ToString(), doc.RootElement.GetProperty("selectedVariant").GetString(), StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Test]
+    public async Task UseAutomaticVariant_WhenOverrideActive_Returns409WithoutTouchingThePin()
+    {
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        var overrideOptions = new LlamaServerRuntimeOverrideOptions
+        {
+            ServerPath = "/opt/llama/llama-server",
+            Variant = GpuVariant.Cuda
+        };
+        await using var factory = CreateFactory(binaryManager, new LlamaCppUpdateState(), overrideOptions: overrideOptions);
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/model-fit/llamacpp/variant/automatic");
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.Contains(doc.RootElement.GetProperty("message").GetString(), "override", StringComparison.OrdinalIgnoreCase);
+        await binaryManager.DidNotReceiveWithAnyArgs().ClearVariantPinAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task RuntimeStatus_WhenNoBearerToken_ReturnsUnauthorized()
     {
         await using var factory = CreateFactory(Substitute.For<ILlamaCppBinaryManager>(), new LlamaCppUpdateState());

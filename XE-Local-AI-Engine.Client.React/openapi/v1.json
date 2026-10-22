@@ -17840,6 +17840,50 @@
         ]
       }
     },
+    "/api/local/v1/model-fit/llamacpp/variant/automatic": {
+      "post": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "useAutomaticLlamaCppVariant",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppUpdateBlockedResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/model-fit/llamacpp/version": {
       "post": {
         "tags": [
@@ -43023,7 +43067,8 @@
           "variant",
           "asset",
           "installedAtUtc",
-          "isSourceBuild"
+          "isSourceBuild",
+          "operatorSelected"
         ],
         "properties": {
           "tag": {
@@ -43039,6 +43084,9 @@
             "type": "integer"
           },
           "isSourceBuild": {
+            "type": "boolean"
+          },
+          "operatorSelected": {
             "type": "boolean"
           },
           "sourceRepository": {
@@ -43080,7 +43128,8 @@
           "isOffline",
           "runningProcessCount",
           "isSourceBuild",
-          "rebuildAvailable"
+          "rebuildAvailable",
+          "selectedVariant"
         ],
         "properties": {
           "installed": {
@@ -43121,6 +43170,9 @@
           "overrideVariant": {
             "type": "string",
             "nullable": true
+          },
+          "selectedVariant": {
+            "type": "string"
           }
         }
       },

@@ -44,7 +44,7 @@ change and reset revoke all. **Prevents:** reviving a logged-out cookie, or a lo
 
 ### `lab-up.sh` refuses to start without the GPU runtime unless `--cpu` is explicit
 
-**Rule:** a GPU lab round exports `XE_LLAMACPP_SERVER_PATH` (the BYO llama-server) and `XE_LLAMACPP_VARIANT` before `scripts/lab-up.sh`; the script reads both from its environment (`HOST_ENV_KEYS`), reuses a running host only when it started with the same values, and exits 2 with a one-line reason when the path is unset and `--cpu` was not passed. `--cpu` is the only way to run a lab on the managed runtime, and it is for functional checks, never for timing. **Prevents:** a live round whose latency figures come from a large model running on the CPU for minutes. **Authority:** `scripts/lab-up.sh` (`HOST_ENV_KEYS`, `--cpu`); `scripts/tests/lab-up.test.sh`; `AGENTS.md` ("Local runtime").
+**Rule:** a GPU lab round exports `XE_LLAMACPP_SERVER_PATH` (the BYO llama-server) and `XE_LLAMACPP_VARIANT` before `scripts/lab-up.sh`; the script reads both from its environment (`HOST_ENV_KEYS`), reuses a running host only when it started with the same values, and exits 2 with a one-line reason when the path is unset and `--cpu` was not passed. `--cpu` accepts whatever managed runtime the node selects for the host (the CUDA prebuilt on a Linux x64 NVIDIA host, Vulkan or CPU elsewhere); timing evidence from such a lab names which runtime served. **Prevents:** a live round whose latency figures come from a large model running on the CPU for minutes. **Authority:** `scripts/lab-up.sh` (`HOST_ENV_KEYS`, `--cpu`); `scripts/tests/lab-up.test.sh`; `AGENTS.md` ("Local runtime").
 
 ### Probe the GPU; never assume one
 

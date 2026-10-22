@@ -199,12 +199,13 @@ See [the reference page](reference/03-llama-server-supervisor.md#startup-orphan-
 For *asset selection*, the supervisor does **only enough** hardware probing to pick the prebuilt binary — the full VRAM/memory-fit math lives in the Model Advisor ([07-model-fit.md](07-model-fit.md)), explicitly NOT here. (The separate process-local VRAM-budget probe used by the variant recommender and the profile/benchmark services is `LlamaListDevicesProcessVramBudgetProbe`, §2.5.)
 
 - `IGpuVendorProbe` → `ProcessGpuVendorProbe` detects the vendor (`DetectedGpuVendor`: Nvidia/Amd/Intel/none).
-- `IGpuVariantSelector` → `GpuVariantSelector.SelectVariantAsync` (`Implementation/GpuVariantSelector.cs`) applies three rules in order:
+- `IGpuVariantSelector` → `GpuVariantSelector.SelectVariantAsync` (`Implementation/GpuVariantSelector.cs`) applies four rules in order:
 
 ```
 1. operator BYO override active  -> the override's configured variant  (vendor probe skipped entirely)
 2. an adopted source build       -> ICudaManagedBuildSignal.ActiveVariant  (cached flag, no store read)
-3. otherwise SelectForVendor(vendor, isWindows):
+3. an operator-pinned prebuilt   -> ICudaManagedBuildSignal.ActiveVariant  (cleared by POST model-fit/llamacpp/variant/automatic)
+4. otherwise SelectForVendor(vendor, isWindows):
      NVIDIA    -> CUDA   on Windows
                -> CUDA   on Linux x64   (managed prebuilt with its cudart companion)
                -> Vulkan on Linux arm64 (no CUDA pin)
@@ -213,6 +214,8 @@ For *asset selection*, the supervisor does **only enough** hardware probing to p
 ```
 
 `GpuVariant` is the resulting enum (`Cuda` / `Vulkan` / `Cpu`).
+
+Rule 3 is the operator pin. An explicit install (the Node Settings ensure, a runtime acquisition start that names a variant, or an update that names one) records `InstalledRuntimeState.OperatorSelected`, and every later spawn uses that variant even where the vendor rule would pick another, so a Vulkan install on an NVIDIA machine sticks. An implicit install (the first chat or first-run provisioning through `EnsureBinaryAsync`) records no pin and never rewrites a pinned record, so it stays dynamic. The runtime-status response reports the selector's current answer as `selectedVariant` and the record's flag as `installed.operatorSelected`. The "use automatic selection" action, `POST model-fit/llamacpp/variant/automatic`, rewrites the record unpinned (binary and tag kept) and clears the signal; it answers 409 under a bring-your-own override, leaves a recorded source build untouched, and takes effect on the next spawn.
 
 Rule 2 is what makes an in-app CUDA build usable on Linux: `ICudaManagedBuildSignal` (`Implementation/CudaManagedBuildSignal.cs`) is a process-wide volatile latch — `SetActive(variant)` on adopt and at startup seeding, `Clear()` on remove or when a serve-time validation fails — so the hot selection path never reads `installed-runtime.json`. It is deliberately **optimistic**: it does not prove the binary is on disk and hash-valid right now, because the binary manager re-validates authoritatively on every serve and clears a stale flag there. Its `Version` counter is bumped on every set/clear so a cache that memoized the selected variant recomputes after an adopt/remove: such a cache records the stamp it saw and recomputes when it differs, so an adopt or remove that flips the selection never leaves a stale memo. The counter is lock-free to read and only ever grows, and `Clear()` is called both on remove and when a serve finds the recorded build missing or invalid.
 

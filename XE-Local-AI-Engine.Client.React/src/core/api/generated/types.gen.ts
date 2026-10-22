@@ -4735,6 +4735,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppInstalledRuntimeResp
 	asset: string;
 	installedAtUtc: number;
 	isSourceBuild: boolean;
+	operatorSelected: boolean;
 	sourceRepository?: string | null;
 	sourceCommit?: string | null;
 	sourceSelection?: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto | null;
@@ -4753,6 +4754,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusRespons
 	rebuildAvailable: boolean;
 	checkedAtUtc?: number | null;
 	overrideVariant?: string | null;
+	selectedVariant: string;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto = "cpu" | "vulkan" | "cuda";
@@ -17669,6 +17671,37 @@ export type UpdateLlamaCppRuntimeResponses = {
 };
 
 export type UpdateLlamaCppRuntimeResponse = UpdateLlamaCppRuntimeResponses[keyof UpdateLlamaCppRuntimeResponses];
+
+export type UseAutomaticLlamaCppVariantData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/llamacpp/variant/automatic";
+};
+
+export type UseAutomaticLlamaCppVariantErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppUpdateBlockedResponse;
+};
+
+export type UseAutomaticLlamaCppVariantError = UseAutomaticLlamaCppVariantErrors[keyof UseAutomaticLlamaCppVariantErrors];
+
+export type UseAutomaticLlamaCppVariantResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse;
+};
+
+export type UseAutomaticLlamaCppVariantResponse =
+	UseAutomaticLlamaCppVariantResponses[keyof UseAutomaticLlamaCppVariantResponses];
 
 export type EnsureLlamaCppBinaryData = {
 	body: XeLocalAiEngineClientEndpointsModelFitV1EnsureLlamaCppBinaryRequest;

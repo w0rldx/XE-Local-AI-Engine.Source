@@ -478,6 +478,7 @@ import {
 	uploadImage,
 	uploadKnowledgeDocument,
 	uploadTranscriptionAudio,
+	useAutomaticLlamaCppVariant,
 	validateExecutable,
 	validateGraphWorkflowDefinition,
 	validationProblemProbe,
@@ -1651,6 +1652,9 @@ import type {
 	UploadTranscriptionAudioData,
 	UploadTranscriptionAudioError,
 	UploadTranscriptionAudioResponse,
+	UseAutomaticLlamaCppVariantData,
+	UseAutomaticLlamaCppVariantError,
+	UseAutomaticLlamaCppVariantResponse,
 	ValidateExecutableData,
 	ValidateExecutableResponse,
 	ValidateGraphWorkflowDefinitionData,
@@ -9094,6 +9098,30 @@ export const updateLlamaCppRuntimeMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await updateLlamaCppRuntime({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const useAutomaticLlamaCppVariantMutation = (
+	options?: Partial<Options<UseAutomaticLlamaCppVariantData>>,
+): UseMutationOptions<
+	UseAutomaticLlamaCppVariantResponse,
+	AxiosError<UseAutomaticLlamaCppVariantError>,
+	Options<UseAutomaticLlamaCppVariantData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		UseAutomaticLlamaCppVariantResponse,
+		AxiosError<UseAutomaticLlamaCppVariantError>,
+		Options<UseAutomaticLlamaCppVariantData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await useAutomaticLlamaCppVariant({
 				...options,
 				...fnOptions,
 				throwOnError: true,

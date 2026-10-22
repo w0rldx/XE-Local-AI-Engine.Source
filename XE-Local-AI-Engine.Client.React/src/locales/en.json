@@ -7285,6 +7285,8 @@
 				},
 				"updater": {
 					"activeSourceBuildNotice": "Wait for the active source build to finish or cancel it before installing a prebuilt runtime.",
+					"automaticRestoreError": "Could not restore automatic variant selection.",
+					"automaticRestored": "Automatic variant selection restored.",
 					"devBadge": "Dev",
 					"installUpstream": "Install upstream ({{tag}})",
 					"installed": "Installed",
@@ -7298,6 +7300,8 @@
 					"recommended": "Recommended",
 					"refresh": "Check for updates",
 					"runningNotice": "{{count}} llama.cpp model(s) running — eject them before updating the runtime.",
+					"selectionAutomatic": "Automatic: {{variant}}",
+					"selectionPinned": "Pinned by you: {{variant}}",
 					"statusError": "Could not resolve the llama.cpp runtime status.",
 					"toastError": "Could not update the llama.cpp runtime.",
 					"toastErrorTitle": "Update failed",
@@ -7308,7 +7312,9 @@
 					"upToDate": "Up to date",
 					"update": "Install recommended ({{tag}})",
 					"updateAvailable": "Update available",
-					"upstream": "Upstream latest"
+					"upstream": "Upstream latest",
+					"useAutomatic": "Use automatic selection",
+					"variantPinHelp": "Installing a variant pins it for this node until you restore automatic selection."
 				},
 				"variants": {
 					"cpu": "CPU",

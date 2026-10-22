@@ -275,7 +275,7 @@ public sealed class LlamaCppSourceBuildTransportTests
             "/managed/source", LlamaCppSourceBuildRequestValidation.OfficialRepository, new string('a', 40),
             LlamaCppSourceRevisionMode.DefaultBranch, null, LlamaCppSourceSelection.Custom);
 
-        var response = LlamaCppUpdateSnapshot.Empty.ToRuntimeStatusResponse(installed, "b1", runningProcessCount: 0, overrideVariant: null);
+        var response = LlamaCppUpdateSnapshot.Empty.ToRuntimeStatusResponse(installed, "b1", runningProcessCount: 0, overrideVariant: null, GpuVariant.Cuda);
 
         AssertEx.Equal(LlamaCppSourceSelectionDto.Custom, response.Installed!.SourceSelection);
     }
@@ -283,7 +283,7 @@ public sealed class LlamaCppSourceBuildTransportTests
     [Test]
     public void RuntimeMapper_ReportsOverrideVariantAsItsWireName()
     {
-        var response = LlamaCppUpdateSnapshot.Empty.ToRuntimeStatusResponse(installed: null, "b1", runningProcessCount: 0, GpuVariant.Cuda);
+        var response = LlamaCppUpdateSnapshot.Empty.ToRuntimeStatusResponse(installed: null, "b1", runningProcessCount: 0, GpuVariant.Cuda, GpuVariant.Cuda);
 
         AssertEx.Equal("cuda", response.OverrideVariant);
     }

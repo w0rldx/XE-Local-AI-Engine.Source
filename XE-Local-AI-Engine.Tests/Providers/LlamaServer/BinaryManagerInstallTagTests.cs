@@ -6,6 +6,7 @@ using System.Net;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Security.Cryptography;
+using NSubstitute;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
@@ -189,6 +190,38 @@ public sealed class BinaryManagerInstallTagTests
         var state = AssertEx.NotNull(await store.ReadAsync(CancellationToken.None));
         AssertEx.Equal(Tag, state.Tag);
         AssertEx.Equal(AssetName, state.Asset);
+    }
+
+    [Test]
+    [ExcludeOn(OS.Windows)]
+    [Arguments(true, false, true)]
+    [Arguments(false, false, false)]
+    [Arguments(false, true, true)]
+    public async Task InstallTag_PinsANamedVariant_AndOtherwiseKeepsTheRecordsPin(bool pinVariant, bool previouslyPinned, bool expectedPinned)
+    {
+        // POSIX-only: the smoke test spawns the extracted stub.
+        using var cache = new TempDir();
+        var archive = BuildExecutableTarGz();
+        using var handler = new ScriptedHandler(() => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(archive)
+        });
+        using var http = new HttpClient(handler, disposeHandler: false);
+        using var store = new InstalledRuntimeStore(cache.Path);
+        await store.WriteAsync(new InstalledRuntimeState(LlamaCppReleasePins.PinnedTag, "previous.tar.gz", new string('b', 64), GpuVariant.Cpu,
+            DateTimeOffset.UtcNow, OperatorSelected: previouslyPinned), CancellationToken.None);
+        var signal = new CudaManagedBuildSignal();
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: store,
+            managedCudaSignal: signal);
+
+        await manager.InstallTagAsync(Tag, AssetName, $"sha256:{Sha256Hex(archive)}", archive.Length, GpuVariant.Cpu, pinVariant,
+            Substitute.For<ILlamaServerRuntimeMutationLease>(), CancellationToken.None);
+
+        var state = AssertEx.NotNull(await store.ReadAsync(CancellationToken.None));
+        AssertEx.Equal(Tag, state.Tag);
+        AssertEx.Equal(expectedPinned, state.OperatorSelected);
+        AssertEx.Equal(expectedPinned ? (GpuVariant?)GpuVariant.Cpu : null, signal.ActiveVariant);
     }
 
     [Test]

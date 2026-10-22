@@ -34,9 +34,10 @@
 #   --download       Install a missing model through the node from the profile's `modelSource`.
 #   --no-link        Do not hard-link a missing model from the user-level store (XE_LAB_MODEL_SOURCE_DIR).
 #   --no-build       Pass --no-build to dev-start.sh.
-#   --cpu            Accept the node's managed llama.cpp runtime. Without this flag the caller must export the
-#                    bring-your-own CUDA llama-server (XE_LLAMACPP_SERVER_PATH), or the run is refused (exit 2):
-#                    on Linux the managed NVIDIA build is Vulkan, which has silently run the 27B on the CPU.
+#   --cpu            Accept whatever managed llama.cpp runtime the node selects for this host (the CUDA prebuilt on
+#                    Linux x64 NVIDIA, Vulkan or CPU elsewhere). The name predates the managed CUDA prebuilt.
+#                    Without this flag the caller must export a bring-your-own llama-server
+#                    (XE_LLAMACPP_SERVER_PATH), or the run is refused (exit 2).
 #   --plan NAME      The plan that owns this lab (default: env XE_LAB_PLAN, else `unassigned`).
 #   --note TEXT      Free-text session note stored in the lab's OWNER file.
 #   --take-over      Re-assign a lab owned by another plan to --plan (keeps `created`, adds `taken_over`).
@@ -136,7 +137,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 [[ -n "${XE_LLAMACPP_SERVER_PATH:-}" || "${CPU}" == "true" ]] \
-  || die 2 "REFUSED: XE_LLAMACPP_SERVER_PATH is not set, so the node would run its managed runtime (Vulkan or CPU, not CUDA); export the bring-your-own CUDA llama-server, or pass --cpu to accept the managed runtime."
+  || die 2 "REFUSED: XE_LLAMACPP_SERVER_PATH is not set, so the node would run the managed runtime it selects for this host; export a bring-your-own llama-server, or pass --cpu to accept the managed runtime."
 
 for tool in python3 curl; do
   command -v "${tool}" >/dev/null 2>&1 || die 2 "PREREQUISITE MISSING: ${tool} is not on PATH."

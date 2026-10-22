@@ -39,7 +39,7 @@ internal sealed class CudaBuildStartupService : IHostedService
             await _buildService.RecoverAsync(cancellationToken).ConfigureAwait(false);
 
             var installed = await _installedRuntimeStore.ReadAsync(cancellationToken).ConfigureAwait(false);
-            if (RecordedSourceBuildVariant(installed) is { } recorded)
+            if (RecordedPinnedVariant(installed) is { } recorded)
             {
                 _signal.SetActive(recorded);
             }
@@ -51,18 +51,20 @@ internal sealed class CudaBuildStartupService : IHostedService
         }
     }
 
-    /// <summary>The variant of a recorded source build whose server binary is present, or <see langword="null" />.</summary>
+    /// <summary>The variant the record pins (a source build whose binary is present, or an operator-selected prebuilt), else <see langword="null" />.</summary>
     /// <remarks>
-    ///     Optimistic: the serve-time validator (<c>EnsureBinaryAsync</c>) re-checks perms/SHA and clears the signal if the
-    ///     build is actually invalid, so seeding on presence alone is safe. Shared with <see cref="GpuVariantSelector" />'s
-    ///     first-use seed.
+    ///     Optimistic: the serve-time validator (<c>EnsureBinaryAsync</c>) re-checks a source build's perms/SHA and clears
+    ///     the signal if it is invalid, and re-acquires a pinned prebuilt whose binary went missing, so seeding on the
+    ///     record alone is safe. Shared with <see cref="GpuVariantSelector" />'s first-use seed.
     /// </remarks>
-    internal static GpuVariant? RecordedSourceBuildVariant(InstalledRuntimeState? installed)
+    internal static GpuVariant? RecordedPinnedVariant(InstalledRuntimeState? installed)
     {
-        return installed?.SourceBuildPath is { Length: > 0 } sourceBuildPath
-               && File.Exists(Path.Combine(sourceBuildPath, "llama-server"))
-            ? installed.Variant
-            : null;
+        if (installed?.SourceBuildPath is { Length: > 0 } sourceBuildPath)
+        {
+            return File.Exists(Path.Combine(sourceBuildPath, "llama-server")) ? installed.Variant : null;
+        }
+
+        return installed is { OperatorSelected: true } ? installed.Variant : null;
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)

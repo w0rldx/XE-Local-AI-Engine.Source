@@ -5,6 +5,7 @@ import {
 	IconCloudOff,
 	IconDownload,
 	IconInfoCircle,
+	IconPinnedOff,
 	IconPlayerStop,
 	IconRefresh,
 	IconRocket,
@@ -27,6 +28,7 @@ import {
 	useEnsureLlamaCppBinary,
 	useLlamaCppRuntimeStatus,
 	useRefreshLlamaCppRuntime,
+	useRestoreAutomaticLlamaCppVariant,
 	useSourceBuildStatus,
 	useUpdateLlamaCppRuntime,
 } from "@/features/node-settings/queries/useLocalRuntime";
@@ -63,6 +65,7 @@ export function LlamaCppUpdaterPanel() {
 	const updateMutation = useUpdateLlamaCppRuntime();
 	const ensureMutation = useEnsureLlamaCppBinary();
 	const refreshRuntime = useRefreshLlamaCppRuntime();
+	const automaticMutation = useRestoreAutomaticLlamaCppVariant();
 	const sourceBuildStatusQuery = useSourceBuildStatus();
 
 	const [isRefreshing, setIsRefreshing] = useState(false);
@@ -91,6 +94,12 @@ export function LlamaCppUpdaterPanel() {
 	const sourceBuildActive = sourceBuildStatusQuery.data?.isRunning === true;
 	const prebuiltMutationBlocked = hasInstalledSourceRuntime || sourceBuildActive;
 	const overrideVariant = status?.overrideVariant ?? null;
+	const isPinned = status?.installed?.operatorSelected === true;
+	const activeVariant = status?.selectedVariant ?? "";
+	// Under a pin and no override the selector's answer IS the pin; a pin held only by the process leaves
+	// `installed.variant` naming another build, so only an override keeps the label on the installed variant.
+	const pinnedVariant = overrideVariant === null && activeVariant.length > 0 ? activeVariant : installedVariant;
+	const variantLabel = (variant: string): string => t(`pages.nodeSettings.llamaCpp.variants.${variant}`, variant);
 
 	// Effective Select value: the operator's explicit pick, else the installed variant (when it is a known build), else
 	// the cpu fallback. Recomputed on each render so it tracks the resolved status without copying it into state.
@@ -165,6 +174,20 @@ export function LlamaCppUpdaterPanel() {
 					apiErrorMessage(error, t("pages.nodeSettings.llamaCpp.ensureError", "Could not ensure the llama.cpp binary.")),
 				);
 			},
+		});
+	};
+
+	const handleUseAutomatic = (): void => {
+		automaticMutation.mutate(undefined, {
+			onSuccess: () =>
+				toast.success(t("pages.nodeSettings.llamaCpp.updater.automaticRestored", "Automatic variant selection restored.")),
+			onError: (error) =>
+				toast.error(
+					apiErrorMessage(
+						error,
+						t("pages.nodeSettings.llamaCpp.updater.automaticRestoreError", "Could not restore automatic variant selection."),
+					),
+				),
 		});
 	};
 
@@ -283,6 +306,30 @@ export function LlamaCppUpdaterPanel() {
 							) : null}
 						</Group>
 
+						<Group gap="sm" align="center">
+							<Text size="sm" data-testid="llamacpp-updater-selection">
+								{isPinned
+									? t("pages.nodeSettings.llamaCpp.updater.selectionPinned", "Pinned by you: {{variant}}", {
+											variant: variantLabel(pinnedVariant),
+										})
+									: t("pages.nodeSettings.llamaCpp.updater.selectionAutomatic", "Automatic: {{variant}}", {
+											variant: variantLabel(activeVariant),
+										})}
+							</Text>
+							{isPinned && overrideVariant === null ? (
+								<Button
+									variant="subtle"
+									size="xs"
+									leftSection={<IconPinnedOff size={14} />}
+									loading={automaticMutation.isPending}
+									onClick={handleUseAutomatic}
+									data-testid="llamacpp-updater-use-automatic-button"
+								>
+									{t("pages.nodeSettings.llamaCpp.updater.useAutomatic", "Use automatic selection")}
+								</Button>
+							) : null}
+						</Group>
+
 						{overrideVariant !== null ? (
 							<Alert color="blue" icon={<IconInfoCircle size={16} />} data-testid="llamacpp-updater-override-notice">
 								{t(
@@ -379,6 +426,10 @@ export function LlamaCppUpdaterPanel() {
 						<Group gap="sm" align="flex-end">
 							<Select
 								label={t("pages.nodeSettings.llamaCpp.selectVariant", "Variant")}
+								description={t(
+									"pages.nodeSettings.llamaCpp.updater.variantPinHelp",
+									"Installing a variant pins it for this node until you restore automatic selection.",
+								)}
 								data={variantData}
 								value={selectedVariant}
 								onChange={handleVariantChange}

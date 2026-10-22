@@ -65,6 +65,12 @@ public sealed class LlamaCppInstalledRuntimeResponse
     /// </summary>
     public required bool IsSourceBuild { get; init; }
 
+    /// <summary>
+    ///     True while an operator pin is in effect (recorded, or held by this process); it holds until
+    ///     <c>POST model-fit/llamacpp/variant/automatic</c>.
+    /// </summary>
+    public required bool OperatorSelected { get; init; }
+
     public string? SourceRepository { get; init; }
     public string? SourceCommit { get; init; }
     public LlamaCppSourceSelectionDto? SourceSelection { get; init; }
@@ -149,6 +155,12 @@ public sealed class LlamaCppRuntimeStatusResponse
     ///     instead of <see cref="Installed" />; <c>null</c> when no override is set. The override's path is never sent.
     /// </summary>
     public string? OverrideVariant { get; init; }
+
+    /// <summary>
+    ///     The variant (<c>cpu|cuda|vulkan</c>) the next spawn selects: the override, else an operator pin or a recorded
+    ///     source build, else the vendor rule.
+    /// </summary>
+    public required string SelectedVariant { get; init; }
 }
 
 /// <summary>

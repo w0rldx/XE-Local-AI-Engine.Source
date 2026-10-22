@@ -189,6 +189,12 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **An explicitly installed llama.cpp variant now sticks** — installing a variant from the Node Settings runtime card
+  (or an update that names one) pins variant selection to it, so a Vulkan install on an NVIDIA machine is what every
+  later spawn uses; before, each launch re-applied the vendor rule and the install changed nothing. Implicit installs
+  (first chat, first-run provisioning) stay automatic. The runtime status reports `selectedVariant` and
+  `installed.operatorSelected`, and `POST model-fit/llamacpp/variant/automatic` restores automatic selection on the
+  next spawn. A bring-your-own override and a recorded source build keep their precedence.
 - **Unsloth `_XL` quants are ladder rungs** — `Q2_K_XL` to `Q8_K_XL` now rank directly above their base quant and carry
   measured sizes, and the requested quant ceiling admits the `_XL` rung directly above it (a `Q4_K_M` ceiling picks
   `UD-Q4_K_XL` over a repo's Q3 files), so the Flint and gemma4 entries reach "Recommended" when they fit instead of

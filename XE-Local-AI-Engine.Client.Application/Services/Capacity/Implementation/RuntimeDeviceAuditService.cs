@@ -289,11 +289,21 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
     // not apply; both branches keep the same reason codes.
     private static FallbackText BuildFallbackText(GpuVendor vendor, GpuVariant variant, bool cpuVariant, bool isWindows)
     {
-        const string LinuxRemediation =
-            "Update the NVIDIA driver to the 525 series or newer and reinstall the runtime from Node Settings. Otherwise build the "
-            + "Vulkan runtime with the in-app source build, choosing the Vulkan backend, which then takes precedence over the "
+        const string LinuxAlternatives =
+            " Otherwise build the Vulkan runtime with the in-app source build, choosing the Vulkan backend, which then takes precedence over the "
             + "prebuilt; that needs a Vulkan ICD (commonly missing under WSL2). If a bring-your-own override is set, verify "
             + "XE_LLAMACPP_SERVER_PATH points to a valid GPU-capable binary.";
+
+        // Known limit: Linux arm64 NVIDIA has no CUDA prebuilt, so its automatic pick is Vulkan despite this sentence.
+        const string LinuxNvidiaRemediation =
+            "In Node Settings, use automatic variant selection (or install the CUDA variant) so the managed CUDA prebuilt serves; "
+            + "it needs the NVIDIA driver 525 series or newer." + LinuxAlternatives;
+
+        const string LinuxOtherRemediation =
+            "In Node Settings, use automatic variant selection if a variant was pinned; the managed Vulkan runtime needs a GPU "
+            + "driver with a Vulkan ICD (commonly missing under WSL2)." + LinuxAlternatives;
+
+        var linuxRemediation = vendor == GpuVendor.Nvidia ? LinuxNvidiaRemediation : LinuxOtherRemediation;
 
         const string WindowsRemediation =
             "Update the GPU driver, check the GPU is visible to the system, then reinstall the runtime from Node Settings. If a "
@@ -304,7 +314,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
             return new FallbackText
             {
                 Reason = $"A {VendorName(vendor)} GPU was detected, but the CPU llama.cpp runtime is selected — inference is running on the CPU.",
-                Remediation = isWindows ? WindowsRemediation : LinuxRemediation
+                Remediation = isWindows ? WindowsRemediation : linuxRemediation
             };
         }
 
@@ -315,7 +325,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         return new FallbackText
         {
             Reason = reason,
-            Remediation = isWindows ? WindowsRemediation : LinuxRemediation
+            Remediation = isWindows ? WindowsRemediation : linuxRemediation
         };
     }
 

@@ -7285,6 +7285,8 @@
 				},
 				"updater": {
 					"activeSourceBuildNotice": "Warten Sie, bis der aktive Quellbuild abgeschlossen ist, oder brechen Sie ihn ab, bevor Sie eine vorgefertigte Laufzeit installieren.",
+					"automaticRestoreError": "Die automatische Variantenauswahl konnte nicht wiederhergestellt werden.",
+					"automaticRestored": "Automatische Variantenauswahl wiederhergestellt.",
 					"devBadge": "Dev",
 					"installUpstream": "Upstream-Version installieren ({{tag}})",
 					"installed": "Installiert",
@@ -7298,6 +7300,8 @@
 					"recommended": "Empfohlen",
 					"refresh": "Nach Updates suchen",
 					"runningNotice": "{{count}} llama.cpp-Modell(e) aktiv — werfen Sie diese aus, bevor Sie die Laufzeit aktualisieren.",
+					"selectionAutomatic": "Automatisch: {{variant}}",
+					"selectionPinned": "Von Ihnen festgelegt: {{variant}}",
 					"statusError": "Der llama.cpp-Laufzeitstatus konnte nicht ermittelt werden.",
 					"toastError": "Die llama.cpp-Laufzeit konnte nicht aktualisiert werden.",
 					"toastErrorTitle": "Update fehlgeschlagen",
@@ -7308,7 +7312,9 @@
 					"upToDate": "Aktuell",
 					"update": "Empfohlene Version installieren ({{tag}})",
 					"updateAvailable": "Update verfügbar",
-					"upstream": "Aktuellste Upstream-Version"
+					"upstream": "Aktuellste Upstream-Version",
+					"useAutomatic": "Automatische Auswahl verwenden",
+					"variantPinHelp": "Wenn Sie eine Variante installieren, wird sie für diesen Node festgelegt, bis Sie die automatische Auswahl wiederherstellen."
 				},
 				"variants": {
 					"cpu": "CPU",
