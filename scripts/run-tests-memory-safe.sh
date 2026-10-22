@@ -69,8 +69,11 @@
 #   Coverage hits can be lost while the tests pass. Seen on CI from 2026-10-21 (package 18.12.0): a group
 #   reports every test green, but its Cobertura report carries the product assemblies with their line map
 #   and zero hits (`<package line-rate="0" … name="XE-Local-AI-Engine.Client.Application">`), so the host
-#   ran un-instrumented code. Most runs lose one to four groups, and on a bad day the merged figure drops
-#   under the floor. The cause is not known yet. So lost_sentinels checks each grouped unit's report for
+#   ran un-instrumented code. Most runs lost one to four groups, and on a bad day the merged figure dropped
+#   under the floor. Cause (found 2026-10-22 from the tracker logs): the slot lock below handed one slot to two
+#   batches, so two hosts instrumented the same copies and one restore deleted the other's hit buffers
+#   (tracker_<guid>.log: FileNotFoundException on /tmp/CodeCoverage.<guid>). The lock is fixed; the check
+#   stays as the net under it. lost_sentinels checks each grouped unit's report for
 #   three packages every group of a pack of at most 16 executes (COVERAGE_SENTINELS; a finer pack can
 #   isolate a namespace that never touches one). If one is absent or at zero, run_ns re-clones
 #   the slot, deletes the unit's report and TRX, and runs the unit once more. A second loss is FAILED as
@@ -245,20 +248,24 @@ echo "   ${#NAMESPACES[@]} namespaces; PAR=$PAR"
 RESULTS_DIR="$(mktemp -d)"
 
 # Slot pool for coverage mode (see "Coverage instrumentation is in-place" above). A slot is claimed
-# with mkdir, which is atomic across the batch subshells; at most JOBS batches run at once, so a
-# free slot always exists and the wait loop never actually spins.
+# by creating its lock file under noclobber, which bash opens with O_CREAT|O_EXCL: the kernel admits
+# exactly one creator, whatever coreutils the box ships. (`mkdir` is NOT that guarantee: the uutils
+# coreutils on ubuntu-26.04 check-then-create, and two batches claiming one slot a few milliseconds
+# apart both got it, instrumented the same DLL copies, and one host's restore deleted the other's hit
+# buffers: the sentinel loss above.) At most JOBS batches run at once, so a free slot always exists
+# and the wait loop never actually spins.
 SLOT_ROOT=""
 SLOT_LOCKS=""
 acquire_slot() {
   local i
   while :; do
     for ((i = 0; i < JOBS; i++)); do
-      if mkdir "$SLOT_LOCKS/$i" 2>/dev/null; then printf '%s' "$i"; return; fi
+      if (set -o noclobber; : >"$SLOT_LOCKS/$i") 2>/dev/null; then printf '%s' "$i"; return; fi
     done
     sleep 0.2
   done
 }
-release_slot() { [[ -n "${1:-}" ]] && rmdir "$SLOT_LOCKS/$1" 2>/dev/null; return 0; }
+release_slot() { [[ -n "${1:-}" ]] && rm -f "$SLOT_LOCKS/$1" 2>/dev/null; return 0; }
 
 # Coverage mode only: build the migrated SQLite template (TestServerWebAppFactory.BuildMigratedTemplate) ONCE in the
 # base output tree, so every slot clone carries it — see "Coverage instrumentation is in-place" above. Runs the one
