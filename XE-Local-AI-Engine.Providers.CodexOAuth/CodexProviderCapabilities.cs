@@ -38,7 +38,7 @@ public static class CodexProviderCapabilities
         SupportsParallelToolCalls = false,
         SupportsStructuredOutput = false,
         SupportsVision = false,
-        SupportsUsage = false,
+        SupportsUsage = true,
         SupportsServiceSideThreads = false
     };
 }

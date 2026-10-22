@@ -43,6 +43,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Interaction;
 using XE_Local_AI_Engine.Client.Services.Interaction.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
@@ -1329,6 +1330,23 @@ public sealed class InvocationRunnerTests
         AssertEx.Equal(expectedSpecialistCap, definition.Participants[1].DefaultMaxOutputTokens);
     }
 
+    /// <summary>A cloud or external participant on another model budgets against its declared window, as such a turn does.</summary>
+    [Test]
+    [Arguments(CloudModel)]
+    [Arguments("ext:provider/remote-model")]
+    public async Task RunAsync_ForAnOrchestration_GivesARemoteParticipantItsDeclaredWindow(string specialistModel)
+    {
+        var definition = await CaptureOrchestrationDefinitionAsync(new ChatOutputCap
+        {
+            Mode = "cap",
+            MaxTokens = 16_384
+        }, RuntimePackageBuilder.Valid(), specialistModel: specialistModel, declaredRemoteWindow: 20_000);
+
+        AssertEx.Equal(specialistModel, definition.Participants[1].ModelId);
+        AssertEx.Equal(20_000, definition.Participants[1].EffectiveContextTokens);
+        AssertEx.Equal(10_000, definition.Participants[1].DefaultMaxOutputTokens, "half the declared window, not the unlaunched-local ceiling");
+    }
+
     [Test]
     [Arguments("small-model")]
     [Arguments("cold-model")]
@@ -1395,7 +1413,8 @@ public sealed class InvocationRunnerTests
     private static async Task<OrchestrationAgentDefinition> CaptureOrchestrationDefinitionAsync(ChatOutputCap outputCap,
         RuntimePackageBuilder packageBuilder,
         bool frozen = false,
-        string specialistModel = "small-model")
+        string specialistModel = "small-model",
+        int? declaredRemoteWindow = null)
     {
         OrchestrationAgentDefinition? captured = null;
         var orchestrationFactory = Substitute.For<IOrchestrationAgentFactory>();
@@ -1403,7 +1422,12 @@ public sealed class InvocationRunnerTests
                             .Returns(_ => Task.FromException<IOrchestrationRunSession>(new InvalidOperationException("stop after the definition")));
         var cloudFactory = Substitute.For<IActiveCloudChatClientFactory>();
         cloudFactory.IsCloudProviderSelected(CloudModel).Returns(true);
+        // A declared window, when given, is the cloud catalog's for CloudModel and the operator's for the ext: id.
+        var cloudModels = Substitute.For<ICloudModelResolver>();
+        cloudModels.ResolveContextWindowAsync(CloudModel, Arg.Any<CancellationToken>()).Returns(new CloudModelContextWindow { ContextTokens = declaredRemoteWindow });
         var runner = CreateRunner(orchestrationAgentFactory: orchestrationFactory,
+            cloudModelResolver: cloudModels,
+            modelTrustResolver: new FakeModelTrustResolver().Register("provider", "remote-model", contextLength: declaredRemoteWindow),
             providerResolver: CreatePerModelLlamaCppResolver(new Dictionary<string, int>(StringComparer.Ordinal)
             {
                 ["qwen3.5:0.8b"] = 65_536,
@@ -6648,7 +6672,9 @@ public sealed class InvocationRunnerTests
         Action<INodeRuntimeSettings>? configureRuntimeSettings = null,
         InvocationReasoningControl? reasoningControl = null,
         ILogger<InvocationRunner>? logger = null,
-        TimeProvider? coordinatorTimeProvider = null)
+        TimeProvider? coordinatorTimeProvider = null,
+        ICloudModelResolver? cloudModelResolver = null,
+        IModelTrustResolver? modelTrustResolver = null)
     {
         var resolvedContextBudgetOptions = contextBudgetOptions ?? new ConversationContextBudgetOptions();
         var resolvedFactory = invocationAgentFactory ?? CreateFactory(agentUpdates ?? CreateUpdates("ok"));
@@ -6731,7 +6757,7 @@ public sealed class InvocationRunnerTests
             resolvedValidator,
             resolvedCapabilityReporter,
             resolvedProviderResolver,
-            new LocalRuntimeWarmer(resolvedProviderResolver, resolvedActiveCloudFactory, new FakeModelTrustResolver(), Substitute.For<ICloudModelResolver>(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System, new GpuWorkGate()),
+            new LocalRuntimeWarmer(resolvedProviderResolver, resolvedActiveCloudFactory, modelTrustResolver ?? new FakeModelTrustResolver(), cloudModelResolver ?? Substitute.For<ICloudModelResolver>(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System, new GpuWorkGate()),
             resolvedProviderStreamResilience,
             contextBudgeter ?? new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(resolvedContextBudgetOptions), runtimeSettings),
             Options.Create(resolvedContextBudgetOptions),

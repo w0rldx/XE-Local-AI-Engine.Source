@@ -8,6 +8,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class CodexModelCatalogTests
 {
     [Test]
+    [Arguments("gpt-6-astra")]
+    [Arguments("gpt-6-sol")]
+    [Arguments("GPT-6-LUNA")]
     [Arguments("gpt-5.6-sol")]
     [Arguments("gpt-5.6-terra")]
     [Arguments("GPT-5.6-LUNA")]
@@ -23,5 +26,15 @@ public sealed class CodexModelCatalogTests
     public void ContextTokensFor_AnUnsourcedOrUnknownId_IsNull(string? modelId)
     {
         AssertEx.Null(CodexModelCatalog.ContextTokensFor(modelId));
+    }
+
+    [Test]
+    [Arguments("gpt-6-astra", true)]
+    [Arguments("gpt-5.6-terra", true)]
+    [Arguments("gpt-5.5", false)]
+    [Arguments("gpt-5.4-mini", false)]
+    public void IsCodexModel_FollowsTheCurrentCatalog(string modelId, bool expected)
+    {
+        AssertEx.Equal(expected, CodexModelCatalog.IsCodexModel(modelId));
     }
 }

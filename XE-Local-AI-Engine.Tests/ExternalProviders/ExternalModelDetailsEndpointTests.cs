@@ -80,7 +80,7 @@ public sealed class ExternalModelDetailsEndpointTests
     [Arguments("azure-gpt", HttpStatusCode.OK, null)]
     public async Task GetLocalModelDetails_ForACloudModel_ReportsOnlyItsDeclaredWindow(string modelName, HttpStatusCode expectedStatus, int? expectedWindow)
     {
-        // Through the REAL resolvers: a sourced Codex id reports its catalog window, an unsourced one 404s, and a stored deployment
+        // Through the REAL resolvers: a sourced Codex id reports its catalog window, a retired or unknown id 404s, and a stored deployment
         // with no declared window is still 200 with a null one. LocalModelEndpointTests pins "never probes".
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
         _ = cloudCredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(new StoredCloudProviderConfig

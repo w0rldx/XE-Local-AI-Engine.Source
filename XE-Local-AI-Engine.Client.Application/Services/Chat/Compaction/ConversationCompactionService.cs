@@ -238,8 +238,8 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         // miss safely resolves NOT-capable. It is resolved here because the scoped resolver cannot live in a singleton.
         var capabilities = await _modelCapabilityResolver.ResolveAsync(model, cancellationToken);
 
-        // The window the fold model is running with, read back exactly as a chat turn's participant on another model
-        // reads it: only from an already-resident llama.cpp server, never triggering a load. Null keeps the ceiling.
+        // The fold model is always an installed GGUF: its window comes only from an already-resident llama.cpp server,
+        // never a load and never a declared cloud or external window. Null keeps the ceiling.
         var warmProvider = await _localRuntimeWarmer.ResolveWarmableProviderAsync(model, conversationId, cancellationToken);
         var effectiveContextTokens = warmProvider is null
             ? null

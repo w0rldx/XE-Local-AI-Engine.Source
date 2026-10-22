@@ -86,13 +86,13 @@ public sealed class CodexOptions
     public string UserAgent { get; set; } = ProductUserAgent;
 
     /// <summary>
-    ///     Default Codex model id (account-scoped <c>gpt-5.x</c> family); the node's selection store persists the
+    ///     Default Codex model id (account-scoped <c>gpt-5.6</c> family); the node's selection store persists the
     ///     non-secret selected model, and this is the fallback.
     /// </summary>
     /// <remarks>
     ///     LIVE-CORRECTNESS: must be a model the subscription Responses backend accepts. Any id outside
     ///     <see cref="Implementation.CodexModelCatalog.ModelIds" /> — the earlier default <c>gpt-5-codex</c>, for
-    ///     instance — is rejected with HTTP 400. <c>gpt-5.6-sol</c> is the frontier model and leads the catalog, but
+    ///     instance — is rejected with HTTP 400. The <c>gpt-6</c> family leads the catalog, but
     ///     the chosen default is <c>gpt-5.6-terra</c>; operators can override either via the <c>CodexOAuth</c> section.
     /// </remarks>
     public string DefaultModel { get; set; } = "gpt-5.6-terra";

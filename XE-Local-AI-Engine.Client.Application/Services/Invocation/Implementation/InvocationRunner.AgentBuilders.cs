@@ -103,11 +103,10 @@ public sealed partial class InvocationRunner
     ///     provider-round budgeter sizes against it.
     /// </summary>
     /// <remarks>
-    ///     A participant on the turn's own model reuses the window
-    ///     <see cref="LocalRuntimeWarmer.ResolveEffectiveContextTokensAsync" /> already read back for it. One on a DIFFERENT model reads
-    ///     its window only when a llama.cpp server is ALREADY resident, <c>GetRuntimeInfo</c> being an in-memory read
-    ///     that never triggers a load. Otherwise <see langword="null" />: participants are deliberately not pre-warmed
-    ///     (VRAM and latency), so the inner budgeter keeps its default window until that participant launches.
+    ///     The turn's own model reuses the turn's window. Another local model reads one only from an ALREADY resident
+    ///     llama.cpp server (an in-memory read, never a load); a cloud or external one takes its declared window from
+    ///     <see cref="LocalRuntimeWarmer.ResolveDeclaredRemoteContextAsync" />. Otherwise <see langword="null" />:
+    ///     participants are not pre-warmed, so the inner budgeter keeps its default until that participant launches.
     /// </remarks>
     private async Task<ParticipantWindow> ResolveParticipantContextTokensAsync(string participantModel,
         string resolvedModel,
@@ -123,7 +122,8 @@ public sealed partial class InvocationRunner
         var provider = await _localRuntimeWarmer.ResolveWarmableProviderAsync(participantModel, invocationId, cancellationToken);
         if (provider is null)
         {
-            return new ParticipantWindow(ContextTokens: null, UnlaunchedLocalModel: false);
+            var declaredContextTokens = await _localRuntimeWarmer.ResolveDeclaredRemoteContextAsync(participantModel, invocationId, cancellationToken);
+            return new ParticipantWindow(declaredContextTokens, UnlaunchedLocalModel: false);
         }
 
         var contextTokens = await _localRuntimeWarmer.ResolveEffectiveContextTokensAsync(provider, participantModel, invocationId, cancellationToken);

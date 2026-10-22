@@ -2261,7 +2261,7 @@ public sealed partial class NodeChatStreamServiceTests
                            "how do I restart the service?",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           Model: "gpt-5.5",
+                           Model: "gpt-5.6-sol",
                            UseKnowledgeBase: true)))
         {
             events.Add(streamEvent);
@@ -2282,7 +2282,7 @@ public sealed partial class NodeChatStreamServiceTests
     {
         // RR3-4 Part C: a cloud effective model (Codex here) must NOT receive node-local attachment content without the
         // operator opt-in — the content is withheld from the prompt and the user gets a visible notice.
-        var (events, capturedContext) = await RunAttachmentEgressAsync(cloudModel: "gpt-5.5", allowCloudModelAccess: false);
+        var (events, capturedContext) = await RunAttachmentEgressAsync(cloudModel: "gpt-5.6-sol", allowCloudModelAccess: false);
 
         AssertEx.False(capturedContext.Any(message => message.Content.Contains("The launch code is alpha-zero.", StringComparison.Ordinal)),
             "a cloud model must not receive the attachment content without opt-in");
@@ -2297,7 +2297,7 @@ public sealed partial class NodeChatStreamServiceTests
     [Test]
     public async Task SendMessageAsync_WhenCloudEffectiveModelWithAttachment_AndOperatorOptedIn_ComposesAttachment()
     {
-        var (_, capturedContext) = await RunAttachmentEgressAsync(cloudModel: "gpt-5.5", allowCloudModelAccess: true);
+        var (_, capturedContext) = await RunAttachmentEgressAsync(cloudModel: "gpt-5.6-sol", allowCloudModelAccess: true);
 
         AssertEx.Contains(capturedContext, message => message.Content.Contains("The launch code is alpha-zero.", StringComparison.Ordinal));
     }
@@ -5050,7 +5050,7 @@ public sealed partial class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           Model: "gpt-5.5",
+                           Model: "gpt-5.6-sol",
                            UseLocalTools: true)))
         {
             drained++;
@@ -5060,13 +5060,13 @@ public sealed partial class NodeChatStreamServiceTests
 
         // The Ollama classifier is never consulted for a Codex model id — capabilities come from the Codex matrix.
         await classificationService.DidNotReceive()
-                                   .ClassifyAsync(Arg.Is<IEnumerable<ModelIdentity>>(models => models.Any(m => string.Equals(m.ModelName, "gpt-5.5", StringComparison.OrdinalIgnoreCase))),
+                                   .ClassifyAsync(Arg.Is<IEnumerable<ModelIdentity>>(models => models.Any(m => string.Equals(m.ModelName, "gpt-5.6-sol", StringComparison.OrdinalIgnoreCase))),
                                        Arg.Any<CancellationToken>());
 
         // Tool calling is enabled for ALL Codex ids, so the requested local tool offer (UseLocalTools: true) is
         // honored for the Codex model — capabilities still come from the Codex matrix, not the Ollama classifier. The
         // offer is requested with isCloudModel: true so the knowledge-tool provider-locality gate applies.
-        _ = offerProvider.Received().GetOfferedToolsAsync("gpt-5.5", true, Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>());
+        _ = offerProvider.Received().GetOfferedToolsAsync("gpt-5.6-sol", true, Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -5925,7 +5925,7 @@ public sealed partial class NodeChatStreamServiceTests
             persistedSelection: null,
             requestSelection: null,
             conversationMessages: ToolInvestigationTurn(conversationId),
-            model: "gpt-5.5");
+            model: "gpt-5.6-sol");
 
         AssertEx.True(runner.CapturedContext.All(message => message.ToolExchanges is null), "Node-local tool output must not reach a cloud model without the opt-in.");
         AssertEx.ContainsSingle(runner.Events, streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.ToolHistoryWithheld));

@@ -54,14 +54,14 @@ public sealed class ActiveCloudChatClientFactoryTests
         harness.NodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
                .Returns(new StoredNodeSettings
                {
-                   DefaultModelName = "gpt-5.4"
+                   DefaultModelName = "gpt-5.6-terra"
                });
         harness.CodexFactory.Create(Arg.Any<string?>()).Returns(codexClient);
 
         harness.Factory.TryCreateActiveCloudChatClient(null, out _);
 
         // The selected Codex model id must reach the Codex factory — never always-default.
-        harness.CodexFactory.Received().Create("gpt-5.4");
+        harness.CodexFactory.Received().Create("gpt-5.6-terra");
     }
 
     [Test]
@@ -536,9 +536,9 @@ public sealed class ActiveCloudChatClientFactoryTests
                {
                    DefaultModelName = "qwen3:8b"
                });
-        harness.CodexFactory.Create("gpt-5.4-mini").Returns(codexClient);
+        harness.CodexFactory.Create("gpt-5.6-luna").Returns(codexClient);
 
-        var produced = harness.Factory.TryCreateActiveCloudChatClient("gpt-5.4-mini", out var client);
+        var produced = harness.Factory.TryCreateActiveCloudChatClient("gpt-5.6-luna", out var client);
 
         AssertEx.True(produced);
         AssertEx.True(ReferenceEquals(codexClient, client));
@@ -587,19 +587,19 @@ public sealed class ActiveCloudChatClientFactoryTests
         harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(NonExpiredSession());
         harness.CredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateAzureConfig());
         harness.AzureFactory.Create(Arg.Any<StoredAzureFoundryConnection>(), "gpt-4o").Returns(azureClient);
-        harness.CodexFactory.Create("gpt-5.4-mini").Returns(codexClient);
+        harness.CodexFactory.Create("gpt-5.6-luna").Returns(codexClient);
         using var factory = harness.Factory;
 
         for (var i = 0; i < 3; i++)
         {
             factory.TryCreateActiveCloudChatClient("gpt-4o", out var azureResult);
-            factory.TryCreateActiveCloudChatClient("gpt-5.4-mini", out var codexResult);
+            factory.TryCreateActiveCloudChatClient("gpt-5.6-luna", out var codexResult);
             AssertEx.True(ReferenceEquals(azureClient, azureResult));
             AssertEx.True(ReferenceEquals(codexClient, codexResult));
         }
 
         harness.AzureFactory.Received(1).Create(Arg.Any<StoredAzureFoundryConnection>(), "gpt-4o");
-        harness.CodexFactory.Received(1).Create("gpt-5.4-mini");
+        harness.CodexFactory.Received(1).Create("gpt-5.6-luna");
     }
 
     private static StoredCloudProviderConfig CreateAzureConfig()

@@ -23,11 +23,11 @@ public sealed class CodexProviderCapabilitiesTests
         // Single-call first — parallel tool calls stay off.
         AssertEx.False(capabilities.SupportsParallelToolCalls, "parallel tool calls must remain off (single-call first)");
 
-        // Unchanged neighbours: streaming on; the rest stay off as before the flip.
+        // Streaming and usage on; the rest stay off.
         AssertEx.True(capabilities.SupportsStreaming, "streaming stays on");
         AssertEx.False(capabilities.SupportsStructuredOutput);
         AssertEx.False(capabilities.SupportsVision);
-        AssertEx.False(capabilities.SupportsUsage);
+        AssertEx.True(capabilities.SupportsUsage, "usage reaches the runner: CodexUsageReplayTests");
         AssertEx.False(capabilities.SupportsServiceSideThreads);
     }
 }

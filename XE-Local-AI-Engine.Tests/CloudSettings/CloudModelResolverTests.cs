@@ -36,8 +36,8 @@ public sealed class CloudModelResolverTests
     {
         var resolver = CreateResolver(WithDeployments("azure-gpt"));
 
-        AssertEx.True(await resolver.IsCloudModelAsync("gpt-5.5"));
-        AssertEx.False(await resolver.IsAzureFoundryDeploymentAsync("gpt-5.5"));
+        AssertEx.True(await resolver.IsCloudModelAsync("gpt-5.6-sol"));
+        AssertEx.False(await resolver.IsAzureFoundryDeploymentAsync("gpt-5.6-sol"));
     }
 
     [Test]
@@ -128,7 +128,7 @@ public sealed class CloudModelResolverTests
         var resolver = CreateResolver(store);
 
         AssertEx.Equal(272_000, AssertEx.NotNull(await resolver.ResolveContextWindowAsync("GPT-5.6-TERRA")).ContextTokens);
-        // A catalog id with no sourced window has nothing to report; its cloud-ness is the trust resolver's answer.
+        // A retired id is no longer a catalog id, so it has no window to report.
         AssertEx.Null(await resolver.ResolveContextWindowAsync("gpt-5.5"));
         AssertEx.Null(await resolver.ResolveContextWindowAsync("azure-gpt"));
     }

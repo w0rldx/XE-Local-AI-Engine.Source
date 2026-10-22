@@ -24,12 +24,12 @@ public sealed class CloudSettingsPolicyTests
     [Test]
     public void DeploymentNames_ThatShadowAnExternalOrCodexId_AreRejected()
     {
-        var errors = CloudSettingsPolicy.ValidateDeploymentNames(["ext:lan-box/qwen3", "EXT:x/y", "GPT-5.5", "gpt-4o", " ", null]);
+        var errors = CloudSettingsPolicy.ValidateDeploymentNames(["ext:lan-box/qwen3", "EXT:x/y", "GPT-5.6-SOL", "gpt-4o", " ", null]);
 
         AssertEx.Equal(expected: 3, errors.Count);
         AssertEx.Contains(errors, "Deployment name 'EXT:x/y' uses the reserved 'ext:' prefix of external connections.");
         AssertEx.Contains(errors, "Deployment name 'ext:lan-box/qwen3' uses the reserved 'ext:' prefix of external connections.");
-        AssertEx.Contains(errors, "Deployment name 'GPT-5.5' is a Codex model id and would shadow it.");
+        AssertEx.Contains(errors, "Deployment name 'GPT-5.6-SOL' is a Codex model id and would shadow it.");
     }
 
     [Test]

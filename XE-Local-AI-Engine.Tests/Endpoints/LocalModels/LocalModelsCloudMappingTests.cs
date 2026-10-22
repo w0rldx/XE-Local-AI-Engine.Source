@@ -29,17 +29,17 @@ public sealed class LocalModelsCloudMappingTests
         // Tool calling is now enabled for ALL Codex ids; the mapped tag tracks the V0 flag, which is now true.
         AssertEx.True(CodexProviderCapabilities.V0.SupportsToolCalling, "the Codex matrix must advertise tool calling");
         AssertEx.True(cloud.All(static m => m.IsToolCapable == CodexProviderCapabilities.V0.SupportsToolCalling));
-        AssertEx.True(cloud.Any(static m => m.ModelName == "gpt-5.5"), "the catalog must include gpt-5.5");
+        AssertEx.True(cloud.Any(static m => m.ModelName == "gpt-5.6-sol"), "the catalog must include gpt-5.6-sol");
     }
 
     [Test]
     public void ToCodexCloudModelResponses_MarksTheSelectedCloudModel()
     {
-        var cloud = LocalModelsMapper.ToCodexCloudModelResponses("gpt-5.4");
+        var cloud = LocalModelsMapper.ToCodexCloudModelResponses("gpt-5.6-terra");
 
         var selected = cloud.Where(static m => m.IsSelected).ToList();
         AssertEx.Equal(expected: 1, selected.Count);
-        AssertEx.Equal("gpt-5.4", selected[0].ModelName);
+        AssertEx.Equal("gpt-5.6-terra", selected[0].ModelName);
     }
 
     [Test]

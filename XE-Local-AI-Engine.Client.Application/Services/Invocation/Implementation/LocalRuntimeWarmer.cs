@@ -82,7 +82,7 @@ public sealed class LocalRuntimeWarmer
         {
             stream.ProviderTag = "remote";
             stream.ModelReadyTimestamp = turnStartedTimestamp;
-            var declaredContextTokens = await ResolveDeclaredExternalContextAsync(resolvedModel, invocationId, cancellationToken);
+            var declaredContextTokens = await ResolveDeclaredRemoteContextAsync(resolvedModel, invocationId, cancellationToken);
             return new LocalRuntimePreparationResult(declaredContextTokens, ExternalProviderConstants.ProviderName, WarmFailure: null);
         }
 
@@ -93,9 +93,7 @@ public sealed class LocalRuntimeWarmer
             // latency is the provider's own; the load-start histogram is local-only. A cloud model's declared window replaces the default.
             stream.ProviderTag = "remote";
             stream.ModelReadyTimestamp = turnStartedTimestamp;
-            var cloudContextTokens = _activeCloudFactory.IsCloudProviderSelected(resolvedModel)
-                ? (await _cloudModelResolver.ResolveContextWindowAsync(resolvedModel, cancellationToken))?.ContextTokens
-                : null;
+            var cloudContextTokens = await ResolveDeclaredRemoteContextAsync(resolvedModel, invocationId, cancellationToken);
             return new LocalRuntimePreparationResult(cloudContextTokens, ProviderName: null, WarmFailure: null);
         }
 
@@ -197,6 +195,41 @@ public sealed class LocalRuntimeWarmer
         catch (Exception exception)
         {
             _logger.LogDebug(exception, "Reading the effective context window for invocation {InvocationId} failed; the configured default window is used.", invocationId);
+            return null;
+        }
+    }
+
+    /// <summary>
+    ///     The DECLARED context window of a model the node does not launch: an external (<c>ext:</c>) model's
+    ///     registered length, else a selected cloud (Codex/Azure) model's catalog window, else <see langword="null" />.
+    /// </summary>
+    /// <remarks>
+    ///     Makes no provider call, so it never triggers a load. A cancellation propagates; every other failure degrades
+    ///     to <see langword="null" />, which keeps the caller's default window.
+    /// </remarks>
+    public async Task<int?> ResolveDeclaredRemoteContextAsync(string resolvedModel, Guid correlationId, CancellationToken cancellationToken)
+    {
+        if (ExternalModelId.HasExternalScheme(resolvedModel))
+        {
+            return await ResolveDeclaredExternalContextAsync(resolvedModel, correlationId, cancellationToken);
+        }
+
+        if (!_activeCloudFactory.IsCloudProviderSelected(resolvedModel))
+        {
+            return null;
+        }
+
+        try
+        {
+            return (await _cloudModelResolver.ResolveContextWindowAsync(resolvedModel, cancellationToken))?.ContextTokens;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogDebug(exception, "Reading the declared cloud context window for {CorrelationId} failed; the configured default window is used.", correlationId);
             return null;
         }
     }

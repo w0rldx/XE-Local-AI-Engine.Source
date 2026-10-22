@@ -37,7 +37,7 @@ public sealed class ModelTrustResolverTests
         "ext:not-an-id",
         "EXT:cloud-box/qwen3",
         "azure-gpt",
-        "gpt-5.5",
+        "gpt-5.6-sol",
         "qwen3-27b.gguf",
         null
     ];
@@ -115,12 +115,12 @@ public sealed class ModelTrustResolverTests
     public async Task ResolveAsync_ForACodexIdWithNoSession_IsCloud()
     {
         var resolver = Build(out var cloudFactory, ExternalProviderLocality.Local);
-        _ = cloudFactory.IsCloudProviderSelected("gpt-5.5").Returns(false);
+        _ = cloudFactory.IsCloudProviderSelected("gpt-5.6-sol").Returns(false);
 
         // No session means the factory would route it local, to a runtime that does not have it. Trust is not routing:
         // the id names a cloud model, so every gate treats it as one.
-        AssertEx.Equal(ModelTrustLocality.Cloud, await resolver.ResolveAsync("gpt-5.5"));
-        AssertEx.Equal(ModelTrustLocality.Cloud, resolver.Classify("gpt-5.5"));
+        AssertEx.Equal(ModelTrustLocality.Cloud, await resolver.ResolveAsync("gpt-5.6-sol"));
+        AssertEx.Equal(ModelTrustLocality.Cloud, resolver.Classify("gpt-5.6-sol"));
     }
 
     [Test]
@@ -148,7 +148,7 @@ public sealed class ModelTrustResolverTests
                  {
                      "qwen3-27b.gguf",
                      "azure-gpt",
-                     "gpt-5.5",
+                     "gpt-5.6-sol",
                      "ext:local-box/qwen3",
                      "ext:cloud-box/qwen3",
                      "ext:gone/qwen3",
@@ -300,7 +300,7 @@ public sealed class ModelTrustResolverTests
                      "ext:local-box/qwen3",
                      "ext:gone/qwen3",
                      "ext:not-an-id",
-                     "gpt-5.5",
+                     "gpt-5.6-sol",
                      "qwen3-27b.gguf",
                      null
                  })

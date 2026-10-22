@@ -23,7 +23,7 @@ public static class AzureFoundryProviderCapabilities
         SupportsParallelToolCalls = false,
         SupportsStructuredOutput = false,
         SupportsVision = false,
-        SupportsUsage = false,
+        SupportsUsage = true,
         SupportsServiceSideThreads = false
     };
 }

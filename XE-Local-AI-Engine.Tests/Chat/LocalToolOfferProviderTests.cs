@@ -723,9 +723,9 @@ public sealed class LocalToolOfferProviderTests
     {
         // A Codex id is detected as cloud synchronously, so the gate fires even if the caller passes isCloudModel: false
         // (e.g. a custom agent pinned to a Codex model while the turn's active model was local).
-        var provider = CreateProvider("gpt-5.5");
+        var provider = CreateProvider("gpt-5.6-sol");
 
-        var offered = provider.GetOfferedTools("gpt-5.5", isCloudModel: false);
+        var offered = provider.GetOfferedTools("gpt-5.6-sol", isCloudModel: false);
 
         AssertEx.False(offered.Any(tool => tool.Name == KnowledgeSearchToolName),
             "a Codex model must not be offered the knowledge tools regardless of the threaded cloud flag");

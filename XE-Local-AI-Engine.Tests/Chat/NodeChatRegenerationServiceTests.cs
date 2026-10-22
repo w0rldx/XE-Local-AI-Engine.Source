@@ -543,7 +543,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // The KB egress gate mirrors the send path: a Codex cloud effective model must NOT receive KB context without the
         // operator opt-in. The rerun runs without KB context and the user gets a KnowledgeWithheld notice.
         var events = new List<ChatStreamEvent>();
-        var context = await RegenerateWithKnowledgeAsync("regeneration-kb-cloud.sqlite", "gpt-5.5", trustResolver: null, events);
+        var context = await RegenerateWithKnowledgeAsync("regeneration-kb-cloud.sqlite", "gpt-5.6-sol", trustResolver: null, events);
 
         AssertEx.False(context.Any(message => message.Content.Contains(KnowledgeChatContextComposer.Preamble, StringComparison.Ordinal)),
             "the KB context block must not be composed for a cloud model without opt-in.");
@@ -3330,7 +3330,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await using var provider = await BuildProviderAsync("regeneration-codex-capabilities.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 
-        const string CodexModel = "gpt-5.5";
+        const string CodexModel = "gpt-5.6-sol";
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
             Title = "Codex regen",

@@ -142,6 +142,55 @@ public sealed class LocalRuntimeWarmerTests
     }
 
     [Test]
+    public async Task ResolveDeclaredRemoteContextAsync_ForAnExternalModel_ReturnsItsRegisteredLength()
+    {
+        var resolver = CreateLlamaCppResolver();
+        var trust = new FakeModelTrustResolver().Register("local-box", "qwen3", contextLength: 65_536);
+        var warmer = CreateWarmer(resolver, trust: trust);
+
+        AssertEx.Equal(65_536, await warmer.ResolveDeclaredRemoteContextAsync("ext:local-box/qwen3", Guid.NewGuid(), CancellationToken.None));
+        await resolver.DidNotReceive().ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ResolveDeclaredRemoteContextAsync_ForASelectedCloudModel_ReturnsItsCatalogWindow()
+    {
+        var resolver = CreateLlamaCppResolver();
+        var cloudModels = Substitute.For<ICloudModelResolver>();
+        cloudModels.ResolveContextWindowAsync("gpt-5.6-terra", Arg.Any<CancellationToken>()).Returns(new CloudModelContextWindow { ContextTokens = 272_000 });
+        var warmer = CreateWarmer(resolver, cloudSelected: true, cloudModels: cloudModels);
+
+        AssertEx.Equal(272_000, await warmer.ResolveDeclaredRemoteContextAsync("gpt-5.6-terra", Guid.NewGuid(), CancellationToken.None));
+        await resolver.DidNotReceive().ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ResolveDeclaredRemoteContextAsync_ForALocalModel_IsNullAndNeverReadsTheCloudConfig()
+    {
+        var cloudModels = Substitute.For<ICloudModelResolver>();
+        cloudModels.ResolveContextWindowAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new CloudModelContextWindow { ContextTokens = 272_000 });
+        var warmer = CreateWarmer(CreateLlamaCppResolver(), cloudModels: cloudModels);
+
+        AssertEx.Null(await warmer.ResolveDeclaredRemoteContextAsync("model.gguf", Guid.NewGuid(), CancellationToken.None));
+        await cloudModels.DidNotReceive().ResolveContextWindowAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ResolveDeclaredRemoteContextAsync_WhenTheCloudReadFails_IsNull_ButACancellationPropagates()
+    {
+        var failing = Substitute.For<ICloudModelResolver>();
+        failing.ResolveContextWindowAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("config unreadable"));
+        AssertEx.Null(await CreateWarmer(CreateLlamaCppResolver(), cloudSelected: true, cloudModels: failing)
+            .ResolveDeclaredRemoteContextAsync("gpt-5.6-terra", Guid.NewGuid(), CancellationToken.None));
+
+        var cancelled = Substitute.For<ICloudModelResolver>();
+        cancelled.ResolveContextWindowAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).ThrowsAsync(new OperationCanceledException());
+        var warmer = CreateWarmer(CreateLlamaCppResolver(), cloudSelected: true, cloudModels: cancelled);
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() =>
+            warmer.ResolveDeclaredRemoteContextAsync("gpt-5.6-terra", Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Test]
     public async Task ResolveEffectiveContextTokensAsync_ReturnsTheLaunchedWindow()
     {
         var warmer = CreateWarmer(CreateLlamaCppResolver());
@@ -214,12 +263,12 @@ public sealed class LocalRuntimeWarmerTests
     }
 
     private static LocalRuntimeWarmer CreateWarmer(ILocalModelProviderResolver resolver, bool cloudSelected = false, GpuWorkGate? gate = null,
-        ICloudModelResolver? cloudModels = null)
+        ICloudModelResolver? cloudModels = null, FakeModelTrustResolver? trust = null)
     {
         var cloudFactory = Substitute.For<IActiveCloudChatClientFactory>();
         cloudFactory.IsCloudProviderSelected(Arg.Any<string?>()).Returns(cloudSelected);
 
-        return new LocalRuntimeWarmer(resolver, cloudFactory, new FakeModelTrustResolver(), cloudModels ?? Substitute.For<ICloudModelResolver>(),
+        return new LocalRuntimeWarmer(resolver, cloudFactory, trust ?? new FakeModelTrustResolver(), cloudModels ?? Substitute.For<ICloudModelResolver>(),
             NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System, gate ?? new GpuWorkGate());
     }
 

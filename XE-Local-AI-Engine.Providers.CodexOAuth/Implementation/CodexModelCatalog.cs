@@ -14,18 +14,17 @@ namespace XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 public static class CodexModelCatalog
 {
     /// <summary>
-    ///     The offered Codex model ids, strongest-first (<c>gpt-5.6-sol</c>, the frontier model, leads). The node
+    ///     The offered Codex model ids, strongest-first (the <c>gpt-6</c> family leads, then the <c>gpt-5.6</c> family). The node
     ///     default (<see cref="CodexOAuth.Options.CodexOptions.DefaultModel" />) is <c>gpt-5.6-terra</c>, not necessarily the first entry.
     /// </summary>
     public static IReadOnlyList<string> ModelIds { get; } =
     [
+        "gpt-6-astra",
+        "gpt-6-sol",
+        "gpt-6-luna",
         "gpt-5.6-sol",
         "gpt-5.6-terra",
-        "gpt-5.6-luna",
-        "gpt-5.5",
-        "gpt-5.4",
-        "gpt-5.4-mini",
-        "gpt-5.3-codex-spark"
+        "gpt-5.6-luna"
     ];
 
     /// <summary>
@@ -33,11 +32,9 @@ public static class CodexModelCatalog
     ///     when the id is unknown or no official figure could be sourced for it.
     /// </summary>
     /// <remarks>
-    ///     Values come from the Codex CLI catalog for the ChatGPT-subscription path this provider uses, not the public API pages,
-    ///     which advertise a larger window that belongs to the API-key path and would over-budget here. 272,000 is the catalog's
-    ///     default <c>context_window</c>; its larger <c>max_context_window</c> (872,000) is opt-in for a client, and this node does
-    ///     not opt in, so the default is the honest budget. An id absent here (the older ids, no longer in that catalog) has no
-    ///     sourced window, so the chat meter shows "unknown" and the turn budget keeps the node default rather than trusting a guess.
+    ///     Values come from the Codex CLI's ChatGPT-path model catalog (read 2026-10-22), not the larger API-key-path
+    ///     figures. 272,000 is the catalog's default <c>context_window</c>; its opt-in 872,000 maximum is not used by
+    ///     this node. An id absent here, such as a retired one, has no sourced window, so the meter shows "unknown".
     /// </remarks>
     public static int? ContextTokensFor(string? modelId)
     {
@@ -46,6 +43,9 @@ public static class CodexModelCatalog
 
     private static readonly Dictionary<string, int> ContextTokens = new(StringComparer.OrdinalIgnoreCase)
     {
+        ["gpt-6-astra"] = 272_000,
+        ["gpt-6-sol"] = 272_000,
+        ["gpt-6-luna"] = 272_000,
         ["gpt-5.6-sol"] = 272_000,
         ["gpt-5.6-terra"] = 272_000,
         ["gpt-5.6-luna"] = 272_000

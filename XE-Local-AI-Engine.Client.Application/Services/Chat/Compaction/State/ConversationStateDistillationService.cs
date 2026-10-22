@@ -154,6 +154,7 @@ internal sealed class ConversationStateDistillationService : IConversationStateD
         }
 
         var capabilities = await _modelCapabilityResolver.ResolveAsync(model, operationToken);
+        // The fold model is always an installed GGUF, so only a resident llama.cpp window applies, never a declared one.
         var warmProvider = await _localRuntimeWarmer.ResolveWarmableProviderAsync(model, conversationId, operationToken);
         var effectiveContextTokens = warmProvider is null
             ? null
