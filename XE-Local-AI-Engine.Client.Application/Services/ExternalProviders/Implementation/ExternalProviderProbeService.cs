@@ -102,9 +102,17 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
             ? carriedStoredHeaders
             : ExternalProviderStore.MergeHeaders(ExternalProviderStore.NormalizeHeaders(query.Headers), stored, baseAddress.AbsoluteUri, isSave: false);
 
+        // A gateway may echo what it was sent; the credentials the probe sends are known here, so a detail carrying one is dropped.
+        string[] sentSecrets =
+        [
+            .. headers.Where(static header => header.IsSecret).Select(static header => header.Value).Append(apiKey)
+                .OfType<string>()
+                .Where(static value => !string.IsNullOrWhiteSpace(value))
+        ];
         return await SendProbeAsync(baseAddress,
             apiKey,
             [.. headers.Select(static header => new KeyValuePair<string, string>(header.Name, header.Value ?? string.Empty))],
+            sentSecrets,
             cancellationToken);
     }
 
@@ -123,6 +131,7 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
     private async Task<ExternalProviderProbeResult> SendProbeAsync(Uri baseAddress,
         string? apiKey,
         IReadOnlyList<KeyValuePair<string, string>> headers,
+        IReadOnlyList<string> sentSecrets,
         CancellationToken cancellationToken)
     {
         // The probe's own deadline must not be indistinguishable from the caller cancelling: a linked source lets the
@@ -159,7 +168,7 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
             }
 
             using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
-            return await ReadProbeResponseAsync(response, timeout.Token);
+            return await ReadProbeResponseAsync(response, sentSecrets, timeout.Token, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -178,7 +187,10 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
         }
     }
 
-    private static async Task<ExternalProviderProbeResult> ReadProbeResponseAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    private async Task<ExternalProviderProbeResult> ReadProbeResponseAsync(HttpResponseMessage response,
+        IReadOnlyList<string> sentSecrets,
+        CancellationToken cancellationToken,
+        CancellationToken callerToken)
     {
         var status = (int)response.StatusCode;
         if (response.StatusCode is >= HttpStatusCode.MultipleChoices and < HttpStatusCode.BadRequest)
@@ -186,11 +198,15 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
             return Answered($"The endpoint answered with a redirect (HTTP {status}), which is not followed. Enter the address it redirects to.");
         }
 
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
+            var rejected = $"The endpoint rejected the model listing with HTTP {status}. Check the API key or the connection's custom headers.";
+            return Answered(await ReadRejectionDetailAsync(response, sentSecrets, cancellationToken, callerToken) is { } detail ? $"{rejected} ({detail})" : rejected);
+        }
+
         if (!response.IsSuccessStatusCode)
         {
-            return Answered(response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
-                ? $"The endpoint rejected the model listing with HTTP {status}. Check the API key."
-                : $"The endpoint answered with HTTP {status} and served no model listing. Add model ids by hand.");
+            return Answered($"The endpoint answered with HTTP {status} and served no model listing. Add model ids by hand.");
         }
 
         var payload = await ReadBoundedAsync(response, cancellationToken);
@@ -206,6 +222,27 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
                 Models = models
             }
             : Answered("The endpoint answered, but its model listing could not be understood. Add model ids by hand.");
+    }
+
+    /// <summary>The sanitized code and message of a 401/403 body, or <see langword="null" /> when there is none to quote.</summary>
+    /// <remarks>
+    ///     A body carrying any credential the probe sent, checked on the decoded values before sanitizing reshapes them, yields nothing. The
+    ///     detail is optional: a failed read keeps the rejection verdict, and only the caller's own cancellation propagates.
+    /// </remarks>
+    private async Task<string?> ReadRejectionDetailAsync(HttpResponseMessage response,
+        IReadOnlyList<string> sentSecrets,
+        CancellationToken cancellationToken,
+        CancellationToken callerToken)
+    {
+        try
+        {
+            return await ReadBoundedAsync(response, cancellationToken) is { } body ? ExternalProviderErrorDetail.Parse(body, sentSecrets).Text : null;
+        }
+        catch (Exception exception) when (!callerToken.IsCancellationRequested)
+        {
+            _logger.LogDebug(exception, "External provider probe could not read the rejection body.");
+            return null;
+        }
     }
 
     /// <summary>Reads at most <see cref="MaxResponseBytes" />, or <see langword="null" /> when the body exceeds it.</summary>

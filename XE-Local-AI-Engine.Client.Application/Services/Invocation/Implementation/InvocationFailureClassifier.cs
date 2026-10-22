@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -17,11 +18,10 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     and a user-facing message.
 /// </summary>
 /// <remarks>
-///     Pure functions over an <see cref="Exception" />, with no invocation state, so the switch-arm ORDER in
-///     <see cref="MapFailure" /> is the whole contract and <c>InvocationRunnerTests</c> pins it. Three rules run through
-///     every arm: an arm whose type derives from a later arm's type comes first; a new <see cref="FailureCategory" />
-///     value drifts the generated OpenAPI/zod client, so prefer the closest existing category with its own fixed,
-///     path-free message; and only an already-sanitized message is surfaced verbatim.
+///     Pure functions with no invocation state, so the switch-arm ORDER in <see cref="MapFailure" /> is the whole contract
+///     and <c>InvocationRunnerTests</c> pins it. An arm whose type derives from a later arm's type comes first; a new
+///     <see cref="FailureCategory" /> drifts the generated OpenAPI/zod client, so prefer the closest existing one; only a
+///     sanitized message is surfaced, a provider body only through <see cref="ExternalProviderErrorDetail" />.
 /// </remarks>
 internal static class InvocationFailureClassifier
 {
@@ -68,9 +68,9 @@ internal static class InvocationFailureClassifier
     // A provider or gateway HTTP 404: nothing is installed locally, so the node's "not installed" text would mislead.
     private const string ProviderModelNotOfferedMessage = "The provider does not offer the selected model. Check the model id on the connection.";
 
-    // A provider or gateway HTTP 401/403. Fixed and path-free: the response body, URL and credential are never surfaced.
+    // A provider or gateway HTTP 401/403. Fixed and path-free: only the sanitized body detail is appended, never the URL or credential.
     private const string ProviderAuthFailedMessage =
-        "The provider rejected the credentials. Replace the API key or bearer token in the connection settings.";
+        "The provider rejected the credentials. Replace the API key, bearer token or secret headers in the connection settings.";
 
     private const string ProviderRateLimitedMessage = "The provider rate-limited this request";
 
@@ -79,6 +79,11 @@ internal static class InvocationFailureClassifier
 
     // A 5xx reason phrase longer than this is dropped rather than cut.
     private const int MaxReasonPhraseLength = 64;
+
+    private static readonly Regex ModelWordPattern = new(@"\bmodel\b", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1));
+
+    private static readonly string[] ModelRefusalPhrases =
+        ["not assigned", "not allowed", "not available", "not enabled", "not permitted", "no access", "does not exist", "not found", "unknown"];
 
     private static readonly Regex FrameworkExceptionNamePattern =
         new(@"\b(?:Microsoft|System)(?:\.[A-Za-z_][A-Za-z0-9_]*)*\.[A-Za-z_][A-Za-z0-9_]*Exception\b|\b(?:AgentException|ChatClientAgentException)\b", RegexOptions.CultureInvariant,
@@ -139,9 +144,14 @@ internal static class InvocationFailureClassifier
             _ when FindInChain<AzureFoundryProviderException>(exception) is { Kind: AzureFoundryProviderErrorKind.AuthFailed or AzureFoundryProviderErrorKind.AuthRequired } azureAuth =>
                 new FailureClassification(FailureCategory.ProviderAuthFailed, azureAuth.Message),
             // An OpenAI-compatible provider or gateway rejecting a call by status. 400 and 5xx fall through to the grammar, capability and model-load
-            // arms, which read a wrapper's text; the 5xx arm follows them. The body and URL are never surfaced.
-            _ when FindProviderClientResult(exception) is { Status: 401 or 403 } =>
-                new FailureClassification(FailureCategory.ProviderAuthFailed, ProviderAuthFailedMessage),
+            // arms, which read a wrapper's text; the 5xx arm follows them. A 403 refusing the model by name is not a bad credential.
+            _ when FindProviderClientResult(exception) is { Status: 403 } forbidden
+                   && ReadBodyDetail(forbidden) is { Message: { } forbiddenMessage } forbiddenDetail
+                   && RefusesTheModel(forbiddenMessage) =>
+                new FailureClassification(FailureCategory.ModelUnavailable,
+                    $"The provider does not offer the selected model to this connection ({forbiddenDetail.Text}). Check the model id on the connection."),
+            _ when FindProviderClientResult(exception) is { Status: 401 or 403 } authFailed =>
+                new FailureClassification(FailureCategory.ProviderAuthFailed, AppendDetail(ProviderAuthFailedMessage, authFailed)),
             _ when FindProviderClientResult(exception) is { Status: 404 } =>
                 new FailureClassification(FailureCategory.ModelUnavailable, ProviderModelNotOfferedMessage),
             _ when FindProviderClientResult(exception) is { Status: 429 } rateLimited =>
@@ -315,7 +325,7 @@ internal static class InvocationFailureClassifier
     /// <summary>A fixed server-error message naming the HTTP status, plus the response reason phrase when it is short and plain.</summary>
     /// <remarks>
     ///     The phrase is quoted only when it fits <see cref="MaxReasonPhraseLength" /> and holds ASCII letters, digits,
-    ///     spaces and <c>.,:-_()</c>; anything else is dropped. The body and URL are never surfaced.
+    ///     spaces and <c>.,:-_()</c>; anything else is dropped. The body's sanitized detail is appended; the URL is never surfaced.
     /// </remarks>
     private static string BuildServerErrorMessage(ClientResultException exception)
     {
@@ -326,7 +336,25 @@ internal static class InvocationFailureClassifier
             ? $"HTTP {exception.Status}"
             : $"HTTP {exception.Status} {reasonPhrase}";
 
-        return $"The provider returned a server error ({statusText}). Retry, or check the connection's gateway.";
+        return AppendDetail($"The provider returned a server error ({statusText}). Retry, or check the connection's gateway.", exception);
+    }
+
+    // Whole-word "model" plus a refusal phrase, so "Missing or invalid required header 'X-Model-Token'." stays a credential failure.
+    private static bool RefusesTheModel(string message)
+    {
+        return ModelWordPattern.IsMatch(message)
+               && ModelRefusalPhrases.Any(phrase => message.Contains(phrase, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>The message, followed by the response body's sanitized detail in parentheses when it carries one.</summary>
+    private static string AppendDetail(string message, ClientResultException exception)
+    {
+        return ReadBodyDetail(exception).Text is { } detail ? $"{message} ({detail})" : message;
+    }
+
+    private static ExternalProviderErrorDetail ReadBodyDetail(ClientResultException exception)
+    {
+        return ExternalProviderErrorDetail.Parse(exception.GetRawResponse()?.Content?.ToMemory() ?? default);
     }
 
     private static string RedactAgentRuntimeMessage(string message)

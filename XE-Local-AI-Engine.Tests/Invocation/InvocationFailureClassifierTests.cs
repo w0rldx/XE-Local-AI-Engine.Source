@@ -11,12 +11,23 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Pins how <see cref="InvocationFailureClassifier.MapFailure" /> names an OpenAI-compatible provider or gateway
-///     rejection (<see cref="ClientResultException" /> by status) and an Azure auth failure, without leaking the body.
+///     rejection (<see cref="ClientResultException" /> by status) and an Azure auth failure, quoting only the body's sanitized
+///     code and message.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class InvocationFailureClassifierTests
 {
-    private const string AuthFailedMessage = "The provider rejected the credentials. Replace the API key or bearer token in the connection settings.";
+    private const string AuthFailedMessage = "The provider rejected the credentials. Replace the API key, bearer token or secret headers in the connection settings.";
+
+    private const string ServerErrorMessage = "The provider returned a server error (HTTP 500 Internal Server Error). Retry, or check the connection's gateway.";
+
+    private const string TenantId = "tenant-0f3c9a";
+    private const string UserId = "user-7b21de";
+    private const string ProjectId = "project-44aa10";
+
+    // A policy gateway's 403 echoes the caller's ids beside the reason; only the reason may reach the operator.
+    private const string PolicyBodyTemplate =
+        $$"""{"allowed":false,"reason":"{0}","tenantId":"{{TenantId}}","userId":"{{UserId}}","projectId":"{{ProjectId}}","modelId":"DeepSeek-V4-Flash-2","foundryInstanceId":"","tokensPerMinute":0,"projectEndDateUtc":null}""";
 
     [Test]
     [Arguments(401, null, FailureCategory.ProviderAuthFailed, AuthFailedMessage)]
@@ -175,10 +186,77 @@ public sealed class InvocationFailureClassifierTests
         AssertEx.Equal("unrelated failure", classification.Message);
     }
 
-    private static ClientResultException CreateClientResultException(int status, string? retryAfter, string reasonPhrase = "")
+    // The gateway samples: an operator's gateway answers both API surfaces with these bodies.
+    [Test]
+    [Arguments(500, """{"error":"unsupported_tpm_configuration","message":"TokensPerMinute must be one of 10000, 30000, 60000, 100000, 200000, 500000, 1000000.","configuredTokensPerMinute":80000}""",
+        FailureCategory.ProviderUnreachable,
+        ServerErrorMessage + " (unsupported_tpm_configuration: TokensPerMinute must be one of 10000, 30000, 60000, 100000, 200000, 500000, 1000000.)")]
+    [Arguments(401, """{"error":"invalid_token","message":"Access token is expired or invalid."}""", FailureCategory.ProviderAuthFailed,
+        AuthFailedMessage + " (invalid_token: Access token is expired or invalid.)")]
+    [Arguments(401, """{"error":{"message":"Incorrect API key provided.","type":"invalid_request_error","code":"invalid_api_key"}}""", FailureCategory.ProviderAuthFailed,
+        AuthFailedMessage + " (invalid_api_key: Incorrect API key provided.)")]
+    [Arguments(403, """{"code":"denied","message":"Denied by policy."}""", FailureCategory.ProviderAuthFailed, AuthFailedMessage + " (denied: Denied by policy.)")]
+    [Arguments(500, "<html><body><h1>502 Bad Gateway</h1></body></html>", FailureCategory.ProviderUnreachable, ServerErrorMessage)]
+    [Arguments(500, "", FailureCategory.ProviderUnreachable, ServerErrorMessage)]
+    [Arguments(500, "[\"not an object\"]", FailureCategory.ProviderUnreachable, ServerErrorMessage)]
+    [Arguments(500, """{"message":"line one\r\nline two"}""", FailureCategory.ProviderUnreachable, ServerErrorMessage + " (line one line two)")]
+    [Arguments(500, """{"message":"bad\r\n<script>alert(1)</script>"}""", FailureCategory.ProviderUnreachable, ServerErrorMessage)]
+    [Arguments(500, """{"error":"<b>code</b>","message":"Plain text."}""", FailureCategory.ProviderUnreachable, ServerErrorMessage + " (Plain text.)")]
+    [Arguments(401, """{"message":"Invalid API key: sk-secret123"}""", FailureCategory.ProviderAuthFailed, AuthFailedMessage)]
+    [Arguments(401, """{"error":"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl","message":"Token eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl expired."}""",
+        FailureCategory.ProviderAuthFailed, AuthFailedMessage)]
+    [Arguments(500, """{"message":"Upstream https://gateway.internal.example/v1/chat failed."}""", FailureCategory.ProviderUnreachable, ServerErrorMessage)]
+    [Arguments(500, """{"message":"Cannot open /var/lib/gateway/tenants.json now."}""", FailureCategory.ProviderUnreachable, ServerErrorMessage)]
+    [Arguments(500, """{"code":"sk-live-abc","message":"Quota exceeded."}""", FailureCategory.ProviderUnreachable, ServerErrorMessage + " (Quota exceeded.)")]
+    public void MapFailure_ProviderBody_AppendsOnlyTheSanitizedDetail(int status, string body, FailureCategory expectedCategory, string expectedMessage)
+    {
+        var classification = InvocationFailureClassifier.MapFailure(CreateClientResultException(status, retryAfter: null, "Internal Server Error", body));
+
+        AssertEx.Equal(expectedCategory, classification.Category);
+        AssertEx.Equal(expectedMessage, classification.Message);
+    }
+
+    // A 403 whose reason names the model sends the operator to the model id; any other 403 reason stays a credential failure.
+    [Test]
+    [Arguments("Model is not assigned to this project.", FailureCategory.ModelUnavailable,
+        "The provider does not offer the selected model to this connection (Model is not assigned to this project.). Check the model id on the connection.")]
+    [Arguments("Project does not exist.", FailureCategory.ProviderAuthFailed, AuthFailedMessage + " (Project does not exist.)")]
+    [Arguments("Missing or invalid required header 'X-Model-Token'.", FailureCategory.ProviderAuthFailed,
+        AuthFailedMessage + " (Missing or invalid required header 'X-Model-Token'.)")]
+    [Arguments("Your model quota is exhausted.", FailureCategory.ProviderAuthFailed, AuthFailedMessage + " (Your model quota is exhausted.)")]
+    public void MapFailure_PolicyGateway403_SplitsModelFromCredentialAndNeverSurfacesTheEchoedIds(string reason, FailureCategory expectedCategory, string expectedMessage)
+    {
+        var body = PolicyBodyTemplate.Replace("{0}", reason, StringComparison.Ordinal);
+
+        var classification = InvocationFailureClassifier.MapFailure(new InvalidOperationException("agent run failed",
+            CreateClientResultException(403, retryAfter: null, body: body)));
+
+        AssertEx.Equal(expectedCategory, classification.Category);
+        AssertEx.Equal(expectedMessage, classification.Message);
+        foreach (var id in (string[])[TenantId, UserId, ProjectId, "DeepSeek-V4-Flash-2"])
+        {
+            AssertEx.False(classification.Message.Contains(id, StringComparison.Ordinal), $"The message surfaced '{id}': {classification.Message}");
+        }
+    }
+
+    // A message longer than the cap is cut to it; the cut is plain text because the filter ran first.
+    [Test]
+    public void MapFailure_LongBodyMessage_IsCappedAtThreeHundredCharacters()
+    {
+        var longMessage = string.Concat(Enumerable.Repeat("word ", 100));
+
+        var classification = InvocationFailureClassifier.MapFailure(CreateClientResultException(500, retryAfter: null, "Internal Server Error",
+            $$"""{"message":"{{longMessage}}"}"""));
+
+        AssertEx.Equal($"{ServerErrorMessage} ({longMessage[..300].TrimEnd()})", classification.Message);
+    }
+
+    // The default body carries only a field the classifier never reads, so the fixed texts above stay exact.
+    private static ClientResultException CreateClientResultException(int status, string? retryAfter, string reasonPhrase = "",
+        string body = """{"error":{"type":"body-sentinel"}}""")
     {
         // The fake owns nothing (its Dispose is empty), so the exception may keep reading it after this scope.
-        using var response = new FakePipelineResponse(status, BinaryData.FromString("""{"error":{"message":"body-sentinel"}}"""), retryAfter, reasonPhrase);
+        using var response = new FakePipelineResponse(status, BinaryData.FromString(body), retryAfter, reasonPhrase);
         return new ClientResultException(response, innerException: null);
     }
 

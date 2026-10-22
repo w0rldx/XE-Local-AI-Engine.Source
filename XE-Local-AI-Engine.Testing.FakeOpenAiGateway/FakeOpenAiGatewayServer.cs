@@ -19,6 +19,12 @@ public sealed class FakeOpenAiGatewayServer : IAsyncDisposable
     /// <summary>The opaque <c>encrypted_content</c> of the reasoning item every <c>responses</c> answer leads with.</summary>
     public const string EncryptedReasoning = "fake-encrypted-reasoning";
 
+    /// <summary>The tenant id the <see cref="FakeOpenAiGatewayFailure.ModelNotAssigned" /> body echoes; a caller must never surface it.</summary>
+    public const string ModelNotAssignedTenantId = "tenant-sentinel-0001";
+
+    /// <summary>The project id the <see cref="FakeOpenAiGatewayFailure.ModelNotAssigned" /> body echoes; a caller must never surface it.</summary>
+    public const string ModelNotAssignedProjectId = "project-sentinel-0002";
+
     private readonly WebApplication _app;
 
     private FakeOpenAiGatewayServer(WebApplication app, Uri baseAddress, FakeOpenAiGatewayState state)

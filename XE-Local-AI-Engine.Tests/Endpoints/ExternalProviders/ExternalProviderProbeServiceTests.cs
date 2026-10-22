@@ -111,6 +111,112 @@ public sealed class ExternalProviderProbeServiceTests
         AssertEx.Equal(expected: 1, transport.RequestCount);
     }
 
+    // A header-authenticated gateway's rejection names the headers as well as the key and quotes the body's own reason;
+    // an HTML body adds nothing, and an echo of the key or secret header the probe sent is dropped whole.
+    [Test]
+    [Arguments(HttpStatusCode.Unauthorized, """{"error":"invalid_token","message":"Access token is expired or invalid."}""",
+        "The endpoint rejected the model listing with HTTP 401. Check the API key or the connection's custom headers. (invalid_token: Access token is expired or invalid.)")]
+    [Arguments(HttpStatusCode.Forbidden, "<html><body>Forbidden</body></html>",
+        "The endpoint rejected the model listing with HTTP 403. Check the API key or the connection's custom headers.")]
+    // The stored key and secret header are letters and hyphens, so the grammar alone would let an echo of either through.
+    [Arguments(HttpStatusCode.Unauthorized, $$"""{"error":"invalid_token","message":"Key {{StoredKey}} rejected"}""",
+        "The endpoint rejected the model listing with HTTP 401. Check the API key or the connection's custom headers.")]
+    [Arguments(HttpStatusCode.Forbidden, $$"""{"reason":"Header value {{StoredHeaderValue}} is wrong."}""",
+        "The endpoint rejected the model listing with HTTP 403. Check the API key or the connection's custom headers.")]
+    public async Task Probe_WhenTheListingIsRejected_NamesKeyAndHeadersAndQuotesTheSanitizedReason(HttpStatusCode status, string body, string expected)
+    {
+        var transport = new ProbeTransport(_ => new HttpResponseMessage(status)
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json")
+        });
+        var service = CreateService(transport, CreateConfig());
+
+        var result = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", BaseUrl: null, ApiKey: null));
+
+        AssertEx.Equal($"Bearer {StoredKey}", transport.LastAuthorization);
+        AssertEx.Equal(ExternalProviderProbeOutcome.Answered, result.Outcome);
+        AssertEx.Equal(expected, result.Error);
+        AssertEx.Equal(StoredHeaderValue, transport.LastHeaders.GetValueOrDefault("X-Stored-Token"));
+        var error = AssertEx.NotNull(result.Error);
+        AssertEx.False(error.Contains(StoredKey, StringComparison.OrdinalIgnoreCase));
+        AssertEx.False(error.Contains(StoredHeaderValue, StringComparison.OrdinalIgnoreCase));
+    }
+
+    // The secret check runs on the raw body: parsing collapses inner whitespace and caps at 300 characters, either of which
+    // would hide an echo from a check on the parsed detail.
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Probe_WhenTheRejectionEchoesASecretParsingWouldReshape_QuotesNothing(bool longKey)
+    {
+        var key = longKey ? new string('k', 320) : StoredKey;
+        const string headerValue = "alpha  beta";
+        var body = longKey ? $$"""{"message":"{{key}}"}""" : $$"""{"reason":"Header {{headerValue}} is wrong."}""";
+        var transport = new ProbeTransport(_ => new HttpResponseMessage(longKey ? HttpStatusCode.Unauthorized : HttpStatusCode.Forbidden)
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json")
+        });
+        var service = CreateService(transport, CreateConfig(key, headerValue));
+
+        var result = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", BaseUrl: null, ApiKey: null));
+
+        AssertEx.Equal(headerValue, transport.LastHeaders.GetValueOrDefault("X-Stored-Token"));
+        AssertEx.Equal($"The endpoint rejected the model listing with HTTP {(longKey ? 401 : 403)}. Check the API key or the connection's custom headers.", result.Error);
+    }
+
+    // A JSON escape hides the key from the raw bytes but not from the decoded message, which is where the check runs.
+    [Test]
+    public async Task Probe_WhenTheRejectionEchoesTheKeyJsonEscaped_QuotesNothing()
+    {
+        const string escapedKey = "sk\\u002Dunsloth-super-secret";
+        var transport = new ProbeTransport(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized)
+        {
+            Content = new StringContent($$"""{"error":"invalid_token","message":"Key {{escapedKey}} rejected"}""", Encoding.UTF8, "application/json")
+        });
+        var service = CreateService(transport, CreateConfig());
+
+        var result = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", BaseUrl: null, ApiKey: null));
+
+        AssertEx.Equal($"Bearer {StoredKey}", transport.LastAuthorization);
+        AssertEx.Equal("The endpoint rejected the model listing with HTTP 401. Check the API key or the connection's custom headers.", result.Error);
+    }
+
+    // The body is optional: a 401 whose body cannot be read keeps the rejection verdict instead of becoming "unreachable".
+    [Test]
+    public async Task Probe_WhenTheRejectionBodyFailsToRead_StillReportsTheRejection()
+    {
+        var transport = new ProbeTransport(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized)
+        {
+            Content = new StreamContent(new ScriptedReadStream(_ => throw new HttpIOException(HttpRequestError.ResponseEnded, "body dropped")))
+        });
+        var service = CreateService(transport);
+
+        var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://127.0.0.1:18099", ApiKey: null));
+
+        AssertEx.Equal(ExternalProviderProbeOutcome.Answered, result.Outcome);
+        AssertEx.Equal("The endpoint rejected the model listing with HTTP 401. Check the API key or the connection's custom headers.", result.Error);
+    }
+
+    // The caller navigating away during the body read is not a verdict: its cancellation propagates.
+    [Test]
+    public async Task Probe_WhenTheCallerCancelsDuringTheRejectionBodyRead_Propagates()
+    {
+        using var caller = new CancellationTokenSource();
+        var transport = new ProbeTransport(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized)
+        {
+            Content = new StreamContent(new ScriptedReadStream(async token =>
+            {
+                await caller.CancelAsync();
+                await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                return 0;
+            }))
+        });
+        var service = CreateService(transport);
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(async () =>
+            await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://127.0.0.1:18099", ApiKey: null), caller.Token));
+    }
+
     [Test]
     public async Task Probe_WhenTheTransportFails_ReportsUnreachableWithoutLeakingTheExceptionText()
     {
@@ -365,7 +471,7 @@ public sealed class ExternalProviderProbeServiceTests
         };
     }
 
-    private static StoredExternalProviderConfig CreateConfig()
+    private static StoredExternalProviderConfig CreateConfig(string apiKey = StoredKey, string headerValue = StoredHeaderValue)
     {
         return new StoredExternalProviderConfig
         {
@@ -377,9 +483,9 @@ public sealed class ExternalProviderProbeServiceTests
                     Id = "unsloth-box",
                     DisplayName = "Unsloth box",
                     BaseUrl = "http://127.0.0.1:18099/v1/",
-                    ApiKey = StoredKey,
+                    ApiKey = apiKey,
                     Locality = ExternalProviderLocality.Local,
-                    Headers = [Header("X-Stored-Token", StoredHeaderValue, isSecret: true)]
+                    Headers = [Header("X-Stored-Token", headerValue, isSecret: true)]
                 }
             ]
         };
@@ -398,6 +504,65 @@ public sealed class ExternalProviderProbeServiceTests
         {
             Content = new StringContent(payload, Encoding.UTF8, "application/json")
         };
+    }
+
+    /// <summary>A response body whose every read runs the supplied script, to fail or stall a body read on cue.</summary>
+    private sealed class ScriptedReadStream : Stream
+    {
+        private readonly Func<CancellationToken, Task<int>> _read;
+
+        public ScriptedReadStream(Func<CancellationToken, Task<int>> read)
+        {
+            _read = read;
+        }
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            return _read(CancellationToken.None).GetAwaiter().GetResult();
+        }
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            return _read(cancellationToken);
+        }
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            return new ValueTask<int>(_read(cancellationToken));
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void SetLength(long value)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            throw new NotSupportedException();
+        }
     }
 
     /// <summary>

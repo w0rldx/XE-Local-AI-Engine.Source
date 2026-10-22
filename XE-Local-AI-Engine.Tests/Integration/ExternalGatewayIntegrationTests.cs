@@ -269,6 +269,82 @@ public sealed class ExternalGatewayIntegrationTests
             "The operator-facing message must never carry a credential.");
     }
 
+    // A policy gateway's 403 for a model the connection may not use names the model, not the key, on both API surfaces and
+    // on the streaming send a chat turn makes, and the ids its body echoes stay out of the operator-facing message.
+    [Test]
+    [Arguments(ExternalProviderApiSurface.ChatCompletions, false)]
+    [Arguments(ExternalProviderApiSurface.ChatCompletions, true)]
+    [Arguments(ExternalProviderApiSurface.Responses, false)]
+    [Arguments(ExternalProviderApiSurface.Responses, true)]
+    public async Task GatewayModelNotAssigned_IsModelUnavailableWithTheReasonAndNoEchoedIds(ExternalProviderApiSurface surface, bool streaming)
+    {
+        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions
+        {
+            RequiredBearerToken = Token,
+            Models =
+            [
+                new FakeOpenAiGatewayModel
+                {
+                    Id = WireId,
+                    ContextLength = 32768
+                },
+                new FakeOpenAiGatewayModel
+                {
+                    Id = ResponsesWireId,
+                    ContextLength = 32768
+                }
+            ]
+        }, Token, [Secret(SecretValue)], TwoModels(surface));
+        using var deadline = new CancellationTokenSource(TestBudgets.Contended);
+        using var client = new ExternalOpenAiChatClient(rig.Registry, ResponsesModelId);
+        rig.Gateway.State.EnqueueFailure(FakeOpenAiGatewayFailure.ModelNotAssigned);
+
+        var thrown = await AssertEx.ThrowsAsync<Exception>(async () =>
+        {
+            if (streaming)
+            {
+                await client.GetStreamingResponseAsync("hello", cancellationToken: deadline.Token).ToChatResponseAsync(deadline.Token);
+            }
+            else
+            {
+                await client.GetResponseAsync("hello", cancellationToken: deadline.Token);
+            }
+        });
+        var classification = InvocationFailureClassifier.MapFailure(thrown);
+
+        AssertEx.True(rig.Gateway.RecordedRequests[^1].Stream == streaming, "The send did not take the requested streaming mode.");
+        AssertEx.Equal(surface == ExternalProviderApiSurface.Responses ? "/v1/responses" : "/v1/chat/completions", rig.Gateway.RecordedRequests[^1].Path);
+        AssertEx.Equal(FailureCategory.ModelUnavailable, classification.Category);
+        AssertEx.Equal("The provider does not offer the selected model to this connection (Model is not assigned to this project.). Check the model id on the connection.",
+            classification.Message);
+        foreach (var echoed in (string[])[FakeOpenAiGatewayServer.ModelNotAssignedTenantId, FakeOpenAiGatewayServer.ModelNotAssignedProjectId, ResponsesWireId, Token])
+        {
+            AssertEx.False(classification.Message.Contains(echoed, StringComparison.Ordinal), $"The message surfaced '{echoed}': {classification.Message}");
+        }
+    }
+
+    // A required-header refusal whose header name contains "Model" is still a credential failure, not a model refusal.
+    [Test]
+    public async Task GatewayMissingModelNamedHeader_IsProviderAuthFailed()
+    {
+        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions
+        {
+            RequiredBearerToken = Token,
+            RequiredHeaders = new Dictionary<string, string>
+            {
+                ["X-Model-Token"] = "model-token-value"
+            }
+        }, Token, []);
+        using var deadline = new CancellationTokenSource(TestBudgets.Contended);
+        using var client = new ExternalOpenAiChatClient(rig.Registry, ModelId);
+
+        var thrown = await AssertEx.ThrowsAsync<Exception>(async () => await client.GetResponseAsync("hello", cancellationToken: deadline.Token));
+        var classification = InvocationFailureClassifier.MapFailure(thrown);
+
+        AssertEx.Equal(FailureCategory.ProviderAuthFailed, classification.Category);
+        AssertEx.Contains(classification.Message, "(missing_required_header: Missing or invalid required header 'X-Model-Token'.)");
+    }
+
     private static StoredExternalProviderHeader Plain(string value)
     {
         return new StoredExternalProviderHeader

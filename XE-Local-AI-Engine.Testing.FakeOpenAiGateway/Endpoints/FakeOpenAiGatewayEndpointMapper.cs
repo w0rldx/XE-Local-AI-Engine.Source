@@ -169,6 +169,17 @@ internal static class FakeOpenAiGatewayEndpointMapper
                 await WriteErrorAsync(context, StatusCodes.Status500InternalServerError,
                     "The server had an error while processing your request.", "server_error", code: null);
                 break;
+            case FakeOpenAiGatewayFailure.ModelNotAssigned:
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await WriteJsonAsync(context, new JsonObject
+                {
+                    ["allowed"] = false,
+                    ["reason"] = "Model is not assigned to this project.",
+                    ["tenantId"] = FakeOpenAiGatewayServer.ModelNotAssignedTenantId,
+                    ["projectId"] = FakeOpenAiGatewayServer.ModelNotAssignedProjectId,
+                    ["modelId"] = model
+                });
+                break;
             case FakeOpenAiGatewayFailure.Hang:
                 await HangAsync(context);
                 break;

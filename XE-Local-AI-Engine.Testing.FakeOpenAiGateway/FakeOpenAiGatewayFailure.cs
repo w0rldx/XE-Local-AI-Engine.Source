@@ -10,5 +10,8 @@ public enum FakeOpenAiGatewayFailure
     Http500,
     Hang,
     PartialStream,
-    MalformedJson
+    MalformedJson,
+
+    /// <summary>A 403 in a policy gateway's own shape (<c>allowed</c>, <c>reason</c>, echoed ids) refusing the model, not the credential.</summary>
+    ModelNotAssigned
 }
