@@ -297,7 +297,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
 
         // The same egress gate as the single-agent path, keyed on THIS participant's effective model only, and
         // reported as withheld only when there IS enabled memory to withhold.
-        if (localDataNeedsCloudSwitch && !await _runtimeSettings.GetAllowCloudModelAccessAsync(cancellationToken))
+        if (await CloudLocalDataGate.WithholdsAsync(localDataNeedsCloudSwitch, ExternalProviderCloudGrants.None, _runtimeSettings, cancellationToken))
         {
             var withheld = (await _playbookActionStore.ListEnabledByAgentAsync(participant.Id, cancellationToken)).Count > 0;
             if (withheld)

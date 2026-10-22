@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 public sealed class NodeChatStreamService : INodeChatStreamService
 {
@@ -726,7 +727,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         // A connection's local-data grant covers only its own model: an ungranted cloud participant still forces the withhold.
         var anyUngrantedCloudParticipant = resolution.Orchestration?.AnyParticipantNeedsCloudDataSwitch ?? false;
         var turnReachesCloud = (resolution.EffectiveModelIsCloud && !resolution.EffectiveModelCloudGrants.LocalData) || anyUngrantedCloudParticipant;
-        return !turnReachesCloud || await _runtimeSettings.GetAllowCloudModelAccessAsync(cancellationToken);
+        return !await CloudLocalDataGate.WithholdsAsync(turnReachesCloud, ExternalProviderCloudGrants.None, _runtimeSettings, cancellationToken);
     }
 
     // The pre-run notices, in wire order: agent-unavailable, orchestration-degraded, playbook, tools and cloud-tools withheld, then either the

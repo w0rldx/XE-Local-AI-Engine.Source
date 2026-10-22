@@ -371,7 +371,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         var baseOffer = _runtimeSettings.GetKnowledgeAgentToolsEnabled() ? _builtinAllTools : _builtinAllToolsNoKnowledge;
         var leavesNode = LeavesNode(activeModelId, isCloudModel);
         // A connection's own grant stands in for the node-wide switch of its class; it never changes leavesNode.
-        if (leavesNode && !grants.LocalData && !_runtimeSettings.GetAllowCloudModelAccess())
+        if (CloudLocalDataGate.Withholds(leavesNode, grants, _runtimeSettings))
         {
             baseOffer = _builtinAllToolsNoLocalData;
         }

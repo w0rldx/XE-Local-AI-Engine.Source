@@ -372,7 +372,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             return new ComposedPrompt(definition.Instructions, false);
         }
 
-        if (localDataNeedsCloudSwitch && !await _runtimeSettings.GetAllowCloudModelAccessAsync(cancellationToken))
+        if (await CloudLocalDataGate.WithholdsAsync(localDataNeedsCloudSwitch, ExternalProviderCloudGrants.None, _runtimeSettings, cancellationToken))
         {
             // Withheld only when there IS enabled memory to withhold, so an empty playbook raises no PlaybookWithheld notice.
             var withheld = (await _playbookActionStore.ListEnabledByAgentAsync(definition.Id, cancellationToken)).Count > 0;

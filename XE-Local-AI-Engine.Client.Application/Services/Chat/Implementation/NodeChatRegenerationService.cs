@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 /// <summary>
 ///     Default <see cref="INodeChatRegenerationService" />, reusing the runner, pump and dispatcher of the send path.
@@ -471,7 +472,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         var anyUngrantedCloudParticipant = resolution.Orchestration?.AnyParticipantNeedsCloudDataSwitch ?? false;
         var effectiveModelNeedsSwitch = resolution.EffectiveModelIsCloud && !resolution.EffectiveModelCloudGrants.LocalData;
         var turnReachesCloud = effectiveModelNeedsSwitch || anyUngrantedCloudParticipant;
-        var knowledgeAllowed = !turnReachesCloud || await _runtimeSettings.GetAllowCloudModelAccessAsync(cancellationToken);
+        var knowledgeAllowed = !await CloudLocalDataGate.WithholdsAsync(turnReachesCloud, ExternalProviderCloudGrants.None, _runtimeSettings, cancellationToken);
         if (!knowledgeAllowed)
         {
             // Name the model the notice is about: the effective cloud model when that is what reaches the cloud,

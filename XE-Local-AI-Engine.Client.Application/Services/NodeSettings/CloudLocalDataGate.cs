@@ -10,7 +10,8 @@ using XE_Local_AI_Engine.Providers.Abstractions.External;
 ///     Node-local data here is an uploaded file or a knowledge-base or workspace tool result. A stateless function over <see cref="INodeRuntimeSettings" />, needing no interface, lifetime or registration
 ///     (same shape as <see cref="CloudUnattendedGate" />). It is the <c>leavesNode &amp;&amp; !grant &amp;&amp; !switch</c>
 ///     rule of <see cref="ExternalProviderCloudGrants" /> for <see cref="ExternalProviderCloudGrants.LocalData" />.
-///     The chat offer, orchestration and integration paths still spell the rule inline.
+///     The chat, agent, orchestration and integration paths call it too; a caller that folds several models into one
+///     <c>leavesNode</c> passes <see cref="ExternalProviderCloudGrants.None" />.
 /// </remarks>
 public static class CloudLocalDataGate
 {
@@ -27,5 +28,16 @@ public static class CloudLocalDataGate
         ArgumentNullException.ThrowIfNull(runtimeSettings);
 
         return leavesNode && !grants.LocalData && !await runtimeSettings.GetAllowCloudModelAccessAsync(cancellationToken);
+    }
+
+    /// <summary>
+    ///     Synchronous twin of <see cref="WithholdsAsync" /> for the synchronous tool-offer seam.
+    /// </summary>
+    public static bool Withholds(bool leavesNode, ExternalProviderCloudGrants grants, INodeRuntimeSettings runtimeSettings)
+    {
+        ArgumentNullException.ThrowIfNull(grants);
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+
+        return leavesNode && !grants.LocalData && !runtimeSettings.GetAllowCloudModelAccess();
     }
 }
