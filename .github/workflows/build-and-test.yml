@@ -293,11 +293,13 @@ jobs:
           # `**` spans any number of segments, so the TRX files are picked up at both depths: one
           # per whole-module project, and one per namespace batch a level deeper (~13 MB in total).
           # units.txt is what the `build-and-test` job counts the shard's reports against, so it has
-          # to travel with them — the *.xml glob does not match it.
+          # to travel with them — the *.xml glob does not match it. coverage-logs* is the coverage extension's
+          # own log per unit: run-tests-memory-safe.sh, "Coverage hits can be lost".
           path: |
             ${{ runner.temp }}/backend-coverage/**/*.xml
             ${{ runner.temp }}/backend-coverage/**/*.trx
             ${{ runner.temp }}/backend-coverage/**/units.txt
+            ${{ runner.temp }}/backend-coverage/**/coverage-logs*/**
           # warn, not error: a run that died before the first suite finished has nothing to upload,
           # and the test step already failed — a second red here would only add noise.
           if-no-files-found: warn

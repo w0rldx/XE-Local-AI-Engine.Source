@@ -66,6 +66,23 @@
 #   once in the base tree before the clones — one run of the test that exists for it, a few seconds
 #   when the keyed template already exists (the usual local case) because the factory reuses it.
 #
+#   Coverage hits can be lost while the tests pass. Seen on CI from 2026-10-21 (package 18.12.0): a group
+#   reports every test green, but its Cobertura report carries the product assemblies with their line map
+#   and zero hits (`<package line-rate="0" … name="XE-Local-AI-Engine.Client.Application">`), so the host
+#   ran un-instrumented code. Most runs lose one to four groups, and on a bad day the merged figure drops
+#   under the floor. The cause is not known yet. So lost_sentinels checks each grouped unit's report for
+#   three packages every group of a pack of at most 16 executes (COVERAGE_SENTINELS; a finer pack can
+#   isolate a namespace that never touches one). If one is absent or at zero, run_ns re-clones
+#   the slot, deletes the unit's report and TRX, and runs the unit once more. A second loss is FAILED as
+#   <unit>(coverage-lost), and the final summary names every retried unit. Two logs land in
+#   <COVERAGE_DIR>/<unit>/coverage-logs/, and a lost attempt's are kept as coverage-logs-attempt1/. The
+#   platform's --diagnostic file at Information holds one StaticInstrumenter line per assembly. A
+#   --coverage-settings file sets ManagedVanguardLogLevel + CoverageFileLogPath. Those two keys never log
+#   the static instrumenter. They are baked into each instrumented module's runtime tracker, which writes
+#   tracker_<guid>.log only when it fails to set up its hit buffer, so a healthy unit leaves none.
+#   The file restates the static-instrumentation defaults explicitly. Measured 2026-10-22, it yields the
+#   same packages as the default, unlike the dynamic attempt below.
+#
 # In UNGROUPED coverage mode a namespace that touches no product assembly reports FAILED
 #   The per-unit verdict below demands a Cobertura report with content. A batch whose tests exercise
 #   only test-side code produces one with none, so an ungrouped local coverage run
@@ -264,35 +281,91 @@ prewarm_template() {
   echo "   template ready in $((EPOCHSECONDS - t0))s"
 }
 
+# Coverage mode only: the sentinel packages of a report that lost its hits — see "Coverage hits can be lost while
+# the tests pass" in the header. Every group executes all three, so one that is absent or at line-rate="0" means the
+# host ran un-instrumented code. Prints the lost names space-separated; nothing for a healthy report.
+COVERAGE_SENTINELS=(XE-Local-AI-Engine.Client.Application XE-Local-AI-Engine.Client.Persistence XE-Local-AI-Engine.Client)
+lost_sentinels() {
+  local s rate names=()
+  for s in "${COVERAGE_SENTINELS[@]}"; do
+    rate="$(grep -o '<package [^>]*>' "$1" 2>/dev/null | grep -F "name=\"$s\"" | grep -o 'line-rate="[^"]*"' | head -1)"
+    [[ -z "$rate" || "$rate" == 'line-rate="0"' ]] && names+=("$s")
+  done
+  printf '%s' "${names[*]}"
+}
+
 run_ns() {
   local ns="$1" filter="$2" out; out="$(mktemp)"; local t0=$EPOCHSECONDS
   # Coverage/TRX is opt-in: one results directory per batch, because MTP resolves --coverage-output
   # relative to --results-directory and batches sharing one would overwrite each other's report.
-  local exe="$EXE" slot=""
+  local exe="$EXE" slot="" lost="" attempt rc
   local -a report_args=()
   if [[ -n "${COVERAGE_DIR:-}" ]]; then
+    # Per unit, so both logs land beside this unit's report (header, "Coverage hits can be lost"). The settings
+    # file's two log keys are baked into every instrumented module's runtime tracker, which writes
+    # tracker_<guid>.log there only when it cannot set up its hit buffer. --diagnostic at Information carries the
+    # StaticInstrumenter lines (succeeded / skipped / failed / copied from cache) from the platform logger.
+    # The instrumentation switches restate the Linux defaults explicitly.
+    local settings="$RESULTS_DIR/$ns.coverage-settings.xml"
+    cat >"$settings" <<SETTINGS
+<?xml version="1.0" encoding="utf-8"?>
+<Configuration>
+  <ManagedVanguardLogLevel>Verbose</ManagedVanguardLogLevel>
+  <CoverageFileLogPath>$COVERAGE_DIR/$ns/coverage-logs/</CoverageFileLogPath>
+  <CodeCoverage>
+    <EnableStaticManagedInstrumentation>True</EnableStaticManagedInstrumentation>
+    <EnableStaticManagedInstrumentationRestore>True</EnableStaticManagedInstrumentationRestore>
+    <EnableDynamicManagedInstrumentation>False</EnableDynamicManagedInstrumentation>
+  </CodeCoverage>
+</Configuration>
+SETTINGS
     report_args=(--coverage --coverage-output coverage.cobertura.xml --coverage-output-format cobertura
-                 --report-trx --results-directory "$COVERAGE_DIR/$ns")
+                 --coverage-settings "$settings" --report-trx --results-directory "$COVERAGE_DIR/$ns"
+                 --diagnostic --diagnostic-verbosity Information
+                 --diagnostic-output-directory "$COVERAGE_DIR/$ns/coverage-logs")
     if [[ -n "$SLOT_ROOT" ]]; then
       slot="$(acquire_slot)"; exe="$SLOT_ROOT/$slot/$(basename "$EXE")"
     fi
   fi
-  TUNIT_DISABLE_HTML_REPORTER=1 "$exe" --treenode-filter "$filter" --maximum-parallel-tests "$PAR" \
-    "${report_args[@]}" >"$out" 2>&1 &
-  local pid=$! peak=0
-  while kill -0 "$pid" 2>/dev/null; do
-    local rss avail
-    rss="$(ps -o rss= -p "$pid" 2>/dev/null | tr -d ' ')"
-    [[ -n "$rss" && "$rss" -gt "$peak" ]] && peak="$rss"
-    avail="$(free -m | awk '/^Mem:/{print $7}')"
-    if [[ "${avail:-9999}" -lt "$AVAIL_FLOOR" ]]; then
-      echo "   !! SAFETY-KILL $ns: avail ${avail}MB < ${AVAIL_FLOOR}MB (rss ${rss}KB)"; kill -9 "$pid" 2>/dev/null
-      echo "0 1 $peak oom $((EPOCHSECONDS-t0)) 0 0 0" >"$RESULTS_DIR/$ns.result"; rm -f "$out"
-      release_slot "$slot"; return
+  local peak=0
+  for attempt in 1 2; do
+    [[ -n "${COVERAGE_DIR:-}" ]] && mkdir -p "$COVERAGE_DIR/$ns/coverage-logs"
+    TUNIT_DISABLE_HTML_REPORTER=1 "$exe" --treenode-filter "$filter" --maximum-parallel-tests "$PAR" \
+      "${report_args[@]}" >"$out" 2>&1 &
+    local pid=$!
+    while kill -0 "$pid" 2>/dev/null; do
+      local rss avail
+      rss="$(ps -o rss= -p "$pid" 2>/dev/null | tr -d ' ')"
+      [[ -n "$rss" && "$rss" -gt "$peak" ]] && peak="$rss"
+      avail="$(free -m | awk '/^Mem:/{print $7}')"
+      if [[ "${avail:-9999}" -lt "$AVAIL_FLOOR" ]]; then
+        echo "   !! SAFETY-KILL $ns: avail ${avail}MB < ${AVAIL_FLOOR}MB (rss ${rss}KB)"; kill -9 "$pid" 2>/dev/null
+        echo "0 1 $peak oom $((EPOCHSECONDS-t0)) 0 0 0" >"$RESULTS_DIR/$ns.result"; rm -f "$out"
+        release_slot "$slot"; return
+      fi
+      sleep 1
+    done
+    wait "$pid"; rc=$?
+    # Only a clean exit with a non-empty report is checked for lost hits: a red unit stays red on its own
+    # verdict (a retry could hide a flaky failure), and an empty report keeps its no-coverage-report verdict.
+    # Packs of at most 16 groups only: every group of the 16-group CI pack executes all three sentinels
+    # (verified on 48 CI reports), but a finer pack can isolate a namespace that touches no persistence code
+    # (Caching, say), and that healthy report would be rejected as coverage-lost.
+    lost=""
+    if [[ -n "${COVERAGE_DIR:-}" && -n "${TEST_GROUPS:-}" ]] && (( TEST_GROUPS <= 16 && rc == 0 )) \
+        && grep -q '<class' "$COVERAGE_DIR/$ns/coverage.cobertura.xml" 2>/dev/null; then
+      lost="$(lost_sentinels "$COVERAGE_DIR/$ns/coverage.cobertura.xml")"
     fi
-    sleep 1
+    [[ -z "$lost" || "$attempt" == 2 ]] && break
+    echo "   !! coverage lost in $ns: $lost; retrying once in a re-cloned slot"
+    : >"$RESULTS_DIR/$ns.retried"
+    # Re-clone rather than trust the extension's restore (the FileNotFound variant leaves the slot short a DLL),
+    # and drop this attempt's report + TRX so exactly one of each survives per unit. Its extension log is the
+    # evidence for the loss, so it is kept beside the retry's.
+    rm -rf "${SLOT_ROOT:?}/$slot" && cp -a "$(dirname "$EXE")" "$SLOT_ROOT/$slot"
+    find "$COVERAGE_DIR/$ns" -mindepth 1 -maxdepth 1 ! -name 'coverage-logs*' -exec rm -rf {} +
+    mv "$COVERAGE_DIR/$ns/coverage-logs" "$COVERAGE_DIR/$ns/coverage-logs-attempt1"
   done
-  wait "$pid"; local rc=$?
   local p f s
   p="$(grep -oE 'succeeded: *[0-9]+' "$out" | grep -oE '[0-9]+' | tail -1)"; p="${p:-0}"
   f="$(grep -oE 'failed: *[0-9]+' "$out" | grep -oE '[0-9]+' | tail -1)"; f="${f:-0}"
@@ -313,6 +386,7 @@ run_ns() {
   local cov=1
   if [[ -n "${COVERAGE_DIR:-}" ]]; then
     grep -q '<class' "$COVERAGE_DIR/$ns/coverage.cobertura.xml" 2>/dev/null || cov=0
+    [[ -n "$lost" ]] && cov=lost
     # --report-trx copies coverage.cobertura.xml into the TRX attachment tree byte for byte. At
     # ~40 MB a unit that is GBs of pure duplication across the module — and it is the copy that
     # makes a recursive report search count every report twice (the miscount that kept develop red
@@ -541,7 +615,7 @@ for unit in "${UNITS[@]}"; do
 done
 wait
 
-TOTAL_PASS=0; TOTAL_FAIL=0; TOTAL_SKIP=0; FAILED=(); PEAK_ALL=0
+TOTAL_PASS=0; TOTAL_FAIL=0; TOTAL_SKIP=0; FAILED=(); RETRIED=(); PEAK_ALL=0
 for unit in "${UNITS[@]}"; do
   ns="${unit%%$'\t'*}"
   rfile="$RESULTS_DIR/$ns.result"
@@ -564,9 +638,12 @@ for unit in "${UNITS[@]}"; do
     # A summary with nothing succeeded: every test skipped (a broken capability probe, say). Never green.
     echo "HOLLOW: all $s tests skipped in $ns (succeeded 0)" >&2
     FAILED+=("$ns(hollow)")
+  elif [[ "$cov" == lost ]]; then
+    FAILED+=("$ns(coverage-lost)")
   elif [[ "$cov" != 1 ]]; then
     FAILED+=("$ns(no-coverage-report)")
   fi
+  [[ -f "$RESULTS_DIR/$ns.retried" ]] && RETRIED+=("$ns")
 done
 
 # Verify BEFORE the verdict: if the assemblies moved, there is no verdict to report.
@@ -581,5 +658,7 @@ fi
 echo "======================================================================"
 echo "TOTAL: pass=$TOTAL_PASS fail=$TOTAL_FAIL skip=$TOTAL_SKIP  peakRSS(any batch)=$((PEAK_ALL/1024))MB"
 echo "(pass may exceed the ~4.9k unique tests: a few tests live in a parent namespace also matched by a child batch.)"
+# Printed on green runs too: how often the coverage loss strikes is the input for fixing it.
+[[ ${#RETRIED[@]} -eq 0 ]] || echo "Coverage retried (lost hits on the first attempt): ${RETRIED[*]}"
 if [[ ${#FAILED[@]} -gt 0 ]]; then echo "FAILED namespaces: ${FAILED[*]}"; exit 1; fi
 echo "ALL NAMESPACE BATCHES GREEN"

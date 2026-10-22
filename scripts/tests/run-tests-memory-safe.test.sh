@@ -46,10 +46,22 @@ printf 'max=%s html=%s filter=%s\n' "$max" "${TUNIT_DISABLE_HTML_REPORTER:-}" "$
 if [[ "$filter" == */TestServerWebAppFactoryTemplateSweepTests/* && -z "${FAKE_NO_TEMPLATE:-}" ]]; then
   mkdir -p "$(dirname "$0")/sqlite-templates" && : >"$(dirname "$0")/sqlite-templates/fake.sqlite"
 fi
+# FAKE_COVERAGE picks the report: healthy (default, every sentinel package hit), lossy (sentinels at
+# line-rate="0", the CI loss), lossy-once (lossy on a unit's first call, healthy on its second).
 if [[ -n "$coverage" ]]; then
   mkdir -p "$results"
-  printf '<coverage><packages><package><classes><class /></classes></package></packages></coverage>\n' \
-    >"$results/$coverage"
+  rate=0.5 seen="$FAKE_LOG.seen-$(basename "$results")"
+  case "${FAKE_COVERAGE:-healthy}" in
+    lossy) rate=0 ;;
+    lossy-once) [[ -e "$seen" ]] || rate=0; : >"$seen" ;;
+  esac
+  { printf '<coverage><packages>'
+    for pkg in XE-Local-AI-Engine.Client.Application XE-Local-AI-Engine.Client.Persistence XE-Local-AI-Engine.Client; do
+      printf '<package line-rate="%s" branch-rate="0" complexity="1" name="%s"><classes><class /></classes></package>' \
+        "$rate" "$pkg"
+    done
+    printf '</packages></coverage>\n'; } >"$results/$coverage"
+  : >"$results/fake.trx"
 fi
 # FAKE_SUMMARY picks the MTP summary: passed (default), failed, skipped (all skipped), none.
 case "${FAKE_SUMMARY:-passed}" in
@@ -145,6 +157,18 @@ set -e
 grep -Fq 'ERROR: template pre-warm failed' <<<"$prewarm_output"
 [[ "$(wc -l <"$TMP/prewarm-missing.log")" -eq 1 ]]
 
+# A grouped coverage report whose sentinel packages lost their hits is retried once in a re-cloned slot; the
+# retry's report and TRX are the only ones left, and the summary names the unit.
+run_case coverage-lossy-once env COVERAGE_DIR="$TMP/cov-retry" TEST_GROUPS=1 FAKE_COVERAGE=lossy-once
+unit_dir="$TMP/cov-retry/group0[DevWorkflows+0]"
+grep -Fq "!! coverage lost in group0[DevWorkflows+0]: XE-Local-AI-Engine.Client.Application XE-Local-AI-Engine.Client.Persistence XE-Local-AI-Engine.Client; retrying once in a re-cloned slot" <<<"$output"
+grep -Fq 'Coverage retried (lost hits on the first attempt): group0[DevWorkflows+0]' <<<"$output"
+[[ "$(find "$unit_dir" -name coverage.cobertura.xml | wc -l)" -eq 1 ]]
+[[ "$(find "$unit_dir" -name '*.trx' | wc -l)" -eq 1 ]]
+grep -Fq 'line-rate="0.5"' "$unit_dir/coverage.cobertura.xml"
+[[ -d "$unit_dir/coverage-logs-attempt1" ]]
+[[ "$(grep -c 'DevWorkflows)/' "$TMP/coverage-lossy-once.log")" -eq 2 ]]
+
 write_namespaces XE_Local_AI_Engine.Tests.Ordinary
 set +e
 partial_output="$(FAKE_LOG="$TMP/partial-error.log" FAKE_EXIT_AFTER_SUMMARY=2 NO_BUILD=1 JOBS=1 \
@@ -182,6 +206,19 @@ run_red hollow env FAKE_SUMMARY=skipped
 grep -Fq 'HOLLOW: all 4 tests skipped in XE_Local_AI_Engine.Tests.Ordinary' <<<"$output"
 grep -Fq 'FAILED namespaces: XE_Local_AI_Engine.Tests.Ordinary(hollow)' <<<"$output"
 grep -Fq 'TOTAL: pass=0 fail=0 skip=4' <<<"$output"
+
+# A loss that survives the one retry is red, and the host ran exactly twice for the unit.
+write_namespaces XE_Local_AI_Engine.Tests.Ordinary
+run_red coverage-lossy env COVERAGE_DIR="$TMP/cov-lossy" TEST_GROUPS=1 FAKE_COVERAGE=lossy
+[[ "$status" -eq 1 ]] || { echo "coverage-lossy case exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fq 'FAILED namespaces: group0[Ordinary+0](coverage-lost)' <<<"$output"
+[[ "$(grep -c 'Ordinary)/' "$TMP/coverage-lossy.log")" -eq 2 ]]
+
+# A pack finer than 16 groups can isolate a namespace that touches no sentinel, so the check is off there:
+# the same lossy report passes without a retry and the host ran once.
+run_case coverage-lossy-fine-pack env COVERAGE_DIR="$TMP/cov-fine" TEST_GROUPS=17 FAKE_COVERAGE=lossy
+if grep -Fq 'coverage lost' <<<"$output"; then echo "fine pack ran the sentinel check" >&2; exit 1; fi
+[[ "$(grep -c 'Ordinary)/' "$TMP/coverage-lossy-fine-pack.log")" -eq 1 ]]
 
 # Contamination outranks the red verdict of the same run.
 run_red contaminated env FAKE_GUARD_VERIFY_EXIT=1 FAKE_SUMMARY=failed
