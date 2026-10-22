@@ -17,13 +17,13 @@ public sealed class LlamaCppAssetPin
     public required string ServerRelativePath { get; init; }
 
     /// <summary>
-    ///     The companion CUDA-runtime archive name, set ONLY on the Windows x64 CUDA pin and <see langword="null" /> on
+    ///     The companion CUDA-runtime archive name, set ONLY on the CUDA pins (Windows x64, Linux x64) and <see langword="null" /> on
     ///     every other pin, which has no second archive to fetch.
     /// </summary>
     /// <remarks>
-    ///     llama.cpp ships the CUDA runtime DLLs (<c>cudart64_*.dll</c>, <c>cublas64_*.dll</c>,
-    ///     <c>cublasLt64_*.dll</c>) in a SEPARATE archive from the main build; without them next to
-    ///     <c>llama-server.exe</c> the ggml-cuda backend fails to load and the server silently runs CPU-only.
+    ///     llama.cpp ships the CUDA runtime libraries (<c>cudart</c>, <c>cublas</c>, <c>cublasLt</c>: DLLs on Windows,
+    ///     <c>.so</c> files on Linux) in a SEPARATE archive from the main build; without them next to
+    ///     <c>llama-server</c> the ggml-cuda backend fails to load and the server silently runs CPU-only.
     /// </remarks>
     public string? CudartAssetName { get; init; }
 
@@ -39,8 +39,8 @@ public sealed class LlamaCppAssetPin
 ///     SHA256 digests come from the GitHub release-assets API <c>digest</c> field, because llama.cpp publishes NO
 ///     <c>.sha256</c> sidecar files; re-pin <see cref="PinnedTag" /> and every hash together when bumping the
 ///     recommended version. Assets are named <c>llama-{tag}-bin-{os}-{variant}-{arch}.{ext}</c> and downloaded from
-///     <c>https://github.com/ggml-org/llama.cpp/releases/download/{tag}/{asset}</c>. Upstream's Linux CUDA prebuilts
-///     (<c>ubuntu-cuda-12.8-x64</c>, <c>-13.4-x64</c>, from b11803) are not adopted, so Linux NVIDIA selects Vulkan (<see cref="Implementation.GpuVariantSelector" />).
+///     <c>https://github.com/ggml-org/llama.cpp/releases/download/{tag}/{asset}</c>. Linux x64 pins upstream's
+///     <c>ubuntu-cuda-12.8-x64</c> prebuilt; Linux arm64 has no CUDA prebuilt, so its NVIDIA hosts select Vulkan (<see cref="Implementation.GpuVariantSelector" />).
 /// </remarks>
 public static class LlamaCppReleasePins
 {
@@ -104,7 +104,16 @@ public static class LlamaCppReleasePins
                     ServerRelativePath = WindowsServerPath
                 },
 
-            // Linux x64 (upstream's Linux CUDA prebuilts are not pinned here)
+            // Linux x64 — the CUDA pin carries its companion runtime archive like Windows does, but the Linux companion name IS tag-prefixed.
+            [new PinKey(OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda)] =
+                new()
+                {
+                    AssetName = "llama-b11803-bin-ubuntu-cuda-12.8-x64.tar.gz",
+                    Sha256 = "4594be0afdddcfdf15e82f4fbd6805c60c399eaa62b181432ccaf3de87ef36d0",
+                    ServerRelativePath = UnixServerPath,
+                    CudartAssetName = "cudart-llama-b11803-bin-ubuntu-cuda-12.8-x64.tar.gz",
+                    CudartSha256 = "38af6ae05c2d7313a577e1dafc5527950b16ad62193e2a0e7c278b504ea5d7e4"
+                },
             [new PinKey(OSPlatform.Linux, Architecture.X64, GpuVariant.Vulkan)] =
                 new()
                 {
@@ -160,13 +169,13 @@ public static class LlamaCppReleasePins
     }
 
     /// <summary>
-    ///     Derives the companion CUDA-runtime archive name from a Windows-CUDA main asset name, or
+    ///     Derives the companion CUDA-runtime archive name from a CUDA main asset name, or
     ///     <see langword="null" /> for any name that is not one.
     /// </summary>
     /// <remarks>
-    ///     The main asset is <c>llama-{tag}-bin-win-cuda-{ver}-x64.zip</c> and its cudart companion
-    ///     <c>cudart-llama-bin-win-cuda-{ver}-x64.zip</c> — the cudart name is NOT tag-prefixed. Returning null for
-    ///     anything else is what keeps a second archive on the Windows-CUDA acquisition path alone.
+    ///     Windows: <c>llama-{tag}-bin-win-cuda-{ver}-x64.zip</c> pairs with <c>cudart-llama-bin-win-cuda-{ver}-x64.zip</c>, NOT
+    ///     tag-prefixed. Linux: <c>llama-{tag}-bin-ubuntu-cuda-{ver}-{arch}.tar.gz</c> pairs with the whole name prefixed by
+    ///     <c>cudart-</c>. Returning null for anything else keeps a second archive on the CUDA acquisition paths alone.
     /// </remarks>
     public static string? DeriveCudartAssetName(string? mainAssetName)
     {
@@ -176,6 +185,13 @@ public static class LlamaCppReleasePins
         }
 
         const string prefix = "llama-";
+        if (mainAssetName.StartsWith(prefix, StringComparison.Ordinal)
+            && mainAssetName.Contains("-bin-ubuntu-cuda-", StringComparison.Ordinal)
+            && mainAssetName.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"cudart-{mainAssetName}";
+        }
+
         const string suffix = "-bin-win-cuda-";
         var bin = mainAssetName.IndexOf(suffix, StringComparison.Ordinal);
         if (!mainAssetName.StartsWith(prefix, StringComparison.Ordinal)
@@ -195,7 +211,7 @@ public static class LlamaCppReleasePins
     ///     exists for the host; <see langword="null" /> only when even the CPU floor is unavailable.
     /// </summary>
     /// <remarks>
-    ///     CAUTION: a GPU-variant request whose (os, arch, variant) has no pinned prebuilt — Linux CUDA — returns the CPU
+    ///     CAUTION: a GPU-variant request whose (os, arch, variant) has no pinned prebuilt — arm64 CUDA — returns the CPU
     ///     floor pin here, a non-null CPU archive, and serving that as a GPU-variant binary would mislabel a CPU build
     ///     the supervisor then emits GPU placement flags against. A caller acquiring a GPU variant must use
     ///     <see cref="TryResolveExact" /> and treat null as "no prebuilt", never fall through to this floor.
@@ -217,13 +233,16 @@ public static class LlamaCppReleasePins
     /// </summary>
     /// <remarks>
     ///     This is the acquisition path for a GPU variant: unlike <see cref="Resolve" /> it never substitutes the CPU
-    ///     archive, so a Linux CUDA request — which has no pinned prebuilt — resolves to null and the binary manager
+    ///     archive, so an arm64 CUDA request — which has no pinned prebuilt — resolves to null and the binary manager
     ///     fails with the sanitized "no prebuilt" error instead of serving a CPU build stamped as CUDA.
     /// </remarks>
     public static LlamaCppAssetPin? TryResolveExact(OSPlatform os, Architecture arch, GpuVariant variant)
     {
         return Pins.TryGetValue(new PinKey(os, arch, variant), out var pin) ? pin : null;
     }
+
+    /// <summary>Whether a genuine prebuilt is pinned for EXACTLY this (os, arch, variant); the variant selector keys NVIDIA → CUDA on it.</summary>
+    public static bool HasPin(OSPlatform os, Architecture arch, GpuVariant variant) => Pins.ContainsKey(new PinKey(os, arch, variant));
 
     /// <summary>
     ///     Resolves the pin an ACQUISITION of <paramref name="variant" /> may use: the CPU floor for a CPU request, the

@@ -199,8 +199,11 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
   repository creation date.
 - **llama.cpp pinned to b11803** (source commit `a37cc461`, the first build that loads the `flint` architecture; all
   ten asset SHA256 digests re-verified against the release API, the Windows cudart companion unchanged). Upstream now
-  also publishes prebuilt Linux CUDA archives from this build; they are not adopted yet, a Linux NVIDIA node still
-  selects the Vulkan runtime.
+  also publishes prebuilt Linux CUDA archives from this build; they are adopted in the entry below.
+- **Managed Linux x64 CUDA runtime.** A Linux x64 NVIDIA node now downloads upstream's prebuilt CUDA llama.cpp (CUDA
+  12.8, NVIDIA driver 525 series or newer) with its cudart companion instead of selecting Vulkan. The in-app source
+  build (a recorded build still wins) and the bring-your-own override are unchanged, Linux arm64 keeps Vulkan, and
+  there is no automatic fallback to Vulkan: the device audit's CPU-fallback remediation now says what to do.
 - **Graph workflows gate node-local data on a direct edge.** A cloud Agent, LLM Call or Decision node fed directly by a
   Tool node that reads node-local data (knowledge-base or workspace file tools) is now refused unless 'Let cloud models
   read local data' is on or the model's connection grants local data. Graphs that ran before may now fail with

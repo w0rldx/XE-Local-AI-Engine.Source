@@ -74,8 +74,8 @@ Chat needs a `llama-server` binary. The engine downloads a hash-pinned prebuilt 
 network and nothing installed yet has no runtime until it can download one. When the pins carry no prebuilt for
 the host's OS, CPU architecture and GPU backend, acquisition fails with "No prebuilt llama.cpp runtime is available for
 this operating system and CPU architecture", or names the backends that do exist and points at the in-app source
-build. The usual case is Linux with an NVIDIA card: the default there is Vulkan, and CUDA comes from the in-app source
-build or a bring-your-own binary (see [GPU paths for operators](#gpu-paths-for-operators)). Acquisition order and
+build. The usual case is Linux arm64, which has no CUDA pin and defaults to Vulkan; a custom CUDA build comes from the in-app
+source build or a bring-your-own binary (see [GPU paths for operators](#gpu-paths-for-operators)). Acquisition order and
 messages: [Runtime Binaries and Tuning](wiki/reference/03-runtime-binaries-and-tuning.md#binary-manager--dynamic-updater).
 
 ## Readiness and port discovery
@@ -116,8 +116,8 @@ it before attaching it to a public issue. Redaction rules: [Security & Privacy](
 ## GPU paths for operators
 
 User-level GPU symptoms are in the [FAQ](user-guide/docs/faq.md#replies-are-extremely-slow). On Linux with an NVIDIA
-card, the engine pins no prebuilt CUDA `llama-server`, so an operator who wants CUDA instead of the Vulkan default
-can supply their own binary: [Linux CUDA bring-your-own llama-server runbook](runbooks/linux-cuda-override-operator-runbook.md).
+card on x64, the engine downloads a prebuilt CUDA `llama-server` that needs an NVIDIA driver from the 525 series or
+newer. An operator who wants a custom or specific-commit build can use the in-app source build or supply their own binary: [Linux CUDA bring-your-own llama-server runbook](runbooks/linux-cuda-override-operator-runbook.md).
 
 ## Dev host
 

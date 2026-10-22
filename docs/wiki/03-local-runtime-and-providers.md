@@ -206,7 +206,8 @@ For *asset selection*, the supervisor does **only enough** hardware probing to p
 2. an adopted source build       -> ICudaManagedBuildSignal.ActiveVariant  (cached flag, no store read)
 3. otherwise SelectForVendor(vendor, isWindows):
      NVIDIA    -> CUDA   on Windows
-               -> Vulkan on Linux   (the pins carry NO Linux CUDA prebuilt)
+               -> CUDA   on Linux x64   (managed prebuilt with its cudart companion)
+               -> Vulkan on Linux arm64 (no CUDA pin)
      AMD/Intel -> Vulkan
      none/unknown -> CPU
 ```
@@ -262,7 +263,7 @@ See [the reference page](reference/03-runtime-binaries-and-tuning.md#25-inferenc
 
 ### 2.6 In-app source builds (Linux)
 
-On Linux the node can compile `llama-server` from source in-app and adopt it as a managed runtime, because the pins carry no Linux CUDA prebuilt (upstream ships Linux CUDA prebuilts from b11803; they are not adopted).
+On Linux the node can compile `llama-server` from source in-app and adopt it as a managed runtime, for custom forks and specific commits. The managed default on Linux x64 NVIDIA is the pinned upstream CUDA prebuilt; a recorded source build still wins over it.
 
 See [the reference page](reference/03-runtime-binaries-and-tuning.md#26-in-app-source-builds-linux) for the rest of this section.
 

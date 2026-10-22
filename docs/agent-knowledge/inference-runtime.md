@@ -9,8 +9,7 @@ schema, chat-template capability detection, or request-body patches. Dev-host sc
 ### llama.cpp binaries
 
 **Rule:** `LlamaCppReleasePins.PinnedTag` is the offline floor, not the recommendation; after a pin or BYO change re-run
-`scripts/run-tool-grammar-smoke-local.sh`. No Linux CUDA prebuilt is pinned: use `XE_LLAMACPP_SERVER_PATH` + `XE_LLAMACPP_VARIANT` or
-the managed source build. Verify assets by the Releases API `digest`. Never cache an indeterminate device probe or let it
+`scripts/run-tool-grammar-smoke-local.sh`. Linux x64 CUDA is pinned with its tag-prefixed cudart companion; arm64 keeps Vulkan; BYO and the source build stay alternatives. Verify assets by the Releases API `digest`. Never cache an indeterminate device probe or let it
 download (`TryGetInstalledBinaryAsync` only). Helper tools resolve beside `llama-server`; a BYO tree
 without `llama-fit-params` 400s every Explore. Never build that target into a shared tree
 (it stales every frozen profile's fingerprint): use a disposable `cp -a` copy of `bin/`. Never enable `--ui-mcp-proxy`.
@@ -162,6 +161,7 @@ Superseded claims; the entries above are the active rules.
 |---|---|
 | The tool-grammar repetition ceiling is spent across the whole tools array, and the raw production offer is the smoke's negative control. | From b11669 (still at b11803) an upper bound above 2000 is silently dropped (upstream #26613), so the raw production offer compiles; a lower bound above 2000 still fails. The control is a synthetic raw `minLength` 4096 tool. No array-wide budget showed at b11669 (64 extra tools at the lower-bound limits); it is unverified at b10201. Wiki reference 03, "The grammar repetition bound". |
 | The llama.cpp pin is b10201 or b11669. | It is b11803 (still the 0.7.0-dev version line); read `LlamaCppReleasePins.PinnedTag`, never a tag quoted in a doc. Its `--version` line now reads `version: 0.7.0-dev (build N, commit X)`, and `--mlock`/`--mmap`/`--no-mmap` are gone in favour of `--load-mode`. |
+| Linux NVIDIA selects Vulkan because no CUDA prebuilt is pinned. | Stale since 2026-10-22: Linux x64 selects the managed CUDA prebuilt (CUDA 12.8, driver 525 series or newer); arm64 keeps Vulkan. |
 | A GGUF that reaches the store while the host runs (copied, linked) stays off the tool-capable list until a restart, and its two-tool offer is silent. | The offer self-heals the miss through `ToolCapableModelRegistrar`; an unhealed allow-list trim raises a `ToolsWithheld` notice naming the setting. |
 | A parked turn holds the node's invocation slot until its card is answered or expires. | A parked turn releases it (`HumanPark`, `ReleaseSlotForPark`) and waits for it again on resume (`ReacquireSlotAsync`). |
 | Harmony reasoning must remain undetected. | It is detected as distinct `native_reasoning`, mutually exclusive with graded thinking |

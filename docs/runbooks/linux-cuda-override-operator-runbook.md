@@ -2,14 +2,14 @@
 
 **Date:** 2026-06-29
 **Last validated against the repository:** 2026-10-02 (`eea44543f`)
-**Audience:** operator running the engine on a Linux + NVIDIA host who wants the **CUDA** inference path (not the default Vulkan fallback).
+**Audience:** operator running the engine on a Linux + NVIDIA host who wants an operator-managed **CUDA** `llama-server` instead of the managed default.
 **Authoritative sources:** the [environment contract](../../XE-Local-AI-Engine.Providers.LlamaServer/Options/LlamaServerRuntimeOverrideOptions.cs), [binary validation path](../../XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaCppBinaryManager.Override.cs), [current llama.cpp pin](../../XE-Local-AI-Engine.Providers.LlamaServer/LlamaCppReleasePins.cs), and [live GPU smoke](../../scripts/run-gpu-smoke-local.sh).
 
 ---
 
 ## Why this exists
 
-The engine pins **no Linux CUDA prebuilt** of llama.cpp (`ggml-org/llama.cpp`) — only Windows gets a CUDA build. Upstream ships Linux CUDA prebuilts from b11803, but the pin does not adopt them. So on a Linux NVIDIA box the engine deliberately falls back to **Vulkan** (`GpuVariantSelector`). This override lets you point the engine at a **locally-built CUDA `llama-server`** for an operator-managed CUDA runtime.
+On a Linux x64 NVIDIA box the engine now downloads upstream's prebuilt **CUDA** llama.cpp (`ggml-org/llama.cpp`, CUDA 12.8, NVIDIA driver 525 series or newer) with its cudart companion by default. Linux arm64 keeps Vulkan. This override, and the in-app source build, are the alternatives: they let you point the engine at a **locally-built CUDA `llama-server`** for an operator-managed runtime, for example a custom fork or a specific commit.
 
 It is **off by default**. When the override environment variable is unset, acquisition uses the pinned download and SHA256 verification path. The override **skips** download and hash verification (an operator-built binary has no publisher digest) and instead validates the binary you supply.
 

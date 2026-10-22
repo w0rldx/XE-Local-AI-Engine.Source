@@ -393,7 +393,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
         var serverDir = Directory.CreateDirectory(Path.Combine(cache.Path, "server")).FullName;
         Directory.CreateDirectory(Path.Combine(serverDir, "nvrtc64_120_0.dll"));
 
-        AssertEx.Throws<SystemException>(() => LlamaCppBinaryManager.FlattenDllsInto(Path.Combine(cache.Path, "extracted"), serverDir));
+        AssertEx.Throws<SystemException>(() => LlamaCppBinaryManager.FlattenCompanionInto(Path.Combine(cache.Path, "extracted"), serverDir, OSPlatform.Windows));
 
         AssertEx.Empty(Directory.EnumerateFiles(serverDir, "cudart64_*.dll"));
         AssertEx.Empty(Directory.EnumerateFiles(serverDir, "*.partial"));

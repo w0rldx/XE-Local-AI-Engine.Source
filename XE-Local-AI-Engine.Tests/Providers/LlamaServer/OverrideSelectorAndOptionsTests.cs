@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using System.Runtime.InteropServices;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
@@ -20,14 +21,13 @@ public sealed class OverrideSelectorAndOptionsTests
     [Test]
     public async Task SelectVariant_WhenOverrideActive_ReturnsConfiguredVariant()
     {
-        // Override active with variant Cuda on a NON-Windows host whose probe would otherwise pick Vulkan: the override
-        // wins and the vendor probe is never consulted.
+        // Override active with variant Cuda: the override wins and the vendor probe is never consulted.
         var options = new LlamaServerRuntimeOverrideOptions
         {
             ServerPath = "/opt/llama/llama-server",
             Variant = GpuVariant.Cuda
         };
-        var selector = new GpuVariantSelector(new ThrowingVendorProbe(), isWindows: false, options);
+        var selector = new GpuVariantSelector(new ThrowingVendorProbe(), OSPlatform.Linux, Architecture.X64, options);
 
         var variant = await selector.SelectVariantAsync(CancellationToken.None);
 
@@ -37,9 +37,9 @@ public sealed class OverrideSelectorAndOptionsTests
     [Test]
     public async Task SelectVariant_WhenOverrideInactive_UsesVendorRule()
     {
-        // No override → the existing Linux-NVIDIA → Vulkan rule is unchanged (the vendor probe drives the decision).
+        // No override → the vendor probe drives the decision: Linux arm64 NVIDIA has no CUDA prebuilt, so Vulkan.
         var options = new LlamaServerRuntimeOverrideOptions(); // ServerPath null → inactive
-        var selector = new GpuVariantSelector(new FakeVendorProbe(DetectedGpuVendor.Nvidia), isWindows: false, options);
+        var selector = new GpuVariantSelector(new FakeVendorProbe(DetectedGpuVendor.Nvidia), OSPlatform.Linux, Architecture.Arm64, options);
 
         var variant = await selector.SelectVariantAsync(CancellationToken.None);
 

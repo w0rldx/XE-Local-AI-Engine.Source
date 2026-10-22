@@ -223,18 +223,18 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             : ResolveTagOnDisk(variant, installed) ?? throw new LlamaRuntimeNotInstalledException(refusal);
 
         // A GPU variant MUST resolve a GENUINE (os, arch, variant) asset via TryResolveExact: Resolve() would substitute the CPU floor where no GPU prebuilt exists
-        // — Linux CUDA has none upstream — and the supervisor would emit GPU placement flags against a CPU build. CPU keeps the plain Resolve, its exact pin BEING the floor.
+        // — arm64 CUDA has none upstream — and the supervisor would emit GPU placement flags against a CPU build. CPU keeps the plain Resolve, its exact pin BEING the floor.
         var pin = ResolveAcquirablePin(variant);
 
         var isPinnedFallback = string.Equals(resolvedTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal);
         var variantDir = Path.Combine(_cacheRoot, "llama.cpp", resolvedTag, VariantSlug(variant));
 
-        // Progress side-channel, armed now that the variant and tag are known. Windows CUDA fetches TWO archives (build plus cudart companion), so the step count
+        // Progress side-channel, armed now that the variant and tag are known. CUDA fetches TWO archives (build plus cudart companion), so the step count
         // keeps the UI from running 0→100 % twice. The cached-serve branch is inside the segment (it can top up a missing cudart); the short-circuits above are not.
         var reporter = new AcquisitionReporter(_acquisitionStatus,
             variant,
             resolvedTag,
-            stepCount: variant == GpuVariant.Cuda && _os == OSPlatform.Windows ? 2 : 1);
+            stepCount: PairsCudaCompanion(variant) ? 2 : 1);
 
         // Single-flight per variant dir, taken BEFORE the reporter can arm so a cancelled waiter never touches the banner. Lock order: see _acquisitionLocks.
         var acquisitionLock = AcquisitionLockFor(variantDir);
@@ -267,8 +267,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             var cachedServer = ResolveServerPath(variantDir, pin);
             if (cachedServer is not null)
             {
-                // A published Windows-CUDA dir missing part of its companion set is repaired best-effort; a failed, impossible or refused repair serves it as it is.
-                var repairFailed = IsIncompleteWindowsCudaDir(variant, cachedServer)
+                // A published CUDA dir missing part of its companion set is repaired best-effort; a failed, impossible or refused repair serves it as it is.
+                var repairFailed = IsIncompleteCudaDir(variant, cachedServer)
                                    && (refusal is not null
                                        ? RefuseCudaCompanionRepair(resolvedTag, reporter)
                                        : !await TryRepairCudaCompanionSetAsync(resolvedTag, pin, isPinnedFallback, cachedServer, reporter, ct).ConfigureAwait(false));
@@ -278,7 +278,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                 // confirmed complete clears only the Failed an earlier repair of this same runtime wrote (completed elsewhere, e.g. by another node).
                 if (!repairFailed)
                 {
-                    if (variant == GpuVariant.Cuda && _os == OSPlatform.Windows)
+                    if (PairsCudaCompanion(variant))
                     {
                         reporter.ClearFailureStartingWith(CudaRepairFailurePrefix);
                     }
@@ -308,7 +308,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                     ct)
                 .ConfigureAwait(false);
 
-            // Pair the CUDA runtime DLLs (pinned companion) INTO THE STAGING DIR, then publish: a CUDA build without its cudart archive silently degrades to
+            // Pair the CUDA runtime libraries (pinned companion) INTO THE STAGING DIR, then publish: a CUDA build without its cudart archive silently degrades to
             // CPU-only, and a published half-CUDA dir let the device probe cache an empty GPU list. A cudart failure discards the staging dir and throws.
             try
             {
@@ -394,9 +394,9 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         var resolvedTag = ResolveInstalledTag(installed);
         var cachedServer = ResolvePrebuiltServer(resolvedTag, variant);
 
-        // Filesystem probes only, nothing created. A Windows-CUDA dir missing any companion DLL family is NOT topped up (that downloads) and reads as NOT installed: it enumerates
+        // Filesystem probes only, nothing created. A CUDA dir missing any companion library family is NOT topped up (that downloads) and reads as NOT installed: it enumerates
         // no GPU, and the device probe would cache that against an exe mtime the later top-up never changes. The next ensure repairs a pinned-tag dir.
-        if (cachedServer is not null && IsIncompleteWindowsCudaDir(variant, cachedServer))
+        if (cachedServer is not null && IsIncompleteCudaDir(variant, cachedServer))
         {
             return null;
         }
@@ -415,7 +415,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     /// <inheritdoc />
     public async Task<bool> IsCompanionSetIncompleteAsync(GpuVariant variant, CancellationToken ct)
     {
-        if (variant != GpuVariant.Cuda || _os != OSPlatform.Windows || _overrideOptions?.IsActive == true)
+        if (!PairsCudaCompanion(variant) || _overrideOptions?.IsActive == true)
         {
             return false;
         }
@@ -429,7 +429,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         }
 
         var cachedServer = ResolvePrebuiltServer(ResolveInstalledTag(installed), variant);
-        return cachedServer is not null && IsIncompleteWindowsCudaDir(variant, cachedServer);
+        return cachedServer is not null && IsIncompleteCudaDir(variant, cachedServer);
     }
 
     // The recorded installed tag, else the pinned floor. The live catalog tier is skipped: it only selects a tag to
@@ -439,21 +439,24 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         return installed is { Tag.Length: > 0 } && IsValidTag(installed.Tag) ? installed.Tag : _activeTag;
     }
 
-    // Null when nothing is on disk, including a (os, arch, variant) with no prebuilt at all, e.g. Linux CUDA.
+    // Null when nothing is on disk, including a (os, arch, variant) with no prebuilt at all, e.g. arm64 CUDA.
     private string? ResolvePrebuiltServer(string resolvedTag, GpuVariant variant)
     {
         var pin = _pinResolver(_os, _arch, variant);
         return pin is null ? null : ResolveServerPath(Path.Combine(_cacheRoot, "llama.cpp", resolvedTag, VariantSlug(variant)), pin);
     }
 
-    private bool IsIncompleteWindowsCudaDir(GpuVariant variant, string serverPath)
+    private bool IsIncompleteCudaDir(GpuVariant variant, string serverPath)
     {
-        return variant == GpuVariant.Cuda && _os == OSPlatform.Windows && !CudartRuntimePresent(Path.GetDirectoryName(serverPath)!);
+        return PairsCudaCompanion(variant) && !CudartRuntimePresent(Path.GetDirectoryName(serverPath)!);
     }
+
+    // The CUDA prebuilts (Windows x64, Linux x64) ship their runtime libraries in a second, companion archive.
+    private bool PairsCudaCompanion(GpuVariant variant) => variant == GpuVariant.Cuda && (_os == OSPlatform.Windows || _os == OSPlatform.Linux);
 
     /// <summary>
     ///     The pin a prebuilt acquisition of <paramref name="variant" /> uses on this host, shared by ensure and install so
-    ///     both refuse a request with no genuine prebuilt (Linux CUDA) with one typed error instead of serving the CPU floor.
+    ///     both refuse a request with no genuine prebuilt (arm64 CUDA) with one typed error instead of serving the CPU floor.
     /// </summary>
     private LlamaCppAssetPin ResolveAcquirablePin(GpuVariant variant) =>
         _pinResolver(_os, _arch, variant)
@@ -613,7 +616,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(assetName);
 
-        // Same refusal as EnsureBinaryAsync, before any download: a (Linux, CUDA) install has no genuine asset, and the caller's asset would be recorded as CUDA.
+        // Same refusal as EnsureBinaryAsync, before any download: an (arm64, CUDA) install has no genuine asset, and the caller's asset would be recorded as CUDA.
         var pin = ResolveAcquirablePin(variant);
 
         // The asset name is interpolated into a temp file path and the download URL — it comes from the live GitHub API,
@@ -643,7 +646,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         var reporter = new AcquisitionReporter(_acquisitionStatus,
             variant,
             tag,
-            stepCount: variant == GpuVariant.Cuda && _os == OSPlatform.Windows ? 2 : 1);
+            stepCount: PairsCudaCompanion(variant) ? 2 : 1);
 
         try
         {
@@ -651,7 +654,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             // failure the previously-installed binary (a sibling versioned dir) is untouched — versioned dirs isolate tiers.
             var stagingDir = await DownloadVerifyExtractAsync(url, assetName, expectedDigest, expectedSize, variantDir, reporter, stepIndex: 1, ct).ConfigureAwait(false);
 
-            // Pair the CUDA runtime DLLs (live companion, name derived from the main asset) in staging, BEFORE publish and the smoke test, so nothing ever sees a
+            // Pair the CUDA runtime libraries (live companion, name derived from the main asset) in staging, BEFORE publish and the smoke test, so nothing ever sees a
             // half-CUDA dir; a cudart failure discards the staging dir and throws, never installs blind.
             try
             {
@@ -715,8 +718,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     }
 
     /// <summary>
-    ///     Pairs the Windows-CUDA runtime DLLs (<c>cudart64_*.dll</c>, <c>cublas64_*.dll</c>, <c>cublasLt64_*.dll</c>)
-    ///     next to <c>llama-server.exe</c>; a no-op for every non-Windows-CUDA acquisition, and idempotent.
+    ///     Pairs the CUDA runtime libraries (<see cref="CompanionFamilies" />) next to <c>llama-server</c>; a no-op for every
+    ///     acquisition without a companion archive (<see cref="PairsCudaCompanion" />), and idempotent.
     /// </summary>
     /// <remarks>
     ///     llama.cpp ships these in a SEPARATE archive from the main CUDA build; without them the ggml-cuda backend
@@ -728,8 +731,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     private async Task EnsureCudartRuntimeAsync(string tag, LlamaCppAssetPin? pin, string? cudartAsset, GpuVariant variant, string variantDir, string serverPath, AcquisitionReporter? reporter,
         CancellationToken ct)
     {
-        // Windows-CUDA only — Vulkan/CPU/Linux need no second archive and must be byte-unchanged.
-        if (variant != GpuVariant.Cuda || _os != OSPlatform.Windows)
+        // CUDA only — Vulkan/CPU need no second archive and must be byte-unchanged.
+        if (!PairsCudaCompanion(variant))
         {
             return;
         }
@@ -795,7 +798,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         }
         catch
         {
-            // A half-CUDA dir (main archive extracted, runtime DLLs missing) must not survive to look like a valid CUDA
+            // A half-CUDA dir (main archive extracted, runtime libraries missing) must not survive to look like a valid CUDA
             // install on a later resolve — discard it so the next acquisition re-runs the complete pairing.
             TryDeleteDirectory(variantDir);
             throw;
@@ -810,7 +813,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     }
 
     /// <summary>
-    ///     Best-effort repair of a PUBLISHED Windows-CUDA dir missing part of its companion set. False when it did not complete; the dir is served as before.
+    ///     Best-effort repair of a PUBLISHED CUDA dir missing part of its companion set. False when it did not complete; the dir is served as before.
     /// </summary>
     /// <remarks>
     ///     The companion is checked in temp first; a failure up to there touches nothing. The DLLs then land one file at a time, never moving the dir, which
@@ -848,7 +851,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
             // A target of the verified length is kept: a running server may have it loaded, and Windows refuses to replace a loaded DLL. Any other target
             // (missing, or cut short by an older build's non-atomic copy) is replaced whole by rename.
-            foreach (var dll in CudartLast(Directory.EnumerateFiles(companionDir, "*.dll")))
+            foreach (var dll in CudartLast(Directory.EnumerateFiles(companionDir, CompanionLibraryPattern(_os))))
             {
                 var target = Path.Combine(serverDir, Path.GetFileName(dll));
                 try
@@ -929,13 +932,14 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     private const string CudaRepairRefusedReason =
         "The external access profile does not download them automatically; installing the runtime in Node Settings under the llama.cpp runtime repairs them.";
 
-    /// <summary>The sanitized failure for a companion set missing <paramref name="missingFamily" />, listing the DLL names (never paths) in <paramref name="dir" />.</summary>
+    /// <summary>The sanitized failure for a companion set missing <paramref name="missingFamily" />, listing the library names (never paths) of its OS in <paramref name="dir" />.</summary>
     internal static string IncompleteCompanionSetMessage(string missingFamily, string dir)
     {
+        var isDll = missingFamily.EndsWith(".dll", StringComparison.OrdinalIgnoreCase);
         string found;
         try
         {
-            var names = Directory.EnumerateFiles(dir, "*.dll", SearchOption.TopDirectoryOnly).Select(Path.GetFileName).Order(StringComparer.OrdinalIgnoreCase).ToList();
+            var names = Directory.EnumerateFiles(dir, isDll ? "*.dll" : "*.so*", SearchOption.TopDirectoryOnly).Select(Path.GetFileName).Order(StringComparer.OrdinalIgnoreCase).ToList();
             found = names.Count > 0 ? string.Join(", ", names) : "none";
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
@@ -944,35 +948,43 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             found = "could not be listed";
         }
 
-        return $"The llama.cpp CUDA runtime archive did not contain the expected runtime libraries: no {missingFamily} next to the server. DLLs found: {found}.";
+        return $"The llama.cpp CUDA runtime archive did not contain the expected runtime libraries: no {missingFamily} next to the server. {(isDll ? "DLLs" : "Libraries")} found: {found}.";
     }
 
     /// <summary>
-    ///     The DLL families the Windows-CUDA companion archive delivers; ggml-cuda loads only with all three next to the server. The one place to adjust if a
+    ///     The library families the Windows-CUDA companion archive delivers; ggml-cuda loads only with all three next to the server. The one place to adjust if a
     ///     release renames them.
     /// </summary>
-    private static readonly string[] CudaCompanionFamilies = ["cudart64_*.dll", "cublas64_*.dll", "cublasLt64_*.dll"];
+    private static readonly string[] WindowsCudaCompanionFamilies = ["cudart64_*.dll", "cublas64_*.dll", "cublasLt64_*.dll"];
+
+    /// <summary>The Linux counterpart of <see cref="WindowsCudaCompanionFamilies" />; any suffix after <c>.so</c> (the CUDA major) is accepted.</summary>
+    private static readonly string[] LinuxCudaCompanionFamilies = ["libcudart.so*", "libcublas.so*", "libcublasLt.so*"];
+
+    private string[] CompanionFamilies => _os == OSPlatform.Linux ? LinuxCudaCompanionFamilies : WindowsCudaCompanionFamilies;
+
+    /// <summary>The file pattern of the runtime libraries a companion archive lands next to the server on <paramref name="os" />.</summary>
+    private static string CompanionLibraryPattern(OSPlatform os) => os == OSPlatform.Linux ? "*.so*" : "*.dll";
 
     /// <summary>How every Failed status of a published-dir repair starts; the one mark a later cache hit clears it by, never another acquisition's failure.</summary>
     private const string CudaRepairFailurePrefix =
         "The CUDA runtime libraries of the installed llama.cpp runtime are incomplete and could not be repaired, so it runs without CUDA until a retry succeeds.";
 
     /// <summary>True when the complete CUDA companion set is present next to the server (the pairing has already happened).</summary>
-    private static bool CudartRuntimePresent(string serverDir)
+    private bool CudartRuntimePresent(string serverDir)
     {
         return MissingCudaCompanionFamily(serverDir) is null;
     }
 
-    /// <summary>The first <see cref="CudaCompanionFamilies" /> pattern with no file next to the server, or <see langword="null" /> when the set is complete.</summary>
-    private static string? MissingCudaCompanionFamily(string serverDir)
+    /// <summary>The first <see cref="CompanionFamilies" /> pattern with no file next to the server, or <see langword="null" /> when the set is complete.</summary>
+    private string? MissingCudaCompanionFamily(string serverDir)
     {
-        return CudaCompanionFamilies.FirstOrDefault(family =>
+        return CompanionFamilies.FirstOrDefault(family =>
             !Directory.Exists(serverDir) || !Directory.EnumerateFiles(serverDir, family, SearchOption.TopDirectoryOnly).Any());
     }
 
     /// <summary>
-    ///     Downloads, size-checks and SHA256-verifies the cudart archive, then FLATTENS its DLLs into the server's bin
-    ///     dir, whatever their internal nesting, so the OS loader finds them next to <c>llama-server.exe</c>.
+    ///     Downloads, size-checks and SHA256-verifies the cudart archive, then FLATTENS its libraries into the server's bin
+    ///     dir, whatever their internal nesting, so the OS loader finds them next to <c>llama-server</c> (its Linux RUNPATH is <c>$ORIGIN</c>).
     /// </summary>
     /// <remarks>Retried exactly once on a transient failure or hash mismatch, mirroring the main archive pipeline.</remarks>
     private async Task DownloadVerifyFlattenCudartAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string serverDir, AcquisitionReporter? reporter, CancellationToken ct)
@@ -1017,12 +1029,20 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                 return new LlamaRuntimeException("The llama.cpp CUDA runtime archive failed integrity verification.");
             }
 
-            // Extract to a temp staging dir, then flatten only the runtime DLLs into the server dir — a partial extract
+            // Extract to a temp staging dir, then flatten only the runtime libraries into the server dir — a partial extract
             // never touches the live server dir, and the archive's internal nesting (root or build/bin) is irrelevant.
             reporter?.Report(RuntimeAcquisitionPhase.Extracting, CudartStepIndex);
             Directory.CreateDirectory(stagingDir);
-            await ZipFile.ExtractToDirectoryAsync(tempArchive, stagingDir, ct).ConfigureAwait(false);
-            FlattenDllsInto(stagingDir, serverDir);
+            if (assetName.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase))
+            {
+                await ExtractTarGzAsync(tempArchive, stagingDir, ct).ConfigureAwait(false);
+            }
+            else
+            {
+                await ZipFile.ExtractToDirectoryAsync(tempArchive, stagingDir, ct).ConfigureAwait(false);
+            }
+
+            FlattenCompanionInto(stagingDir, serverDir, _os);
             return null;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -1040,15 +1060,15 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         }
     }
 
-    /// <summary>Copies every <c>*.dll</c> found anywhere under <paramref name="sourceRoot" /> into <paramref name="serverDir" /> (flattened, overwriting).</summary>
+    /// <summary>Copies every runtime library of <paramref name="os" /> found anywhere under <paramref name="sourceRoot" /> into <paramref name="serverDir" /> (flattened, overwriting).</summary>
     /// <remarks>
-    ///     The <c>cudart64_*</c> marker, one of the families <see cref="CudartRuntimePresent" /> requires, lands LAST, each file by an atomic rename: a top-up of a published dir
+    ///     The cudart marker, one of the families <see cref="CudartRuntimePresent" /> requires, lands LAST, each file by an atomic rename: a top-up of a published dir
     ///     must never read as installed (to the device probe) or as paired (to the next ensure's skip) before every runtime DLL is complete.
     /// </remarks>
-    internal static void FlattenDllsInto(string sourceRoot, string serverDir)
+    internal static void FlattenCompanionInto(string sourceRoot, string serverDir, OSPlatform os)
     {
         Directory.CreateDirectory(serverDir);
-        foreach (var dll in CudartLast(Directory.EnumerateFiles(sourceRoot, "*.dll", SearchOption.AllDirectories)))
+        foreach (var dll in CudartLast(Directory.EnumerateFiles(sourceRoot, CompanionLibraryPattern(os), SearchOption.AllDirectories)))
         {
             LandFile(dll, Path.Combine(serverDir, Path.GetFileName(dll)));
         }
@@ -1056,7 +1076,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
     private static IEnumerable<string> CudartLast(IEnumerable<string> dlls)
     {
-        return dlls.OrderBy(dll => Path.GetFileName(dll).StartsWith("cudart64_", StringComparison.OrdinalIgnoreCase));
+        return dlls.OrderBy(dll => Path.GetFileName(dll) is var name
+                                   && (name.StartsWith("cudart64_", StringComparison.OrdinalIgnoreCase) || name.StartsWith("libcudart.so", StringComparison.Ordinal)));
     }
 
     /// <summary>Copies <paramref name="source" /> to a <c>.partial</c> next to <paramref name="target" />, then renames it over the target; no partial outlives a failure.</summary>
@@ -1196,7 +1217,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     /// <remarks>
     ///     The expected digest is supplied by the caller — the pinned hash (<see cref="EnsureBinaryAsync(GpuVariant, CancellationToken)" />) or the
     ///     live publisher digest (<see cref="InstallTagAsync(string, string, string, long, GpuVariant, CancellationToken)" />) — so both acquisition paths run identical
-    ///     verification logic. The caller completes the staged tree (the Windows-CUDA cudart pairing), publishes it with
+    ///     verification logic. The caller completes the staged tree (the CUDA cudart pairing), publishes it with
     ///     <see cref="PublishStagedVariantAsync" /> and deletes the staging dir on failure; nothing is visible at
     ///     <paramref name="variantDir" /> until then.
     /// </remarks>

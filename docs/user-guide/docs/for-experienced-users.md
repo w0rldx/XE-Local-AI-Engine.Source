@@ -13,7 +13,7 @@ guessing.
 | | |
 |---|---|
 | **Engine** | llama.cpp, pinned to upstream tag **`b11803`** |
-| **Backends** | CUDA (Windows), Vulkan (Windows/Linux), CPU |
+| **Backends** | CUDA (Windows, Linux x64), Vulkan (Windows/Linux), CPU |
 | **Runtime integrity** | Each binary pinned to an exact upstream asset + **SHA-256 verified before extraction**; mismatch aborts |
 | **Default context** | **8192 tokens** |
 | **Launch flags** | Benchmarked per machine, then frozen — **not visible, not editable**. A developer-mode-only panel can append extra raw flags per llama.cpp model — see below |
@@ -57,7 +57,8 @@ mismatch aborts rather than running.
 
 **Windows** gets a prebuilt CUDA runtime (`llama-b11803-bin-win-cuda-12.4-x64.zip`) or Vulkan.
 
-**Linux** gets no prebuilt CUDA runtime from the app, so Vulkan is the default. There's an in-app
+**Linux x64** with an NVIDIA GPU gets a prebuilt CUDA 12.8 runtime (needs an NVIDIA driver from the 525
+series or newer); Linux arm64 uses Vulkan. For a custom fork or a specific commit there's an in-app
 **build-from-source** path that compiles a CUDA runtime, pinned to an exact upstream commit and
 refusing to proceed if the checked-out source doesn't match. That path needs testing across distros
 and driver versions — it's one of the more valuable things to try.

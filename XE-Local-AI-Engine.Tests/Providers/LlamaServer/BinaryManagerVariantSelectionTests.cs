@@ -7,9 +7,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     GPU-variant selection: the OS-aware selection rule
-///     (NVIDIA→CUDA on Windows / →Vulkan on Linux, AMD/Intel→Vulkan, none→CPU) plus pinned-vs-upgrade asset
-///     resolution. No network and no real GPU probe — the vendor probe is faked.
+///     GPU-variant selection (NVIDIA→CUDA where a CUDA prebuilt is pinned, else Vulkan; AMD/Intel→Vulkan; none→CPU) plus
+///     pinned-vs-upgrade asset resolution. No network; the vendor probe is faked.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class BinaryManagerVariantSelectionTests
@@ -17,7 +16,7 @@ public sealed class BinaryManagerVariantSelectionTests
     [Test]
     public async Task SelectVariant_WindowsNvidia_PicksCuda()
     {
-        var selector = new GpuVariantSelector(new FakeVendorProbe(DetectedGpuVendor.Nvidia), isWindows: true);
+        var selector = new GpuVariantSelector(new FakeVendorProbe(DetectedGpuVendor.Nvidia), OSPlatform.Windows, Architecture.X64);
 
         var variant = await selector.SelectVariantAsync(CancellationToken.None);
 
@@ -25,9 +24,21 @@ public sealed class BinaryManagerVariantSelectionTests
     }
 
     [Test]
-    public async Task SelectVariant_LinuxNvidia_FallsBackToVulkan_NoPrebuiltCuda()
+    public async Task SelectVariant_LinuxX64Nvidia_PicksCuda()
     {
-        var selector = new GpuVariantSelector(new FakeVendorProbe(DetectedGpuVendor.Nvidia), isWindows: false);
+        var selector = new GpuVariantSelector(new FakeVendorProbe(DetectedGpuVendor.Nvidia), OSPlatform.Linux, Architecture.X64);
+
+        var variant = await selector.SelectVariantAsync(CancellationToken.None);
+
+        AssertEx.Equal(GpuVariant.Cuda, variant);
+    }
+
+    [Test]
+    [Arguments("Linux")]
+    [Arguments("Windows")]
+    public async Task SelectVariant_Arm64Nvidia_FallsBackToVulkan_NoPrebuiltCuda(string os)
+    {
+        var selector = new GpuVariantSelector(new FakeVendorProbe(DetectedGpuVendor.Nvidia), (os == "Linux" ? OSPlatform.Linux : OSPlatform.Windows), Architecture.Arm64);
 
         var variant = await selector.SelectVariantAsync(CancellationToken.None);
 
@@ -37,7 +48,7 @@ public sealed class BinaryManagerVariantSelectionTests
     [Test]
     public async Task SelectVariant_AmdGpu_PicksVulkan()
     {
-        var selector = new GpuVariantSelector(new FakeVendorProbe(DetectedGpuVendor.Amd), isWindows: true);
+        var selector = new GpuVariantSelector(new FakeVendorProbe(DetectedGpuVendor.Amd), OSPlatform.Windows, Architecture.X64);
 
         var variant = await selector.SelectVariantAsync(CancellationToken.None);
 
@@ -47,7 +58,7 @@ public sealed class BinaryManagerVariantSelectionTests
     [Test]
     public async Task SelectVariant_IntelGpu_PicksVulkan()
     {
-        var selector = new GpuVariantSelector(new FakeVendorProbe(DetectedGpuVendor.Intel), isWindows: false);
+        var selector = new GpuVariantSelector(new FakeVendorProbe(DetectedGpuVendor.Intel), OSPlatform.Linux, Architecture.X64);
 
         var variant = await selector.SelectVariantAsync(CancellationToken.None);
 
@@ -57,7 +68,7 @@ public sealed class BinaryManagerVariantSelectionTests
     [Test]
     public async Task SelectVariant_NoGpu_PicksCpu()
     {
-        var selector = new GpuVariantSelector(new FakeVendorProbe(DetectedGpuVendor.None), isWindows: false);
+        var selector = new GpuVariantSelector(new FakeVendorProbe(DetectedGpuVendor.None), OSPlatform.Linux, Architecture.X64);
 
         var variant = await selector.SelectVariantAsync(CancellationToken.None);
 
@@ -77,8 +88,8 @@ public sealed class BinaryManagerVariantSelectionTests
     [Test]
     public void ResolvePin_LinuxNoGpuPrebuilt_FallsBackToCpuFloor()
     {
-        // No Linux CUDA prebuilt is pinned; requesting CUDA on Linux resolves to the CPU floor, never null.
-        var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda);
+        // No Linux arm64 CUDA prebuilt is pinned; requesting CUDA there resolves to the CPU floor, never null.
+        var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.Arm64, GpuVariant.Cuda);
 
         AssertEx.NotNull(pin);
         AssertEx.Contains(pin!.AssetName, "ubuntu");
@@ -86,13 +97,22 @@ public sealed class BinaryManagerVariantSelectionTests
     }
 
     [Test]
-    public void ResolveExact_LinuxCuda_ReturnsNull_NoCpuFloorFallback()
+    public void ResolveExact_LinuxArm64Cuda_ReturnsNull_NoCpuFloorFallback()
     {
-        // Unlike Resolve(), the exact resolve never substitutes the CPU floor — no Linux CUDA prebuilt is pinned,
+        // Unlike Resolve(), the exact resolve never substitutes the CPU floor — no Linux arm64 CUDA prebuilt is pinned,
         // so it returns null and the binary manager fails loud rather than serving a CPU archive stamped as CUDA.
-        var pin = LlamaCppReleasePins.TryResolveExact(OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda);
+        var pin = LlamaCppReleasePins.TryResolveExact(OSPlatform.Linux, Architecture.Arm64, GpuVariant.Cuda);
 
         AssertEx.Null(pin);
+    }
+
+    [Test]
+    public void ResolveExact_LinuxX64Cuda_ReturnsGenuineCudaPin()
+    {
+        var pin = LlamaCppReleasePins.TryResolveExact(OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda);
+
+        AssertEx.NotNull(pin);
+        AssertEx.Contains(pin!.AssetName, "ubuntu-cuda");
     }
 
     [Test]
@@ -115,20 +135,20 @@ public sealed class BinaryManagerVariantSelectionTests
     }
 
     [Test]
-    public async Task EnsureBinary_LinuxCudaNoPrebuilt_Throws_NeverServesCpuArchiveAsCuda()
+    public async Task EnsureBinary_LinuxArm64CudaNoPrebuilt_Throws_NeverServesCpuArchiveAsCuda()
     {
-        // A Cuda request on Linux/x64 (no pinned CUDA prebuilt, no managed source build) must fail loud, even
+        // A Cuda request on Linux/arm64 (no pinned CUDA prebuilt, no managed source build) must fail loud, even
         // when a binary is cached under the requested "cuda" variant dir — before the fix EnsureBinary resolved the CPU
         // floor pin and returned that cached CPU archive as a LlamaBinary with Variant=Cuda, which the supervisor would
         // then launch with GPU placement flags. The exact-resolve now throws BEFORE any cache/download lookup.
         using var cache = new TempCacheDir();
-        var cpuPin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
+        var cpuPin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.Arm64, GpuVariant.Cpu)!;
         // Seed a CPU server under the CUDA variant dir — the exact path a pre-fix cache hit would have served as Cuda.
         SeedCachedServer(cache.Path, LlamaCppReleasePins.PinnedTag, "cuda", cpuPin.ServerRelativePath);
 
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
-        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64, TimeProvider.System);
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.Arm64, TimeProvider.System);
 
         var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
             manager.EnsureBinaryAsync(GpuVariant.Cuda, CancellationToken.None));

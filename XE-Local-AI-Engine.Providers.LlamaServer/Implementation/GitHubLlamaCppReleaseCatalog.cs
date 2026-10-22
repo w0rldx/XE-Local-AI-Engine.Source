@@ -161,7 +161,7 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
     /// </remarks>
     private static LlamaCppReleaseAsset? MatchAsset(IReadOnlyList<GitHubAsset> assets, string tag, OSPlatform os, Architecture arch, GpuVariant variant)
     {
-        // Never the CPU floor for a GPU request: a Linux CUDA install would otherwise resolve the CPU archive and record it as CUDA.
+        // Never the CPU floor for a GPU request: an arm64 CUDA install would otherwise resolve the CPU archive and record it as CUDA.
         var pin = LlamaCppReleasePins.ResolveForAcquisition(os, arch, variant);
         if (pin is null)
         {
@@ -207,11 +207,16 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
     ///     distinguishing token of the expected name except a purely-numeric version token such as <c>12.4</c>.
     /// </summary>
     /// <remarks>
-    ///     Only the main asset is matched here; the Windows-CUDA <c>cudart-…</c> companion is resolved separately
-    ///     through <see cref="ResolveCompanionAssetAsync" />.
+    ///     Only the main asset is matched here; the CUDA <c>cudart-…</c> companion is resolved separately
+    ///     through <see cref="ResolveCompanionAssetAsync" />, and is refused here: the Linux one carries every token of its main asset.
     /// </remarks>
     private static bool MatchesByTokens(string candidate, string expectedName)
     {
+        if (candidate.StartsWith("cudart-", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
         var (expectedStem, expectedExt) = SplitArchive(expectedName);
         var (candidateStem, candidateExt) = SplitArchive(candidate);
         if (!string.Equals(expectedExt, candidateExt, StringComparison.OrdinalIgnoreCase))

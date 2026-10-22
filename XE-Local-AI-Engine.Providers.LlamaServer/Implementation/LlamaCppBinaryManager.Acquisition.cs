@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 public sealed partial class LlamaCppBinaryManager
 {
     /// <summary>
-    ///     The cudart companion archive is always the SECOND archive of a Windows-CUDA acquisition (the build itself is
+    ///     The cudart companion archive is always the SECOND archive of a CUDA acquisition (the build itself is
     ///     the first), so its progress reports under a fixed step index rather than one threaded through from the caller.
     /// </summary>
     private const int CudartStepIndex = 2;

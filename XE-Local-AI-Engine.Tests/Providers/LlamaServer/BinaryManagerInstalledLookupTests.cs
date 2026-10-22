@@ -79,12 +79,12 @@ public sealed class BinaryManagerInstalledLookupTests
     [Test]
     public async Task TryGetInstalledBinary_NoPrebuiltForTheHostVariant_ReturnsNull_NotAThrow()
     {
-        // No Linux CUDA prebuilt is pinned, so an ensure raises its sanitized "no prebuilt" refusal. The
+        // No Linux arm64 CUDA prebuilt is pinned, so an ensure raises its sanitized "no prebuilt" refusal. The
         // lookup must simply report "none installed" instead, so a page-load diagnostic degrades rather than erroring.
         using var cache = new TempCacheDir();
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
-        var manager = Manager(http, cache.Path, store: null);
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.Arm64, TimeProvider.System);
 
         AssertEx.Null(await manager.TryGetInstalledBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
         AssertEx.Equal(expected: 0, handler.CallCount);

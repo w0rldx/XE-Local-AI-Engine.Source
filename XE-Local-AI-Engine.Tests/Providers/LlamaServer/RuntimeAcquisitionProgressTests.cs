@@ -311,7 +311,7 @@ public sealed class RuntimeAcquisitionProgressTests
         using var handler = new ScriptedHandler(() => throw new InvalidOperationException("An unresolvable variant must not download."));
         using var http = new HttpClient(handler, disposeHandler: false);
         var registry = new RecordingRegistry();
-        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64,
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.Arm64,
             TimeProvider.System,
             acquisitionStatus: registry);
 

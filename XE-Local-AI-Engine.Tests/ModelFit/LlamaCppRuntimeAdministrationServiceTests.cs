@@ -189,8 +189,25 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
 
     [Test]
     [RunOn(OS.Linux)]
-    public async Task InstallAsync_LinuxCuda_RefusesWithTheEnsureMessageBeforeCatalogOrLease()
+    public async Task InstallAsync_LinuxX64Cuda_ResolvesThePinnedPrebuiltThroughTheCatalog()
     {
+        Skip.Unless(RuntimeInformation.OSArchitecture == Architecture.X64, "the Linux CUDA prebuilt is pinned for x64 only.");
+        var releaseCatalog = Substitute.For<ILlamaCppReleaseCatalog>();
+        releaseCatalog.ResolveAssetAsync("b10201", OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda, Arg.Any<CancellationToken>())
+                      .Returns(LlamaCppReleaseResult.NotFound());
+        var service = CreateService(Substitute.For<ILlamaCppBinaryManager>(), Substitute.For<ILlamaServerProcessSupervisor>(), releaseCatalog: releaseCatalog);
+
+        var result = await service.InstallAsync("b10201", GpuVariant.Cuda);
+
+        AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.InvalidRequest, result.Failure);
+        await releaseCatalog.Received(1).ResolveAssetAsync("b10201", OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task InstallAsync_LinuxArm64Cuda_RefusesWithTheEnsureMessageBeforeCatalogOrLease()
+    {
+        Skip.Unless(RuntimeInformation.OSArchitecture == Architecture.Arm64, "Linux arm64 is the Linux host with no CUDA prebuilt pinned.");
         var releaseCatalog = Substitute.For<ILlamaCppReleaseCatalog>();
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();

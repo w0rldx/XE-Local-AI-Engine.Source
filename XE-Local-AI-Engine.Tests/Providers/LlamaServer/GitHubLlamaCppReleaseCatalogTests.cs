@@ -111,6 +111,7 @@ public sealed class GitHubLlamaCppReleaseCatalogTests
     [Arguments("win", GpuVariant.Cuda)]
     [Arguments("win", GpuVariant.Vulkan)]
     [Arguments("win", GpuVariant.Cpu)]
+    [Arguments("ubuntu", GpuVariant.Cuda)]
     [Arguments("ubuntu", GpuVariant.Vulkan)]
     [Arguments("ubuntu", GpuVariant.Cpu)]
     [Arguments("macos", GpuVariant.Cpu)]
@@ -145,6 +146,27 @@ public sealed class GitHubLlamaCppReleaseCatalogTests
         var catalog = new GitHubLlamaCppReleaseCatalog(http, TimeProvider.System);
 
         var result = await catalog.ResolveAssetAsync(Tag, OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda, CancellationToken.None);
+
+        AssertEx.Equal(driftedName, AssertEx.NotNull(result.Asset).Name);
+    }
+
+    [Test]
+    public async Task ResolveAsset_LinuxCudaVersionDrift_MatchesTheMainAssetNeverItsTagPrefixedCompanion()
+    {
+        // The Linux cudart companion carries every token of its main asset, so the drift match must refuse it even when it is listed first.
+        const string driftedName = $"llama-{Tag}-bin-ubuntu-cuda-13.4-x64.tar.gz";
+        var digest = new string('e', 64);
+        const string url = $"https://github.com/ggml-org/llama.cpp/releases/download/{Tag}/";
+        var json = $$"""
+                     {"tag_name":"{{Tag}}","assets":[
+                       {"name":"cudart-{{driftedName}}","browser_download_url":"{{url}}cudart-{{driftedName}}","digest":"sha256:{{digest}}","size":3},
+                       {"name":"{{driftedName}}","browser_download_url":"{{url}}{{driftedName}}","digest":"sha256:{{digest}}","size":5}]}
+                     """;
+        using var handler = new ScriptedHandler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) });
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var catalog = new GitHubLlamaCppReleaseCatalog(http, TimeProvider.System);
+
+        var result = await catalog.ResolveAssetAsync(Tag, OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda, CancellationToken.None);
 
         AssertEx.Equal(driftedName, AssertEx.NotNull(result.Asset).Name);
     }

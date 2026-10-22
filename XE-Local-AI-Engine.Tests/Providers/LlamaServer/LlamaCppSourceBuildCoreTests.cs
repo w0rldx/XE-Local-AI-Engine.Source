@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using System.Runtime.InteropServices;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
@@ -359,7 +360,7 @@ public sealed class LlamaCppSourceBuildCoreTests
     {
         var signal = new CudaManagedBuildSignal();
         signal.SetActive(GpuVariant.Cpu);
-        var selector = new GpuVariantSelector(new FixedVendorProbe(DetectedGpuVendor.Nvidia), isWindows: false, managedCudaSignal: signal);
+        var selector = new GpuVariantSelector(new FixedVendorProbe(DetectedGpuVendor.Nvidia), OSPlatform.Linux, Architecture.X64, managedCudaSignal: signal);
 
         AssertEx.Equal(GpuVariant.Cpu, await selector.SelectVariantAsync(CancellationToken.None));
     }

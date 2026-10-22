@@ -49,25 +49,25 @@ public sealed class CudaManagedRuntimeTests
     }
 
     [Test]
-    public async Task InstallTag_LinuxCudaWithoutManagedBuild_RefusesBeforeDownloadAndWritesNoRecord()
+    public async Task InstallTag_LinuxArm64CudaWithoutManagedBuild_RefusesBeforeDownloadAndWritesNoRecord()
     {
         using var dir = new TempDir();
         using var store = new InstalledRuntimeStore(dir.Path);
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, new CudaManagedBuildSignal());
+            OSPlatform.Linux, Architecture.Arm64, TimeProvider.System, catalog: null, store, overrideOptions: null, new CudaManagedBuildSignal());
 
-        // The live-QA shape: the CPU asset handed in under a CUDA request must never be downloaded or recorded as CUDA.
+        // The live-QA shape on a host with no CUDA prebuilt: the CPU asset handed in under a CUDA request must never be downloaded or recorded as CUDA.
         var install = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.InstallTagAsync(LlamaCppReleasePins.PinnedTag,
-            "llama-b10201-bin-ubuntu-x64.tar.gz",
+            "llama-b10201-bin-ubuntu-arm64.tar.gz",
             new string('b', 64),
             expectedSize: 0,
             GpuVariant.Cuda,
             CancellationToken.None));
         var ensure = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.EnsureBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
 
-        AssertEx.Equal(LlamaCppReleasePins.MissingPrebuiltMessage(OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda), install.Message);
+        AssertEx.Equal(LlamaCppReleasePins.MissingPrebuiltMessage(OSPlatform.Linux, Architecture.Arm64, GpuVariant.Cuda), install.Message);
         AssertEx.Equal(install.Message, ensure.Message);
         AssertEx.Contains(install.Message, "CUDA");
         AssertEx.Contains(install.Message, "build from source");
@@ -107,9 +107,9 @@ public sealed class CudaManagedRuntimeTests
     [Test]
     public void MissingPrebuiltMessage_NamesVariantHostAndTheBuildsThatExist()
     {
-        AssertEx.Null(LlamaCppReleasePins.ResolveForAcquisition(OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda));
-        AssertEx.Equal("llama.cpp publishes no prebuilt CUDA build for Linux x64; build it from source in Node settings → llama.cpp build from source, or choose CPU or Vulkan.",
-            LlamaCppReleasePins.MissingPrebuiltMessage(OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda));
+        AssertEx.Null(LlamaCppReleasePins.ResolveForAcquisition(OSPlatform.Linux, Architecture.Arm64, GpuVariant.Cuda));
+        AssertEx.Equal("llama.cpp publishes no prebuilt CUDA build for Linux arm64; build it from source in Node settings → llama.cpp build from source, or choose CPU or Vulkan.",
+            LlamaCppReleasePins.MissingPrebuiltMessage(OSPlatform.Linux, Architecture.Arm64, GpuVariant.Cuda));
     }
 
     [Test]
@@ -365,7 +365,7 @@ public sealed class CudaManagedRuntimeTests
     {
         var signal = new CudaManagedBuildSignal();
         signal.MarkAvailable();
-        var selector = new GpuVariantSelector(new StubVendorProbe(DetectedGpuVendor.Nvidia), isWindows: false, overrideOptions: null, signal);
+        var selector = new GpuVariantSelector(new StubVendorProbe(DetectedGpuVendor.Nvidia), OSPlatform.Linux, Architecture.Arm64, overrideOptions: null, signal);
 
         AssertEx.Equal(GpuVariant.Cuda, await selector.SelectVariantAsync(CancellationToken.None));
     }
@@ -380,7 +380,7 @@ public sealed class CudaManagedRuntimeTests
         using var store = new InstalledRuntimeStore(dir.Path);
         await store.WriteAsync(SourceBuildState(binDir, sha), CancellationToken.None);
         var signal = new CudaManagedBuildSignal();
-        var selector = new GpuVariantSelector(new StubVendorProbe(DetectedGpuVendor.Nvidia), isWindows: false, overrideOptions: null, signal, store);
+        var selector = new GpuVariantSelector(new StubVendorProbe(DetectedGpuVendor.Nvidia), OSPlatform.Linux, Architecture.Arm64, overrideOptions: null, signal, store);
 
         // A hosted service that runs before CudaBuildStartupService has seeded the signal (a workflow dispatcher's first
         // sweep after a restart) is admitted and spawned through this selector: both must already answer CUDA.
@@ -397,7 +397,7 @@ public sealed class CudaManagedRuntimeTests
     {
         var store = Substitute.For<IInstalledRuntimeStore>();
         store.ReadAsync(Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("store gone"));
-        var selector = new GpuVariantSelector(new StubVendorProbe(DetectedGpuVendor.Nvidia), isWindows: false, overrideOptions: null, new CudaManagedBuildSignal(), store);
+        var selector = new GpuVariantSelector(new StubVendorProbe(DetectedGpuVendor.Nvidia), OSPlatform.Linux, Architecture.Arm64, overrideOptions: null, new CudaManagedBuildSignal(), store);
 
         // The seed is cached once: a faulted seed must not turn every later selection into a throw.
         AssertEx.Equal(GpuVariant.Vulkan, await selector.SelectVariantAsync(CancellationToken.None));
@@ -405,12 +405,14 @@ public sealed class CudaManagedRuntimeTests
     }
 
     [Test]
-    public async Task Selector_WhenNoManagedBuild_UnchangedRule()
+    [Arguments(Architecture.X64, GpuVariant.Cuda)]
+    [Arguments(Architecture.Arm64, GpuVariant.Vulkan)]
+    public async Task Selector_WhenNoManagedBuild_LinuxNvidiaFollowsThePinnedPrebuilt(Architecture arch, GpuVariant expected)
     {
-        var selector = new GpuVariantSelector(new StubVendorProbe(DetectedGpuVendor.Nvidia), isWindows: false, overrideOptions: null, new CudaManagedBuildSignal());
+        var selector = new GpuVariantSelector(new StubVendorProbe(DetectedGpuVendor.Nvidia), OSPlatform.Linux, arch, overrideOptions: null, new CudaManagedBuildSignal());
 
-        // Linux NVIDIA with no managed build → Vulkan (unchanged rule).
-        AssertEx.Equal(GpuVariant.Vulkan, await selector.SelectVariantAsync(CancellationToken.None));
+        // x64 has a pinned CUDA prebuilt, arm64 does not.
+        AssertEx.Equal(expected, await selector.SelectVariantAsync(CancellationToken.None));
     }
 
     [Test]

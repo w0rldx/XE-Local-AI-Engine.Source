@@ -447,7 +447,8 @@ only.
 
 ![In-app CUDA build](../media/screenshots/cuda-build-running@2x.png)
 
-The app downloads no prebuilt Linux CUDA component, so it can **compile one locally** — pinned to
+On Linux x64 the app downloads a prebuilt CUDA component by default; for a custom fork or a specific commit it can
+also **compile one locally** — pinned to
 an exact upstream version, refusing to proceed if the source doesn't match, with the build log streamed
 live into the interface.
 

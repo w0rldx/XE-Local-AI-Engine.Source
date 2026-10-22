@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     Managed source-built CUDA runtime branch of <see cref="LlamaCppBinaryManager" />: adoption validation and
 ///     recording (<see cref="AdoptCudaSourceBuildAsync" />) plus the every-serve re-validation
 ///     (<see cref="TryServeManagedSourceBinaryAsync" />), for the <c>llama-server</c> an in-app build
-///     (<see cref="Contracts.ILlamaCppSourceBuildService" />) produces because the pins carry no Linux CUDA prebuilt.
+///     (<see cref="Contracts.ILlamaCppSourceBuildService" />) produces, which wins over the pinned prebuilt.
 /// </summary>
 /// <remarks>
 ///     The built binary carries no publisher SHA256, so adoption records the SHA256 of the on-disk binary and every
@@ -214,7 +214,7 @@ public sealed partial class LlamaCppBinaryManager
                 await _installedRuntimeStore.WriteAsync(state, ct).ConfigureAwait(false);
             }
 
-            // Cached signal: the variant selector now returns Cuda on a Linux NVIDIA machine without a per-call store read.
+            // Cached signal: the variant selector now returns the built variant without a per-call store read.
             _managedCudaSignal?.SetActive(variant);
 
             return state;

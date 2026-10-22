@@ -67,8 +67,8 @@ public sealed class RuntimeDeviceAuditServiceTests
     [Test]
     public void BuildState_OnWindows_ZeroDevices_DropsTheWslVulkanWording_AndPointsAtTheDriver()
     {
-        // Windows ships a prebuilt CUDA runtime: the Linux text told a Windows tester to install a Vulkan ICD and
-        // source-build CUDA, neither of which applies. The reason code ("zero_devices") is unchanged.
+        // The Linux text told a Windows tester to install a Vulkan ICD and update a Linux driver series, neither of
+        // which applies. The reason code ("zero_devices") is unchanged.
         var state = RuntimeDeviceAuditService.BuildState(GpuProfile(GpuVendor.Nvidia), GpuVariant.Cuda, LlamaDeviceInventory.Empty(GpuVariant.Cuda), isWindows: true);
 
         AssertEx.True(state.CpuFallback);
@@ -79,8 +79,8 @@ public sealed class RuntimeDeviceAuditServiceTests
 
         var remediation = AssertEx.NotNull(state.Remediation);
         AssertEx.True(remediation.Contains("driver", StringComparison.OrdinalIgnoreCase));
-        AssertEx.False(remediation.Contains("build the CUDA runtime from source", StringComparison.Ordinal),
-            "Windows has a prebuilt CUDA runtime — do not send the operator to a source build");
+        AssertEx.False(remediation.Contains("Vulkan ICD", StringComparison.Ordinal),
+            "the Linux remediation does not apply on Windows");
     }
 
     [Test]

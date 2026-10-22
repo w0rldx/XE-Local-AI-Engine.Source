@@ -98,7 +98,7 @@ public static class LlamaServerServiceCollectionExtensions
                 sp.GetRequiredService<ILogger<LlamaCppBinaryManager>>(),
                 sp.GetService<ILlamaCppImplicitAcquisitionPolicy>()));
 
-        // In-app Linux source build (the pins carry no Linux CUDA prebuilt): the per-backend prerequisite probe, the no-op build-event publisher (the Client host
+        // In-app Linux source build (wins over the pinned prebuilt once adopted): the per-backend prerequisite probe, the no-op build-event publisher (the Client host
         // swaps in a hub-backed one) and the single-flight build service; the startup service cleans a stale work dir and seeds the managed-CUDA signal from the record.
         services.TryAddSingleton<ILlamaCppSourceBuildPrerequisiteProbe>(static sp =>
             new LlamaCppSourceBuildPrerequisiteProbe(sp.GetRequiredService<IGpuVendorProbe>()));

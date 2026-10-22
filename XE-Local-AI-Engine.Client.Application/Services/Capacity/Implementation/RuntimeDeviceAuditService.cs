@@ -285,15 +285,15 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         return variant == GpuVariant.Cuda ? "cuda" : "vulkan";
     }
 
-    // Windows ships a prebuilt CUDA runtime and has no Vulkan-ICD/WSL2 story, so the Linux wording sends a Windows
-    // operator to fix something that does not apply; both branches keep the same reason codes.
+    // Windows has no Vulkan-ICD/WSL2 story, so the Linux wording sends a Windows operator to fix something that does
+    // not apply; both branches keep the same reason codes.
     private static FallbackText BuildFallbackText(GpuVendor vendor, GpuVariant variant, bool cpuVariant, bool isWindows)
     {
         const string LinuxRemediation =
-            "To run on the GPU: build the CUDA runtime from source with the in-app build feature, or set XE_LLAMACPP_SERVER_PATH + "
-            + "XE_LLAMACPP_VARIANT to a GPU-capable llama-server binary. On Linux there is no prebuilt CUDA llama.cpp — the default "
-            + "NVIDIA build is Vulkan, which needs a Vulkan ICD; if a bring-your-own override is set, verify XE_LLAMACPP_SERVER_PATH "
-            + "points to a valid GPU-capable binary.";
+            "Update the NVIDIA driver to the 525 series or newer and reinstall the runtime from Node Settings. Otherwise build the "
+            + "Vulkan runtime with the in-app source build, choosing the Vulkan backend, which then takes precedence over the "
+            + "prebuilt; that needs a Vulkan ICD (commonly missing under WSL2). If a bring-your-own override is set, verify "
+            + "XE_LLAMACPP_SERVER_PATH points to a valid GPU-capable binary.";
 
         const string WindowsRemediation =
             "Update the GPU driver, check the GPU is visible to the system, then reinstall the runtime from Node Settings. If a "

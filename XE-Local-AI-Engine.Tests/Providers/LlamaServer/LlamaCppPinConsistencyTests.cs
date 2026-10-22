@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Guards the llama.cpp version pin against a PARTIALLY applied bump. The pin is spread over a tag, a source commit
-///     SHA, and ten per-platform asset rows; editing the tag but leaving one asset row behind produces a 404 at download
+///     SHA, and the per-platform asset rows; editing the tag but leaving one asset row behind produces a 404 at download
 ///     time on exactly one platform — the one nobody tested on. Pure constant inspection: no network, no file system.
 /// </summary>
 [Category(TestCategories.Unit)]
@@ -72,6 +72,20 @@ public sealed class LlamaCppPinConsistencyTests
         AssertEx.NotNull(pin.CudartSha256, "The cudart companion must carry its own digest.");
         AssertEx.True(!cudartName.Contains(LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal),
             $"The cudart asset name is not tag-prefixed upstream, but '{cudartName}' embeds the pinned tag.");
+    }
+
+    [Test]
+    public void LinuxX64CudaPin_CarriesTheVerifiedB11803AssetsAndATagPrefixedCompanion()
+    {
+        // Outside PinnedCombinations (whose tuples are frozen), so asserted exactly here. Digests from the release-assets digest API;
+        // unlike Windows, the Linux companion IS tag-prefixed upstream.
+        var pin = AssertEx.NotNull(LlamaCppReleasePins.TryResolveExact(OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda));
+
+        AssertEx.Equal("llama-b11803-bin-ubuntu-cuda-12.8-x64.tar.gz", pin.AssetName);
+        AssertEx.Equal("4594be0afdddcfdf15e82f4fbd6805c60c399eaa62b181432ccaf3de87ef36d0", pin.Sha256);
+        AssertEx.Equal("build/bin/llama-server", pin.ServerRelativePath);
+        AssertEx.Equal("cudart-llama-b11803-bin-ubuntu-cuda-12.8-x64.tar.gz", pin.CudartAssetName);
+        AssertEx.Equal("38af6ae05c2d7313a577e1dafc5527950b16ad62193e2a0e7c278b504ea5d7e4", pin.CudartSha256);
     }
 
     [Test]
