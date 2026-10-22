@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 
+using System.ClientModel;
 using System.Collections.Concurrent;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
@@ -112,13 +113,18 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
             {
                 await DisposeQuietlyAsync(enumerator);
 
-                var transient = IsTransient(exception, cancellationToken);
-                if (transient)
+                var failureKind = ClassifyFailure(exception, cancellationToken);
+                if (failureKind == SendFailureKind.Transient)
                 {
                     RecordFailure(breaker);
                 }
 
-                var canRetry = transient
+                // A Retry-After above the cap is not waited out: the send fails now with the classifier's "retry after X" text.
+                var retryAfter = failureKind == SendFailureKind.NotRetryable ? null : ProviderRetryAfter.Find(exception, _timeProvider.GetUtcNow());
+                var retryAfterTooLong = retryAfter > TimeSpan.FromSeconds(Math.Max(val1: 0, _options.MaxRetryAfterSeconds));
+
+                var canRetry = failureKind != SendFailureKind.NotRetryable
+                               && !retryAfterTooLong
                                && retryEnabled
                                && attempt < maxAttempts
                                && (breaker is null || !IsOpen(breaker));
@@ -135,7 +141,14 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
                     attempt,
                     maxAttempts);
 
-                await DelayBeforeRetryAsync(attempt, cancellationToken);
+                if (retryAfter is { } wait)
+                {
+                    await Task.Delay(wait, _timeProvider, cancellationToken);
+                }
+                else
+                {
+                    await DelayBeforeRetryAsync(attempt, cancellationToken);
+                }
             }
         }
     }
@@ -162,13 +175,32 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
 
     // Transient = a connection/transport failure or a server-side/overload status, where a retry to a possibly
     // re-spawned endpoint may succeed. A 4xx other than 429 is not, nor is a cancellation on the caller's token.
-    private static bool IsTransient(Exception exception, CancellationToken cancellationToken)
+    private static SendFailureKind ClassifyFailure(Exception exception, CancellationToken cancellationToken)
     {
         if (cancellationToken.IsCancellationRequested)
         {
-            return false;
+            return SendFailureKind.NotRetryable;
         }
 
+        // An SDK status failure (System.ClientModel) anywhere in the chain, also under a provider wrapper exception.
+        // A 429 is rate limiting, not an outage: retried, but kept off the breaker.
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            switch (current)
+            {
+                case ClientResultException { Status: 429 }:
+                    return SendFailureKind.RateLimited;
+
+                case ClientResultException { Status: >= 500 }:
+                    return SendFailureKind.Transient;
+            }
+        }
+
+        return IsTransient(exception) ? SendFailureKind.Transient : SendFailureKind.NotRetryable;
+    }
+
+    private static bool IsTransient(Exception exception)
+    {
         for (var current = exception; current is not null; current = current.InnerException)
         {
             switch (current)
@@ -208,7 +240,7 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
                     return true;
 
                 case AggregateException aggregate:
-                    if (aggregate.InnerExceptions.Any(inner => IsTransient(inner, cancellationToken)))
+                    if (aggregate.InnerExceptions.Any(IsTransient))
                     {
                         return true;
                     }
@@ -288,6 +320,13 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
         {
             return breaker.OpenUntil is { } openUntil && _timeProvider.GetUtcNow() < openUntil;
         }
+    }
+
+    private enum SendFailureKind
+    {
+        NotRetryable,
+        Transient,
+        RateLimited
     }
 
     private readonly record struct Establishment<T>(IAsyncEnumerator<T> Enumerator, bool HasFirst, T? First);

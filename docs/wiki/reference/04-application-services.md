@@ -492,7 +492,11 @@ factory's seed: the system prompt as its leading System message, then the conver
 always fixed overhead; the system prompt is fixed overhead only when the history does not already carry it, so both
 stages size the same request and a prompt is never paid for twice (`ConversationContextBudgeter.Budget`).
 `RetryEnabled` / `MaxRetries` / `CircuitBreakerEnabled` govern only the pre-first-token send of the **first**
-segment (`ProviderStreamResilience`). `MaxToolIterationsPerRequest` and
+segment (`ProviderStreamResilience`). A transport failure, a 5xx and a 429 are retried there, including the
+OpenAI SDK's `ClientResultException` anywhere in the exception chain; other 4xx are not. A 429 never counts toward
+the circuit breaker, because rate limiting is not an outage. A 429 or 503 carrying `Retry-After` (delta-seconds or
+an HTTP-date) waits exactly that long instead of the exponential backoff, up to `MaxRetryAfterSeconds` (default 30);
+a longer request is not retried, so the send fails at once with the classifier's "retry after" message. `MaxToolIterationsPerRequest` and
 `MaxConsecutiveInvalidToolCallsPerTool` are the node-global tool-pipeline ceilings that the DI-wired
 `FunctionInvokingChatClient` and `ToolArgumentRepairAIFunction` apply; they ride the record as read-only
 reference values, so one place documents the whole turn's bounds.

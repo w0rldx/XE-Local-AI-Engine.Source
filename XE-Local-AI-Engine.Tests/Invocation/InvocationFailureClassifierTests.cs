@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Invocation;
 
 using System.ClientModel;
-using System.ClientModel.Primitives;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -42,7 +41,7 @@ public sealed class InvocationFailureClassifierTests
     [Arguments(503, "30", FailureCategory.ProviderUnreachable, "The provider returned a server error (HTTP 503). Retry, or check the connection's gateway.")]
     public void MapFailure_ProviderStatus_NamesCategoryWithFixedMessage(int status, string? retryAfter, FailureCategory expectedCategory, string expectedMessage)
     {
-        var classification = InvocationFailureClassifier.MapFailure(CreateClientResultException(status, retryAfter));
+        var classification = InvocationFailureClassifier.MapFailure(FakeClientResultException.Create(status, retryAfter));
 
         AssertEx.Equal(expectedCategory, classification.Category);
         AssertEx.Equal(expectedMessage, classification.Message);
@@ -57,7 +56,7 @@ public sealed class InvocationFailureClassifierTests
     [Arguments(504, "Gateway Timeout Gateway Timeout Gateway Timeout Gateway Timeout Gateway", "HTTP 504")]
     public void MapFailure_ServerErrorReasonPhrase_IsQuotedOnlyWhenPlain(int status, string reasonPhrase, string expectedStatusText)
     {
-        var classification = InvocationFailureClassifier.MapFailure(CreateClientResultException(status, retryAfter: null, reasonPhrase));
+        var classification = InvocationFailureClassifier.MapFailure(FakeClientResultException.Create(status, retryAfter: null, reasonPhrase));
 
         AssertEx.Equal(FailureCategory.ProviderUnreachable, classification.Category);
         AssertEx.Equal($"The provider returned a server error ({expectedStatusText}). Retry, or check the connection's gateway.", classification.Message);
@@ -66,7 +65,7 @@ public sealed class InvocationFailureClassifierTests
     [Test]
     public void MapFailure_RateLimitWrappedByTheAgentFramework_WalksTheInnerChain()
     {
-        var wrapped = new InvalidOperationException("agent run failed", CreateClientResultException(429, "12"));
+        var wrapped = new InvalidOperationException("agent run failed", FakeClientResultException.Create(429, "12"));
 
         var classification = InvocationFailureClassifier.MapFailure(wrapped);
 
@@ -91,7 +90,7 @@ public sealed class InvocationFailureClassifierTests
     [Test]
     public void MapFailure_UnmappedStatus418_KeepsTheCatchAll()
     {
-        var exception = CreateClientResultException(418, retryAfter: null);
+        var exception = FakeClientResultException.Create(418, retryAfter: null);
 
         var classification = InvocationFailureClassifier.MapFailure(exception);
 
@@ -115,7 +114,7 @@ public sealed class InvocationFailureClassifierTests
     [Test]
     public void MapFailure_Status500UnderAModelLoadMessage_StaysModelLoadFailed()
     {
-        var exception = new InvalidOperationException("unable to load model", CreateClientResultException(500, retryAfter: null));
+        var exception = new InvalidOperationException("unable to load model", FakeClientResultException.Create(500, retryAfter: null));
 
         var classification = InvocationFailureClassifier.MapFailure(exception);
 
@@ -128,7 +127,7 @@ public sealed class InvocationFailureClassifierTests
     public void MapFailure_AzureAuthKinds_AreProviderAuthFailedWithTheTranslatorsMessage(AzureFoundryProviderErrorKind kind)
     {
         const string sanitized = "Azure Foundry rejected the Entra ID bearer token (sign in again, or check the token scope).";
-        var exception = new AzureFoundryProviderException(kind, sanitized, CreateClientResultException(401, retryAfter: null));
+        var exception = new AzureFoundryProviderException(kind, sanitized, FakeClientResultException.Create(401, retryAfter: null));
 
         var classification = InvocationFailureClassifier.MapFailure(exception);
 
@@ -144,7 +143,7 @@ public sealed class InvocationFailureClassifierTests
     public void MapFailure_OtherAzureKinds_KeepTheCatchAll(AzureFoundryProviderErrorKind kind, int innerStatus)
     {
         const string message = "The Azure Foundry endpoint returned an error.";
-        var exception = new AzureFoundryProviderException(kind, message, CreateClientResultException(innerStatus, "5"));
+        var exception = new AzureFoundryProviderException(kind, message, FakeClientResultException.Create(innerStatus, "5"));
 
         var classification = InvocationFailureClassifier.MapFailure(exception);
 
@@ -157,7 +156,7 @@ public sealed class InvocationFailureClassifierTests
     public void MapFailure_WrappedAzureAuthFailed_KeepsTheAzureText()
     {
         const string sanitized = "Azure Foundry rejected the Entra ID bearer token (sign in again, or check the token scope).";
-        var azure = new AzureFoundryProviderException(AzureFoundryProviderErrorKind.AuthFailed, sanitized, CreateClientResultException(401, retryAfter: null));
+        var azure = new AzureFoundryProviderException(AzureFoundryProviderErrorKind.AuthFailed, sanitized, FakeClientResultException.Create(401, retryAfter: null));
 
         var classification = InvocationFailureClassifier.MapFailure(new InvalidOperationException("agent run failed", azure));
 
@@ -169,7 +168,7 @@ public sealed class InvocationFailureClassifierTests
     public void MapFailure_WrappedAzureTransport404_KeepsTheCatchAll()
     {
         var azure = new AzureFoundryProviderException(AzureFoundryProviderErrorKind.Transport, "The Azure Foundry endpoint returned an error (HTTP 404).",
-            CreateClientResultException(404, retryAfter: null));
+            FakeClientResultException.Create(404, retryAfter: null));
 
         var classification = InvocationFailureClassifier.MapFailure(new InvalidOperationException("agent run failed", azure));
 
@@ -210,7 +209,7 @@ public sealed class InvocationFailureClassifierTests
     [Arguments(500, """{"code":"sk-live-abc","message":"Quota exceeded."}""", FailureCategory.ProviderUnreachable, ServerErrorMessage + " (Quota exceeded.)")]
     public void MapFailure_ProviderBody_AppendsOnlyTheSanitizedDetail(int status, string body, FailureCategory expectedCategory, string expectedMessage)
     {
-        var classification = InvocationFailureClassifier.MapFailure(CreateClientResultException(status, retryAfter: null, "Internal Server Error", body));
+        var classification = InvocationFailureClassifier.MapFailure(FakeClientResultException.Create(status, retryAfter: null, "Internal Server Error", body));
 
         AssertEx.Equal(expectedCategory, classification.Category);
         AssertEx.Equal(expectedMessage, classification.Message);
@@ -229,7 +228,7 @@ public sealed class InvocationFailureClassifierTests
         var body = PolicyBodyTemplate.Replace("{0}", reason, StringComparison.Ordinal);
 
         var classification = InvocationFailureClassifier.MapFailure(new InvalidOperationException("agent run failed",
-            CreateClientResultException(403, retryAfter: null, body: body)));
+            FakeClientResultException.Create(403, retryAfter: null, body: body)));
 
         AssertEx.Equal(expectedCategory, classification.Category);
         AssertEx.Equal(expectedMessage, classification.Message);
@@ -245,85 +244,10 @@ public sealed class InvocationFailureClassifierTests
     {
         var longMessage = string.Concat(Enumerable.Repeat("word ", 100));
 
-        var classification = InvocationFailureClassifier.MapFailure(CreateClientResultException(500, retryAfter: null, "Internal Server Error",
+        var classification = InvocationFailureClassifier.MapFailure(FakeClientResultException.Create(500, retryAfter: null, "Internal Server Error",
             $$"""{"message":"{{longMessage}}"}"""));
 
         AssertEx.Equal($"{ServerErrorMessage} ({longMessage[..300].TrimEnd()})", classification.Message);
-    }
-
-    // The default body carries only a field the classifier never reads, so the fixed texts above stay exact.
-    private static ClientResultException CreateClientResultException(int status, string? retryAfter, string reasonPhrase = "",
-        string body = """{"error":{"type":"body-sentinel"}}""")
-    {
-        // The fake owns nothing (its Dispose is empty), so the exception may keep reading it after this scope.
-        using var response = new FakePipelineResponse(status, BinaryData.FromString(body), retryAfter, reasonPhrase);
-        return new ClientResultException(response, innerException: null);
-    }
-
-    // A PipelineResponse with a fixed status, reason phrase, JSON body and optional Retry-After header, so GetRawResponse() is the real read path.
-    private sealed class FakePipelineResponse : PipelineResponse
-    {
-        private readonly FakeHeaders _headers;
-
-        public FakePipelineResponse(int status, BinaryData content, string? retryAfter, string reasonPhrase)
-        {
-            Status = status;
-            Content = content;
-            ReasonPhrase = reasonPhrase;
-            _headers = new FakeHeaders(retryAfter);
-        }
-
-        public override int Status { get; }
-
-        public override string ReasonPhrase { get; }
-
-        public override Stream? ContentStream { get; set; }
-
-        public override BinaryData Content { get; }
-
-        protected override PipelineResponseHeaders HeadersCore => _headers;
-
-        public override BinaryData BufferContent(CancellationToken cancellationToken = default)
-        {
-            return Content;
-        }
-
-        public override ValueTask<BinaryData> BufferContentAsync(CancellationToken cancellationToken = default)
-        {
-            return ValueTask.FromResult(Content);
-        }
-
-        public override void Dispose()
-        {
-        }
-    }
-
-    private sealed class FakeHeaders : PipelineResponseHeaders
-    {
-        private readonly List<KeyValuePair<string, string>> _headers;
-
-        public FakeHeaders(string? retryAfter)
-        {
-            _headers = retryAfter is null ? [] : [new KeyValuePair<string, string>("Retry-After", retryAfter)];
-        }
-
-        public override bool TryGetValue(string name, out string? value)
-        {
-            value = _headers.FirstOrDefault(header => string.Equals(header.Key, name, StringComparison.OrdinalIgnoreCase)).Value;
-            return value is not null;
-        }
-
-        public override bool TryGetValues(string name, out IEnumerable<string>? values)
-        {
-            var found = _headers.Where(header => string.Equals(header.Key, name, StringComparison.OrdinalIgnoreCase)).Select(static header => header.Value).ToList();
-            values = found.Count == 0 ? null : found;
-            return found.Count > 0;
-        }
-
-        public override IEnumerator<KeyValuePair<string, string>> GetEnumerator()
-        {
-            return _headers.GetEnumerator();
-        }
     }
 
     /// <summary>R2-05: a model server that died mid-stream is named, with the resend that reloads it, never the raw framework text.</summary>

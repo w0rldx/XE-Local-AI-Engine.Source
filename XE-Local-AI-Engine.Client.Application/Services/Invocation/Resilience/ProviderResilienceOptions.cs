@@ -30,11 +30,19 @@ public sealed class ProviderResilienceOptions
     /// <summary>Upper bound (before jitter) on any single backoff delay in milliseconds.</summary>
     public int MaxDelayMilliseconds { get; set; } = 2000;
 
+    /// <summary>Longest provider-requested <c>Retry-After</c> wait, in seconds, that the retry honours.</summary>
+    /// <remarks>
+    ///     A 429 or 503 carrying <c>Retry-After</c> (delta-seconds or an HTTP-date) waits exactly that long instead of the
+    ///     exponential backoff; a longer request is not retried, so the send fails at once with the "retry after" hint.
+    ///     A 429 is retried like a 5xx but never counts toward the circuit breaker: rate limiting is not an outage.
+    /// </remarks>
+    public int MaxRetryAfterSeconds { get; set; } = 30;
+
     /// <summary>Whether the circuit breaker (keyed by resolved model) is active.</summary>
     public bool CircuitBreakerEnabled { get; set; } = true;
 
     /// <summary>
-    ///     Number of consecutive transient failures for one resolved model that trips its breaker open. While open,
+    ///     Number of consecutive transient failures (a 429 excluded) for one resolved model that trips its breaker open. While open,
     ///     sends to that model fail fast with a sanitized "provider temporarily unavailable" error.
     /// </summary>
     public int CircuitBreakerFailureThreshold { get; set; } = 5;

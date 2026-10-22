@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Invocation;
 
+using System.ClientModel;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
@@ -244,6 +246,151 @@ public sealed class ProviderStreamResilienceTests
         AssertEx.Equal(expected: 1, result.Count);
     }
 
+    [Test]
+    public async Task ExecuteStreamingAsync_WhenSdkRateLimited_RetriesAndYieldsFullStream()
+    {
+        var callCount = new StrongBox<int>(value: 0);
+        var sut = CreateSut(new ProviderResilienceOptions { BaseDelayMilliseconds = 0, CircuitBreakerEnabled = false }, maxRetries: 2);
+
+        var result = await CollectAsync(sut.ExecuteStreamingAsync("endpoint",
+            FactoryFailing(failures: 1, callCount, () => Yield(4, 5), () => ThrowStatus(429)),
+            CancellationToken.None));
+
+        AssertEx.Equal(expected: 2, result.Count);
+        AssertEx.Equal(expected: 2, callCount.Value);
+    }
+
+    [Test]
+    public async Task ExecuteStreamingAsync_WhenSdkServerError_IsTransientAndRetried()
+    {
+        var callCount = new StrongBox<int>(value: 0);
+        var sut = CreateSut(new ProviderResilienceOptions { BaseDelayMilliseconds = 0, CircuitBreakerEnabled = false }, maxRetries: 2);
+
+        var result = await CollectAsync(sut.ExecuteStreamingAsync("endpoint",
+            FactoryFailing(failures: 2, callCount, () => Yield(1), () => ThrowStatus(503)),
+            CancellationToken.None));
+
+        AssertEx.Equal(expected: 1, result.Count);
+        AssertEx.Equal(expected: 3, callCount.Value);
+    }
+
+    [Test]
+    public async Task ExecuteStreamingAsync_WhenSdkClientError_IsNotTransientAndNotRetried()
+    {
+        var callCount = new StrongBox<int>(value: 0);
+        var sut = CreateSut(new ProviderResilienceOptions { BaseDelayMilliseconds = 0, CircuitBreakerEnabled = false }, maxRetries: 2);
+
+        await AssertEx.ThrowsAsync<ClientResultException>(() => CollectAsync(sut.ExecuteStreamingAsync("endpoint",
+            FactoryFailing(failures: int.MaxValue, callCount, () => Yield(1), () => ThrowStatus(400)),
+            CancellationToken.None)));
+
+        AssertEx.Equal(expected: 1, callCount.Value);
+    }
+
+    [Test]
+    public async Task ExecuteStreamingAsync_WhenRetryAfterIsDeltaSeconds_WaitsExactlyThatLong()
+    {
+        var time = new MutableTimeProvider(DateTimeOffset.UnixEpoch);
+        var callCount = new StrongBox<int>(value: 0);
+
+        // Zero base backoff: any recorded delay can only come from the Retry-After header.
+        var sut = CreateSut(new ProviderResilienceOptions { BaseDelayMilliseconds = 0, CircuitBreakerEnabled = false }, time, maxRetries: 2);
+
+        _ = await CollectAsync(sut.ExecuteStreamingAsync("endpoint",
+            FactoryFailing(failures: 1, callCount, () => Yield(1), () => ThrowStatus(429, "7")),
+            CancellationToken.None));
+
+        AssertEx.Equal(expected: 1, time.Delays.Count);
+        AssertEx.Equal(TimeSpan.FromSeconds(7), time.Delays[0]);
+    }
+
+    [Test]
+    public async Task ExecuteStreamingAsync_WhenRetryAfterIsHttpDate_WaitsUntilThatDate()
+    {
+        var time = new MutableTimeProvider(new DateTimeOffset(year: 2026, month: 10, day: 22, hour: 12, minute: 0, second: 0, TimeSpan.Zero));
+        var callCount = new StrongBox<int>(value: 0);
+        var retryAt = time.GetUtcNow().AddSeconds(12).ToString("r", CultureInfo.InvariantCulture);
+        var sut = CreateSut(new ProviderResilienceOptions { BaseDelayMilliseconds = 0, CircuitBreakerEnabled = false }, time, maxRetries: 2);
+
+        _ = await CollectAsync(sut.ExecuteStreamingAsync("endpoint",
+            FactoryFailing(failures: 1, callCount, () => Yield(1), () => ThrowStatus(503, retryAt)),
+            CancellationToken.None));
+
+        AssertEx.Equal(expected: 1, time.Delays.Count);
+        AssertEx.Equal(TimeSpan.FromSeconds(12), time.Delays[0]);
+    }
+
+    [Test]
+    public async Task ExecuteStreamingAsync_WhenRetryAfterExceedsTheCap_ThrowsWithoutRetrying()
+    {
+        var time = new MutableTimeProvider(DateTimeOffset.UnixEpoch);
+        var callCount = new StrongBox<int>(value: 0);
+        var sut = CreateSut(new ProviderResilienceOptions { MaxRetryAfterSeconds = 30, CircuitBreakerEnabled = false }, time, maxRetries: 2);
+        ProviderCallEfficiencySnapshot snapshot;
+
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
+        {
+            await AssertEx.ThrowsAsync<ClientResultException>(() => CollectAsync(sut.ExecuteStreamingAsync("endpoint",
+                FactoryFailing(failures: int.MaxValue, callCount, () => Yield(1), () => ThrowStatus(429, "120")),
+                CancellationToken.None)));
+            snapshot = ProviderCallBudget.Current!.CaptureEfficiencySnapshot();
+        }
+
+        AssertEx.Equal(expected: 1, callCount.Value);
+        AssertEx.Equal(expected: 0, snapshot.ProviderRetries);
+        AssertEx.Equal(expected: 0, time.Delays.Count);
+    }
+
+    [Test]
+    public async Task ExecuteStreamingAsync_WhenRepeatedlyRateLimited_KeepsTheBreakerClosed()
+    {
+        var callCount = new StrongBox<int>(value: 0);
+        var sut = CreateSut(BreakerAtTwo(), new MutableTimeProvider(DateTimeOffset.UnixEpoch), maxRetries: 0);
+        var factory = FactoryFailing(failures: int.MaxValue, callCount, () => Yield(1), () => ThrowStatus(429));
+
+        for (var send = 0; send < 3; send++)
+        {
+            await AssertEx.ThrowsAsync<ClientResultException>(() => CollectAsync(sut.ExecuteStreamingAsync("endpoint", factory, CancellationToken.None)));
+        }
+
+        AssertEx.Equal(expected: 3, callCount.Value, "every rate-limited send reached the provider; none was fast-failed");
+    }
+
+    [Test]
+    public async Task ExecuteStreamingAsync_WhenRepeatedlyServerError_OpensTheBreaker()
+    {
+        var callCount = new StrongBox<int>(value: 0);
+        var sut = CreateSut(BreakerAtTwo(), new MutableTimeProvider(DateTimeOffset.UnixEpoch), maxRetries: 0);
+        var factory = FactoryFailing(failures: int.MaxValue, callCount, () => Yield(1), () => ThrowStatus(503));
+
+        await AssertEx.ThrowsAsync<ClientResultException>(() => CollectAsync(sut.ExecuteStreamingAsync("endpoint", factory, CancellationToken.None)));
+        await AssertEx.ThrowsAsync<ClientResultException>(() => CollectAsync(sut.ExecuteStreamingAsync("endpoint", factory, CancellationToken.None)));
+        await AssertEx.ThrowsAsync<ProviderCircuitOpenException>(() => CollectAsync(sut.ExecuteStreamingAsync("endpoint", factory, CancellationToken.None)));
+
+        AssertEx.Equal(expected: 2, callCount.Value);
+    }
+
+    [Test]
+    [Arguments("Thu, 22 Oct 2026 11:59:00 GMT", 0)]
+    [Arguments("0", 0)]
+    [Arguments(" 3 ", 3)]
+    public void ProviderRetryAfterParse_ClampsAPastDateToZeroAndTrims(string value, int expectedSeconds)
+    {
+        var now = new DateTimeOffset(year: 2026, month: 10, day: 22, hour: 12, minute: 0, second: 0, TimeSpan.Zero);
+
+        AssertEx.Equal<TimeSpan?>(TimeSpan.FromSeconds(expectedSeconds), ProviderRetryAfter.Parse(value, now));
+    }
+
+    [Test]
+    [Arguments("soon")]
+    [Arguments("-5")]
+    [Arguments("1.5")]
+    [Arguments("")]
+    public void ProviderRetryAfterParse_WhenNotDeltaSecondsOrHttpDate_ReturnsNull(string value)
+    {
+        AssertEx.Null(ProviderRetryAfter.Parse(value, DateTimeOffset.UnixEpoch));
+    }
+
     // The retry count is a node setting read per send, so it rides the accessor; the backoff and breaker stay on the options.
     private static ProviderStreamResilience CreateSut(ProviderResilienceOptions options, TimeProvider? timeProvider = null, int maxRetries = StoredNodeSettings.DefaultProviderMaxRetries)
     {
@@ -251,6 +398,17 @@ public sealed class ProviderStreamResilienceTests
             StubNodeRuntimeSettings.Create().WithProviderMaxRetries(maxRetries).Build(),
             timeProvider ?? TimeProvider.System,
             NullLogger<ProviderStreamResilience>.Instance);
+    }
+
+    private static ProviderResilienceOptions BreakerAtTwo()
+    {
+        return new ProviderResilienceOptions
+        {
+            BaseDelayMilliseconds = 0,
+            CircuitBreakerEnabled = true,
+            CircuitBreakerFailureThreshold = 2,
+            CircuitBreakerBreakDurationSeconds = 30
+        };
     }
 
     private static Func<CancellationToken, IAsyncEnumerable<int>> FactoryFailing(int failures,
@@ -298,9 +456,18 @@ public sealed class ProviderStreamResilienceTests
         yield return await Task.FromException<int>(new HttpRequestException("provider send failed", inner: null, statusCode));
     }
 
+    private static async IAsyncEnumerable<int> ThrowStatus(int status, string? retryAfter = null)
+    {
+        await Task.Yield();
+        yield return await Task.FromException<int>(FakeClientResultException.Create(status, retryAfter));
+    }
+
+    // Records every timer's due time and fires it at once, so a backoff is asserted on the clock, never waited out.
     private sealed class MutableTimeProvider : TimeProvider
     {
         private DateTimeOffset _utcNow;
+
+        public List<TimeSpan> Delays { get; } = [];
 
         public MutableTimeProvider(DateTimeOffset start)
         {
@@ -315,6 +482,16 @@ public sealed class ProviderStreamResilienceTests
         public void Advance(TimeSpan by)
         {
             _utcNow = _utcNow.Add(by);
+        }
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            lock (Delays)
+            {
+                Delays.Add(dueTime);
+            }
+
+            return System.CreateTimer(callback, state, TimeSpan.Zero, Timeout.InfiniteTimeSpan);
         }
     }
 }

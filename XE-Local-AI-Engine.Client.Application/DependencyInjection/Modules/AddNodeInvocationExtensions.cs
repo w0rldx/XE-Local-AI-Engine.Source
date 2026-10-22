@@ -42,6 +42,7 @@ internal static class AddNodeInvocationExtensions
                .Validate(static options => options.MaxRetries >= 0
                                            && options.BaseDelayMilliseconds >= 0
                                            && options.MaxDelayMilliseconds >= options.BaseDelayMilliseconds
+                                           && options.MaxRetryAfterSeconds >= 0
                                            && options.CircuitBreakerFailureThreshold >= 1
                                            && options.CircuitBreakerBreakDurationSeconds >= 1,
                    "Invalid ProviderResilienceOptions configuration.")
