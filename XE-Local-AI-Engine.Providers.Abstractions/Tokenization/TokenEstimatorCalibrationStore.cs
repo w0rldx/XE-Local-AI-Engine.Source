@@ -266,6 +266,19 @@ public sealed class TokenEstimatorCalibrationStore : ITokenEstimatorCalibrationS
     }
 
     /// <inheritdoc />
+    public void TightenObservedCorrection(string modelName, double minimumCorrection)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        if (!double.IsFinite(minimumCorrection))
+        {
+            return;
+        }
+
+        var floor = Math.Clamp(minimumCorrection, MinimumObservedCorrection, MaximumObservedCorrection);
+        _ = _observedCorrections.AddOrUpdate(modelName, Math.Max(NeutralObservedCorrection, floor), (_, prior) => Math.Max(prior, floor));
+    }
+
+    /// <inheritdoc />
     public double ResolveObservedCorrection(string? modelName)
     {
         return !string.IsNullOrWhiteSpace(modelName) && _observedCorrections.TryGetValue(modelName, out var correction)

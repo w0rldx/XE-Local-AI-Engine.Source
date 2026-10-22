@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Chat;
 
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -1028,6 +1029,277 @@ public sealed class ProviderCallBudgetChatClientTests
         AssertEx.Empty(store.Observations);
     }
 
+    private const string LlamaOverflowBody =
+        """{"error":{"code":400,"message":"request (2000 tokens) exceeds the available context size (1800 tokens), try increasing it","type":"exceed_context_size_error","n_prompt_tokens":2000,"n_ctx":1800}}""";
+
+    private const string GatewayOverflowBody = """{"error":{"message":"maximum context length exceeded","type":"invalid_request_error","code":"context_length_exceeded"}}""";
+
+    [Test]
+    public async Task GetStreamingResponseAsync_WhenTheProviderRejectsTheRoundForContextSize_RaisesTheCorrectionAndResendsOnce()
+    {
+        var store = new RecordingCalibrationStore();
+        using var inner = new RejectingThenStreamingChatClient(rejections: 1, LlamaOverflowBody);
+        using var sut = OverflowRecoveringClient(inner, store);
+        ProviderCallBudget budget;
+        List<ChatResponseUpdate> yielded = [];
+
+        using (ProviderCallBudget.BeginScope(ReportedContextBudgetOptions()))
+        {
+            budget = AssertEx.NotNull(ProviderCallBudget.Current);
+            await foreach (var update in sut.GetStreamingResponseAsync(LongRound(), LargeWindowOptions()))
+            {
+                yielded.Add(update);
+            }
+        }
+
+        var expectedRatio = 2_000.0 / budget.CumulativeInputTokens;
+        AssertEx.Equal(expected: 2, inner.Calls);
+        AssertEx.Equal(expected: 2, yielded.Count);
+        AssertEx.Equal(expected: 1, budget.ProviderCalls, "the resend is the same logical round, registered once");
+        AssertEx.Equal(expected: 1, budget.CaptureEfficiencySnapshot().ProviderRetries);
+        AssertEx.True(Math.Abs(store.Tightenings.Single() - expectedRatio) < 1e-9, $"tightened to {store.Tightenings.Single()}, expected the body ratio {expectedRatio}");
+        AssertEx.True(Math.Abs(store.ResolveObservedCorrection(ModelId) - expectedRatio) < 1e-9, "the correction must take the body ratio at once");
+    }
+
+    [Test]
+    public async Task GetStreamingResponseAsync_WhenTheProviderReportsASmallerContext_TheResendIsBudgetedAgainstIt()
+    {
+        // The estimate is exact (ratio 1.0, the correction does not move); only the declared window overstated the provider's.
+        var budgetOptions = new ProviderCallBudgetOptions
+        {
+            ReservedOutputTokenFloor = 0,
+            RecentMessagesToKeep = 2
+        };
+        int estimate;
+        using (var probe = new CapturingChatClient())
+        using (var probeSut = new ProviderCallBudgetChatClient(probe, NullLogger<ProviderCallBudgetChatClient>.Instance))
+        using (ProviderCallBudget.BeginScope(budgetOptions))
+        {
+            _ = await DrainAsync(probeSut.GetStreamingResponseAsync(LongRound(), LargeWindowOptions()));
+            estimate = (int)AssertEx.NotNull(ProviderCallBudget.Current).CumulativeInputTokens;
+        }
+
+        var body = $$$"""{"error":{"code":400,"type":"exceed_context_size_error","n_prompt_tokens":{{{estimate}}},"n_ctx":800}}""";
+        var store = new RecordingCalibrationStore();
+        using var inner = new RejectingThenStreamingChatClient(rejections: 1, body);
+        using var sut = OverflowRecoveringClient(inner, store);
+
+        using (ProviderCallBudget.BeginScope(budgetOptions))
+        {
+            _ = await DrainAsync(sut.GetStreamingResponseAsync(LongRound(), LargeWindowOptions()));
+        }
+
+        AssertEx.Equal(expected: 2, inner.Calls);
+        AssertEx.Equal(LongRound().Count, inner.MessageCounts[0]);
+        AssertEx.True(inner.MessageCounts[1] < inner.MessageCounts[0], $"the resend must be trimmed to the reported context, sent {inner.MessageCounts[1]} of {inner.MessageCounts[0]}");
+        AssertEx.Equal(TokenEstimatorCalibrationStore.NeutralObservedCorrection, store.ResolveObservedCorrection(ModelId));
+    }
+
+    [Test]
+    public async Task GetStreamingResponseAsync_WhenTheResendIsRejectedToo_RethrowsTheFirstRejection()
+    {
+        var store = new RecordingCalibrationStore();
+        using var inner = new RejectingThenStreamingChatClient(rejections: 2, LlamaOverflowBody);
+        using var sut = OverflowRecoveringClient(inner, store);
+        ProviderCallBudget budget;
+        ProviderRejectionException? caught = null;
+
+        using (ProviderCallBudget.BeginScope(ReportedContextBudgetOptions()))
+        {
+            budget = AssertEx.NotNull(ProviderCallBudget.Current);
+            try
+            {
+                _ = await DrainAsync(sut.GetStreamingResponseAsync(LongRound(), LargeWindowOptions()));
+            }
+            catch (ProviderRejectionException exception)
+            {
+                caught = exception;
+            }
+        }
+
+        AssertEx.Equal(expected: 2, inner.Calls);
+        AssertEx.True(ReferenceEquals(inner.Thrown[0], caught), "the first rejection must surface, not the resend's");
+        AssertEx.Equal(expected: 1, budget.CaptureEfficiencySnapshot().ProviderRetries);
+        AssertEx.Equal(expected: 1, store.Tightenings.Count);
+    }
+
+    [Test]
+    public async Task GetStreamingResponseAsync_WhenAGatewayRejectsWithoutCounts_RaisesTheCorrectionByTheFixedFactor()
+    {
+        var store = new RecordingCalibrationStore();
+        using var inner = new RejectingThenStreamingChatClient(rejections: 1, GatewayOverflowBody);
+        using var sut = OverflowRecoveringClient(inner, store);
+
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
+        {
+            _ = await DrainAsync(sut.GetStreamingResponseAsync(LongRound(), LargeWindowOptions()));
+        }
+
+        AssertEx.Equal(expected: 2, inner.Calls);
+        AssertEx.Equal(ProviderCallBudgetChatClient.UncountedOverflowCorrectionFactor, store.Tightenings.Single());
+        AssertEx.Equal(ProviderCallBudgetChatClient.UncountedOverflowCorrectionFactor, store.ResolveObservedCorrection(ModelId));
+    }
+
+    [Test]
+    public async Task GetStreamingResponseAsync_WhenTheRejectionFollowsTheFirstUpdate_RethrowsWithoutAResend()
+    {
+        var store = new RecordingCalibrationStore();
+        using var inner = new RejectingThenStreamingChatClient(rejections: 1, LlamaOverflowBody, rejectAfterFirstUpdate: true);
+        using var sut = OverflowRecoveringClient(inner, store);
+        ProviderCallBudget budget;
+        List<ChatResponseUpdate> yielded = [];
+
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
+        {
+            budget = AssertEx.NotNull(ProviderCallBudget.Current);
+            await AssertEx.ThrowsAsync<ProviderRejectionException>(async () =>
+            {
+                await foreach (var update in sut.GetStreamingResponseAsync(LongRound(), LargeWindowOptions()))
+                {
+                    yielded.Add(update);
+                }
+            });
+        }
+
+        AssertEx.Equal(expected: 1, inner.Calls);
+        AssertEx.Equal(expected: 1, yielded.Count);
+        AssertEx.Equal(expected: 0, budget.CaptureEfficiencySnapshot().ProviderRetries);
+        AssertEx.Empty(store.Tightenings);
+    }
+
+    [Test]
+    public async Task GetStreamingResponseAsync_WhenTheRejectionIsNotAboutContextSize_RethrowsWithoutAResend()
+    {
+        var store = new RecordingCalibrationStore();
+        using var inner = new RejectingThenStreamingChatClient(rejections: 1, """{"error":{"code":400,"message":"'messages' must not be empty","type":"invalid_request_error"}}""");
+        using var sut = OverflowRecoveringClient(inner, store);
+        ProviderCallBudget budget;
+
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
+        {
+            budget = AssertEx.NotNull(ProviderCallBudget.Current);
+            await AssertEx.ThrowsAsync<ProviderRejectionException>(async () =>
+            {
+                _ = await DrainAsync(sut.GetStreamingResponseAsync(LongRound(), LargeWindowOptions()));
+            });
+        }
+
+        AssertEx.Equal(expected: 1, inner.Calls);
+        AssertEx.Equal(expected: 0, budget.CaptureEfficiencySnapshot().ProviderRetries);
+        AssertEx.Empty(store.Tightenings);
+    }
+
+    private static async Task<List<ChatResponseUpdate>> DrainAsync(IAsyncEnumerable<ChatResponseUpdate> stream)
+    {
+        List<ChatResponseUpdate> updates = [];
+        await foreach (var update in stream)
+        {
+            updates.Add(update);
+        }
+
+        return updates;
+    }
+
+    // No reserved output, so the resend still fits the body's reported context of 1,800 once trimmed.
+    private static ProviderCallBudgetOptions ReportedContextBudgetOptions() =>
+        new()
+        {
+            ReservedOutputTokenFloor = 0
+        };
+
+    private static ProviderCallBudgetChatClient OverflowRecoveringClient(IChatClient inner, ITokenEstimatorCalibrationStore store)
+    {
+        return new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance, store, errorBodyReader: new RejectionBodyReader());
+    }
+
+    /// <summary>A provider status failure carrying its raw response body, as an SDK exception does.</summary>
+    public sealed class ProviderRejectionException : Exception
+    {
+        public ProviderRejectionException(string body)
+            : base("HTTP 400")
+        {
+            Body = body;
+        }
+
+        public string Body { get; }
+    }
+
+    /// <summary>The host's reader reduced to its contract: a provider rejection's status and raw body, null for anything else.</summary>
+    private sealed class RejectionBodyReader : IProviderErrorBodyReader
+    {
+        public ProviderErrorBody? Read(Exception exception)
+        {
+            return exception is ProviderRejectionException rejection
+                ? new ProviderErrorBody
+                {
+                    Status = 400,
+                    Body = Encoding.UTF8.GetBytes(rejection.Body)
+                }
+                : null;
+        }
+    }
+
+    /// <summary>Rejects its first <c>rejections</c> streams with the body (before or after one update), then streams two updates.</summary>
+    private sealed class RejectingThenStreamingChatClient : IChatClient
+    {
+        private readonly int _rejections;
+        private readonly string _body;
+        private readonly bool _rejectAfterFirstUpdate;
+
+        public RejectingThenStreamingChatClient(int rejections, string body, bool rejectAfterFirstUpdate = false)
+        {
+            _rejections = rejections;
+            _body = body;
+            _rejectAfterFirstUpdate = rejectAfterFirstUpdate;
+        }
+
+        public int Calls { get; private set; }
+
+        public List<ProviderRejectionException> Thrown { get; } = [];
+
+        public List<int> MessageCounts { get; } = [];
+
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException("Only the streaming path recovers a context-size rejection.");
+        }
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            MessageCounts.Add(messages.Count());
+            var reject = Calls <= _rejections;
+            await Task.Yield();
+            if (reject && _rejectAfterFirstUpdate)
+            {
+                yield return new ChatResponseUpdate(ChatRole.Assistant, "partial");
+            }
+
+            if (reject)
+            {
+                var rejection = new ProviderRejectionException(_body);
+                Thrown.Add(rejection);
+                throw rejection;
+            }
+
+            yield return new ChatResponseUpdate(ChatRole.Assistant, "first");
+            yield return new ChatResponseUpdate(ChatRole.Assistant, "second");
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null)
+        {
+            return serviceType == typeof(IChatClient) ? this : null;
+        }
+
+        public void Dispose()
+        {
+            GC.SuppressFinalize(this);
+        }
+    }
+
     private const string ModelId = "qwen3.8-27b:Q4_K_M";
 
     /// <summary>
@@ -1119,6 +1391,14 @@ public sealed class ProviderCallBudgetChatClientTests
                 ObservedInputTokens = observedInputTokens
             });
             _inner.RecordObservedUsage(modelName, estimatedTokens, observedInputTokens);
+        }
+
+        public List<double> Tightenings { get; } = [];
+
+        public void TightenObservedCorrection(string modelName, double minimumCorrection)
+        {
+            Tightenings.Add(minimumCorrection);
+            _inner.TightenObservedCorrection(modelName, minimumCorrection);
         }
 
         public double ResolveObservedCorrection(string? modelName)

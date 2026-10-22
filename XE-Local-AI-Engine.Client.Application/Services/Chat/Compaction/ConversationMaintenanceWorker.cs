@@ -172,16 +172,24 @@ public sealed class ConversationMaintenanceWorker : BackgroundService
         }
 
         // Folds on the node's default local model, like the work-session bound: the fold is not the chat's own work, so its load never unloads the chat's model.
+        // The verbatim window is sized against the chat model's corrected usable window, the same figure the threshold uses.
         var result = await services.GetRequiredService<IConversationCompactionService>()
                                    .CompactAsync(job.ConversationId, requestedModel: null, recentMessagesToKeepVerbatim: null, residencyIntent: ModelResidencyIntent.Background,
+                                       verbatimBudget: new ConversationVerbatimBudget
+                                       {
+                                           UsableContextTokens = TokenEstimatorCalibrationStore.ApplyObservedCorrection(usableTokens, estimator.ResolveObservedCorrection(job.ModelName)),
+                                           ModelName = job.ModelName
+                                       },
                                        cancellationToken: cancellationToken);
         _logger.LogInformation(
-            "Conversation {ConversationId} projected ~{Projected} replayed token(s) against an auto-compact threshold of {Threshold}; automatic compaction reported {Outcome} after folding {Folded} message(s).",
+            "Conversation {ConversationId} projected ~{Projected} replayed token(s) against an auto-compact threshold of {Threshold}; automatic compaction reported {Outcome} after folding {Folded} message(s), keeping {Kept} verbatim (~{KeptTokens} token(s)).",
             job.ConversationId,
             projected,
             threshold,
             result.Outcome,
-            result.MessagesFolded);
+            result.MessagesFolded,
+            result.MessagesKeptVerbatim,
+            result.KeptVerbatimTokens);
     }
 
     /// <summary>

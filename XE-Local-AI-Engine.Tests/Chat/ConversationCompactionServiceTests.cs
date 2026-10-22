@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -8,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -201,6 +203,7 @@ public sealed class ConversationCompactionServiceTests
             CreateNodeSettingsStore(),
             options,
             StubNodeRuntimeSettings.Create().Build(),
+            new HeuristicTokenEstimator(),
             TimeProvider.System,
             NullLogger<ConversationCompactionService>.Instance);
 
@@ -368,6 +371,55 @@ public sealed class ConversationCompactionServiceTests
     }
 
     [Test]
+    public async Task CompactAsync_WhenTheUsableContextIsKnown_KeepsOnlyWhatFitsTheVerbatimFraction()
+    {
+        // Twelve ~100-token messages; the verbatim share of the usable window holds three of them, below the configured eight.
+        var summarizer = SynopsisSummarizer();
+        var service = ServiceOverUniformMessages(summarizer);
+        var perMessage = UniformMessageTokens();
+        var usable = (int)Math.Ceiling(((3 * perMessage) + 1) / new ConversationCompactionOptions().RecentVerbatimFraction);
+
+        var result = await service.CompactAsync(ConversationId, requestedModel: null, recentMessagesToKeepVerbatim: null,
+            verbatimBudget: new ConversationVerbatimBudget
+            {
+                UsableContextTokens = usable
+            });
+
+        AssertEx.Equal(ConversationCompactionOutcome.Compacted, result.Outcome);
+        AssertEx.Equal(expected: 3, result.MessagesKeptVerbatim);
+        AssertEx.Equal(expected: 9, result.MessagesFolded);
+        AssertEx.Equal(3 * perMessage, result.KeptVerbatimTokens);
+        await summarizer.Received(1).SummarizeAsync(Arg.Is<ConversationSummarizerInput>(input => input.Messages.Count == 9), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task CompactAsync_WhenTheNewestTwoAloneExceedTheVerbatimShare_StillKeepsTheLastExchange()
+    {
+        var service = ServiceOverUniformMessages(SynopsisSummarizer());
+
+        var result = await service.CompactAsync(ConversationId, requestedModel: null, recentMessagesToKeepVerbatim: null,
+            verbatimBudget: new ConversationVerbatimBudget
+            {
+                UsableContextTokens = 1
+            });
+
+        AssertEx.Equal(expected: 2, result.MessagesKeptVerbatim);
+        AssertEx.Equal(expected: 10, result.MessagesFolded);
+    }
+
+    [Test]
+    public async Task CompactAsync_WhenTheUsableContextIsUnknown_KeepsTheConfiguredCount()
+    {
+        var service = ServiceOverUniformMessages(SynopsisSummarizer());
+
+        var result = await service.CompactAsync(ConversationId, requestedModel: null, recentMessagesToKeepVerbatim: null);
+
+        AssertEx.Equal(expected: 8, result.MessagesKeptVerbatim);
+        AssertEx.Equal(expected: 4, result.MessagesFolded);
+        AssertEx.Null(result.KeptVerbatimTokens);
+    }
+
+    [Test]
     public async Task CompactAsync_WhenAKeepWindowBelowTheFloorIsPassed_StillKeepsTheLastExchange()
     {
         var messages = CompletedMessages(count: 12);
@@ -491,6 +543,7 @@ public sealed class ConversationCompactionServiceTests
             CreateNodeSettingsStore(),
             options,
             StubNodeRuntimeSettings.Create().Build(),
+            new HeuristicTokenEstimator(),
             TimeProvider.System,
             NullLogger<ConversationCompactionService>.Instance);
 
@@ -775,6 +828,7 @@ public sealed class ConversationCompactionServiceTests
             nodeSettingsStore ?? CreateNodeSettingsStore(),
             Options.Create(new ConversationCompactionOptions()),
             StubNodeRuntimeSettings.Create().Build(),
+            new HeuristicTokenEstimator(),
             timeProvider ?? TimeProvider.System,
             NullLogger<ConversationCompactionService>.Instance);
     }
@@ -841,6 +895,38 @@ public sealed class ConversationCompactionServiceTests
             CompactionSummary = compactionSummary,
             CompactionSummaryCoversToSequence = coversToSequence
         };
+
+    private const int UniformMessageChars = 400;
+
+    private static int UniformMessageTokens()
+    {
+        var estimator = new HeuristicTokenEstimator();
+        return Math.Max(estimator.EstimateTokens(new ChatMessage(ChatRole.User, new string('x', UniformMessageChars)), (string?)null),
+            estimator.EstimateTokens(new ChatMessage(ChatRole.Assistant, new string('x', UniformMessageChars)), (string?)null));
+    }
+
+    // Twelve completed messages of equal length, so the token-aware keep window is a whole number of messages.
+    private static ConversationCompactionService ServiceOverUniformMessages(IConversationSummarizer summarizer)
+    {
+        var messages = CompletedMessages(count: 12).Select(static message => message with
+        {
+            Content = new string('x', UniformMessageChars)
+        }).ToList();
+        var conversation = Conversation(messages);
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+        persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
+        resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
+        return CreateService(persistence, summarizer, resolver);
+    }
+
+    private static IConversationSummarizer SynopsisSummarizer()
+    {
+        var summarizer = Substitute.For<IConversationSummarizer>();
+        summarizer.SummarizeAsync(Arg.Any<ConversationSummarizerInput>(), Arg.Any<CancellationToken>()).Returns("SYNOPSIS");
+        return summarizer;
+    }
 
     private static List<NodeChatPersistedMessageDto> CompletedMessages(int count)
     {

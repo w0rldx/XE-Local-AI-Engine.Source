@@ -59,6 +59,9 @@ internal sealed class ConversationMaintenanceHarness : IAsyncDisposable
     /// <summary>Every compaction the worker asked for, with the scoped service instance that served it.</summary>
     public ConcurrentQueue<(Guid ConversationId, string? RequestedModel, RecordingCompactionService Instance)> Compactions { get; } = new();
 
+    /// <summary>The verbatim budget every compaction was handed, in call order.</summary>
+    public ConcurrentQueue<ConversationVerbatimBudget?> VerbatimBudgets { get; } = new();
+
     /// <summary>Every distillation the worker asked for.</summary>
     public ConcurrentQueue<Guid> Distillations { get; } = new();
 
@@ -162,9 +165,11 @@ internal sealed class ConversationMaintenanceHarness : IAsyncDisposable
             int? recentMessagesToKeepVerbatim,
             bool distill = true,
             ModelResidencyIntent residencyIntent = ModelResidencyIntent.Interactive,
+            ConversationVerbatimBudget? verbatimBudget = null,
             CancellationToken cancellationToken = default)
         {
             _harness.Compactions.Enqueue((conversationId, requestedModel, this));
+            _harness.VerbatimBudgets.Enqueue(verbatimBudget);
             _harness.Intents.Enqueue(residencyIntent);
             if (_harness.OnCompact is { } onCompact)
             {

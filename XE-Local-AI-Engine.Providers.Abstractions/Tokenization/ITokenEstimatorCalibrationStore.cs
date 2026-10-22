@@ -31,6 +31,16 @@ public interface ITokenEstimatorCalibrationStore
     void RecordObservedUsage(string modelName, long estimatedTokens, long observedInputTokens);
 
     /// <summary>
+    ///     Raises <paramref name="modelName" />'s observed correction to at least <paramref name="minimumCorrection" />,
+    ///     within the store's bounds; never lowers it.
+    /// </summary>
+    /// <remarks>
+    ///     For a round the provider REJECTED for its context size: unlike <see cref="RecordObservedUsage" /> it applies at
+    ///     once and unsmoothed, because the next send is the resend of that same round.
+    /// </remarks>
+    void TightenObservedCorrection(string modelName, double minimumCorrection);
+
+    /// <summary>
     ///     The multiplicative correction learned for <paramref name="modelName" />: observed ÷ estimated, smoothed and
     ///     bounded.
     /// </summary>

@@ -160,7 +160,8 @@ public static class AgentServiceCollectionExtensions
                                       .Use(chatClient => new ProviderCallBudgetChatClient(chatClient,
                                           serviceProvider.GetRequiredService<ILogger<ProviderCallBudgetChatClient>>(),
                                           serviceProvider.GetRequiredService<ITokenEstimatorCalibrationStore>(),
-                                          pipelineOptions.MaxToolCallsPerResponse))
+                                          pipelineOptions.MaxToolCallsPerResponse,
+                                          serviceProvider.GetService<IProviderErrorBodyReader>()))
                                       .Use(chatClient => new SingleSystemMessageChatClient(chatClient))
                                       .UseOpenTelemetry(serviceProvider.GetRequiredService<ILoggerFactory>(),
                                           sourceName: "Microsoft.Extensions.AI",

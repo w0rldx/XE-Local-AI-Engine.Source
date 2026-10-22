@@ -260,6 +260,7 @@ public sealed class WorkSessionCheckpointTests
             int? recentMessagesToKeepVerbatim,
             bool distill = true,
             ModelResidencyIntent residencyIntent = ModelResidencyIntent.Interactive,
+            ConversationVerbatimBudget? verbatimBudget = null,
             CancellationToken cancellationToken = default)
         {
             LastKeepVerbatim = recentMessagesToKeepVerbatim;

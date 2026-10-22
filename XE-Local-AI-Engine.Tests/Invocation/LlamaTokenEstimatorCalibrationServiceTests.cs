@@ -676,6 +676,11 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
             throw new NotSupportedException("The llama.cpp /tokenize calibration service must not write observed-usage samples.");
         }
 
+        public void TightenObservedCorrection(string modelName, double minimumCorrection)
+        {
+            throw new NotSupportedException("The llama.cpp /tokenize calibration service must not raise the observed correction.");
+        }
+
         public double ResolveObservedCorrection(string? modelName)
         {
             return TokenEstimatorCalibrationStore.NeutralObservedCorrection;

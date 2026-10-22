@@ -2,15 +2,23 @@ namespace XE_Local_AI_Engine.Tests.Chat;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
+using XE_Local_AI_Engine.AI.Agent.Chat;
+using XE_Local_AI_Engine.AI.Agent.DependencyInjection;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -51,6 +59,31 @@ public sealed class NodeChatServiceRegistrationTests : IDisposable
         // Registered, or a thin run envelope silently stays booked under "unknown" (R5-07); lazy, so resolving it builds nothing yet.
         AssertEx.NotNull(provider.GetService<Lazy<IUsageProviderResolver>>());
         AssertEx.NotEqual(firstContextId, secondContextId, "Registered writer should resolve a fresh NodeChatDbContext for each persistence operation.");
+    }
+
+    // Without the reader a provider context-size rejection is never recovered, and nothing else would notice.
+    [Test]
+    public async Task AddServices_HandsTheProviderErrorBodyReaderToTheProviderCallBudgetHop()
+    {
+        var builder = CreateBuilder();
+        builder.AddServices(builder.Configuration, NodeStartupSettings.Read(builder.Configuration, builder.Environment));
+        builder.Services.AddSingleton<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
+
+        await using var host = builder.Services.BuildServiceProvider(true);
+        var reader = host.GetRequiredService<IProviderErrorBodyReader>();
+
+        // The host's IChatClient needs the node secret to resolve, so the same decoration runs over a stub provider client.
+        var pipeline = new ServiceCollection();
+        _ = pipeline.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
+        _ = pipeline.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
+        _ = pipeline.AddSingleton(Substitute.For<IChatClient>());
+        _ = pipeline.AddSingleton(reader);
+        _ = pipeline.DecorateChatClientPipeline();
+        await using var agentRuntime = pipeline.BuildServiceProvider();
+
+        var budgetHop = AssertEx.NotNull(agentRuntime.GetRequiredService<IChatClient>().GetService<ProviderCallBudgetChatClient>());
+        AssertEx.True(reader is ProviderErrorBodyReader, "The host must register its ClientResultException body reader.");
+        AssertEx.True(ReferenceEquals(reader, budgetHop.ErrorBodyReader), "The provider-call budget hop must receive the registered error-body reader.");
     }
 
     [Test]

@@ -552,6 +552,17 @@ estimator's observed correction applied to the threshold the same way `Conversat
 Below the threshold, nothing runs. Automatic compaction folds on the node's default local model, like a
 work-session checkpoint, so it never gates the answer that just streamed.
 
+**Token-aware verbatim window.** An automatic fold also hands the service the turn's usable window (after the
+observed correction) and the chat model. The newest completed messages then stay verbatim only while their summed
+estimate fits `RecentVerbatimFraction` (default `0.25`, range `0.05`–`0.5`) of it: never fewer than two, never more
+than `RecentMessagesToKeepVerbatim`. A manual fold has no turn window and keeps the count alone. The worker's
+outcome log line names the kept count and their tokens.
+
+**Context overflow at the provider.** When the provider still rejects a round for its context size, the
+provider-call budget hop raises the model's correction to what the provider counted, re-budgets (capped to the
+provider's reported context size when the body carries one) and resends once before the first update; a second rejection surfaces as `ContextWindowExceeded` with a fixed message
+([AI agent runtime](reference/04-ai-agent-runtime.md#provider-boundary-budgeting)).
+
 **Calibrated fold budget.** Both `ConversationSummarizer.ResolveRequestBudget` and the distiller's own copy of the
 same arithmetic (`ConversationStateDistiller.ResolveRequestBudget`) size a call's character budget as
 `min(MaxInputCharsPerSummarizationCall, effectiveContextTokens × divisor × 0.6)`, where the divisor comes from
@@ -647,6 +658,7 @@ only seed them:
 |---|---|---|
 | `AutoCompactEnabled` | `true` | Kill switch for the post-turn automatic `Compact` trigger |
 | `AutoCompactFraction` | `0.75` | Share of the turn's usable window (capacity − reserved output) the projected next-turn history may fill before auto-compaction queues |
+| `RecentVerbatimFraction` | `0.25` | Share of the turn's usable window the messages an automatic fold keeps verbatim may fill (count floor 2, ceiling `RecentMessagesToKeepVerbatim`) |
 | `MaintenanceQueueCapacity` | `64` | Bound on queued `Compact`/`Distill` jobs; a full queue drops the newest with a warning |
 | `MaintenanceShutdownDrainTimeoutSeconds` | `10` | How long shutdown waits for queued/running jobs before cancelling them |
 | `DistillEnabled` | `true` | Kill switch for both the adaptive `Distill` trigger and the reconciled distill-before-fold step |

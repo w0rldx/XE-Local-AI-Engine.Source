@@ -62,6 +62,30 @@ public sealed class ConversationCompactionOptionsTests
             + "summary at its cap; that margin is the reason the default was raised.");
     }
 
+    [Test]
+    [Arguments(0.05, true)]
+    [Arguments(0.25, true)]
+    [Arguments(0.5, true)]
+    [Arguments(0.04, false)]
+    [Arguments(0.51, false)]
+    public void Validation_RecentVerbatimFraction_IsBoundedToFiveToFiftyPercent(double fraction, bool valid)
+    {
+        var options = new ConversationCompactionOptions
+        {
+            RecentVerbatimFraction = fraction
+        };
+
+        var errors = Validate(options).SelectMany(static result => result.MemberNames).ToList();
+
+        AssertEx.Equal(valid ? 0 : 1, errors.Count(static name => name == nameof(ConversationCompactionOptions.RecentVerbatimFraction)));
+    }
+
+    [Test]
+    public void Defaults_KeepAQuarterOfTheUsableWindowVerbatim()
+    {
+        AssertEx.Equal(expected: 0.25, new ConversationCompactionOptions().RecentVerbatimFraction);
+    }
+
     private static IReadOnlyList<ValidationResult> Validate(ConversationCompactionOptions options)
     {
         var results = new List<ValidationResult>();

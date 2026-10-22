@@ -333,6 +333,18 @@ pass-through, except for the tool-call ceiling below.
   intentionally skipped, because that round never reaches the provider. A streaming call is budgeted —
   and its ceiling enforced — before the first chunk is pulled, so a ceiling breach fails the round up
   front rather than after streaming has begun.
+- **A provider context-size rejection is recovered once.** The estimate can still undershoot: llama-server
+  then answers HTTP 400 `exceed_context_size_error` with `n_prompt_tokens` and `n_ctx`, an OpenAI-compatible
+  gateway 400 `context_length_exceeded` without counts. The streaming path opens the inner stream with a manual
+  first pull; when that pull fails this way, the hop raises the model's observed correction at once to the
+  provider's count over the round's estimate (×1.25 on the current correction when the body has no counts,
+  clamped to the store's bounds, tighten-only), re-budgets the same input and resends once. When the body reports
+  `n_ctx` below the declared window, the resend is also budgeted against that reported context size. The resend is
+  not a second registered round; it counts as a provider retry and on `xe.agent.budget.context_window_retried`. A second
+  rejection rethrows the first, and a failure after the first update is never retried, so no output is
+  duplicated and no tool runs twice. The agent layer references no provider SDK, so the host supplies the body
+  reader (`IProviderErrorBodyReader`); without it there is no recovery. The failure classifier maps the
+  same rejection to `ContextWindowExceeded` with a fixed message.
 - **Reasoning-budget narrowing.** When the turn carries the llama.cpp thinking-budget marker, the
   provider-side clamp can only see the launched window, so on a long conversation it still permits a
   budget larger than the tokens remaining after the prompt — and a reasoning phase that eats the

@@ -74,6 +74,14 @@ public sealed class ConversationCompactionOptions : IValidatableObject
     [Range(0.3, 0.95)]
     public double AutoCompactFraction { get; set; } = 0.75;
 
+    /// <summary>
+    ///     The share of the turn's usable window the messages kept verbatim by an automatic fold may fill; the newest
+    ///     <see cref="RecentMessagesToKeepVerbatim" /> stay a ceiling and two messages a floor.
+    /// </summary>
+    /// <remarks>Applies only when the fold knows the turn's usable window; a manual fold keeps the count alone.</remarks>
+    [Range(0.05, 0.5)]
+    public double RecentVerbatimFraction { get; set; } = 0.25;
+
     /// <summary>Bound on queued background maintenance jobs; a full queue drops the newest with a warning.</summary>
     [Range(1, int.MaxValue)]
     public int MaintenanceQueueCapacity { get; set; } = 64;

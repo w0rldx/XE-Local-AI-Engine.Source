@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
+using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -26,6 +28,7 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
     private readonly INodeSettingsStore _nodeSettingsStore;
     private readonly ConversationCompactionOptions _options;
     private readonly INodeRuntimeSettings _runtimeSettings;
+    private readonly ITokenEstimator _tokenEstimator;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<ConversationCompactionService> _logger;
 
@@ -39,6 +42,7 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         INodeSettingsStore nodeSettingsStore,
         IOptions<ConversationCompactionOptions> options,
         INodeRuntimeSettings runtimeSettings,
+        ITokenEstimator tokenEstimator,
         TimeProvider timeProvider,
         ILogger<ConversationCompactionService> logger)
     {
@@ -60,6 +64,8 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         _nodeSettingsStore = nodeSettingsStore;
         _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(tokenEstimator);
+        _tokenEstimator = tokenEstimator;
         ArgumentNullException.ThrowIfNull(timeProvider);
         _timeProvider = timeProvider;
         ArgumentNullException.ThrowIfNull(logger);
@@ -74,6 +80,7 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         int? recentMessagesToKeepVerbatim,
         bool distill = true,
         ModelResidencyIntent residencyIntent = ModelResidencyIntent.Interactive,
+        ConversationVerbatimBudget? verbatimBudget = null,
         CancellationToken cancellationToken = default)
     {
         // Before any model work: an Origin=Remote conversation is refused, a missing one still answers ConversationNotFound.
@@ -86,7 +93,7 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         ConversationCompactionResult result;
         try
         {
-            result = await CompactCoreAsync(conversationId, requestedModel, recentMessagesToKeepVerbatim, distill, residencyIntent, nodeSettings, operation.Token);
+            result = await CompactCoreAsync(conversationId, requestedModel, recentMessagesToKeepVerbatim, distill, residencyIntent, verbatimBudget, nodeSettings, operation.Token);
         }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
@@ -132,6 +139,7 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         int? recentMessagesToKeepVerbatim,
         bool distill,
         ModelResidencyIntent residencyIntent,
+        ConversationVerbatimBudget? verbatimBudget,
         StoredNodeSettings nodeSettings,
         CancellationToken cancellationToken)
     {
@@ -162,7 +170,15 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
 
         // The per-call override wins when present, otherwise the configured window. The floor of 2 applies to both, so a
         // caller can shrink the window but never below the last exchange.
-        var keep = Math.Max(2, recentMessagesToKeepVerbatim ?? await _runtimeSettings.GetCompactionRecentMessagesVerbatimAsync(cancellationToken));
+        var maxKeep = Math.Max(2, recentMessagesToKeepVerbatim ?? await _runtimeSettings.GetCompactionRecentMessagesVerbatimAsync(cancellationToken));
+        var keep = maxKeep;
+        int? keptTokens = null;
+        if (verbatimBudget is not null)
+        {
+            keep = KeepWithinBudget(completed, maxKeep, verbatimBudget, out var budgetedTokens);
+            keptTokens = budgetedTokens;
+        }
+
         if (completed.Count <= keep)
         {
             return new ConversationCompactionResult
@@ -192,6 +208,8 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
                 Summary = conversation.CompactionSummary,
                 CoversToSequence = priorCover,
                 MessagesFolded = 0,
+                MessagesKeptVerbatim = keep,
+                KeptVerbatimTokens = keptTokens,
                 UpdatedAtUtc = conversation.CompactionSummaryUpdatedAtUtc
             };
         }
@@ -278,10 +296,35 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
             Summary = summary,
             CoversToSequence = cutoffSequence,
             MessagesFolded = toFold.Count,
+            MessagesKeptVerbatim = keep,
+            KeptVerbatimTokens = keptTokens,
             UpdatedAtUtc = now,
             ModelUsed = model,
             UsedFallbackModel = usedFallbackModel,
             ExpectedUpdatedAtUtc = conversation.CompactionSummaryUpdatedAtUtc
         };
+    }
+
+    /// <summary>The newest completed messages whose summed estimate fits the verbatim share of the usable context, from 2 to <paramref name="maxKeep" />.</summary>
+    private int KeepWithinBudget(List<NodeChatPersistedMessageDto> completed, int maxKeep, ConversationVerbatimBudget budget, out int keptTokens)
+    {
+        var tokenBudget = (long)(Math.Max(0, budget.UsableContextTokens) * _options.RecentVerbatimFraction);
+        var keep = 0;
+        var tokens = 0L;
+        for (var index = completed.Count - 1; index >= 0 && keep < maxKeep; index--)
+        {
+            var message = completed[index];
+            var estimate = _tokenEstimator.EstimateTokens(new ChatMessage(new ChatRole(message.Role), message.Content), budget.ModelName);
+            if (keep >= 2 && tokens + estimate > tokenBudget)
+            {
+                break;
+            }
+
+            tokens += estimate;
+            keep++;
+        }
+
+        keptTokens = (int)Math.Min(tokens, int.MaxValue);
+        return keep;
     }
 }

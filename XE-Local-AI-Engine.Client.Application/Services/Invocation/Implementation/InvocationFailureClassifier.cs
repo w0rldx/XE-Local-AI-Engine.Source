@@ -156,6 +156,9 @@ internal static class InvocationFailureClassifier
                 new FailureClassification(FailureCategory.ModelUnavailable, ProviderModelNotOfferedMessage),
             _ when FindProviderClientResult(exception) is { Status: 429 } rateLimited =>
                 new FailureClassification(FailureCategory.ProviderRateLimited, BuildRateLimitedMessage(rateLimited)),
+            // A provider HTTP 400 rejecting the request for its context size, read from the body ahead of the 400 text arms below.
+            _ when ProviderContextOverflow.From(ProviderErrorBodyReader.Find(exception)) is not null =>
+                new FailureClassification(FailureCategory.ContextWindowExceeded, ProviderContextOverflow.Message),
             HttpRequestException httpRequestException when httpRequestException.StatusCode == HttpStatusCode.NotFound =>
                 new FailureClassification(FailureCategory.ModelUnavailable, ModelUnavailableMessage),
             // llama-server reports an uncompilable tool-schema grammar as an HTTP 400, so this arm MUST match before the ReportsModelLoadFailure and generic

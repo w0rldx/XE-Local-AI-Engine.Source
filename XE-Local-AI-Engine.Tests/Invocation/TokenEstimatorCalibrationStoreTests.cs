@@ -327,6 +327,24 @@ public sealed class TokenEstimatorCalibrationStoreTests
         }
     }
 
+    [Test]
+    public void TightenObservedCorrection_AppliesAtOnce_NeverLowers_AndStaysWithinTheBounds()
+    {
+        var store = new TokenEstimatorCalibrationStore();
+
+        store.TightenObservedCorrection(Model, 1.4);
+        AssertClose(1.4, store.ResolveObservedCorrection(Model));
+
+        store.TightenObservedCorrection(Model, 1.1);
+        AssertClose(1.4, store.ResolveObservedCorrection(Model));
+
+        store.TightenObservedCorrection(Model, 9.0);
+        AssertClose(TokenEstimatorCalibrationStore.MaximumObservedCorrection, store.ResolveObservedCorrection(Model));
+
+        store.TightenObservedCorrection("other-model", 0.2);
+        AssertClose(TokenEstimatorCalibrationStore.NeutralObservedCorrection, store.ResolveObservedCorrection("other-model"));
+    }
+
     /// <summary>One smoothing step from neutral — what a single recorded sample is worth.</summary>
     private static double Fold(double sample)
     {

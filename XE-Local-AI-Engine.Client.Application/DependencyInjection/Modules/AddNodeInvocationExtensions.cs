@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
@@ -48,6 +49,7 @@ internal static class AddNodeInvocationExtensions
                    "Invalid ProviderResilienceOptions configuration.")
                .ValidateOnStart();
         builder.Services.AddSingleton<IProviderStreamResilience, ProviderStreamResilience>();
+        builder.Services.AddSingleton<IProviderErrorBodyReader, ProviderErrorBodyReader>();
         builder.Services.AddOptions<ConversationContextBudgetOptions>()
                .Bind(configuration.GetSection(ConversationContextBudgetOptions.SectionName))
                .Validate(static options => options.ReservedOutputTokenFloor >= 0

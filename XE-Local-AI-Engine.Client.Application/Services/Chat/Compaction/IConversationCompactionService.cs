@@ -47,6 +47,12 @@ public sealed class ConversationCompactionResult
 
     public int MessagesFolded { get; init; }
 
+    /// <summary>How many of the newest completed messages the fold kept verbatim, once the window was decided.</summary>
+    public int MessagesKeptVerbatim { get; init; }
+
+    /// <summary>The kept messages' summed estimate, when a <see cref="ConversationVerbatimBudget" /> sized the window.</summary>
+    public int? KeptVerbatimTokens { get; init; }
+
     public long? UpdatedAtUtc { get; init; }
 
     // The local model that produced the synopsis, and whether it differs from the user's selection, which is true
@@ -57,6 +63,16 @@ public sealed class ConversationCompactionResult
 
     /// <summary>The synopsis stamp the fold read; the commit only lands while the row still carries it.</summary>
     internal long? ExpectedUpdatedAtUtc { get; init; }
+}
+
+/// <summary>The turn's usable context and the model it is estimated for, which bound the fold's verbatim window in tokens.</summary>
+public sealed record ConversationVerbatimBudget
+{
+    /// <summary>The turn's usable context tokens: capacity minus reserved output, after the model's observed correction.</summary>
+    public required int UsableContextTokens { get; init; }
+
+    /// <summary>The chat model the messages are estimated for; null estimates uncalibrated.</summary>
+    public string? ModelName { get; init; }
 }
 
 /// <summary>
@@ -82,6 +98,7 @@ public interface IConversationCompactionService
     /// </param>
     /// <param name="distill">True distils the state up to the fold cutoff first; work sessions pass false (their state is rebuilt per step).</param>
     /// <param name="residencyIntent"><see cref="ModelResidencyIntent.Background" /> when no user waits on it: a cold model then never unloads another.</param>
+    /// <param name="verbatimBudget">Also caps the kept window in tokens (<see cref="ConversationVerbatimBudget" />); null keeps the count alone.</param>
     /// <remarks>
     ///     A caller that knows its conversation does not depend on verbatim history can fold down to the last
     ///     exchange. A work-session step is that caller: its state block is rebuilt from the database every step, so
@@ -92,5 +109,6 @@ public interface IConversationCompactionService
         int? recentMessagesToKeepVerbatim,
         bool distill = true,
         ModelResidencyIntent residencyIntent = ModelResidencyIntent.Interactive,
+        ConversationVerbatimBudget? verbatimBudget = null,
         CancellationToken cancellationToken = default);
 }

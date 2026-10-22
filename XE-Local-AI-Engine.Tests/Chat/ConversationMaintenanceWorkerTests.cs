@@ -28,6 +28,22 @@ public sealed class ConversationMaintenanceWorkerTests
     }
 
     [Test]
+    public async Task Worker_HandsTheJobsCorrectedUsableWindowAndModelToTheFold()
+    {
+        await using var harness = new ConversationMaintenanceHarness(observedCorrection: 1.25);
+        await harness.Worker.StartAsync(CancellationToken.None);
+
+        harness.Dispatcher.Dispatch(ConversationMaintenanceHarness.Job(Guid.NewGuid(), modelName: "chat-model", capacity: 8_192, reserved: 1_024));
+        await AssertEx.EventuallyAsync(() => harness.Compactions.Count == 1, Wait, "The over-threshold job should compact.");
+        await harness.Worker.StopAsync(CancellationToken.None);
+
+        var budget = AssertEx.NotNull(harness.VerbatimBudgets.Single());
+        AssertEx.Equal(expected: (int)((8_192 - 1_024) / 1.25), budget.UsableContextTokens, "usable = capacity - reserved, divided by the observed correction");
+        AssertEx.Equal("chat-model", budget.ModelName);
+        AssertEx.Contains(harness.Logger.AllText, "keeping", StringComparison.Ordinal);
+    }
+
+    [Test]
     public async Task Worker_WhenAJobThrows_KeepsRunningAndReleasesThatConversation()
     {
         await using var harness = new ConversationMaintenanceHarness();

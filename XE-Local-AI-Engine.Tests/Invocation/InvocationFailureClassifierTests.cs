@@ -185,6 +185,38 @@ public sealed class InvocationFailureClassifierTests
         AssertEx.Equal("unrelated failure", classification.Message);
     }
 
+    // llama-server's context-size body (type plus counts) and an OpenAI-compatible one (code only), bare and wrapped by the agent framework.
+    [Test]
+    [Arguments("""{"error":{"code":400,"message":"request (9000 tokens) exceeds the available context size (8192 tokens), try increasing it","type":"exceed_context_size_error","n_prompt_tokens":9000,"n_ctx":8192}}""", false)]
+    [Arguments("""{"error":{"message":"This model's maximum context length is 8192 tokens.","type":"invalid_request_error","param":"messages","code":"context_length_exceeded"}}""", true)]
+    public void MapFailure_ProviderContextSizeRejection_IsContextWindowExceededWithTheFixedMessage(string body, bool wrapped)
+    {
+        Exception exception = FakeClientResultException.Create(400, retryAfter: null, "Bad Request", body);
+        if (wrapped)
+        {
+            exception = new InvalidOperationException("agent run failed", exception);
+        }
+
+        var classification = InvocationFailureClassifier.MapFailure(exception);
+
+        AssertEx.Equal(FailureCategory.ContextWindowExceeded, classification.Category);
+        AssertEx.Equal(ProviderContextOverflow.Message, classification.Message);
+    }
+
+    // A 400 whose body is not a context-size rejection keeps its current landing: the grammar arm under a wrapper, the catch-all bare.
+    [Test]
+    public void MapFailure_Status400WithAnUnrelatedBody_KeepsItsCurrentArm()
+    {
+        const string body = """{"error":{"code":400,"message":"'messages' must not be empty","type":"invalid_request_error"}}""";
+        var bare = FakeClientResultException.Create(400, retryAfter: null, "Bad Request", body);
+
+        var grammar = InvocationFailureClassifier.MapFailure(new InvalidOperationException("failed to parse grammar", bare));
+        var catchAll = InvocationFailureClassifier.MapFailure(bare);
+
+        AssertEx.Equal(FailureCategory.ModelCapabilityUnsupported, grammar.Category);
+        AssertEx.Equal(FailureCategory.Unexpected, catchAll.Category);
+    }
+
     // The gateway samples: an operator's gateway answers both API surfaces with these bodies.
     [Test]
     [Arguments(500, """{"error":"unsupported_tpm_configuration","message":"TokensPerMinute must be one of 10000, 30000, 60000, 100000, 200000, 500000, 1000000.","configuredTokensPerMinute":80000}""",

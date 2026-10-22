@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.AI.Agent.Chat;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -37,6 +38,12 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
     private static readonly Counter<long> ContextWindowExceededCounter = Meter.CreateCounter<long>("xe.agent.budget.context_window_exceeded",
         description: "Provider rounds rejected because the irreducible message set still exceeded the context window.");
 
+    private static readonly Counter<long> ContextWindowRetriedCounter = Meter.CreateCounter<long>("xe.agent.budget.context_window_retried",
+        description: "Provider rounds resent once after the provider rejected them for context size before the first update.");
+
+    /// <summary>The correction a context-size rejection without counts multiplies the model's current one by.</summary>
+    internal const double UncountedOverflowCorrectionFactor = 1.25;
+
     // The Ollama num_ctx option key the invocation factory writes onto ChatOptions.AdditionalProperties when a per-send
     // context window is set; read here so the per-round window matches the window the provider is actually launched with.
     private const string NumCtxKey = "num_ctx";
@@ -47,19 +54,25 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
     private readonly ILogger<ProviderCallBudgetChatClient> _logger;
     private readonly ITokenEstimatorCalibrationStore _calibrationStore;
     private readonly int _maxToolCallsPerResponse;
+    private readonly IProviderErrorBodyReader? _errorBodyReader;
 
     public ProviderCallBudgetChatClient(IChatClient innerClient,
         ILogger<ProviderCallBudgetChatClient> logger,
         ITokenEstimatorCalibrationStore? calibrationStore = null,
-        int maxToolCallsPerResponse = AgentToolPipelineOptions.DefaultMaxToolCallsPerResponse)
+        int maxToolCallsPerResponse = AgentToolPipelineOptions.DefaultMaxToolCallsPerResponse,
+        IProviderErrorBodyReader? errorBodyReader = null)
         : base(innerClient)
     {
+        _errorBodyReader = errorBodyReader;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _calibrationStore = calibrationStore ?? new TokenEstimatorCalibrationStore();
         _maxToolCallsPerResponse = maxToolCallsPerResponse >= 1
             ? maxToolCallsPerResponse
             : throw new ArgumentOutOfRangeException(nameof(maxToolCallsPerResponse), maxToolCallsPerResponse, "At least one tool call per response must be allowed.");
     }
+
+    /// <summary>The host's provider error-body reader; null leaves a context-size rejection unrecovered.</summary>
+    internal IProviderErrorBodyReader? ErrorBodyReader => _errorBodyReader;
 
     public override async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
@@ -108,10 +121,15 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         long? observedInputTokens = null;
         UsageDetails? observedUsage = null;
         var ceiling = new ToolCallCeiling(_maxToolCallsPerResponse);
+        IAsyncEnumerator<ChatResponseUpdate>? enumerator = null;
         try
         {
-            await foreach (var update in base.GetStreamingResponseAsync(round.Messages, round.Options, cancellationToken).ConfigureAwait(false))
+            var established = await EstablishStreamAsync(messages, options, round, cancellationToken).ConfigureAwait(false);
+            round = established.Round;
+            enumerator = established.Enumerator;
+            for (var moved = established.Moved; moved; moved = await enumerator.MoveNextAsync().ConfigureAwait(false))
             {
+                var update = enumerator.Current;
                 if (update.Contents is { Count: > 0 } contents)
                 {
                     foreach (var content in contents)
@@ -142,6 +160,11 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         }
         finally
         {
+            if (enumerator is not null)
+            {
+                await enumerator.DisposeAsync().ConfigureAwait(false);
+            }
+
             LogDroppedToolCalls(ceiling);
 
             // A streamed call is pull-based: include the complete enumerator lifetime, including any consumer
@@ -153,6 +176,95 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
             RecordObservedUsage(round, observedInputTokens);
             AttachRoundUsage(budget, round, observedUsage);
         }
+    }
+
+    /// <summary>
+    ///     Opens the provider stream and pulls its first update. A context-size rejection there is recovered once: the model's
+    ///     correction is raised to what the provider counted, the same input is re-budgeted, and the round is resent.
+    /// </summary>
+    /// <remarks>
+    ///     Only before the first update, so no output is duplicated and no tool re-runs. The resend is not registered as a new
+    ///     round against the ceilings; it counts as a provider retry. A second rejection rethrows the first one. When the body
+    ///     reports the provider's context size, the resend is budgeted against it if it is smaller than the declared window.
+    /// </remarks>
+    private async Task<EstablishedStream> EstablishStreamAsync(IEnumerable<ChatMessage> messages,
+        ChatOptions? options,
+        BudgetedRound round,
+        CancellationToken cancellationToken)
+    {
+        Exception? firstOverflow = null;
+        while (true)
+        {
+            IAsyncEnumerator<ChatResponseUpdate>? enumerator = null;
+            try
+            {
+                enumerator = base.GetStreamingResponseAsync(round.Messages, round.Options, cancellationToken).GetAsyncEnumerator(cancellationToken);
+                var moved = await enumerator.MoveNextAsync().ConfigureAwait(false);
+                return new EstablishedStream
+                {
+                    Enumerator = enumerator,
+                    Moved = moved,
+                    Round = round
+                };
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException
+                                              && round.ModelName is { } modelName
+                                              && _errorBodyReader is not null
+                                              && ProviderContextOverflow.From(_errorBodyReader.Read(exception)) is { } overflow)
+            {
+                if (enumerator is not null)
+                {
+                    await enumerator.DisposeAsync().ConfigureAwait(false);
+                }
+
+                if (firstOverflow is not null)
+                {
+                    ExceptionDispatchInfo.Throw(firstOverflow);
+                }
+
+                firstOverflow = exception;
+                RaiseCorrectionFor(modelName, round.EstimatedInputTokens, overflow);
+                round = ApplyBudget(messages, options, registerRound: false, windowCap: overflow.ContextTokens);
+                ProviderCallBudget.Current?.RecordProviderRetry();
+                ContextWindowRetriedCounter.Add(1);
+            }
+            catch
+            {
+                if (enumerator is not null)
+                {
+                    await enumerator.DisposeAsync().ConfigureAwait(false);
+                }
+
+                throw;
+            }
+        }
+    }
+
+    /// <summary>Raises the model's correction to the provider's count over this round's estimate, or by a fixed factor without counts.</summary>
+    private void RaiseCorrectionFor(string modelName, int estimatedInputTokens, ProviderContextOverflow overflow)
+    {
+        var current = _calibrationStore.ResolveObservedCorrection(modelName);
+        var ratio = overflow.PromptTokens is { } promptTokens && estimatedInputTokens > 0
+            ? (double)promptTokens / estimatedInputTokens
+            : current * UncountedOverflowCorrectionFactor;
+        _calibrationStore.TightenObservedCorrection(modelName, ratio);
+        _logger.LogWarning(
+            "Provider rejected a round for context size ({PromptTokens} prompt token(s), context {ContextTokens}, ~{Estimated} estimated); raised the observed correction from {Current:F2} to at least {Ratio:F2} and resending once.",
+            overflow.PromptTokens,
+            overflow.ContextTokens,
+            estimatedInputTokens,
+            current,
+            ratio);
+    }
+
+    /// <summary>An opened provider stream, whether its first pull produced an update, and the round that was actually sent.</summary>
+    private sealed record EstablishedStream
+    {
+        public required IAsyncEnumerator<ChatResponseUpdate> Enumerator { get; init; }
+
+        public required bool Moved { get; init; }
+
+        public required BudgetedRound Round { get; init; }
     }
 
     /// <summary>
@@ -295,7 +407,7 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
     ///     model name, nothing recorded — when no ambient budget scope is present. Throws
     ///     <see cref="ProviderCallBudgetExceededException" /> when a cumulative ceiling trips.
     /// </remarks>
-    private BudgetedRound ApplyBudget(IEnumerable<ChatMessage> messages, ChatOptions? options)
+    private BudgetedRound ApplyBudget(IEnumerable<ChatMessage> messages, ChatOptions? options, bool registerRound = true, int? windowCap = null)
     {
         var budget = ProviderCallBudget.Current;
         if (budget is null)
@@ -307,6 +419,11 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         var materialized = messages as IReadOnlyList<ChatMessage> ?? [.. messages];
 
         var window = ResolveContextWindow(options, budgetOptions);
+        // A context-size resend never budgets against more than the provider said it has (a declared window can overstate it).
+        if (windowCap is > 0 && windowCap.Value < window)
+        {
+            window = windowCap.Value;
+        }
         var reserved = ResolveReservedOutputTokens(options, budgetOptions);
 
         // Two comparison-only margins: EstimateSafetyFactor of the window (the char heuristic under-counts ~10% on
@@ -333,7 +450,11 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
 
         var result = ProviderCallBudgeter.Budget(materialized, instructionsTokens, effectiveWindow, budgetOptions, charsPerToken);
 
-        ProviderRoundsCounter.Add(1);
+        if (registerRound)
+        {
+            ProviderRoundsCounter.Add(1);
+        }
+
         if (result.Trimmed)
         {
             MessagesDroppedCounter.Add(result.MessagesDropped);
@@ -365,21 +486,25 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
             throw new ProviderContextWindowExceededException(result.EstimatedTokensAfter, effectiveWindow);
         }
 
-        try
+        // A context-size resend is the same logical round, so it is registered against the ceilings only once.
+        if (registerRound)
         {
-            budget.RegisterProviderRound(result.EstimatedTokensAfter,
-                toolSchemaTokens,
-                result.MessagesDropped,
-                result.ToolResultsTruncated,
-                result.CharsTruncated);
-        }
-        catch (ProviderCallBudgetExceededException)
-        {
-            CeilingExceededCounter.Add(1);
-            _logger.LogWarning("Invocation exceeded its cumulative provider-call budget after {Calls} round(s) and ~{Tokens} estimated input token(s); stopping the turn.",
-                budget.ProviderCalls,
-                budget.CumulativeInputTokens);
-            throw;
+            try
+            {
+                budget.RegisterProviderRound(result.EstimatedTokensAfter,
+                    toolSchemaTokens,
+                    result.MessagesDropped,
+                    result.ToolResultsTruncated,
+                    result.CharsTruncated);
+            }
+            catch (ProviderCallBudgetExceededException)
+            {
+                CeilingExceededCounter.Add(1);
+                _logger.LogWarning("Invocation exceeded its cumulative provider-call budget after {Calls} round(s) and ~{Tokens} estimated input token(s); stopping the turn.",
+                    budget.ProviderCalls,
+                    budget.CumulativeInputTokens);
+                throw;
+            }
         }
 
         var roundContext = CaptureRoundContext(result,
