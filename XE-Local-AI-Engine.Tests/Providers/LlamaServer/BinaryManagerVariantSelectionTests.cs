@@ -77,7 +77,7 @@ public sealed class BinaryManagerVariantSelectionTests
     [Test]
     public void ResolvePin_LinuxNoGpuPrebuilt_FallsBackToCpuFloor()
     {
-        // Linux has no CUDA prebuilt; requesting CUDA on Linux resolves to the CPU floor, never null.
+        // No Linux CUDA prebuilt is pinned; requesting CUDA on Linux resolves to the CPU floor, never null.
         var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda);
 
         AssertEx.NotNull(pin);
@@ -88,7 +88,7 @@ public sealed class BinaryManagerVariantSelectionTests
     [Test]
     public void ResolveExact_LinuxCuda_ReturnsNull_NoCpuFloorFallback()
     {
-        // Unlike Resolve(), the exact resolve never substitutes the CPU floor — Linux has no CUDA prebuilt,
+        // Unlike Resolve(), the exact resolve never substitutes the CPU floor — no Linux CUDA prebuilt is pinned,
         // so it returns null and the binary manager fails loud rather than serving a CPU archive stamped as CUDA.
         var pin = LlamaCppReleasePins.TryResolveExact(OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda);
 
@@ -117,7 +117,7 @@ public sealed class BinaryManagerVariantSelectionTests
     [Test]
     public async Task EnsureBinary_LinuxCudaNoPrebuilt_Throws_NeverServesCpuArchiveAsCuda()
     {
-        // A Cuda request on Linux/x64 (no genuine CUDA prebuilt, no managed source build) must fail loud, even
+        // A Cuda request on Linux/x64 (no pinned CUDA prebuilt, no managed source build) must fail loud, even
         // when a binary is cached under the requested "cuda" variant dir — before the fix EnsureBinary resolved the CPU
         // floor pin and returned that cached CPU archive as a LlamaBinary with Variant=Cuda, which the supervisor would
         // then launch with GPU placement flags. The exact-resolve now throws BEFORE any cache/download lookup.

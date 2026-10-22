@@ -79,7 +79,7 @@ public sealed class BinaryManagerInstalledLookupTests
     [Test]
     public async Task TryGetInstalledBinary_NoPrebuiltForTheHostVariant_ReturnsNull_NotAThrow()
     {
-        // Linux has no prebuilt CUDA asset upstream, where an ensure raises its sanitized "no prebuilt" refusal. The
+        // No Linux CUDA prebuilt is pinned, so an ensure raises its sanitized "no prebuilt" refusal. The
         // lookup must simply report "none installed" instead, so a page-load diagnostic degrades rather than erroring.
         using var cache = new TempCacheDir();
         using var handler = new ThrowingHandler();

@@ -92,6 +92,19 @@
       "thinkingOff": "template",
       "toolCapable": true,
       "tiers": ["rc"]
+    },
+    {
+      "id": "flint",
+      "repo": "unsloth/flint-GGUF",
+      "file": "flint-UD-Q4_K_XL.gguf",
+      "sha256": "63c2ecc461ca545134b670c660e76fa20f47240f8d39b6510bfd21c4dd6e072f",
+      "sizeBytes": 25054688704,
+      "modelName": "unsloth/flint-GGUF:UD-Q4_K_XL",
+      "architecture": "flint",
+      "moe": true,
+      "thinkingOff": "budget",
+      "toolCapable": true,
+      "tiers": ["rc"]
     }
   ]
 }

@@ -473,7 +473,7 @@ public static class LocalApiRoutes
         // the release catalog). Validates the tag format before resolving the asset + digest and installing.
         public const string LlamaCppUpdate = "model-fit/llamacpp/update";
 
-        // In-app Linux source build of llama.cpp for a chosen backend, because no upstream prebuilt CUDA asset exists. Admission gating, the prerequisites checklist and the
+        // In-app Linux source build of llama.cpp for a chosen backend, because the pins carry no Linux CUDA prebuilt. Admission gating, the prerequisites checklist and the
         // phase/log payload: docs/wiki/09-api-and-hubs.md ("Design notes on the newer endpoint families"). The literal "source-build" segments follow "llamacpp", and the hub is a full MapHub path.
         public const string SourceBuildPrerequisites = "model-fit/llamacpp/source-build/prerequisites";
         public const string SourceBuild = "model-fit/llamacpp/source-build";

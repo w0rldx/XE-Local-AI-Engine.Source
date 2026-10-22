@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 /// </summary>
 /// <remarks>
 ///     The rule: NVIDIA to CUDA on Windows; on Linux NVIDIA to CUDA only when a managed source build is signalled
-///     (<see cref="ICudaManagedBuildSignal" />) and Vulkan otherwise, llama.cpp shipping no prebuilt Linux CUDA asset;
+///     (<see cref="ICudaManagedBuildSignal" />) and Vulkan otherwise, the pins carrying no Linux CUDA prebuilt;
 ///     AMD and Intel to Vulkan; none or unknown to CPU. An active operator override short-circuits the vendor probe
 ///     entirely, and the override path is never validated here — that is the binary manager's single responsibility,
 ///     as is re-validating the cached managed-CUDA flag this reads instead of the installed-runtime store.

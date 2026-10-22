@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026.10.5",
-  "updatedAt": "2026-10-19",
+  "catalogVersion": "2026.10.6",
+  "updatedAt": "2026-10-22",
   "models": [
     {
       "id": "qwen3-0.6b",
@@ -245,6 +245,26 @@
       "tested": true,
       "testedQuant": "UD-Q4_K_M",
       "testedSizeBytes": 16464440224
+    },
+    {
+      "id": "flint",
+      "family": "Flint",
+      "displayName": "Flint 40B-A2.5B (MoE)",
+      "publisher": "Recursive",
+      "ggufRepo": "unsloth/flint-GGUF",
+      "license": "apache-2.0",
+      "tier": "S",
+      "useCases": ["coding", "reasoning", "general"],
+      "totalParamsB": 39.8,
+      "activeParamsB": 2.5,
+      "moe": true,
+      "contextLength": 262144,
+      "minLlamaCppTag": "b11803",
+      "releaseDate": "2026-10-21",
+      "notes": "Coding-agent MoE aimed at Terminal-Bench and SWE-bench style work; thinks by default and only a zero reasoning budget turns that off, needs about 25 GB resident at UD-Q4_K_XL or expert offload on smaller GPUs, and the repo ships no Q4_K_M, so it shows under \"Can run\".",
+      "tested": true,
+      "testedQuant": "UD-Q4_K_XL",
+      "testedSizeBytes": 25054688704
     },
     {
       "id": "gemma3-4b",

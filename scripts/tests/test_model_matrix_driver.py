@@ -45,7 +45,7 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(
             sorted(ids["extended"]), sorted(ids["fast"] + ["qwen3.5-9b", "granite-4.1-3b", "lfm2.5-8b-a1b"])
         )
-        self.assertEqual(sorted(ids["rc"]), sorted(ids["extended"] + ["qwen3.6-35b-a3b", "qwen3.8-27b"]))
+        self.assertEqual(sorted(ids["rc"]), sorted(ids["extended"] + ["qwen3.6-35b-a3b", "qwen3.8-27b", "flint"]))
 
     def test_every_entry_is_pinned(self) -> None:
         for model in MANIFEST["models"]:

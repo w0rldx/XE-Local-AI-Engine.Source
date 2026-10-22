@@ -20,7 +20,7 @@
 #   The test posts twice: the production offer plus a synthetic control tool after the
 #   compatibility pass (must be 200), and the control tool alone with its raw minLength 4096
 #   (must be 400 carrying "failed to parse grammar"). The control is synthetic because the
-#   production offer's large bounds are all upper bounds, and llama.cpp b11669 (upstream #26613)
+#   production offer's large bounds are all upper bounds, and llama.cpp from b11669 (upstream #26613)
 #   silently drops an upper bound above 2000 instead of failing; a minimum above 2000 still fails
 #   on every build from b10201 on. The second post is what makes the first one mean anything,
 #   because there are two ways a green run can be VACUOUS:

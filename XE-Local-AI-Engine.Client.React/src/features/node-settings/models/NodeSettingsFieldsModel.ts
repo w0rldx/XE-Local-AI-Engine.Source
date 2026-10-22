@@ -106,7 +106,7 @@ const nodeSettingsFieldBounds = {
 // `draft-` name prefix is NOT the capability test: `external-draft` runs a second GGUF drafter (needs a draft model,
 // uses additional VRAM), `main-model-heads` (draft-mtp) drafts from multi-token-prediction heads inside the MAIN model
 // and needs no draft model at all, `draftless` (ngram-*) self-speculates from context. Kept in sync with the backend
-// accepted set (pinned llama.cpp build b11669). The full set is used for validation; the settings UI offers a curated
+// accepted set (pinned llama.cpp build b11803). The full set is used for validation; the settings UI offers a curated
 // subset (see speculativeModeSelectValues).
 export const SPECULATIVE_DISABLED_MODE = "none";
 

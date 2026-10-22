@@ -71,7 +71,7 @@ downgrade preflight.
 ## No llama.cpp runtime on this host
 
 Chat needs a `llama-server` binary. The engine downloads a hash-pinned prebuilt build on first use, so a host with no
-network and nothing installed yet has no runtime until it can download one. When upstream publishes no prebuilt for
+network and nothing installed yet has no runtime until it can download one. When the pins carry no prebuilt for
 the host's OS, CPU architecture and GPU backend, acquisition fails with "No prebuilt llama.cpp runtime is available for
 this operating system and CPU architecture", or names the backends that do exist and points at the in-app source
 build. The usual case is Linux with an NVIDIA card: the default there is Vulkan, and CUDA comes from the in-app source
@@ -116,7 +116,7 @@ it before attaching it to a public issue. Redaction rules: [Security & Privacy](
 ## GPU paths for operators
 
 User-level GPU symptoms are in the [FAQ](user-guide/docs/faq.md#replies-are-extremely-slow). On Linux with an NVIDIA
-card, upstream publishes no prebuilt CUDA `llama-server`, so an operator who wants CUDA instead of the Vulkan default
+card, the engine pins no prebuilt CUDA `llama-server`, so an operator who wants CUDA instead of the Vulkan default
 can supply their own binary: [Linux CUDA bring-your-own llama-server runbook](runbooks/linux-cuda-override-operator-runbook.md).
 
 ## Dev host

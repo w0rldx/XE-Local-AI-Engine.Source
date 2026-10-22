@@ -447,7 +447,7 @@ only.
 
 ![In-app CUDA build](../media/screenshots/cuda-build-running@2x.png)
 
-Upstream publishes no prebuilt Linux CUDA component, so the app can **compile one locally** — pinned to
+The app downloads no prebuilt Linux CUDA component, so it can **compile one locally** — pinned to
 an exact upstream version, refusing to proceed if the source doesn't match, with the build log streamed
 live into the interface.
 

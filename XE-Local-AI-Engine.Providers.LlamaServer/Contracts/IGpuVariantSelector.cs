@@ -7,7 +7,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <remarks>
 ///     The full <c>HardwareProfiler</c> — the VRAM probe and the memory-fit math — lives in the model-fit advisor and
 ///     is explicitly NOT built here. Selection rule: NVIDIA GPU → <see cref="GpuVariant.Cuda" /> on Windows, and
-///     <see cref="GpuVariant.Vulkan" /> on Linux, where no prebuilt CUDA asset exists; AMD or Intel GPU →
+///     <see cref="GpuVariant.Vulkan" /> on Linux, where no CUDA prebuilt is pinned; AMD or Intel GPU →
 ///     <see cref="GpuVariant.Vulkan" />; no GPU → <see cref="GpuVariant.Cpu" />.
 /// </remarks>
 public interface IGpuVariantSelector

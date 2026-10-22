@@ -29,7 +29,7 @@
 #
 # Options:
 #   --tier fast|extended|rc  Models to run (default fast). fast = Qwen3.5-0.8B + 4B; extended adds Qwen3.5-9B,
-#                            Granite 4.1-3B and LFM2.5-8B-A1B; rc adds Qwen3.6-35B-A3B and Qwen3.8-27B.
+#                            Granite 4.1-3B and LFM2.5-8B-A1B; rc adds Qwen3.6-35B-A3B, Qwen3.8-27B and Flint.
 #   --models <id,id>         Run these manifest ids instead of a tier.
 #   --checks <name,name>     Run only these checks (names: see scripts/model-matrix-driver.py HARD_CHECKS and
 #                            MEASURED_CHECKS). Default: all.

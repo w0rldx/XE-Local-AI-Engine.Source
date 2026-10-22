@@ -9,7 +9,7 @@
 
 ## Why this exists
 
-Upstream llama.cpp (`ggml-org/llama.cpp`) ships **no Linux CUDA prebuilt** — only Windows gets a CUDA build. So on a Linux NVIDIA box the engine deliberately falls back to **Vulkan** (`GpuVariantSelector`). This override lets you point the engine at a **locally-built CUDA `llama-server`** for an operator-managed CUDA runtime.
+The engine pins **no Linux CUDA prebuilt** of llama.cpp (`ggml-org/llama.cpp`) — only Windows gets a CUDA build. Upstream ships Linux CUDA prebuilts from b11803, but the pin does not adopt them. So on a Linux NVIDIA box the engine deliberately falls back to **Vulkan** (`GpuVariantSelector`). This override lets you point the engine at a **locally-built CUDA `llama-server`** for an operator-managed CUDA runtime.
 
 It is **off by default**. When the override environment variable is unset, acquisition uses the pinned download and SHA256 verification path. The override **skips** download and hash verification (an operator-built binary has no publisher digest) and instead validates the binary you supply.
 

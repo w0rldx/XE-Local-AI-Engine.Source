@@ -69,7 +69,7 @@ route and DTO details are in
 
 `InstallTagAsync` (the operator updater path) gates the live asset name against a strict allow-list (no path/URL metacharacters) since it is interpolated into a temp path and download URL, verifies the 64-hex digest, and enforces a disk-space guard. It **refuses outright** while a source build is recorded ("Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime") — prebuilt install and source build are mutually exclusive, serialized by the manager's `_sourceMutationGate`. `ILlamaCppUpdateState` / `LlamaCppUpdateState` is the shared "is a newer runtime available?" snapshot, written by the startup check and surfaced by a read-only runtime-status endpoint — decoupled from any app-package update channel.
 
-> Upstream constraint, documented in the pins: llama.cpp ships **no prebuilt Linux CUDA asset**. That gap is exactly what §2.6 exists to close — a Linux NVIDIA box either runs Vulkan, or the operator supplies a binary via the BYO override, or it builds CUDA in-app.
+> Pin constraint, documented in `LlamaCppReleasePins`: the table carries **no Linux CUDA asset**. Upstream ships Linux CUDA prebuilts from b11803, but the pin does not adopt them. That gap is exactly what §2.6 exists to close — a Linux NVIDIA box either runs Vulkan, or the operator supplies a binary via the BYO override, or it builds CUDA in-app.
 
 ## 2.5 Inference profiles / per-machine tuning
 
@@ -101,7 +101,7 @@ The persisted store + benchmark metrics are migration `20260626234754_AddInferen
 
 ## 2.6 In-app source builds (Linux)
 
-Upstream ships no prebuilt Linux CUDA `llama-server`. Rather than leave a Linux NVIDIA box on Vulkan, the node can **compile `llama-server` from source in-app** and adopt the result as a managed runtime. This is a real, tested subsystem — not a plan — and the code lives in `Providers.LlamaServer/Implementation/` (`LlamaCppSourceBuildService.cs`, `LlamaCppSourceBuildActivity.cs`, `LlamaCppSourceBuildPrerequisiteProbe.cs`, `CudaBuildStartupService.cs`, `CudaManagedBuildSignal.cs`, `LlamaCppBinaryManager.ManagedCuda.cs`), with the operator surface at `LocalApiRoutes.ModelFit.SourceBuild*` and `LlamaCppSourceBuildHub` ([09-api-and-hubs.md](../09-api-and-hubs.md)).
+The pins carry no Linux CUDA `llama-server`. Rather than leave a Linux NVIDIA box on Vulkan, the node can **compile `llama-server` from source in-app** and adopt the result as a managed runtime. This is a real, tested subsystem — not a plan — and the code lives in `Providers.LlamaServer/Implementation/` (`LlamaCppSourceBuildService.cs`, `LlamaCppSourceBuildActivity.cs`, `LlamaCppSourceBuildPrerequisiteProbe.cs`, `CudaBuildStartupService.cs`, `CudaManagedBuildSignal.cs`, `LlamaCppBinaryManager.ManagedCuda.cs`), with the operator surface at `LocalApiRoutes.ModelFit.SourceBuild*` and `LlamaCppSourceBuildHub` ([09-api-and-hubs.md](../09-api-and-hubs.md)).
 
 **Prebuilt download remains the default and only automatic path.** A source build never happens implicitly: it is always an explicit, Operator-gated POST. Once a build is adopted it becomes authoritative (§ binary manager, source 2) until it is explicitly removed.
 

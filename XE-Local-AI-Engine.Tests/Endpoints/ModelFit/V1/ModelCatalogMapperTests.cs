@@ -26,12 +26,12 @@ public sealed class ModelCatalogMapperTests
     public void ToResponse_WithTheBundledSeed_ListsExactlyTheTestedEntriesSmallestFirst()
     {
         var snapshot = BundledSnapshot();
-        GgufFitVerdict[] verdicts = [GgufFitVerdict.Fits, GgufFitVerdict.Tight, GgufFitVerdict.Fits, GgufFitVerdict.Unknown, GgufFitVerdict.WontFit];
+        GgufFitVerdict[] verdicts = [GgufFitVerdict.Fits, GgufFitVerdict.Tight, GgufFitVerdict.Fits, GgufFitVerdict.Unknown, GgufFitVerdict.WontFit, GgufFitVerdict.WontFit];
 
         var response = snapshot.ToResponse(refreshSourceConfigured: false, verdicts);
 
         AssertEx.True(response.TestedModels.Select(model => model.Id)
-                              .SequenceEqual(["granite-4.1-3b", "qwen3.5-4b", "qwen3.5-9b", "qwen3.8-27b", "qwen3.6-35b-a3b"]),
+                              .SequenceEqual(["granite-4.1-3b", "qwen3.5-4b", "qwen3.5-9b", "qwen3.8-27b", "qwen3.6-35b-a3b", "flint"]),
             $"unexpected tested list: {string.Join(", ", response.TestedModels.Select(model => model.Id))}");
         AssertEx.True(snapshot.TestedEntries().Select(entry => entry.Id).SequenceEqual(response.TestedModels.Select(model => model.Id)),
             "TestedEntries must give the response order, since the endpoints grade sizes in that order.");
@@ -47,12 +47,17 @@ public sealed class ModelCatalogMapperTests
         AssertEx.Equal("Q4_K_M", granite.TestedQuant);
         AssertEx.Equal(2099502400L, granite.TestedSizeBytes);
 
-        var moe = response.TestedModels[^1];
+        var moe = response.TestedModels[^2];
         AssertEx.Equal("UD-Q4_K_M", moe.TestedQuant);
         AssertEx.Equal(22134528992L, moe.TestedSizeBytes);
 
+        var flint = response.TestedModels[^1];
+        AssertEx.Equal("unsloth/flint-GGUF", flint.GgufRepo);
+        AssertEx.Equal("UD-Q4_K_XL", flint.TestedQuant);
+        AssertEx.Equal(25054688704L, flint.TestedSizeBytes);
+
         // Each verdict lands on its own row, as the picker's wire value (the GgufFitVerdict enum name).
-        AssertEx.True(response.TestedModels.Select(model => model.FitVerdict).SequenceEqual(["Fits", "Tight", "Fits", "Unknown", "WontFit"]),
+        AssertEx.True(response.TestedModels.Select(model => model.FitVerdict).SequenceEqual(["Fits", "Tight", "Fits", "Unknown", "WontFit", "WontFit"]),
             $"verdicts: {string.Join(", ", response.TestedModels.Select(model => model.FitVerdict))}");
     }
 
@@ -61,7 +66,7 @@ public sealed class ModelCatalogMapperTests
     {
         var response = BundledSnapshot().ToResponse(refreshSourceConfigured: true, [GgufFitVerdict.Fits]);
 
-        AssertEx.Equal(expected: 5, response.TestedModels.Count);
+        AssertEx.Equal(expected: 6, response.TestedModels.Count);
         AssertEx.Equal("Fits", response.TestedModels[0].FitVerdict);
         AssertEx.True(response.TestedModels.Skip(1).All(model => model.FitVerdict == "Unknown"),
             $"verdicts: {string.Join(", ", response.TestedModels.Select(model => model.FitVerdict))}");

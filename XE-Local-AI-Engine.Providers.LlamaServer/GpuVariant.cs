@@ -5,8 +5,8 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 /// </summary>
 /// <remarks>
 ///     The variant only selects which prebuilt asset is downloaded; the actual GPU detection and offload logic lives
-///     inside llama.cpp itself. NVIDIA machines map to <see cref="Cuda" /> on Windows only — llama.cpp
-///     ships no prebuilt Linux CUDA asset, so a Linux NVIDIA machine falls back to <see cref="Vulkan" />.
+///     inside llama.cpp itself. NVIDIA machines map to <see cref="Cuda" /> on Windows only — the pins carry no
+///     Linux CUDA prebuilt (upstream's, from b11803, are not adopted), so a Linux NVIDIA machine falls back to <see cref="Vulkan" />.
 /// </remarks>
 public enum GpuVariant
 {

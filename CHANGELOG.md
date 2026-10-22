@@ -24,6 +24,11 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Added
 
+- **Flint in the curated catalog** — Recursive's Flint (39.8B total / ~2.5B active mixture-of-experts coding-agent
+  model, 256K context, Apache-2.0) is a tier-S entry under the coding, reasoning and general use cases, marked Tested
+  at `UD-Q4_K_XL` after a full model-matrix pass. It thinks by default and switches thinking off through the reasoning
+  budget only; its repository ships no `Q4_K_M`, so the advisor lists it under "Can run". Needs llama.cpp b11803 or
+  later, so it is hidden on a node whose runtime is older.
 - **Per-model API surface for external connections** — each model registered on an OpenAI-compatible external
   connection declares whether it answers on Chat Completions (default) or the Responses API, chosen in the model row of
   the connection editor. Responses models run statelessly (`store=false`, encrypted reasoning replayed from memory in
@@ -184,6 +189,10 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **llama.cpp pinned to b11803** (source commit `a37cc461`, the first build that loads the `flint` architecture; all
+  ten asset SHA256 digests re-verified against the release API, the Windows cudart companion unchanged). Upstream now
+  also publishes prebuilt Linux CUDA archives from this build; they are not adopted yet, a Linux NVIDIA node still
+  selects the Vulkan runtime.
 - **Graph workflows gate node-local data on a direct edge.** A cloud Agent, LLM Call or Decision node fed directly by a
   Tool node that reads node-local data (knowledge-base or workspace file tools) is now refused unless 'Let cloud models
   read local data' is on or the model's connection grants local data. Graphs that ran before may now fail with

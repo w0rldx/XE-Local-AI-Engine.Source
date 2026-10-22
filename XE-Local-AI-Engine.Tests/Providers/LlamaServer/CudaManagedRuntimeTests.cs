@@ -131,7 +131,7 @@ public sealed class CudaManagedRuntimeTests
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, signal);
 
-        // No prebuilt Linux CUDA asset exists → after discarding the bad record the Cuda request fails loudly (no silent CPU).
+        // No Linux CUDA prebuilt is pinned → after discarding the bad record the Cuda request fails loudly (no silent CPU).
         await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.EnsureBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
 
         AssertEx.Null(await store.ReadAsync(CancellationToken.None));
