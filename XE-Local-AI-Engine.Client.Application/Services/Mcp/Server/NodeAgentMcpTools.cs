@@ -32,16 +32,6 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 public sealed class NodeAgentMcpTools
 {
     /// <summary>
-    ///     Upper bound on the characters returned from a single agent run.
-    /// </summary>
-    /// <remarks>
-    ///     An MCP client caps tool output — Claude Code at ~25k tokens by default, warning past ~10k — so an unbounded
-    ///     local-model answer would be truncated by the client with no indication of why. Bounding here gives the
-    ///     caller a clean, explicit marker instead.
-    /// </remarks>
-    private const string TruncationMarker = "\n\n[output truncated by the XE Local AI Engine MCP server]";
-
-    /// <summary>
     ///     How often a synchronous run reports that it is still generating. An MCP client aborts a call that produces neither a
     ///     response nor a progress notification inside its idle window, and a long local generation used to report nothing (I-D15).
     /// </summary>
@@ -244,10 +234,10 @@ public sealed class NodeAgentMcpTools
         }
 
         var result = run.PayloadExpired ? null : run.Result;
-        var resultTruncated = result?.Length > _runOptions.MaxResultCharacters;
-        if (resultTruncated)
+        var resultTruncated = result is not null && McpAgentRunResultTruncation.IsTruncated(result, _runOptions.MaxResultCharacters);
+        if (result?.Length > _runOptions.MaxResultCharacters)
         {
-            result = result![.._runOptions.MaxResultCharacters];
+            result = result[.._runOptions.MaxResultCharacters];
         }
 
         var responseStatus = run.PayloadExpired
@@ -464,7 +454,7 @@ public sealed class NodeAgentMcpTools
             _logger.LogInformation("An MCP run_agent result was truncated from {ActualLength} to {MaxLength} characters before returning it to the client.",
                 result.Length,
                 _runOptions.MaxResultCharacters);
-            result = string.Concat(result.AsSpan(0, _runOptions.MaxResultCharacters), TruncationMarker);
+            result = McpAgentRunResultTruncation.Apply(result, _runOptions.MaxResultCharacters);
         }
 
         return McpToolResults.Text(result);

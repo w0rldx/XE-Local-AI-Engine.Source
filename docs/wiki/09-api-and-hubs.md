@@ -164,6 +164,10 @@ same sweep deletes a tombstone 30 days after compaction and releases its identit
 transaction, so the caps bound a window of recent work rather than the node's lifetime. A request id older
 than that window is admitted as new work.
 
+A durable run, like a synchronous `run_agent`, carries the node's provider-call budget (the same ceilings as a chat turn): a run that exceeds them
+fails `budget_exceeded`, and one whose rounds cannot fit the model window is rejected `task_too_large`. A result clipped to the configured bound ends with the
+server's truncation marker, and `get_agent_run` reports `result_truncated` for it.
+
 Outbound registrations (`mcp/servers`) answer a nullable `slug` — the segment of the server's qualified tool names (`mcp__{slug}__{tool}`), null until the first connect assigns it — so a client can map a tool name back to its server. They carry two fields beside the command/URL: `headers`, HTTP
 request headers sent on every request of an HTTP server's session (for example `Authorization`),
 and `sessionScope` (`Shared` or `PerConversation`, see [Agent Mode](04-agent-mode.md)). Responses

@@ -317,6 +317,7 @@ or Tailscale path separately; the engine still authenticates the MCP bearer key.
 | Agentic approval-required call fails before side effects | Strict metadata-only audit persistence failed. Repair node storage/logging health; the call is intentionally fail-closed. |
 | `run_agent` times out | Raise the client timeout or use `start_agent_run` and poll. |
 | `request_id_conflict` | The UUID already binds different inputs or authority. Use a fresh UUID for distinct work. |
+| `budget_exceeded` | The run hit the node's provider-call or cumulative input-token ceiling, the same ceilings a chat turn has. Split the task into smaller runs; a run whose rounds cannot fit the model window answers `task_too_large` instead. |
 | `result_expired` | The 24-hour durable result payload expired. Start genuinely new work with a fresh UUID. |
 | `workspace_not_authorized` | Refresh `list_workspaces` and use an active opaque id only with the seeded Coder. Never send a host path. |
 | `--status --json` exits 1 | PID/readiness/auth-status evidence does not describe a live healthy process. Restart MCP-only mode and inspect `ready.json`. |

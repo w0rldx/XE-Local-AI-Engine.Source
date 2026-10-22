@@ -3,6 +3,9 @@ namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using System.ClientModel;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Instructions;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -11,6 +14,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
@@ -68,6 +72,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
     private readonly IMcpToolRegistry _mcpToolRegistry;
     private readonly IModelCapabilityResolver _modelCapabilityResolver;
     private readonly IModelTrustResolver _modelTrustResolver;
+    private readonly ProviderCallBudgetOptions _providerCallBudgetOptions;
     private readonly INodeSettingsStore _nodeSettingsStore;
     private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly ISpawnSerializer _spawnSerializer;
@@ -91,6 +96,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         IMcpWorkspaceExecutionSessionFactory mcpWorkspaceSessionFactory,
         INodeSettingsStore nodeSettingsStore,
         IExternalProviderRegistry externalProviderRegistry,
+        IOptions<ProviderCallBudgetOptions> providerCallBudgetOptions,
         ILoggerFactory loggerFactory,
         ILogger<SubAgentSpawnService> logger)
     {
@@ -112,6 +118,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         _mcpWorkspaceSessionFactory = mcpWorkspaceSessionFactory ?? throw new ArgumentNullException(nameof(mcpWorkspaceSessionFactory));
         _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
         _externalProviderRegistry = externalProviderRegistry ?? throw new ArgumentNullException(nameof(externalProviderRegistry));
+        _providerCallBudgetOptions = (providerCallBudgetOptions ?? throw new ArgumentNullException(nameof(providerCallBudgetOptions))).Value;
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -540,10 +547,26 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
     {
         try
         {
+            // An unattended run has no parent turn to share a budget with, so it opens its own, with the same ceilings as a chat turn.
+            using var providerBudget = ProviderCallBudget.BeginScope(await ProviderCallBudgetOptionsResolver.ResolveAsync(_providerCallBudgetOptions,
+                _runtimeSettings,
+                await _runtimeSettings.GetDefaultContextTokensAsync(ct),
+                null,
+                ct));
             return await RunSubAgentCoreAsync(binding,
                 context,
                 async (agent, innerCt) => ToMcpOutcome(await agent.RunAsync(task, cancellationToken: innerCt)),
                 ct);
+        }
+        catch (ProviderCallBudgetExceededException)
+        {
+            return SpawnOutcome.Failed(McpExecutionFailureCodes.BudgetExceeded,
+                "The run stopped at the node's provider-call budget before it finished.");
+        }
+        catch (ProviderContextWindowExceededException)
+        {
+            return SpawnOutcome.Rejected(McpExecutionFailureCodes.TaskTooLarge,
+                "Cannot run: the task does not fit the model's context window. Shorten the task and retry.");
         }
         catch (ClientResultException exception) when (IsContextSizeExceeded(exception))
         {

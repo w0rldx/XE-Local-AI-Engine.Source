@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Capacity;
 
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 /// <summary>
@@ -57,6 +58,9 @@ internal sealed class GateableChatClient : IChatClient
     /// <summary>The external binding pin in force for the last run's model, or <see langword="null" /> when that send was unpinned.</summary>
     public ExternalProviderBindingPin? LastBindingPin { get; private set; }
 
+    /// <summary>The ambient provider-call budget in force during the last run, or <see langword="null" /> when the run had no budget scope.</summary>
+    public ProviderCallBudget? LastProviderBudget { get; private set; }
+
     /// <summary>The system instructions the inner agent passed on the last run (read from <c>ChatOptions.Instructions</c>).</summary>
     public string? LastInstructions { get; private set; }
 
@@ -100,6 +104,7 @@ internal sealed class GateableChatClient : IChatClient
         // Read INSIDE the run, which is where the real transport reads it. The pin is ambient, so this is the only
         // place a test can see whether the child's own send was actually covered by one.
         LastBindingPin = ExternalProviderBindingPinScope.Find(options?.ModelId);
+        LastProviderBudget = ProviderCallBudget.Current;
         LastModelId = options?.ModelId;
         LastInstructions = options?.Instructions;
         LastAdditionalProperties = options?.AdditionalProperties;

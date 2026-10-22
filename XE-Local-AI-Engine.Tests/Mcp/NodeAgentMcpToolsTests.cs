@@ -458,6 +458,22 @@ public sealed class NodeAgentMcpToolsTests
     }
 
     [Test]
+    public async Task GetAgentRunAsync_WhenStoredResultEndsWithTruncationMarker_ReportsTruncation()
+    {
+        var stored = McpAgentRunResultTruncation.Apply(new string('x', 200), 100);
+        var harness = new Harness(maxResultCharacters: 100);
+        harness.RunCoordinator.GetResult = CreateRunView(McpAgentRunStatus.Succeeded) with
+        {
+            Result = stored
+        };
+
+        var response = await harness.Tools.GetAgentRunAsync(harness.RunCoordinator.GetResult.RequestId.ToString("D"), CancellationToken.None);
+
+        AssertEx.Equal(100, response.Run!.Result!.Length);
+        AssertEx.True(response.Run.ResultTruncated, "a result the dispatcher clipped at finalisation must report truncation.");
+    }
+
+    [Test]
     public async Task GetAgentRunAsync_WhenResultExceedsLimit_ReturnsBoundedResultAndTruncationFlag()
     {
         var harness = new Harness(maxResultCharacters: 8);
@@ -889,9 +905,9 @@ public sealed class NodeAgentMcpToolsTests
 
         var result = RunText(await harness.Tools.RunAgentAsync("inspect", harness.Progress, CancellationToken.None, model: Model));
 
-        AssertEx.Equal(retainedCharacters + marker.Length, result.Length);
-        AssertEx.True(result.AsSpan(0, retainedCharacters).IndexOfAnyExcept('x') < 0,
-            "the adapter must retain the first 24,000 result characters unchanged.");
+        AssertEx.Equal(retainedCharacters, result.Length);
+        AssertEx.True(result.AsSpan(0, retainedCharacters - marker.Length).IndexOfAnyExcept('x') < 0,
+            "the adapter must retain the leading result characters unchanged.");
         AssertEx.True(result.EndsWith(marker, StringComparison.Ordinal),
             "the bounded result must explain that truncation happened at the MCP server.");
     }

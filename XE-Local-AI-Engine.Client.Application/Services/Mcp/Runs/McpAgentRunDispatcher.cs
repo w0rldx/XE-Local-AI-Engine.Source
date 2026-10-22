@@ -461,7 +461,7 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
             Status = succeeded ? McpAgentRunStatus.Succeeded : McpAgentRunStatus.Failed,
             ExpectedStopReason = McpAgentRunStopReason.None,
             FailureCode = succeeded ? null : outcome.FailureCode ?? InternalFailureCode,
-            Result = succeeded ? Truncate(outcome.Content, _options.MaxResultCharacters) : null,
+            Result = succeeded && outcome.Content is { } content ? McpAgentRunResultTruncation.Apply(content, _options.MaxResultCharacters) : null,
             // At most 512 UTF-16 code units can encode to the store's 2 KiB UTF-8 display bound.
             DisplayMessage = Truncate(outcome.DisplayMessage, 512),
             CompletedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()

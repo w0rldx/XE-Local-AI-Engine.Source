@@ -209,6 +209,74 @@ public sealed class McpAgentRunDispatcherTests
     }
 
     [Test]
+    public async Task ExecuteAsync_WhenOutcomeExceedsResultBound_StoresMarkedResultWithinTheBound()
+    {
+        var max = new McpAgentRunOptions().MaxResultCharacters;
+
+        var finalization = await FinalizeSuccessfulRunAsync(new string('x', max + 1));
+
+        AssertEx.Equal(max, finalization.Result!.Length);
+        AssertEx.True(finalization.Result.EndsWith(McpAgentRunResultTruncation.Marker, StringComparison.Ordinal),
+            "a clipped result must end with the truncation marker so get_agent_run can report it.");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenOutcomeEqualsResultBound_StoresResultVerbatim()
+    {
+        var content = new string('x', new McpAgentRunOptions().MaxResultCharacters);
+
+        var finalization = await FinalizeSuccessfulRunAsync(content);
+
+        AssertEx.Equal(content, finalization.Result!);
+    }
+
+    private static async Task<McpAgentRunFinalization> FinalizeSuccessfulRunAsync(string content)
+    {
+        using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var registry = new McpAgentRunCancellationRegistry();
+        var store = Substitute.For<IMcpAgentRunStore>();
+        var executor = Substitute.For<IMcpAgentRunExecutor>();
+        var queued = CreateRun(McpAgentRunStatus.Queued, version: 0, claimToken: null, McpAgentRunStopReason.None);
+        var claimed = queued with
+        {
+            Status = McpAgentRunStatus.Running,
+            Version = 1,
+            ClaimToken = Guid.NewGuid(),
+            ClaimedAtUtc = 2
+        };
+        McpAgentRunFinalization? finalization = null;
+        store.ListAsync(Arg.Any<int>(), McpAgentRunStatus.Queued, Arg.Any<CancellationToken>()).Returns([queued]);
+        store.TryClaimAsync(Arg.Is<Guid>(requestId => requestId == queued.RequestId),
+                 Arg.Is<long>(version => version == queued.Version),
+                 Arg.Any<long>(),
+                 Arg.Any<CancellationToken>())
+             .Returns(new McpAgentRunClaimResult
+             {
+                 Kind = McpAgentRunClaimKind.Claimed,
+                 Run = claimed
+             });
+        store.GetAsync(claimed.RequestId, Arg.Any<CancellationToken>()).Returns(claimed);
+        executor.ExecuteAsync(claimed, Arg.Any<CancellationToken>()).Returns(SpawnOutcome.Success(content));
+        store.TryFinalizeAsync(Arg.Any<McpAgentRunFinalization>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
+        {
+            finalization = callInfo.Arg<McpAgentRunFinalization>();
+            stop.Cancel();
+            return true;
+        });
+        await using var provider = CreateProvider(store, executor);
+        using var wake = NewWake();
+        using var dispatcher = CreateDispatcher(provider.GetRequiredService<IServiceScopeFactory>(),
+            registry,
+            wake,
+            provider.GetRequiredService<McpAgentRunMetrics>(),
+            TimeProvider.System);
+
+        await BackgroundServiceTestHelper.RunExecuteAsync(dispatcher, stop.Token).WaitAsync(TimeSpan.FromSeconds(5));
+
+        return finalization!;
+    }
+
+    [Test]
     [SuppressMessage("Reliability", "CA2025:Ensure tasks using IDisposable instances complete before disposal",
         Justification = "The dispatcher task is explicitly awaited before the dispatcher using-scope exits.")]
     public async Task ExecuteAsync_AfterThirtyMinuteWatchdog_PersistsMarkerBeforeCancellingExecution()

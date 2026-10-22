@@ -801,17 +801,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
         int defaultContextTokens,
         CancellationToken cancellationToken)
     {
-        return new ProviderCallBudgetOptions
-        {
-            MaxProviderCallsPerInvocation = _providerCallBudgetOptions.MaxProviderCallsPerInvocation,
-            MaxCumulativeInputTokens = await _runtimeSettings.GetProviderBudgetMaxCumulativeInputTokensAsync(cancellationToken),
-            DefaultContextTokens = defaultContextTokens,
-            ReservedOutputTokenFloor = package.ReservedOutputTokensOverride is { } reserved && reserved >= 0
-                ? reserved
-                : _providerCallBudgetOptions.ReservedOutputTokenFloor,
-            RecentMessagesToKeep = await _runtimeSettings.GetProviderBudgetRecentMessagesToKeepAsync(cancellationToken),
-            OversizedToolResultExcerptChars = _providerCallBudgetOptions.OversizedToolResultExcerptChars
-        };
+        return await ProviderCallBudgetOptionsResolver.ResolveAsync(_providerCallBudgetOptions,
+            _runtimeSettings,
+            defaultContextTokens,
+            package.ReservedOutputTokensOverride,
+            cancellationToken);
     }
 
     /// <summary>Emits the terminal token-usage counter for a completed turn, and nothing when the model reported no usage.</summary>

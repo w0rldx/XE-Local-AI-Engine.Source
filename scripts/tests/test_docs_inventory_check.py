@@ -588,6 +588,15 @@ class DocsInventoryCheckTests(unittest.TestCase):
         self.assertEqual({"docs/wiki/20-new.md"}, {item.doc.as_posix() for item in result.missing})
         self.assertTrue(result.missing[0].render().startswith("CITATION file-line-citations: docs/wiki/20-new.md: "))
 
+    def test_file_line_citations_report_a_line_citation_in_an_adr(self) -> None:
+        root = self.make_repo()
+        self.track(root, {"docs/adr/0099-new.md": "Held by `Foo.cs:12`.\n"})
+
+        result = MODULE.check_file_line_citations(root)
+
+        self.assertEqual(["Foo.cs:12"], [item.name for item in result.missing])
+        self.assertEqual({"docs/adr/0099-new.md"}, {item.doc.as_posix() for item in result.missing})
+
     def test_file_line_citations_cover_script_and_configuration_extensions(self) -> None:
         root = self.make_repo()
         cited = [

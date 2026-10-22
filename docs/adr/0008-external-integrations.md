@@ -20,16 +20,16 @@ a future slice turns. Inbound MCP and the local model proxy are hand-mapped **in
 they inherit that gate.
 
 **Every `IInvocationRunner` caller already shares one slot.** Chat, the platform hub, benchmarks and the scheduler all
-serialise through a single `SemaphoreSlim(1,1)` lease: `RunSavedAgentHandler.cs:321` calls
-`ReportInvocationAssignedAsync`, which is the acquisition (`WorkerEventDispatcher.Inbound.cs:143-152`). Lane 01
+serialise through a single `SemaphoreSlim(1,1)` lease: `RunSavedAgentHandler` calls
+`ReportInvocationAssignedAsync`, which is the acquisition (`WorkerEventDispatcher.Local`, `ReportInvocationAssignedAsync`). Lane 01
 originally reported the scheduler as bypassing it; `REPORT.md` §0.1 records the correction. Integration executions
 therefore do not need a new admission primitive — they need to queue behind the one that exists, and to reject rather
 than accumulate when that queue is full.
 
 **XE already ships an audited auto-approve path for an external principal.** An MCP *Agentic*-scope key wraps every
-`ApprovalRequiredAIFunction` in `AutoApprovedFunction` with an audit row (`SubAgentSpawnService.cs:463-467`,
-`McpAgenticToolAdapter.cs:19-35`), while `IsUnattended` runs fail closed before any other check
-(`ToolApprovalCoordinator.cs:170-180`). Two precedents exist and they disagree, which is why the unattended posture
+`ApprovalRequiredAIFunction` in `AutoApprovedFunction` with an audit row (`SubAgentSpawnService.ResolveAgenticMcpToolsAsync`,
+`McpAgenticToolAdapter.Adapt`), while `IsUnattended` runs fail closed before any other check
+(`ToolApprovalCoordinator`, the `package.IsUnattended` branch). Two precedents exist and they disagree, which is why the unattended posture
 below is an explicit ruling rather than a default.
 
 ## Decision
@@ -146,7 +146,7 @@ below is an explicit ruling rather than a default.
 ## Consequences
 
 **What this forecloses.** There are no concurrent integration executions in V1: one lease serialises them, and
-`InvocationLifecycleTracker.cs:55` holds a single CTS. There is no resume of an in-flight generation across a restart —
+`InvocationLifecycleTracker` registers a single active invocation (one cancellation source). There is no resume of an in-flight generation across a restart —
 the coordinator terminalises orphaned rows `Failed` / `restart` at startup. There is no IP allowlist, because there is
 no non-loopback peer to allow.
 
@@ -155,7 +155,7 @@ the principal's active executions, re-reads the key row for revocation, and inse
 `execution.accepted` event, then commits. **Only after that commit** does the caller create the owned
 `NodeConversation` — at the `ConversationId` the session row already carries, minted before the transaction — and write
 the seed message, because `INodeChatPersistenceService` is a singleton that opens its own scope per operation
-(`NodeChatPersistenceWriter.cs:48-70`) and cannot join another transaction. A failure at either post-commit step
+(`NodeChatPersistenceWriter.ExecuteConversationExclusiveAsync`, via `RunScopedAsync`) and cannot join another transaction. A failure at either post-commit step
 terminalises the execution `Failed` / `internal-failure` through the coordinator's ordinary path, which already treats a
 missing conversation as `internal-failure`.
 

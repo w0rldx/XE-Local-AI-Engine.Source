@@ -118,6 +118,7 @@ HEADING_MARKUP_RE = re.compile(
 CITATION_DOC_PATHSPECS = (
     "docs/agent-knowledge*.md",
     "docs/wiki/*.md",
+    "docs/adr/*.md",
     "AGENTS.md",
     "XE-Local-AI-Engine.Client.React/AGENTS.md",
 )

@@ -32,6 +32,9 @@ public static class McpExecutionFailureCodes
     /// <summary>The task does not fit the bound (<c>MaxTaskUtf8Bytes</c>) or the model's context window.</summary>
     public const string TaskTooLarge = "task_too_large";
 
+    /// <summary>The run hit the node's provider-call or cumulative input-token ceiling.</summary>
+    public const string BudgetExceeded = "budget_exceeded";
+
     /// <summary>Several agents share the requested name; name-keyed lookups refuse to pick one.</summary>
     public const string AmbiguousName = "ambiguous_name";
 }

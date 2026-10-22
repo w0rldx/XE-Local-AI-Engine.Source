@@ -4,7 +4,10 @@ using System.ClientModel;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
+using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -1031,6 +1034,63 @@ public sealed class SubAgentSpawnServiceTests
     }
 
     [Test]
+    public async Task SpawnForMcp_RunsInsideAProviderCallBudgetScopeCarryingTheResolvedOptions()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.ResolveMcpBinding(BareBinding());
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var outcome = await harness.Build().SpawnForMcpAsync(new McpExecutionBindingRequest
+        {
+            ModelId = Model
+        }, "inspect", expectedBindingFingerprint: null, CancellationToken.None);
+
+        AssertEx.Equal(SpawnOutcomeKind.Success, outcome.Kind);
+        var budget = harness.ChatClient.LastProviderBudget;
+        AssertEx.True(budget is not null, "an unattended MCP run must open its own provider-call budget scope.");
+        AssertEx.Equal(7, budget!.Options.MaxProviderCallsPerInvocation);
+        AssertEx.Equal(12_345, budget.Options.DefaultContextTokens);
+        AssertEx.True(ProviderCallBudget.Current is null, "the budget scope must not leak past the run.");
+    }
+
+    [Test]
+    public async Task SpawnForMcp_WhenProviderCallBudgetIsExceeded_FailsBudgetExceeded()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.ResolveMcpBinding(BareBinding());
+        harness.ChatClient.Failure = new ProviderCallBudgetExceededException("budget");
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var outcome = await harness.Build().SpawnForMcpAsync(new McpExecutionBindingRequest
+        {
+            ModelId = Model
+        }, "loop", expectedBindingFingerprint: null, CancellationToken.None);
+
+        AssertEx.Equal(SpawnOutcomeKind.Failed, outcome.Kind);
+        AssertEx.Equal(McpExecutionFailureCodes.BudgetExceeded, outcome.FailureCode!);
+    }
+
+    [Test]
+    public async Task SpawnForMcp_WhenRoundDoesNotFitTheWindow_RejectsTaskTooLarge()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.ResolveMcpBinding(BareBinding());
+        harness.ChatClient.Failure = new ProviderContextWindowExceededException(9_000, 4_000);
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var outcome = await harness.Build().SpawnForMcpAsync(new McpExecutionBindingRequest
+        {
+            ModelId = Model
+        }, "huge", expectedBindingFingerprint: null, CancellationToken.None);
+
+        AssertEx.Equal(SpawnOutcomeKind.Rejected, outcome.Kind);
+        AssertEx.Equal(McpExecutionFailureCodes.TaskTooLarge, outcome.FailureCode!);
+    }
+
+    [Test]
     public async Task SpawnForMcp_WhenCapacityRejectsWorkspace_DoesNotResolveOrLeaseWorkspace()
     {
         using var harness = new Harness();
@@ -1977,7 +2037,7 @@ public sealed class SubAgentSpawnServiceTests
                 new EmptyMcpToolRegistry(),
                 _customToolCatalog,
                 _chatClient,
-                StubNodeRuntimeSettings.Create().WithSpawnQueueWaitSeconds(5).WithAllowCloudModelSubAgents(AllowCloudModelSubAgents).Build(),
+                StubNodeRuntimeSettings.Create().WithSpawnQueueWaitSeconds(5).WithDefaultContextTokens(12_345).WithAllowCloudModelSubAgents(AllowCloudModelSubAgents).Build(),
                 _instructionProvider,
                 _modelCapabilityResolver,
                 TrustResolver,
@@ -1986,6 +2046,7 @@ public sealed class SubAgentSpawnServiceTests
                 _mcpWorkspaceSessionFactory,
                 _nodeSettingsStore,
                 ExternalRegistry,
+                Options.Create(new ProviderCallBudgetOptions { MaxProviderCallsPerInvocation = 7 }),
                 NullLoggerFactory.Instance,
                 _logger);
         }

@@ -279,6 +279,8 @@ invisible to the runner — so this hop is the only place that sees, and can bou
 It is gated on an ambient `ProviderCallBudget` scope seeded per invocation by the runner; with no scope
 (the eval and preview-workflow runners drive the same shared client without one) it is a transparent
 pass-through, except for the tool-call ceiling below.
+An unattended inbound MCP run (`run_agent`, `start_agent_run`) has no runner above it, so `SubAgentSpawnService` opens its own scope with the same
+ceilings, resolved by the shared `ProviderCallBudgetOptionsResolver`.
 
 - **Per-response tool-call ceiling.** `MaximumToolIterationsPerRequest` counts round-trips, so one runaway
   response (a 7B model once emitted 1,584 identical calls in a single turn) was otherwise unbounded. Every
