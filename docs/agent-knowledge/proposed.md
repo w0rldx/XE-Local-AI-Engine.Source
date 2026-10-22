@@ -165,3 +165,11 @@ record it in `ToolExecutionTimingScope`, and read it where the completed lifecyc
 `Requested` and `Completed` events of `InvocationRunner.StreamLoop`, and never read `ToolInvocationObservabilityChatClient`'s
 `tool.duration_ms` as execution time. **Prevents:** a tool time that includes the model's streaming tail and every sibling
 call of the round, so a fast tool reports seconds. **Authority:** `ToolExecutionTimingScope`; `ToolExecutionTimingTests`.
+
+### Never build a symlink-chain fixture at the kernel's 40-link limit
+
+**Rule:** keep a symlink-chain fixture at or below 20 links. Linux follows at most 40, and its lock-free path walk
+restarts and re-counts the links already followed whenever anything on the box mounts, so a chain longer than 20 is not
+reliably resolvable while other tests launch sandboxes. **Prevents:** a fixture that resolves alone and fails `stat`
+with ELOOP inside a gate, as `SandboxedMcpStdioTransport.MaxLinkHops` did at 40 in the 2026-10-22 gate reds.
+**Authority:** `SandboxedMcpStdioTransport.MaxLinkHops`; `SandboxedMcpStdioTransportTests`.

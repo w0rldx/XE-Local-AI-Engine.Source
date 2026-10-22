@@ -66,7 +66,8 @@ fi
 # FAKE_SUMMARY picks the MTP summary: passed (default), failed, skipped (all skipped), none.
 case "${FAKE_SUMMARY:-passed}" in
   passed)  printf 'Test run summary: Passed!\n  total: 1\n  failed: 0\n  succeeded: 1\n  skipped: 0\n' ;;
-  failed)  printf 'Test run summary: Failed!\n  total: 3\n  failed: 2\n  succeeded: 1\n  skipped: 0\n'
+  failed)  printf 'failed SomeTest (12ms)\n  Assertion failed: Expected: 5, actual: 4\n    at Some.Frame()\n\n'
+           printf 'Test run summary: Failed!\n  total: 3\n  failed: 2\n  succeeded: 1\n  skipped: 0\n'
            exit 2 ;;
   skipped) printf 'Test run summary: Passed!\n  total: 4\n  failed: 0\n  succeeded: 0\n  skipped: 4\n' ;;
   none)    exit 0 ;;
@@ -196,6 +197,9 @@ run_red failed env FAKE_SUMMARY=failed
 [[ "$status" -eq 1 ]] || { echo "failed case exited $status" >&2; exit 1; }
 grep -Fq 'FAILED namespaces: XE_Local_AI_Engine.Tests.Ordinary' <<<"$output"
 grep -Fq 'TOTAL: pass=1 fail=2 skip=0' <<<"$output"
+
+# The assertion line under a failure header reaches the printed output, not only the header.
+grep -Fq 'Expected: 5, actual: 4' <<<"$output"
 
 run_red no-summary env FAKE_SUMMARY=none
 [[ "$status" -eq 1 ]] || { echo "no-summary case exited $status" >&2; exit 1; }

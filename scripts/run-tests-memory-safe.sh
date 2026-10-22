@@ -384,7 +384,16 @@ SETTINGS
   # unit does print "Passed!", so the verdict below separately requires succeeded > 0 (HOLLOW).
   local sum=0; grep -qE 'Test run summary: (Passed|Failed)!' "$out" && sum=1
   printf "   %-52s pass=%-4s fail=%-3s skip=%-3s peakRSS=%sMB exit=%s dur=%ss\n" "$ns" "$p" "$f" "$s" "$((peak/1024))" "$rc" "$((EPOCHSECONDS-t0))"
-  if [[ "$f" -gt 0 ]]; then grep -E 'failed|error' "$out" | grep -viE 'failed: 0' | head -3 >"$RESULTS_DIR/$ns.fails"; fi
+  if [[ "$f" -gt 0 ]]; then
+    # Each "failed <Test> (<ms>)" header keeps its exact line plus the block under it (the assertion line and the first
+    # frames, 12 lines per failure, 60 in all): the gate's FAILED TEST parser reads only the header lines. A host that
+    # printed no such header falls back to the first three failed|error lines.
+    awk '/^[[:space:]]*failed .+ \([0-9][^()]*\)[[:space:]]*$/ { keep = 12 }
+         keep > 0 && n < 60 { print; keep--; n++ }
+         /^[[:space:]]*$/ { keep = 0 }' "$out" >"$RESULTS_DIR/$ns.fails"
+    [[ -s "$RESULTS_DIR/$ns.fails" ]] \
+      || grep -E 'failed|error' "$out" | grep -viE 'failed: 0' | head -3 >"$RESULTS_DIR/$ns.fails"
+  fi
   rm -f "$out"
   # A unit whose collector wrote no report (or an empty one) would otherwise be merged as silently
   # incomplete coverage: the tests pass, the percentage quietly drops. The marker is `<class`, NOT

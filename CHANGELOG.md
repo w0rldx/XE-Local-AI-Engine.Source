@@ -340,6 +340,9 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Fixed
 
+- The Sandboxed MCP link-chain walk now stops at 20 hops instead of 40, so a working directory behind a deep link chain
+  is refused with a margin below the Linux limit of 40 (the kernel's lock-free path walk retries and re-counts links
+  whenever anything mounts), and the backend gate keeps a failing test's assertion text.
 - External Apps is off while the app catalog is empty: with an empty catalog at startup the container bridge does not open, and install, update, Start, Restart and Reset refuse until a restart after the first catalog entry (`restartRequired` on the catalog response, restart card in English and German; Stop and Uninstall stay allowed). A catalog that empties while the node runs refuses the same operations and the page says the bridge stays open until a restart. Install and Open reasons on the External Apps page are keyboard-reachable through the shared disabled-reason tooltip.
 
 - The external-provider connection store wrote its encrypted file in place; a crash mid-write could lose every

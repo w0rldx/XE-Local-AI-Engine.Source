@@ -891,7 +891,8 @@ public sealed class SandboxedMcpStdioTransportTests
         try
         {
             var target = Directory.CreateDirectory(Path.Combine(chain.FullName, "real")).FullName;
-            // Linux follows at most 40 links (ELOOP beyond), so this chain stays resolvable only while MaxLinkHops is at most 40.
+            // The kernel limit is 40 links and its walk retry under concurrent mounts can double the count, so the chain
+            // follows MaxLinkHops, which must stay at or below 20 for the OS itself to resolve it reliably.
             for (var hop = 1; hop <= SandboxedMcpStdioTransport.MaxLinkHops; hop++)
             {
                 var link = Path.Combine(chain.FullName, $"l{hop.ToString(CultureInfo.InvariantCulture)}");
@@ -1192,11 +1193,11 @@ public sealed class SandboxedMcpStdioTransportTests
         // through.
         RequireSymlinks();
         var estate = Directory.CreateDirectory(Path.Combine(FixtureRoot, $"estate-{Guid.NewGuid():N}"));
+        var link = Path.Combine(FixtureRoot, $"link-{Guid.NewGuid():N}");
         try
         {
             var account = Directory.CreateDirectory(Path.Combine(estate.FullName, "home"));
             _ = Directory.CreateDirectory(Path.Combine(account.FullName, ".ssh"));
-            var link = Path.Combine(FixtureRoot, $"link-{Guid.NewGuid():N}");
             Directory.CreateSymbolicLink(link, estate.FullName);
 
             var record = StdioRecord(McpTrustTier.Sandboxed) with
@@ -1223,6 +1224,7 @@ public sealed class SandboxedMcpStdioTransportTests
         }
         finally
         {
+            File.Delete(link);
             estate.Delete(recursive: true);
         }
     }
@@ -1235,9 +1237,9 @@ public sealed class SandboxedMcpStdioTransportTests
         // mount and what the chain's descriptor opener will validate.
         RequireSymlinks();
         var nvm = Directory.CreateDirectory(Path.Combine(FixtureRoot, $"nvm-{Guid.NewGuid():N}", "versions", "v22"));
+        var link = Path.Combine(FixtureRoot, $"tools-{Guid.NewGuid():N}");
         try
         {
-            var link = Path.Combine(FixtureRoot, $"tools-{Guid.NewGuid():N}");
             Directory.CreateSymbolicLink(link, nvm.FullName);
 
             var record = StdioRecord(McpTrustTier.Sandboxed) with
@@ -1253,6 +1255,7 @@ public sealed class SandboxedMcpStdioTransportTests
         }
         finally
         {
+            File.Delete(link);
             nvm.Parent!.Parent!.Delete(recursive: true);
         }
     }

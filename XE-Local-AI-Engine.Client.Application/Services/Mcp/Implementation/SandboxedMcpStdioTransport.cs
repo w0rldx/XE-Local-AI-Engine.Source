@@ -59,8 +59,13 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     /// <summary>FILE_NAME_NORMALIZED | VOLUME_NAME_DOS: the long, link-resolved name on its drive letter.</summary>
     private const uint FileNameNormalizedVolumeNameDos = 0;
 
-    /// <summary>Link hops followed before a path is treated as a cycle. The kernel's own ELOOP limit is 40.</summary>
-    internal const int MaxLinkHops = 40;
+    /// <summary>Link hops followed before a path is treated as a cycle: half the kernel's limit of 40.</summary>
+    /// <remarks>
+    /// Linux follows at most 40 links, but its lock-free path walk retries from a partially spent link budget whenever a mount
+    /// happens elsewhere, so a chain it resolves reliably stays at or below half that limit. A real working directory sits
+    /// behind one to three links.
+    /// </remarks>
+    internal const int MaxLinkHops = 20;
 
     /// <summary>Credential and configuration stores under the operator's home directory, each denied with its whole subtree.</summary>
     private static readonly string[] SensitiveHomeSubdirectories =
