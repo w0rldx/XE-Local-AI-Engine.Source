@@ -177,8 +177,8 @@ importers:
         specifier: ^5.0.3
         version: 5.0.3(vitest@5.0.3)
       '@vitest/ui':
-        specifier: ^5.0.3
-        version: 5.0.3(vitest@5.0.3)
+        specifier: ^5.0.5
+        version: 5.0.5(vitest@5.0.3)
       cspell:
         specifier: ^10.3.6
         version: 10.3.6
@@ -226,7 +226,7 @@ importers:
         version: 8.3.4(@types/node@22.3.0)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.29))(yaml@2.9.1)
       vitest:
         specifier: ^5.0.3
-        version: 5.0.3(@opentelemetry/api@1.9.1)(@types/node@22.3.0)(@vitest/coverage-v8@5.0.3)(@vitest/ui@5.0.3)(jsdom@30.0.1)(msw@2.15.0(@types/node@22.3.0)(typescript@6.0.3))(vite@8.3.4(@types/node@22.3.0)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.29))(yaml@2.9.1))
+        version: 5.0.3(@opentelemetry/api@1.9.1)(@types/node@22.3.0)(@vitest/coverage-v8@5.0.3)(@vitest/ui@5.0.5)(jsdom@30.0.1)(msw@2.15.0(@types/node@22.3.0)(typescript@6.0.3))(vite@8.3.4(@types/node@22.3.0)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.29))(yaml@2.9.1))
     optionalDependencies:
       '@rollup/rollup-linux-x64-gnu':
         specifier: 4.64.5
@@ -1033,6 +1033,7 @@ packages:
   '@opentelemetry/sdk-trace-base@2.10.0':
     resolution: {integrity: sha512-GuYQQT7QD2EeO8lcZLRQzcbOyhqAzL+6WWTKTU9mSUBYBazkEDl+VrQcXQhbB08OWM9anD1aHleVadzulpOaUQ==}
     engines: {node: ^18.19.0 || >=20.6.0}
+    deprecated: Use @opentelemetry/sdk-trace package
     peerDependencies:
       '@opentelemetry/api': '>=1.3.0 <1.10.0'
 
@@ -2506,19 +2507,19 @@ packages:
       vite:
         optional: true
 
-  '@vitest/pretty-format@5.0.3':
-    resolution: {integrity: sha512-3hr5eV5z2ff0l2Q1vaKQbB4j3M3tElw8stDokEOTqXJB3Es5VrT8gBRIMY59gGuFp8Y61sWlWFK1aNUH5dHDYw==}
+  '@vitest/pretty-format@5.0.5':
+    resolution: {integrity: sha512-24sSdIlMA9DVPXnYiB9siwU0bTd887Y9jX3+vabztCSsvHwo7ipvJ/a2L3Rljw8+2rK1f5fCj3h5U9I/Jsqgbw==}
 
   '@vitest/spy@5.0.3':
     resolution: {integrity: sha512-XhFysQTB8AZ+P4gMi+Lpo99vg2AZi0qKpaB9yXQl37+CaMEAPO3iH/wGVnSyL5MPERiLezpqTVtrR6UZH5GCXg==}
 
-  '@vitest/ui@5.0.3':
-    resolution: {integrity: sha512-9dfvqDBvSbHM6y9YVXxAypkl2z7mrWozK/JFo237qI0cj/3M/kzDKiVZqzi3TE54Ler7Jditud7OMBZCyUvRHA==}
+  '@vitest/ui@5.0.5':
+    resolution: {integrity: sha512-dCoGUOdgmCaSB2g+WQ/spPCBkytAWdNUkFSXY4z+eYp2d8JEOY8v0uDRaJTG9qf/kTlTVZ4CuYMYMz/f1HS/qQ==}
     peerDependencies:
-      vitest: 5.0.3
+      vitest: 5.0.5
 
-  '@vitest/utils@5.0.3':
-    resolution: {integrity: sha512-77fDTZv8eu1CzlIfgPU2yrl5MXSUaUAOvgdZEeVm3X3WIxUubIX2SforqS6176lT32HCF6uBVMYVqfHxw7o6eg==}
+  '@vitest/utils@5.0.5':
+    resolution: {integrity: sha512-/rBu7gzLDQI/SC79Tn98b5DwOgaHU/Gt4I9OVeP3YofzNaYtbImRCOJQmT1S6vOJg9gEIlWC+r3QxKkjuSa1nQ==}
 
   '@xstate/fsm@1.6.5':
     resolution: {integrity: sha512-b5o1I6aLNeYlU/3CPlj/Z91ybk1gUsKT+5NAJI+2W4UjvS5KLG28K9v5UvNoFVjHV8PajVZ00RH3vnjyQO7ZAw==}
@@ -4891,6 +4892,10 @@ packages:
 
   tinyrainbow@3.1.1:
     resolution: {integrity: sha512-yau8yJdTt989Mm0Bd/236QnzEiPf2xLLTqUZRUJOo/3CB078LSwzei343DgtJVmfJKJE3TMINY1u42SQsP6mXw==}
+    engines: {node: '>=14.0.0'}
+
+  tinyrainbow@3.2.0:
+    resolution: {integrity: sha512-LgO3D9yZJjApUiuUfl9iFAwrtaX4+lok3wJIqttGoKCHlWUqHqbQpnxCf82L8FjgKsh4iGo78hqJwgL8F6To2A==}
     engines: {node: '>=14.0.0'}
 
   tldts-core@7.4.10:
@@ -7397,7 +7402,7 @@ snapshots:
       obug: 2.1.4
       std-env: 4.2.0
       tinyrainbow: 3.1.1
-      vitest: 5.0.3(@opentelemetry/api@1.9.1)(@types/node@22.3.0)(@vitest/coverage-v8@5.0.3)(@vitest/ui@5.0.3)(jsdom@30.0.1)(msw@2.15.0(@types/node@22.3.0)(typescript@6.0.3))(vite@8.3.4(@types/node@22.3.0)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.29))(yaml@2.9.1))
+      vitest: 5.0.3(@opentelemetry/api@1.9.1)(@types/node@22.3.0)(@vitest/coverage-v8@5.0.3)(@vitest/ui@5.0.5)(jsdom@30.0.1)(msw@2.15.0(@types/node@22.3.0)(typescript@6.0.3))(vite@8.3.4(@types/node@22.3.0)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.29))(yaml@2.9.1))
 
   '@vitest/istanbul-lib-coverage@1.0.1': {}
 
@@ -7415,27 +7420,27 @@ snapshots:
       msw: 2.15.0(@types/node@22.3.0)(typescript@6.0.3)
       vite: 8.3.4(@types/node@22.3.0)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.29))(yaml@2.9.1)
 
-  '@vitest/pretty-format@5.0.3':
+  '@vitest/pretty-format@5.0.5':
     dependencies:
-      tinyrainbow: 3.1.1
+      tinyrainbow: 3.2.0
 
   '@vitest/spy@5.0.3': {}
 
-  '@vitest/ui@5.0.3(vitest@5.0.3)':
+  '@vitest/ui@5.0.5(vitest@5.0.3)':
     dependencies:
-      '@vitest/utils': 5.0.3
+      '@vitest/utils': 5.0.5
       fflate: 0.8.3
       flatted: 3.4.4
       pathe: 2.0.3
       sirv: 3.0.2
-      tinyrainbow: 3.1.1
-      vitest: 5.0.3(@opentelemetry/api@1.9.1)(@types/node@22.3.0)(@vitest/coverage-v8@5.0.3)(@vitest/ui@5.0.3)(jsdom@30.0.1)(msw@2.15.0(@types/node@22.3.0)(typescript@6.0.3))(vite@8.3.4(@types/node@22.3.0)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.29))(yaml@2.9.1))
+      tinyrainbow: 3.2.0
+      vitest: 5.0.3(@opentelemetry/api@1.9.1)(@types/node@22.3.0)(@vitest/coverage-v8@5.0.3)(@vitest/ui@5.0.5)(jsdom@30.0.1)(msw@2.15.0(@types/node@22.3.0)(typescript@6.0.3))(vite@8.3.4(@types/node@22.3.0)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.29))(yaml@2.9.1))
 
-  '@vitest/utils@5.0.3':
+  '@vitest/utils@5.0.5':
     dependencies:
-      '@vitest/pretty-format': 5.0.3
+      '@vitest/pretty-format': 5.0.5
       convert-source-map: 2.0.0
-      tinyrainbow: 3.1.1
+      tinyrainbow: 3.2.0
 
   '@xstate/fsm@1.6.5': {}
 
@@ -10177,6 +10182,8 @@ snapshots:
 
   tinyrainbow@3.1.1: {}
 
+  tinyrainbow@3.2.0: {}
+
   tldts-core@7.4.10: {}
 
   tldts@7.4.10:
@@ -10434,7 +10441,7 @@ snapshots:
       sugarss: 5.0.1(postcss@8.5.29)
       yaml: 2.9.1
 
-  vitest@5.0.3(@opentelemetry/api@1.9.1)(@types/node@22.3.0)(@vitest/coverage-v8@5.0.3)(@vitest/ui@5.0.3)(jsdom@30.0.1)(msw@2.15.0(@types/node@22.3.0)(typescript@6.0.3))(vite@8.3.4(@types/node@22.3.0)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.29))(yaml@2.9.1)):
+  vitest@5.0.3(@opentelemetry/api@1.9.1)(@types/node@22.3.0)(@vitest/coverage-v8@5.0.3)(@vitest/ui@5.0.5)(jsdom@30.0.1)(msw@2.15.0(@types/node@22.3.0)(typescript@6.0.3))(vite@8.3.4(@types/node@22.3.0)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.29))(yaml@2.9.1)):
     dependencies:
       '@types/chai': 5.2.3
       '@vitest/mocker': 5.0.3(msw@2.15.0(@types/node@22.3.0)(typescript@6.0.3))(vite@8.3.4(@types/node@22.3.0)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.29))(yaml@2.9.1))
@@ -10454,7 +10461,7 @@ snapshots:
       '@opentelemetry/api': 1.9.1
       '@types/node': 22.3.0
       '@vitest/coverage-v8': 5.0.3(vitest@5.0.3)
-      '@vitest/ui': 5.0.3(vitest@5.0.3)
+      '@vitest/ui': 5.0.5(vitest@5.0.3)
       jsdom: 30.0.1
     transitivePeerDependencies:
       - msw
