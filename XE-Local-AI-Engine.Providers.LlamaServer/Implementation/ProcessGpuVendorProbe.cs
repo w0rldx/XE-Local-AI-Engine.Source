@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
@@ -14,16 +15,21 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     Windows (<see cref="ReadWindowsAdapterListAsync" />). Rationale and the single-timeout model:
 ///     docs/wiki/03-local-runtime-and-providers.md, "Vendor detection: probe order, the Windows adapter list and the single timeout model".
 /// </remarks>
+[SuppressMessage("Design", "CA1001:Types that own disposable fields should be disposable",
+    Justification = "The semaphore is a process-lifetime singleton single-flight gate and is never disposed while a probe may be running.")]
 public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
 {
     // Hard cap per probe tool: without it a hung tool blocks until the caller's token fires — nvidia-smi can stall indefinitely under some Windows driver/WMI states,
     // and so can a CIM/WMI query against a wedged repository — freezing first-run provisioning. On timeout the tool's whole tree is killed and the vendor reads as undetected.
     private static readonly TimeSpan DefaultProbeTimeout = TimeSpan.FromSeconds(8);
 
+    private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Func<bool> _nvidiaDriverPresent;
     private readonly ProbePlatform _platform;
     private readonly TimeSpan _probeTimeout;
     private readonly Func<string, string, IProbeProcess> _processFactory;
+    // None (0) means not cached: an int-sized enum publishes atomically, which a Nullable<enum> struct does not.
+    private volatile DetectedGpuVendor _detected;
 
     /// <summary>Creates a probe that detects the NVIDIA driver from the live host's NVML library locations.</summary>
     public ProcessGpuVendorProbe()
@@ -72,6 +78,38 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
 
     /// <inheritdoc />
     public async Task<DetectedGpuVendor> DetectVendorAsync(CancellationToken ct)
+    {
+        // A positive detection is kept for the process lifetime; None is re-probed so a transient timeout never pins the CPU floor.
+        var known = _detected;
+        if (known != DetectedGpuVendor.None)
+        {
+            return known;
+        }
+
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var raced = _detected;
+            if (raced != DetectedGpuVendor.None)
+            {
+                return raced;
+            }
+
+            var vendor = await ProbeAsync(ct).ConfigureAwait(false);
+            if (vendor != DetectedGpuVendor.None)
+            {
+                _detected = vendor;
+            }
+
+            return vendor;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task<DetectedGpuVendor> ProbeAsync(CancellationToken ct)
     {
         // Fast path: the NVML runtime library ships with the NVIDIA display driver. If it is present we are confident an
         // NVIDIA adapter is installed — return immediately, with NO process spawned.

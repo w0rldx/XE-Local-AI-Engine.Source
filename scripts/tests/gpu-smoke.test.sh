@@ -92,6 +92,47 @@ audit_vulkan_ok="$(records 'inferenceBackend\tvulkan\ngpuExpected\ttrue\ncpuFall
 assert_device_audit "${audit_vulkan_ok}" >/dev/null 2>&1
 check "a working vulkan backend passes" "0" "$?"
 
+echo "== device audit deferral =="
+
+# A fake driver that answers each `audit` call from a queue and counts the calls. The script's own
+# functions call `drive` and read TOKEN, so defining both here exercises the real step-2 logic.
+AUDIT_CALLS_FILE="${TEMP_ROOT}/audit-calls"
+audit_unknown_rec='inferenceBackend\tunknown\ngpuExpected\ttrue\ncpuFallback\tfalse\n'
+audit_cuda_rec='inferenceBackend\tcuda\ngpuExpected\ttrue\ncpuFallback\tfalse\n'
+# shellcheck disable=SC2034 # read by the sourced script functions
+TOKEN=t
+drive() {
+  local n
+  n="$(cat "${AUDIT_CALLS_FILE}")"; n=$((n + 1)); printf '%s' "${n}" >"${AUDIT_CALLS_FILE}"
+  if [[ "${n}" -eq 1 ]]; then records "${FIRST_AUDIT}"; else records "${SECOND_AUDIT}"; fi
+}
+# shellcheck disable=SC2034 # AUDIT_DEFERRED and the ledger arrays belong to the sourced script
+run_audit_step() {
+  FIRST_AUDIT="$1"; SECOND_AUDIT="$2"; printf '0' >"${AUDIT_CALLS_FILE}"
+  LEDGER_EXPECTED=(); LEDGER_PASSED=(); LEDGER_SKIPPED=(); LEDGER_FAILED=(); FAILURES=(); AUDIT_DEFERRED=false
+  ledger_expect "2-device-audit"
+  device_audit_first_read
+  device_audit_reread
+}
+
+out="$(run_audit_step "${audit_unknown_rec}" "${audit_cuda_rec}" 2>&1; ledger_finalize 2>&1; echo "finalize=$?")"
+check_contains "unknown first read defers" "backend=unknown before the first spawn; step 2 re-reads after step 3" "${out}"
+check_contains "re-read is logged" "audit re-read after the first spawn: backend=cuda cpuFallback=false" "${out}"
+check_contains "unknown then cuda passes step 2" "PASS  2-device-audit" "${out}"
+check_contains "unknown then cuda finalizes green" "finalize=0" "${out}"
+CHECKS=$((CHECKS + 1))
+[[ "${out}" != *"FAIL"* ]] || { echo "  FAIL: unknown then cuda must not fail: ${out}" >&2; FAILED=$((FAILED + 1)); }
+
+run_audit_step "${audit_unknown_rec}" "${audit_unknown_rec}" >/dev/null 2>&1
+check "unknown then unknown fails step 2" "2-device-audit" "${LEDGER_FAILED[*]:-}"
+check "unknown then unknown records no pass" "0" "${#LEDGER_PASSED[@]}"
+out="$(ledger_finalize 2>&1)"; status=$?
+check "unknown then unknown cannot reach RESULT PASS" "1" "${status}"
+
+run_audit_step "${audit_cuda_rec}" "${audit_unknown_rec}" >/dev/null 2>&1
+check "cuda first read is never re-read" "1" "$(cat "${AUDIT_CALLS_FILE}")"
+check "cuda first read passes step 2 once" "2-device-audit" "${LEDGER_PASSED[*]:-}"
+
 echo "== runtime identity =="
 
 # `installed` is nullable and null does NOT mean "no runtime" — a fresh node running the

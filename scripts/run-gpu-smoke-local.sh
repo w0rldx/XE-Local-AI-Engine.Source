@@ -21,6 +21,12 @@
 #                           verdict belongs to step 2, see "configuration vs outcome" below).
 #   2. Device audit       — IRuntimeDeviceAudit reports a GPU backend and NOT cpuFallback.
 #                           This is the check that would have caught the original silent-CPU state.
+#                           Deferral rule: when the FIRST read says `unknown` (and only then) the
+#                           selected variant's binary may simply not be on disk yet, because the node
+#                           acquires it at the first spawn (seen right after a variant selection
+#                           changed). Step 2 then waits, steps 1, 3 and 4 run as usual, the audit is
+#                           read ONCE more after step 4, and step 2 is judged from that second read
+#                           with the same assertion: still unknown or cpu is a FAIL, as ever.
 #   3. Model load + chat  — a real streamed turn over the SignalR hub returns non-empty content.
 #   4. GPU actually used  — nvidia-smi utilisation crossed a threshold DURING generation AND VRAM
 #                           rose above the pre-start baseline. THE load-bearing assertion.
@@ -331,6 +337,38 @@ assert_device_audit() {
     return 1
   fi
   return 0
+}
+
+# Step 2 first read. An `unknown` backend defers the verdict to device_audit_reread (see the
+# deferral rule in the header); every other outcome is judged here, as before.
+AUDIT_DEFERRED=false
+AUDIT_RECORDS=""
+AUDIT_BACKEND=""
+device_audit_first_read() {
+  AUDIT_RECORDS="$(drive audit --token "${TOKEN}")" || AUDIT_RECORDS=""
+  AUDIT_BACKEND="$(record_value inferenceBackend "${AUDIT_RECORDS}")"
+  if [[ -z "${AUDIT_RECORDS}" ]]; then
+    step_fail "2-device-audit" "the hardware-profile request failed; no audit verdict could be read."
+  elif [[ "${AUDIT_BACKEND}" == "unknown" ]]; then
+    AUDIT_DEFERRED=true
+    log "audit: backend=unknown before the first spawn; step 2 re-reads after step 3"
+  elif assert_device_audit "${AUDIT_RECORDS}"; then
+    ledger_pass "2-device-audit"
+  fi
+}
+
+# Step 2 second read, only when the first one deferred. Judged with the same assertion.
+device_audit_reread() {
+  [[ "${AUDIT_DEFERRED}" == "true" ]] || return 0
+  AUDIT_DEFERRED=false
+  local records
+  records="$(drive audit --token "${TOKEN}")" || records=""
+  log "audit re-read after the first spawn: backend=$(record_value inferenceBackend "${records}") cpuFallback=$(record_value cpuFallback "${records}")"
+  if [[ -z "${records}" ]]; then
+    step_fail "2-device-audit" "the hardware-profile re-read failed; no audit verdict could be read."
+  elif assert_device_audit "${records}"; then
+    ledger_pass "2-device-audit"
+  fi
 }
 
 # Step 3 helper. Picks the SMALLEST installed llama.cpp chat model — smallest by sizeBytes, not
@@ -871,13 +909,7 @@ log "auth       ok (first-run setup performed: $(record_value setupPerformed "${
 # step 2 first: its verdict is an input to step 1
 log "=== Step 2: device audit ==="
 ledger_expect "2-device-audit"
-AUDIT_RECORDS="$(drive audit --token "${TOKEN}")" || AUDIT_RECORDS=""
-AUDIT_BACKEND="$(record_value inferenceBackend "${AUDIT_RECORDS}")"
-if [[ -z "${AUDIT_RECORDS}" ]]; then
-  step_fail "2-device-audit" "the hardware-profile request failed; no audit verdict could be read."
-elif assert_device_audit "${AUDIT_RECORDS}"; then
-  ledger_pass "2-device-audit"
-fi
+device_audit_first_read
 
 log "=== Step 1: runtime identity ==="
 ledger_expect "1-runtime-identity"
@@ -922,6 +954,8 @@ else
     ledger_pass "4-gpu-used"
   fi
 fi
+
+device_audit_reread
 
 log "=== Step 5: tool calling ==="
 TOOL_RECORDS="$(drive tools --token "${TOKEN}")" || TOOL_RECORDS=""

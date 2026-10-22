@@ -221,7 +221,7 @@ Rule 2 is what makes an in-app CUDA build usable on Linux: `ICudaManagedBuildSig
 
 #### Vendor detection: probe order, the Windows adapter list and the single timeout model
 
-`ProcessGpuVendorProbe` tries NVML driver presence, then `nvidia-smi`, then a platform adapter list, and degrades to the CPU floor on any failure.
+`ProcessGpuVendorProbe` tries NVML driver presence, then `nvidia-smi`, then a platform adapter list, and degrades to the CPU floor on any failure. A detected vendor is kept for the process lifetime and concurrent first calls probe once; `None` is re-probed on the next call so a transient timeout never pins the CPU floor.
 
 See [the reference page](reference/03-runtime-binaries-and-tuning.md#vendor-detection-probe-order-the-windows-adapter-list-and-the-single-timeout-model) for the rest of this section.
 

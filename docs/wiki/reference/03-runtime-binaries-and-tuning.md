@@ -6,7 +6,7 @@ It lists GPU vendor detection, the llama.cpp binary manager and updater, runtime
 
 ### Vendor detection: probe order, the Windows adapter list and the single timeout model
 
-`ProcessGpuVendorProbe` prefers a non-shelling driver-presence signal and shells out only when that misses; any detection failure degrades to `DetectedGpuVendor.None`, the CPU floor, and never throws. In order:
+`ProcessGpuVendorProbe` prefers a non-shelling driver-presence signal and shells out only when that misses; any detection failure degrades to `DetectedGpuVendor.None`, the CPU floor, and never throws. A detected vendor is kept for the process lifetime and concurrent first calls probe once; `None` is re-probed on the next call so a transient timeout never pins the CPU floor. In order:
 
 1. **NVML driver presence, no process spawned.** The NVML runtime library — `nvml.dll` on Windows, `libnvidia-ml.so` / `libnvidia-ml.so.1` on Linux — ships with the NVIDIA *display driver*, not the CUDA toolkit, so finding it is a valid "an NVIDIA driver is installed" signal and the probe returns immediately. Its ABSENCE is not proof of the opposite: newer Windows drivers may place `nvml.dll` only under `Program Files\NVIDIA\NVSMI` rather than `System32`.
 2. **`nvidia-smi`**, which is the confirmation that inconclusive absence needs.

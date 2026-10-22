@@ -165,6 +165,110 @@ public sealed class ProcessGpuVendorProbeTests
             "the Linux branch must not shell a Windows adapter query");
     }
 
+    [Test]
+    public async Task AfterAPositiveDetection_TheNextCallSpawnsNothing()
+    {
+        var spawns = 0;
+        var probe = new ProcessGpuVendorProbe(() => false,
+            TimeSpan.FromSeconds(8),
+            (name, args) =>
+            {
+                spawns++;
+                return ScriptedProcess.Factory(new Dictionary<string, string?> { ["nvidia-smi"] = "NVIDIA GeForce RTX 4080\n" })(name, args);
+            },
+            ProcessGpuVendorProbe.ProbePlatform.Linux);
+
+        AssertEx.Equal(DetectedGpuVendor.Nvidia, await probe.DetectVendorAsync(CancellationToken.None));
+        var spawnsAfterFirst = spawns;
+        AssertEx.Equal(DetectedGpuVendor.Nvidia, await probe.DetectVendorAsync(CancellationToken.None));
+
+        AssertEx.True(spawnsAfterFirst > 0, "the first call must have probed");
+        AssertEx.Equal(spawnsAfterFirst, spawns, "a kept detection must not spawn another process");
+    }
+
+    [Test]
+    public async Task AfterNone_TheNextCallProbesAgain()
+    {
+        var spawns = 0;
+        var probe = new ProcessGpuVendorProbe(() => false,
+            TimeSpan.FromSeconds(8),
+            (name, args) =>
+            {
+                spawns++;
+                return ScriptedProcess.Factory(new Dictionary<string, string?>())(name, args);
+            },
+            ProcessGpuVendorProbe.ProbePlatform.Linux);
+
+        AssertEx.Equal(DetectedGpuVendor.None, await probe.DetectVendorAsync(CancellationToken.None));
+        var spawnsAfterFirst = spawns;
+        AssertEx.Equal(DetectedGpuVendor.None, await probe.DetectVendorAsync(CancellationToken.None));
+
+        AssertEx.True(spawnsAfterFirst > 0, "the first call must have probed");
+        AssertEx.Equal(spawnsAfterFirst * 2, spawns, "an undetected result must be probed again");
+    }
+
+    [Test]
+    public async Task TwoConcurrentFirstCalls_ProbeOnce()
+    {
+        var spawns = 0;
+        var release = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var probe = new ProcessGpuVendorProbe(() => false,
+            TimeSpan.FromSeconds(8),
+            (_, _) =>
+            {
+                Interlocked.Increment(ref spawns);
+                return new GatedProbeProcess(release.Task);
+            },
+            ProcessGpuVendorProbe.ProbePlatform.Linux);
+
+        var first = probe.DetectVendorAsync(CancellationToken.None);
+        var second = probe.DetectVendorAsync(CancellationToken.None);
+        release.SetResult("NVIDIA GeForce RTX 4080\n");
+        var vendors = await Task.WhenAll(first, second);
+
+        AssertEx.Equal(DetectedGpuVendor.Nvidia, vendors[0]);
+        AssertEx.Equal(DetectedGpuVendor.Nvidia, vendors[1]);
+        AssertEx.Equal(expected: 1, spawns, "a concurrent burst must probe once");
+    }
+
+    /// <summary>A fake probe process whose stdout completes only when the test releases it.</summary>
+    private sealed class GatedProbeProcess : ProcessGpuVendorProbe.IProbeProcess
+    {
+        private readonly Task<string> _standardOutput;
+
+        public GatedProbeProcess(Task<string> standardOutput)
+        {
+            _standardOutput = standardOutput;
+        }
+
+        public bool HasExited => true;
+
+        public int ExitCode => 0;
+
+        public bool Start()
+        {
+            return true;
+        }
+
+        public Task<string> ReadStandardOutputAsync(CancellationToken ct)
+        {
+            return _standardOutput;
+        }
+
+        public Task WaitForExitAsync(CancellationToken ct)
+        {
+            return Task.CompletedTask;
+        }
+
+        public void Kill()
+        {
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
     /// <summary>A fake probe process answering canned stdout per executable, recording which were attempted.</summary>
     private sealed class ScriptedProcess : ProcessGpuVendorProbe.IProbeProcess
     {
