@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Tools;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
@@ -45,6 +46,48 @@ internal static class GraphWorkflowToolGate
                 }
             ]
             : invocable;
+    }
+
+    /// <summary>
+    ///     Whether <paramref name="node" /> is a <c>Tool</c> node whose tool returns node-local data: the set the chat
+    ///     local-data gate withholds from a cloud model (<see cref="LocalToolOfferProvider.LocalDataToolNames" />).
+    /// </summary>
+    public static bool ReadsLocalData(GraphWorkflowGraphNode node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+
+        return node.Config is GraphWorkflowToolConfig config && LocalToolOfferProvider.LocalDataToolNames.Contains(config.ToolName);
+    }
+
+    /// <summary>The first DIRECT predecessor, in node-key order, that fed <paramref name="inputJson" /> node-local data, or <see langword="null" />.</summary>
+    /// <remarks>
+    ///     Read off the composed document's <c>upstream</c> keys, which hold only SATISFIED edges, so a local-data Tool
+    ///     that failed on an <c>Any</c> join taints nothing. Why: docs/wiki/21-graph-workflows.md §4.3.
+    /// </remarks>
+    public static GraphWorkflowGraphNode? LocalDataSource(GraphWorkflowGraph graph, string inputJson)
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+
+        try
+        {
+            using var document = JsonDocument.Parse(inputJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty("upstream", out var upstream)
+                || upstream.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            return upstream.EnumerateObject()
+                           .Select(static property => property.Name)
+                           .Order(StringComparer.Ordinal)
+                           .Select(key => graph.Nodes.GetValueOrDefault(key))
+                           .FirstOrDefault(static node => node is not null && ReadsLocalData(node));
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     /// <summary>One error per offending <c>Tool</c> node, keyed by NODE KEY so the editor draws it on that node.</summary>

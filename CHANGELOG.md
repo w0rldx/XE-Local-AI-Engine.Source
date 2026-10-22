@@ -184,6 +184,10 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **Graph workflows gate node-local data on a direct edge.** A cloud Agent, LLM Call or Decision node fed directly by a
+  Tool node that reads node-local data (knowledge-base or workspace file tools) is now refused unless 'Let cloud models
+  read local data' is on or the model's connection grants local data. Graphs that ran before may now fail with
+  `ValidationFailed`; set the grant on the connection. Saving such a graph with a pinned cloud model warns.
 - **llama.cpp pinned to b11669** (release v0.7.0, source commit `620d2225`, all ten asset SHA256 digests and the
   cudart companion re-verified against the release API). The bundled runtime no longer enforces a tool's upper
   length or item bound above 2000 in its grammar; the tool-schema compatibility pass still strips such bounds, and

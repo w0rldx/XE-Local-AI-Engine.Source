@@ -230,8 +230,55 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
         }
 
         var warnings = suppressed.Count == 0 ? graph.Warnings : [.. graph.Warnings.Where(warning => !suppressed.Contains(warning))];
-        var uninstalled = await UninstalledModelWarningsAsync(graph, cancellationToken);
-        return uninstalled.Count == 0 ? warnings : [.. warnings, .. uninstalled];
+        var runtime = (IReadOnlyList<GraphWorkflowValidationError>)
+        [
+            .. await UninstalledModelWarningsAsync(graph, cancellationToken),
+            .. await LocalDataEdgeWarningsAsync(graph, cancellationToken)
+        ];
+        return runtime.Count == 0 ? warnings : [.. warnings, .. runtime];
+    }
+
+    /// <summary>One warning per model node whose OWN pin would be refused the output of a direct local-data Tool predecessor.</summary>
+    /// <remarks>
+    ///     Mirrors the executor's local-data gate on the definition, so it warns conservatively: an <c>Any</c> join whose
+    ///     local-data branch fails would run. An unpinned node is skipped like the unattended warning skips it; the runtime
+    ///     gate is authoritative. A trust lookup that faults reads as local and says nothing.
+    /// </remarks>
+    private async Task<IReadOnlyList<GraphWorkflowValidationError>> LocalDataEdgeWarningsAsync(GraphWorkflowGraph graph, CancellationToken cancellationToken)
+    {
+        var warnings = new List<GraphWorkflowValidationError>();
+        foreach (var node in graph.Nodes.Values.OrderBy(static node => node.NodeKey, StringComparer.Ordinal))
+        {
+            var model = node.Config switch
+            {
+                GraphWorkflowAgentConfig { Model: { } agentModel, IncludeUpstreamOutputs: true } => agentModel,
+                GraphWorkflowLlmCallConfig { Model: { } llmModel, InputBindings.Count: > 0 } => llmModel,
+                GraphWorkflowDecisionModelConfig { Model: { } decisionModel, InputBindings.Count: > 0 } when !IsNativeDecisionNode(node.Config) => decisionModel,
+                _ => null
+            };
+            if (string.IsNullOrWhiteSpace(model))
+            {
+                continue;
+            }
+
+            var source = graph.InboundEdges(node.NodeKey)
+                              .Select(edge => graph.Nodes[edge.From])
+                              .OrderBy(static predecessor => predecessor.NodeKey, StringComparer.Ordinal)
+                              .FirstOrDefault(GraphWorkflowToolGate.ReadsLocalData);
+            if (source is null
+                || await IsLocalAsync(model, cancellationToken)
+                || !await CloudLocalDataGate.WithholdsAsync(leavesNode: true, await _trust.ResolveCloudGrantsAsync(model, cancellationToken), _runtimeSettings, cancellationToken))
+            {
+                continue;
+            }
+
+            warnings.Add(new GraphWorkflowValidationError(node.NodeKey,
+                $"Node '{node.NodeKey}' pins model '{model}', which is not a node-local model, and reads Tool node '{source.NodeKey}' "
+                + $"('{((GraphWorkflowToolConfig)source.Config).ToolName}'), which returns node-local data, so a run will refuse this node. Turn on "
+                + "'Let cloud models read local data' in Node Settings → Privacy & updates, or grant local data on the model's external connection when it has one, to allow it."));
+        }
+
+        return warnings;
     }
 
     /// <summary>One warning per model-running node pinned to a model a run of that node would refuse.</summary>

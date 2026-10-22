@@ -269,6 +269,13 @@ a `$defs` or `definitions` pool is correctly ignored, since the transform never 
 editor's validation strip renders it through the same generic channel as the first kind, so neither the DTO nor the
 SPA needed a new shape for it. What it is warning about is §4.2.
 
+**The service adds warnings about pinned models**, in `GraphWorkflowDefinitionService.WarningsForRuntimeAsync`, because
+only it reaches the model catalog and the node settings. Each judges a node's OWN `model` pin and skips an unpinned
+node, since the run-start gates are authoritative: a pin that is not an installed node-managed GGUF model; a cloud pin
+on an LLM Call or decision node while unattended cloud runs are withheld (§4.2a); and a cloud pin on a node that reads a
+local-data Tool node over a direct edge while local data is withheld (`LocalDataEdgeWarningsAsync`, §4.3). The last is
+read off the definition's inbound edges, so it also warns on an `Any` join whose local-data branch might fail.
+
 The node cap runs **first of all**, ahead of every rule above. `MaxNodesPerDefinition` reaches the parser as an
 argument rather than a dependency (`GraphWorkflowGraph.Parse(graphJson, maxNodes)`, defaulted to no cap so the parser
 stays testable without a container; `GraphWorkflowGraphContract.ValidateAndCountNodes` passes the option through), and
@@ -611,6 +618,11 @@ chat-bound run (`run.input.conversationId`). `GraphWorkflowInvocationExecutor` r
   that reads the content decides this, so the notice can never disagree with the prompt. The node's **output** document
   gains `attachmentsSkipped: [name…]` (omitted when nothing was skipped), the executor logs the count at Information,
   and the turn still runs.
+- **Withheld from a cloud model** — uploaded files are node-local data. A node whose effective model leaves the node
+  reads them only while **Let cloud models read local data** (`AllowCloudModelAccess`) is on or the model's connection
+  grants local data (`CloudLocalDataGate`, the rule §4.3's edge gate shares). Otherwise every file is skipped and named
+  in `attachmentsSkipped`, and the turn still runs: attachments are an enrichment, where upstream content is the node's
+  input and is refused instead.
 
 A node without the flag, a `Standard` graph and a run without attachments send a prompt byte-identical to one before
 attachments existed; every Agent of a Chat graph still sees the `Attachments: <names>` line of its conversation request (§4.2).
@@ -759,6 +771,13 @@ tools (it lists some, or orchestrates) is refused `ValidationFailed` the same wa
 them; the reason is `AgentModelRequirements.ToolRefusal`'s sentence. The editor's Agent form shows a yellow warning when
 the node's model override is such a model; with no override the server decides.
 
+**A second gate guards node-local data on a direct edge.** When an inbound edge from a Tool node that reads node-local
+data (§4.3) was satisfied and `includeUpstreamOutputs` is on, a cloud effective model is refused `ValidationFailed` unless
+**Let cloud models read local data** (`AllowCloudModelAccess`) is on or the model's connection grants local data. It
+runs right after the unattended gate, so an unattended refusal wins when both apply, and before attachments, capacity
+and the package: nothing is sent. The reason names the Tool node, its tool, the model, the switch and the connection
+grant. With `includeUpstreamOutputs` off the seed inlines no upstream, so the node runs.
+
 The runner's own watchdog reports a timeout as a failed terminal, which is why the executor classes it `Timeout`
 rather than `NodeFailed` — a node that ran out of time deserves a different answer from one whose provider said no.
 Provider errors never reach the row: the reason says "see the node logs" and the detail stays there.
@@ -787,6 +806,11 @@ gate is skipped, capacity short-circuits as for any cloud model, and the package
 llama requirement, so the shared runtime routes the call to the cloud client. A response schema rides the request's
 response format as on the local path; a provider that ignores it fails the run through the usual parse or label check,
 never silently.
+
+The local-data edge gate of §4.2 applies too, after the unattended check and with the same grants: a cloud or unresolved
+model is refused when a local-data Tool node fed this node over a satisfied edge and `inputBindings` is non-empty.
+Without bindings no upstream reaches the prompt, so the node runs. Bindings are not path-analysed: a binding that only
+reads `run.input` is refused too while such a predecessor exists.
 
 | Config member | Meaning |
 |---|---|
@@ -845,6 +869,18 @@ The one exception besides `web_fetch` is an action (below).
 A tool that was read-only when the graph was saved does not execute after a policy tightened. A tool outside the
 envelope is an **error**, never a warning: a workflow node runs unattended, so a write, execute or approval-gated
 tool has nobody to ask. Errors are keyed by node key, so the editor draws them on the offending node.
+
+**A local-data Tool node taints its direct consumers.** A Tool node whose tool returns node-local data is one in the set
+the chat local-data gate withholds from a cloud model (`LocalToolOfferProvider.LocalDataToolNames`: the knowledge-base
+read tools and the coder workspace file tools). `GraphWorkflowToolGate.LocalDataSource` finds such a node among the keys
+of the consumer's `upstream` document, which hold only satisfied edges, so a failed one on an `Any` join taints nothing.
+Its Agent, LLM Call or `llm` decision consumer then passes the local-data gate of §4.2 before a cloud model sees the
+output. `web_fetch`, `get_current_time`, `calculate` and action tools are not in the set.
+
+**Accepted ceiling: direct edges only.** Taint is not carried further. Content laundered through a local LLM Call or
+Agent, a `Condition`, a `Join` or `End`, a later run's `run.previous`, or a local agent's cloud sub-agent reaches a cloud
+node ungated. Action tools stay untainted although a command or HTTP action can return local content, matching the chat
+classification, where custom tools are never under the local-data rule.
 
 **The one web exception** ([ADR 0017](../adr/0017-web-access-tools-and-graph-allowlist.md) decision 6; ADR 0006 is its
 basis and is not amended). While web access is on, a Tool node may name `web_fetch` if it carries a non-empty
@@ -1056,6 +1092,7 @@ runs through `RunLlmTurnAsync` unchanged, model gate, capacity and binding rules
 **interprets** the answer, and the executor holds the choice to the labels: an answer that is not a JSON object, or
 names anything outside them, fails `NodeFailed` (retryable, so `AttemptsExhausted` on the last attempt), and the reason
 never repeats the model's text.
+The lowered call carries the same bindings, so the local-data edge gate of §4.2a applies unchanged.
 
 **`systemone` provider.** `SystemOneDecisionProvider` is an `IGraphWorkflowNativeDecisionProvider`: it answers itself
 through a native decision model (Julia-1, Laya, Kev-4B: any GGUF carrying `<arch>.decision.type`) and llama-server's
@@ -1072,7 +1109,9 @@ about 1.3 s for a 200-token input in the live round, so an input of a few thousa
 `Timeout` on every attempt. It
 deliberately takes no node-wide invocation slot (the decision process is a pooled companion with its own lease, and
 the chat slot would queue it behind chat turns) and runs no invocation runner, so there is no invocation record and no
-runner watchdog; attachments and steering do not apply. An answer of another type than `questionType`, an off-label
+runner watchdog; attachments and steering do not apply. The local-data edge gate does not run on this lane because
+only node-local models do; a provider that ever answers remotely must call `CloudLocalDataGate` with the bound input.
+An answer of another type than `questionType`, an off-label
 choice or a missing number fails `NodeFailed` (retryable), each with its own reason; HTTP 501 (the model is not a
 decision model) fails `ValidationFailed` naming the model; a refused request (HTTP 400, or the HTTP 500 "input (N tokens)
 is too large to process" b11669 answers for a prompt longer than the process's physical batch: `-ub` equals the launched

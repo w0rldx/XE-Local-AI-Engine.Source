@@ -177,6 +177,9 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             inputJson = nodeRun.InputJson ?? await InputDocumentAsync(store, graph, node, run, cancellationToken);
         }
 
+        // From the document the turn reads, so a re-offer judges what the row carries; recomputed rather than stored (wiki 21 §4.3).
+        var localDataSource = GraphWorkflowToolGate.LocalDataSource(graph, inputJson);
+
         // Minted HERE, before the task starts: it is the first argument of the runtime package request AND what the stop path hands the runner, so a turn that
         // minted it privately would leave the cancel path with nothing to call for the whole of its first tick.
         var invocationId = Guid.NewGuid();
@@ -189,6 +192,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                 node.Config,
                 invocationId,
                 inputJson,
+                localDataSource,
                 graph.Kind == GraphWorkflowDefinitionKind.Chat,
                 SteeringSection(nodeRun),
                 leaseAcquired,
@@ -336,6 +340,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         GraphWorkflowNodeConfig config,
         Guid invocationId,
         string inputJson,
+        GraphWorkflowGraphNode? localDataSource,
         bool chatGraph,
         string? steering,
         StrongBox<bool> leaseAcquired,
@@ -343,12 +348,12 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
     {
         if (config is GraphWorkflowLlmCallConfig llmConfig)
         {
-            return await RunLlmTurnAsync(runId, nodeRunId, node, llmConfig, invocationId, inputJson, steering, leaseAcquired, cancellationToken);
+            return await RunLlmTurnAsync(runId, nodeRunId, node, llmConfig, invocationId, inputJson, localDataSource, steering, leaseAcquired, cancellationToken);
         }
 
         if (config is GraphWorkflowDecisionModelConfig decisionConfig)
         {
-            return await RunDecisionTurnAsync(runId, nodeRunId, node, decisionConfig, invocationId, inputJson, leaseAcquired, cancellationToken);
+            return await RunDecisionTurnAsync(runId, nodeRunId, node, decisionConfig, invocationId, inputJson, localDataSource, leaseAcquired, cancellationToken);
         }
 
         var agentConfig = (GraphWorkflowAgentConfig)config;
@@ -387,13 +392,23 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             // 3. LOCALITY GATE. Classified on the EFFECTIVE model and refused before capacity and before any invocation: a graph workflow run is
             //    unattended by construction, so its content reaches a cloud model only while the operator lets cloud models run unattended.
             var capabilities = await services.GetRequiredService<IModelCapabilityResolver>().ResolveAsync(effectiveModel, cancellationToken);
-            if (await CloudUnattendedGate.WithholdsAsync(capabilities.IsCloud, capabilities.CloudGrants, services.GetRequiredService<INodeRuntimeSettings>(), cancellationToken))
+            var runtimeSettings = services.GetRequiredService<INodeRuntimeSettings>();
+            if (await CloudUnattendedGate.WithholdsAsync(capabilities.IsCloud, capabilities.CloudGrants, runtimeSettings, cancellationToken))
             {
                 _logger.LogInformation("Graph workflow run {RunId} refused node '{NodeKey}': its effective model is cloud-hosted and AllowCloudModelUnattendedRuns is off.",
                     runId,
                     node.NodeKey);
                 return Invalid(
                     "This graph workflow agent node's effective model is a cloud model, which does not run unattended. Turn on 'Let cloud models run unattended' in Node Settings → Privacy & updates, or grant unattended runs on the model's external connection when it has one, to allow it.");
+            }
+
+            // The LOCAL-DATA GATE on a direct edge: the seed inlines upstream only with IncludeUpstreamOutputs, so only then does a local-data Tool's output reach the model.
+            if (localDataSource is not null
+                && agentConfig.IncludeUpstreamOutputs
+                && await CloudLocalDataGate.WithholdsAsync(capabilities.IsCloud, capabilities.CloudGrants, runtimeSettings, cancellationToken))
+            {
+                LogLocalDataRefusal(runId, node, localDataSource);
+                return Invalid(LocalDataRefusal(node, localDataSource, $"to the cloud model '{effectiveModel}'"));
             }
 
             // The capability gate, for a bound agent only: the default persona lists no tools and requires none.
@@ -497,6 +512,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         GraphWorkflowLlmCallConfig config,
         Guid invocationId,
         string inputJson,
+        GraphWorkflowGraphNode? localDataSource,
         string? steering,
         StrongBox<bool> leaseAcquired,
         CancellationToken cancellationToken)
@@ -545,17 +561,33 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                     return Invalid($"Graph workflow {callName} nodes require a model classified for chat.");
                 }
             }
-            else if (await CloudUnattendedGate.WithholdsAsync(leavesNode: true,
-                         await services.GetRequiredService<IModelTrustResolver>().ResolveCloudGrantsAsync(effectiveModel, cancellationToken),
-                         services.GetRequiredService<INodeRuntimeSettings>(),
-                         cancellationToken))
+            else
             {
-                _logger.LogInformation("Graph workflow run {RunId} refused node '{NodeKey}': its effective model is cloud-hosted and AllowCloudModelUnattendedRuns is off.",
-                    runId,
-                    node.NodeKey);
-                return Invalid(locality == ModelTrustLocality.Cloud
-                    ? $"Node '{node.NodeKey}' would run this {callName} on the cloud model '{effectiveModel}', which does not run unattended. Turn on 'Let cloud models run unattended' in Node Settings → Privacy & updates, or grant unattended runs on the model's external connection when it has one, to allow it."
-                    : $"Node '{node.NodeKey}' would run this {callName} on '{effectiveModel}', which is not a node-local model; a model outside the trust boundary runs unattended only while 'Let cloud models run unattended' is on in Node Settings → Privacy & updates.");
+                // Resolved once: the unattended and the local-data gates judge the same connection's grants.
+                var grants = await services.GetRequiredService<IModelTrustResolver>().ResolveCloudGrantsAsync(effectiveModel, cancellationToken);
+                var runtimeSettings = services.GetRequiredService<INodeRuntimeSettings>();
+                if (await CloudUnattendedGate.WithholdsAsync(leavesNode: true, grants, runtimeSettings, cancellationToken))
+                {
+                    _logger.LogInformation("Graph workflow run {RunId} refused node '{NodeKey}': its effective model is cloud-hosted and AllowCloudModelUnattendedRuns is off.",
+                        runId,
+                        node.NodeKey);
+                    return Invalid(locality == ModelTrustLocality.Cloud
+                        ? $"Node '{node.NodeKey}' would run this {callName} on the cloud model '{effectiveModel}', which does not run unattended. Turn on 'Let cloud models run unattended' in Node Settings → Privacy & updates, or grant unattended runs on the model's external connection when it has one, to allow it."
+                        : $"Node '{node.NodeKey}' would run this {callName} on '{effectiveModel}', which is not a node-local model; a model outside the trust boundary runs unattended only while 'Let cloud models run unattended' is on in Node Settings → Privacy & updates.");
+                }
+
+                // Upstream reaches the prompt only through a binding. Bindings are not path-analysed: any binding beside a local-data predecessor refuses.
+                if (localDataSource is not null
+                    && config.InputBindings.Count > 0
+                    && await CloudLocalDataGate.WithholdsAsync(leavesNode: true, grants, runtimeSettings, cancellationToken))
+                {
+                    LogLocalDataRefusal(runId, node, localDataSource);
+                    return Invalid(LocalDataRefusal(node,
+                        localDataSource,
+                        locality == ModelTrustLocality.Cloud
+                            ? $"to this {callName} on the cloud model '{effectiveModel}'"
+                            : $"to this {callName} on '{effectiveModel}', which is not a node-local model"));
+                }
             }
 
             var capabilities = await services.GetRequiredService<IModelCapabilityResolver>().ResolveAsync(effectiveModel, cancellationToken);
@@ -643,6 +675,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         GraphWorkflowDecisionModelConfig config,
         Guid invocationId,
         string inputJson,
+        GraphWorkflowGraphNode? localDataSource,
         StrongBox<bool> leaseAcquired,
         CancellationToken cancellationToken)
     {
@@ -657,7 +690,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             return Invalid($"Node '{node.NodeKey}' names the decision provider '{config.Provider}', which this build does not run.");
         }
 
-        var turn = await RunLlmTurnAsync(runId, nodeRunId, node, provider.Lower(config), invocationId, inputJson, steering: null, leaseAcquired, cancellationToken);
+        var turn = await RunLlmTurnAsync(runId, nodeRunId, node, provider.Lower(config), invocationId, inputJson, localDataSource, steering: null, leaseAcquired, cancellationToken);
         if (!turn.Succeeded)
         {
             return turn;
@@ -680,6 +713,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
     ///     Skipped on purpose: the node-wide invocation slot (a pooled companion holds its own lease), the invocation runner
     ///     (the client's budget bounds the call), attachments, steering and cloud models. A wrong type, an off-label choice
     ///     or a missing number fails <c>NodeFailed</c>; HTTP 501 fails <c>ValidationFailed</c>. Why each: wiki 21 §4.9.
+    ///     No local-data gate runs here because only Local models do: a remote native provider must call <see cref="CloudLocalDataGate" />.
     /// </remarks>
     private async Task<GraphWorkflowAgentTurn> RunNativeDecisionTurnAsync(Guid runId,
         Guid nodeRunId,
@@ -1225,6 +1259,17 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
               + string.Join("\n", applied);
     }
 
+    /// <summary>The local-data refusal; <paramref name="destination" /> names where the content would go, as the unattended refusal does.</summary>
+    private static string LocalDataRefusal(GraphWorkflowGraphNode node, GraphWorkflowGraphNode source, string destination) =>
+        $"Node '{node.NodeKey}' would send the output of Tool node '{source.NodeKey}' ('{((GraphWorkflowToolConfig)source.Config).ToolName}'), which reads node-local data, {destination}. "
+        + "Turn on 'Let cloud models read local data' in Node Settings → Privacy & updates, or grant local data on the model's external connection when it has one, to allow it.";
+
+    private void LogLocalDataRefusal(Guid runId, GraphWorkflowGraphNode node, GraphWorkflowGraphNode source) =>
+        _logger.LogInformation("Graph workflow run {RunId} refused node '{NodeKey}': it reads local-data Tool node '{SourceKey}', its effective model is cloud-hosted and AllowCloudModelAccess is off.",
+            runId,
+            node.NodeKey,
+            source.NodeKey);
+
     private static string WithSteering(string prompt, string? steering) =>
         WithSection(prompt, steering);
 
@@ -1261,8 +1306,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         }
 
         // Uploaded files are node-local data, which follow the chat's rule: a cloud model reads them only by the operator's opt-in.
-        if (capabilities.IsCloud && !capabilities.CloudGrants.LocalData
-                                 && !await services.GetRequiredService<INodeRuntimeSettings>().GetAllowCloudModelAccessAsync(cancellationToken))
+        if (await CloudLocalDataGate.WithholdsAsync(capabilities.IsCloud, capabilities.CloudGrants, services.GetRequiredService<INodeRuntimeSettings>(), cancellationToken))
         {
             _logger.LogInformation("Graph workflow run {RunId} node '{NodeKey}' skips {SkippedCount} attachment(s): its model is cloud-hosted and AllowCloudModelAccess is off.",
                 runId,

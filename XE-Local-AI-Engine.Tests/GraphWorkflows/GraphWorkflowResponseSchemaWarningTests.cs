@@ -234,6 +234,75 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
     }
 
     /// <summary>
+    ///     A pinned cloud LLM call bound to a knowledge-base Tool's output is refused at run time while local data is
+    ///     withheld, so validation names both routes that would admit it.
+    /// </summary>
+    [Test]
+    public async Task ValidateAsync_WhenACloudLlmCallReadsAKnowledgeBaseTool_WarnsAboutLocalData()
+    {
+        var result = await LocalDataService(ExternalProviderCloudGrants.None).ValidateAsync(LocalDataEdgeGraph("search_knowledge_base", CloudRoutedModel));
+
+        AssertEx.True(result.IsValid, string.Join(" | ", result.Errors));
+        var warning = AssertEx.NotNull(result.Warnings.SingleOrDefault(warning => warning.Message.Contains("node-local data", StringComparison.Ordinal)),
+            $"one local-data warning expected: {string.Join(" | ", result.Warnings)}");
+        AssertEx.Equal("analyze", warning.Key);
+        AssertEx.Contains(warning.Message, "Tool node 'kb' ('search_knowledge_base')");
+        AssertEx.Contains(warning.Message, "Let cloud models read local data");
+        AssertEx.Contains(warning.Message, "grant local data on the model's external connection");
+    }
+
+    [Test]
+    public async Task ValidateAsync_WhenTheCloudLlmCallsConnectionGrantsLocalData_DoesNotWarnAboutLocalData()
+    {
+        var result = await LocalDataService(new ExternalProviderCloudGrants
+            {
+                LocalData = true
+            })
+            .ValidateAsync(LocalDataEdgeGraph("search_knowledge_base", CloudRoutedModel));
+
+        AssertEx.Empty(result.Warnings, "the executor admits the node under the grant.");
+    }
+
+    /// <summary>An unpinned node runs a model unknown here; the runtime gate is authoritative, as for the unattended warning.</summary>
+    [Test]
+    public async Task ValidateAsync_WhenTheLlmCallReadingAKnowledgeBaseToolPinsNoModel_DoesNotWarnAboutLocalData()
+    {
+        var result = await LocalDataService(ExternalProviderCloudGrants.None).ValidateAsync(LocalDataEdgeGraph("search_knowledge_base", model: null));
+
+        AssertEx.Empty(result.Warnings);
+    }
+
+    [Test]
+    public async Task ValidateAsync_WhenTheCloudLlmCallReadsAToolThatReturnsNoLocalData_DoesNotWarnAboutLocalData()
+    {
+        var result = await LocalDataService(ExternalProviderCloudGrants.None).ValidateAsync(LocalDataEdgeGraph("get_current_time", CloudRoutedModel));
+
+        AssertEx.Empty(result.Warnings, "only the chat local-data tool set taints a Tool node's output.");
+    }
+
+    /// <summary>A pinned cloud Agent warns only while it inlines its upstream, because only then does the Tool's output reach the model.</summary>
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task ValidateAsync_WhenACloudAgentReadsAKnowledgeBaseTool_WarnsOnlyWhileItIncludesUpstreamOutputs(bool includeUpstreamOutputs)
+    {
+        var result = await LocalDataService(ExternalProviderCloudGrants.None).ValidateAsync(LocalDataAgentEdgeGraph(includeUpstreamOutputs));
+
+        AssertEx.True(result.IsValid, string.Join(" | ", result.Errors));
+        var warnings = result.Warnings.Where(warning => warning.Message.Contains("node-local data", StringComparison.Ordinal)).ToList();
+        if (includeUpstreamOutputs)
+        {
+            var warning = AssertEx.NotNull(warnings.SingleOrDefault(), $"one local-data warning expected: {string.Join(" | ", result.Warnings)}");
+            AssertEx.Equal("agent", warning.Key);
+            AssertEx.Contains(warning.Message, "Tool node 'kb' ('search_knowledge_base')");
+        }
+        else
+        {
+            AssertEx.Empty(warnings, "an agent that inlines no upstream sends none of it.");
+        }
+    }
+
+    /// <summary>
     ///     The tester's case: an invalid graph used to throw before any warning ran, so the editor saw the error and never learnt the
     ///     pinned model was missing too. Validate reports both lists; it still refuses the graph.
     /// </summary>
@@ -311,18 +380,66 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
         IGgufModelStore? ggufModels = null,
         ModelTrustLocality locality = ModelTrustLocality.Local,
         bool allowCloudUnattendedRuns = false,
-        ExternalProviderCloudGrants? grants = null)
+        ExternalProviderCloudGrants? grants = null,
+        IToolInvocationService? tools = null)
     {
         var trust = Substitute.For<IModelTrustResolver>();
         trust.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(locality);
         trust.ResolveCloudGrantsAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(grants ?? ExternalProviderCloudGrants.None);
         return new GraphWorkflowDefinitionService(Substitute.For<IGraphWorkflowStore>(),
-            Substitute.For<IToolInvocationService>(), StubNodeRuntimeSettings.Create().WithAllowCloudModelUnattendedRuns(allowCloudUnattendedRuns).Build(),
+            tools ?? Substitute.For<IToolInvocationService>(), StubNodeRuntimeSettings.Create().WithAllowCloudModelUnattendedRuns(allowCloudUnattendedRuns).Build(),
             providers,
             ggufModels ?? Substitute.For<IGgufModelStore>(),
             trust,
             Options.Create(new GraphWorkflowOptions()));
     }
+
+    // A cloud locality with unattended runs on, so the local-data warning is the only one a cloud pin can earn, and a
+    // tool catalog listing the two tools the edge graphs name.
+    private static IGraphWorkflowDefinitionService LocalDataService(ExternalProviderCloudGrants grants)
+    {
+        var tools = Substitute.For<IToolInvocationService>();
+        tools.ListInvocableToolsAsync(Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult<IReadOnlyList<InvocableToolDescriptor>>([Descriptor("search_knowledge_base"), Descriptor("get_current_time")]));
+        return BuildService(Substitute.For<ILocalModelProviderResolver>(),
+            locality: ModelTrustLocality.Cloud,
+            allowCloudUnattendedRuns: true,
+            grants: grants,
+            tools: tools);
+    }
+
+    private static InvocableToolDescriptor Descriptor(string name) =>
+        new()
+        {
+            Name = name,
+            Description = name,
+            ParameterSchema = """{"type":"object","properties":{}}"""
+        };
+
+    // Start → kb (Tool) → analyze (LlmCall bound to kb's output) → End.
+    private static string LocalDataEdgeGraph(string toolName, string? model)
+    {
+        var pin = model is null ? string.Empty : $""", "model": "{model}" """;
+        return $$"""
+                 { "schemaVersion": 1,
+                   "nodes": [{ "key": "start", "kind": "Start" },
+                             { "key": "kb", "kind": "Tool", "config": { "toolName": "{{toolName}}" } },
+                             { "key": "analyze", "kind": "LlmCall", "config": { "prompt": "Summarize it.", "inputBindings": { "found": "upstream.kb" }{{pin}} } },
+                             { "key": "done", "kind": "End", "config": { "outcome": "completed" } }],
+                   "edges": [{ "key": "e1", "from": "start", "to": "kb" }, { "key": "e2", "from": "kb", "to": "analyze" }, { "key": "e3", "from": "analyze", "to": "done" }] }
+                 """;
+    }
+
+    // Start → kb (Tool) → agent (pinned cloud Agent) → End.
+    private static string LocalDataAgentEdgeGraph(bool includeUpstreamOutputs) =>
+        $$"""
+          { "schemaVersion": 1,
+            "nodes": [{ "key": "start", "kind": "Start" },
+                      { "key": "kb", "kind": "Tool", "config": { "toolName": "search_knowledge_base" } },
+                      { "key": "agent", "kind": "Agent", "config": { "model": "{{CloudRoutedModel}}", "instructions": "Judge it.", "includeUpstreamOutputs": {{(includeUpstreamOutputs ? "true" : "false")}} } },
+                      { "key": "done", "kind": "End", "config": { "outcome": "completed" } }],
+            "edges": [{ "key": "e1", "from": "start", "to": "kb" }, { "key": "e2", "from": "kb", "to": "agent" }, { "key": "e3", "from": "agent", "to": "done" }] }
+          """;
 
     private static string LlmCallGraph(string? model)
     {
