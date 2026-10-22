@@ -22,8 +22,9 @@ internal static class GgufFileSelector
     /// </summary>
     /// <remarks>
     ///     Only files that fit the budget, have a computable weights term and sit at or above the quality floor are
-    ///     considered. When every fitting file is higher quality than the ceiling (a roomy machine with no file at or
-    ///     below the target quant) the smallest fitting one is returned so the repo still surfaces.
+    ///     considered. The ceiling admits its Unsloth <c>_XL</c> sibling (<see cref="QuantLadder.CeilingRank" />). When
+    ///     every fitting file is higher quality than the ceiling (a roomy machine with no file at or below the target
+    ///     quant) the smallest fitting one is returned so the repo still surfaces.
     /// </remarks>
     /// <returns><see langword="null" /> when nothing at or above the floor fits.</returns>
     public static SelectedGgufFile? SelectBestFit(MemoryFitEstimator estimator,
@@ -33,7 +34,7 @@ internal static class GgufFileSelector
         HardwareProfile profile,
         Func<GgufRepoFile, MoeFacts?>? moeFactsSelector = null)
     {
-        var ceilingRank = QuantLadder.QualityRank(quant);
+        var ceilingRank = QuantLadder.CeilingRank(quant);
         var floorRank = QuantLadder.FloorRank;
 
         var fitting = files

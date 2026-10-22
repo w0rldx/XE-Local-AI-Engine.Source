@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026.10.6",
+  "catalogVersion": "2026.10.7",
   "updatedAt": "2026-10-22",
   "models": [
     {
@@ -220,7 +220,7 @@
       "moe": true,
       "contextLength": 262144,
       "minLlamaCppTag": "b10201",
-      "releaseDate": "2026-04-20",
+      "releaseDate": "2026-04-15",
       "notes": "MoE sibling of Qwen3.6 27B — can run with experts offloaded to system RAM on 12-24GB GPUs.",
       "tested": true,
       "testedQuant": "UD-Q4_K_M",
@@ -261,7 +261,7 @@
       "contextLength": 262144,
       "minLlamaCppTag": "b11803",
       "releaseDate": "2026-10-21",
-      "notes": "Coding-agent MoE aimed at Terminal-Bench and SWE-bench style work; thinks by default and only a zero reasoning budget turns that off, needs about 25 GB resident at UD-Q4_K_XL or expert offload on smaller GPUs, and the repo ships no Q4_K_M, so it shows under \"Can run\".",
+      "notes": "Coding-agent MoE aimed at Terminal-Bench and SWE-bench style work; thinks by default and only a zero reasoning budget turns that off, needs about 25 GB resident at UD-Q4_K_XL or expert offload on smaller GPUs, and the repo ships no Q4_K_M; UD-Q4_K_XL is the tested quant.",
       "tested": true,
       "testedQuant": "UD-Q4_K_XL",
       "testedSizeBytes": 25054688704

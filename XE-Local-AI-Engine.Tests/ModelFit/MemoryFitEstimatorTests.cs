@@ -898,4 +898,34 @@ public sealed class MemoryFitEstimatorTests
             FreeDiskBytes = 500 * Gb
         };
     }
+
+    [Test]
+    public void Estimate_DynamicPrefixedXlQuant_IsSizedAtItsBaseDensity_NotTheFallback()
+    {
+        // The selector hands the preserved UD- token to Estimate; the weights term must price it off the stripped base,
+        // else every Dynamic file falls through to the 4.5 bpw default and a UD-Q4_K_XL is undersized by ~12 %.
+        var profile = GpuProfile(64 * Gb);
+        var estimator = new MemoryFitEstimator();
+
+        var prefixed = estimator.Estimate("UD-Q4_K_XL", ParamCount, fileSizeBytes: 0, BlockCount, KvHeads, EmbeddingLength, HeadCount, CtxTarget, profile, kvCacheQuantized: false);
+        var bare = estimator.Estimate("Q4_K_XL", ParamCount, fileSizeBytes: 0, BlockCount, KvHeads, EmbeddingLength, HeadCount, CtxTarget, profile, kvCacheQuantized: false);
+        var fallback = estimator.Estimate("totally-made-up", ParamCount, fileSizeBytes: 0, BlockCount, KvHeads, EmbeddingLength, HeadCount, CtxTarget, profile, kvCacheQuantized: false);
+
+        AssertEx.Equal(bare.EstimatedBytes, prefixed.EstimatedBytes);
+        AssertEx.True(prefixed.EstimatedBytes > fallback.EstimatedBytes, "UD-Q4_K_XL must be sized above the 4.5 bpw fallback.");
+    }
+
+    [Test]
+    public void BytesPerWeight_UnslothXlQuants_AreMeasuredDistinctAndOrdered()
+    {
+        string[] ladder = ["Q2_K_XL", "Q3_K_XL", "Q4_K_XL", "Q5_K_XL", "Q6_K_XL", "Q8_K_XL"];
+        var densities = ladder.Select(MemoryFitEstimator.BytesPerWeight).ToArray();
+
+        var unknown = MemoryFitEstimator.BytesPerWeight("totally-made-up");
+        AssertEx.True(densities.All(density => Math.Abs(density - unknown) > 1e-6), "no _XL quant may fall through to the default density.");
+        for (var i = 1; i < densities.Length; i++)
+        {
+            AssertEx.True(densities[i] > densities[i - 1], $"{ladder[i]} must size above {ladder[i - 1]}.");
+        }
+    }
 }

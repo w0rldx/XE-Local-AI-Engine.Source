@@ -155,4 +155,50 @@ public sealed class QuantLadderTests
         AssertEx.True(MemoryFitEstimator.BytesPerWeight("IQ2_M") > MemoryFitEstimator.BytesPerWeight("IQ1_S"),
             "IQ2_M must size above IQ1_S.");
     }
+
+    [Test]
+    public void QualityRank_UnslothXlRungs_SitDirectlyAboveTheirBaseAndBelowTheNextRungUp()
+    {
+        string[][] cases =
+        [
+            ["Q8_K_XL", "F16", "Q8_0"],
+            ["Q6_K_XL", "Q8_0", "Q6_K"],
+            ["Q5_K_XL", "Q6_K", "Q5_K_M"],
+            ["Q4_K_XL", "MXFP4", "Q4_K_M"],
+            ["Q3_K_XL", "IQ4_XS", "Q3_K_L"],
+            ["Q2_K_XL", "IQ3_XXS", "Q2_K"]
+        ];
+
+        foreach (var rungs in cases)
+        {
+            var xl = rungs[0];
+            var above = rungs[1];
+            var below = rungs[2];
+            AssertEx.True(QuantLadder.QualityRank(above) < QuantLadder.QualityRank(xl), $"{xl} must rank below {above}.");
+            AssertEx.Equal(QuantLadder.QualityRank(below) - 1, QuantLadder.QualityRank(xl));
+        }
+    }
+
+    [Test]
+    public void CeilingRank_AdmitsTheXlSiblingDirectlyAboveTheCeiling_AndNothingElse()
+    {
+        // A Q4_K_M ceiling admits UD-Q4_K_XL (same nominal bit-width) but still excludes MXFP4 and every Q5 rung.
+        AssertEx.Equal(QuantLadder.QualityRank("Q4_K_XL"), QuantLadder.CeilingRank("Q4_K_M"));
+        AssertEx.True(QuantLadder.QualityRank("MXFP4") < QuantLadder.CeilingRank("Q4_K_M"), "MXFP4 stays above a Q4_K_M ceiling.");
+        AssertEx.Equal(QuantLadder.QualityRank("Q8_K_XL"), QuantLadder.CeilingRank("Q8_0"));
+        // A ceiling whose upper neighbour is not an _XL rung is unchanged.
+        AssertEx.Equal(QuantLadder.QualityRank("Q4_K_S"), QuantLadder.CeilingRank("Q4_K_S"));
+        AssertEx.Equal(QuantLadder.QualityRank("F32"), QuantLadder.CeilingRank("F32"));
+        // An _XL ceiling admits itself only.
+        AssertEx.Equal(QuantLadder.QualityRank("Q4_K_XL"), QuantLadder.CeilingRank("UD-Q4_K_XL"));
+    }
+
+    [Test]
+    public void UnslothQ4KXl_DynamicPrefixRanksAsBase_IsBalanced_AndClearsTheRecommendedGate()
+    {
+        AssertEx.Equal(QuantLadder.QualityRank("Q4_K_XL"), QuantLadder.QualityRank("UD-Q4_K_XL"));
+        AssertEx.True(QuantLadder.TierOf("Q4_K_XL") == GgufQuantTier.Balanced, "Q4_K_XL is Balanced.");
+        AssertEx.True(QuantLadder.QualityRank("UD-Q4_K_XL") <= QuantLadder.QualityRank(MemoryFitEstimator.DefaultQuant),
+            "UD-Q4_K_XL must clear the Q4_K_M recommended gate.");
+    }
 }

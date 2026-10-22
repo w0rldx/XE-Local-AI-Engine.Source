@@ -27,8 +27,8 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 - **Flint in the curated catalog** — Recursive's Flint (39.8B total / ~2.5B active mixture-of-experts coding-agent
   model, 256K context, Apache-2.0) is a tier-S entry under the coding, reasoning and general use cases, marked Tested
   at `UD-Q4_K_XL` after a full model-matrix pass. It thinks by default and switches thinking off through the reasoning
-  budget only; its repository ships no `Q4_K_M`, so the advisor lists it under "Can run". Needs llama.cpp b11803 or
-  later, so it is hidden on a node whose runtime is older.
+  budget only; its repository ships no `Q4_K_M`, but `UD-Q4_K_XL` ranks on the quant ladder, so it reaches "Recommended"
+  when it fits. Needs llama.cpp b11803 or later, so it is hidden on a node whose runtime is older.
 - **Per-model API surface for external connections** — each model registered on an OpenAI-compatible external
   connection declares whether it answers on Chat Completions (default) or the Responses API, chosen in the model row of
   the connection editor. Responses models run statelessly (`store=false`, encrypted reasoning replayed from memory in
@@ -189,6 +189,14 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **Unsloth `_XL` quants are ladder rungs** — `Q2_K_XL` to `Q8_K_XL` now rank directly above their base quant and carry
+  measured sizes, and the requested quant ceiling admits the `_XL` rung directly above it (a `Q4_K_M` ceiling picks
+  `UD-Q4_K_XL` over a repo's Q3 files), so the Flint and gemma4 entries reach "Recommended" when they fit instead of
+  landing under "Can run". A Dynamic (`UD-`) file is now sized at its base quant's density; it fell through to the
+  4.5 bits/weight default before.
+  A quantization-aware-trained `q4_0` build (a `qat` repository or file name) passes the Recommended quality gate like
+  `Q4_K_M`; a plain `Q4_0` requant stays below it. The Qwen3.6 35B-A3B catalog release date is corrected to the base
+  repository creation date.
 - **llama.cpp pinned to b11803** (source commit `a37cc461`, the first build that loads the `flint` architecture; all
   ten asset SHA256 digests re-verified against the release API, the Windows cudart companion unchanged). Upstream now
   also publishes prebuilt Linux CUDA archives from this build; they are not adopted yet, a Linux NVIDIA node still

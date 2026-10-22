@@ -249,7 +249,8 @@ public sealed class MemoryFitEstimator
     ///     Unknown labels fall back to the Q4_K_M density (~0.5625 bytes/weight ≈ 4.5 bits) — a conservative middle
     ///     ground. The I-quant (IQ*) bit-widths are the MEASURED effective bpw from the llama.cpp Llama-3.1-8B
     ///     quantize benchmark, so an IQ file is sized at its true density instead of the legacy 4.5 bpw default.
-    ///     <c>MXFP4</c> is gpt-oss's native ~4.25 bits/weight MoE format.
+    ///     <c>MXFP4</c> is gpt-oss's native ~4.25 bits/weight MoE format. The Unsloth <c>_XL</c> densities are measured from the
+    ///     Unsloth Qwen3.8-27B, Qwen3.6-35B-A3B, Flint and gemma-4-26B-A4B GGUF repos (file size × 8 / parameter count).
     /// </remarks>
     public static double BytesPerWeight(string quant)
     {
@@ -281,6 +282,12 @@ public sealed class MemoryFitEstimator
             "Q5_K_S" or "Q5_K_M" or "Q5_K" => 5.5d / 8d,
             "Q6_K" => 6.5625d / 8d,
             "Q8_0" => 8.5d / 8d,
+            "Q2_K_XL" => 2.85d / 8d,
+            "Q3_K_XL" => 3.875d / 8d,
+            "Q4_K_XL" => 5.1d / 8d,
+            "Q5_K_XL" => 6.1d / 8d,
+            "Q6_K_XL" => 7.4d / 8d,
+            "Q8_K_XL" => 9.0d / 8d,
             "F16" or "FP16" or "BF16" => 16d / 8d,
             "F32" or "FP32" => 32d / 8d,
             _ => 4.5d / 8d
@@ -316,7 +323,8 @@ public sealed class MemoryFitEstimator
     {
         if (paramCount is { } parameters && parameters > 0)
         {
-            return (long)(parameters * BytesPerWeight(quant));
+            // Priced off the stripped base: a Dynamic (UD-) token has no density row of its own.
+            return (long)(parameters * DensityOf(quant));
         }
 
         // No param count → the already-quantized file size is the best available weights estimate (clamped non-negative).

@@ -367,6 +367,66 @@ public sealed class CatalogRecommendationServiceTests
         AssertEx.Empty(result.SkippedEntryNames);
     }
 
+
+    [Test]
+    public async Task BuildRecommendationsAsync_UnslothQ4KXlWithHeadroom_IsRecommended()
+    {
+        var entry = Entry("xl-model", useCases: ["general"], tier: "A");
+        var result = await RecommendSingleFileAsync(entry, File("UD-Q4_K_XL", paramCountB: 1));
+
+        AssertEx.ContainsSingle(result.Recommended, c => c.Entry.Id == "xl-model");
+        AssertEx.Empty(result.CanRun);
+    }
+
+    [Test]
+    public async Task BuildRecommendationsAsync_Q4KMCeiling_PrefersUnslothQ4KXlOverTheRepoQ3KXl()
+    {
+        // The Flint shape: no Q4_K_M, UD-Q3_K_XL and UD-Q4_K_XL both fit. The Q4_K_M ceiling must admit the Q4 _XL sibling
+        // instead of walking down to the Q3 file, which would keep the repo under Can run on a roomy machine.
+        var entry = Entry("flint-shape", useCases: ["general"], tier: "S");
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+        discovery.InspectRepoAsync(entry.GgufRepo, Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail(entry.GgufRepo,
+                     File("UD-Q3_K_XL", paramCountB: 1),
+                     File("UD-Q4_K_XL", paramCountB: 1),
+                     File("UD-Q5_K_XL", paramCountB: 1))));
+        var service = BuildService([entry], discovery, installedTag: "b9692");
+
+        var result = await service.BuildRecommendationsAsync(useCase: null, "Q4_K_M", ctxTarget: 8192, GpuProfile(64 * Gb), Empty, CancellationToken.None);
+
+        AssertEx.ContainsSingle(result.Recommended, c => c.Entry.Id == "flint-shape");
+        AssertEx.Equal("UD-Q4_K_XL", result.Recommended[0].File.Quant);
+        AssertEx.Empty(result.CanRun);
+    }
+
+    [Test]
+    public async Task BuildRecommendationsAsync_QuantizationAwareQ4_0WithHeadroom_IsRecommended()
+    {
+        var entry = Entry("gemma-4-it-qat-q4_0", useCases: ["general"], tier: "A");
+        var result = await RecommendSingleFileAsync(entry, File("Q4_0", paramCountB: 1));
+
+        AssertEx.ContainsSingle(result.Recommended, c => c.Entry.Id == "gemma-4-it-qat-q4_0");
+        AssertEx.Empty(result.CanRun);
+    }
+
+    [Test]
+    public async Task BuildRecommendationsAsync_PlainQ4_0Requant_IsCanRun()
+    {
+        var entry = Entry("plain-model", useCases: ["general"], tier: "A");
+        var result = await RecommendSingleFileAsync(entry, File("Q4_0", paramCountB: 1));
+
+        AssertEx.ContainsSingle(result.CanRun, c => c.Entry.Id == "plain-model");
+        AssertEx.Empty(result.Recommended);
+    }
+
+    private static Task<CatalogRecommendationResult> RecommendSingleFileAsync(ModelCatalogEntry entry, GgufRepoFile file)
+    {
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+        discovery.InspectRepoAsync(entry.GgufRepo, Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail(entry.GgufRepo, file)));
+        var service = BuildService([entry], discovery, installedTag: "b9692");
+        return service.BuildRecommendationsAsync(useCase: null, "Q4_K_M", ctxTarget: 8192, GpuProfile(64 * Gb), Empty, CancellationToken.None);
+    }
     private static IReadOnlySet<string> Empty { get; } = new HashSet<string>(StringComparer.Ordinal);
 
     private static ModelCatalogEntry Entry(string id,

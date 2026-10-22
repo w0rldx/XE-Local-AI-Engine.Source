@@ -22,7 +22,7 @@ public static class QuantLadder
     public const string DefaultFloorQuant = "Q3_K_M";
 
     // Best → worst. Each rung carries the curated fine quality order (the array index) AND the coarse tier the download picker badges.
-    // Unknown / off-ladder labels rank just below Q4_K_M (see QualityRank); GgufQuantQuality applies its own family rules to them.
+    // The Unsloth _XL K-quants sit directly above their base rung. Unknown / off-ladder labels rank just below Q4_K_M (see QualityRank); GgufQuantQuality applies its own family rules to them.
     private static readonly QuantRung[] Rungs =
     [
         new()
@@ -37,13 +37,28 @@ public static class QuantLadder
         },
         new()
         {
+            Quant = "Q8_K_XL",
+            Tier = GgufQuantTier.NearLossless
+        },
+        new()
+        {
             Quant = "Q8_0",
+            Tier = GgufQuantTier.NearLossless
+        },
+        new()
+        {
+            Quant = "Q6_K_XL",
             Tier = GgufQuantTier.NearLossless
         },
         new()
         {
             Quant = "Q6_K",
             Tier = GgufQuantTier.NearLossless
+        },
+        new()
+        {
+            Quant = "Q5_K_XL",
+            Tier = GgufQuantTier.SweetSpot
         },
         new()
         {
@@ -69,6 +84,11 @@ public static class QuantLadder
         },
         new()
         {
+            Quant = "Q4_K_XL",
+            Tier = GgufQuantTier.Balanced
+        },
+        new()
+        {
             Quant = "Q4_K_M",
             Tier = GgufQuantTier.Balanced
         },
@@ -85,6 +105,11 @@ public static class QuantLadder
         new()
         {
             Quant = "IQ4_XS",
+            Tier = GgufQuantTier.Small
+        },
+        new()
+        {
+            Quant = "Q3_K_XL",
             Tier = GgufQuantTier.Small
         },
         new()
@@ -121,6 +146,11 @@ public static class QuantLadder
         {
             Quant = "IQ3_XXS",
             Tier = GgufQuantTier.Small
+        },
+        new()
+        {
+            Quant = "Q2_K_XL",
+            Tier = GgufQuantTier.Minimal
         },
         new()
         {
@@ -176,6 +206,17 @@ public static class QuantLadder
 
     /// <summary>The rank of the quality floor (<see cref="DefaultFloorQuant" />); quants ranked above this are off-limits.</summary>
     public static int FloorRank => RankByQuant[DefaultFloorQuant];
+
+    /// <summary>The rank a requested quant ceiling admits: its own rank, or one rung up when that rung is its Unsloth <c>_XL</c> sibling.</summary>
+    /// <remarks>
+    ///     An <c>_XL</c> file has the ceiling's nominal bit-width with selected layers kept at higher precision, so a
+    ///     <c>Q4_K_M</c> ceiling still selects a repo's <c>UD-Q4_K_XL</c> over its <c>Q3</c> files.
+    /// </remarks>
+    public static int CeilingRank(string quant)
+    {
+        var rank = QualityRank(quant);
+        return rank > 0 && Rungs[rank - 1].Quant.EndsWith("_K_XL", StringComparison.Ordinal) ? rank - 1 : rank;
+    }
 
     /// <summary>
     ///     Repository-owned canonical quantizations that may be selected when a GGUF header and filename cannot

@@ -117,12 +117,27 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
     }
 
     /// <summary>
-    ///     Recommended = fits at/above Q4_K_M quality with real headroom (resident or offload-labeled).
+    ///     Recommended = fits at/above Q4_K_M quality (or is a quantization-aware-trained <c>q4_0</c> build) with real headroom
+    ///     (resident or offload-labeled).
     /// </summary>
     private static bool IsRecommended(CatalogRecommendationCandidate candidate)
     {
-        return QuantLadder.QualityRank(candidate.File.Quant) <= QuantLadder.QualityRank(MemoryFitEstimator.DefaultQuant)
+        return (QuantLadder.QualityRank(candidate.File.Quant) <= QuantLadder.QualityRank(MemoryFitEstimator.DefaultQuant)
+                || IsQuantizationAwareQ4_0(candidate))
                && candidate.Estimate.HeadroomBytes > 0;
+    }
+
+    // Google's QAT q4_0 builds are trained at that precision, while a legacy Q4_0 requant stays below the gate.
+    private static bool IsQuantizationAwareQ4_0(CatalogRecommendationCandidate candidate)
+    {
+        return string.Equals(GgufQuantParser.StripDynamicPrefix(candidate.File.Quant), "Q4_0", StringComparison.OrdinalIgnoreCase)
+               && (HasQatSegment(candidate.Entry.GgufRepo) || HasQatSegment(candidate.File.FileName));
+    }
+
+    private static bool HasQatSegment(string? text)
+    {
+        return text is not null
+               && text.Split('-', '_', '/', '.').Any(static segment => segment.Equals("qat", StringComparison.OrdinalIgnoreCase));
     }
 
     private static int TierRank(string tier)
