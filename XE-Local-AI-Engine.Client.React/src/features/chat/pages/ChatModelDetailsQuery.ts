@@ -3,13 +3,13 @@ import { EXTERNAL_PROVIDER } from "@/core/models/LocalModelProviders";
 
 // Decides whether the chat page should poll GET models/{name}/details for the current selection.
 //
-// Details (max context length, template) come from the local runtime. We only fetch when the selection can actually
-// yield them:
+// Details (max context length, template) come from the local runtime for a local model, and from declarations for a
+// remote one (an external connection's declared window, a Codex id's catalogued window, an Azure deployment's
+// operator-declared window). We only fetch when the selection can actually yield them:
 //   - a non-empty concrete model name is resolved, AND
-//   - the selection is not a cloud (Codex) model — cloud ids have no LOCAL details (the endpoint 404s for them), AND
 //   - when the selection maps to a known list option, that option is available — an unavailable model can't return
 //     details, so polling it just retries a guaranteed failure, AND
-//   - the resolved concrete name is actually present in the installed-model list.
+//   - the selection is remote (external or cloud), or the resolved concrete name is present in the installed list.
 //
 // The installed-list gate is the terminal domain state that fixes the configured-but-not-installed starter model: the
 // local-default sentinel resolves to `configuredDefaultModelName`, which may name a model whose GGUF was never
@@ -17,19 +17,15 @@ import { EXTERNAL_PROVIDER } from "@/core/models/LocalModelProviders";
 // stuck, noisy error. A SignalR invalidation on download completion refreshes the installed list, so the moment the
 // model IS installed this flips true and the poll begins on its own.
 //
-// Note: GGUF (llamacpp) selections that ARE installed get polled — the details endpoint answers those with a 200 carrying maxContextTokens,
-// which the context usage meter needs. Only cloud, unavailable, and not-installed selections are suppressed.
+// A Codex id with no catalogued window still 404s. That is one request per stale cycle, not a loop: the query
+// client never retries a 404 (shouldRetryQuery), the page reads only `data`, so the meter shows unknown and nothing
+// is surfaced. Gating those ids here would need a second copy of the backend's window table.
 export function shouldFetchLocalModelDetails(
 	concreteModelName: string,
 	selectedOption: ModelOption | undefined,
-	selectedModelIsCloud: boolean,
 	concreteModelInstalled: boolean,
 ): boolean {
 	if (concreteModelName.length === 0) {
-		return false;
-	}
-
-	if (selectedModelIsCloud) {
 		return false;
 	}
 
@@ -38,11 +34,11 @@ export function shouldFetchLocalModelDetails(
 		return false;
 	}
 
-	// An external model is served by a remote endpoint, so it is never in the node's installed list — but the details
-	// route DOES answer for its `ext:` id, from the operator's own declarations, with the context window the usage
-	// meter needs. The installed-list gate below exists for a local default whose GGUF was never downloaded; applying
-	// it here is what left every external selection metered against an unknown capacity ("N of —").
-	if (selectedOption?.provider === EXTERNAL_PROVIDER) {
+	// An external or cloud model is served remotely, so it is never in the node's installed list — but the details
+	// route DOES answer for it from declarations, with the context window the usage meter needs. The installed-list
+	// gate below exists for a local default whose GGUF was never downloaded; applying it here is what left every
+	// remote selection metered against an unknown capacity ("N of —").
+	if (selectedOption?.provider === EXTERNAL_PROVIDER || selectedOption?.isCloud === true) {
 		return true;
 	}
 

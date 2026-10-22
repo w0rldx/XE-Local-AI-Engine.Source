@@ -75,12 +75,13 @@ public sealed class ExternalModelDetailsEndpointTests
     }
 
     [Test]
-    [Arguments("gpt-5.5")]
-    [Arguments("azure-gpt")]
-    public async Task GetLocalModelDetails_ForACloudModel_Returns404(string modelName)
+    [Arguments("gpt-5.6-terra", HttpStatusCode.OK, 272_000)]
+    [Arguments("gpt-5.5", HttpStatusCode.NotFound, null)]
+    [Arguments("azure-gpt", HttpStatusCode.OK, null)]
+    public async Task GetLocalModelDetails_ForACloudModel_ReportsOnlyItsDeclaredWindow(string modelName, HttpStatusCode expectedStatus, int? expectedWindow)
     {
-        // Through the REAL trust resolver: a Codex id is cloud with no session signed in, and a stored Azure deployment
-        // is cloud through the routing snapshot. Neither has local details; LocalModelEndpointTests pins "never probes".
+        // Through the REAL resolvers: a sourced Codex id reports its catalog window, an unsourced one 404s, and a stored deployment
+        // with no declared window is still 200 with a null one. LocalModelEndpointTests pins "never probes".
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
         _ = cloudCredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(new StoredCloudProviderConfig
         {
@@ -112,7 +113,13 @@ public sealed class ExternalModelDetailsEndpointTests
         using var request = CreateRequest(factory, $"/api/local/v1/models/{modelName}/details");
         using var response = await client.SendAsync(request);
 
-        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        AssertEx.Equal(expectedStatus, response.StatusCode);
+        if (expectedStatus == HttpStatusCode.OK)
+        {
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var window = body.RootElement.TryGetProperty("maxContextTokens", out var max) && max.ValueKind == JsonValueKind.Number ? max.GetInt32() : (int?)null;
+            AssertEx.Equal(expectedWindow, window);
+        }
     }
 
     private static TestServerWebAppFactory CreateFactory(IModelTrustResolver trust)

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { CustomHeaderDraft } from "@/core/http-headers/CustomHeaders";
 import {
 	type CloudSettingsFormValues,
+	contextLengthToNumber,
 	hasAtLeastOneModel,
 	isHttpsAbsoluteUrl,
 	isValidHostSuffix,
@@ -18,7 +19,7 @@ function baseValues(overrides: Partial<CloudSettingsFormValues> = {}): CloudSett
 		authMode: "ApiKey",
 		apiSurface: "AzureDeployments",
 		apiKey: "secret-key",
-		models: [{ deploymentName: "gpt-4o", displayLabel: "" }],
+		models: [{ deploymentName: "gpt-4o", displayLabel: "", contextLength: "" }],
 		headers: [],
 		hostSuffixes: [],
 		entraTenantId: "",
@@ -51,9 +52,9 @@ describe("cloud settings model", () => {
 	});
 
 	it("reports a models list valid only when a row carries a non-blank deployment name", () => {
-		expect(hasAtLeastOneModel([{ deploymentName: "", displayLabel: "" }])).toBe(false);
-		expect(hasAtLeastOneModel([{ deploymentName: "  ", displayLabel: "x" }])).toBe(false);
-		expect(hasAtLeastOneModel([{ deploymentName: "gpt-4o", displayLabel: "" }])).toBe(true);
+		expect(hasAtLeastOneModel([{ deploymentName: "", displayLabel: "", contextLength: "" }])).toBe(false);
+		expect(hasAtLeastOneModel([{ deploymentName: "  ", displayLabel: "x", contextLength: "" }])).toBe(false);
+		expect(hasAtLeastOneModel([{ deploymentName: "gpt-4o", displayLabel: "", contextLength: "" }])).toBe(true);
 	});
 
 	it("requires endpoint, API key, and at least one model in API-key mode", () => {
@@ -61,7 +62,7 @@ describe("cloud settings model", () => {
 			baseValues({
 				endpoint: "http://example.openai.azure.com/",
 				apiKey: "",
-				models: [{ deploymentName: "", displayLabel: "" }],
+				models: [{ deploymentName: "", displayLabel: "", contextLength: "" }],
 			}),
 		);
 
@@ -80,6 +81,12 @@ describe("cloud settings model", () => {
 
 	it("accepts a fully valid API-key connection", () => {
 		expect(validateCloudSettingsForm(baseValues())).toEqual({});
+	});
+
+	it("maps a blank context length to null and a typed one to its number", () => {
+		expect(contextLengthToNumber("")).toBeNull();
+		expect(contextLengthToNumber("  ")).toBeNull();
+		expect(contextLengthToNumber("128000")).toBe(128000);
 	});
 });
 

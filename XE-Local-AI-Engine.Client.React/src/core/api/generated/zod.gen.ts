@@ -1656,6 +1656,11 @@ export const zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto
 export const zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto = z.object({
 	deploymentName: z.string(),
 	displayLabel: z.string().nullish(),
+	contextLength: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse = z.object({

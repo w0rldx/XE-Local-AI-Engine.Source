@@ -78,6 +78,9 @@ public sealed record AzureFoundryModelDto
     public required string DeploymentName { get; init; }
 
     public string? DisplayLabel { get; init; }
+
+    /// <summary>The operator-declared total context window in tokens; null when unknown.</summary>
+    public int? ContextLength { get; init; }
 }
 
 public sealed record AzureFoundryHeaderDto

@@ -131,7 +131,6 @@ export function useChatModelSelection({
 	// node-wide gate inside ChatInputArea), image attachment on its vision projector.
 	const activeModelToolCapable = selectedModelOption?.isToolCapable ?? false;
 	const activeModelMultimodal = selectedModelOption?.isMultimodal ?? false;
-	const selectedModelIsCloud = selectedModelOption?.isCloud === true;
 	// Which effort vocabulary this model's provider actually honours — see ChatReasoningEfforts for the rule.
 	const availableReasoningEfforts = useMemo<ReasoningEffort[]>(
 		() => resolveAvailableReasoningEfforts(selectedModelOption),
@@ -188,20 +187,17 @@ export function useChatModelSelection({
 		);
 	}, [localModelsData, selectedModel]);
 
-	// Only poll model-details when the selection can actually return them: a non-empty local (non-cloud) name whose
-	// list option, if known, is available AND whose concrete name is actually installed. Cloud (Codex) ids have no
-	// LOCAL details (the endpoint 404s for them), an unavailable model just retries a guaranteed failure, and a
-	// configured-but-not-installed default (its GGUF never downloaded) 404s forever until the install lands. GGUF
-	// (llamacpp) selections that are installed ARE polled — the details endpoint answers with a 200 carrying
-	// maxContextTokens, which the context meter needs.
+	// Only poll model-details when the selection can actually return them: a non-empty name whose list option, if
+	// known, is available AND that is either remote (external or cloud, answered from declarations) or installed. An
+	// unavailable model just retries a guaranteed failure, and a configured-but-not-installed default (its GGUF never
+	// downloaded) 404s forever until the install lands. See ChatModelDetailsQuery for the full rule.
 	const concreteModelInstalled = useMemo(
 		() => selectedConcreteModelName.length > 0 && modelOptions.some((option) => option.value === selectedConcreteModelName),
 		[modelOptions, selectedConcreteModelName],
 	);
 	const selectedModelDetailsEnabled =
 		// Don't poll for a name we are about to replace once the pinned agent lands.
-		!scopedModelPending &&
-		shouldFetchLocalModelDetails(selectedConcreteModelName, selectedModelOption, selectedModelIsCloud, concreteModelInstalled);
+		!scopedModelPending && shouldFetchLocalModelDetails(selectedConcreteModelName, selectedModelOption, concreteModelInstalled);
 	const { data: selectedModelDetails } = useQuery({
 		...getLocalModelDetailsOptions({ path: { modelName: selectedConcreteModelName } }),
 		enabled: selectedModelDetailsEnabled,

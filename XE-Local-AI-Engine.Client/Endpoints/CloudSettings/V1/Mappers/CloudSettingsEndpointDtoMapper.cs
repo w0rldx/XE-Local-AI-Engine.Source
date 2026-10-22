@@ -26,7 +26,8 @@ internal static class CloudSettingsEndpointDtoMapper
                     .. connection.Models.Select(static model => new AzureFoundryModelDto
                     {
                         DeploymentName = model.DeploymentName,
-                        DisplayLabel = model.DisplayLabel
+                        DisplayLabel = model.DisplayLabel,
+                        ContextLength = model.ContextLength
                     })
                 ],
                 Headers =
@@ -108,7 +109,8 @@ internal static class CloudSettingsEndpointDtoMapper
                     .. request.Models.Select(static model => new StoredAzureFoundryModel
                     {
                         DeploymentName = model.DeploymentName?.Trim() ?? string.Empty,
-                        DisplayLabel = string.IsNullOrWhiteSpace(model.DisplayLabel) ? null : model.DisplayLabel.Trim()
+                        DisplayLabel = string.IsNullOrWhiteSpace(model.DisplayLabel) ? null : model.DisplayLabel.Trim(),
+                        ContextLength = model.ContextLength
                     })
                 ],
                 Headers = mergedHeaders,

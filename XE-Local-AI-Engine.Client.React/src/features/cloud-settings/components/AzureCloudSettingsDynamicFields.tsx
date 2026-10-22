@@ -1,11 +1,15 @@
-import { ActionIcon, Button, Flex, Group, Stack, Text, TextInput } from "@mantine/core";
+import { ActionIcon, Button, Flex, Group, NumberInput, Stack, Text, TextInput } from "@mantine/core";
 import { IconPlus, IconTrash } from "@tabler/icons-react";
 import type { Dispatch } from "react";
 import { useTranslation } from "react-i18next";
 
 import { CustomHeaderRows } from "@/core/ui/components/CustomHeaderRows/CustomHeaderRows";
 import { type CloudSettingsFormAction, nextCloudRowId } from "@/features/cloud-settings/models/CloudSettingsFormState";
-import type { CloudSettingsFormValues } from "@/features/cloud-settings/models/CloudSettingsModel";
+import {
+	type CloudSettingsFormValues,
+	MAX_DEPLOYMENT_CONTEXT_LENGTH,
+	MIN_DEPLOYMENT_CONTEXT_LENGTH,
+} from "@/features/cloud-settings/models/CloudSettingsModel";
 
 interface AzureCloudSettingsDynamicFieldsProps {
 	readonly values: CloudSettingsFormValues;
@@ -58,6 +62,20 @@ export function AzureCloudSettingsDynamicFields(props: AzureCloudSettingsDynamic
 									const value = event.currentTarget.value;
 									dispatch({ type: "setModelField", index, field: "displayLabel", value });
 								}}
+							/>
+							<NumberInput
+								style={{ flex: "0 1 12rem", minWidth: 0 }}
+								aria-label={t("pages.cloudSettings.azure.contextLengthLabel", "Context length (tokens)")}
+								label={index === 0 ? t("pages.cloudSettings.azure.contextLengthLabel", "Context length (tokens)") : undefined}
+								placeholder={t("pages.cloudSettings.azure.contextLengthPlaceholder", "128000")}
+								min={MIN_DEPLOYMENT_CONTEXT_LENGTH}
+								max={MAX_DEPLOYMENT_CONTEXT_LENGTH}
+								step={1024}
+								allowDecimal={false}
+								allowNegative={false}
+								value={model.contextLength}
+								onChange={(value) => dispatch({ type: "setModelField", index, field: "contextLength", value: String(value) })}
+								onBlur={() => dispatch({ type: "touchField", field: "models" })}
 							/>
 						</Flex>
 						<ActionIcon

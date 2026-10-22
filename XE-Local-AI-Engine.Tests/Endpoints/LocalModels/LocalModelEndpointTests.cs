@@ -226,30 +226,58 @@ public sealed class LocalModelEndpointTests
     }
 
     [Test]
-    public async Task GetLocalModelDetails_WhenCodexCloudModel_Returns404_AndNeverProbesLocalRuntime()
+    public async Task GetLocalModelDetails_WhenCodexCloudModel_ReportsItsCatalogWindow_AndNeverProbesLocalRuntime()
     {
-        // A Codex cloud id has no LOCAL details — the endpoint must short-circuit to 404 instead of probing Ollama
-        // /api/show (which 500s because the local runtime has no such model). Regression for the details-500 noise.
+        // A Codex cloud id has no LOCAL details; its one detail is the catalog window. The endpoint must short-circuit instead
+        // of probing Ollama /api/show (which 500s because the local runtime has no such model). Regression for the details-500 noise.
         await using var context = await CreateContextAsync("llama3:8b");
         using var client = context.Factory.CreateClient();
 
-        using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/gpt-5.5/details");
+        using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/gpt-5.6-terra/details");
         using var response = await client.SendAsync(request);
+        var details = Deserialize<LocalModelDetailsResponse>(await response.Content.ReadAsStringAsync());
 
-        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(272_000, details.MaxContextTokens);
+        AssertEx.Null(details.Template);
         var probedLocalRuntime = context.Server!.RecordedRequests
-                                        .Any(recorded => recorded.Path == "/api/show" && recorded.ModelName == "gpt-5.5");
+                                        .Any(recorded => recorded.Path == "/api/show" && recorded.ModelName == "gpt-5.6-terra");
         AssertEx.False(probedLocalRuntime, "a Codex cloud id must not probe the local Ollama /api/show endpoint");
     }
 
     [Test]
-    public async Task GetLocalModelDetails_WhenAzureFoundryDeployment_Returns404_AndNeverProbesLocalRuntime()
+    [Arguments(128_000)]
+    [Arguments(null)]
+    public async Task GetLocalModelDetails_WhenAzureFoundryDeployment_ReportsTheDeclaredWindow_AndNeverProbesLocalRuntime(int? declaredWindow)
     {
-        // An Azure Foundry deployment id has no LOCAL details either. The branch must short-circuit BEFORE provider
-        // routing reaches the Ollama /api/show probe, which 500s for an id the daemon has never heard of.
+        // An Azure Foundry deployment id has no LOCAL details either. The branch must short-circuit BEFORE provider routing reaches the
+        // Ollama /api/show probe, which 500s for an id the daemon has never heard of. An undeclared window is still 200 with null.
         var modelService = Substitute.For<IOllamaModelService>();
         var cloudModelResolver = Substitute.For<ICloudModelResolver>();
         cloudModelResolver.IsCloudModelAsync("gpt-4o-prod", Arg.Any<CancellationToken>()).Returns(true);
+        cloudModelResolver.ResolveContextWindowAsync("gpt-4o-prod", Arg.Any<CancellationToken>()).Returns(new CloudModelContextWindow { ContextTokens = declaredWindow });
+        await using var context = CreateContext(modelService, new FakeNodeSettingsStore(new StoredNodeSettings()), cloudModelResolver);
+        using var client = context.Factory.CreateClient();
+
+        using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/gpt-4o-prod/details");
+        using var response = await client.SendAsync(request);
+        var details = Deserialize<LocalModelDetailsResponse>(await response.Content.ReadAsStringAsync());
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal("gpt-4o-prod", details.ModelName);
+        AssertEx.Equal(declaredWindow, details.MaxContextTokens);
+        AssertEx.Equal(declaredWindow, details.EffectiveContextTokens);
+        await modelService.DidNotReceiveWithAnyArgs().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetLocalModelDetails_WhenACloudIdIsNoLongerRecognised_Returns404()
+    {
+        // The trust resolver still answers "cloud" for an id whose Azure deployment was removed, but there is no window to report.
+        var modelService = Substitute.For<IOllamaModelService>();
+        var cloudModelResolver = Substitute.For<ICloudModelResolver>();
+        cloudModelResolver.IsCloudModelAsync("gpt-4o-prod", Arg.Any<CancellationToken>()).Returns(true);
+        cloudModelResolver.ResolveContextWindowAsync("gpt-4o-prod", Arg.Any<CancellationToken>()).Returns((CloudModelContextWindow?)null);
         await using var context = CreateContext(modelService, new FakeNodeSettingsStore(new StoredNodeSettings()), cloudModelResolver);
         using var client = context.Factory.CreateClient();
 

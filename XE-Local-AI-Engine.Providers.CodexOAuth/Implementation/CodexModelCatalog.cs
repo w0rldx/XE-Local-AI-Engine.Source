@@ -29,6 +29,29 @@ public static class CodexModelCatalog
     ];
 
     /// <summary>
+    ///     The total context window of a Codex model id, in tokens (ordinal, case-insensitive), or <see langword="null" />
+    ///     when the id is unknown or no official figure could be sourced for it.
+    /// </summary>
+    /// <remarks>
+    ///     Values come from the Codex CLI catalog for the ChatGPT-subscription path this provider uses, not the public API pages,
+    ///     which advertise a larger window that belongs to the API-key path and would over-budget here. 272,000 is the catalog's
+    ///     default <c>context_window</c>; its larger <c>max_context_window</c> (872,000) is opt-in for a client, and this node does
+    ///     not opt in, so the default is the honest budget. An id absent here (the older ids, no longer in that catalog) has no
+    ///     sourced window, so the chat meter shows "unknown" and the turn budget keeps the node default rather than trusting a guess.
+    /// </remarks>
+    public static int? ContextTokensFor(string? modelId)
+    {
+        return modelId is not null && ContextTokens.TryGetValue(modelId, out var tokens) ? tokens : null;
+    }
+
+    private static readonly Dictionary<string, int> ContextTokens = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["gpt-5.6-sol"] = 272_000,
+        ["gpt-5.6-terra"] = 272_000,
+        ["gpt-5.6-luna"] = 272_000
+    };
+
+    /// <summary>
     ///     True when <paramref name="modelId" /> is one of the offered Codex cloud model ids (ordinal, case-insensitive).
     ///     A null/blank id is never a Codex model.
     /// </summary>

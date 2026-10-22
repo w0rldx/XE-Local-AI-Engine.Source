@@ -108,6 +108,40 @@ public sealed class LocalRuntimeWarmerTests
     }
 
     [Test]
+    public async Task PrepareLocalRuntimeAsync_ForACloudModel_ReturnsItsDeclaredWindowWithoutWarming()
+    {
+        var resolver = CreateLlamaCppResolver();
+        var cloudModels = Substitute.For<ICloudModelResolver>();
+        cloudModels.ResolveContextWindowAsync("gpt-5.6-terra", Arg.Any<CancellationToken>()).Returns(new CloudModelContextWindow { ContextTokens = 400_000 });
+
+        var result = await CreateWarmer(resolver, cloudSelected: true, cloudModels: cloudModels).PrepareLocalRuntimeAsync("gpt-5.6-terra",
+            Substitute.For<IWorkerEventDispatcher>(), Guid.NewGuid(), new InvocationRunner.StreamState(), turnStartedTimestamp: 0, CancellationToken.None);
+
+        AssertEx.Equal(400_000, result.EffectiveContextTokens);
+        AssertEx.Null(result.WarmFailure);
+        await resolver.DidNotReceive().ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task PrepareLocalRuntimeAsync_ForANonWarmableLocalModel_NeverAsksForACloudWindow()
+    {
+        // An Ollama model is skipped like a cloud one, but has no declared window: the default must stay, and the cloud
+        // config must not even be read for it.
+        var ollama = Substitute.For<ILocalModelProvider>();
+        ollama.ProviderName.Returns("ollama");
+        var resolver = Substitute.For<ILocalModelProviderResolver>();
+        resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(ollama));
+        var cloudModels = Substitute.For<ICloudModelResolver>();
+        cloudModels.ResolveContextWindowAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new CloudModelContextWindow { ContextTokens = 400_000 });
+
+        var result = await CreateWarmer(resolver, cloudModels: cloudModels).PrepareLocalRuntimeAsync("qwen3.5:0.8b",
+            Substitute.For<IWorkerEventDispatcher>(), Guid.NewGuid(), new InvocationRunner.StreamState(), turnStartedTimestamp: 0, CancellationToken.None);
+
+        AssertEx.Null(result.EffectiveContextTokens);
+        await cloudModels.DidNotReceive().ResolveContextWindowAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task ResolveEffectiveContextTokensAsync_ReturnsTheLaunchedWindow()
     {
         var warmer = CreateWarmer(CreateLlamaCppResolver());
@@ -179,12 +213,14 @@ public sealed class LocalRuntimeWarmerTests
             LocalRuntimeWarmer.BuildGenerationAdmissionRejectionMessage(InvocationGenerationAdmissionReasonCodes.EffectiveContextInsufficient, context));
     }
 
-    private static LocalRuntimeWarmer CreateWarmer(ILocalModelProviderResolver resolver, bool cloudSelected = false, GpuWorkGate? gate = null)
+    private static LocalRuntimeWarmer CreateWarmer(ILocalModelProviderResolver resolver, bool cloudSelected = false, GpuWorkGate? gate = null,
+        ICloudModelResolver? cloudModels = null)
     {
         var cloudFactory = Substitute.For<IActiveCloudChatClientFactory>();
         cloudFactory.IsCloudProviderSelected(Arg.Any<string?>()).Returns(cloudSelected);
 
-        return new LocalRuntimeWarmer(resolver, cloudFactory, new FakeModelTrustResolver(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System, gate ?? new GpuWorkGate());
+        return new LocalRuntimeWarmer(resolver, cloudFactory, new FakeModelTrustResolver(), cloudModels ?? Substitute.For<ICloudModelResolver>(),
+            NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System, gate ?? new GpuWorkGate());
     }
 
     private static ILocalModelProvider CreateLlamaCppProvider(int? effectiveContextTokens)

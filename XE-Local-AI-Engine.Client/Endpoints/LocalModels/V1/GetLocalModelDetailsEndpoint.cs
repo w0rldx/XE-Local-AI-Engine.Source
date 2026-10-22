@@ -41,6 +41,10 @@ public sealed class GetLocalModelDetailsEndpoint : Endpoint<GetLocalModelDetails
 
         switch (resolution)
         {
+            case LocalModelDetailsResolution.Cloud cloud:
+                // A recognised cloud id with an unknown window is still 200 with a null window: the meter shows "unknown" without 404 polling noise.
+                await Send.OkAsync(LocalModelsMapper.ToCloudDetailsResponse(modelName, cloud.ContextLength), ct);
+                return;
             case LocalModelDetailsResolution.External external:
                 await Send.OkAsync(external.Registration.ToDetailsResponse(), ct);
                 return;

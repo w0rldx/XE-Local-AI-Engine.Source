@@ -57,11 +57,14 @@ internal sealed class LocalModelDetailsResolver : ILocalModelDetailsResolver
                 : new LocalModelDetailsResolution.External(registration);
         }
 
-        // A cloud id (Codex, an Azure Foundry deployment) is NOT a local model: context window, template and license are local-runtime
-        // concepts, and probing /api/show for it 500s. A clean 404, not a 500.
+        // A cloud id (Codex, an Azure Foundry deployment) is NOT a local model and probing /api/show for it 500s. Template and license
+        // are local-runtime concepts; its one detail is the declared window. An id with no known window 404s.
         if (await _cloudModelResolver.IsCloudModelAsync(modelName, cancellationToken))
         {
-            return new LocalModelDetailsResolution.NoLocalDetails();
+            var window = await _cloudModelResolver.ResolveContextWindowAsync(modelName, cancellationToken);
+            return window is null
+                ? new LocalModelDetailsResolution.NoLocalDetails()
+                : new LocalModelDetailsResolution.Cloud(window.ContextTokens);
         }
 
         // Route by the model's provider BEFORE probing: a GGUF (llama.cpp) model has no Ollama /api/show entry, so its details come from the

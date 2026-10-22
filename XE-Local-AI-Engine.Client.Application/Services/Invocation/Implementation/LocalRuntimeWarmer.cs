@@ -25,6 +25,7 @@ public sealed class LocalRuntimeWarmer
 {
     private readonly IGpuWorkGate _gpuWorkGate;
     private readonly IActiveCloudChatClientFactory _activeCloudFactory;
+    private readonly ICloudModelResolver _cloudModelResolver;
     private readonly ILogger<LocalRuntimeWarmer> _logger;
     private readonly IModelTrustResolver _modelTrustResolver;
     private readonly ILocalModelProviderResolver _providerResolver;
@@ -33,6 +34,7 @@ public sealed class LocalRuntimeWarmer
     public LocalRuntimeWarmer(ILocalModelProviderResolver providerResolver,
         IActiveCloudChatClientFactory activeCloudFactory,
         IModelTrustResolver modelTrustResolver,
+        ICloudModelResolver cloudModelResolver,
         ILogger<LocalRuntimeWarmer> logger,
         TimeProvider timeProvider,
         IGpuWorkGate gpuWorkGate)
@@ -40,11 +42,13 @@ public sealed class LocalRuntimeWarmer
         ArgumentNullException.ThrowIfNull(gpuWorkGate);
         _gpuWorkGate = gpuWorkGate;
         ArgumentNullException.ThrowIfNull(activeCloudFactory);
+        ArgumentNullException.ThrowIfNull(cloudModelResolver);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(modelTrustResolver);
         ArgumentNullException.ThrowIfNull(providerResolver);
         ArgumentNullException.ThrowIfNull(timeProvider);
         _activeCloudFactory = activeCloudFactory;
+        _cloudModelResolver = cloudModelResolver;
         _logger = logger;
         _modelTrustResolver = modelTrustResolver;
         _providerResolver = providerResolver;
@@ -86,10 +90,13 @@ public sealed class LocalRuntimeWarmer
         if (provider is null)
         {
             // No local cold-load (cloud, Ollama or an unresolved provider): the TTFT baseline is turn start and the
-            // latency is the provider's own. The send-to-load-start histogram is local-only and is not recorded.
+            // latency is the provider's own; the load-start histogram is local-only. A cloud model's declared window replaces the default.
             stream.ProviderTag = "remote";
             stream.ModelReadyTimestamp = turnStartedTimestamp;
-            return new LocalRuntimePreparationResult(EffectiveContextTokens: null, ProviderName: null, WarmFailure: null);
+            var cloudContextTokens = _activeCloudFactory.IsCloudProviderSelected(resolvedModel)
+                ? (await _cloudModelResolver.ResolveContextWindowAsync(resolvedModel, cancellationToken))?.ContextTokens
+                : null;
+            return new LocalRuntimePreparationResult(cloudContextTokens, ProviderName: null, WarmFailure: null);
         }
 
         // This turn pays a real local cold-load. Record how long the turn waited before the load even began

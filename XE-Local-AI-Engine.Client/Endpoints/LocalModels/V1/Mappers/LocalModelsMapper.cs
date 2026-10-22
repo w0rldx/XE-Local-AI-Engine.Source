@@ -465,6 +465,23 @@ internal static class LocalModelsMapper
     }
 
     /// <summary>
+    ///     Maps a built-in cloud model (Codex, Azure Foundry) to the shared model-details response.
+    /// </summary>
+    /// <remarks>
+    ///     The declared window is the only detail, reported as both ceiling and effective window for the same reason as an
+    ///     external model's: the node does not launch the process, so the two are one number.
+    /// </remarks>
+    public static LocalModelDetailsResponse ToCloudDetailsResponse(string modelName, int? contextLength)
+    {
+        return new LocalModelDetailsResponse
+        {
+            ModelName = modelName,
+            MaxContextTokens = contextLength,
+            EffectiveContextTokens = contextLength
+        };
+    }
+
+    /// <summary>
     ///     Maps an external OpenAI-compatible registration to the shared model-details response.
     /// </summary>
     /// <remarks>

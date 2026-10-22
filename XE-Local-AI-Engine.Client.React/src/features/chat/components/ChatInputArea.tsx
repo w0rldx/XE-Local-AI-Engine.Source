@@ -375,8 +375,8 @@ export function ChatInputArea({
 					opened={samplingDialogOpen}
 					onClose={() => setSamplingDialogOpen(false)}
 					maxContextTokens={contextUsage?.maxTokens}
-					/* The cloud sections of the model picker are the same list Chat.tsx derives selectedModelIsCloud
-					   from, so membership here needs no extra prop threaded down. */
+					/* The cloud sections of the model picker are the same list the model-selection hook resolves the
+					   selection against, so membership here needs no extra prop threaded down. */
 					cloudModelSelected={cloudModelOptions?.some((option) => option.value === selectedModel) === true}
 				/>
 			) : null}

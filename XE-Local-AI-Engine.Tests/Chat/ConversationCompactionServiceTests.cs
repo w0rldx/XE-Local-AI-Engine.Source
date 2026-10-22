@@ -806,7 +806,7 @@ public sealed class ConversationCompactionServiceTests
         var providerResolver = Substitute.For<ILocalModelProviderResolver>();
         providerResolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(provider);
         var cloudFactory = Substitute.For<IActiveCloudChatClientFactory>();
-        return new LocalRuntimeWarmer(providerResolver, cloudFactory, new FakeModelTrustResolver(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System, new GpuWorkGate());
+        return new LocalRuntimeWarmer(providerResolver, cloudFactory, new FakeModelTrustResolver(), Substitute.For<ICloudModelResolver>(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System, new GpuWorkGate());
     }
 
     private static IModelCapabilityResolver CreateCapabilityResolver(bool supportsThinking)

@@ -30,16 +30,23 @@ import {
 import {
 	type CloudFoundryModelDraft,
 	type CloudSettingsFormValues,
+	contextLengthToNumber,
 	shouldWarnManagedIdentityEgress,
 	validateCloudSettingsForm,
 } from "@/features/cloud-settings/models/CloudSettingsModel";
 
 function configuredModels(models: readonly CloudFoundryModelDraft[]) {
-	return models.reduce<Array<{ deploymentName: string; displayLabel?: string }>>((configured, model) => {
+	return models.reduce<Array<{ deploymentName: string; displayLabel?: string; contextLength?: number }>>((configured, model) => {
 		const deploymentName = model.deploymentName.trim();
 		if (deploymentName.length > 0) {
 			const displayLabel = model.displayLabel.trim();
-			configured.push({ deploymentName, ...(displayLabel.length > 0 ? { displayLabel } : {}) });
+			// Omitted like a blank label: the backend reads a missing window as null (unknown).
+			const contextLength = contextLengthToNumber(model.contextLength);
+			configured.push({
+				deploymentName,
+				...(displayLabel.length > 0 ? { displayLabel } : {}),
+				...(contextLength !== null ? { contextLength } : {}),
+			});
 		}
 		return configured;
 	}, []);

@@ -18,4 +18,10 @@ public sealed record StoredAzureFoundryModel
     ///     Optional human-friendly label shown alongside the deployment name.
     /// </summary>
     public string? DisplayLabel { get; init; }
+
+    /// <summary>
+    ///     The operator-declared total context window of the deployment, in tokens; <see langword="null" /> when unknown.
+    /// </summary>
+    /// <remarks>Azure reports no window for a deployment, so only the operator can declare it; it sizes the turn budget and the chat context meter.</remarks>
+    public int? ContextLength { get; init; }
 }

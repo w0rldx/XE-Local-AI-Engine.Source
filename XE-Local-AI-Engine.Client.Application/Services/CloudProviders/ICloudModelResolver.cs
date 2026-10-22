@@ -27,4 +27,14 @@ public interface ICloudModelResolver
     ///     could not be read).
     /// </summary>
     Task<StoredAzureFoundryConnection?> ResolveAzureFoundryConnectionAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The declared context window of a stored Azure Foundry deployment or a Codex id with a sourced window, or
+    ///     <see langword="null" /> when the id is neither (including when the config could not be read).
+    /// </summary>
+    /// <remarks>
+    ///     The single home for "how big is this cloud model's window": the model-details route and the turn budget both read
+    ///     it, so the chat meter and the budgeter cannot disagree. A deployment is matched before a Codex id, as routing does.
+    /// </remarks>
+    Task<CloudModelContextWindow?> ResolveContextWindowAsync(string? modelName, CancellationToken cancellationToken = default);
 }

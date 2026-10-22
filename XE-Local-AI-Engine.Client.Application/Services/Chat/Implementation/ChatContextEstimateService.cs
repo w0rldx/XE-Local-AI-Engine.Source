@@ -177,8 +177,8 @@ internal sealed class ChatContextEstimateService : IChatContextEstimateService
     /// <remarks>
     ///     Mirrors <c>TurnPolicy.ResolveContextBudget</c> and <c>WithEffectiveContext</c>: a positive <c>num_ctx</c> is capped by a
     ///     known launched window, else taken as is. Without one: the launched window, a cold GGUF's ceiling capped at the node
-    ///     default (under-reporting is the safe side), a declared window, else the node default. A cloud model without local
-    ///     details takes the node default; any other is unknown.
+    ///     default (under-reporting is the safe side), a declared window (external, or a Codex/Azure cloud model), else the node
+    ///     default. A cloud model with no declared window, or no longer recognised, takes the node default; any other is unknown.
     /// </remarks>
     private async Task<int?> ResolveWindowTokensAsync(string model, bool isCloud, int? numCtx, CancellationToken cancellationToken)
     {
@@ -193,9 +193,16 @@ internal sealed class ChatContextEstimateService : IChatContextEstimateService
             return numCtx is int requestedWithin and > 0 ? Math.Min(requestedWithin, launched) : launched;
         }
 
+        // A requested window is taken as-is, except that a declared external or cloud window caps it, as the send path does.
+        var declaredRemote = details switch
+        {
+            LocalModelDetailsResolution.External external => external.Registration.Model.ContextLength,
+            LocalModelDetailsResolution.Cloud cloud => cloud.ContextLength,
+            _ => null
+        };
         if (numCtx is int requested and > 0)
         {
-            return requested;
+            return declaredRemote is int cap and > 0 ? Math.Min(requested, cap) : requested;
         }
 
         var nodeDefault = await _runtimeSettings.GetDefaultContextTokensAsync(cancellationToken);
@@ -203,6 +210,7 @@ internal sealed class ChatContextEstimateService : IChatContextEstimateService
         {
             LocalModelDetailsResolution.Gguf gguf => gguf.Descriptor.MaxContextTokens is int ceiling and > 0 ? Math.Min(ceiling, nodeDefault) : null,
             LocalModelDetailsResolution.External external => external.Registration.Model.ContextLength,
+            LocalModelDetailsResolution.Cloud cloud => cloud.ContextLength,
             LocalModelDetailsResolution.Ollama ollama => ollama.Details.MaxContextTokens,
             _ => null
         };

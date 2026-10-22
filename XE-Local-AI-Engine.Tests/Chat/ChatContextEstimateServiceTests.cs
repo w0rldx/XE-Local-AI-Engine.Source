@@ -32,6 +32,11 @@ public sealed class ChatContextEstimateServiceTests
 {
     private const string LocalModel = "local-model";
     private const string CloudModel = "cloud-model";
+    private const string DeclaredCloudModel = "declared-cloud-model";
+    private const string UndeclaredCloudModel = "undeclared-cloud-model";
+    private const int DeclaredCloudWindow = 400_000;
+    private const string DeclaredExternalModel = "declared-external-model";
+    private const int DeclaredExternalWindow = 131_072;
     private const string UnknownModel = "unknown-model";
     private const string NoToolsModel = "local-without-tools";
     private const int LocalWindow = 32768;
@@ -232,6 +237,33 @@ public sealed class ChatContextEstimateServiceTests
     }
 
     [Test]
+    public async Task Estimate_ForACloudModelWithADeclaredWindow_UsesItOverTheNodeDefault()
+    {
+        // Larger than the node default on purpose: a declared cloud window replaces the default, it is not clamped to it.
+        var harness = new Harness(CreateTool("get_time"));
+
+        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = DeclaredCloudModel
+        }));
+
+        AssertEx.Equal(DeclaredCloudWindow, estimate.WindowTokens);
+    }
+
+    [Test]
+    public async Task Estimate_ForARecognisedCloudModelWithAnUnknownWindow_UsesTheNodeDefault()
+    {
+        var harness = new Harness(CreateTool("get_time"));
+
+        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = UndeclaredCloudModel
+        }));
+
+        AssertEx.Equal(NodeDefaultWindow, estimate.WindowTokens);
+    }
+
+    [Test]
     public async Task Estimate_ForAColdGguf_CapsTheTrainCeilingAtTheNodeDefault()
     {
         // A pre-launch turn budgets against the node default, not the train ceiling, so the estimate must not promise more.
@@ -284,6 +316,62 @@ public sealed class ChatContextEstimateServiceTests
         }));
 
         AssertEx.Equal(WarmGgufLaunchedWindow, estimate.WindowTokens);
+    }
+
+    [Test]
+    public async Task Estimate_WithANumCtxAboveADeclaredCloudWindow_IsCappedByIt()
+    {
+        var harness = new Harness(CreateTool("get_time"));
+
+        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = DeclaredCloudModel,
+            NumCtx = DeclaredCloudWindow + 1
+        }));
+
+        AssertEx.Equal(DeclaredCloudWindow, estimate.WindowTokens);
+    }
+
+    [Test]
+    public async Task Estimate_WithANumCtxBelowADeclaredCloudWindow_TakesTheRequest()
+    {
+        var harness = new Harness(CreateTool("get_time"));
+
+        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = DeclaredCloudModel,
+            NumCtx = 4096
+        }));
+
+        AssertEx.Equal(4096, estimate.WindowTokens);
+    }
+
+    [Test]
+    public async Task Estimate_WithANumCtxAboveADeclaredExternalWindow_IsCappedByIt()
+    {
+        var harness = new Harness(CreateTool("get_time"));
+
+        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = DeclaredExternalModel,
+            NumCtx = DeclaredExternalWindow + 1
+        }));
+
+        AssertEx.Equal(DeclaredExternalWindow, estimate.WindowTokens);
+    }
+
+    [Test]
+    public async Task Estimate_WithANumCtxBelowADeclaredExternalWindow_TakesTheRequest()
+    {
+        var harness = new Harness(CreateTool("get_time"));
+
+        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = DeclaredExternalModel,
+            NumCtx = 4096
+        }));
+
+        AssertEx.Equal(4096, estimate.WindowTokens);
     }
 
     [Test]
@@ -418,6 +506,24 @@ public sealed class ChatContextEstimateServiceTests
                        Capabilities = ["completion", "tools"]
                    }));
 
+            details.ResolveAsync(DeclaredCloudModel, Arg.Any<CancellationToken>()).Returns(new LocalModelDetailsResolution.Cloud(DeclaredCloudWindow));
+            details.ResolveAsync(DeclaredExternalModel, Arg.Any<CancellationToken>()).Returns(new LocalModelDetailsResolution.External(new ExternalProviderModelRegistration
+            {
+                Connection = new ExternalProviderConnectionDescriptor
+                {
+                    Id = "external-box",
+                    DisplayName = "External box",
+                    BaseUrl = new Uri("http://127.0.0.1:18099/v1/"),
+                    Locality = ExternalProviderLocality.Local,
+                    CloudGrants = ExternalProviderCloudGrants.None
+                },
+                Model = new ExternalProviderModelDescriptor
+                {
+                    WireId = DeclaredExternalModel,
+                    ContextLength = DeclaredExternalWindow
+                }
+            }));
+            details.ResolveAsync(UndeclaredCloudModel, Arg.Any<CancellationToken>()).Returns(new LocalModelDetailsResolution.Cloud(ContextLength: null));
             details.ResolveAsync(ColdGgufModel, Arg.Any<CancellationToken>()).Returns(new LocalModelDetailsResolution.Gguf(CreateGgufDescriptor(ColdGgufModel), EffectiveContextTokens: null));
             details.ResolveAsync(WarmGgufModel, Arg.Any<CancellationToken>()).Returns(new LocalModelDetailsResolution.Gguf(CreateGgufDescriptor(WarmGgufModel), WarmGgufLaunchedWindow));
 

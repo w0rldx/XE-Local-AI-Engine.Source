@@ -50,10 +50,24 @@ export function parseApiSurface(value: string | null | undefined): CloudApiSurfa
 }
 
 // One editable deployment row in the models list. `deploymentName` is the Foundry portal deployment
-// name (not the model family); `displayLabel` is an optional friendly label shown in the picker.
+// name (not the model family); `displayLabel` is an optional friendly label shown in the picker; `contextLength` is
+// the optional declared context window in tokens, kept as the raw field text (blank = unknown).
 export interface CloudFoundryModelDraft {
 	deploymentName: string;
 	displayLabel: string;
+	contextLength: string;
+}
+
+// Mirrors the backend bounds on a declared Azure deployment context window: the cloud-settings save validator
+// (CloudSettingsEndpointValidators) reuses StoredNodeSettings.MinDefaultContextTokens and MaxDefaultContextTokens.
+export const MIN_DEPLOYMENT_CONTEXT_LENGTH = 1024;
+export const MAX_DEPLOYMENT_CONTEXT_LENGTH = 1_048_576;
+
+// Blank → null (window unknown). The field's NumberInput already clamps to the bounds above and refuses decimals; a
+// value the backend still rejects comes back as the save error toast.
+export function contextLengthToNumber(value: string): number | null {
+	const trimmed = value.trim();
+	return trimmed.length === 0 ? null : Number(trimmed);
 }
 
 export interface CloudSettingsFormValues {

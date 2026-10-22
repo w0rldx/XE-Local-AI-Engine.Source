@@ -263,7 +263,7 @@ XE-Local-AI-Engine.Providers.LlamaServer/Implementation/ProcessCaptureResult.cs|
 XE-Local-AI-Engine.Providers.LlamaServer/Implementation/ProcessGpuVendorProbe.cs|AdapterListCommand
 XE-Local-AI-Engine.Tests/CodexOAuth/CodexAuthServiceTests.cs|BoundLogin
 
-# --- record-hierarchy (23) --------------------------------------------------------
+# --- record-hierarchy (24) --------------------------------------------------------
 # Part of a record inheritance hierarchy. A record can only derive from a record, and the derived declarations
 # chain to the positional primary constructor: the hierarchy converts as a unit or not at all.
 XE-Local-AI-Engine.Client.Application/Services/ExternalProviders/IExternalProviderStore.cs|Committed
@@ -286,6 +286,7 @@ XE-Local-AI-Engine.Client.Application/Services/Models/ICoordinatedModelProviderM
 XE-Local-AI-Engine.Client.Application/Services/Models/ICoordinatedModelProviderMapStore.cs|Removed
 XE-Local-AI-Engine.Client.Application/Services/Models/ICoordinatedModelProviderMapStore.cs|Superseded
 XE-Local-AI-Engine.Client.Application/Services/Models/ICoordinatedModelProviderMapStore.cs|Superseded
+XE-Local-AI-Engine.Client.Application/Services/Models/ILocalModelDetailsResolver.cs|Cloud
 XE-Local-AI-Engine.Client.Application/Services/Models/ILocalModelDetailsResolver.cs|External
 XE-Local-AI-Engine.Client.Application/Services/Models/ILocalModelDetailsResolver.cs|Gguf
 XE-Local-AI-Engine.Client.Application/Services/Models/ILocalModelDetailsResolver.cs|Ollama

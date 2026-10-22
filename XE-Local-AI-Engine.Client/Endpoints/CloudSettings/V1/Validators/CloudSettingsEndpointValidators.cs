@@ -5,6 +5,7 @@ using FluentValidation;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 public sealed class SaveCloudSettingsRequestValidator : Validator<SaveCloudSettingsRequest>
 {
@@ -63,7 +64,11 @@ public sealed class SaveCloudSettingsRequestValidator : Validator<SaveCloudSetti
             .Must(static models => models is not null && models.Any(static model => !string.IsNullOrWhiteSpace(model.DeploymentName)))
             .WithMessage("At least one model with a non-blank deployment name is required.")
             .Must(static models => models is null || models.All(static model => (model.DeploymentName?.Length ?? 0) <= 128))
-            .WithMessage("Deployment names must be 128 characters or fewer.");
+            .WithMessage("Deployment names must be 128 characters or fewer.")
+            // A declared window is optional (null = unknown); a declared one stays within the node's own window bounds.
+            .Must(static models => models is null || models.All(static model => model.ContextLength is null
+                                                                                 or (>= StoredNodeSettings.MinDefaultContextTokens and <= StoredNodeSettings.MaxDefaultContextTokens)))
+            .WithMessage($"Context length must be between {StoredNodeSettings.MinDefaultContextTokens} and {StoredNodeSettings.MaxDefaultContextTokens} tokens, or blank when unknown.");
     }
 
     private static bool IsApiKeyMode(string? authMode)

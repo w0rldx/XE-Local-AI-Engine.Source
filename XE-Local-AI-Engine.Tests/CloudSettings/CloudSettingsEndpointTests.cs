@@ -79,6 +79,91 @@ public sealed class CloudSettingsEndpointTests
     }
 
     [Test]
+    [Arguments(null)]
+    [Arguments(1024)]
+    [Arguments(200_000)]
+    [Arguments(1_048_576)]
+    public async Task SaveCloudSettings_WithAContextLengthInBounds_PersistsAndReturnsIt(int? contextLength)
+    {
+        var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
+        await using var factory = CreateFactory(cloudCredentialStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
+        request.Content = JsonContent.Create(CreateSaveRequestWithContextLength(contextLength));
+        using var response = await client.SendAsync(request);
+        var settings = Deserialize<CloudSettingsResponse>(await response.Content.ReadAsStringAsync());
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(contextLength, AssertEx.NotNull(settings.AzureFoundry).Models.Single().ContextLength);
+        await cloudCredentialStore.Received(1).SaveConfigAsync(Arg.Is<StoredCloudProviderConfig>(config =>
+                config.AzureFoundry != null && config.AzureFoundry.Models.Single().ContextLength == contextLength),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [Arguments(0)]
+    [Arguments(1023)]
+    [Arguments(1_048_577)]
+    public async Task SaveCloudSettings_WithAContextLengthOutOfBounds_ReturnsValidationProblem(int contextLength)
+    {
+        var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
+        await using var factory = CreateFactory(cloudCredentialStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
+        request.Content = JsonContent.Create(CreateSaveRequestWithContextLength(contextLength));
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Contains(body, "Context length must be between 1024 and 1048576 tokens");
+        await cloudCredentialStore.DidNotReceiveWithAnyArgs().SaveConfigAsync(Arg.Any<StoredCloudProviderConfig>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetCloudSettings_ReturnsEachDeploymentsDeclaredContextLength()
+    {
+        var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
+        var config = CreateConfig();
+        cloudCredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(config with
+        {
+            AzureFoundry = config.AzureFoundry! with
+            {
+                Models = [new StoredAzureFoundryModel { DeploymentName = "gpt-4o", ContextLength = 128_000 }]
+            }
+        });
+        await using var factory = CreateFactory(cloudCredentialStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/cloud-settings");
+        using var response = await client.SendAsync(request);
+        var settings = Deserialize<CloudSettingsResponse>(await response.Content.ReadAsStringAsync());
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(128_000, AssertEx.NotNull(settings.AzureFoundry).Models.Single().ContextLength);
+    }
+
+    private static SaveCloudSettingsRequest CreateSaveRequestWithContextLength(int? contextLength)
+    {
+        return new SaveCloudSettingsRequest
+        {
+            ProviderName = "AzureFoundry",
+            Endpoint = "https://example.openai.azure.com/",
+            AuthMode = "ApiKey",
+            ApiKey = "secret",
+            Models =
+            [
+                new AzureFoundryModelDto
+                {
+                    DeploymentName = "gpt-4o",
+                    ContextLength = contextLength
+                }
+            ]
+        };
+    }
+
+    [Test]
     public async Task SaveCloudSettings_WhenSaved_InvalidatesTheRoutingSnapshot()
     {
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();

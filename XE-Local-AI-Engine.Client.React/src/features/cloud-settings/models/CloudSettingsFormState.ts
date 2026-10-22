@@ -21,7 +21,7 @@ export function errorMessage(error: unknown): string {
 
 // Always show at least one (blank) deployment row so the user has somewhere to type on a fresh connection.
 function withAtLeastOneRow(models: CloudFoundryModelDraft[]): CloudFoundryModelDraft[] {
-	return models.length > 0 ? models : [{ deploymentName: "", displayLabel: "" }];
+	return models.length > 0 ? models : [{ deploymentName: "", displayLabel: "", contextLength: "" }];
 }
 
 // Save and clear return the same view; both reset the form to the stored (redacted) values. The API key is never
@@ -37,6 +37,7 @@ export function settingsToFormValues(settings: CloudSettings): CloudSettingsForm
 			(azure?.models ?? []).map((model) => ({
 				deploymentName: model.deploymentName ?? "",
 				displayLabel: model.displayLabel ?? "",
+				contextLength: model.contextLength == null ? "" : String(model.contextLength),
 			})),
 		),
 		// Secret header values are write-only: they load blank with a "stored" hint driven by hasStoredSecret;
@@ -67,7 +68,7 @@ const emptyFormValues: CloudSettingsFormValues = {
 	authMode: "ApiKey",
 	apiSurface: "AzureDeployments",
 	apiKey: "",
-	models: [{ deploymentName: "", displayLabel: "" }],
+	models: [{ deploymentName: "", displayLabel: "", contextLength: "" }],
 	headers: [],
 	hostSuffixes: [],
 	entraTenantId: "",
@@ -185,7 +186,10 @@ export function formReducer(state: CloudSettingsFormState, action: CloudSettings
 		case "addModel":
 			return {
 				...state,
-				values: { ...state.values, models: [...state.values.models, { deploymentName: "", displayLabel: "" }] },
+				values: {
+					...state.values,
+					models: [...state.values.models, { deploymentName: "", displayLabel: "", contextLength: "" }],
+				},
 				modelRowIds: [...state.modelRowIds, action.rowId],
 			};
 		case "removeModel": {

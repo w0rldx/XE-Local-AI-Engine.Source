@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 ///     Ollama-served model — is a decision, so it lives here rather than in the endpoint, which is left to map one
 ///     <see cref="LocalModelDetailsResolution" /> onto the wire response. <para> The branch order is a PRIORITY, not an arbitrary sequence:
 ///     the cloud/external ids are recognised by shape before anything probes a local runtime, because probing the Ollama daemon's <c>/api/show</c>
-///     for an id it has never heard of answers 500, and a cloud model simply has no local details to report. </para>
+///     for an id it has never heard of answers 500, and a cloud model's only detail is its declared context window. </para>
 /// </remarks>
 public interface ILocalModelDetailsResolver
 {
@@ -26,13 +26,19 @@ public interface ILocalModelDetailsResolver
 public abstract record LocalModelDetailsResolution
 {
     /// <summary>
-    ///     The model has no local details to report — a Codex cloud id, an Azure Foundry deployment, an external registration that is gone,
-    ///     a GGUF with no installed descriptor, or an unreachable Ollama daemon.
+    ///     No details to report: a gone external registration, a cloud id with no known window (a removed deployment, an
+    ///     unsourced Codex id), a GGUF with no installed descriptor, or an unreachable Ollama daemon.
     /// </summary>
     /// <remarks>
     ///     Every one of those is a clean 404 rather than a fault.
     /// </remarks>
     public sealed record NoLocalDetails : LocalModelDetailsResolution;
+
+    /// <summary>
+    ///     A built-in cloud model (a Codex id or an Azure Foundry deployment); its declared window is the only detail, and
+    ///     <see langword="null" /> means unknown.
+    /// </summary>
+    public sealed record Cloud(int? ContextLength) : LocalModelDetailsResolution;
 
     /// <summary>An external OpenAI-compatible registration; the operator's declarations are the only detail source.</summary>
     public sealed record External(ExternalProviderModelRegistration Registration) : LocalModelDetailsResolution;

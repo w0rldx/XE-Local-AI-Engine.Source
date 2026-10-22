@@ -31129,6 +31129,11 @@
           "displayLabel": {
             "type": "string",
             "nullable": true
+          },
+          "contextLength": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
           }
         }
       },

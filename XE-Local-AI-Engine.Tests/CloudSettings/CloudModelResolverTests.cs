@@ -96,6 +96,53 @@ public sealed class CloudModelResolverTests
         AssertEx.Equal(expected: 2, connection!.Models.Count);
     }
 
+    [Test]
+    public async Task ResolveContextWindow_ForAStoredDeployment_IsItsDeclaredWindow_MatchedCaseInsensitively()
+    {
+        var store = Substitute.For<ICloudCredentialStore>();
+        store.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(new StoredCloudProviderConfig
+        {
+            ProviderName = "AzureFoundry",
+            AzureFoundry = new StoredAzureFoundryConnection
+            {
+                Models =
+                [
+                    new StoredAzureFoundryModel { DeploymentName = "Azure-GPT", ContextLength = 128_000 },
+                    new StoredAzureFoundryModel { DeploymentName = "azure-mini" }
+                ]
+            }
+        });
+        var resolver = CreateResolver(store);
+
+        AssertEx.Equal(128_000, AssertEx.NotNull(await resolver.ResolveContextWindowAsync("azure-gpt")).ContextTokens);
+        // Recognised but undeclared: a window record with a null value, not "not a cloud model".
+        AssertEx.Null(AssertEx.NotNull(await resolver.ResolveContextWindowAsync("azure-mini")).ContextTokens);
+        AssertEx.Null(await resolver.ResolveContextWindowAsync("llama-3.gguf"));
+    }
+
+    [Test]
+    public async Task ResolveContextWindow_ForACodexId_IsTheCatalogFigure_EvenWhenTheStoreFails()
+    {
+        var store = Substitute.For<ICloudCredentialStore>();
+        store.LoadConfigAsync(Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("decrypt failed"));
+        var resolver = CreateResolver(store);
+
+        AssertEx.Equal(272_000, AssertEx.NotNull(await resolver.ResolveContextWindowAsync("GPT-5.6-TERRA")).ContextTokens);
+        // A catalog id with no sourced window has nothing to report; its cloud-ness is the trust resolver's answer.
+        AssertEx.Null(await resolver.ResolveContextWindowAsync("gpt-5.5"));
+        AssertEx.Null(await resolver.ResolveContextWindowAsync("azure-gpt"));
+    }
+
+    [Test]
+    public async Task ResolveContextWindow_ForABlankId_IsNull_WithoutReadingTheStore()
+    {
+        var store = Substitute.For<ICloudCredentialStore>();
+        var resolver = CreateResolver(store);
+
+        AssertEx.Null(await resolver.ResolveContextWindowAsync("  "));
+        await store.DidNotReceive().LoadConfigAsync(Arg.Any<CancellationToken>());
+    }
+
     private static ICloudCredentialStore WithDeployments(params string[] deploymentNames)
     {
         var store = Substitute.For<ICloudCredentialStore>();

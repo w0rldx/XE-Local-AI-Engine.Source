@@ -320,7 +320,7 @@ public sealed class ConversationStateDistillationServiceTests
             provider.ProviderName.Returns("ollama");
             var providerResolver = Substitute.For<ILocalModelProviderResolver>();
             providerResolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(provider);
-            return new LocalRuntimeWarmer(providerResolver, Substitute.For<IActiveCloudChatClientFactory>(), new FakeModelTrustResolver(), NullLogger<LocalRuntimeWarmer>.Instance,
+            return new LocalRuntimeWarmer(providerResolver, Substitute.For<IActiveCloudChatClientFactory>(), new FakeModelTrustResolver(), Substitute.For<ICloudModelResolver>(), NullLogger<LocalRuntimeWarmer>.Instance,
                 TimeProvider.System, new GpuWorkGate());
         }
     }

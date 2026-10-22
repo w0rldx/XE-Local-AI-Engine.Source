@@ -2567,6 +2567,8 @@
 				"authModeManagedIdentity": "Verwaltete Identität",
 				"clear": "Gespeicherte Anmeldedaten löschen",
 				"configured": "Konfiguriert",
+				"contextLengthLabel": "Kontextlänge (Tokens)",
+				"contextLengthPlaceholder": "128000",
 				"deploymentNameHelp": "Deployment-Name (wie im Foundry-Portal angezeigt — nicht die Modellfamilie).",
 				"deploymentNameLabel": "Deployment-Name",
 				"deploymentNamePlaceholder": "gpt-4o",

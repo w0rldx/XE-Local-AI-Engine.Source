@@ -1486,6 +1486,7 @@ export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto =
 export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto = {
 	deploymentName: string;
 	displayLabel?: string | null;
+	contextLength?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse = {

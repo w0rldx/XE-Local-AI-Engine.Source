@@ -164,6 +164,48 @@ describe("CloudSettings — Azure Foundry connection form (generated hey-api dat
 		});
 	});
 
+	it("hydrates a stored deployment context length and saves an edited one as a number", async () => {
+		generatedMock.getFn.mockResolvedValue(
+			makeSettings({
+				azureFoundry: {
+					endpoint: "https://example.openai.azure.com/",
+					authMode: "ApiKey",
+					hasStoredApiKey: true,
+					models: [{ deploymentName: "gpt-4o", displayLabel: null, contextLength: 128000 }],
+				},
+			}),
+		);
+		renderCloudSettings();
+		await waitFor(() => expect(screen.queryByText(/Loading cloud settings/i)).toBeNull());
+
+		const contextLength = screen.getByLabelText(/Context length \(tokens\)/i) as HTMLInputElement;
+		expect(contextLength.value).toBe("128000");
+
+		fireEvent.change(contextLength, { target: { value: "200000" } });
+		fireEvent.change(screen.getByLabelText("API key", { selector: 'input[type="password"]' }), {
+			target: { value: "secret-key" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: /save cloud settings/i }));
+
+		await waitFor(() => {
+			expect(generatedMock.saveFn.mock.calls[0]?.[0]?.body?.models).toEqual([
+				{ deploymentName: "gpt-4o", contextLength: 200000 },
+			]);
+		});
+	});
+
+	it("clamps a context length below the backend minimum on blur", async () => {
+		renderCloudSettings();
+		await waitFor(() => expect(screen.queryByText(/Loading cloud settings/i)).toBeNull());
+
+		const contextLength = screen.getByLabelText(/Context length \(tokens\)/i) as HTMLInputElement;
+		expect(contextLength.value).toBe("");
+		fireEvent.change(contextLength, { target: { value: "512" } });
+		fireEvent.blur(contextLength);
+
+		expect(contextLength.value).toBe("1024");
+	});
+
 	it("adds, edits, toggles secret on, and removes custom header rows", async () => {
 		renderCloudSettings();
 		await waitFor(() => expect(screen.queryByText(/Loading cloud settings/i)).toBeNull());

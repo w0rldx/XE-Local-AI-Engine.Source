@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 
 /// <summary>
 ///     Reads the stored cloud configuration to classify model ids.
@@ -82,5 +83,37 @@ public sealed class CloudModelResolver : ICloudModelResolver
             _logger.LogWarning(exception, "Azure Foundry cloud model list could not be resolved.");
             return null;
         }
+    }
+
+    public async Task<CloudModelContextWindow?> ResolveContextWindowAsync(string? modelName, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(modelName))
+        {
+            return null;
+        }
+
+        try
+        {
+            var config = await _cloudCredentialStore.LoadConfigAsync(cancellationToken);
+            var deployment = config?.AzureFoundry?.Models.FirstOrDefault(model => string.Equals(model.DeploymentName, modelName, StringComparison.OrdinalIgnoreCase));
+            if (deployment is not null)
+            {
+                return new CloudModelContextWindow { ContextTokens = deployment.ContextLength };
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            // Debug, as for the deployment match: the details endpoint polls per selected model.
+            _logger.LogDebug(exception, "Azure Foundry deployment window could not be resolved for '{ModelName}'.", modelName);
+        }
+
+        // A Codex id counts only with a sourced window: membership itself is the trust resolver's answer, not this lookup's.
+        return CodexModelCatalog.ContextTokensFor(modelName) is { } codexTokens
+            ? new CloudModelContextWindow { ContextTokens = codexTokens }
+            : null;
     }
 }

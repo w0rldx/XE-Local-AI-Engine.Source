@@ -2567,6 +2567,8 @@
 				"authModeManagedIdentity": "Managed identity",
 				"clear": "Clear saved credentials",
 				"configured": "Configured",
+				"contextLengthLabel": "Context length (tokens)",
+				"contextLengthPlaceholder": "128000",
 				"deploymentNameHelp": "Deployment name (as shown in the Foundry portal — not the model family).",
 				"deploymentNameLabel": "Deployment name",
 				"deploymentNamePlaceholder": "gpt-4o",
