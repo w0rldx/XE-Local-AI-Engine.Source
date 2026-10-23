@@ -210,25 +210,25 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/query-core@5.104.2",
+			"id": "frontend:@tanstack/query-core@5.104.3",
 			"name": "@tanstack/query-core",
-			"version": "5.104.2",
+			"version": "5.104.3",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/query",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/react-query@5.104.2",
+			"id": "frontend:@tanstack/react-query@5.104.3",
 			"name": "@tanstack/react-query",
-			"version": "5.104.2",
+			"version": "5.104.3",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/query",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/react-router@1.170.42",
+			"id": "frontend:@tanstack/react-router@1.170.44",
 			"name": "@tanstack/react-router",
-			"version": "1.170.42",
+			"version": "1.170.44",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/router",
 			"source": "frontend"
@@ -242,17 +242,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/react-virtual@3.14.15",
+			"id": "frontend:@tanstack/react-virtual@3.14.20",
 			"name": "@tanstack/react-virtual",
-			"version": "3.14.15",
+			"version": "3.14.20",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/virtual",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/router-core@1.171.35",
+			"id": "frontend:@tanstack/router-core@1.171.37",
 			"name": "@tanstack/router-core",
-			"version": "1.171.35",
+			"version": "1.171.37",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/router",
 			"source": "frontend"
@@ -266,9 +266,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/virtual-core@3.19.0",
+			"id": "frontend:@tanstack/virtual-core@3.19.5",
 			"name": "@tanstack/virtual-core",
-			"version": "3.19.0",
+			"version": "3.19.5",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/virtual",
 			"source": "frontend"
@@ -1082,9 +1082,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:dompurify@3.4.16",
+			"id": "frontend:dompurify@3.4.17",
 			"name": "dompurify",
-			"version": "3.4.16",
+			"version": "3.4.17",
 			"license": "(MPL-2.0 OR Apache-2.0)",
 			"homepageUrl": "https://github.com/cure53/DOMPurify",
 			"source": "frontend"
@@ -1298,9 +1298,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:framer-motion@14.1.0",
+			"id": "frontend:framer-motion@14.3.0",
 			"name": "framer-motion",
-			"version": "14.1.0",
+			"version": "14.3.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/motiondivision/motion#readme",
 			"source": "frontend"
@@ -1498,9 +1498,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:i18next@26.4.3",
+			"id": "frontend:i18next@26.4.7",
 			"name": "i18next",
-			"version": "26.4.3",
+			"version": "26.4.7",
 			"license": "MIT",
 			"homepageUrl": "https://www.i18next.com",
 			"source": "frontend"
@@ -2658,17 +2658,17 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Identity.Client@4.91.0",
+			"id": "backend:Microsoft.Identity.Client@4.91.1",
 			"name": "Microsoft.Identity.Client",
-			"version": "4.91.0",
+			"version": "4.91.1",
 			"license": "MIT",
 			"homepageUrl": "https://go.microsoft.com/fwlink/?linkid=844761",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Identity.Client.Extensions.Msal@4.91.0",
+			"id": "backend:Microsoft.Identity.Client.Extensions.Msal@4.91.1",
 			"name": "Microsoft.Identity.Client.Extensions.Msal",
-			"version": "4.91.0",
+			"version": "4.91.1",
 			"license": "MIT",
 			"homepageUrl": "https://go.microsoft.com/fwlink/?linkid=844761",
 			"source": "backend"
@@ -2770,25 +2770,25 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:ModelContextProtocol@2.2.0",
+			"id": "backend:ModelContextProtocol@2.3.0",
 			"name": "ModelContextProtocol",
-			"version": "2.2.0",
+			"version": "2.3.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://csharp.sdk.modelcontextprotocol.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:ModelContextProtocol.AspNetCore@2.2.0",
+			"id": "backend:ModelContextProtocol.AspNetCore@2.3.0",
 			"name": "ModelContextProtocol.AspNetCore",
-			"version": "2.2.0",
+			"version": "2.3.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://csharp.sdk.modelcontextprotocol.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:ModelContextProtocol.Core@2.2.0",
+			"id": "backend:ModelContextProtocol.Core@2.3.0",
 			"name": "ModelContextProtocol.Core",
-			"version": "2.2.0",
+			"version": "2.3.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://csharp.sdk.modelcontextprotocol.io/",
 			"source": "backend"
@@ -2810,17 +2810,17 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:motion-dom@14.1.0",
+			"id": "frontend:motion-dom@14.3.0",
 			"name": "motion-dom",
-			"version": "14.1.0",
+			"version": "14.3.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/motiondivision/motion#readme",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:motion-utils@14.1.0",
+			"id": "frontend:motion-utils@14.1.1",
 			"name": "motion-utils",
-			"version": "14.1.0",
+			"version": "14.1.1",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/motiondivision/motion#readme",
 			"source": "frontend"
@@ -2850,17 +2850,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:NAudio.Core@3.2.0",
+			"id": "backend:NAudio.Core@3.3.0",
 			"name": "NAudio.Core",
-			"version": "3.2.0",
+			"version": "3.3.0",
 			"license": "MIT",
 			"homepageUrl": "https://naudio.github.io/NAudio/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:NAudio.Wasapi@3.2.0",
+			"id": "backend:NAudio.Wasapi@3.3.0",
 			"name": "NAudio.Wasapi",
-			"version": "3.2.0",
+			"version": "3.3.0",
 			"license": "MIT",
 			"homepageUrl": "https://naudio.github.io/NAudio/",
 			"source": "backend"
@@ -2994,9 +2994,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry@1.20.0",
+			"id": "backend:OpenTelemetry@1.20.1",
 			"name": "OpenTelemetry",
-			"version": "1.20.0",
+			"version": "1.20.1",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
@@ -3010,57 +3010,57 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Api@1.20.0",
+			"id": "backend:OpenTelemetry.Api@1.20.1",
 			"name": "OpenTelemetry.Api",
-			"version": "1.20.0",
+			"version": "1.20.1",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Api.ProviderBuilderExtensions@1.20.0",
+			"id": "backend:OpenTelemetry.Api.ProviderBuilderExtensions@1.20.1",
 			"name": "OpenTelemetry.Api.ProviderBuilderExtensions",
-			"version": "1.20.0",
+			"version": "1.20.1",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Exporter.OpenTelemetryProtocol@1.20.0",
+			"id": "backend:OpenTelemetry.Exporter.OpenTelemetryProtocol@1.20.1",
 			"name": "OpenTelemetry.Exporter.OpenTelemetryProtocol",
-			"version": "1.20.0",
+			"version": "1.20.1",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Extensions.Hosting@1.20.0",
+			"id": "backend:OpenTelemetry.Extensions.Hosting@1.20.1",
 			"name": "OpenTelemetry.Extensions.Hosting",
-			"version": "1.20.0",
+			"version": "1.20.1",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Instrumentation.AspNetCore@1.20.0",
+			"id": "backend:OpenTelemetry.Instrumentation.AspNetCore@1.20.1",
 			"name": "OpenTelemetry.Instrumentation.AspNetCore",
-			"version": "1.20.0",
+			"version": "1.20.1",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Instrumentation.Http@1.20.0",
+			"id": "backend:OpenTelemetry.Instrumentation.Http@1.20.1",
 			"name": "OpenTelemetry.Instrumentation.Http",
-			"version": "1.20.0",
+			"version": "1.20.1",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Instrumentation.Runtime@1.20.0",
+			"id": "backend:OpenTelemetry.Instrumentation.Runtime@1.20.1",
 			"name": "OpenTelemetry.Instrumentation.Runtime",
-			"version": "1.20.0",
+			"version": "1.20.1",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
@@ -3114,9 +3114,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:postcss@8.5.29",
+			"id": "frontend:postcss@8.5.30",
 			"name": "postcss",
-			"version": "8.5.29",
+			"version": "8.5.30",
 			"license": "MIT",
 			"homepageUrl": "https://postcss.org/",
 			"source": "frontend"
@@ -3170,57 +3170,57 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:Quartz@3.22.6",
+			"id": "backend:Quartz@3.22.7",
 			"name": "Quartz",
-			"version": "3.22.6",
+			"version": "3.22.7",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Extensions.DependencyInjection@3.22.6",
+			"id": "backend:Quartz.Extensions.DependencyInjection@3.22.7",
 			"name": "Quartz.Extensions.DependencyInjection",
-			"version": "3.22.6",
+			"version": "3.22.7",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Extensions.Hosting@3.22.6",
+			"id": "backend:Quartz.Extensions.Hosting@3.22.7",
 			"name": "Quartz.Extensions.Hosting",
-			"version": "3.22.6",
+			"version": "3.22.7",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Jobs@3.22.6",
+			"id": "backend:Quartz.Jobs@3.22.7",
 			"name": "Quartz.Jobs",
-			"version": "3.22.6",
+			"version": "3.22.7",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Plugins@3.22.6",
+			"id": "backend:Quartz.Plugins@3.22.7",
 			"name": "Quartz.Plugins",
-			"version": "3.22.6",
+			"version": "3.22.7",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Plugins.TimeZoneConverter@3.22.6",
+			"id": "backend:Quartz.Plugins.TimeZoneConverter@3.22.7",
 			"name": "Quartz.Plugins.TimeZoneConverter",
-			"version": "3.22.6",
+			"version": "3.22.7",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Serialization.SystemTextJson@3.22.6",
+			"id": "backend:Quartz.Serialization.SystemTextJson@3.22.7",
 			"name": "Quartz.Serialization.SystemTextJson",
-			"version": "3.22.6",
+			"version": "3.22.7",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
@@ -3234,17 +3234,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:react@19.3.0",
+			"id": "frontend:react@19.3.1",
 			"name": "react",
-			"version": "19.3.0",
+			"version": "19.3.1",
 			"license": "MIT",
 			"homepageUrl": "https://react.dev/",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:react-dom@19.3.0",
+			"id": "frontend:react-dom@19.3.1",
 			"name": "react-dom",
-			"version": "19.3.0",
+			"version": "19.3.1",
 			"license": "MIT",
 			"homepageUrl": "https://react.dev/",
 			"source": "frontend"
@@ -3258,9 +3258,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:react-i18next@17.0.16",
+			"id": "frontend:react-i18next@17.0.19",
 			"name": "react-i18next",
-			"version": "17.0.16",
+			"version": "17.0.19",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/i18next/react-i18next",
 			"source": "frontend"
@@ -3474,9 +3474,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:Scalar.AspNetCore@2.18.0",
+			"id": "backend:Scalar.AspNetCore@2.18.2",
 			"name": "Scalar.AspNetCore",
-			"version": "2.18.0",
+			"version": "2.18.2",
 			"license": "MIT",
 			"homepageUrl": "https://scalar.com/",
 			"source": "backend"
@@ -4186,9 +4186,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:zod@4.6.6",
+			"id": "frontend:zod@4.6.7",
 			"name": "zod",
-			"version": "4.6.6",
+			"version": "4.6.7",
 			"license": "MIT",
 			"homepageUrl": "https://zod.dev",
 			"source": "frontend"

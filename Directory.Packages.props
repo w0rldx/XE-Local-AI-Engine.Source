@@ -18,10 +18,10 @@
     <!-- MSAL ConfidentialClientApplication for the Entra ID authorization-code sign-in flow (Postman-parity delegated
          token via a confidential client + PKCE). Not pulled in transitively by Azure.Identity 1.21.0 (which depends
          only on Azure.Core), so both packages are direct references, version-locked to the same MSAL release. -->
-    <PackageVersion Include="Microsoft.Identity.Client" Version="4.91.0" />
+    <PackageVersion Include="Microsoft.Identity.Client" Version="4.91.1" />
     <!-- OS-native encrypted MSAL token-cache persistence (DPAPI/Keychain/libsecret), mirroring the
          TokenCachePersistenceOptions Azure.Identity provides for its own credential types. -->
-    <PackageVersion Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.91.0" />
+    <PackageVersion Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.91.1" />
     <!-- Pure-.NET document text extraction for chat file-upload attachments (single-file-publish safe; no Python/Docker/native deps). -->
     <PackageVersion Include="Microsoft.Extensions.DataIngestion.Abstractions" Version="10.10.0-preview.1.26459.2" />
     <!-- Genuine PdfPig (Apache-2.0, github.com/UglyToad/PdfPig). NOTE: the package id is `PdfPig`, NOT `UglyToad.PdfPig`
@@ -52,7 +52,7 @@
     <PackageVersion Include="MessagePack" Version="2.5.303" />
     <PackageVersion Include="FastEndpoints" Version="8.3.0" />
     <PackageVersion Include="FastEndpoints.Swagger" Version="8.3.0" />
-    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.312" />
+    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.316" />
     <!-- Architecture conformance tests (layer-dependency direction). Test-project only. -->
     <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
     <!-- Architecture conformance tests (intra-project file/namespace placement). Test-project only, Apache-2.0.
@@ -79,12 +79,12 @@
     <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.12.0" />
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.1" />
     <PackageVersion Include="Microsoft.Testing.Platform" Version="2.5.1" />
-    <PackageVersion Include="Microsoft.Playwright" Version="1.63.0" />
+    <PackageVersion Include="Microsoft.Playwright" Version="1.64.1" />
     <PackageVersion Include="OllamaSharp" Version="5.5.0" />
     <!-- Coupled to the Microsoft.Playwright pin above: TUnit.Playwright's nuspec sets the Microsoft.Playwright
          floor (1.68.4 requires >= 1.62.0), so check that floor before moving either package. A Microsoft.Playwright
          bump additionally needs `playwright.ps1 install` to refresh ~/.cache/ms-playwright and CI's browser layer. -->
-    <PackageVersion Include="TUnit.Playwright" Version="1.75.0" />
+    <PackageVersion Include="TUnit.Playwright" Version="1.76.0" />
     <PackageVersion Include="Microsoft.Extensions.AI" Version="10.10.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.11.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.10.0" />
@@ -129,8 +129,8 @@
     <PackageVersion Include="Microsoft.Mxc.Sdk" Version="1.0.1" />
     <!-- ModelContextProtocol.AspNetCore takes an exact dependency on the matching ModelContextProtocol
          build, so these two only ever move together; a split bump fails restore with NU1107/NU1608. -->
-    <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
-    <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
+    <PackageVersion Include="ModelContextProtocol" Version="2.3.0" />
+    <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.3.0" />
     <!-- WASAPI process-loopback capture for Windows per-application audio (transcription source kind
          ApplicationProcess). NOTE the package id: the `NAudio` META-package multi-targets
          net9.0;net9.0-windows;net9.0-windows10.0.19041.0 and drags in Midi/Asio/WinMM, which would force a Windows
@@ -140,23 +140,23 @@
          dependency, NAudio.Core, declares System.Numerics.Tensors >= 9.0.0, which the 10.0.12 pin below satisfies
          upward under CentralPackageTransitivePinningEnabled. Both packages are MIT with a copyright string, so the
          release license corpus resolves them to third-party/nuget/standard/MIT.txt and no new notice file exists. -->
-    <PackageVersion Include="NAudio.Wasapi" Version="3.2.0" />
+    <PackageVersion Include="NAudio.Wasapi" Version="3.3.0" />
     <PackageVersion Include="NSubstitute" Version="6.2.0" />
     <!-- Mechanical enforcement of correct NSubstitute usage (non-virtual member substitution,
          unused Received checks). Test-project only, PrivateAssets="all". -->
     <PackageVersion Include="NSubstitute.Analyzers.CSharp" Version="1.0.17" />
-    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.0" />
-    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.20.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.20.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.20.0" />
-    <PackageVersion Include="Quartz" Version="3.22.6" />
-    <PackageVersion Include="Quartz.Extensions.Hosting" Version="3.22.6" />
-    <PackageVersion Include="Quartz.Plugins" Version="3.22.6" />
-    <PackageVersion Include="Quartz.Plugins.TimeZoneConverter" Version="3.22.6" />
-    <PackageVersion Include="Quartz.Serialization.SystemTextJson" Version="3.22.6" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.1" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.1" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.20.1" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.20.1" />
+    <PackageVersion Include="Quartz" Version="3.22.7" />
+    <PackageVersion Include="Quartz.Extensions.Hosting" Version="3.22.7" />
+    <PackageVersion Include="Quartz.Plugins" Version="3.22.7" />
+    <PackageVersion Include="Quartz.Plugins.TimeZoneConverter" Version="3.22.7" />
+    <PackageVersion Include="Quartz.Serialization.SystemTextJson" Version="3.22.7" />
     <PackageVersion Include="Serilog" Version="4.4.0" />
-    <PackageVersion Include="Scalar.AspNetCore" Version="2.18.0" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.18.2" />
     <PackageVersion Include="Scrutor" Version="7.0.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="Serilog.Enrichers.Environment" Version="3.0.1" />
@@ -173,7 +173,7 @@
     <PackageVersion Include="System.CommandLine" Version="2.0.13" />
     <PackageVersion Include="System.Numerics.Tensors" Version="10.0.13" />
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.13" />
-    <PackageVersion Include="TUnit" Version="1.75.0" />
+    <PackageVersion Include="TUnit" Version="1.76.0" />
     <PackageVersion Include="Velopack" Version="1.2.161" />
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>

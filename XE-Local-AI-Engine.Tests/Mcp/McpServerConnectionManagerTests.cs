@@ -1843,7 +1843,7 @@ public sealed class McpServerConnectionManagerTests
 
         public override ServerCapabilities ServerCapabilities => _inner.ServerCapabilities;
 
-        public override Implementation ServerInfo => _inner.ServerInfo;
+        public override Implementation? ServerInfo => _inner.ServerInfo;
 
         public override string? ServerInstructions => _inner.ServerInstructions;
 
