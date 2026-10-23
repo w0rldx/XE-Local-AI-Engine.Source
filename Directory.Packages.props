@@ -23,7 +23,7 @@
          TokenCachePersistenceOptions Azure.Identity provides for its own credential types. -->
     <PackageVersion Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.91.1" />
     <!-- Pure-.NET document text extraction for chat file-upload attachments (single-file-publish safe; no Python/Docker/native deps). -->
-    <PackageVersion Include="Microsoft.Extensions.DataIngestion.Abstractions" Version="10.10.0-preview.1.26459.2" />
+    <PackageVersion Include="Microsoft.Extensions.DataIngestion.Abstractions" Version="10.11.0-preview.1.26513.7" />
     <!-- Genuine PdfPig (Apache-2.0, github.com/UglyToad/PdfPig). NOTE: the package id is `PdfPig`, NOT `UglyToad.PdfPig`
          (the latter is an unofficial, unlicensed republish on nuget.org with a commit absent from the real repo). -->
     <PackageVersion Include="PdfPig" Version="0.1.16" />
@@ -85,9 +85,9 @@
          floor (1.68.4 requires >= 1.62.0), so check that floor before moving either package. A Microsoft.Playwright
          bump additionally needs `playwright.ps1 install` to refresh ~/.cache/ms-playwright and CI's browser layer. -->
     <PackageVersion Include="TUnit.Playwright" Version="1.76.0" />
-    <PackageVersion Include="Microsoft.Extensions.AI" Version="10.10.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI" Version="10.11.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.11.0" />
-    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.10.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.11.0" />
     <!-- Transitive only (pulled in by Microsoft.Extensions.AI.OpenAI): pinned
          explicitly, matching the version CentralPackageTransitivePinningEnabled currently resolves, so the plain
          OpenAI SDK's OPENAI001-experimental OpenAIClient(AuthenticationPolicy, OpenAIClientOptions) ctor that
@@ -95,13 +95,13 @@
          future Microsoft.Extensions.AI.OpenAI bump becomes a conscious version change here rather than a silent
          transitive drift.
 
-         DO NOT raise this to 2.14.0 while Microsoft.Extensions.AI.OpenAI is 10.10.0. 10.10.0 is compiled against
-         2.13.0 and its OpenAIResponsesChatClient.ToResponseTool references OpenAI.Responses.GlobalMcpToolCallApprovalPolicy,
-         a type 2.14.0 removed. NuGet resolves 2.14.0 happily (the floor is only >= 2.13.0) and the solution compiles
-         clean, but every Responses call that carries ChatOptions.Tools throws TypeLoadException at run time — the
-         Codex tool path, caught by CodexToolCallingWireTests. Move this pin only together with a
-         Microsoft.Extensions.AI.OpenAI release built against the newer SDK. -->
-    <PackageVersion Include="OpenAI" Version="2.13.0" />
+         Coupled to Microsoft.Extensions.AI.OpenAI: this pin must equal the OpenAI version that package is compiled
+         against (Microsoft.Extensions.AI.OpenAI 10.11.0 is built against OpenAI 2.14.0; its nuspec floor is >= 2.14.0).
+         A mismatch resolves and compiles clean but can fail at run time: 10.10.0 (built against 2.13.0) referenced
+         OpenAI.Responses.GlobalMcpToolCallApprovalPolicy, which 2.14.0 renamed, so pairing it with 2.14.0 threw
+         TypeLoadException on every Responses call carrying ChatOptions.Tools. CodexToolCallingWireTests catches that
+         class of break. Move both pins together, to the OpenAI version the new Microsoft.Extensions.AI.OpenAI nuspec names. -->
+    <PackageVersion Include="OpenAI" Version="2.14.0" />
     <!-- Never below 10.0.10: ModelContextProtocol 2.2.0 pulls Microsoft.Extensions.Hosting.Abstractions 10.0.10,
          which requires Configuration.Abstractions >= 10.0.10, and central transitive pinning turns a mismatch into
          an NU1109 downgrade error across five projects. Same servicing band as the DependencyInjection.Abstractions

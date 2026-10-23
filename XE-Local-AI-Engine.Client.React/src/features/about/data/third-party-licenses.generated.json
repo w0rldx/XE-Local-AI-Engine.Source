@@ -2274,9 +2274,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.AI@10.10.0",
+			"id": "backend:Microsoft.Extensions.AI@10.11.0",
 			"name": "Microsoft.Extensions.AI",
-			"version": "10.10.0",
+			"version": "10.11.0",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2298,9 +2298,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.AI.OpenAI@10.10.0",
+			"id": "backend:Microsoft.Extensions.AI.OpenAI@10.11.0",
 			"name": "Microsoft.Extensions.AI.OpenAI",
-			"version": "10.10.0",
+			"version": "10.11.0",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2309,14 +2309,6 @@
 			"id": "backend:Microsoft.Extensions.AmbientMetadata.Application@10.11.0",
 			"name": "Microsoft.Extensions.AmbientMetadata.Application",
 			"version": "10.11.0",
-			"license": "MIT",
-			"homepageUrl": "https://dot.net/",
-			"source": "backend"
-		},
-		{
-			"id": "backend:Microsoft.Extensions.Caching.Abstractions@10.0.12",
-			"name": "Microsoft.Extensions.Caching.Abstractions",
-			"version": "10.0.12",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2386,9 +2378,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.DataIngestion.Abstractions@10.10.0-preview.1.26459.2",
+			"id": "backend:Microsoft.Extensions.DataIngestion.Abstractions@10.11.0-preview.1.26513.7",
 			"name": "Microsoft.Extensions.DataIngestion.Abstractions",
-			"version": "10.10.0-preview.1.26459.2",
+			"version": "10.11.0-preview.1.26513.7",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2589,14 +2581,6 @@
 			"id": "backend:Microsoft.Extensions.Options.DataAnnotations@10.0.13",
 			"name": "Microsoft.Extensions.Options.DataAnnotations",
 			"version": "10.0.13",
-			"license": "MIT",
-			"homepageUrl": "https://dot.net/",
-			"source": "backend"
-		},
-		{
-			"id": "backend:Microsoft.Extensions.Primitives@10.0.12",
-			"name": "Microsoft.Extensions.Primitives",
-			"version": "10.0.12",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2986,11 +2970,11 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenAI@2.13.0",
+			"id": "backend:OpenAI@2.14.0",
 			"name": "OpenAI",
-			"version": "2.13.0",
+			"version": "2.14.0",
 			"license": "MIT",
-			"homepageUrl": "https://github.com/openai/openai-dotnet/tree/OpenAI_2.13.0",
+			"homepageUrl": "https://github.com/openai/openai-dotnet/tree/OpenAI_2.14.0",
 			"source": "backend"
 		},
 		{
@@ -3794,11 +3778,11 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:System.ClientModel@1.14.0",
+			"id": "backend:System.ClientModel@1.15.0",
 			"name": "System.ClientModel",
-			"version": "1.14.0",
+			"version": "1.15.0",
 			"license": "MIT",
-			"homepageUrl": "https://github.com/Azure/azure-sdk-for-net/blob/System.ClientModel_1.14.0/sdk/core/System.ClientModel/README.md",
+			"homepageUrl": "https://github.com/Azure/azure-sdk-for-net/blob/System.ClientModel_1.15.0/sdk/core/System.ClientModel/README.md",
 			"source": "backend"
 		},
 		{
@@ -3882,9 +3866,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:System.Memory.Data@10.0.3",
+			"id": "backend:System.Memory.Data@10.0.9",
 			"name": "System.Memory.Data",
-			"version": "10.0.3",
+			"version": "10.0.9",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
