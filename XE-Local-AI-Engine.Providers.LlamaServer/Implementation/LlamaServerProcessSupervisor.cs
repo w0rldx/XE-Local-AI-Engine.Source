@@ -174,7 +174,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
             _options,
             _timeProvider,
             _logger,
-            _residencyNotifier);
+            _residencyNotifier,
+            _loadTelemetry);
 
         _reaperLoop = Task.Run(() => _reaper.ReapIdleLoopAsync(_shutdownCts.Token), _shutdownCts.Token);
     }
@@ -219,6 +220,11 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         {
             if (_reaper.DetachProcess(key, running) is { } detached)
             {
+                if (!detached.Handle.HasExited)
+                {
+                    _reaper.RecordUnload(key, LlamaServerUnloadReason.Shutdown);
+                }
+
                 LlamaServerIdleReaper.KillDetachedProcess(detached);
             }
         }

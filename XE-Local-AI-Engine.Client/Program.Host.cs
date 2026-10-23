@@ -429,6 +429,9 @@ namespace XE_Local_AI_Engine.Client
             // Applied last so a test can override registrations and swap the server (e.g. TestServer).
             customization?.ConfigureBuilder?.Invoke(builder);
 
+            // After every registration, the test overrides included, so each hosted service's StartAsync is timed.
+            HostedServiceStartTiming.Install(builder.Services);
+
             var app = builder.Build();
             Log.Information("Engine host built in {ElapsedMs} ms; applying migrations, then starting hosted services.", hostBuild.ElapsedMilliseconds);
 
@@ -483,12 +486,17 @@ namespace XE_Local_AI_Engine.Client
             {
                 // Split around the migration pass on purpose, and written IMMEDIATELY after the node-chat pass. See
                 // docs/wiki/11-hosting-and-deployment.md ("The node host pipeline (`Program.cs`)").
+                var phaseStart = Stopwatch.GetTimestamp();
                 var pendingCanvasWorkflows = await ReadPendingCanvasWorkflowsAsync(app.Services);
+                phaseStart = LogStartupPhase("canvas read", phaseStart);
 
                 commandContext?.SetStage(OneShotCommandStage.Migrations);
                 await ApplyNodeChatMigrationsAsync(app.Services);
+                phaseStart = LogStartupPhase("node-chat migrations", phaseStart);
                 await ImportCanvasWorkflowsAsync(app.Services, pendingCanvasWorkflows);
+                phaseStart = LogStartupPhase("canvas import", phaseStart);
                 await ApplyNodeIdentityMigrationsAsync(app.Services);
+                _ = LogStartupPhase("identity migrations", phaseStart);
                 Log.Information("Database migrations applied.");
             }
             catch (Exception migrationException) when (IsDatabaseFailure(migrationException))
@@ -564,11 +572,15 @@ namespace XE_Local_AI_Engine.Client
                 };
             }
 
+            var recoveryStart = Stopwatch.GetTimestamp();
             await RecoverInterruptedNodeChatMessagesAsync(app.Services);
+            recoveryStart = LogStartupPhase("interrupted-message recovery", recoveryStart);
             await ReconcileStaleScheduledRunsAsync(app.Services);
+            recoveryStart = LogStartupPhase("stale-run reconcile", recoveryStart);
             ActivateInvocationResumeRegistry(app.Services);
 
             ConfigureRequestPipeline(app, bridgeEndpoint, isLocalMode, isDevelopmentModeEnabled);
+            _ = LogStartupPhase("request pipeline", recoveryStart);
 
             // Desktop mode only: install the console-close graceful-stop triggers and the on-started browser launch. Off the flag this is never reached, so no signal
             // handler or P/Invoke is installed. The lifecycle is rooted for the app's lifetime through the lifetime token registration and disposes with the host.

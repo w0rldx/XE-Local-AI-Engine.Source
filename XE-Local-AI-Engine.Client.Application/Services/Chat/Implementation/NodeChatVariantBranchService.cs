@@ -109,7 +109,8 @@ internal sealed class NodeChatVariantBranchService
                                 message.ReasoningCount,
                                 message.Parts, message.AgentDefinitionId, message.AgentName, message.ReasoningEffort, sources: message.Sources,
                                 contextWindow: message.ContextWindow,
-                                failureCategory: message.FailureCategory),
+                                failureCategory: message.FailureCategory,
+                                throughput: message.Throughput),
                             branchedConversationId,
                             copyMessageId));
                     AddParameter(messageCommand, "$created_at_utc", message.CreatedAtUtc);

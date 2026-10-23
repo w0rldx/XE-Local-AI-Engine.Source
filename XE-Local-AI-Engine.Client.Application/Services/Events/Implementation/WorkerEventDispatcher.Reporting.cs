@@ -55,7 +55,7 @@ public sealed partial class WorkerEventDispatcher
         return Task.CompletedTask;
     }
 
-    public Task ReportInvocationPhaseAsync(Guid invocationId, InvocationRuntimePhase phase)
+    public Task ReportInvocationPhaseAsync(Guid invocationId, InvocationRuntimePhase phase, InvocationRuntimePhaseDetail? detail = null)
     {
         // The cold-load phases (PreparingRuntime/LoadingModel) fire BEFORE the stream-idle watchdog is armed, so a
         // legitimate load is visible instead of an apparent hang. A no-op when the id is not the current invocation.
@@ -70,6 +70,7 @@ public sealed partial class WorkerEventDispatcher
                 }
 
                 state.RuntimePhase = phase;
+                state.RuntimePhaseDetail = detail;
                 return state;
             });
 

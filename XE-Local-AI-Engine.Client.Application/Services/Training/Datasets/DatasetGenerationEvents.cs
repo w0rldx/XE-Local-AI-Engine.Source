@@ -231,5 +231,9 @@ public sealed class DatasetGenerationQueueSignal : IDatasetGenerationQueueSignal
 
 public sealed class DatasetGenerationQueueOptions
 {
-    public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(1);
+    /// <summary>
+    ///     The idle fallback behind <see cref="IDatasetGenerationQueueSignal" />: an enqueue wakes the queue, and a claim
+    ///     the GPU gate refused retries every second on its own.
+    /// </summary>
+    public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(30);
 }

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Invocation;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
+using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -12,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -262,14 +264,59 @@ public sealed class LocalRuntimeWarmerTests
             LocalRuntimeWarmer.BuildGenerationAdmissionRejectionMessage(InvocationGenerationAdmissionReasonCodes.EffectiveContextInsufficient, context));
     }
 
+    /// <summary>U6: the loading phase says why the model loads and how long it took last time.</summary>
+    [Test]
+    [Arguments(null, InvocationRuntimePhaseReasons.FirstLoad, null)]
+    [Arguments(LlamaServerUnloadReason.IdleTimeout, InvocationRuntimePhaseReasons.IdleUnloaded, 9_000d)]
+    [Arguments(LlamaServerUnloadReason.LoadedModelCap, InvocationRuntimePhaseReasons.EvictedForCap, 9_000d)]
+    [Arguments(LlamaServerUnloadReason.MemoryForAnotherModel, InvocationRuntimePhaseReasons.EvictedForMemory, 9_000d)]
+    [Arguments(LlamaServerUnloadReason.Shutdown, null, 9_000d)]
+    public async Task PrepareLocalRuntimeAsync_ReportsLoadingModel_WithTheUnloadReasonAndTheLastLoadDuration(LlamaServerUnloadReason? unload,
+        string? expectedReason,
+        double? expectedLastLoadMs)
+    {
+        var perfLog = new LocalModelPerfLog(TimeProvider.System);
+        if (unload is { } reason)
+        {
+            perfLog.RecordReadyLoad("model.gguf", ModelRole.Chat, readinessDurationMs: 9_000);
+            perfLog.RecordUnload("MODEL.gguf", ModelRole.Chat, reason);
+        }
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var invocationId = Guid.NewGuid();
+
+        _ = await CreateWarmer(CreateLlamaCppResolver(), perfLog: perfLog).PrepareLocalRuntimeAsync("model.gguf", dispatcher, invocationId,
+            new InvocationRunner.StreamState(), turnStartedTimestamp: 0, CancellationToken.None);
+
+        await dispatcher.Received(1).ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.LoadingModel,
+            new InvocationRuntimePhaseDetail
+            {
+                Reason = expectedReason,
+                LastLoadMs = expectedLastLoadMs
+            });
+        await dispatcher.Received(1).ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.Generating, null);
+    }
+
+    [Test]
+    public async Task PrepareLocalRuntimeAsync_WithoutAPerfLog_ReportsLoadingModelWithNoDetail()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var invocationId = Guid.NewGuid();
+
+        _ = await CreateWarmer(CreateLlamaCppResolver()).PrepareLocalRuntimeAsync("model.gguf", dispatcher, invocationId,
+            new InvocationRunner.StreamState(), turnStartedTimestamp: 0, CancellationToken.None);
+
+        await dispatcher.Received(1).ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.LoadingModel, null);
+    }
+
     private static LocalRuntimeWarmer CreateWarmer(ILocalModelProviderResolver resolver, bool cloudSelected = false, GpuWorkGate? gate = null,
-        ICloudModelResolver? cloudModels = null, FakeModelTrustResolver? trust = null)
+        ICloudModelResolver? cloudModels = null, FakeModelTrustResolver? trust = null, LocalModelPerfLog? perfLog = null)
     {
         var cloudFactory = Substitute.For<IActiveCloudChatClientFactory>();
         cloudFactory.IsCloudProviderSelected(Arg.Any<string?>()).Returns(cloudSelected);
 
         return new LocalRuntimeWarmer(resolver, cloudFactory, trust ?? new FakeModelTrustResolver(), cloudModels ?? Substitute.For<ICloudModelResolver>(),
-            NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System, gate ?? new GpuWorkGate());
+            NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System, gate ?? new GpuWorkGate(), perfLog);
     }
 
     private static ILocalModelProvider CreateLlamaCppProvider(int? effectiveContextTokens)

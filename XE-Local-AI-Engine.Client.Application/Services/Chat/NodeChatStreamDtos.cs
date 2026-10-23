@@ -220,8 +220,17 @@ public sealed record ChatStreamEvent
 
     public string? RuntimePhaseChangedAtUtc { get; init; }
 
+    /// <summary>On an <c>assistant-phase</c> event only: why the model loads (<c>InvocationRuntimePhaseReasons</c>); null when unknown.</summary>
+    public string? RuntimePhaseReason { get; init; }
+
+    /// <summary>On an <c>assistant-phase</c> event only: how long this model's previous load took; null when there was none.</summary>
+    public double? RuntimePhaseLastLoadMs { get; init; }
+
     /// <summary>On a terminal event only: the content-free context-window snapshot of the turn's last provider round.</summary>
     public NodeChatContextWindowDto? ContextWindow { get; init; }
+
+    /// <summary>On a terminal event only: the turn's time to first token and prompt/generation throughput; null when not reported.</summary>
+    public NodeChatThroughputDto? Throughput { get; init; }
 
     /// <summary>
     ///     On a terminal event only: the <c>FailureCategory</c> enum name of a failed turn, so a client

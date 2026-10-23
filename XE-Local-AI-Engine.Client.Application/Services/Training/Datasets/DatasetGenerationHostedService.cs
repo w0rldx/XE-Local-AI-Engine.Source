@@ -17,6 +17,9 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 /// </remarks>
 public sealed class DatasetGenerationHostedService : BackgroundService
 {
+    // Nothing signals when an exclusive holder releases the gate, so a refused admission retries on this, not the idle poll.
+    private static readonly TimeSpan GateRetryInterval = TimeSpan.FromSeconds(1);
+
     private readonly IDatasetGenerationEventBuffer _events;
     private readonly IGpuWorkGate _gpuWorkGate;
     private readonly ILogger<DatasetGenerationHostedService> _logger;
@@ -56,7 +59,7 @@ public sealed class DatasetGenerationHostedService : BackgroundService
                 recovered = await RecoverAsync(stoppingToken);
                 if (!recovered)
                 {
-                    await WaitAsync(stoppingToken);
+                    await WaitAsync(_pollInterval, stoppingToken);
                     continue;
                 }
             }
@@ -105,16 +108,16 @@ public sealed class DatasetGenerationHostedService : BackgroundService
 
             if (work is null)
             {
-                await WaitAsync(stoppingToken);
+                await WaitAsync(admission is null && GateRetryInterval < _pollInterval ? GateRetryInterval : _pollInterval, stoppingToken);
             }
         }
     }
 
-    private async Task WaitAsync(CancellationToken stoppingToken)
+    private async Task WaitAsync(TimeSpan timeout, CancellationToken stoppingToken)
     {
         try
         {
-            _ = await _signal.WaitAsync(_pollInterval, stoppingToken);
+            _ = await _signal.WaitAsync(timeout, stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {

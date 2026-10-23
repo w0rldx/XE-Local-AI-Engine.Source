@@ -60,6 +60,8 @@ interface ChatMessageListProps {
 	isWorkSessionConversation?: boolean;
 	// Rendered right after a persisted message row (chat workflow mode's activity blocks). Absent = nothing extra.
 	renderAfterMessage?: (messageId: string) => ReactNode;
+	// Advanced UI mode: each finished assistant turn shows its time to first token, decode rate and cached tokens.
+	showTurnThroughput?: boolean;
 }
 
 function bySortOrder(left: ChatMessageModel, right: ChatMessageModel): number {
@@ -90,6 +92,7 @@ export function ChatMessageList({
 	reasoningEffort,
 	isWorkSessionConversation = false,
 	renderAfterMessage,
+	showTurnThroughput = false,
 }: ChatMessageListProps) {
 	const { t } = useTranslation();
 	// Owned here rather than by useStickToBottomScroll: the row virtualizer below reads the viewport ref, and the
@@ -200,6 +203,7 @@ export function ChatMessageList({
 		reasoningEffort,
 		isWorkSessionConversation,
 		renderAfterMessage,
+		showTurnThroughput,
 	};
 
 	return (

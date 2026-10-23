@@ -2203,8 +2203,10 @@
 				"searchAria": "Search conversations",
 				"searchPlaceholder": "Search",
 				"show": "Expand sidebar",
+				"showAll": "Show all",
 				"showArchived": "Show archived",
 				"title": "Conversations",
+				"truncatedNotice": "Showing the 100 most recent",
 				"unarchive": "Unarchive",
 				"unpin": "Unpin",
 				"untitled": "Untitled conversation"
@@ -2278,7 +2280,16 @@
 			"loadingHistory": "Loading local chat history…",
 			"loadingMessages": "Loading messages…",
 			"loadingModel": "Loading model…",
+			"loadingModelDetail": "({{detail}})",
 			"loadingModelElapsed": "· {{elapsed}}",
+			"loadingModelLastLoad": "about {{duration}} last time",
+			"loadingModelNamed": "Loading {{model}}…",
+			"loadingModelReason": {
+				"evictedForCap": "unloaded to stay within the loaded-model limit",
+				"evictedForMemory": "unloaded to free memory for another model",
+				"firstLoad": "first load",
+				"idleUnloaded": "unloaded after idle"
+			},
 			"localDefaultModel": {
 				"displayName": "Local runtime default",
 				"label": "Local default",
@@ -2467,6 +2478,11 @@
 				"title": "Tool approval required"
 			},
 			"turnParked": "A reply in this conversation is waiting for your answer. Answer the waiting card, then send again.",
+			"turnThroughput": {
+				"cached": "{{value}} cached",
+				"timeToFirstToken": "{{value}} s to first token",
+				"tokensPerSecond": "{{value}} tok/s"
+			},
 			"unknownError": "Unknown error",
 			"waitingForResponse": "Waiting for response",
 			"waitingForStreamedResponse": "Waiting for streamed response",

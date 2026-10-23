@@ -4122,6 +4122,7 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse = {
 	sources?: Array<XeLocalAiEngineClientServicesChatNodeChatMessageSource> | null;
 	contextWindow?: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowResponse | null;
 	failureCategory?: XeLocalAiEngineClientModelsEnumsFailureCategory | null;
+	throughput?: XeLocalAiEngineClientServicesChatNodeChatThroughputDto | null;
 };
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse = {
@@ -7022,6 +7023,15 @@ export type XeLocalAiEngineClientServicesChatNodeChatMessageSource = {
 	section?: string | null;
 	score?: number;
 	scoreKind?: XeLocalAiEngineClientServicesKnowledgeKnowledgeScoreKind | null;
+};
+
+export type XeLocalAiEngineClientServicesChatNodeChatThroughputDto = {
+	timeToFirstTokenMs?: number | null;
+	promptTokens?: number | null;
+	promptMs?: number | null;
+	generationTokens?: number | null;
+	generationMs?: number | null;
+	cachedPromptTokens?: number | null;
 };
 
 export type XeLocalAiEngineClientServicesCustomToolsCommandDefinition = {

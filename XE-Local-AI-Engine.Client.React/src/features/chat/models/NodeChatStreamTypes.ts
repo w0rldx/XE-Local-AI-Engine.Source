@@ -75,6 +75,17 @@ export interface NodeChatWebReviewPreviewDto {
 	results?: NodeChatWebSearchResultDto[] | null;
 }
 
+// How fast an assistant turn arrived (mirrors the backend `NodeChatThroughputDto`, camelCase). Numbers only; each
+// member is null when the provider reported none (every cloud provider reports at most `timeToFirstTokenMs`).
+export interface ChatTurnThroughput {
+	timeToFirstTokenMs?: number | null;
+	promptTokens?: number | null;
+	promptMs?: number | null;
+	generationTokens?: number | null;
+	generationMs?: number | null;
+	cachedPromptTokens?: number | null;
+}
+
 export interface NodeChatStreamEventDto {
 	type: string;
 	conversationId: string;
@@ -105,6 +116,8 @@ export interface NodeChatStreamEventDto {
 	reasoningTokens?: number | null;
 	// Last-round context-window snapshot, present on the terminal assistant event only.
 	contextWindow?: ContextWindowSnapshot | null;
+	// The turn's time to first token and prompt/generation throughput, present on the terminal assistant event only.
+	throughput?: ChatTurnThroughput | null;
 	// The server `FailureCategory` name of a failed turn, present on the terminal assistant event only.
 	failureCategory?: string | null;
 	// Tool lifecycle fields: present on `tool-call-requested` / `tool-call-completed` events only.
@@ -137,6 +150,10 @@ export interface NodeChatStreamEventDto {
 	// that carry no phase timestamp, which is the only case the first-observed-time fallback covers. Unrelated to
 	// `occurredAtUtc` on the same event, which is the frame's send time off a different clock.
 	runtimePhaseChangedAtUtc?: string | null;
+	// Why a `loading_model` phase loads the model: "first-load" | "idle-unloaded" | "evicted-for-cap" |
+	// "evicted-for-memory"; and how long the model's previous load took. Both on `assistant-phase` only, null when unknown.
+	runtimePhaseReason?: string | null;
+	runtimePhaseLastLoadMs?: number | null;
 	// Approval request id: present on the `approval-requested` event only. The durable key the browser echoes
 	// back to the loopback resolve endpoint to release the waiting tool call. `toolCallId` carries the tool-call id the
 	// approval belongs to (so the Approve/Deny controls attach to the matching card) and `toolName` the tool name.

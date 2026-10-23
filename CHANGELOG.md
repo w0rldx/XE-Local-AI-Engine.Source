@@ -24,6 +24,13 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Added
 
+- **Why the model is loading, and how long it took last time** — the chat loading indicator names the model and the
+  reason (first load, unloaded after idle, evicted for the loaded-model cap or for memory) with the last load duration.
+- **Per-turn throughput in chat (Advanced UI mode)** — one muted line under an assistant reply: time to first token,
+  tokens per second and cached prompt tokens; persisted with the message and returned on the REST message. The support
+  bundle gains `perf.json` with the last 20 turns and the last load per model (numbers and scrubbed model names only).
+- **Startup phase timing** — the node log shows the elapsed time of each startup phase and of every hosted service that
+  takes 100 ms or more to start, plus a summary line.
 - **Flint in the curated catalog** — Recursive's Flint (39.8B total / ~2.5B active mixture-of-experts coding-agent
   model, 256K context, Apache-2.0) is a tier-S entry under the coding, reasoning and general use cases, marked Tested
   at `UD-Q4_K_XL` after a full model-matrix pass. It thinks by default and switches thinking off through the reasoning
@@ -189,6 +196,11 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **Conversation list requests the 100 most recent conversations** and offers "Show all"; before, every list load read
+  and decrypted every conversation's last message.
+- **Idle queue polling** for training runs, dataset generation and benchmarks falls back to 30 s instead of 1 s (every
+  enqueue signals the worker; work refused by the GPU gate or a loaded model retries every second). `journal_mode=WAL` is
+  issued once per database file per process instead of on every connection open.
 - **Error toasts stay until dismissed**; warnings close after 15 s; success and info keep 5 s. A failed delete,
   revoke or download no longer disappears while the user looks elsewhere.
 - **Confirmation before five irreversible actions**: deleting a training checkpoint, removing the Python training
@@ -353,6 +365,8 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Fixed
 
+- The live terminal chat event now carries the message's sources and context window; before, only the refetch after the
+  stream did.
 - **First page load no longer downloads the code editor** — a chunk-splitting group had captured Vite's preload
   helper, so every page, including the login page, modulepreloaded the 3 MB Monaco chunk. The helper now has its own
   group, and the bundle check fails if `index.html` ever loads a lazy editor or scene-viewer asset again.

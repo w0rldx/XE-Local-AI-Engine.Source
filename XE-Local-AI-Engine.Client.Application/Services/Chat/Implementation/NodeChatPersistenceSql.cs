@@ -257,6 +257,7 @@ internal static class NodeChatPersistenceSql
                 GenerationDurationMs = metadata.GenerationDurationMs,
                 Sources = metadata.Sources,
                 ContextWindow = metadata.ContextWindow,
+                Throughput = metadata.Throughput,
                 FailureCategory = ParseFailureCategory(metadata.FailureCategory)
             });
         }

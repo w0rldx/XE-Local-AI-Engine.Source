@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Sqlite;
 
+using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
@@ -10,8 +11,7 @@ using SQLitePCL;
 
 /// <summary>
 ///     Applies the node SQLite pragmas (busy_timeout, foreign_keys, WAL, synchronous) on open. EF's interceptor and
-///     the raw-ADO helpers both route here; re-applying per open is idempotent, so a pooled handle is never left
-///     unconfigured.
+///     the raw-ADO helpers both route here; the per-connection three re-run on every open, WAL once per file.
 /// </summary>
 /// <remarks>
 ///     WAL is a file-level property, so once any connection sets it the whole database file runs under WAL — the
@@ -25,6 +25,10 @@ public static class NodeSqlitePragmas
     // Process-wide default consumed by the static raw-open helpers, which cannot take injected options. Swapped once at the composition root via Configure; a
     // volatile reference read/write is atomic. Defaults to the production values, so an unconfigured host (tests, design-time) still gets WAL + busy_timeout.
     private static volatile NodeSqlitePragmaSettings _settings = NodeSqlitePragmaSettings.Default;
+
+    // journal_mode=WAL persists in the database file, so it is issued once per file per process, recorded only once it
+    // reported wal. Accepted ceiling: a file replaced at the same path inside one process is not switched again.
+    private static readonly ConcurrentDictionary<string, bool> WalFiles = new(StringComparer.Ordinal);
 
     /// <summary>The effective process-wide settings used by <see cref="OpenAndConfigureAsync" />.</summary>
     public static NodeSqlitePragmaSettings Settings => _settings;
@@ -87,13 +91,16 @@ public static class NodeSqlitePragmas
             return;
         }
 
-        Execute(logger, connection, required: false, "journal_mode", () =>
+        var walFile = WalFileKey(connection);
+        if (walFile is null || !WalFiles.ContainsKey(walFile))
         {
-            using var command = connection.CreateCommand();
-            command.CommandText = "PRAGMA journal_mode=WAL;";
-            var mode = command.ExecuteScalar() as string;
-            WarnIfNotWal(logger, mode);
-        });
+            Execute(logger, connection, required: false, "journal_mode", () =>
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText = "PRAGMA journal_mode=WAL;";
+                RecordJournalMode(logger, walFile, command.ExecuteScalar() as string);
+            });
+        }
 
         Execute(logger, connection, required: false, "synchronous", () =>
         {
@@ -131,13 +138,16 @@ public static class NodeSqlitePragmas
             return;
         }
 
-        await ExecuteAsync(logger, connection, required: false, "journal_mode", async () =>
+        var walFile = WalFileKey(connection);
+        if (walFile is null || !WalFiles.ContainsKey(walFile))
         {
-            await using var command = connection.CreateCommand();
-            command.CommandText = "PRAGMA journal_mode=WAL;";
-            var mode = await command.ExecuteScalarAsync(cancellationToken) as string;
-            WarnIfNotWal(logger, mode);
-        });
+            await ExecuteAsync(logger, connection, required: false, "journal_mode", async () =>
+            {
+                await using var command = connection.CreateCommand();
+                command.CommandText = "PRAGMA journal_mode=WAL;";
+                RecordJournalMode(logger, walFile, await command.ExecuteScalarAsync(cancellationToken) as string);
+            });
+        }
 
         await ExecuteAsync(logger, connection, required: false, "synchronous", async () =>
         {
@@ -208,9 +218,30 @@ public static class NodeSqlitePragmas
         }
     }
 
-    private static void WarnIfNotWal(ILogger? logger, string? mode)
+    // The full path of the database file, or null when the string names none (an empty data source is a temporary database).
+    private static string? WalFileKey(DbConnection connection)
     {
-        if (!string.Equals(mode, "wal", StringComparison.OrdinalIgnoreCase))
+        try
+        {
+            var dataSource = new SqliteConnectionStringBuilder(connection.ConnectionString).DataSource;
+            return string.IsNullOrWhiteSpace(dataSource) ? null : Path.GetFullPath(dataSource);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    private static void RecordJournalMode(ILogger? logger, string? walFile, string? mode)
+    {
+        if (string.Equals(mode, "wal", StringComparison.OrdinalIgnoreCase))
+        {
+            if (walFile is not null)
+            {
+                _ = WalFiles.TryAdd(walFile, value: true);
+            }
+        }
+        else
         {
             // WAL is a persistent property that another connection sets once, so a later open that reads it back as wal is the norm. A non-wal result here means
             // the switch could not be applied (an exclusive lock held by another process, a read-only file); log and continue in the file's current journal mode.

@@ -655,6 +655,76 @@ public sealed class SupervisorEvictionTests
             "A crash must reach the header without waiting for the idle reaper's next pass.");
     }
 
+    [Test]
+    public async Task UnloadTelemetry_NamesTheIdleReap_ThenTheCapEviction()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var telemetry = new FakeLlamaServerLoadTelemetry();
+        var ttl = TimeSpan.FromMinutes(15);
+        await using var supervisor = SupervisorFactory.Create(launcher, options: CapOf(cap: 2, ttl), timeProvider: time, loadTelemetry: telemetry);
+
+        await supervisor.EnsureRunningAsync("chat-a", ModelRole.Chat, CancellationToken.None);
+        time.Advance(ttl + TimeSpan.FromMinutes(1));
+        await supervisor.ReapIdleOnceAsync();
+
+        await supervisor.EnsureRunningAsync("chat-b", ModelRole.Chat, CancellationToken.None);
+        time.Advance(TimeSpan.FromMinutes(1));
+        await supervisor.EnsureRunningAsync("chat-c", ModelRole.Chat, CancellationToken.None);
+        time.Advance(ttl + TimeSpan.FromMinutes(1));
+        // Cap 2 is full and chat-b is the idle LRU, so admitting chat-d evicts it for the cap.
+        await supervisor.EnsureRunningAsync("chat-d", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal("(chat-a, Chat, IdleTimeout), (chat-b, Chat, LoadedModelCap)", string.Join(", ", telemetry.Unloads));
+    }
+
+    [Test]
+    public async Task UnloadTelemetry_NamesTheMemoryEviction()
+    {
+        var time = new AdvanceableTimeProvider();
+        var telemetry = new FakeLlamaServerLoadTelemetry();
+        await using var supervisor = SupervisorFactory.Create(options: CapOf(cap: 5, TimeSpan.FromMinutes(15)), timeProvider: time, loadTelemetry: telemetry,
+            pooledLaunchAdmission: new EvictingChatAdmission("chat-b"));
+
+        await ServeOneTurnAsync(supervisor, "chat-a");
+        time.Advance(TimeSpan.FromMinutes(1));
+        await supervisor.EnsureRunningAsync("chat-b", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal("(chat-a, Chat, MemoryForAnotherModel)", string.Join(", ", telemetry.Unloads));
+    }
+
+    [Test]
+    public async Task UnloadTelemetry_NamesShutdownForEveryLiveProcess_AndNothingForAnExitedOne()
+    {
+        var launcher = new FakeProcessLauncher();
+        var telemetry = new FakeLlamaServerLoadTelemetry();
+        var supervisor = SupervisorFactory.Create(launcher, loadTelemetry: telemetry);
+        await supervisor.EnsureRunningAsync("chat-a", ModelRole.Chat, CancellationToken.None);
+        await supervisor.EnsureRunningAsync("embed-a", ModelRole.Embedding, CancellationToken.None);
+        // The embedder, launched second, dies on its own: the node did not unload it.
+        launcher.Handles.OrderBy(static handle => handle.ProcessId).Last().SimulateExit(exitCode: 1);
+
+        await supervisor.DisposeAsync();
+
+        AssertEx.Equal("(chat-a, Chat, Shutdown)", string.Join(", ", telemetry.Unloads));
+    }
+
+    [Test]
+    public async Task UnloadTelemetry_WhenTheSinkThrows_TheIdleReapStillTearsTheProcessDown()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var ttl = TimeSpan.FromMinutes(15);
+        await using var supervisor = SupervisorFactory.Create(launcher, options: CapOf(cap: 2, ttl), timeProvider: time,
+            loadTelemetry: new ThrowingLlamaServerLoadTelemetry());
+        await supervisor.EnsureRunningAsync("chat-a", ModelRole.Chat, CancellationToken.None);
+
+        time.Advance(ttl + TimeSpan.FromMinutes(1));
+        await supervisor.ReapIdleOnceAsync();
+
+        AssertEx.True(launcher.Handles.Single().WasTreeKilled, "Unload telemetry is report-only and never blocks an eviction.");
+    }
+
     private static LlamaServerSupervisorOptions CapOf(int cap, TimeSpan ttl, int companionCap = 2)
     {
         return new LlamaServerSupervisorOptions

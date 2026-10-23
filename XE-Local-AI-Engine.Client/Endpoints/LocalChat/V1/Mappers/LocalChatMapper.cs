@@ -115,7 +115,8 @@ internal static class LocalChatMapper
             // user messages. The DTO source records carry no transport-specific shape, so they pass through unchanged.
             Sources = message.Sources,
             ContextWindow = message.ContextWindow is { } contextWindow ? ToResponse(contextWindow) : null,
-            FailureCategory = message.FailureCategory
+            FailureCategory = message.FailureCategory,
+            Throughput = message.Throughput
         };
     }
 

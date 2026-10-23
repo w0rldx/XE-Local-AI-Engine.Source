@@ -38,6 +38,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     private readonly TimeProvider _timeProvider;
     private readonly ILogger _logger;
     private readonly IRuntimeResidencyChangeNotifier _residencyNotifier;
+    private readonly ILlamaServerLoadTelemetry _loadTelemetry;
 
     internal LlamaServerIdleReaper(ConcurrentDictionary<ProcessKey, RunningProcess> processes,
         LlamaServerPortAllocator ports,
@@ -45,9 +46,11 @@ internal sealed class LlamaServerIdleReaper : IDisposable
         LlamaServerSupervisorOptions options,
         TimeProvider timeProvider,
         ILogger logger,
-        IRuntimeResidencyChangeNotifier? residencyNotifier = null)
+        IRuntimeResidencyChangeNotifier? residencyNotifier = null,
+        ILlamaServerLoadTelemetry? loadTelemetry = null)
     {
         _residencyNotifier = residencyNotifier ?? NullRuntimeResidencyChangeNotifier.Instance;
+        _loadTelemetry = loadTelemetry ?? new NullLlamaServerLoadTelemetry();
         _processes = processes ?? throw new ArgumentNullException(nameof(processes));
         _ports = ports ?? throw new ArgumentNullException(nameof(ports));
         _layerPlacementReport = layerPlacementReport ?? throw new ArgumentNullException(nameof(layerPlacementReport));
@@ -148,6 +151,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
                 {
                     _logger.LogInformation("Evicting idle {Residency} llama-server for model {ModelName} role {Role} (idle {IdleSeconds:F0}s past TTL {TtlSeconds:F0}s).",
                         running.IsTransient ? "transient" : "interactive", key.ModelName, key.Role, (now - running.LastUsedUtc).TotalSeconds, ttl.TotalSeconds);
+                    RecordUnload(key, LlamaServerUnloadReason.IdleTimeout);
                 }
 
                 // A teardown failure must not fault the reaper loop (it would never run again) or skip the remaining processes.
@@ -235,6 +239,11 @@ internal sealed class LlamaServerIdleReaper : IDisposable
 
         _logger.LogWarning("Loaded-model cap ({Cap}) reached; evicting {Idleness} llama-server for model {ModelName} role {Role} to admit a new one.",
             cap, victimRank == 0 ? "idle" : "in-window pooled or transient", victimKey.Value.ModelName, victimKey.Value.Role);
+        if (!victim.Handle.HasExited)
+        {
+            RecordUnload(victimKey.Value, LlamaServerUnloadReason.LoadedModelCap);
+        }
+
         return true;
     }
 
@@ -301,6 +310,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
 
             _logger.LogWarning("Evicting idle chat llama-server for model {ModelName} to free memory for a load of model {RequestedModelName}.",
                 victimKey.Value.ModelName, requesting.ModelName);
+            RecordUnload(victimKey.Value, LlamaServerUnloadReason.MemoryForAnotherModel);
             return new ChatEvictionOutcome(victimKey, null);
         }
         finally
@@ -333,6 +343,19 @@ internal sealed class LlamaServerIdleReaper : IDisposable
 
         detached.Add(evicted);
         return true;
+    }
+
+    /// <summary>Reports a deliberate teardown to the load telemetry; report-only, so a failing sink never changes an eviction.</summary>
+    internal void RecordUnload(ProcessKey key, LlamaServerUnloadReason reason)
+    {
+        try
+        {
+            _loadTelemetry.RecordUnload(key.ModelName, key.Role, reason);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogDebug(exception, "llama-server unload telemetry observer failed.");
+        }
     }
 
     private TimeSpan IdleTimeToLiveFor(RunningProcess running) =>

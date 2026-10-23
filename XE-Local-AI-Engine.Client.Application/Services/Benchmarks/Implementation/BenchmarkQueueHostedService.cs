@@ -13,6 +13,9 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 /// </remarks>
 public sealed class BenchmarkQueueHostedService : BackgroundService
 {
+    // Nothing signals when an exclusive holder releases the gate, so a refused admission retries on this, not the idle poll.
+    private static readonly TimeSpan GateRetryInterval = TimeSpan.FromSeconds(1);
+
     private readonly TimeSpan _pollInterval;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IBenchmarkQueueSignal _signal;
@@ -128,7 +131,7 @@ public sealed class BenchmarkQueueHostedService : BackgroundService
 
             if (work is null)
             {
-                await _signal.WaitAsync(_pollInterval, stoppingToken);
+                await _signal.WaitAsync(admission is null && GateRetryInterval < _pollInterval ? GateRetryInterval : _pollInterval, stoppingToken);
             }
         }
     }

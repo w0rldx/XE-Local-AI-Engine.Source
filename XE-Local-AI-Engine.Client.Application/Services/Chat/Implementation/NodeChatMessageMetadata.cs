@@ -35,4 +35,6 @@ internal sealed record NodeChatMessageMetadata(
     NodeChatContextWindowDto? ContextWindow = null,
     // The FailureCategory enum NAME of a failed turn (trailing optional, legacy blobs omit it). A raw JsonElement, so a
     // non-string token cannot fail the message read; ParseFailureCategory accepts only an exact member name.
-    JsonElement? FailureCategory = null);
+    JsonElement? FailureCategory = null,
+    // Time to first token and prompt/generation throughput of the turn (trailing optional, legacy blobs omit it). Numbers only.
+    NodeChatThroughputDto? Throughput = null);

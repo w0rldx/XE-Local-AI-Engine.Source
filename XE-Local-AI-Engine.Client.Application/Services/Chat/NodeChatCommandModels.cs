@@ -185,6 +185,9 @@ public sealed class NodeChatTerminalizeMessageRequest
     // Content-free context-window snapshot of the turn's last provider round. Null preserves any existing value, as Sources does.
     public NodeChatContextWindowDto? ContextWindow { get; init; }
 
+    // The turn's throughput facts. Null preserves any existing value, as ContextWindow does.
+    public NodeChatThroughputDto? Throughput { get; init; }
+
     // The category of a failed turn, persisted as its enum name in the metadata blob. Null preserves any existing value.
     public FailureCategory? FailureCategory { get; init; }
 }

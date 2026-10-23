@@ -7153,6 +7153,27 @@ export const zXeLocalAiEngineClientServicesChatNodeChatMessagePart = z.object({
 	requiresApproval: z.boolean().nullish(),
 });
 
+export const zXeLocalAiEngineClientServicesChatNodeChatThroughputDto = z.object({
+	timeToFirstTokenMs: z.number().nullish(),
+	promptTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	promptMs: z.number().nullish(),
+	generationTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	generationMs: z.number().nullish(),
+	cachedPromptTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
 export const zXeLocalAiEngineClientServicesCustomToolsCustomToolEnvironmentVariableModel = z.object({
 	name: z.string().optional(),
 	value: z.string().optional(),
@@ -7604,6 +7625,7 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse =
 	sources: z.array(zXeLocalAiEngineClientServicesChatNodeChatMessageSource).nullish(),
 	contextWindow: zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowResponse.nullish(),
 	failureCategory: zXeLocalAiEngineClientModelsEnumsFailureCategory.nullish(),
+	throughput: zXeLocalAiEngineClientServicesChatNodeChatThroughputDto.nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse = z.object({

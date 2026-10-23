@@ -152,6 +152,35 @@ describe("node chat stream state", () => {
 		);
 	});
 
+	it("puts the terminal event's throughput on the assistant message and keeps it through a client-side terminal", () => {
+		const throughput = { timeToFirstTokenMs: 1_400, generationTokens: 150, generationMs: 2_000, cachedPromptTokens: 2_080 };
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"hello",
+			"2026-05-24T00:00:01.000Z",
+		);
+		const partial = applyNodeChatStreamEvent(optimistic, streamEvent({ content: "hi", delta: "hi" }));
+		const terminal = applyNodeChatStreamEvent(
+			partial.conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.assistantCompleted,
+				status: "completed",
+				content: "hi",
+				delta: null,
+				throughput,
+			}),
+		);
+		const assistantOf = (applied: AppliedNodeChatStreamEvent) =>
+			applied.conversation.messages.find((message) => message.id === "assistant-1");
+
+		expect(assistantOf(partial)?.throughput).toBeUndefined();
+		expect(assistantOf(terminal)?.throughput).toEqual(throughput);
+		expect(assistantOf(markNodeChatStreamTerminated(terminal.conversation, "assistant-1", "interrupted"))?.throughput).toEqual(
+			throughput,
+		);
+	});
+
 	it("carries the failed terminal event's failure category onto the message and the streaming state", () => {
 		const optimistic = appendOptimisticNodeChatSend(
 			conversation,
@@ -1700,6 +1729,37 @@ describe("node chat stream state", () => {
 			runtimePhase: "loading_model",
 			runtimePhaseChangedAtUtc: "2026-09-10T08:15:00.000Z",
 		});
+	});
+
+	// U6: the load reason and the last load duration ride the same phase event, survive a snapshot like the phase, and clear with it.
+	it("carries the load reason and last load duration from the phase event, across a snapshot, until content lands", () => {
+		const phase = applyNodeChatStreamEvent(
+			conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.assistantPhase,
+				sequence: 1,
+				runtimePhase: "loading_model",
+				runtimePhaseReason: "evicted-for-memory",
+				runtimePhaseLastLoadMs: 9_000,
+				content: null,
+				delta: null,
+			}),
+		);
+		const snapshot = applyNodeChatStreamEvent(
+			phase.conversation,
+			streamEvent({ type: nodeChatStreamEventTypes.assistantSnapshot, sequence: 2, content: "", delta: null }),
+			phase.streamingMessage,
+		);
+		const delta = applyNodeChatStreamEvent(
+			snapshot.conversation,
+			streamEvent({ sequence: 3, delta: "he", content: null, contentOffset: 0 }),
+			snapshot.streamingMessage,
+		);
+
+		expect(phase.streamingMessage).toMatchObject({ runtimePhaseReason: "evicted-for-memory", runtimePhaseLastLoadMs: 9_000 });
+		expect(snapshot.streamingMessage).toMatchObject({ runtimePhaseReason: "evicted-for-memory", runtimePhaseLastLoadMs: 9_000 });
+		expect(delta.streamingMessage.runtimePhaseReason).toBeUndefined();
+		expect(delta.streamingMessage.runtimePhaseLastLoadMs).toBeUndefined();
 	});
 
 	// An older node emits the phase without the timestamp; the indicator then falls back to first-observed time,

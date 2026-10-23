@@ -37,6 +37,83 @@ public sealed class TrainingExclusivityTests
 {
     private static readonly TimeSpan BoundedWait = TimeSpan.FromSeconds(5);
 
+    /// <summary>Far past <see cref="BoundedWait" />, so no assertion here can be met by the idle poll firing.</summary>
+    private static readonly TimeSpan IdlePoll = BenchmarkQueueOptions.MaxPollInterval;
+
+    /// <summary>
+    ///     Nothing signals a shared queue when an exclusive holder releases the gate, so a refused claim retries on its
+    ///     own short interval: both queues claim soon after the release instead of at the next idle poll.
+    /// </summary>
+    [Test]
+    public async Task SharedQueues_RefusedAtTheGate_ClaimSoonAfterTheExclusiveHoldReleases()
+    {
+        var gate = new ObservedGpuWorkGate(new GpuWorkGate());
+        using var held = AssertEx.NotNull(gate.TryBeginExclusive(GpuWorkKind.Export), "Something exclusive holds the gate.");
+        var benchmarks = Substitute.For<IBenchmarkStore>();
+        var datasets = Substitute.For<ITrainingDatasetStore>();
+        var benchmarkClaimed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var generationClaimed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = benchmarks.ClaimNextAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            benchmarkClaimed.TrySetResult();
+            return Task.FromResult<BenchmarkClaimedWork?>(null);
+        });
+        _ = datasets.ClaimNextAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            generationClaimed.TrySetResult();
+            return Task.FromResult<DatasetGenerationClaimedWork?>(null);
+        });
+        var asked = Task.WhenAll(gate.Asked(GpuWorkKind.Benchmark), gate.Asked(GpuWorkKind.DatasetGeneration));
+        using var benchmarkSignal = new BenchmarkQueueSignal();
+        using var generationSignal = new DatasetGenerationQueueSignal();
+        using var benchmarkQueue = BuildBenchmarkQueue(benchmarks, benchmarkSignal, gate);
+        using var generationQueue = BuildGenerationQueue(datasets, generationSignal, gate);
+
+        await benchmarkQueue.StartAsync(CancellationToken.None);
+        await generationQueue.StartAsync(CancellationToken.None);
+        try
+        {
+            AssertEx.True(Array.TrueForAll(await asked.WaitAsync(BoundedWait), static admitted => !admitted), "Both queues are refused while the hold is taken.");
+            held.Dispose();
+
+            await AssertEx.CompletesAsync(Task.WhenAll(benchmarkClaimed.Task, generationClaimed.Task), BoundedWait,
+                "A refused shared queue must claim after the release without waiting for its idle poll.");
+        }
+        finally
+        {
+            await benchmarkQueue.StopAsync(CancellationToken.None);
+            await generationQueue.StopAsync(CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    ///     A queued run behind a loaded model: nothing signals the run queue when the model unloads, so it retries the
+    ///     runtime-mutation lease on its own short interval and claims soon after the lease is granted.
+    /// </summary>
+    [Test]
+    public async Task RunQueue_RefusedTheLease_ClaimsSoonAfterTheLeaseIsGranted()
+    {
+        var runs = Substitute.For<ITrainingRunStore>();
+        _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
+        _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns(TrainingWorkKind.TrainingRun);
+        var claimed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = runs.ClaimNextAsync(TrainingWorkKind.TrainingRun, Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            claimed.TrySetResult();
+            return Task.FromResult<TrainingWorkClaim?>(null);
+        });
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        using var queue = BuildRunQueue(runs, new GpuWorkGate(), supervisor: supervisor);
+        // Configured after the builder, which probes the substitute: the first loop ask is refused, the next granted.
+        var asks = 0;
+        _ = supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+                      .Returns(_ => Task.FromResult<ILlamaServerRuntimeMutationLease?>(Interlocked.Increment(ref asks) == 1 ? null : Substitute.For<ILlamaServerRuntimeMutationLease>()));
+
+        await RunUntilAsync(claimed.Task, queue);
+
+        AssertEx.Equal(expected: 2, Volatile.Read(ref asks), "The claim must follow one refused and one granted lease.");
+    }
+
     [Test]
     public async Task Exclusivity_RunActive_BenchmarkAndGenerationRefused()
     {
@@ -398,7 +475,7 @@ public sealed class TrainingExclusivityTests
             signal,
             Substitute.For<IBenchmarkEventBuffer>(),
             gate,
-            Options.Create(new BenchmarkQueueOptions()),
+            Options.Create(new BenchmarkQueueOptions { PollInterval = IdlePoll }),
             NullLogger<BenchmarkQueueHostedService>.Instance);
     }
 
@@ -416,7 +493,7 @@ public sealed class TrainingExclusivityTests
             signal,
             Substitute.For<IDatasetGenerationEventBuffer>(),
             gate,
-            Options.Create(new DatasetGenerationQueueOptions()),
+            Options.Create(new DatasetGenerationQueueOptions { PollInterval = IdlePoll }),
             NullLogger<DatasetGenerationHostedService>.Instance);
     }
 
@@ -446,7 +523,7 @@ public sealed class TrainingExclusivityTests
             Substitute.For<ITrainingRunEventBuffer>(),
             gate,
             supervisor,
-            Options.Create(new TrainingRunQueueOptions()),
+            Options.Create(new TrainingRunQueueOptions { PollInterval = IdlePoll }),
             NullLogger<TrainingRunQueueHostedService>.Instance);
     }
 

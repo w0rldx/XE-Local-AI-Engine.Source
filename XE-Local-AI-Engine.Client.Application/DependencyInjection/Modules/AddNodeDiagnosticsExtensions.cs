@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
+using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Services.Diagnostics;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Diagnostics;
@@ -21,7 +22,8 @@ internal static class AddNodeDiagnosticsExtensions
             services.GetRequiredService<IChildProcessOutputTails>(),
             services.GetRequiredService<SupportBundleScrubber>(),
             ResolveLogDirectories(services.GetRequiredService<INodeDataDirectory>().Root),
-            services.GetRequiredService<TimeProvider>()));
+            services.GetRequiredService<TimeProvider>(),
+            services.GetService<LocalModelPerfLog>()));
         return builder;
     }
 

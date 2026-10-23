@@ -789,6 +789,8 @@ export function applyNodeChatStreamEvent(
 				isActive: true,
 				runtimePhase: event.runtimePhase ?? undefined,
 				runtimePhaseChangedAtUtc: event.runtimePhaseChangedAtUtc ?? undefined,
+				runtimePhaseReason: event.runtimePhaseReason ?? undefined,
+				runtimePhaseLastLoadMs: event.runtimePhaseLastLoadMs ?? undefined,
 				inputTokens: current?.inputTokens,
 				outputTokens: current?.outputTokens,
 				totalTokens: current?.totalTokens,
@@ -869,6 +871,8 @@ export function applyNodeChatStreamEvent(
 		reasoningTokens: event.reasoningTokens ?? existing?.reasoningTokens,
 		// Only the terminal event carries a snapshot; every other event keeps the one already on the message.
 		contextWindow: event.contextWindow ?? existing?.contextWindow,
+		// Same for the turn's throughput.
+		throughput: event.throughput ?? existing?.throughput,
 	};
 	const nextConversation: ChatConversationModel = {
 		...conversation,
@@ -895,6 +899,8 @@ export function applyNodeChatStreamEvent(
 			isActive: !isTerminal,
 			runtimePhase: isSnapshot ? previous?.runtimePhase : undefined,
 			runtimePhaseChangedAtUtc: isSnapshot ? previous?.runtimePhaseChangedAtUtc : undefined,
+			runtimePhaseReason: isSnapshot ? previous?.runtimePhaseReason : undefined,
+			runtimePhaseLastLoadMs: isSnapshot ? previous?.runtimePhaseLastLoadMs : undefined,
 			// Queued turns are live (isActive) but not yet streaming; clear once the streaming event arrives.
 			isQueued: status === "queued",
 			error: event.error ?? undefined,
@@ -944,6 +950,7 @@ export function markNodeChatStreamTerminated(
 		totalTokens: existing?.totalTokens,
 		reasoningTokens: existing?.reasoningTokens,
 		contextWindow: existing?.contextWindow,
+		throughput: existing?.throughput,
 	};
 	const nextConversation = {
 		...conversation,

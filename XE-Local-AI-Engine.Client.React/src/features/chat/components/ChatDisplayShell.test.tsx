@@ -6,6 +6,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
+import { getNodeSettingsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
 import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
 import type { ChatConversationModel, ChatDisplayShellProps, ChatMessagePart } from "@/features/chat/models/ChatModels";
@@ -125,6 +126,32 @@ describe("ChatDisplayShell tool-call parts pass-through", () => {
 		renderWithProviders(<ChatDisplayShell {...shellProps()} />);
 
 		expect(screen.queryByTestId("chat-tool-call-card-search_docs")).toBeNull();
+	});
+
+	// U7 / decision D2: the per-turn throughput line shows in Advanced UI mode only, read from the cached node settings.
+	it.each([
+		["advanced", true],
+		["simple", false],
+	] as const)("in %s UI mode, shows the turn throughput line: %s", (uiMode, shown) => {
+		const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+		queryClient.setQueryData(getNodeSettingsOptions().queryKey, { uiMode } as never);
+		const withThroughput: ChatConversationModel = {
+			...conversation,
+			messages: conversation.messages.map((message) => ({
+				...message,
+				throughput: { timeToFirstTokenMs: 1_400, generationTokens: 150, generationMs: 2_000 },
+			})),
+		};
+
+		render(
+			<QueryClientProvider client={queryClient}>
+				<MantineProvider env="test" theme={testMantineTheme}>
+					<ChatDisplayShell {...shellProps({ conversations: [withThroughput] })} />
+				</MantineProvider>
+			</QueryClientProvider>,
+		);
+
+		expect(screen.queryByTestId("chat-message-throughput-assistant-1") !== null).toBe(shown);
 	});
 
 	it("suppresses the empty-state while the selected conversation's messages are loading", () => {

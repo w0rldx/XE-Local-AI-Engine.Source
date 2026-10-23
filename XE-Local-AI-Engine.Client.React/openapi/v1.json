@@ -41045,6 +41045,14 @@
                 "$ref": "#/components/schemas/XE_Local_AI_EngineClientModelsEnumsFailureCategory"
               }
             ]
+          },
+          "throughput": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesChatNodeChatThroughputDto"
+              }
+            ]
           }
         }
       },
@@ -51676,6 +51684,42 @@
                 "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesKnowledgeKnowledgeScoreKind"
               }
             ]
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesChatNodeChatThroughputDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "timeToFirstTokenMs": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "promptTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "promptMs": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "generationTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "generationMs": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "cachedPromptTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
           }
         }
       },

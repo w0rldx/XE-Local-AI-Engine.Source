@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Chat;
 
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -606,6 +607,50 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
                 && request.Envelope.DispatchedTier == "fast"
                 && request.Envelope.AuthoredEffort == "auto"),
             Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task TerminalizeAsync_CarriesTheTurnThroughputOntoTheTerminalizeRequest_AndIntoThePerfLog()
+    {
+        var persistence = CreatePersistence();
+        var perfLog = new LocalModelPerfLog(TimeProvider.System);
+        var pump = new NodeChatInvocationPump(persistence, Substitute.For<IUsageProviderResolver>(), TimeProvider.System, perfLog);
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            Status = InvocationStatus.Completed,
+            ModelUsed = "llama-3.1",
+            Throughput = new InvocationThroughput
+            {
+                TimeToFirstTokenMs = 1_400,
+                GenerationTokens = 150,
+                GenerationMs = 2_000,
+                CachedPromptTokens = 2_080,
+                SegmentCount = 1
+            }
+        };
+
+        _ = await pump.TerminalizeAsync(new NodeChatMessageCorrelation
+            {
+                ConversationId = state.ConversationId,
+                MessageId = Guid.NewGuid(),
+                RequestId = Guid.NewGuid()
+            },
+            state,
+            "requested-model");
+
+        var request = (NodeChatTerminalizeMessageRequest)persistence.ReceivedCalls().Single().GetArguments()[0]!;
+        AssertEx.Equal(new NodeChatThroughputDto
+        {
+            TimeToFirstTokenMs = 1_400,
+            GenerationTokens = 150,
+            GenerationMs = 2_000,
+            CachedPromptTokens = 2_080
+        }, request.Throughput);
+        var turn = perfLog.Snapshot().Turns.Single();
+        AssertEx.Equal("llama-3.1", turn.Model);
+        AssertEx.Equal(expected: 150, turn.GenerationTokens);
     }
 
     [Test]

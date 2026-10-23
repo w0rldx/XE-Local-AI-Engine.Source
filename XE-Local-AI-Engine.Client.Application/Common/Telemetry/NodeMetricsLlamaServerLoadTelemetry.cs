@@ -19,6 +19,18 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 internal sealed class NodeMetricsLlamaServerLoadTelemetry : ILlamaServerLoadTelemetry
 {
     private readonly ConcurrentDictionary<LoadKey, LlamaServerVramAtLoad> _lastReadyLoads = new();
+    private readonly LocalModelPerfLog? _perfLog;
+
+    /// <param name="perfLog">Receives every ready load's duration and every unload reason; null in tests that read only the VRAM figures.</param>
+    public NodeMetricsLlamaServerLoadTelemetry(LocalModelPerfLog? perfLog = null)
+    {
+        _perfLog = perfLog;
+    }
+
+    public void RecordUnload(string modelName, ModelRole role, LlamaServerUnloadReason reason)
+    {
+        _perfLog?.RecordUnload(modelName, role, reason);
+    }
 
     /// <summary>
     ///     The VRAM figures of the most recent successful load of this <c>(model, role)</c> THAT CARRIED A CAPACITY
@@ -40,6 +52,7 @@ internal sealed class NodeMetricsLlamaServerLoadTelemetry : ILlamaServerLoadTele
     {
         if (observation.Outcome == LlamaServerReadinessOutcome.Ready && !string.IsNullOrWhiteSpace(observation.ModelName))
         {
+            _perfLog?.RecordReadyLoad(observation.ModelName, observation.Role, observation.ReadinessDurationMs);
             var key = new LoadKey(observation.ModelName, observation.Role);
             if (observation.GlobalFreeVramBytesAtLoad is null && observation.AdmittedVramBytes is null)
             {

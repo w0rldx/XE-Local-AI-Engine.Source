@@ -81,6 +81,7 @@ internal static class ChatStreamEventMapper
             InvocationTimeoutSeconds = invocationTimeoutSeconds,
             // Terminal events only: the snapshot describes a finished turn, and lifecycle frames stay lean.
             ContextWindow = IsTerminalEventType(type) ? message.ContextWindow : null,
+            Throughput = IsTerminalEventType(type) ? message.Throughput : null,
             FailureCategory = IsTerminalEventType(type) ? message.FailureCategory?.ToString() : null
         };
     }
@@ -257,7 +258,8 @@ internal static class ChatStreamEventMapper
         long sequence,
         // When the phase CHANGED, off InvocationState. A different clock from timestampMs, the frame's send time off
         // the injected TimeProvider: under a test clock the two disagree by decades, and nothing may relate them.
-        DateTimeOffset? phaseChangedAtUtc = null)
+        DateTimeOffset? phaseChangedAtUtc = null,
+        InvocationRuntimePhaseDetail? detail = null)
     {
         return new ChatStreamEvent
         {
@@ -269,7 +271,9 @@ internal static class ChatStreamEventMapper
             Sequence = sequence,
             OccurredAtUtc = timestampMs,
             RuntimePhase = ToWirePhase(phase),
-            RuntimePhaseChangedAtUtc = phaseChangedAtUtc?.ToString("O", CultureInfo.InvariantCulture)
+            RuntimePhaseChangedAtUtc = phaseChangedAtUtc?.ToString("O", CultureInfo.InvariantCulture),
+            RuntimePhaseReason = detail?.Reason,
+            RuntimePhaseLastLoadMs = detail?.LastLoadMs
         };
     }
 

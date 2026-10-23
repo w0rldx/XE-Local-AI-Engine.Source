@@ -142,7 +142,7 @@ public sealed class ChatInvocationStatePump
                 if (!isTerminal && latest.RuntimePhase is { } runtimePhase && runtimePhase != lastEmittedPhase)
                 {
                     lastEmittedPhase = runtimePhase;
-                    await eventSink.WriteAsync(ChatStreamEventMapper.PhaseEvent(correlation, runtimePhase, NowUnixMilliseconds(), sequence.Next(), latest.RuntimePhaseChangedAtUtc), cancellationToken);
+                    await eventSink.WriteAsync(ChatStreamEventMapper.PhaseEvent(correlation, runtimePhase, NowUnixMilliseconds(), sequence.Next(), latest.RuntimePhaseChangedAtUtc, latest.RuntimePhaseDetail), cancellationToken);
                 }
 
                 // Send first, on the fast cadence: the first delta emits immediately, and a terminal emits its tail

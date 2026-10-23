@@ -516,6 +516,12 @@ public sealed class NodeChatMessageResponse
     ///     for a turn that did not fail, a legacy turn and every user message.
     /// </summary>
     public FailureCategory? FailureCategory { get; init; }
+
+    /// <summary>
+    ///     Time to first token and the prompt/generation split of tokens and milliseconds for this assistant turn. Null for
+    ///     legacy turns, user messages and providers that report no timings. Numbers only.
+    /// </summary>
+    public NodeChatThroughputDto? Throughput { get; init; }
 }
 
 /// <summary>

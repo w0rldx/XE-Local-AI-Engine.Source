@@ -4,8 +4,12 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using NSubstitute;
+using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Services.Diagnostics;
+using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Providers.Abstractions.Diagnostics;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -170,13 +174,46 @@ public sealed class SupportBundleServiceTests : IDisposable
         AssertEx.Equal(version, manifest.RootElement.GetProperty("version").GetString());
     }
 
-    private SupportBundleService CreateService(string logDirectory)
+    [Test]
+    public async Task Build_WithAPerfLog_ShipsPerfJson_WithTurnsAndLoads_NumbersAndScrubbedModelNamesOnly()
+    {
+        var perfLog = new LocalModelPerfLog(new ManualTimeProvider(DateTimeOffset.UnixEpoch));
+        perfLog.RecordReadyLoad("/home/jane/models/llama.gguf", ModelRole.Chat, readinessDurationMs: 9_000);
+        perfLog.RecordUnload("/home/jane/models/llama.gguf", ModelRole.Chat, LlamaServerUnloadReason.IdleTimeout);
+        perfLog.RecordTurn("/home/jane/models/llama.gguf", new InvocationThroughput { TimeToFirstTokenMs = 1_400, GenerationTokens = 150, GenerationMs = 2_000, SegmentCount = 1 });
+
+        var entries = await ReadAsync(await CreateService(_logs, perfLog).BuildAsync(isShellOwned: false, CancellationToken.None));
+
+        using var perf = JsonDocument.Parse(entries[SupportBundleService.PerfEntry]);
+        var turn = perf.RootElement.GetProperty("turns").EnumerateArray().Single();
+        AssertEx.Equal(expected: 1_400d, turn.GetProperty("timeToFirstTokenMs").GetDouble());
+        AssertEx.Equal(expected: 150, turn.GetProperty("generationTokens").GetInt32());
+        AssertEx.False(turn.GetProperty("model").GetString()!.Contains("jane", StringComparison.Ordinal), "A model path is scrubbed like every other free text.");
+        var load = perf.RootElement.GetProperty("loads").EnumerateArray().Single();
+        AssertEx.Equal(expected: 9_000d, load.GetProperty("lastReadyLoadMs").GetDouble());
+        AssertEx.Equal("Chat", load.GetProperty("role").GetString());
+        AssertEx.Equal("IdleTimeout", load.GetProperty("lastUnloadReason").GetString());
+        AssertEx.False(load.GetProperty("modelName").GetString()!.Contains("jane", StringComparison.Ordinal));
+        using var manifest = JsonDocument.Parse(entries[SupportBundleService.ManifestEntry]);
+        AssertEx.Contains(manifest.RootElement.GetProperty("entries").EnumerateArray().Select(static entry => entry.GetProperty("path").GetString()), SupportBundleService.PerfEntry);
+    }
+
+    [Test]
+    public async Task Build_WithoutAPerfLog_ShipsNoPerfJson()
+    {
+        var entries = await ReadAsync(await CreateService(_logs).BuildAsync(isShellOwned: false, CancellationToken.None));
+
+        AssertEx.False(entries.ContainsKey(SupportBundleService.PerfEntry), "No perf log wired, no perf entry.");
+    }
+
+    private SupportBundleService CreateService(string logDirectory, LocalModelPerfLog? perfLog = null)
     {
         return new SupportBundleService(_nodeInfo,
             _tails,
             new SupportBundleScrubber(["/home/jane"], "/srv/data", ignoreCase: false),
             [logDirectory],
-            new ManualTimeProvider(DateTimeOffset.UnixEpoch));
+            new ManualTimeProvider(DateTimeOffset.UnixEpoch),
+            perfLog);
     }
 
     private static async Task<Dictionary<string, string>> ReadAsync(SupportBundle bundle)

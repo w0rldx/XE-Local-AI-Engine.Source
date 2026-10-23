@@ -59,11 +59,12 @@ internal static class NodeChatMetadataSerializer
         long? generationDurationMs = null,
         IReadOnlyList<NodeChatMessageSource>? sources = null,
         NodeChatContextWindowDto? contextWindow = null,
-        FailureCategory? failureCategory = null)
+        FailureCategory? failureCategory = null,
+        NodeChatThroughputDto? throughput = null)
     {
         if (metadataJson is null && reasoning is null && model is null && inputTokens is null && outputTokens is null && totalTokens is null && reasoningTokens is null && parts is null
             && agentDefinitionId is null && agentName is null && reasoningEffort is null && generationDurationMs is null && sources is null
-            && contextWindow is null && failureCategory is null)
+            && contextWindow is null && failureCategory is null && throughput is null)
         {
             return null;
         }
@@ -73,7 +74,8 @@ internal static class NodeChatMetadataSerializer
                 generationDurationMs,
                 sources,
                 contextWindow,
-                failureCategory is { } category ? JsonSerializer.SerializeToElement(category.ToString()) : null),
+                failureCategory is { } category ? JsonSerializer.SerializeToElement(category.ToString()) : null,
+                throughput),
             MetadataJsonOptions));
     }
 

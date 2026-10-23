@@ -295,15 +295,28 @@ internal sealed class FakeLlamaServerLoadTelemetry : ILlamaServerLoadTelemetry
 {
     public ConcurrentQueue<LlamaServerLoadObservation> Observations { get; } = new();
 
+    /// <summary>Each unload as "(model, Role, Reason)", in report order.</summary>
+    public ConcurrentQueue<string> Unloads { get; } = new();
+
     public void RecordLoad(LlamaServerLoadObservation observation)
     {
         Observations.Enqueue(observation);
+    }
+
+    public void RecordUnload(string modelName, ModelRole role, LlamaServerUnloadReason reason)
+    {
+        Unloads.Enqueue($"({modelName}, {role}, {reason})");
     }
 }
 
 internal sealed class ThrowingLlamaServerLoadTelemetry : ILlamaServerLoadTelemetry
 {
     public void RecordLoad(LlamaServerLoadObservation observation)
+    {
+        throw new InvalidOperationException("Synthetic telemetry sink failure.");
+    }
+
+    public void RecordUnload(string modelName, ModelRole role, LlamaServerUnloadReason reason)
     {
         throw new InvalidOperationException("Synthetic telemetry sink failure.");
     }

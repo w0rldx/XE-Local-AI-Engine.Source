@@ -13,6 +13,7 @@ import type { ChatMessageDisplay } from "@/features/chat/models/ChatMessageDispl
 import { chatFailureCategoryLabel, chatFailureHeadline } from "@/features/chat/models/ChatFailureCategory";
 import { hasText } from "@/features/chat/models/ChatMessageDisplay";
 import type { ChatMessageModel, ReasoningEffort } from "@/features/chat/models/ChatModels";
+import { turnThroughputLabel } from "@/features/chat/models/ChatTurnThroughput";
 import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
 
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
@@ -29,6 +30,8 @@ interface AssistantMessageBubbleProps {
 	reasoningEffort?: ReasoningEffort;
 	failureCategory?: string;
 	showTokensPerSecond: boolean;
+	// Advanced UI mode: show the turn's time to first token, decode rate and cached prompt tokens.
+	showTurnThroughput: boolean;
 }
 
 // Every non-user turn: the assistant bubble proper, and the rare system/tool row that shares its layout.
@@ -43,8 +46,11 @@ export function AssistantMessageBubble({
 	reasoningEffort,
 	failureCategory,
 	showTokensPerSecond,
+	showTurnThroughput,
 }: AssistantMessageBubbleProps) {
 	const { t, i18n } = useTranslation();
+	const throughputLabel =
+		showTurnThroughput && !isStreaming ? turnThroughputLabel(message.throughput, t, i18n.language) : undefined;
 	const failureHeadline = chatFailureHeadline(t, i18n, failureCategory);
 	const reducedMotion = useReducedMotion();
 	// When this turn's answer is being read aloud, silence the screen reader on the answer block to avoid a
@@ -212,6 +218,11 @@ export function AssistantMessageBubble({
 				) : (
 					actions
 				)}
+				{assistantMessage && throughputLabel ? (
+					<Text size="xs" c="dimmed" ta="right" data-testid={`chat-message-throughput-${message.id}`}>
+						{throughputLabel}
+					</Text>
+				) : null}
 				{footer}
 			</Stack>
 		</Group>

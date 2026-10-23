@@ -195,6 +195,10 @@ public sealed record NodeChatPersistedMessageDto : ISelectedPathMessage
     // blob (no DB column). Null for legacy turns, user messages and turns that never reached a provider round.
     public NodeChatContextWindowDto? ContextWindow { get; init; }
 
+    // Time to first token and prompt/generation throughput of this assistant turn, surfaced from the metadata blob (no DB
+    // column). Null for legacy turns, user messages and providers that report no timings.
+    public NodeChatThroughputDto? Throughput { get; init; }
+
     // The category of a failed assistant turn, surfaced from the metadata blob (no DB column). Null for a legacy turn,
     // a turn that did not fail, and a stored name this build does not know.
     public FailureCategory? FailureCategory { get; init; }

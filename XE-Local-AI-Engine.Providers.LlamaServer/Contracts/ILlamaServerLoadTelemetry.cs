@@ -7,4 +7,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 public interface ILlamaServerLoadTelemetry
 {
     void RecordLoad(LlamaServerLoadObservation observation);
+
+    /// <summary>Reports a deliberate teardown of a live process the supervisor owned. Report-only: an implementation must not throw.</summary>
+    void RecordUnload(string modelName, ModelRole role, LlamaServerUnloadReason reason);
 }

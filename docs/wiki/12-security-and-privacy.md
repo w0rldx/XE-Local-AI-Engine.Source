@@ -295,7 +295,7 @@ Silent catches follow one policy, kept here because no conventions page owns it:
 
 ### Support bundle redaction
 
-The support bundle (`diagnostics/support-bundle`, see [Hosting & Deployment](11-hosting-and-deployment.md)) is meant to be attached to a public issue, so `SupportBundleScrubber` runs over every log and `processes/*` entry, line by line with 1 s regex timeouts (a line that times out is dropped whole), and over the free-text values of `node-info.json` (warnings, CPU model, settings values) before that file is serialized. It is idempotent. Dense-token masking skips hex-only runs (trace ids, SHAs), compact timestamps (`20260913T134250067Z`), semantic versions with build metadata and anything directly under a `~`/`<data>` prefix, so those stay readable.
+The support bundle (`diagnostics/support-bundle`, see [Hosting & Deployment](11-hosting-and-deployment.md)) is meant to be attached to a public issue, so `SupportBundleScrubber` runs over every log and `processes/*` entry, line by line with 1 s regex timeouts (a line that times out is dropped whole), and over the free-text values of `node-info.json` (warnings, CPU model, settings values) and the model names in `perf.json` before those files are serialized. It is idempotent. Dense-token masking skips hex-only runs (trace ids, SHAs), compact timestamps (`20260913T134250067Z`), semantic versions with build metadata and anything directly under a `~`/`<data>` prefix, so those stay readable.
 
 | Scrubbed | Becomes |
 |---|---|

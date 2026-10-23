@@ -5,13 +5,14 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Providers.Abstractions.Diagnostics;
 
 /// <inheritdoc />
 /// <remarks>
 ///     Layout (schema 1): manifest, node info, tails of the newest and previous node log (256/128 KB), startup-crash,
-///     desktop and launcher logs (64 KB each, cut to a line boundary) and one <c>processes/*.txt</c> per child-process
-///     tail. Every text entry is scrubbed. A missing log is listed as <c>absent</c>: the Testing host and a fresh install
+///     desktop and launcher logs (64 KB each, cut to a line boundary), one <c>processes/*.txt</c> per child-process
+///     tail and <c>perf.json</c> (recent turn throughput and model loads). Every text entry is scrubbed. A missing log is listed as <c>absent</c>: the Testing host and a fresh install
 ///     have no log directory. Bounded by construction (under 2 MB), so it is built in memory.
 /// </remarks>
 public sealed class SupportBundleService : ISupportBundleService
@@ -19,6 +20,7 @@ public sealed class SupportBundleService : ISupportBundleService
     public const int SchemaVersion = 1;
     public const string ManifestEntry = "manifest.json";
     public const string NodeInfoEntry = "node-info.json";
+    public const string PerfEntry = "perf.json";
 
     private const int NodeLogTailBytes = 256 * 1024;
     private const int PreviousNodeLogTailBytes = 128 * 1024;
@@ -44,14 +46,18 @@ public sealed class SupportBundleService : ISupportBundleService
     private readonly IChildProcessOutputTails _processTails;
     private readonly SupportBundleScrubber _scrubber;
     private readonly TimeProvider _timeProvider;
+    private readonly LocalModelPerfLog? _perfLog;
 
     /// <param name="logDirectories">Where to look for logs, in order; the first directory holding a file wins.</param>
+    /// <param name="perfLog">Source of <c>perf.json</c>; null leaves the entry out of the bundle.</param>
     public SupportBundleService(INodeInfoService nodeInfo,
         IChildProcessOutputTails processTails,
         SupportBundleScrubber scrubber,
         IReadOnlyList<string> logDirectories,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        LocalModelPerfLog? perfLog = null)
     {
+        _perfLog = perfLog;
         ArgumentNullException.ThrowIfNull(nodeInfo);
         ArgumentNullException.ThrowIfNull(processTails);
         ArgumentNullException.ThrowIfNull(scrubber);
@@ -87,6 +93,16 @@ public sealed class SupportBundleService : ISupportBundleService
             foreach (var (entry, fileName) in AuxiliaryLogs)
             {
                 await AddLogAsync(zip, entries, entry, FindFile(fileName), AuxiliaryLogTailBytes, ct);
+            }
+
+            if (_perfLog is not null)
+            {
+                await WriteEntryAsync(zip, PerfEntry, JsonSerializer.Serialize(ScrubModelNames(_perfLog.Snapshot()), JsonOptions), ct);
+                entries.Add(new ManifestEntryInfo
+                {
+                    Path = PerfEntry,
+                    Status = "included"
+                });
             }
 
             var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -150,6 +166,16 @@ public sealed class SupportBundleService : ISupportBundleService
             CpuModel = info.CpuModel is null ? null : _scrubber.Scrub(info.CpuModel),
             Warnings = info.Warnings.Select(_scrubber.Scrub).ToArray(),
             Settings = info.Settings?.ToDictionary(static pair => pair.Key, pair => pair.Value is null ? null : _scrubber.Scrub(pair.Value), StringComparer.Ordinal)
+        };
+    }
+
+    // A model name can be a path under the user's profile, so it is scrubbed like every other free-text value.
+    private LocalModelPerfSnapshot ScrubModelNames(LocalModelPerfSnapshot snapshot)
+    {
+        return snapshot with
+        {
+            Turns = snapshot.Turns.Select(turn => turn with { Model = turn.Model is null ? null : _scrubber.Scrub(turn.Model) }).ToArray(),
+            Loads = snapshot.Loads.Select(load => load with { ModelName = _scrubber.Scrub(load.ModelName) }).ToArray()
         };
     }
 

@@ -45,6 +45,8 @@ interface RequestOptions {
 
 interface ListConversationsOptions extends RequestOptions {
 	includeArchived?: boolean;
+	// Most recent N conversations (server accepts 1..100); omitted means every conversation.
+	limit?: number;
 }
 
 export interface CreateConversationRequest {
@@ -180,7 +182,7 @@ export function toStreamRequest(request: SendMessageRequest): NodeChatStreamRequ
 export const nodeChatAdapter: NodeChatAdapter = {
 	async listConversations(options) {
 		const { data } = await listNodeChatConversations({
-			query: { includeArchived: options?.includeArchived ?? false },
+			query: { includeArchived: options?.includeArchived ?? false, limit: options?.limit },
 			signal: options?.signal,
 		});
 		return {

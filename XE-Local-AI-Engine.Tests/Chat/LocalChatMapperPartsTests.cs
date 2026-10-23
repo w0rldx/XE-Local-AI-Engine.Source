@@ -154,6 +154,25 @@ public sealed class LocalChatMapperPartsTests
         AssertEx.Null(BuildMessage(null).ToResponse().FailureCategory);
     }
 
+    [Test]
+    public void ToResponse_CarriesTheThroughputUnderItsCamelCaseNames_AndLeavesItNullWhenAbsent()
+    {
+        var response = (BuildMessage(null) with
+        {
+            Throughput = new NodeChatThroughputDto
+            {
+                TimeToFirstTokenMs = 1_400,
+                GenerationTokens = 150,
+                GenerationMs = 2_000
+            }
+        }).ToResponse();
+
+        var json = JsonSerializer.Serialize(response, WebOptions);
+
+        AssertEx.Contains(json, "\"throughput\":{\"timeToFirstTokenMs\":1400,\"promptTokens\":null,\"promptMs\":null,\"generationTokens\":150,\"generationMs\":2000,\"cachedPromptTokens\":null}");
+        AssertEx.Null(BuildMessage(null).ToResponse().Throughput);
+    }
+
     private static NodeChatPersistedMessageDto BuildMessage(IReadOnlyList<NodeChatMessagePart>? parts)
     {
         return new NodeChatPersistedMessageDto

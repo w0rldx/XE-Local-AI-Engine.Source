@@ -20,6 +20,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </remarks>
 public sealed class TrainingRunQueueHostedService : BackgroundService
 {
+    // Nothing signals when the gate frees or the loaded model unloads, so queued work that was refused retries on this.
+    private static readonly TimeSpan AdmissionRetryInterval = TimeSpan.FromSeconds(1);
+
     private readonly ITrainingRunEventBuffer _events;
     private readonly IGpuWorkGate _gpuWorkGate;
     private readonly ILogger<TrainingRunQueueHostedService> _logger;
@@ -64,19 +67,20 @@ public sealed class TrainingRunQueueHostedService : BackgroundService
                 recovered = await RecoverAsync(stoppingToken);
                 if (!recovered)
                 {
-                    await WaitAsync(stoppingToken);
+                    await WaitAsync(_pollInterval, stoppingToken);
                     continue;
                 }
             }
 
             TrainingWorkClaim? claim = null;
+            TrainingWorkKind? kind = null;
             IDisposable? admission = null;
             ILlamaServerRuntimeMutationLease? lease = null;
             try
             {
                 // Peek first: the exclusivity a kind needs has to be held before the claim, and an idle queue must not
                 // take the gate at all — holding it across the poll would starve every other GPU path on a quiet node.
-                var kind = await PeekAsync(stoppingToken);
+                kind = await PeekAsync(stoppingToken);
                 if (kind is TrainingWorkKind.TrainingRun or TrainingWorkKind.EvaluationRun)
                 {
                     admission = _gpuWorkGate.TryBeginExclusive(kind == TrainingWorkKind.TrainingRun
@@ -139,7 +143,7 @@ public sealed class TrainingRunQueueHostedService : BackgroundService
 
             if (claim is null)
             {
-                await WaitAsync(stoppingToken);
+                await WaitAsync(kind is not null && AdmissionRetryInterval < _pollInterval ? AdmissionRetryInterval : _pollInterval, stoppingToken);
             }
         }
     }
@@ -180,11 +184,11 @@ public sealed class TrainingRunQueueHostedService : BackgroundService
         return await store.ClaimNextAsync(kind, stoppingToken);
     }
 
-    private async Task WaitAsync(CancellationToken stoppingToken)
+    private async Task WaitAsync(TimeSpan timeout, CancellationToken stoppingToken)
     {
         try
         {
-            _ = await _signal.WaitAsync(_pollInterval, stoppingToken);
+            _ = await _signal.WaitAsync(timeout, stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {

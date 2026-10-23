@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using System.Diagnostics;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 
@@ -21,11 +22,15 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
     private readonly INodeChatPersistenceService _persistence;
     private readonly IUsageProviderResolver _usageProviderResolver;
     private readonly TimeProvider _timeProvider;
+    private readonly LocalModelPerfLog? _perfLog;
 
+    /// <param name="perfLog">Receives each terminal turn's throughput for the support bundle; null records nothing.</param>
     public NodeChatInvocationPump(INodeChatPersistenceService persistence,
         IUsageProviderResolver usageProviderResolver,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        LocalModelPerfLog? perfLog = null)
     {
+        _perfLog = perfLog;
         ArgumentNullException.ThrowIfNull(persistence);
         ArgumentNullException.ThrowIfNull(usageProviderResolver);
         ArgumentNullException.ThrowIfNull(timeProvider);
@@ -167,10 +172,13 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
                 // which preserves any existing persisted sources on the row.
                 Sources = TurnKnowledgeSourceCollector.Merge(sources, TurnKnowledgeSourceCollector.Snapshot()),
                 ContextWindow = state.ContextSnapshot is { } snapshot ? MapContextWindow(snapshot, state) : null,
+                Throughput = NodeChatThroughputDto.From(state.Throughput),
                 // Only a failed turn keeps its category on the row; a cancel is an outcome, not a failure, as with Error above.
                 FailureCategory = terminalStatus == NodeChatMessageStatusValues.Failed ? state.FailureCategory : null
             },
             CancellationToken.None);
+
+        _perfLog?.RecordTurn(state.ModelUsed ?? requestedModel, state.Throughput);
 
         // The transition guard may have rejected this terminalize, so the persisted row is the authoritative winning
         // state and both the returned status and the single SSE terminal are built from it.

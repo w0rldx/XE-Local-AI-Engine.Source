@@ -1,4 +1,4 @@
-import { ActionIcon, Group, Paper, ScrollArea, Stack, Switch, Text, TextInput, Tooltip } from "@mantine/core";
+import { ActionIcon, Button, Group, Paper, ScrollArea, Stack, Switch, Text, TextInput, Tooltip } from "@mantine/core";
 import { IconArchive, IconChevronLeft, IconPinnedFilled, IconPlus, IconSearch } from "@tabler/icons-react";
 import { type KeyboardEvent, memo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -19,6 +19,9 @@ interface ConversationListProps {
 	disabled?: boolean;
 	searchQuery?: string;
 	showArchived?: boolean;
+	// Only the most recent page is loaded; a footer offers onShowAll to load every conversation.
+	truncated?: boolean;
+	onShowAll?: () => void;
 	mutatingConversationId?: string;
 	onCreateConversation: () => void;
 	onSelect: (conversationId: string) => void;
@@ -51,6 +54,8 @@ export const ConversationList = memo(function ConversationList({
 	disabled = false,
 	searchQuery = "",
 	showArchived = false,
+	truncated = false,
+	onShowAll,
 	mutatingConversationId,
 	onCreateConversation,
 	onSelect,
@@ -230,6 +235,16 @@ export const ConversationList = memo(function ConversationList({
 					)}
 				</Stack>
 			</ScrollArea>
+			{truncated && onShowAll ? (
+				<Group gap={6} px="md" py="xs" justify="space-between" wrap="nowrap" data-testid="conversation-list-truncated">
+					<Text size="xs" c="dimmed">
+						{t("pages.chat.conversationList.truncatedNotice", "Showing the 100 most recent")}
+					</Text>
+					<Button size="compact-xs" variant="subtle" onClick={onShowAll}>
+						{t("pages.chat.conversationList.showAll", "Show all")}
+					</Button>
+				</Group>
+			) : null}
 		</Paper>
 	);
 });

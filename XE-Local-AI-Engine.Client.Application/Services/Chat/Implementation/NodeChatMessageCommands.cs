@@ -362,7 +362,8 @@ internal sealed class NodeChatMessageCommands
             // existing persisted sources, just like Parts.
             sources: request.Sources,
             contextWindow: request.ContextWindow,
-            failureCategory: request.FailureCategory);
+            failureCategory: request.FailureCategory,
+            throughput: request.Throughput);
     }
 
     public async Task<NodeChatCancelResultDto> CancelMessageAsync(NodeChatCancelRequest request, CancellationToken cancellationToken = default)
@@ -572,7 +573,8 @@ internal sealed class NodeChatMessageCommands
         RunEnvelopeWriteMode envelopeWriteMode = RunEnvelopeWriteMode.InsertIfAbsent,
         IReadOnlyList<NodeChatMessageSource>? sources = null,
         NodeChatContextWindowDto? contextWindow = null,
-        FailureCategory? failureCategory = null)
+        FailureCategory? failureCategory = null,
+        NodeChatThroughputDto? throughput = null)
     {
         ValidateCorrelation(correlation);
         if (requiredCurrentStatuses is { Count: 0 or > MaxSourceStatusSlots })
@@ -623,11 +625,12 @@ internal sealed class NodeChatMessageCommands
                 // The context snapshot is reported once at terminalize; a null arg preserves any existing value.
                 var nextContextWindow = contextWindow ?? current.ContextWindow;
                 var nextFailureCategory = failureCategory ?? current.FailureCategory;
+                var nextThroughput = throughput ?? current.Throughput;
                 // Agent attribution and the reasoning effort are stamped once at mint and never updated here, so they
                 // are always preserved from current, or a later flush would re-serialize the blob without them.
                 var metadata = SerializeMetadata(current.MetadataJson, nextReasoning, nextModel, nextInputTokens, nextOutputTokens, nextTotalTokens, nextReasoningTokens, nextParts,
                     current.AgentDefinitionId, current.AgentName, current.ReasoningEffort, nextGenerationDurationMs, nextSources, nextContextWindow,
-                    nextFailureCategory);
+                    nextFailureCategory, nextThroughput);
 
                 // With an envelope to write, the message UPDATE, the envelope insert and the conversation touch share
                 // ONE transaction; a non-terminal update keeps the single-statement autocommit path of the hot path.
@@ -728,6 +731,9 @@ internal sealed class NodeChatMessageCommands
                     ReasoningCount = nextReasoningTokens,
                     Parts = nextParts,
                     GenerationDurationMs = nextGenerationDurationMs,
+                    Sources = nextSources,
+                    ContextWindow = nextContextWindow,
+                    Throughput = nextThroughput,
                     FailureCategory = nextFailureCategory
                 };
             },

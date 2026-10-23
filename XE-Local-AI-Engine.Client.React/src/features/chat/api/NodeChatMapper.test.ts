@@ -218,6 +218,18 @@ describe("node chat mapper", () => {
 		expect(mapSingleMessage({ contextWindow: null }).contextWindow).toBeUndefined();
 	});
 
+	it("maps the persisted turn throughput and leaves it undefined when absent", () => {
+		const throughput = {
+			timeToFirstTokenMs: 1_400,
+			promptTokens: null,
+			generationTokens: 150,
+			generationMs: 2_000,
+			cachedPromptTokens: 2_080,
+		};
+		expect(mapSingleMessage({ throughput }).throughput).toEqual(throughput);
+		expect(mapSingleMessage({ throughput: null }).throughput).toBeUndefined();
+	});
+
 	it("maps the persisted failure category and leaves it undefined when absent", () => {
 		expect(mapSingleMessage({ failureCategory: "InsufficientCapacity" }).failureCategory).toBe("InsufficientCapacity");
 		expect(mapSingleMessage({ failureCategory: null }).failureCategory).toBeUndefined();

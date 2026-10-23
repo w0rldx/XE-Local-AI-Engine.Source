@@ -712,6 +712,19 @@ member of the encrypted metadata blob, so rows written before the feature read b
 in exactly two places: the REST message response and the terminal `ChatStreamEvent`
 (`ChatStreamEventMapper` sets it only on terminal event types). Intermediate stream events never carry it.
 
+**Turn throughput.** `InvocationState.Throughput` (time to first token, the prompt/generation split of tokens and
+milliseconds, cached prompt tokens) rides the same carrier: the pump maps it to `NodeChatThroughputDto` on the
+terminalize request, it is stored in `NodeChatMessageMetadata.Throughput`, and it leaves the node on the REST message
+response and the terminal `ChatStreamEvent` only. The client shows it as one muted line under a finished assistant
+turn in Advanced UI mode only (`turnThroughputLabel`); `LocalModelPerfLog` keeps the last 20 turns for the support
+bundle's `perf.json`.
+
+**Cold-load reason.** `LocalRuntimeWarmer` reports `LoadingModel` with an `InvocationRuntimePhaseDetail` read from
+`LocalModelPerfLog`: why the model is not resident (`first-load`, `idle-unloaded`, `evicted-for-cap`,
+`evicted-for-memory`, fed by the supervisor's `ILlamaServerLoadTelemetry.RecordUnload`) and how long its previous ready
+load took. The `assistant-phase` event carries both as `runtimePhaseReason` and `runtimePhaseLastLoadMs`; the streaming
+indicator shows them beside "Loading <model>…" and keeps the plain text when they are absent.
+
 **Before the first send.** With no assistant message there is no snapshot, so the popover fetches
 `GET chat/context-estimate?modelName&agentId&useLocalTools` (`GetNodeChatContextEstimateEndpoint`, Operator policy,
 `ChatContextEstimateService`). A blank model means the node's local default chat model (the composer sends the

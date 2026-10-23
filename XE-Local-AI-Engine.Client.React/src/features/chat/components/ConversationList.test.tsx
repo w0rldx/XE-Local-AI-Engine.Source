@@ -396,3 +396,46 @@ describe("ConversationList management actions", () => {
 		expect(onSelect).not.toHaveBeenCalled();
 	});
 });
+
+describe("ConversationList truncated page footer", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+	});
+
+	afterEach(() => {
+		cleanup();
+	});
+
+	it("offers Show all when the page is truncated and calls onShowAll", () => {
+		const onShowAll = vi.fn();
+		renderWithProviders(
+			<ConversationList
+				conversations={[conversation()]}
+				truncated={true}
+				onShowAll={onShowAll}
+				onCreateConversation={vi.fn()}
+				onSelect={vi.fn()}
+				onToggleCollapse={vi.fn()}
+			/>,
+		);
+
+		expect(screen.getByText("Showing the 100 most recent")).toBeTruthy();
+		fireEvent.click(screen.getByRole("button", { name: "Show all" }));
+
+		expect(onShowAll).toHaveBeenCalledTimes(1);
+	});
+
+	it("shows no footer when the page is not truncated", () => {
+		renderWithProviders(
+			<ConversationList
+				conversations={[conversation()]}
+				onShowAll={vi.fn()}
+				onCreateConversation={vi.fn()}
+				onSelect={vi.fn()}
+				onToggleCollapse={vi.fn()}
+			/>,
+		);
+
+		expect(screen.queryByTestId("conversation-list-truncated")).toBeNull();
+	});
+});

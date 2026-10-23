@@ -51,6 +51,9 @@ public sealed class InvocationState
     /// </remarks>
     public DateTimeOffset? RuntimePhaseChangedAtUtc { get; set; }
 
+    /// <summary>Why the current <see cref="RuntimePhase" /> loads the model and how long its last load took; null when unknown.</summary>
+    public InvocationRuntimePhaseDetail? RuntimePhaseDetail { get; set; }
+
     /// <summary>The immutable streamed-content accumulator — the single source of truth for the response text.</summary>
     /// <remarks>
     ///     Cloning an <see cref="InvocationState" /> copies THIS reference (O(1)) rather than the materialized
@@ -263,6 +266,7 @@ public sealed class InvocationState
             Status = Status,
             RuntimePhase = RuntimePhase,
             RuntimePhaseChangedAtUtc = RuntimePhaseChangedAtUtc,
+            RuntimePhaseDetail = RuntimePhaseDetail,
             ContentAccumulator = ContentAccumulator,
             StreamedChunkCount = StreamedChunkCount,
             ThinkingAccumulator = ThinkingAccumulator,

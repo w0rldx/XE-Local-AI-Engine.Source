@@ -150,7 +150,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                 phase,
                 _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
                 phaseSequence,
-                phaseState.RuntimePhaseChangedAtUtc);
+                phaseState.RuntimePhaseChangedAtUtc,
+                phaseState.RuntimePhaseDetail);
         }
 
         // Replayed AFTER the snapshot, because the client's snapshot reducer arm rebuilds the streaming message and

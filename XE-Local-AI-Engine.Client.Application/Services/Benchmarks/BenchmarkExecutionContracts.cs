@@ -263,7 +263,11 @@ public sealed class BenchmarkQueueOptions
     /// <summary>The longest poll interval that still lets a queued run start promptly after a signal is missed.</summary>
     public static readonly TimeSpan MaxPollInterval = TimeSpan.FromMinutes(5);
 
-    public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(1);
+    /// <summary>
+    ///     The idle fallback behind <see cref="IBenchmarkQueueSignal" />: every enqueue wakes the queue, and a claim the
+    ///     GPU gate refused retries every second on its own.
+    /// </summary>
+    public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(30);
 }
 
 /// <summary>

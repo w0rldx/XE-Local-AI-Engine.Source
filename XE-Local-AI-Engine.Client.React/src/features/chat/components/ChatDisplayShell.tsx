@@ -1,9 +1,11 @@
 import { ActionIcon, Alert, Box, Drawer, Group, Paper, Stack, Switch, Text, Tooltip } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { IconInfoCircle, IconLayoutSidebar, IconUpload } from "@tabler/icons-react";
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useLayoutEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
+import { getNodeSettingsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { TWO_PANE_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { ChatInputArea } from "@/features/chat/components/ChatInputArea";
@@ -43,6 +45,8 @@ export function ChatDisplayShell({
 	inputStatus,
 	conversationSearchQuery,
 	showArchivedConversations,
+	conversationListTruncated = false,
+	onShowAllConversations,
 	mutatingConversationId,
 	onSelectConversation,
 	onCreateConversation,
@@ -90,6 +94,10 @@ export function ChatDisplayShell({
 	workflow,
 }: ChatDisplayShellProps) {
 	const { t } = useTranslation();
+	// The UI mode off the node-settings query the layout guard already primed, read from cache only so the chat adds no
+	// request. Anything but "simple" is Advanced, the same failure direction as useUiMode.
+	const { data: nodeSettings } = useQuery({ ...getNodeSettingsOptions(), enabled: false });
+	const showTurnThroughput = nodeSettings?.uiMode !== "simple";
 	const conversation = conversations.find((item) => item.id === selectedConversationId);
 	const answerNowTarget = answerNowMessageId(
 		streamingMessage,
@@ -150,6 +158,8 @@ export function ChatDisplayShell({
 			disabled={inputStatus.chatInputDisabled}
 			searchQuery={conversationSearchQuery}
 			showArchived={showArchivedConversations}
+			truncated={conversationListTruncated}
+			onShowAll={onShowAllConversations}
 			mutatingConversationId={mutatingConversationId}
 			onCreateConversation={onCreateConversation}
 			onSelect={handleSelectConversation}
@@ -270,6 +280,7 @@ export function ChatDisplayShell({
 					reasoningEffort={reasoningEffort}
 					isWorkSessionConversation={isWorkSessionConversation}
 					renderAfterMessage={workflow?.renderAfterMessage}
+					showTurnThroughput={showTurnThroughput}
 				/>
 				{workflow?.composerHeader}
 				<ChatInputArea

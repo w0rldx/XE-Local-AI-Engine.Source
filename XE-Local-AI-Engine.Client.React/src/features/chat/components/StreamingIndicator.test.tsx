@@ -76,6 +76,59 @@ describe("StreamingIndicator", () => {
 		expect(screen.getByTestId("chat-stream-loading-model-indicator")).toBeTruthy();
 	});
 
+	// U6: the loading line names the model, why it loads and how long the last load took.
+	it("names the model, the unload reason and the last load duration when the node sends them", () => {
+		renderBare(
+			<StreamingIndicator
+				isActive={true}
+				hasContent={false}
+				runtimePhase="loading_model"
+				runtimePhaseReason="idle-unloaded"
+				runtimePhaseLastLoadMs={9_000}
+				modelName="qwen3-8b"
+			/>,
+		);
+
+		const indicator = screen.getByTestId("chat-stream-loading-model-indicator").textContent ?? "";
+		expect(indicator).toContain("Loading qwen3-8b…");
+		expect(screen.getByTestId("chat-stream-loading-model-detail").textContent).toBe("(unloaded after idle · about 9s last time)");
+	});
+
+	it.each([
+		["first-load", undefined, "(first load)"],
+		["evicted-for-cap", 12_000, "(unloaded to stay within the loaded-model limit · about 12s last time)"],
+		["evicted-for-memory", 61_000, "(unloaded to free memory for another model · about 1m 01s last time)"],
+		[undefined, 4_000, "(about 4s last time)"],
+	])("renders reason %s with last load %s as %s", (reason, lastLoadMs, expected) => {
+		renderBare(
+			<StreamingIndicator
+				isActive={true}
+				hasContent={false}
+				runtimePhase="loading_model"
+				runtimePhaseReason={reason}
+				runtimePhaseLastLoadMs={lastLoadMs}
+			/>,
+		);
+
+		expect(screen.getByTestId("chat-stream-loading-model-detail").textContent).toBe(expected);
+	});
+
+	// An older node sends neither field, and a newer one may send a reason this build does not know: both keep
+	// today's plain text with no detail.
+	it("falls back to the plain loading text without a detail", () => {
+		renderBare(
+			<StreamingIndicator
+				isActive={true}
+				hasContent={false}
+				runtimePhase="loading_model"
+				runtimePhaseReason="some-future-reason"
+			/>,
+		);
+
+		expect(screen.getByTestId("chat-stream-loading-model-indicator").textContent).toContain("Loading model…");
+		expect(screen.queryByTestId("chat-stream-loading-model-detail")).toBeNull();
+	});
+
 	it("stops showing the model-loading indicator once generation begins (generating phase)", () => {
 		renderBare(<StreamingIndicator isActive={true} isQueued={false} hasContent={false} runtimePhase="generating" />);
 

@@ -107,7 +107,8 @@ public interface IWorkerEventDispatcher
     ///     rather than an apparent hang while a large local model warms. A no-op when the id is not the current
     ///     invocation.
     /// </remarks>
-    Task ReportInvocationPhaseAsync(Guid invocationId, InvocationRuntimePhase phase);
+    /// <param name="detail">Why the model loads and how long its last load took; replaces the previous detail, null clears it.</param>
+    Task ReportInvocationPhaseAsync(Guid invocationId, InvocationRuntimePhase phase, InvocationRuntimePhaseDetail? detail = null);
 
     /// <summary>Moves the invocation to its terminal completed state, recording whatever usage the provider reported.</summary>
     /// <param name="finishReason">

@@ -229,6 +229,66 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
+    public async Task TerminalizeAssistantMessageAsync_WithThroughputAndAContextWindow_ReturnsBoth_AndRoundTripsThroughTheEncryptedBlob()
+    {
+        await using var provider = await BuildProviderAsync("throughput-roundtrip.sqlite");
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Throughput",
+            UserId = "node",
+            CreatedAtUtc = 2000
+        });
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = correlation.MessageId,
+            RequestId = correlation.RequestId,
+            CreatedAtUtc = 2001
+        });
+        var throughput = new NodeChatThroughputDto
+        {
+            TimeToFirstTokenMs = 1_400.5,
+            PromptTokens = 2_100,
+            PromptMs = 350,
+            GenerationTokens = 150,
+            GenerationMs = 2_000,
+            CachedPromptTokens = 2_080
+        };
+        var window = new NodeChatContextWindowDto
+        {
+            Kind = NodeChatContextWindowKind.LastRound,
+            WindowTokens = 8192,
+            ReservedOutputTokens = 1024,
+            UsableWindowTokens = 5939,
+            SafetyMarginTokens = 1229
+        };
+
+        var returned = await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = correlation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = 2002,
+            Content = "the answer",
+            Throughput = throughput,
+            ContextWindow = window
+        });
+
+        // The returned row is what the pump builds the LIVE terminal event from, so it carries what this write stored.
+        AssertEx.Equal(throughput, returned.Throughput);
+        AssertEx.Equal(expected: 8192, returned.ContextWindow?.WindowTokens);
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId));
+        AssertEx.Equal(throughput, loaded.Messages.Single(message => message.MessageId == correlation.MessageId).Throughput);
+        AssertEx.Null(NodeChatMetadataSerializer.DeserializeMetadata("""{"model":"llama","inputCount":5}""").Throughput, "A legacy blob loads without throughput.");
+    }
+
+    [Test]
     public async Task TerminalizeAssistantMessageAsync_WithInterimTextSplitAtAToolCall_RoundTripsTheTextPartAheadOfTheToolAndOnlyTheAnswerAsContent()
     {
         await using var provider = await BuildProviderAsync("parts-interim-text.sqlite");

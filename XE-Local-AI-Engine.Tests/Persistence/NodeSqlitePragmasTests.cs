@@ -457,6 +457,46 @@ public sealed class NodeSqlitePragmasTests : IDisposable
         await ExecuteAsync(writer, "ROLLBACK;");
     }
 
+    /// <summary>
+    ///     journal_mode is a property of the file, so it is issued on the first open of each database file only, on both
+    ///     apply paths, while busy_timeout, foreign_keys and synchronous still run on every connection.
+    /// </summary>
+    [Test]
+    public async Task JournalMode_IsIssuedOncePerDatabaseFile_WhileThePerConnectionPragmasRunOnEveryOpen()
+    {
+        var path = $"Data Source={Path.Combine(_dir, "once.sqlite")}";
+        await using var first = new PragmaScriptedConnection("(none)") { ConnectionString = path };
+        await using var second = new PragmaScriptedConnection("(none)") { ConnectionString = path };
+        await using var otherFile = new PragmaScriptedConnection("(none)") { ConnectionString = $"Data Source={Path.Combine(_dir, "other.sqlite")}" };
+
+        await NodeSqlitePragmas.ApplyAsync(first, NodeSqlitePragmaSettings.Default, logger: null, CancellationToken.None);
+        NodeSqlitePragmas.Apply(second, NodeSqlitePragmaSettings.Default, logger: null);
+        await NodeSqlitePragmas.ApplyAsync(otherFile, NodeSqlitePragmaSettings.Default, logger: null, CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, CountPragma(first, "journal_mode"));
+        AssertEx.Equal(expected: 0, CountPragma(second, "journal_mode"), "A second open of the same file must not switch WAL again.");
+        AssertEx.Equal(expected: 1, CountPragma(otherFile, "journal_mode"), "Another file gets its own switch.");
+        foreach (var pragma in new[] { "busy_timeout", "foreign_keys", "synchronous" })
+        {
+            AssertEx.Equal(expected: 1, CountPragma(second, pragma), $"{pragma} is per connection and must run on every open.");
+        }
+    }
+
+    /// <summary>A journal_mode switch SQLite refused is not remembered, so the next open of that file tries again.</summary>
+    [Test]
+    public async Task JournalMode_ThatFailed_IsIssuedAgainOnTheNextOpen()
+    {
+        var path = $"Data Source={Path.Combine(_dir, "retry.sqlite")}";
+        await using var refused = new PragmaScriptedConnection("journal_mode") { ConnectionString = path };
+        await using var next = new PragmaScriptedConnection("(none)") { ConnectionString = path };
+
+        await NodeSqlitePragmas.ApplyAsync(refused, NodeSqlitePragmaSettings.Default, logger: null, CancellationToken.None);
+        await NodeSqlitePragmas.ApplyAsync(next, NodeSqlitePragmaSettings.Default, logger: null, CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, CountPragma(refused, "journal_mode"));
+        AssertEx.Equal(expected: 1, CountPragma(next, "journal_mode"));
+    }
+
     [Test]
     [Arguments("Filename=node.db;Cache=Shared;Mode=ReadWriteCreate", SqliteCacheMode.Default)]
     [Arguments("Filename=node.db;Foreign Keys=True", SqliteCacheMode.Default)]
@@ -471,6 +511,9 @@ public sealed class NodeSqlitePragmasTests : IDisposable
         AssertEx.Equal(original.Mode, rewritten.Mode);
         AssertEx.Equal(original.ForeignKeys, rewritten.ForeignKeys);
     }
+
+    private static int CountPragma(PragmaScriptedConnection connection, string pragma) =>
+        connection.Executed.Count(sql => sql.Contains(pragma, StringComparison.Ordinal));
 
     private static async Task<SqliteConnection> OpenConfiguredAsync(string path, NodeSqlitePragmaSettings settings)
     {
@@ -607,7 +650,7 @@ public sealed class NodeSqlitePragmasTests : IDisposable
             public override object? ExecuteScalar()
             {
                 _ = _owner.Execute(CommandText);
-                return null;
+                return CommandText.Contains("journal_mode", StringComparison.Ordinal) ? "wal" : null;
             }
 
             public override void Prepare()

@@ -125,6 +125,9 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 		maxUploadFileSizeMb,
 		showArchivedConversations,
 		setShowArchivedConversations,
+		conversationListQueryKey,
+		isConversationListTruncated,
+		showAllConversations,
 		selectedConversationId,
 		selectedConversationData,
 		selectedConversationIsLoading,
@@ -183,10 +186,10 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 	const createConversationMutation = useMutation({
 		mutationFn: () => nodeChatAdapter.createConversation({ title: "New conversation" }),
 		onSuccess: async (conversation) => {
-			queryClient.setQueryData<ChatConversationListModel>(
-				nodeChatQueryKeys.conversationList(showArchivedConversations),
-				(current = emptyConversationList) => ({ ...current, conversations: [conversation, ...current.conversations] }),
-			);
+			queryClient.setQueryData<ChatConversationListModel>(conversationListQueryKey, (current = emptyConversationList) => ({
+				...current,
+				conversations: [conversation, ...current.conversations],
+			}));
 			queryClient.setQueryData(nodeChatQueryKeys.conversation(conversation.id), conversation);
 			setRequestedConversationId(conversation.id);
 			// A new conversation must not inherit the previous thread's pinned agent — clear the
@@ -229,15 +232,12 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 	const cacheConversation = useCallback(
 		(conversation: ChatConversationModel): void => {
 			cacheConversationDetail(conversation);
-			queryClient.setQueryData<ChatConversationListModel>(
-				nodeChatQueryKeys.conversationList(showArchivedConversations),
-				(current = emptyConversationList) => ({
-					...current,
-					conversations: mergeSelectedConversation(current.conversations, conversation),
-				}),
-			);
+			queryClient.setQueryData<ChatConversationListModel>(conversationListQueryKey, (current = emptyConversationList) => ({
+				...current,
+				conversations: mergeSelectedConversation(current.conversations, conversation),
+			}));
 		},
-		[cacheConversationDetail, queryClient, showArchivedConversations],
+		[cacheConversationDetail, queryClient, conversationListQueryKey],
 	);
 
 	const resolveSendConversation = useCallback(
@@ -741,6 +741,8 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 				}}
 				conversationSearchQuery={conversationSearchQuery}
 				showArchivedConversations={showArchivedConversations}
+				conversationListTruncated={isConversationListTruncated}
+				onShowAllConversations={showAllConversations}
 				mutatingConversationId={mutatingConversationId}
 				conversationListCollapsed={collapsed}
 				hideConversationList={isScoped}

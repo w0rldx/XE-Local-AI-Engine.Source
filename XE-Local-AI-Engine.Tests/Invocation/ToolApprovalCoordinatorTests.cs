@@ -896,8 +896,8 @@ public sealed class ToolApprovalCoordinatorTests
         public Task ReportInvocationTextReclassifiedAsync(Guid invocationId, string content, string reasoningSuffix) =>
             _inner.ReportInvocationTextReclassifiedAsync(invocationId, content, reasoningSuffix);
 
-        public Task ReportInvocationPhaseAsync(Guid invocationId, InvocationRuntimePhase phase) =>
-            _inner.ReportInvocationPhaseAsync(invocationId, phase);
+        public Task ReportInvocationPhaseAsync(Guid invocationId, InvocationRuntimePhase phase, InvocationRuntimePhaseDetail? detail = null) =>
+            _inner.ReportInvocationPhaseAsync(invocationId, phase, detail);
 
         public Task ReportInvocationCompletedAsync(Guid invocationId,
             int? inputTokens = null,

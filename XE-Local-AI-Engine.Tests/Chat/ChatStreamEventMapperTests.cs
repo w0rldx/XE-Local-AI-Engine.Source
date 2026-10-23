@@ -552,6 +552,57 @@ public sealed class ChatStreamEventMapperTests
         }, Timestamp, sequence: 1).FailureCategory);
     }
 
+    [Test]
+    public void MessageEvent_CarriesTheThroughputOnTerminalEventsOnly()
+    {
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
+        var throughput = new NodeChatThroughputDto
+        {
+            TimeToFirstTokenMs = 1_400,
+            GenerationTokens = 150,
+            GenerationMs = 2_000,
+            CachedPromptTokens = 2_080
+        };
+        var message = NewMessage(correlation, "done", reasoning: null, NodeChatMessageStatusValues.Completed, "m", inputCount: 10, outputCount: 2) with
+        {
+            Throughput = throughput
+        };
+
+        AssertEx.True(ReferenceEquals(throughput, ChatStreamEventMapper.MessageEvent(ChatStreamEventTypes.AssistantCompleted, correlation, message, Timestamp, sequence: 1).Throughput));
+        AssertEx.True(ReferenceEquals(throughput, ChatStreamEventMapper.MessageEvent(ChatStreamEventTypes.AssistantCancelled, correlation, message, Timestamp, sequence: 1).Throughput));
+        AssertEx.Null(ChatStreamEventMapper.MessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, message, Timestamp, sequence: 1).Throughput);
+    }
+
+    [Test]
+    public void PhaseEvent_CarriesTheLoadReasonAndTheLastLoadDuration_AndNothingWithoutADetail()
+    {
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
+
+        var withDetail = ChatStreamEventMapper.PhaseEvent(correlation, InvocationRuntimePhase.LoadingModel, Timestamp, sequence: 1,
+            detail: new InvocationRuntimePhaseDetail
+            {
+                Reason = InvocationRuntimePhaseReasons.IdleUnloaded,
+                LastLoadMs = 9_000
+            });
+        var withoutDetail = ChatStreamEventMapper.PhaseEvent(correlation, InvocationRuntimePhase.LoadingModel, Timestamp, sequence: 2);
+
+        AssertEx.Equal("loading_model", withDetail.RuntimePhase);
+        AssertEx.Equal("idle-unloaded", withDetail.RuntimePhaseReason);
+        AssertEx.Equal(expected: 9_000d, withDetail.RuntimePhaseLastLoadMs);
+        AssertEx.Null(withoutDetail.RuntimePhaseReason);
+        AssertEx.Null(withoutDetail.RuntimePhaseLastLoadMs);
+    }
+
     private static NodeChatPersistedMessageDto NewMessage(NodeChatMessageCorrelation correlation,
         string content,
         string? reasoning,

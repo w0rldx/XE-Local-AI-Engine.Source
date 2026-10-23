@@ -1,6 +1,7 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 
+import { ApiError } from "@/core/api/errors/ApiError";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { mergeSelectedConversation } from "@/features/chat/models/ChatConversationDerivations";
 import type { ChatConversationModel, ChatMessageFeedback, ChatScope } from "@/features/chat/models/ChatModels";
@@ -9,6 +10,8 @@ import type { ContextWindowSnapshot } from "@/features/chat/models/ContextWindow
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 
 const emptyConversations: ChatConversationModel[] = [];
+// The list endpoint's maximum page; the sidebar asks for this many until the operator chooses "Show all".
+const CONVERSATION_LIST_PAGE_SIZE = 100;
 
 interface ChatConversationSelectionInput {
 	scope?: ChatScope;
@@ -27,6 +30,12 @@ interface ChatConversationSelection {
 	maxUploadFileSizeMb?: number;
 	showArchivedConversations: boolean;
 	setShowArchivedConversations: (showArchived: boolean) => void;
+	// The list cache entry currently on screen; optimistic writes must target this exact variant.
+	conversationListQueryKey: ReturnType<typeof nodeChatQueryKeys.conversationList>;
+	// The limited page came back full, so older conversations may be hidden.
+	isConversationListTruncated: boolean;
+	// Drops the page limit and re-queries every conversation.
+	showAllConversations: () => void;
 	selectedConversationId: string;
 	selectedConversationData?: ChatConversationModel;
 	selectedConversationIsLoading: boolean;
@@ -48,27 +57,62 @@ export function useChatConversationSelection({
 	scope,
 	requestedConversationId,
 }: ChatConversationSelectionInput): ChatConversationSelection {
+	const queryClient = useQueryClient();
 	const [showArchivedConversations, setShowArchivedConversations] = useState(false);
+	const [showingAllConversations, setShowingAllConversations] = useState(false);
+	// Memoized: Chat.tsx lists this key in useCallback deps, and a fresh array per render would rebuild those callbacks.
+	const conversationListQueryKey = useMemo(
+		() => nodeChatQueryKeys.conversationList(showArchivedConversations, !showingAllConversations),
+		[showArchivedConversations, showingAllConversations],
+	);
 	const {
 		data: conversationsData,
 		isLoading: conversationsIsLoading,
+		isPlaceholderData: conversationsIsPlaceholderData,
 		isError: conversationsIsError,
 		error: conversationsError,
 	} = useQuery({
-		queryKey: nodeChatQueryKeys.conversationList(showArchivedConversations),
-		queryFn: ({ signal }) => nodeChatAdapter.listConversations({ includeArchived: showArchivedConversations, signal }),
+		queryKey: conversationListQueryKey,
+		queryFn: ({ signal }) =>
+			nodeChatAdapter.listConversations({
+				includeArchived: showArchivedConversations,
+				limit: showingAllConversations ? undefined : CONVERSATION_LIST_PAGE_SIZE,
+				signal,
+			}),
+		// "Show all" re-keys the query; keep the page on screen (and the selection with it) until the full list lands.
+		placeholderData: keepPreviousData,
 	});
 
 	const conversations = conversationsData?.conversations ?? emptyConversations;
+	// A full page may hide older conversations. `>=` because an optimistic create can prepend one before the refetch.
+	const isConversationListTruncated = !showingAllConversations && conversations.length >= CONVERSATION_LIST_PAGE_SIZE;
+	const showAllConversations = useCallback(() => setShowingAllConversations(true), []);
 	// The node's effective Security:MaxMessageSizeKb, reported by the conversation-list endpoint. Undefined until that
 	// first fetch lands (or on a node that omits it) — the composer then skips its pre-check and the hub enforces.
 	const maxMessageSizeKb = conversationsData?.maxMessageSizeKb;
 	const maxUploadFileSizeMb = conversationsData?.maxUploadFileSizeMb;
 	const requestedConversationExists = conversations.some((conversation) => conversation.id === requestedConversationId);
+	// A full page cannot prove absence: a remembered or deep-linked older thread is fetched by id below and merged in;
+	// only a complete list demotes an unknown id to the first conversation.
+	const conversationListMayBeIncomplete =
+		(!showingAllConversations || conversationsIsPlaceholderData) && conversations.length >= CONVERSATION_LIST_PAGE_SIZE;
+	// The detail fetch of an unlisted id settles the question: a definitive 404, or an archived thread while archived ones
+	// are hidden, demotes it (the thread stays cached, so this holds after the selection moves on). Read from the cache
+	// during render: while the id is selected the detail query below subscribes this hook to that entry.
+	const requestedDetail = queryClient.getQueryState<ChatConversationModel>(
+		nodeChatQueryKeys.conversation(requestedConversationId),
+	);
+	const requestedConversationRejected =
+		requestedDetail?.status === "error"
+			? requestedDetail.error instanceof ApiError && requestedDetail.error.statusCode === 404
+			: requestedDetail?.data?.isArchived === true && !showArchivedConversations;
+	const requestedConversationMayExist =
+		requestedConversationExists ||
+		(conversationListMayBeIncomplete && requestedConversationId.length > 0 && !requestedConversationRejected);
 	// mergeSelectedConversation prepends the pinned conversation when the list does not contain it, so a scoped id
 	// renders correctly whatever the (still-fetched — it carries maxMessageSizeKb) conversation list returns.
 	const selectedConversationId =
-		scope?.conversationId ?? (requestedConversationExists ? requestedConversationId : (conversations[0]?.id ?? ""));
+		scope?.conversationId ?? (requestedConversationMayExist ? requestedConversationId : (conversations[0]?.id ?? ""));
 
 	const {
 		data: selectedConversationData,
@@ -163,6 +207,9 @@ export function useChatConversationSelection({
 		maxUploadFileSizeMb,
 		showArchivedConversations,
 		setShowArchivedConversations,
+		conversationListQueryKey,
+		isConversationListTruncated,
+		showAllConversations,
 		selectedConversationId,
 		selectedConversationData,
 		selectedConversationIsLoading,

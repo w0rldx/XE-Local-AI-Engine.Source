@@ -124,6 +124,7 @@ internal static class AddNodeModelFitExtensions
 
         // Report-only llama-server spawn/readiness/placement observations, registered BEFORE the provider module so its TryAdd null
         // default leaves this NodeMetrics bridge in place. Concrete plus forwarding interface: one instance also holds the VRAM record the cost collector reads.
+        builder.Services.AddSingleton<LocalModelPerfLog>();
         builder.Services.AddSingleton<NodeMetricsLlamaServerLoadTelemetry>();
         builder.Services.AddSingleton<ILlamaServerLoadTelemetry>(services => services.GetRequiredService<NodeMetricsLlamaServerLoadTelemetry>());
 

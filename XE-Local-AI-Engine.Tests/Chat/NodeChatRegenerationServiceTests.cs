@@ -4362,7 +4362,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             return Task.CompletedTask;
         }
 
-        public Task ReportInvocationPhaseAsync(Guid invocationId, InvocationRuntimePhase phase)
+        public Task ReportInvocationPhaseAsync(Guid invocationId, InvocationRuntimePhase phase, InvocationRuntimePhaseDetail? detail = null)
         {
             if (CurrentInvocation is not null)
             {

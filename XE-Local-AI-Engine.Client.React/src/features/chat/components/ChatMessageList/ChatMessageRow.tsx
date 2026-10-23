@@ -33,6 +33,7 @@ interface ChatMessageRowProps {
 	reasoningEffort?: ReasoningEffort;
 	isWorkSessionConversation: boolean;
 	renderAfterMessage?: (messageId: string) => ReactNode;
+	showTurnThroughput: boolean;
 }
 
 // The single row renderer shared by the plain and the virtualized paths, so the two can never disagree on
@@ -56,6 +57,7 @@ export function ChatMessageRow({
 	reasoningEffort,
 	isWorkSessionConversation,
 	renderAfterMessage,
+	showTurnThroughput,
 }: ChatMessageRowProps) {
 	// Before the first token the queued/loading status sits inside the bubble (the placeholder text or the queued
 	// badge always gives that bubble content); once content starts it moves below the bubble as the footer.
@@ -68,6 +70,9 @@ export function ChatMessageRow({
 			isActive={scopedStreamingMessage.isActive}
 			runtimePhase={scopedStreamingMessage.runtimePhase}
 			runtimePhaseChangedAtUtc={scopedStreamingMessage.runtimePhaseChangedAtUtc}
+			runtimePhaseReason={scopedStreamingMessage.runtimePhaseReason}
+			runtimePhaseLastLoadMs={scopedStreamingMessage.runtimePhaseLastLoadMs}
+			modelName={streamingAssistantMessage?.model}
 		/>
 	) : undefined;
 
@@ -145,6 +150,7 @@ export function ChatMessageRow({
 			reasoningEffort={reasoningEffort}
 			failureCategory={(isStreamingTarget ? scopedStreamingMessage?.failureCategory : undefined) ?? message.failureCategory}
 			isWorkSessionConversation={isWorkSessionConversation}
+			showTurnThroughput={showTurnThroughput}
 			bubbleStatus={isStreamingTarget && isStatusInBubble ? streamingIndicator : undefined}
 			footer={isStreamingTarget && !isStatusInBubble ? streamingIndicator : undefined}
 		/>

@@ -1,5 +1,6 @@
 import { Badge, Loader, Text } from "@mantine/core";
 import { IconClock } from "@tabler/icons-react";
+import type { TFunction } from "i18next";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -26,6 +27,28 @@ interface StreamingIndicatorProps {
 	// Server-stamped ISO-8601 UTC time of that phase transition. Anchors the cold-load elapsed timer so a
 	// reload mid-load resumes the count; absent (older node, cloud/Ollama) falls back to first-observed time.
 	runtimePhaseChangedAtUtc?: string | null;
+	// Why the model loads ("first-load" | "idle-unloaded" | "evicted-for-cap" | "evicted-for-memory") and how long its
+	// previous load took; both absent from an older node, which keeps the plain "Loading model…" text.
+	runtimePhaseReason?: string | null;
+	runtimePhaseLastLoadMs?: number | null;
+	// The model being loaded, when the turn knows it; absent keeps "Loading model…".
+	modelName?: string | null;
+}
+
+// The wire reason as words; an unknown value from a newer node shows no reason rather than a raw token.
+function loadReasonText(reason: string | null | undefined, t: TFunction): string | undefined {
+	switch (reason) {
+		case "first-load":
+			return t("pages.chat.loadingModelReason.firstLoad", "first load");
+		case "idle-unloaded":
+			return t("pages.chat.loadingModelReason.idleUnloaded", "unloaded after idle");
+		case "evicted-for-cap":
+			return t("pages.chat.loadingModelReason.evictedForCap", "unloaded to stay within the loaded-model limit");
+		case "evicted-for-memory":
+			return t("pages.chat.loadingModelReason.evictedForMemory", "unloaded to free memory for another model");
+		default:
+			return undefined;
+	}
 }
 
 export function StreamingIndicator({
@@ -35,6 +58,9 @@ export function StreamingIndicator({
 	isActive,
 	runtimePhase,
 	runtimePhaseChangedAtUtc,
+	runtimePhaseReason,
+	runtimePhaseLastLoadMs,
+	modelName,
 }: StreamingIndicatorProps) {
 	const { t } = useTranslation();
 	const [elapsedMs, setElapsedMs] = useState(0);
@@ -86,6 +112,19 @@ export function StreamingIndicator({
 	// A cold model load happens before the first token: show a distinct "Loading model…" affordance (with a spinner)
 	// so the wait reads as legitimate progress rather than an apparent hang. Only while active and before content.
 	if (isModelLoading) {
+		// "Loading <model> (unloaded after idle · about 9s last time)": each part only when the node sent it.
+		const loadDetail = [
+			loadReasonText(runtimePhaseReason, t),
+			runtimePhaseLastLoadMs != null && runtimePhaseLastLoadMs > 0
+				? t("pages.chat.loadingModelLastLoad", "about {{duration}} last time", {
+						duration: formatDurationCompact(runtimePhaseLastLoadMs),
+					})
+				: undefined,
+		].filter(Boolean);
+		const loadingText =
+			modelName != null && modelName.trim().length > 0
+				? t("pages.chat.loadingModelNamed", "Loading {{model}}…", { model: modelName })
+				: t("pages.chat.loadingModel", "Loading model…");
 		return (
 			<Text
 				size="sm"
@@ -95,7 +134,12 @@ export function StreamingIndicator({
 				data-testid="chat-stream-loading-model-indicator"
 			>
 				<Loader size={12} type="dots" />
-				{t("pages.chat.loadingModel", "Loading model…")}
+				{loadingText}
+				{loadDetail.length > 0 ? (
+					<span data-testid="chat-stream-loading-model-detail">
+						{t("pages.chat.loadingModelDetail", "({{detail}})", { detail: loadDetail.join(" · ") })}
+					</span>
+				) : null}
 				<span data-testid="chat-stream-loading-model-elapsed">
 					{t("pages.chat.loadingModelElapsed", "· {{elapsed}}", { elapsed: formatDurationCompact(elapsedMs) })}
 				</span>

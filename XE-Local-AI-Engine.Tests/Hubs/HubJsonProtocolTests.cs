@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.SignalR.Protocol;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -68,6 +69,40 @@ public sealed class HubJsonProtocolTests
         AssertEx.Contains(frame, "\"status\":\"Succeeded\"");
         AssertEx.Contains(frame, "\"triggeredBy\":\"Schedule\"");
         AssertEx.Contains(frame, "\"manualFireId\":\"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\"");
+    }
+
+    /// <summary>U6/U7: the loading-phase detail and the terminal throughput, in the spelling the SPA's hand-written stream types read.</summary>
+    [Test]
+    public void ChatStreamEvent_SerializesThePhaseDetailAndTheThroughputInCamelCase()
+    {
+        var payload = new ChatStreamEvent
+        {
+            Type = ChatStreamEventTypes.AssistantCompleted,
+            ConversationId = Guid.Parse("11111111-2222-3333-4444-555555555555"),
+            MessageId = Guid.Parse("11111111-2222-3333-4444-555555555555"),
+            RequestId = Guid.Parse("11111111-2222-3333-4444-555555555555"),
+            Status = "completed",
+            Sequence = 1,
+            OccurredAtUtc = 1758000000000,
+            RuntimePhaseReason = "evicted-for-memory",
+            RuntimePhaseLastLoadMs = 9000.5,
+            Throughput = new NodeChatThroughputDto
+            {
+                TimeToFirstTokenMs = 1400.25,
+                PromptTokens = 2100,
+                PromptMs = 350.5,
+                GenerationTokens = 150,
+                GenerationMs = 2000,
+                CachedPromptTokens = 2080
+            }
+        };
+
+        var frame = WriteFrame("chatStreamEvent", payload);
+
+        AssertEx.Contains(frame, "\"runtimePhaseReason\":\"evicted-for-memory\"");
+        AssertEx.Contains(frame, "\"runtimePhaseLastLoadMs\":9000.5");
+        AssertEx.Contains(frame,
+            "\"throughput\":{\"timeToFirstTokenMs\":1400.25,\"promptTokens\":2100,\"promptMs\":350.5,\"generationTokens\":150,\"generationMs\":2000,\"cachedPromptTokens\":2080}");
     }
 
     // The host's registered JSON hub protocol — the same instance a live connection writes through, so what it

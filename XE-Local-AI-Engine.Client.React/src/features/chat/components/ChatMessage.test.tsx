@@ -501,6 +501,37 @@ describe("ChatMessage actions", () => {
 		expect(screen.queryByTestId("chat-message-menu-user-1")).toBeNull();
 	});
 
+	// U7: the per-turn throughput line follows its own switch (the UI mode, decided by the shell), not the tokens/sec toggle.
+	it.each([
+		[true, true],
+		[false, false],
+	])("with showTurnThroughput %s shows the throughput line: %s", (showTurnThroughput, shown) => {
+		renderWithProviders(
+			<ChatMessage
+				message={assistantMessage({ throughput: { timeToFirstTokenMs: 1_400, generationTokens: 150, generationMs: 2_000 } })}
+				showTurnThroughput={showTurnThroughput}
+			/>,
+		);
+
+		expect(screen.queryByTestId("chat-message-throughput-assistant-1") !== null).toBe(shown);
+	});
+
+	it("shows no throughput line for a turn without throughput, nor while the turn streams", () => {
+		const { rerender } = renderWithProviders(<ChatMessage message={assistantMessage()} showTurnThroughput={true} />);
+		expect(screen.queryByTestId("chat-message-throughput-assistant-1")).toBeNull();
+
+		rerender(
+			withProviders(
+				<ChatMessage
+					message={assistantMessage({ throughput: { generationTokens: 150, generationMs: 2_000 } })}
+					showTurnThroughput={true}
+					isStreaming={true}
+				/>,
+			),
+		);
+		expect(screen.queryByTestId("chat-message-throughput-assistant-1")).toBeNull();
+	});
+
 	it("does not show tokens/sec by default even when duration and tokens are present", () => {
 		renderWithProviders(
 			<ChatMessage

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client;
 
 using System.Data.Common;
+using System.Diagnostics;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
@@ -283,6 +284,14 @@ public sealed partial class Program
 #pragma warning restore CA2000
         desktopLifecycle.Activate();
         lifetime.ApplicationStopped.Register(desktopLifecycle.Dispose);
+    }
+
+    /// <summary>Logs how long one named startup phase took since <paramref name="startTimestamp" />; returns now, the next phase's start.</summary>
+    private static long LogStartupPhase(string phase, long startTimestamp)
+    {
+        var now = Stopwatch.GetTimestamp();
+        Log.Information("Startup phase {Phase} took {ElapsedMs} ms", phase, Math.Round(Stopwatch.GetElapsedTime(startTimestamp, now).TotalMilliseconds));
+        return now;
     }
 
     private static void ActivateInvocationResumeRegistry(IServiceProvider services)

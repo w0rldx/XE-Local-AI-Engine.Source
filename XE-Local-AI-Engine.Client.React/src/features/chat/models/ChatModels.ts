@@ -14,7 +14,7 @@ export type { ReasoningEffort };
 import type { PendingUserQuestion } from "@/features/chat/api/AskUserQuestionWire";
 import type { ChatAttachment, PendingAttachmentUpload } from "@/features/chat/models/ChatAttachmentModels";
 import type { ContextWindowSnapshot } from "@/features/chat/models/ContextWindowModels";
-import type { NodeChatWebReviewPreviewDto } from "@/features/chat/models/NodeChatStreamTypes";
+import type { ChatTurnThroughput, NodeChatWebReviewPreviewDto } from "@/features/chat/models/NodeChatStreamTypes";
 
 export type ChatRole = "user" | "assistant" | "system" | "tool";
 
@@ -158,6 +158,9 @@ export interface ChatMessageModel {
 	reasoningTokens?: number;
 	// Context-window snapshot of the turn's last provider round; absent for user, legacy and pre-feature rows.
 	contextWindow?: ContextWindowSnapshot;
+	// Time to first token and prompt/generation throughput of an assistant turn; absent for user, legacy and cloud rows
+	// that reported none. Rendered as one muted line in Advanced UI mode only.
+	throughput?: ChatTurnThroughput;
 	parentMessageId?: string;
 	variantGroupId?: string;
 	// Ordered interleave (reasoning → tool → reasoning → …) for an assistant turn. Drives the in-order render of
@@ -269,6 +272,9 @@ export interface ChatStreamingState {
 	// Server-stamped ISO-8601 UTC time of the runtime-phase transition, carried on the same assistant-phase
 	// event. Anchors the cold-load elapsed timer so a reload mid-load resumes the count instead of restarting.
 	runtimePhaseChangedAtUtc?: string;
+	// Why the loading phase loads the model and how long its previous load took, off the same assistant-phase event.
+	runtimePhaseReason?: string;
+	runtimePhaseLastLoadMs?: number;
 	error?: string;
 	failureCategory?: string;
 	inputTokens?: number;
@@ -492,6 +498,9 @@ export interface ChatDisplayShellProps {
 	inputStatus: ChatInputStatus;
 	conversationSearchQuery?: string;
 	showArchivedConversations?: boolean;
+	// The sidebar holds only the most recent page; it then offers "Show all" through onShowAllConversations.
+	conversationListTruncated?: boolean;
+	onShowAllConversations?: () => void;
 	mutatingConversationId?: string;
 	onSelectConversation: (conversationId: string) => void;
 	onCreateConversation: () => void;

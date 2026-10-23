@@ -42,6 +42,8 @@ interface ChatMessageProps {
 	// The conversation belongs to a work session. Scopes the step-cap notice below so the same text in an ordinary
 	// chat still renders as the red failure it is there.
 	isWorkSessionConversation?: boolean;
+	// Advanced UI mode (decision D2): show the turn's time to first token, decode rate and cached prompt tokens.
+	showTurnThroughput?: boolean;
 }
 
 // Memoized: during a streaming turn the parent ChatMessageList re-renders every frame, but prior turns receive
@@ -66,6 +68,7 @@ export const ChatMessage = memo(function ChatMessage({
 	reasoningEffort,
 	failureCategory,
 	isWorkSessionConversation = false,
+	showTurnThroughput = false,
 }: ChatMessageProps) {
 	const { t } = useTranslation();
 	const showTokensPerSecond = useNodeChatPreferencesStore((state) => state.showTokensPerSecond);
@@ -125,6 +128,7 @@ export const ChatMessage = memo(function ChatMessage({
 			reasoningEffort={reasoningEffort}
 			failureCategory={failureCategory}
 			showTokensPerSecond={showTokensPerSecond}
+			showTurnThroughput={showTurnThroughput}
 		/>
 	);
 });

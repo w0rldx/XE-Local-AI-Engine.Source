@@ -2203,8 +2203,10 @@
 				"searchAria": "Unterhaltungen durchsuchen",
 				"searchPlaceholder": "Suchen",
 				"show": "Seitenleiste ausklappen",
+				"showAll": "Alle anzeigen",
 				"showArchived": "Archivierte anzeigen",
 				"title": "Unterhaltungen",
+				"truncatedNotice": "Die 100 neuesten werden angezeigt",
 				"unarchive": "Aus Archiv holen",
 				"unpin": "Nicht mehr anheften",
 				"untitled": "Unbenannte Unterhaltung"
@@ -2278,7 +2280,16 @@
 			"loadingHistory": "Lokaler Chat-Verlauf wird geladen…",
 			"loadingMessages": "Nachrichten werden geladen…",
 			"loadingModel": "Modell wird geladen…",
+			"loadingModelDetail": "({{detail}})",
 			"loadingModelElapsed": "· {{elapsed}}",
+			"loadingModelLastLoad": "zuletzt etwa {{duration}}",
+			"loadingModelNamed": "{{model}} wird geladen…",
+			"loadingModelReason": {
+				"evictedForCap": "entladen, um das Limit geladener Modelle einzuhalten",
+				"evictedForMemory": "entladen, um Speicher für ein anderes Modell freizugeben",
+				"firstLoad": "erstes Laden",
+				"idleUnloaded": "nach Leerlauf entladen"
+			},
 			"localDefaultModel": {
 				"displayName": "Lokaler Laufzeit-Standard",
 				"label": "Lokaler Standard",
@@ -2467,6 +2478,11 @@
 				"title": "Tool-Freigabe erforderlich"
 			},
 			"turnParked": "Eine Antwort in dieser Unterhaltung wartet auf Ihre Eingabe. Beantworten Sie die wartende Karte und senden Sie dann erneut.",
+			"turnThroughput": {
+				"cached": "{{value}} aus dem Cache",
+				"timeToFirstToken": "{{value}} s bis zum ersten Token",
+				"tokensPerSecond": "{{value}} Tok/s"
+			},
 			"unknownError": "Unbekannter Fehler",
 			"waitingForResponse": "Warten auf Antwort",
 			"waitingForStreamedResponse": "Warten auf gestreamte Antwort",

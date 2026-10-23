@@ -8,7 +8,9 @@ export const nodeChatQueryKeys = {
 	// conversation detail AND each detail's `files` child (the per-turn refresh once did that: the detail refetched
 	// twice per turn — once directly, once via the broad prefix landing mid-flight — and uploads refetched for free).
 	conversationLists: () => [...nodeChatQueryKeys.conversations(), "list"] as const,
-	conversationList: (includeArchived: boolean) => [...nodeChatQueryKeys.conversationLists(), includeArchived] as const,
+	// `limited`: the most-recent page versus every conversation ("Show all"); the two variants cache separately.
+	conversationList: (includeArchived: boolean, limited: boolean) =>
+		[...nodeChatQueryKeys.conversationLists(), includeArchived, limited] as const,
 	conversation: (conversationId: string) => [...nodeChatQueryKeys.conversations(), conversationId] as const,
 	// Per-conversation uploaded-file (attachment) list. Keyed by conversation id so switching conversations
 	// loads that thread's own attachments and a brand-new conversation starts empty.

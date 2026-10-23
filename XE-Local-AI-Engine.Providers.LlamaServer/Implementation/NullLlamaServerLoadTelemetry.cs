@@ -7,4 +7,8 @@ internal sealed class NullLlamaServerLoadTelemetry : ILlamaServerLoadTelemetry
     public void RecordLoad(LlamaServerLoadObservation observation)
     {
     }
+
+    public void RecordUnload(string modelName, ModelRole role, LlamaServerUnloadReason reason)
+    {
+    }
 }

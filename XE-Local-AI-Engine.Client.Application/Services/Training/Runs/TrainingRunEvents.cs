@@ -268,7 +268,11 @@ public sealed class TrainingRunQueueSignal : ITrainingRunQueueSignal, IDisposabl
 
 public sealed class TrainingRunQueueOptions
 {
-    public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(1);
+    /// <summary>
+    ///     The idle fallback behind <see cref="ITrainingRunQueueSignal" />: enqueue, resume and cancel wake the queue, and
+    ///     queued work the gate or the loaded model refused retries every second on its own.
+    /// </summary>
+    public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
     ///     How long the trainer may emit nothing parseable before the run is killed. A silent trainer is either wedged

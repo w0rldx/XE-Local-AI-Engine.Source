@@ -6917,7 +6917,7 @@ public sealed partial class NodeChatStreamServiceTests
             return Task.CompletedTask;
         }
 
-        public Task ReportInvocationPhaseAsync(Guid invocationId, InvocationRuntimePhase phase)
+        public Task ReportInvocationPhaseAsync(Guid invocationId, InvocationRuntimePhase phase, InvocationRuntimePhaseDetail? detail = null)
         {
             if (CurrentInvocation is not null)
             {
@@ -6929,6 +6929,7 @@ public sealed partial class NodeChatStreamServiceTests
                 }
 
                 CurrentInvocation.RuntimePhase = phase;
+                CurrentInvocation.RuntimePhaseDetail = detail;
             }
 
             return Task.CompletedTask;

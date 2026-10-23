@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.OpenAICompat;
 
 /// <summary>
@@ -30,15 +31,19 @@ public sealed class LocalRuntimeWarmer
     private readonly IModelTrustResolver _modelTrustResolver;
     private readonly ILocalModelProviderResolver _providerResolver;
     private readonly TimeProvider _timeProvider;
+    private readonly LocalModelPerfLog? _perfLog;
 
+    /// <param name="perfLog">Why a model is unloaded and how long its last load took, for the loading phase's detail; null reports none.</param>
     public LocalRuntimeWarmer(ILocalModelProviderResolver providerResolver,
         IActiveCloudChatClientFactory activeCloudFactory,
         IModelTrustResolver modelTrustResolver,
         ICloudModelResolver cloudModelResolver,
         ILogger<LocalRuntimeWarmer> logger,
         TimeProvider timeProvider,
-        IGpuWorkGate gpuWorkGate)
+        IGpuWorkGate gpuWorkGate,
+        LocalModelPerfLog? perfLog = null)
     {
+        _perfLog = perfLog;
         ArgumentNullException.ThrowIfNull(gpuWorkGate);
         _gpuWorkGate = gpuWorkGate;
         ArgumentNullException.ThrowIfNull(activeCloudFactory);
@@ -105,7 +110,7 @@ public sealed class LocalRuntimeWarmer
 
         // Phase: preparing runtime → loading model. Both fire BEFORE the stream-idle watchdog is armed.
         await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.PreparingRuntime);
-        await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.LoadingModel);
+        await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.LoadingModel, LoadingDetail(resolvedModel));
         if (GpuWorkHolderNotice.ForModelLoad(_gpuWorkGate, invocationId) is { } gpuWorkNotice)
         {
             // The load waits for the exclusive job (R7-03); without this the loading state carries no reason.
@@ -300,6 +305,40 @@ public sealed class LocalRuntimeWarmer
             _logger.LogDebug(exception, "Skipping runtime warm for invocation {InvocationId}: could not resolve a local provider for the model.", invocationId);
             return null;
         }
+    }
+
+    /// <summary>
+    ///     Why this load happens and how long the model's previous load took, from <see cref="LocalModelPerfLog" />; null when
+    ///     no log is wired.
+    /// </summary>
+    /// <remarks>
+    ///     No history means this process never loaded the model. A history whose model is still loaded, or was lost in a
+    ///     way the supervisor did not cause, has no reason: the warm then returns at once or the cause is unknown.
+    /// </remarks>
+    internal InvocationRuntimePhaseDetail? LoadingDetail(string resolvedModel)
+    {
+        if (_perfLog is null)
+        {
+            return null;
+        }
+
+        if (_perfLog.TryGetLoadHistory(resolvedModel, ModelRole.Chat) is not { } history)
+        {
+            return new InvocationRuntimePhaseDetail { Reason = InvocationRuntimePhaseReasons.FirstLoad };
+        }
+
+        var reason = history.LastUnloadReason switch
+        {
+            LlamaServerUnloadReason.IdleTimeout => InvocationRuntimePhaseReasons.IdleUnloaded,
+            LlamaServerUnloadReason.LoadedModelCap => InvocationRuntimePhaseReasons.EvictedForCap,
+            LlamaServerUnloadReason.MemoryForAnotherModel => InvocationRuntimePhaseReasons.EvictedForMemory,
+            _ => null
+        };
+        return new InvocationRuntimePhaseDetail
+        {
+            Reason = reason,
+            LastLoadMs = history.LastReadyLoadMs
+        };
     }
 
     /// <summary>Records the model-readiness duration + outcome on <see cref="NodeMetrics" /> and returns the elapsed milliseconds.</summary>
