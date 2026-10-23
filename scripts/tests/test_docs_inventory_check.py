@@ -131,6 +131,18 @@ Do the thing; it prevents the failure. Authority: a test.
 Also short.
 """
 
+SCRIPTS_README_MD = """# scripts/
+
+## Scripts
+
+- [`alpha.sh`](alpha.sh) — One line.
+- [`beta.py`](beta.py) — One line.
+
+## Subfolders
+
+- [`lib/`](lib/) — Holds nothing.
+"""
+
 PROPOSED_TOPIC_MD = """# Proposed
 
 ### PROPOSED: a long pending rule
@@ -177,6 +189,12 @@ class DocsInventoryCheckTests(unittest.TestCase):
         topics.mkdir()
         (topics / "build.md").write_text(BUILD_TOPIC_MD, encoding="utf-8")
         (topics / "proposed.md").write_text(PROPOSED_TOPIC_MD, encoding="utf-8")
+
+        scripts = root / "scripts"
+        (scripts / "lib").mkdir(parents=True)
+        for name in ("alpha.sh", "beta.py"):
+            (scripts / name).write_text("#!/usr/bin/env bash\n# One line.\n", encoding="utf-8")
+        (scripts / "README.md").write_text(SCRIPTS_README_MD, encoding="utf-8")
 
         # main() runs check_markdown_links over `git ls-files`, so the miniature repository is a git repository.
         if shutil.which("git") is None:
@@ -320,6 +338,46 @@ class DocsInventoryCheckTests(unittest.TestCase):
         result = MODULE.check_solution_projects(root)
 
         self.assertEqual(["Contoso.Two"], [item.name for item in result.missing])
+
+    def test_scripts_readme_passes_when_every_script_has_a_row(self) -> None:
+        result = MODULE.check_scripts_readme(self.make_repo())
+
+        # The subfolder row is not a script and the README itself is not one either.
+        self.assertEqual(("alpha.sh", "beta.py"), result.inventory)
+        self.assertEqual((), result.missing)
+
+    def test_scripts_readme_reports_a_script_without_a_row(self) -> None:
+        root = self.make_repo()
+        (root / "scripts" / "gamma.sh").write_text("#!/usr/bin/env bash\n# New.\n", encoding="utf-8")
+
+        result = MODULE.check_scripts_readme(root)
+
+        self.assertEqual(
+            ["MISSING scripts-readme: gamma.sh — expected in scripts/README.md"],
+            [item.render() for item in result.missing],
+        )
+
+    def test_scripts_readme_reports_a_row_whose_script_is_gone(self) -> None:
+        root = self.make_repo()
+        (root / "scripts" / "beta.py").unlink()
+
+        result = MODULE.check_scripts_readme(root)
+
+        self.assertEqual(
+            [
+                "STALE scripts-readme: scripts/README.md: row beta.py names no script; "
+                "re-run scripts/generate-scripts-readme.py"
+            ],
+            [item.render() for item in result.missing],
+        )
+
+    def test_scripts_readme_raises_when_scripts_holds_no_script(self) -> None:
+        root = self.make_repo()
+        for name in ("alpha.sh", "beta.py"):
+            (root / "scripts" / name).unlink()
+
+        with self.assertRaises(MODULE.InventoryError):
+            MODULE.check_scripts_readme(root)
 
     def test_an_empty_inventory_raises_instead_of_passing_vacuously(self) -> None:
         root = self.make_repo()
@@ -833,7 +891,7 @@ class DocsInventoryCheckTests(unittest.TestCase):
         )
 
         self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
-        self.assertIn("12 checks", completed.stdout)
+        self.assertIn("13 checks", completed.stdout)
 
     def test_main_is_clean_on_the_real_repository(self) -> None:
         stdout = io.StringIO()

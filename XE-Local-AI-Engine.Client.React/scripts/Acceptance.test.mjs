@@ -8,6 +8,7 @@ import test from "node:test";
 const { scripts } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 const stages = [
 	"node:check",
+	"licenses:check",
 	"lint",
 	"knip",
 	"signalr:check",

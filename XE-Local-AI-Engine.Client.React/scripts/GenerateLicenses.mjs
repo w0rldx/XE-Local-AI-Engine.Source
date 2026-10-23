@@ -135,9 +135,15 @@ function collectFrontendPackages() {
  * restore inputs. Forcing a Release restore here prevents a prior IDE or command-line restore from
  * silently changing the dependency evidence consumed by the generator. Exact shipped-component
  * reconciliation remains the responsibility of the per-RID publish evidence and compliance gate.
+ *
+ * The restore skips the NuGet vulnerability audit (`NuGetAudit=false`): the license scan needs the package graph,
+ * not advisories, and the audit fetches advisory data once its cache expires, so with it an unreachable feed would
+ * fail `licenses:check` (and `acceptance`) even with every package cached. The build and CI keep the audit.
  */
+export const RELEASE_RESTORE_ARGS = ["-p:Configuration=Release", "-p:NuGetAudit=false", "--verbosity", "quiet"];
+
 function restoreSolutionForRelease() {
-	const result = spawnSync("dotnet", ["restore", solutionPath, "-p:Configuration=Release", "--verbosity", "quiet"], {
+	const result = spawnSync("dotnet", ["restore", solutionPath, ...RELEASE_RESTORE_ARGS], {
 		cwd: repoRoot,
 		encoding: "utf8",
 		maxBuffer: 64 * 1024 * 1024,

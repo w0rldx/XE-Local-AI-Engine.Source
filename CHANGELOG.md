@@ -631,6 +631,11 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Internal
 
+- **Developer workflow** — `pnpm run acceptance` runs `licenses:check` (the most frequent CI red was a license manifest
+  nobody checked locally); a root `mise.toml` pins the CI toolchain (Node 22, pnpm, uv; the SDK stays in `global.json`);
+  `scripts/regen-after-merge.sh` regenerates and stages the generated and sorted frontend files after a merge;
+  `scripts/dev-start.sh` writes `.tmp/dev-endpoints.json` with the current app URL; `scripts/README.md` indexes every
+  script from its header and the docs inventory check keeps it complete.
 - **Safety nets** — two new Architecture tests: the save and materialization encryption interceptors must list the
   same columns, and no `ExecuteUpdate` may target an encrypted column; every feature `*NotFoundException` /
   `*ConflictException` / `*ValidationException` / `*UnavailableException` is either named by an exception handler or

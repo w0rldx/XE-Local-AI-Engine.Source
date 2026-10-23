@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 # run-backend-tests.sh — THE local backend gate: one build, then every enrolled test project.
 #
+# Layers, top to bottom (each is a section below):
+#   lock          re-runs itself through with-build-lock.sh unless the lock is already held
+#   build         one Release build of the solution (skipped by NO_BUILD=1)
+#   fail-fast     the Architecture namespace alone under assembly-guard.sh; red exits 1 here
+#   sizing        lib/test-sizing.sh turns free RAM into JOBS for the batched lane
+#   lanes         concurrent: XE-Local-AI-Engine.Tests via run-tests-memory-safe.sh (which sources
+#                 lib/test-sizing.sh too) | every other enrolled project via dotnet test --no-build
+#                 | contracts via run-release-contract-tests.sh when scripts/, publish/ or workflows changed
+#   history row   one line appended to <main checkout>/.tmp/gate-history.log, then the exit code
+#
 # What it replaces
 #   The documented gate used to be a solution-wide `dotnet test XE-Local-AI-Engine.slnx
 #   --max-parallel-test-modules 1`, which serialized the three test modules because MTP's default

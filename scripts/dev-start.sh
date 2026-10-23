@@ -16,6 +16,8 @@ Usage: scripts/dev-start.sh [--no-build]
 
 Starts the current checkout/worktree's explicit AppHost with Aspire isolated
 mode, randomized ports, isolated user secrets, and non-interactive output.
+Once the host is up it writes the loopback app and dashboard URLs, the AppHost
+PID, the start time and the checkout to .tmp/dev-endpoints.json (no token).
 EOF
     exit 0
     ;;
@@ -221,6 +223,10 @@ for _ in $(seq 1 30); do
         exit 1
       fi
       START_ATTEMPTED=false
+      # The host is up either way; a missing endpoints file only means tools fall back to dev-status.sh.
+      if ! XE_DEV_STATUS_SKIP_LAB_SCAN=1 "${DEV_SCRIPT_DIR}/dev-status.sh" --json 2>/dev/null | dev_write_endpoints; then
+        echo "[dev-start] WARNING: could not write ${DEV_ENDPOINTS_FILE}; dev-status.sh shows the URLs." >&2
+      fi
       exit 0
     fi
   else

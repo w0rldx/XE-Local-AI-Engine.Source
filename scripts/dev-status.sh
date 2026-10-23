@@ -103,6 +103,16 @@ for line in filter(None, sys.stdin.read().splitlines()):
                  "deleteAfter": delete_after or None, "status": state.lower()})
 print(json.dumps(rows))
 ' <<<"${LAB_TSV}")"
+ENDPOINTS_JSON="$(dev_endpoints_state_json)"
+print_endpoints_line() {
+  python3 -c '
+import json, sys
+state = json.loads(sys.argv[1])
+if state:
+    stale = " STALE (pid {} is not running)".format(state["pid"]) if state["stale"] else ""
+    print("[dev-status] endpoints={}{}".format(state["path"], stale))
+' "${ENDPOINTS_JSON}"
+}
 if app_json="$(dev_matching_app_json)"; then
   :
 else
@@ -112,9 +122,11 @@ else
     exit 4
   fi
   if [[ "${FORMAT}" == json ]]; then
-    printf '{"appHostPath":"%s","status":"stopped","resources":[],"labData":%s}\n' "${DEV_APPHOST}" "${LAB_JSON}"
+    printf '{"appHostPath":"%s","status":"stopped","resources":[],"endpointsFile":%s,"labData":%s}\n' \
+      "${DEV_APPHOST}" "${ENDPOINTS_JSON}" "${LAB_JSON}"
   else
     echo "[dev-status] stopped  ${DEV_APPHOST}"
+    print_endpoints_line
     print_lab_table
   fi
   exit 3
@@ -147,7 +159,7 @@ if [[ "${newest_spa_source}" =~ ^[0-9]+ ]]; then
   fi
 fi
 
-SPA_WARNING="${spa_warning}" LAB_JSON="${LAB_JSON}" DEV_APPHOST="${DEV_APPHOST}" STATUS_FORMAT="${FORMAT}" APP_JSON="${app_json}" python3 -c '
+ENDPOINTS_JSON="${ENDPOINTS_JSON}" SPA_WARNING="${spa_warning}" LAB_JSON="${LAB_JSON}" DEV_APPHOST="${DEV_APPHOST}" STATUS_FORMAT="${FORMAT}" APP_JSON="${app_json}" python3 -c '
 import json, os, sys
 from urllib.parse import urlsplit, urlunsplit
 
@@ -189,6 +201,7 @@ result = {
     "dashboardUrl": safe_url(app.get("dashboardUrl", "")),
     "resources": resources,
     "spaBundleWarning": os.environ["SPA_WARNING"] or None,
+    "endpointsFile": json.loads(os.environ["ENDPOINTS_JSON"]),
     "labData": json.loads(os.environ["LAB_JSON"]),
 }
 if os.environ["STATUS_FORMAT"] == "json":
@@ -205,4 +218,4 @@ else:
     if result["spaBundleWarning"]:
         print("[dev-status] WARNING: " + result["spaBundleWarning"])
 ' <<<"${describe_json}"
-[[ "${FORMAT}" == json ]] || print_lab_table
+[[ "${FORMAT}" == json ]] || { print_endpoints_line; print_lab_table; }

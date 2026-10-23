@@ -3,7 +3,12 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { dedupeAndSort, isExcludedNativeBinary, normalizeLicense } from "./GenerateLicenses.mjs";
+import { dedupeAndSort, isExcludedNativeBinary, normalizeLicense, RELEASE_RESTORE_ARGS } from "./GenerateLicenses.mjs";
+
+test("the Release restore skips the NuGet audit so licenses:check works offline with cached packages", () => {
+	assert.ok(RELEASE_RESTORE_ARGS.includes("-p:NuGetAudit=false"));
+	assert.ok(RELEASE_RESTORE_ARGS.includes("-p:Configuration=Release"));
+});
 
 test("isExcludedNativeBinary matches rollup platform binaries on every OS but nothing shipped", () => {
 	for (const platformName of ["@rollup/rollup-linux-x64-gnu", "@rollup/rollup-win32-x64-msvc", "@rollup/rollup-darwin-arm64"]) {

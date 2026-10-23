@@ -23,6 +23,8 @@ worktree's processes.
 Scoped processes still alive after `aspire stop` get SIGTERM and then up to
 XE_DEV_STOP_GRACE_SECONDS (default 35, whole seconds) to finish their shutdown
 drain before SIGKILL.
+
+After a proven stop (or when nothing runs) it removes .tmp/dev-endpoints.json.
 EOF
     exit 0
     ;;
@@ -45,6 +47,11 @@ else
   if [[ "${query_status}" -ne 3 ]]; then
     echo "[dev-stop] Aspire state query failed or returned malformed JSON; refusing an unscoped fallback." >&2
     exit 4
+  fi
+  if [[ "${DRY_RUN}" == "true" ]]; then
+    [[ ! -e "${DEV_ENDPOINTS_FILE}" ]] || echo "[dev-stop] --dry-run: would remove ${DEV_ENDPOINTS_FILE}."
+  else
+    rm -f -- "${DEV_ENDPOINTS_FILE}"
   fi
   echo "[dev-stop] No running instance for ${DEV_APPHOST}."
   exit 0
@@ -161,6 +168,7 @@ fi
 # Success proves teardown only for the exact registered AppHost graph selected above. Processes
 # outside that graph may belong to another worktree and are deliberately neither killed nor used
 # to turn a successful scoped teardown into a global-machine failure.
+rm -f -- "${DEV_ENDPOINTS_FILE}"
 if [[ "${registration_gone}" == "true" && ${#survivors[@]} -eq 0 ]]; then
   echo "[dev-stop] Stopped."
 else

@@ -12,6 +12,10 @@ Thanks for your interest in XE Local AI Engine. This is an early-stage, Apache-2
 
 ## Development setup
 
+With [mise](https://mise.jdx.dev/), `mise install` at the repository root gives you the CI toolchain: the Node major,
+pnpm and uv pinned in [`mise.toml`](mise.toml), and the .NET SDK, which mise reads from `global.json`. Python comes
+through uv. Without mise, install the versions listed in `mise.toml` and the SDK per `global.json`.
+
 - .NET SDK per [`global.json`](global.json).
 - .NET 8 runtime for the pinned SBOM and dependency-license tools.
 - Node 22, the major CI uses; `pnpm run acceptance` enforces it, and the React

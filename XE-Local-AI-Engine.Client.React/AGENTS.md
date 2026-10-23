@@ -11,13 +11,16 @@ Run from this directory; `dotnet tool restore --tool-manifest ../dotnet-tools.js
 
 ```bash
 pnpm install --frozen-lockfile
-../scripts/with-build-lock.sh -- pnpm run acceptance   # validate + coverage + tooling tests + production bundle
-pnpm audit --prod --audit-level=high
+../scripts/with-build-lock.sh -- pnpm run acceptance   # licenses + validate + coverage + tooling tests + production bundle
 ```
 
 - Run `acceptance` under the build lock: vitest's timing assertions fail when a backend gate runs beside it.
   Its first step, `node:check` (`scripts/CheckNodeMajor.mjs`, whose header documents the override), fails on a Node
-  major other than CI's `client-react` job.
+  major other than CI's `client-react` job. Its second, `licenses:check`, regenerates the license manifest (frontend
+  and backend packages) and fails when it differs from the index, so a package bump anywhere in the repository reds
+  here as it does in CI; it needs the restored dotnet tools.
+- `acceptance` needs no network once packages are cached: `licenses:check` restores without the NuGet audit, so it
+  works offline. The vulnerability audit stays outside it because it queries the registry on every run.
 - `pnpm run build` remains a checked standalone build (lint + production bundle). The acceptance gate runs lint
   once through `validate`; `build:bundle` is its already-validated bundling step, including licenses and size checks.
 - Use `pnpm run validate`, `pnpm run test:coverage:check` and `pnpm run test:tooling` independently while iterating.
@@ -27,7 +30,8 @@ pnpm audit --prod --audit-level=high
   desktop backend: `OPENAPI_SPEC_URL=<spec-url> pnpm run openapi:check:live`; the repo-root
   `scripts/openapi-live-check.sh` starts an isolated host itself and builds it in Release first unless
   `OPENAPI_LIVE_SKIP_BUILD=1`.
-- After a dependency change: `pnpm run licenses:check`; on dependency-update branches `pnpm run dependencies:refresh`.
+- After a dependency change: `pnpm audit --prod --audit-level=high` (CI's last `client-react` step; `acceptance`
+  already ran `licenses:check`); on dependency-update branches `pnpm run dependencies:refresh`.
 - Knip and dependency-cruiser are no-growth baselines. Fix the code, do not widen the baseline without saying so.
 - `pnpm run doctor` (react-doctor) and `pnpm run spellCheck` are advisory, not gates.
 - E2E (`scripts/run-e2e-local.sh`, from the repo root) is ask-gated unless the task targets E2E behavior.
@@ -54,7 +58,8 @@ pnpm audit --prod --audit-level=high
   The `"New conversation"` literal in `Chat.tsx` stays untranslated (persisted, compared by exact string).
 - `src/locales/*.json` are kept sorted by key (`pnpm run locales:sort`, `scripts/SortLocales.mjs`); its `--check`
   runs in `lint`, so `acceptance` fails on an unsorted file. On a merge conflict in a locale file, take either side,
-  re-add the missing keys, and re-run the sort; never hand-merge. Both bundles are lazy chunks: `src/i18n.ts` exports
+  re-add the missing keys, and re-run the sort; never hand-merge. `../scripts/regen-after-merge.sh` re-runs the sort
+  with the client and license generators and stages their output. Both bundles are lazy chunks: `src/i18n.ts` exports
   `i18nReady`, `Main.tsx` holds the first render on it and the vitest setup awaits it.
 - Dependency decisions that look like dead weight but are not: `recharts` is a required peer of `@mantine/charts`.
   The exact `@types/node` and `jsdom` versions in `package.json` are deliberate: the first sits behind pnpm's

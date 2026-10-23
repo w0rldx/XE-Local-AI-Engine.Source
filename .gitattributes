@@ -15,7 +15,8 @@
 scripts/* text eol=lf
 
 # Generated output: collapsed in GitHub diffs and left out of language stats. Never hand-merge a conflict in
-# these; take either side and regenerate (docs/wiki/13-testing-and-validation.md, "Generated and sorted files").
+# these; take either side and regenerate (docs/wiki/13-testing-and-validation.md, "Generated and sorted files");
+# scripts/regen-after-merge.sh regenerates and stages the client, the license manifest and the sorted locales.
 # No `-diff`: a regenerated file must still show its real change in review.
 XE-Local-AI-Engine.Client.React/src/core/api/generated/** linguist-generated=true
 XE-Local-AI-Engine.Client.React/openapi/v1.json linguist-generated=true

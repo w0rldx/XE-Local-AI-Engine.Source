@@ -1,0 +1,16 @@
+# The toolchain CI uses (.github/workflows/build-and-test.yml). `mise install` gives it; without mise, install
+# these versions yourself. Bump a pin here together with the CI value it mirrors.
+#
+# The .NET SDK is pinned in global.json, not here: the setting below makes mise read that file's sdk.version, so the
+# SDK pin has one home and a second `dotnet` entry here could never disagree with it.
+
+[tools]
+# The major CI's client-react job runs; scripts/CheckNodeMajor.mjs reads the same value from the workflow.
+node = "22"
+# package.json "packageManager".
+pnpm = "11.27.0"
+# No python entry: Python comes through uv, which provisions the interpreter the scripts and tools/training ask for.
+uv = "0.11.30"
+
+[settings]
+idiomatic_version_file_enable_tools = ["dotnet"]

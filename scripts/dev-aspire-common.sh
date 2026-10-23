@@ -160,6 +160,81 @@ else:
 '
 }
 
+# The checkout's current loopback URLs for tools that cannot guess the per-start port: written by dev-start.sh once the
+# host is up, removed by dev-stop.sh, reported (and flagged stale) by dev-status.sh. It lives in the .tmp/ of the
+# checkout that owns the AppHost and never holds a token. XE_DEV_ENDPOINTS_FILE overrides the path (tests).
+DEV_ENDPOINTS_FILE="${XE_DEV_ENDPOINTS_FILE:-$(dirname "$(dirname "${DEV_APPHOST}")")/.tmp/dev-endpoints.json}"
+
+# Reads `dev-status.sh --json` on stdin and writes DEV_ENDPOINTS_FILE atomically. Only loopback URLs are kept; returns 1
+# without writing when there is no loopback `app` URL or no AppHost PID.
+dev_write_endpoints() {
+  DEV_ENDPOINTS_FILE="${DEV_ENDPOINTS_FILE}" DEV_CHECKOUT="$(dirname "$(dirname "${DEV_APPHOST}")")" python3 -c '
+import datetime, ipaddress, json, os, sys
+from urllib.parse import urlsplit, urlunsplit
+
+def loopback(url):
+    try:
+        parts = urlsplit(str(url))
+        host = parts.hostname or ""
+        if host != "localhost" and not ipaddress.ip_address(host).is_loopback:
+            return None
+    except ValueError:
+        return None
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+
+try:
+    status = json.load(sys.stdin)
+except json.JSONDecodeError:
+    raise SystemExit(1)
+urls = [u for r in status.get("resources", []) if r.get("name") == "app"
+        for u in (loopback(x.get("url")) for x in r.get("urls", [])) if u]
+app_url = next((u for u in urls if u.startswith("https:")), urls[0] if urls else None)
+pid = status.get("pid")
+if not app_url or not isinstance(pid, int) or pid <= 1:
+    raise SystemExit(1)
+path = os.environ["DEV_ENDPOINTS_FILE"]
+os.makedirs(os.path.dirname(path), exist_ok=True)
+document = {
+    "appUrl": app_url,
+    "dashboardUrl": loopback(status.get("dashboardUrl") or ""),
+    "pid": pid,
+    "startedAt": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    "worktree": os.environ["DEV_CHECKOUT"],
+}
+with open(path + ".tmp", "w", encoding="utf-8") as handle:
+    json.dump(document, handle, indent=2)
+    handle.write("\n")
+os.replace(path + ".tmp", path)
+'
+}
+
+# Prints `null` when DEV_ENDPOINTS_FILE is absent, else {"path", "pid", "stale"}: stale when the recorded PID is not a
+# live process (a crashed host or a stop that bypassed dev-stop.sh) or the file is unreadable.
+dev_endpoints_state_json() {
+  DEV_ENDPOINTS_FILE="${DEV_ENDPOINTS_FILE}" python3 -c '
+import json, os
+path = os.environ["DEV_ENDPOINTS_FILE"]
+if not os.path.exists(path):
+    print("null")
+    raise SystemExit
+try:
+    with open(path, encoding="utf-8") as handle:
+        pid = json.load(handle).get("pid")
+except (OSError, ValueError, AttributeError):
+    pid = None
+alive = False
+if isinstance(pid, int) and pid > 1:
+    try:
+        os.kill(pid, 0)
+        alive = True
+    except PermissionError:
+        alive = True
+    except (ProcessLookupError, OverflowError):
+        pass
+print(json.dumps({"path": path, "pid": pid, "stale": not alive}))
+'
+}
+
 dev_safe_url() {
   python3 -c '
 import sys

@@ -9,7 +9,9 @@ nobody thinks of as a documentation change, and the wiki page still reads as com
 This guard re-derives each inventory from the code and asserts every member is named in the page
 that claims to list it. It is deliberately a *mention* check, not a structural one: the wiki pages
 spell these names verbatim, so a substring match is enough to catch the failure that actually
-happens (a brand-new name nobody wrote down) without dictating how a page is laid out.
+happens (a brand-new name nobody wrote down) without dictating how a page is laid out. The same holds for
+`scripts/README.md`: every top-level `scripts/*.sh|*.py` needs a row there, and, because that index is generated
+(`scripts/generate-scripts-readme.py`), a row naming a script that no longer exists fails too.
 
 Every inventory must be non-empty. An inventory that silently resolves to zero items — a moved
 directory, a renamed source file, a regex that stopped matching — would make its check vacuously
@@ -79,6 +81,12 @@ MAP_HUB_RE = re.compile(r"MapHub<\s*(?P<hub>[A-Za-z0-9_]+)\s*>")
 NESTED_ROUTE_CLASS_RE = re.compile(r"^ {4}public static class (?P<name>[A-Za-z0-9_]+)\b", re.MULTILINE)
 SOLUTION_PROJECT_RE = re.compile(r"<Project\s+Path=\"(?P<path>[^\"]+)\"")
 NUMBERED_WIKI_PAGE_GLOB = "[0-9][0-9]-*.md"
+
+SCRIPTS_DIR = Path("scripts")
+SCRIPTS_README = SCRIPTS_DIR / "README.md"
+SCRIPT_SUFFIXES = (".sh", ".py")
+# A row of the index scripts/generate-scripts-readme.py writes: "- [`name`](name) — header line".
+SCRIPTS_README_ROW_RE = re.compile(r"^- \[`(?P<name>[^`/]+)`\]", re.MULTILINE)
 
 AGENT_KNOWLEDGE_INDEX = Path("docs/agent-knowledge.md")
 AGENT_KNOWLEDGE_DIR = Path("docs/agent-knowledge")
@@ -381,6 +389,26 @@ def check_solution_projects(root: Path) -> CheckResult:
     return build_result(check, PROJECT_LAYOUT_PAGE, read_text(root, PROJECT_LAYOUT_PAGE), inventory)
 
 
+def check_scripts_readme(root: Path) -> CheckResult:
+    """Every top-level scripts/*.sh|*.py has a row in scripts/README.md, and every script row names one that exists."""
+    check = "scripts-readme"
+    scripts_dir = root / SCRIPTS_DIR
+    if not scripts_dir.is_dir():
+        raise InventoryError(f"{SCRIPTS_DIR.as_posix()} does not exist under {root}")
+
+    names = (path.name for path in scripts_dir.iterdir() if path.is_file() and path.suffix in SCRIPT_SUFFIXES)
+    inventory = require_non_empty(check, SCRIPTS_DIR.as_posix(), names)
+    rows = {match.group("name") for match in SCRIPTS_README_ROW_RE.finditer(read_text(root, SCRIPTS_README))}
+
+    regenerate = "re-run scripts/generate-scripts-readme.py"
+    missing = [Missing(check, name, SCRIPTS_README) for name in inventory if name not in rows]
+    missing.extend(
+        Missing(check, name, SCRIPTS_README, problem=f"row {name} names no script; {regenerate}", label="STALE")
+        for name in sorted(rows.difference(inventory))
+    )
+    return CheckResult(check=check, doc=SCRIPTS_README, inventory=inventory, missing=tuple(missing))
+
+
 def agent_knowledge_topic_files(root: Path, check: str) -> list[Path]:
     topic_dir = root / AGENT_KNOWLEDGE_DIR
     if not topic_dir.is_dir():
@@ -667,6 +695,7 @@ CHECKS: tuple[Callable[[Path], CheckResult], ...] = (
     check_react_features,
     check_wiki_pages_linked,
     check_solution_projects,
+    check_scripts_readme,
     check_agent_knowledge_index,
     check_agent_knowledge_entries,
     check_markdown_links,

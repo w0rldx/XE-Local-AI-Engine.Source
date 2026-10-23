@@ -63,6 +63,8 @@ mkdir -p "${TEMP_ROOT}/proc"
 export XE_ASPIRE_PROC_ROOT="${TEMP_ROOT}/proc"
 # The lab-data scan reads the real main checkout's .tmp; it is exercised on a fake checkout at the end.
 export XE_DEV_STATUS_SKIP_LAB_SCAN=1
+# The real AppHost path is targeted, so keep the endpoints file out of the real checkout's .tmp/.
+export XE_DEV_ENDPOINTS_FILE="${TEMP_ROOT}/endpoints/dev-endpoints.json"
 
 assert_not_contains() {
   local value="$1" forbidden="$2"
@@ -103,10 +105,53 @@ assert_not_contains "${status_output}" "connectionString"
 assert_not_contains "${status_output}" "other-worktree"
 assert_not_contains "${status_output}" "other-secret"
 
+# dev-start.sh leaves the current loopback URLs in the endpoints file, token-free; dev-status reports it as live.
+endpoints="$(cat "${XE_DEV_ENDPOINTS_FILE}")"
+assert_not_contains "${endpoints}" "secret"
+python3 -c '
+import json, sys
+doc = json.loads(sys.argv[1])
+assert sorted(doc) == ["appUrl", "dashboardUrl", "pid", "startedAt", "worktree"], doc
+assert doc["appUrl"] == "https://localhost:4567/", doc
+assert doc["dashboardUrl"] == "https://localhost:12345/login", doc
+assert doc["pid"] == int(sys.argv[2]), doc
+assert doc["worktree"] == sys.argv[3], doc
+assert doc["startedAt"].endswith("Z"), doc
+' "${endpoints}" "$$" "${PROJECT_ROOT}" || { echo "FAIL: endpoints file: ${endpoints}" >&2; exit 1; }
+endpoints_state() { python3 -c 'import json, sys; print(json.dumps(json.load(sys.stdin)["endpointsFile"], sort_keys=True))'; }
+[[ "$(endpoints_state <<<"${status_output}")" == "{\"path\": \"${XE_DEV_ENDPOINTS_FILE}\", \"pid\": $$, \"stale\": false}" ]] \
+  || { echo "FAIL: dev-status --json endpointsFile: ${status_output}" >&2; exit 1; }
+grep -Fxq "[dev-status] endpoints=${XE_DEV_ENDPOINTS_FILE}" <<<"$("${SCRIPT_DIR}/dev-status.sh")" \
+  || { echo "FAIL: dev-status table lacks the live endpoints line" >&2; exit 1; }
+
 "${SCRIPT_DIR}/dev-stop.sh" --dry-run >/dev/null
-[[ -f "${FAKE_ASPIRE_STATE}" ]]
+[[ -f "${FAKE_ASPIRE_STATE}" && -f "${XE_DEV_ENDPOINTS_FILE}" ]]
 "${SCRIPT_DIR}/dev-stop.sh" >/dev/null
 [[ ! -f "${FAKE_ASPIRE_STATE}" ]]
+[[ ! -e "${XE_DEV_ENDPOINTS_FILE}" ]] || { echo "FAIL: dev-stop.sh left the endpoints file" >&2; exit 1; }
+
+# A file whose PID is gone (a crashed host) is reported STALE in both formats; dev-stop.sh with nothing running clears it.
+printf '{"appUrl":"https://localhost:1/","pid":999999999}\n' >"${XE_DEV_ENDPOINTS_FILE}"
+stale_table="$("${SCRIPT_DIR}/dev-status.sh" || true)"
+[[ "${stale_table}" == *"[dev-status] endpoints=${XE_DEV_ENDPOINTS_FILE} STALE (pid 999999999 is not running)"* ]] \
+  || { echo "FAIL: stale endpoints file not flagged: ${stale_table}" >&2; exit 1; }
+[[ "$( ("${SCRIPT_DIR}/dev-status.sh" --json || true) | endpoints_state)" \
+  == "{\"path\": \"${XE_DEV_ENDPOINTS_FILE}\", \"pid\": 999999999, \"stale\": true}" ]] \
+  || { echo "FAIL: stopped --json lacks the stale endpointsFile" >&2; exit 1; }
+[[ "$("${SCRIPT_DIR}/dev-stop.sh" --dry-run)" == *"--dry-run: would remove ${XE_DEV_ENDPOINTS_FILE}."* ]] \
+  || { echo "FAIL: stopped-host dry run did not name the endpoints file" >&2; exit 1; }
+[[ -f "${XE_DEV_ENDPOINTS_FILE}" ]] || { echo "FAIL: dev-stop.sh --dry-run removed the endpoints file" >&2; exit 1; }
+"${SCRIPT_DIR}/dev-stop.sh" >/dev/null
+[[ ! -e "${XE_DEV_ENDPOINTS_FILE}" ]] || { echo "FAIL: dev-stop.sh kept a stale endpoints file" >&2; exit 1; }
+
+# Only loopback URLs are written: a non-loopback app URL writes nothing.
+set +e
+bash -c 'source "$1/dev-aspire-common.sh"; dev_write_endpoints' _ "${SCRIPT_DIR}" \
+  <<<'{"pid":4242,"dashboardUrl":"","resources":[{"name":"app","urls":[{"url":"https://192.0.2.7:4567/"}]}]}'
+remote_status=$?
+set -e
+[[ "${remote_status}" -eq 1 && ! -e "${XE_DEV_ENDPOINTS_FILE}" ]] \
+  || { echo "FAIL: a non-loopback app URL was written (status ${remote_status})" >&2; exit 1; }
 grep -Fq -- "stop --apphost ${APPHOST} --non-interactive --nologo" "${FAKE_ASPIRE_LOG}"
 
 # Survivor grace: the fake /proc anchors the AppHost PID (this shell) and links each survivor's stat and

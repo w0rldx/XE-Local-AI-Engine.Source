@@ -45,7 +45,8 @@ script's header documents its flags and exit codes. `tools/training/` is the shi
 ## Local runtime
 
 `scripts/dev-start.sh`, `dev-status.sh` (the port changes on every restart) and `dev-stop.sh` (the only sanctioned
-stop path) run an isolated AppHost for THIS checkout: `scripts/README-dev-stop.md`.
+stop path) run an isolated AppHost for THIS checkout: `scripts/README-dev-stop.md`; `.tmp/dev-endpoints.json` holds
+the current loopback URLs while it runs.
 
 - Never run `aspire stop --all` or `pkill -f <substring>`: both cross worktree boundaries. Kill by PID, including
   anything you background: collect the PIDs (or `setsid` a process group), put the kill in a `trap … EXIT`, and

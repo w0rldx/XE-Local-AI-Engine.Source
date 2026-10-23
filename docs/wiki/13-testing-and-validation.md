@@ -302,13 +302,17 @@ category, or with two, breaks that sum, and `TestCategoryConventionTests` fails 
 # React client
 cd XE-Local-AI-Engine.Client.React
 pnpm install --frozen-lockfile
-pnpm run acceptance  # validate + coverage thresholds + tooling tests + production bundle
+pnpm run acceptance  # licenses + validate + coverage thresholds + tooling tests + production bundle
 ```
 
 `acceptance` runs static checks once and then tests and `build:bundle` on the same unchanged source tree.
 Its first step, `node:check`
 ([`scripts/CheckNodeMajor.mjs`](../../XE-Local-AI-Engine.Client.React/scripts/CheckNodeMajor.mjs)), fails on a Node
-major other than CI's; its header documents the override. Run `acceptance` through `scripts/with-build-lock.sh`:
+major other than CI's; its header documents the override. Its second, `licenses:check`, regenerates the license
+manifest from the frontend and backend package trees and fails when it differs from the index, as CI's step before
+`acceptance` does, so a backend-only package bump reds locally too (it needs `dotnet tool restore` first).
+`pnpm audit --prod --audit-level=high` stays outside `acceptance`, which needs no network once packages are restored;
+run it after a dependency change. Run `acceptance` through `scripts/with-build-lock.sh`:
 vitest's timing assertions fail when a backend gate runs beside it. Standalone `build` still runs the full lint chain before `build:bundle`; the latter alone is not a gate.
 Use `pnpm run lint` and `pnpm test` for the focused inner loop.
 
@@ -362,7 +366,11 @@ rules in `AGENTS.md`, and `commit-tree` takes the identity from the repository c
 `src/locales/*.json`, never hand-merge: take either side, regenerate, and commit the result. The client and spec:
 `OPENAPI_LIVE_SCRIPT=openapi scripts/openapi-live-check.sh`. The route tree: any `vite` run (`pnpm run build`)
 rewrites it through the TanStack Router plugin. Locales: re-add the other side's new keys (`lint` names any key the
-code uses but the file lacks), then `pnpm run locales:sort` (its `--check` runs in `lint`). A designer
+code uses but the file lacks), then `pnpm run locales:sort` (its `--check` runs in `lint`).
+[`scripts/regen-after-merge.sh`](../../scripts/regen-after-merge.sh) runs the three offline regenerations in one go
+once every conflict is resolved: `openapi:generate` (client from the committed spec), `licenses:generate` and
+`locales:sort`, then stages exactly their paths and prints them; its header lists the exit codes and the contract test
+is `scripts/tests/regen-after-merge.test.sh`. A conflicted `openapi/v1.json` still needs the live script above first. A designer
 file: drop the branch's migration and re-add it on top of `develop` with `dotnet ef migrations add` ([wiki 08](08-data-and-persistence.md)).
 
 ### Landing a branch on develop
@@ -469,7 +477,7 @@ more than a local Release build.
 - **`release-contracts` (ubuntu-latest)** — runs [`scripts/run-release-contract-tests.sh`](../../scripts/run-release-contract-tests.sh) plus `scripts/lint-release-scripts.sh --no-behavior --bootstrap`. Contract discovery is **auto-enrolling** across `scripts/tests`, `scripts/compliance/tests`, and `scripts/performance/tests`, matching `*.test.sh`, `*.test.py`, and `test_*.py` — a new script test needs no workflow edit. The Pester leg of `lint-release-scripts.sh` covers `publish/tests` and `scripts/performance/tests`; **zero discovered Pester tests is a failure, not a pass**.
 - **`backend-tests` (ubuntu-latest, five-leg matrix)** — the backend gate, one runner per leg: `siblings` runs every enrolled test project except `XE-Local-AI-Engine.Tests`, and `tests-0`…`tests-3` each run one `TEST_SHARD` quarter of that module through [`scripts/run-tests-memory-safe.sh`](../../scripts/run-tests-memory-safe.sh) at `TEST_GROUPS=16`. Every leg does its own checkout, restore and `build -c Release --no-restore`; the built test output tree is over 1 GB, so it is rebuilt per leg rather than passed between them. The live OpenAPI comparison ([`scripts/openapi-live-check.sh`](../../scripts/openapi-live-check.sh)) runs only on `siblings`. No leg pulls an image or sets `XE_REQUIRE_DOCKER_TESTS`: the real-daemon suites are opt-in and skip here, and their wire-shape half runs daemon-free against the fake Docker server. Every project emits **Cobertura** coverage into its own `--results-directory`, because MTP resolves `--coverage-output` relative to it and a shared directory would let concurrent modules overwrite each other's report. The `siblings` leg runs [`scripts/run-backend-tests.sh`](../../scripts/run-backend-tests.sh) `--siblings-only` — the same script as the local gate, so the enrolment rule, the per-project results directory, the concurrency and the **hollow-gate guard** (a `Passed!`/`Failed!` summary must appear, catching a silent green where zero suites enrolled) are one implementation with two callers rather than two copies that drift. The `--maximum-parallel-tests` cap stays at **2** here, passed as `XE_TEST_WIDTH_DEFAULT`, because TUnit otherwise runs every test in parallel and leaves the concurrency level to the .NET thread pool — its docs state no formula and no ceiling — which is what made concurrent modules time out on shared runners. The script's local defaults are higher because they were measured on a many-core developer machine; raising CI's is a separate, measured change. `fail-fast: false`, so one red leg does not cancel the evidence from the others. Each leg uploads its reports as **`backend-test-results-<leg>`**.
 - **`build-and-test` (ubuntu-latest)** — the merge gate over every `backend-tests` leg, and the job that must keep this exact id: `build-and-test` is the required status check configured on `develop`'s branch protection, and a matrix job reports as `backend-tests (siblings)`, which can never satisfy it. It downloads every leg's artifact unmerged, then cross-checks before merging — the sibling reports number one per enrolled project minus the batched module (re-derived from the solution, not hard-coded), each shard leg produced one Cobertura report per line of its `units.txt`, and the group indices parsed from every leg's unit names, sorted, equal `0`…`GROUPS-1` exactly. That last check is the one that proves the shards **partition** the module — every group run, and run once. Checking only for duplicates would pass a run that silently *skipped* groups (three legs dividing by four leave four groups unrun), and [`scripts/merge-cobertura.py`](../../scripts/merge-cobertura.py) can see neither failure: it unions by `(filename, line)`, so a gap and an overlap both merge to a perfectly plausible percentage. It then merges the reports without double-counting shared source lines and enforces the floor in [`scripts/backend-coverage-baseline.txt`](../../scripts/backend-coverage-baseline.txt) — currently **90.50**.
-- **`client-react` (ubuntu-latest)** — pnpm + Node 22, the `global.json` SDK, a .NET 8 runtime, and the restored pinned repository tools; then `install --frozen-lockfile`, `openapi:check`, `licenses:check`, **`pnpm run acceptance`** (`node:check` → `validate` → `test:coverage:check` → `test:tooling` → `build:bundle`), and `pnpm audit --prod --audit-level=high` in order. `validate` includes `lint`, `knip`, `signalr:check` and `depcruise`; the combined gate runs those static checks once. `spellCheck` exists as a script but is **not** a gate. A clean local clone must run `dotnet tool restore --tool-manifest dotnet-tools.json` before `licenses:check`.
+- **`client-react` (ubuntu-latest)** — pnpm + Node 22, the `global.json` SDK, a .NET 8 runtime, and the restored pinned repository tools; then `install --frozen-lockfile`, `openapi:check`, `licenses:check`, **`pnpm run acceptance`** (`node:check` → `licenses:check` → `validate` → `test:coverage:check` → `test:tooling` → `build:bundle`), and `pnpm audit --prod --audit-level=high` in order. `validate` includes `lint`, `knip`, `signalr:check` and `depcruise`; the combined gate runs those static checks once. `spellCheck` exists as a script but is **not** a gate. A clean local clone must run `dotnet tool restore --tool-manifest dotnet-tools.json` before `licenses:check`.
 
 #### Measuring what the daemon-free backend legs cost
 

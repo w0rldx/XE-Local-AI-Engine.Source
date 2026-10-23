@@ -30,7 +30,7 @@
 		"bundle:check": "node scripts/CheckBundleBudget.mjs",
 		"locales:sort": "node scripts/SortLocales.mjs",
 		"node:check": "node scripts/CheckNodeMajor.mjs",
-		"acceptance": "pnpm run node:check && pnpm run validate && pnpm run test:coverage:check && pnpm run test:tooling && pnpm run build:bundle",
+		"acceptance": "pnpm run node:check && pnpm run licenses:check && pnpm run validate && pnpm run test:coverage:check && pnpm run test:tooling && pnpm run build:bundle",
 		"validate": "pnpm run lint && pnpm run knip && pnpm run signalr:check && pnpm run depcruise",
 		"spellCheck": "cspell src/**/*.ts{,x} --no-progress",
 		"test": "vitest run",
