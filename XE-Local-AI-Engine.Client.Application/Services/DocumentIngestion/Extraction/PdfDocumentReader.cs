@@ -60,7 +60,7 @@ internal sealed class PdfDocumentReader : IngestionDocumentReader
                         searchFrom = anchor + 1;
                     }
                     else if (index >= fromPreviousPage && pageNumber < pdf.NumberOfPages
-                             && FindTitleAtLineStart(nextPageText ??= ReadPageText(pdf, pageNumber + 1), title, 0) >= 0)
+                                                       && FindTitleAtLineStart(nextPageText ??= ReadPageText(pdf, pageNumber + 1), title, 0) >= 0)
                     {
                         carried.Add(bookmarks[index]);
                         continue;

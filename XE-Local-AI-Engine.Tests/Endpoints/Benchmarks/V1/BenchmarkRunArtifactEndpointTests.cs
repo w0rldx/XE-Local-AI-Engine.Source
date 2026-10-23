@@ -12,7 +12,6 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
-using XE_Local_AI_Engine.Client.Testing.Fakes;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -333,8 +332,7 @@ public sealed class BenchmarkRunArtifactEndpointTests
         {
             var hash = await Blobs.WriteAsync(RunId, ArtifactId, Content);
             Store.GetRunArtifactsAsync(RunId, Arg.Any<CancellationToken>())
-                 .Returns(
-                 [
+                 .Returns([
                      new BenchmarkRunArtifactRecord
                      {
                          Id = ArtifactId,

@@ -60,7 +60,12 @@ public sealed class BenchmarkRunArtifactStoreTests : IDisposable
 
         // criterion_id sits inside the unique index, where SQLite would let NULLs repeat: the store refuses before the schema has to.
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
-            store.AddRunArtifactsAsync(judged.Run.Id, judged.AttemptId, [Artifact("c1", BenchmarkRunArtifactKinds.PythonTestsStdout) with { CriterionId = null }]));
+            store.AddRunArtifactsAsync(judged.Run.Id, judged.AttemptId, [
+                Artifact("c1", BenchmarkRunArtifactKinds.PythonTestsStdout) with
+                {
+                    CriterionId = null
+                }
+            ]));
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
             store.AddRunArtifactsAsync(judged.Run.Id, judged.AttemptId, [Artifact(" ", BenchmarkRunArtifactKinds.PythonTestsStdout)]));
         AssertEx.Equal(expected: 0, await context.BenchmarkRunArtifacts.CountAsync(), "A refused batch writes nothing.");

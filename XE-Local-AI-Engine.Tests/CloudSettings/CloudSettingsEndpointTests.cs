@@ -130,7 +130,14 @@ public sealed class CloudSettingsEndpointTests
         {
             AzureFoundry = config.AzureFoundry! with
             {
-                Models = [new StoredAzureFoundryModel { DeploymentName = "gpt-4o", ContextLength = 128_000 }]
+                Models =
+                [
+                    new StoredAzureFoundryModel
+                    {
+                        DeploymentName = "gpt-4o",
+                        ContextLength = 128_000
+                    }
+                ]
             }
         });
         await using var factory = CreateFactory(cloudCredentialStore);

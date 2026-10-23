@@ -424,6 +424,7 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         {
             window = windowCap.Value;
         }
+
         var reserved = ResolveReservedOutputTokens(options, budgetOptions);
 
         // Two comparison-only margins: EstimateSafetyFactor of the window (the char heuristic under-counts ~10% on

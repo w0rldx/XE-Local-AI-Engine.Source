@@ -41,7 +41,8 @@ internal static class EngineExitNotice
             : DesktopText.EngineStopped;
     }
 
-    private static string? BlockedLine(string? errorTail) => ReportLine(errorTail, BlockedPrefix);
+    private static string? BlockedLine(string? errorTail) =>
+        ReportLine(errorTail, BlockedPrefix);
 
     // The pre-ready failure quotes the tail after its own sentence, so the report need not start a line there.
     private static string? ReportLine(string? errorTail, string prefix)

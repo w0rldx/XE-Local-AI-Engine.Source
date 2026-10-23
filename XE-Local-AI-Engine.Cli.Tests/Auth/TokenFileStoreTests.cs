@@ -53,8 +53,8 @@ public sealed class TokenFileStoreTests
 
             var security = new FileInfo(path).GetAccessControl();
             var rules = security.GetAccessRules(includeExplicit: true, includeInherited: true, typeof(SecurityIdentifier))
-                .Cast<FileSystemAccessRule>()
-                .ToList();
+                                .Cast<FileSystemAccessRule>()
+                                .ToList();
             using var currentIdentity = WindowsIdentity.GetCurrent();
             AssertEx.True(security.AreAccessRulesProtected);
             AssertEx.Equal(currentIdentity.User!.Value, string.Join(',', rules.Select(rule => rule.IdentityReference.Value)));

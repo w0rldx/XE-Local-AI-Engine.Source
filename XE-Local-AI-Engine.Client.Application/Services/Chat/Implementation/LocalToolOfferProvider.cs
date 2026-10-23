@@ -34,8 +34,8 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     ///     What a cloud model is not offered without the local-data opt-in, and what taints a graph Tool node's output.
     /// </summary>
     internal static readonly FrozenSet<string> LocalDataToolNames = KnowledgeToolCatalog.Descriptors.Select(static descriptor => descriptor.Name)
-                                                                                         .Concat(CoderToolDefinition.Descriptors.Select(static descriptor => descriptor.Name))
-                                                                                         .ToFrozenSet(StringComparer.Ordinal);
+                                                                                        .Concat(CoderToolDefinition.Descriptors.Select(static descriptor => descriptor.Name))
+                                                                                        .ToFrozenSet(StringComparer.Ordinal);
 
     // The built-in catalog is static for the process lifetime, so precompute its three projections once. The MCP part
     // is dynamic (servers connect/disconnect) and is read live from the registry on each call, then merged in.

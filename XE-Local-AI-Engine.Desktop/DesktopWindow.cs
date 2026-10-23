@@ -14,7 +14,10 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(400);
 
     // Loopback only (DesktopLaunchOptions enforces an HTTP loopback origin), so no proxy may see it.
-    private static readonly HttpClient Probe = new(new SocketsHttpHandler { UseProxy = false })
+    private static readonly HttpClient Probe = new(new SocketsHttpHandler
+    {
+        UseProxy = false
+    })
     {
         Timeout = TimeSpan.FromSeconds(1)
     };
@@ -223,8 +226,7 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
                 return;
             }
 
-            FailStart(new DesktopPageLoadException(
-                $"The desktop page could not load from the engine at {_options.Origin} within {DesktopNavigationGate.RetryWindow.TotalSeconds:0} seconds."));
+            FailStart(new DesktopPageLoadException($"The desktop page could not load from the engine at {_options.Origin} within {DesktopNavigationGate.RetryWindow.TotalSeconds:0} seconds."));
             return;
         }
 
@@ -259,8 +261,7 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
             // window is caught by the check below, so the delay needs no token whose cancellation would throw here.
             await Task.Delay(RetryDelay, CancellationToken.None);
             if (IsStale(generation)) { return; }
-        }
-        while (!await EngineAnswersAsync() && _navigation.CanRetry());
+        } while (!await EngineAnswersAsync() && _navigation.CanRetry());
 
         // The probe can take a second: a disposal or a Reload during it owns the window now.
         if (IsStale(generation)) { return; }
@@ -269,7 +270,8 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
         catch (Exception exception) { FailStart(exception); }
     }
 
-    private bool IsStale(int generation) => _disposed || !_startLoading || generation != _startGeneration;
+    private bool IsStale(int generation) =>
+        _disposed || !_startLoading || generation != _startGeneration;
 
     /// <summary>Ends the start-page load as failed; a reload after an engine relaunch finds the window already ready, so
     ///     the desktop log is then the only record left.</summary>

@@ -125,8 +125,7 @@ public sealed class KnowledgeEmbeddingModelPinBackfillTests : IDisposable
         var options = Options.Create(new KnowledgeBaseOptions());
         var scopeFactory = new ServiceCollection()
                            .AddScoped(_ => AgentDefinitionTestContextFactory.Create(databasePath, _keyHolder))
-                           .AddScoped<IKnowledgeDocumentCatalogService>(services => new KnowledgeDocumentCatalogService(
-                               services.GetRequiredService<NodeChatDbContext>(),
+                           .AddScoped<IKnowledgeDocumentCatalogService>(services => new KnowledgeDocumentCatalogService(services.GetRequiredService<NodeChatDbContext>(),
                                providerResolver,
                                new EmbeddingModelResolver(options, store),
                                options,

@@ -77,37 +77,37 @@ public sealed partial class BenchmarkStore
         // review project — and its identity stamps still match what the project asks now, because a revised item is excluded before any review matters.
         var projectId = query.ProjectId;
         var rows = from run in _dbContext.BenchmarkRuns.AsNoTracking()
-                   join project in _dbContext.BenchmarkProjects.AsNoTracking() on run.ProjectId equals project.Id
-                   where project.RequiresReview
-                         && run.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded
-                         && !run.IsWarmup
-                         && (projectId == null || run.ProjectId == projectId)
-                         && run.TaskItemSetHash == (project.TaskItemSetHash ?? LegacyTaskHash)
-                         && (run.TaskItemId == null
-                             || _dbContext.BenchmarkTaskItems.Any(item => item.Id == run.TaskItemId
-                                                                         && item.Kind != BenchmarkTaskItemKinds.Niah
-                                                                         && item.CountsTowardScore
-                                                                         && item.InputHash == run.TaskInputHash))
-                   join review in _dbContext.BenchmarkRunReviews.AsNoTracking() on run.Id equals review.RunId into reviews
-                   from review in reviews.DefaultIfEmpty()
-                   select new
-                   {
-                       run.Id,
-                       run.ProjectId,
-                       run.Version,
-                       run.PrimaryModelName,
-                       run.TaskItemId,
-                       run.TaskItemIndex,
-                       run.PrimaryCompletedAtUtc,
-                       ReviewState = review == null ? null : review.State,
-                       ReviewScore = review == null ? null : review.Score,
-                       ReviewedAtUtc = review == null ? (long?)null : review.UpdatedAtUtc,
-                       Stale = review != null && review.PolicyRevisionId != project.CurrentJudgePolicyRevisionId,
-                       JudgingCurrent = project.CurrentJudgePolicyRevisionId == null
-                                        || _dbContext.BenchmarkJudgeAttempts.Any(attempt => attempt.Id == run.CurrentJudgeAttemptId
-                                                                                           && attempt.Status == BenchmarkJudgeAttemptStatus.Succeeded
-                                                                                           && attempt.PolicyRevisionId == project.CurrentJudgePolicyRevisionId)
-                   };
+            join project in _dbContext.BenchmarkProjects.AsNoTracking() on run.ProjectId equals project.Id
+            where project.RequiresReview
+                  && run.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded
+                  && !run.IsWarmup
+                  && (projectId == null || run.ProjectId == projectId)
+                  && run.TaskItemSetHash == (project.TaskItemSetHash ?? LegacyTaskHash)
+                  && (run.TaskItemId == null
+                      || _dbContext.BenchmarkTaskItems.Any(item => item.Id == run.TaskItemId
+                                                                   && item.Kind != BenchmarkTaskItemKinds.Niah
+                                                                   && item.CountsTowardScore
+                                                                   && item.InputHash == run.TaskInputHash))
+            join review in _dbContext.BenchmarkRunReviews.AsNoTracking() on run.Id equals review.RunId into reviews
+            from review in reviews.DefaultIfEmpty()
+            select new
+            {
+                run.Id,
+                run.ProjectId,
+                run.Version,
+                run.PrimaryModelName,
+                run.TaskItemId,
+                run.TaskItemIndex,
+                run.PrimaryCompletedAtUtc,
+                ReviewState = review == null ? null : review.State,
+                ReviewScore = review == null ? null : review.Score,
+                ReviewedAtUtc = review == null ? (long?)null : review.UpdatedAtUtc,
+                Stale = review != null && review.PolicyRevisionId != project.CurrentJudgePolicyRevisionId,
+                JudgingCurrent = project.CurrentJudgePolicyRevisionId == null
+                                 || _dbContext.BenchmarkJudgeAttempts.Any(attempt => attempt.Id == run.CurrentJudgeAttemptId
+                                                                                     && attempt.Status == BenchmarkJudgeAttemptStatus.Succeeded
+                                                                                     && attempt.PolicyRevisionId == project.CurrentJudgePolicyRevisionId)
+            };
 
         // A run still waiting on its judging under the current revision is listed once that judging succeeds: the review service refuses it until then.
         rows = query.State switch
@@ -125,24 +125,27 @@ public sealed partial class BenchmarkStore
                              .ToArrayAsync(cancellationToken);
         return new BenchmarkReviewQueuePage
         {
-            Items = [.. page.Select(row => new BenchmarkReviewQueueEntry
-            {
-                RunId = row.Id,
-                ProjectId = row.ProjectId,
-                RunVersion = row.Version,
-                PrimaryModelName = row.PrimaryModelName,
-                TaskItemId = row.TaskItemId,
-                TaskItemIndex = row.TaskItemIndex,
-                PrimaryCompletedAtUtc = row.PrimaryCompletedAtUtc,
-                State = (row.ReviewState, row.Stale) switch
+            Items =
+            [
+                .. page.Select(row => new BenchmarkReviewQueueEntry
                 {
-                    (null, _) => BenchmarkReviewStates.Pending,
-                    (_, true) => BenchmarkReviewStates.Stale,
-                    var (state, _) => state
-                },
-                ReviewScore = row.ReviewScore,
-                ReviewedAtUtc = row.ReviewedAtUtc
-            })],
+                    RunId = row.Id,
+                    ProjectId = row.ProjectId,
+                    RunVersion = row.Version,
+                    PrimaryModelName = row.PrimaryModelName,
+                    TaskItemId = row.TaskItemId,
+                    TaskItemIndex = row.TaskItemIndex,
+                    PrimaryCompletedAtUtc = row.PrimaryCompletedAtUtc,
+                    State = (row.ReviewState, row.Stale) switch
+                    {
+                        (null, _) => BenchmarkReviewStates.Pending,
+                        (_, true) => BenchmarkReviewStates.Stale,
+                        var (state, _) => state
+                    },
+                    ReviewScore = row.ReviewScore,
+                    ReviewedAtUtc = row.ReviewedAtUtc
+                })
+            ],
             TotalCount = total
         };
     }

@@ -475,7 +475,10 @@ public sealed class TrainingExclusivityTests
             signal,
             Substitute.For<IBenchmarkEventBuffer>(),
             gate,
-            Options.Create(new BenchmarkQueueOptions { PollInterval = IdlePoll }),
+            Options.Create(new BenchmarkQueueOptions
+            {
+                PollInterval = IdlePoll
+            }),
             NullLogger<BenchmarkQueueHostedService>.Instance);
     }
 
@@ -493,7 +496,10 @@ public sealed class TrainingExclusivityTests
             signal,
             Substitute.For<IDatasetGenerationEventBuffer>(),
             gate,
-            Options.Create(new DatasetGenerationQueueOptions { PollInterval = IdlePoll }),
+            Options.Create(new DatasetGenerationQueueOptions
+            {
+                PollInterval = IdlePoll
+            }),
             NullLogger<DatasetGenerationHostedService>.Instance);
     }
 
@@ -523,7 +529,10 @@ public sealed class TrainingExclusivityTests
             Substitute.For<ITrainingRunEventBuffer>(),
             gate,
             supervisor,
-            Options.Create(new TrainingRunQueueOptions { PollInterval = IdlePoll }),
+            Options.Create(new TrainingRunQueueOptions
+            {
+                PollInterval = IdlePoll
+            }),
             NullLogger<TrainingRunQueueHostedService>.Instance);
     }
 

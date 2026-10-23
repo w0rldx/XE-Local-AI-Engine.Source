@@ -62,8 +62,8 @@ public sealed class AddBenchmarkReviewsArtifactsToolTimingMigrationTests
         AssertEx.Equal(expected: 1L, await LongAsync(probe, "SELECT \"notnull\" FROM pragma_table_info('benchmark_run_artifacts') WHERE name = 'criterion_id';"),
             "criterion_id is NOT NULL for the same reason: it is the middle column of the unique index.");
         AssertEx.True(Convert.ToString(await probe.ScalarAsync("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'benchmark_run_reviews';"),
-                          CultureInfo.InvariantCulture)!
-                      .Contains("CONSTRAINT \"CK_benchmark_run_reviews_approved_score\" CHECK (state = 'rejected' OR score IS NOT NULL)", StringComparison.Ordinal),
+                                 CultureInfo.InvariantCulture)!
+                             .Contains("CONSTRAINT \"CK_benchmark_run_reviews_approved_score\" CHECK (state = 'rejected' OR score IS NOT NULL)", StringComparison.Ordinal),
             "The approved-needs-a-score CHECK must be in the stored table definition.");
 
         // The CHECKs, by behaviour: a pending row, an out-of-range score and an unknown kind are all refused by the schema itself.

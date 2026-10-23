@@ -106,7 +106,12 @@ public sealed class BenchmarkOutputPartsTests
             new("tool_result", ToolCallId: "call-1", ToolName: "search", Result: "ok", IsError: false),
             new("output", Content: "It is 42.")
         ];
-        var timed = untimed.Select(static part => part.Kind == "tool_result" ? part with { DurationMs = 1234 } : part).ToArray();
+        var timed = untimed.Select(static part => part.Kind == "tool_result"
+            ? part with
+            {
+                DurationMs = 1234
+            }
+            : part).ToArray();
 
         var timedPayload = BenchmarkExecutionSerialization.SerializeParts(BenchmarkOutputParts.ForJudge(timed, judgeContextTokens: 16384));
         var untimedPayload = BenchmarkExecutionSerialization.SerializeParts(BenchmarkOutputParts.ForJudge(untimed, judgeContextTokens: 16384));

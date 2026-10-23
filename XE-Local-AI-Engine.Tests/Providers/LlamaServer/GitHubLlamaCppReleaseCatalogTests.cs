@@ -162,7 +162,10 @@ public sealed class GitHubLlamaCppReleaseCatalogTests
                        {"name":"cudart-{{driftedName}}","browser_download_url":"{{url}}cudart-{{driftedName}}","digest":"sha256:{{digest}}","size":3},
                        {"name":"{{driftedName}}","browser_download_url":"{{url}}{{driftedName}}","digest":"sha256:{{digest}}","size":5}]}
                      """;
-        using var handler = new ScriptedHandler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) });
+        using var handler = new ScriptedHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(json)
+        });
         using var http = new HttpClient(handler, disposeHandler: false);
         var catalog = new GitHubLlamaCppReleaseCatalog(http, TimeProvider.System);
 

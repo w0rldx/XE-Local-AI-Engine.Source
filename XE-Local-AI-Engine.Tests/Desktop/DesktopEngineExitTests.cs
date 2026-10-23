@@ -4,6 +4,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Desktop;
 using XE_Local_AI_Engine.Tests.Testing;
+using Program = XE_Local_AI_Engine.Client.Program;
 
 /// <summary>How the shell explains an engine exit and when a failed page load is fatal. <c>[NotInParallel]</c> because
 ///     the notice text follows <see cref="DesktopText.Language" />, process-wide state these tests change and restore.</summary>
@@ -17,7 +18,7 @@ public sealed class DesktopEngineExitTests
     [Test]
     public void StartupFailureExitCode_KeepsTheApplicationControlCodeOfAPreReadyEngineExit()
     {
-        AssertEx.Equal(XE_Local_AI_Engine.Client.Program.ApplicationControlBlockedExitCode, DesktopApplication.ApplicationControlBlockedExitCode,
+        AssertEx.Equal(Program.ApplicationControlBlockedExitCode, DesktopApplication.ApplicationControlBlockedExitCode,
             "The shell's duplicate must stay the engine's code.");
         AssertEx.Equal(ApplicationControlBlock.StandardErrorPrefix, EngineExitNotice.BlockedPrefix,
             "The shell's prefix must stay the engine's.");
@@ -27,10 +28,19 @@ public sealed class DesktopEngineExitTests
     [Test]
     public void RelaunchesEngine_OnlyOnTheEnginesRestartCode()
     {
-        AssertEx.Equal(XE_Local_AI_Engine.Client.Program.RestartRequestedExitCode, DesktopApplication.RestartRequestedExitCode,
+        AssertEx.Equal(Program.RestartRequestedExitCode, DesktopApplication.RestartRequestedExitCode,
             "The shell's duplicate must stay the engine's code.");
         AssertEx.True(DesktopApplication.RelaunchesEngine(12));
-        foreach (var other in new[] { 0, 1, 8, 9, 10, 11, -532462766 })
+        foreach (var other in new[]
+                 {
+                     0,
+                     1,
+                     8,
+                     9,
+                     10,
+                     11,
+                     -532462766
+                 })
         {
             AssertEx.False(DesktopApplication.RelaunchesEngine(other), $"Exit {other} must keep its own meaning.");
         }
@@ -43,8 +53,7 @@ public sealed class DesktopEngineExitTests
     public void BlockedFile_ReadsTheFileFromTheEnginesOwnReport(string file)
     {
         AssertEx.Equal(file, EngineExitNotice.BlockedFile(ApplicationControlBlock.Describe(file) + "\r\nnext line"));
-        AssertEx.Equal(file, EngineExitNotice.BlockedFile(
-                "The engine exited before readiness (exit code 11). It reported: " + ApplicationControlBlock.Describe(file)),
+        AssertEx.Equal(file, EngineExitNotice.BlockedFile("The engine exited before readiness (exit code 11). It reported: " + ApplicationControlBlock.Describe(file)),
             "The pre-ready failure quotes the report mid-line.");
     }
 
@@ -115,17 +124,23 @@ public sealed class DesktopEngineExitTests
         var previous = DesktopText.Language;
         try
         {
-            AssertEx.Equal(XE_Local_AI_Engine.Client.Program.OptionsValidationFailedExitCode, DesktopApplication.OptionsValidationFailedExitCode,
+            AssertEx.Equal(Program.OptionsValidationFailedExitCode, DesktopApplication.OptionsValidationFailedExitCode,
                 "The shell's duplicate must stay the engine's code.");
             AssertEx.Equal(SettingValidationFailure.StandardErrorPrefix, EngineExitNotice.SettingPrefix, "The shell's prefix must stay the engine's.");
 
             DesktopText.Apply("en");
             const string Tail = "warn: an earlier stderr line\nSetting out of range: DevelopmentWorkspaceRetentionOptions: RetentionAge must be between 1 hour and 365 days.\n";
-            AssertEx.Equal(
-                "A node setting is out of range, so the engine stopped. It reported: DevelopmentWorkspaceRetentionOptions: "
-                + "RetentionAge must be between 1 hour and 365 days. Fix the setting (environment variable or node-settings.json), then start XE again.",
+            AssertEx.Equal("A node setting is out of range, so the engine stopped. It reported: DevelopmentWorkspaceRetentionOptions: "
+                           + "RetentionAge must be between 1 hour and 365 days. Fix the setting (environment variable or node-settings.json), then start XE again.",
                 EngineExitNotice.For(13, Tail, "/opt/xe"), "Only the engine's report line is quoted, without its prefix.");
-            foreach (var empty in new[] { null, "", " \n", "Unhandled exception without the report", "Setting out of range: " })
+            foreach (var empty in new[]
+                     {
+                         null,
+                         "",
+                         " \n",
+                         "Unhandled exception without the report",
+                         "Setting out of range: "
+                     })
             {
                 var generic = EngineExitNotice.For(13, empty, "/opt/xe");
                 AssertEx.Contains(generic, "A node setting is out of range");
@@ -235,8 +250,10 @@ public sealed class DesktopEngineExitTests
     {
         private DateTimeOffset _now = new(2026, 10, 23, 12, 0, 0, TimeSpan.Zero);
 
-        public override DateTimeOffset GetUtcNow() => _now;
+        public override DateTimeOffset GetUtcNow() =>
+            _now;
 
-        internal void Advance(TimeSpan by) => _now += by;
+        internal void Advance(TimeSpan by) =>
+            _now += by;
     }
 }

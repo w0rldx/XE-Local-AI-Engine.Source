@@ -165,7 +165,8 @@ internal sealed class RetrievalEvalFixture : IDisposable
             var extractor = new DocumentTextExtractor(NullLogger<DocumentTextExtractor>.Instance);
             var chunkingService = new HeaderBoundaryChunkingService(optionsWrapper);
             var providerResolver = new SingleProviderResolver(embeddingProvider);
-            var embedder = new KnowledgeChunkEmbedder(providerResolver, new EmbeddingModelResolver(optionsWrapper, new FakeNodeSettingsStore(new StoredNodeSettings())), new KnowledgeEmbeddingPrefixer(), optionsWrapper);
+            var embedder = new KnowledgeChunkEmbedder(providerResolver, new EmbeddingModelResolver(optionsWrapper, new FakeNodeSettingsStore(new StoredNodeSettings())),
+                new KnowledgeEmbeddingPrefixer(), optionsWrapper);
             var indexWriter = new KnowledgeIndexWriter(ingestionContext, TimeProvider.System);
             var notifier = Substitute.For<IKnowledgeIndexingNotifier>();
             var ingestionService = new KnowledgeIngestionService(ingestionContext,

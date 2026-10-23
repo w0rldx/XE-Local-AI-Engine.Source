@@ -35,19 +35,22 @@ public sealed class ListBenchmarkReviewsEndpoint : Endpoint<ListBenchmarkReviews
         }, ct);
         await Send.OkAsync(new ListBenchmarkReviewsResponse
         {
-            Items = [.. page.Items.Select(static entry => new BenchmarkReviewQueueItemResponse
-            {
-                RunId = entry.RunId,
-                ProjectId = entry.ProjectId,
-                RunVersion = entry.RunVersion,
-                PrimaryModelName = entry.PrimaryModelName,
-                TaskItemId = entry.TaskItemId,
-                TaskItemIndex = entry.TaskItemIndex,
-                PrimaryCompletedAtUtc = entry.PrimaryCompletedAtUtc,
-                State = entry.State,
-                ReviewScore = entry.ReviewScore,
-                ReviewedAtUtc = entry.ReviewedAtUtc
-            })],
+            Items =
+            [
+                .. page.Items.Select(static entry => new BenchmarkReviewQueueItemResponse
+                {
+                    RunId = entry.RunId,
+                    ProjectId = entry.ProjectId,
+                    RunVersion = entry.RunVersion,
+                    PrimaryModelName = entry.PrimaryModelName,
+                    TaskItemId = entry.TaskItemId,
+                    TaskItemIndex = entry.TaskItemIndex,
+                    PrimaryCompletedAtUtc = entry.PrimaryCompletedAtUtc,
+                    State = entry.State,
+                    ReviewScore = entry.ReviewScore,
+                    ReviewedAtUtc = entry.ReviewedAtUtc
+                })
+            ],
             TotalCount = page.TotalCount,
             Page = req.Page,
             Take = req.Take

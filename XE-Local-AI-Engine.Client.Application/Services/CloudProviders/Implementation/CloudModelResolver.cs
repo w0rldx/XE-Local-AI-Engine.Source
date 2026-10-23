@@ -98,7 +98,10 @@ public sealed class CloudModelResolver : ICloudModelResolver
             var deployment = config?.AzureFoundry?.Models.FirstOrDefault(model => string.Equals(model.DeploymentName, modelName, StringComparison.OrdinalIgnoreCase));
             if (deployment is not null)
             {
-                return new CloudModelContextWindow { ContextTokens = deployment.ContextLength };
+                return new CloudModelContextWindow
+                {
+                    ContextTokens = deployment.ContextLength
+                };
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -113,7 +116,10 @@ public sealed class CloudModelResolver : ICloudModelResolver
 
         // A Codex id counts only with a sourced window: membership itself is the trust resolver's answer, not this lookup's.
         return CodexModelCatalog.ContextTokensFor(modelName) is { } codexTokens
-            ? new CloudModelContextWindow { ContextTokens = codexTokens }
+            ? new CloudModelContextWindow
+            {
+                ContextTokens = codexTokens
+            }
             : null;
     }
 }

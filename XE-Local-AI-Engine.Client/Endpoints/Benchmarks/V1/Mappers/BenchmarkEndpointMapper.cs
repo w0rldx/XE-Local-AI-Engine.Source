@@ -313,16 +313,19 @@ internal static class BenchmarkEndpointMapper
             ReasoningBudgetApplicable = reasoningBudgetApplicable,
             Review = run.Review is { } review ? ToReview(review, currentJudgePolicyRevisionId) : null,
             // The detail describes the current judging: an earlier attempt's artifacts stay stored and downloadable by id, never listed here.
-            Artifacts = [.. run.Artifacts.Where(artifact => run.Judge?.AttemptId is { } attemptId && artifact.JudgeAttemptId == attemptId)
-                              .Select(static artifact => new BenchmarkRunArtifactResponse
-            {
-                Id = artifact.Id,
-                Kind = artifact.Kind,
-                CriterionId = artifact.CriterionId,
-                JudgeAttemptId = artifact.JudgeAttemptId,
-                ByteCount = artifact.ByteCount,
-                ContentHash = artifact.ContentHash
-            })]
+            Artifacts =
+            [
+                .. run.Artifacts.Where(artifact => run.Judge?.AttemptId is { } attemptId && artifact.JudgeAttemptId == attemptId)
+                      .Select(static artifact => new BenchmarkRunArtifactResponse
+                      {
+                          Id = artifact.Id,
+                          Kind = artifact.Kind,
+                          CriterionId = artifact.CriterionId,
+                          JudgeAttemptId = artifact.JudgeAttemptId,
+                          ByteCount = artifact.ByteCount,
+                          ContentHash = artifact.ContentHash
+                      })
+            ]
         };
         ApplyLaunchEvidence(detail, run);
         return detail;
@@ -334,11 +337,14 @@ internal static class BenchmarkEndpointMapper
         {
             State = review.State,
             Score = review.Score,
-            Criteria = [.. review.Criteria.Select(static criterion => new BenchmarkReviewCriterionScoreDto
-            {
-                CriterionId = criterion.CriterionId,
-                Score = criterion.Score
-            })],
+            Criteria =
+            [
+                .. review.Criteria.Select(static criterion => new BenchmarkReviewCriterionScoreDto
+                {
+                    CriterionId = criterion.CriterionId,
+                    Score = criterion.Score
+                })
+            ],
             Notes = review.Notes,
             PolicyRevisionId = review.PolicyRevisionId,
             PolicyCurrent = review.PolicyRevisionId == currentJudgePolicyRevisionId,

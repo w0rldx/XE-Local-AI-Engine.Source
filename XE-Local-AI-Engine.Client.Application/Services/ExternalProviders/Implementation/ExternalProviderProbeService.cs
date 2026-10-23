@@ -106,8 +106,8 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
         string[] sentSecrets =
         [
             .. headers.Where(static header => header.IsSecret).Select(static header => header.Value).Append(apiKey)
-                .OfType<string>()
-                .Where(static value => !string.IsNullOrWhiteSpace(value))
+                      .OfType<string>()
+                      .Where(static value => !string.IsNullOrWhiteSpace(value))
         ];
         return await SendProbeAsync(baseAddress,
             apiKey,

@@ -59,7 +59,10 @@ public sealed class LocalModelPerfLog
                 Role = role,
                 LastUnloadReason = reason
             },
-            (_, existing) => existing with { LastUnloadReason = reason });
+            (_, existing) => existing with
+            {
+                LastUnloadReason = reason
+            });
     }
 
     /// <summary>The key's history, or <see langword="null" /> when this process never loaded nor unloaded it.</summary>

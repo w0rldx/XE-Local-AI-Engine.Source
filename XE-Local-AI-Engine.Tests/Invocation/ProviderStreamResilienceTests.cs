@@ -250,7 +250,11 @@ public sealed class ProviderStreamResilienceTests
     public async Task ExecuteStreamingAsync_WhenSdkRateLimited_RetriesAndYieldsFullStream()
     {
         var callCount = new StrongBox<int>(value: 0);
-        var sut = CreateSut(new ProviderResilienceOptions { BaseDelayMilliseconds = 0, CircuitBreakerEnabled = false }, maxRetries: 2);
+        var sut = CreateSut(new ProviderResilienceOptions
+        {
+            BaseDelayMilliseconds = 0,
+            CircuitBreakerEnabled = false
+        }, maxRetries: 2);
 
         var result = await CollectAsync(sut.ExecuteStreamingAsync("endpoint",
             FactoryFailing(failures: 1, callCount, () => Yield(4, 5), () => ThrowStatus(429)),
@@ -264,7 +268,11 @@ public sealed class ProviderStreamResilienceTests
     public async Task ExecuteStreamingAsync_WhenSdkServerError_IsTransientAndRetried()
     {
         var callCount = new StrongBox<int>(value: 0);
-        var sut = CreateSut(new ProviderResilienceOptions { BaseDelayMilliseconds = 0, CircuitBreakerEnabled = false }, maxRetries: 2);
+        var sut = CreateSut(new ProviderResilienceOptions
+        {
+            BaseDelayMilliseconds = 0,
+            CircuitBreakerEnabled = false
+        }, maxRetries: 2);
 
         var result = await CollectAsync(sut.ExecuteStreamingAsync("endpoint",
             FactoryFailing(failures: 2, callCount, () => Yield(1), () => ThrowStatus(503)),
@@ -278,7 +286,11 @@ public sealed class ProviderStreamResilienceTests
     public async Task ExecuteStreamingAsync_WhenSdkClientError_IsNotTransientAndNotRetried()
     {
         var callCount = new StrongBox<int>(value: 0);
-        var sut = CreateSut(new ProviderResilienceOptions { BaseDelayMilliseconds = 0, CircuitBreakerEnabled = false }, maxRetries: 2);
+        var sut = CreateSut(new ProviderResilienceOptions
+        {
+            BaseDelayMilliseconds = 0,
+            CircuitBreakerEnabled = false
+        }, maxRetries: 2);
 
         await AssertEx.ThrowsAsync<ClientResultException>(() => CollectAsync(sut.ExecuteStreamingAsync("endpoint",
             FactoryFailing(failures: int.MaxValue, callCount, () => Yield(1), () => ThrowStatus(400)),
@@ -294,7 +306,11 @@ public sealed class ProviderStreamResilienceTests
         var callCount = new StrongBox<int>(value: 0);
 
         // Zero base backoff: any recorded delay can only come from the Retry-After header.
-        var sut = CreateSut(new ProviderResilienceOptions { BaseDelayMilliseconds = 0, CircuitBreakerEnabled = false }, time, maxRetries: 2);
+        var sut = CreateSut(new ProviderResilienceOptions
+        {
+            BaseDelayMilliseconds = 0,
+            CircuitBreakerEnabled = false
+        }, time, maxRetries: 2);
 
         _ = await CollectAsync(sut.ExecuteStreamingAsync("endpoint",
             FactoryFailing(failures: 1, callCount, () => Yield(1), () => ThrowStatus(429, "7")),
@@ -310,7 +326,11 @@ public sealed class ProviderStreamResilienceTests
         var time = new MutableTimeProvider(new DateTimeOffset(year: 2026, month: 10, day: 22, hour: 12, minute: 0, second: 0, TimeSpan.Zero));
         var callCount = new StrongBox<int>(value: 0);
         var retryAt = time.GetUtcNow().AddSeconds(12).ToString("r", CultureInfo.InvariantCulture);
-        var sut = CreateSut(new ProviderResilienceOptions { BaseDelayMilliseconds = 0, CircuitBreakerEnabled = false }, time, maxRetries: 2);
+        var sut = CreateSut(new ProviderResilienceOptions
+        {
+            BaseDelayMilliseconds = 0,
+            CircuitBreakerEnabled = false
+        }, time, maxRetries: 2);
 
         _ = await CollectAsync(sut.ExecuteStreamingAsync("endpoint",
             FactoryFailing(failures: 1, callCount, () => Yield(1), () => ThrowStatus(503, retryAt)),
@@ -325,7 +345,11 @@ public sealed class ProviderStreamResilienceTests
     {
         var time = new MutableTimeProvider(DateTimeOffset.UnixEpoch);
         var callCount = new StrongBox<int>(value: 0);
-        var sut = CreateSut(new ProviderResilienceOptions { MaxRetryAfterSeconds = 30, CircuitBreakerEnabled = false }, time, maxRetries: 2);
+        var sut = CreateSut(new ProviderResilienceOptions
+        {
+            MaxRetryAfterSeconds = 30,
+            CircuitBreakerEnabled = false
+        }, time, maxRetries: 2);
         ProviderCallEfficiencySnapshot snapshot;
 
         using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))

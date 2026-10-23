@@ -1072,12 +1072,12 @@ public sealed class ProviderCallBudgetChatClientTests
         };
         int estimate;
         using (var probe = new CapturingChatClient())
-        using (var probeSut = new ProviderCallBudgetChatClient(probe, NullLogger<ProviderCallBudgetChatClient>.Instance))
-        using (ProviderCallBudget.BeginScope(budgetOptions))
-        {
-            _ = await DrainAsync(probeSut.GetStreamingResponseAsync(LongRound(), LargeWindowOptions()));
-            estimate = (int)AssertEx.NotNull(ProviderCallBudget.Current).CumulativeInputTokens;
-        }
+            using (var probeSut = new ProviderCallBudgetChatClient(probe, NullLogger<ProviderCallBudgetChatClient>.Instance))
+                using (ProviderCallBudget.BeginScope(budgetOptions))
+                {
+                    _ = await DrainAsync(probeSut.GetStreamingResponseAsync(LongRound(), LargeWindowOptions()));
+                    estimate = (int)AssertEx.NotNull(ProviderCallBudget.Current).CumulativeInputTokens;
+                }
 
         var body = $$$"""{"error":{"code":400,"type":"exceed_context_size_error","n_prompt_tokens":{{{estimate}}},"n_ctx":800}}""";
         var store = new RecordingCalibrationStore();

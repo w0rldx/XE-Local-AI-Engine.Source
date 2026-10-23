@@ -27,7 +27,9 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
     private readonly Func<bool> _nvidiaDriverPresent;
     private readonly ProbePlatform _platform;
     private readonly TimeSpan _probeTimeout;
+
     private readonly Func<string, string, IProbeProcess> _processFactory;
+
     // None (0) means not cached: an int-sized enum publishes atomically, which a Nullable<enum> struct does not.
     private volatile DetectedGpuVendor _detected;
 

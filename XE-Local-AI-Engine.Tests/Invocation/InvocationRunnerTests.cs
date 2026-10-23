@@ -1424,7 +1424,10 @@ public sealed class InvocationRunnerTests
         cloudFactory.IsCloudProviderSelected(CloudModel).Returns(true);
         // A declared window, when given, is the cloud catalog's for CloudModel and the operator's for the ext: id.
         var cloudModels = Substitute.For<ICloudModelResolver>();
-        cloudModels.ResolveContextWindowAsync(CloudModel, Arg.Any<CancellationToken>()).Returns(new CloudModelContextWindow { ContextTokens = declaredRemoteWindow });
+        cloudModels.ResolveContextWindowAsync(CloudModel, Arg.Any<CancellationToken>()).Returns(new CloudModelContextWindow
+        {
+            ContextTokens = declaredRemoteWindow
+        });
         var runner = CreateRunner(orchestrationAgentFactory: orchestrationFactory,
             cloudModelResolver: cloudModels,
             modelTrustResolver: new FakeModelTrustResolver().Register("provider", "remote-model", contextLength: declaredRemoteWindow),
@@ -6853,7 +6856,8 @@ public sealed class InvocationRunnerTests
             resolvedValidator,
             resolvedCapabilityReporter,
             resolvedProviderResolver,
-            new LocalRuntimeWarmer(resolvedProviderResolver, resolvedActiveCloudFactory, modelTrustResolver ?? new FakeModelTrustResolver(), cloudModelResolver ?? Substitute.For<ICloudModelResolver>(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System, new GpuWorkGate()),
+            new LocalRuntimeWarmer(resolvedProviderResolver, resolvedActiveCloudFactory, modelTrustResolver ?? new FakeModelTrustResolver(),
+                cloudModelResolver ?? Substitute.For<ICloudModelResolver>(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System, new GpuWorkGate()),
             resolvedProviderStreamResilience,
             contextBudgeter ?? new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(resolvedContextBudgetOptions), runtimeSettings),
             Options.Create(resolvedContextBudgetOptions),
@@ -7558,8 +7562,11 @@ public sealed class InvocationRunnerTests
                 return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "answered without it")));
             }
 
-            List<AIContent> calls = [.. Enumerable.Range(1, _callsPerRound)
-                                                  .Select(index => new FunctionCallContent(string.Create(CultureInfo.InvariantCulture, $"call-guarded-{call}-{index}"), GuardedToolName))];
+            List<AIContent> calls =
+            [
+                .. Enumerable.Range(1, _callsPerRound)
+                             .Select(index => new FunctionCallContent(string.Create(CultureInfo.InvariantCulture, $"call-guarded-{call}-{index}"), GuardedToolName))
+            ];
             return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, calls)));
         }
 

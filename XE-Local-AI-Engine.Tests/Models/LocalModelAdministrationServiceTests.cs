@@ -198,27 +198,29 @@ public sealed class LocalModelAdministrationServiceTests
                      .ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
-    private static LocalModelDescriptor Installed(string modelName, string? decisionType) => new()
-    {
-        ModelName = modelName,
-        ProviderName = LlamaServerProviderConstants.ProviderName,
-        IsAvailable = true,
-        SizeBytes = null,
-        ModifiedAt = null,
-        MaxContextTokens = null,
-        DecisionType = decisionType
-    };
+    private static LocalModelDescriptor Installed(string modelName, string? decisionType) =>
+        new()
+        {
+            ModelName = modelName,
+            ProviderName = LlamaServerProviderConstants.ProviderName,
+            IsAvailable = true,
+            SizeBytes = null,
+            ModifiedAt = null,
+            MaxContextTokens = null,
+            DecisionType = decisionType
+        };
 
-    private static ModelClassificationRecord Classification(string modelName, ModelKind detectedKind) => new()
-    {
-        ModelName = modelName,
-        Digest = null,
-        DetectedKind = detectedKind,
-        DetectedCapabilitiesJson = null,
-        OverrideKind = null,
-        DetectedAtUtc = null,
-        UpdatedAtUtc = 1
-    };
+    private static ModelClassificationRecord Classification(string modelName, ModelKind detectedKind) =>
+        new()
+        {
+            ModelName = modelName,
+            Digest = null,
+            DetectedKind = detectedKind,
+            DetectedCapabilitiesJson = null,
+            OverrideKind = null,
+            DetectedAtUtc = null,
+            UpdatedAtUtc = 1
+        };
 
     private sealed class Harness
     {

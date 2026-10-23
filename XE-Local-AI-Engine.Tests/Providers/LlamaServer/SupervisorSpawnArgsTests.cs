@@ -175,7 +175,15 @@ public sealed class SupervisorSpawnArgsTests
         await supervisor.EnsureRunningAsync("ggml-org/Kev-4B-GGUF:Q4_K_M", ModelRole.Decision, CancellationToken.None);
 
         AssertEx.True(launcher.Launches.TryDequeue(out var spec));
-        foreach (var roleFlag in new[] { "--jinja", "--embeddings", "--rerank", "--pooling", "--cache-reuse", "--mmproj" })
+        foreach (var roleFlag in new[]
+                 {
+                     "--jinja",
+                     "--embeddings",
+                     "--rerank",
+                     "--pooling",
+                     "--cache-reuse",
+                     "--mmproj"
+                 })
         {
             AssertEx.False(spec!.Arguments.Contains(roleFlag), $"a decision process must not carry {roleFlag}.");
         }

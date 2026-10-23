@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using System.Globalization;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -117,7 +118,7 @@ public sealed class LlamaServerSystemOneClientTests
         AssertEx.Equal(expected, result.Outcome);
         AssertEx.Null(result.Answer);
         AssertEx.Contains(AssertEx.NotNull(result.Detail), "server says no");
-        AssertEx.Contains(result.Detail!, ((int)status).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        AssertEx.Contains(result.Detail!, ((int)status).ToString(CultureInfo.InvariantCulture));
         AssertEx.True(lease.Disposed);
     }
 

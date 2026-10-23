@@ -132,7 +132,10 @@ public sealed class OperatorVariantPinTests
 
         await manager.AcquireBinaryAsync(GpuVariant.Vulkan, CancellationToken.None);
 
-        AssertEx.Equal(implicitRecord with { OperatorSelected = true }, await store.ReadAsync(CancellationToken.None));
+        AssertEx.Equal(implicitRecord with
+        {
+            OperatorSelected = true
+        }, await store.ReadAsync(CancellationToken.None));
     }
 
     [Test]
@@ -192,7 +195,10 @@ public sealed class OperatorVariantPinTests
 
         await manager.ClearVariantPinAsync(CancellationToken.None);
 
-        AssertEx.Equal(pinned with { OperatorSelected = false }, await store.ReadAsync(CancellationToken.None));
+        AssertEx.Equal(pinned with
+        {
+            OperatorSelected = false
+        }, await store.ReadAsync(CancellationToken.None));
         AssertEx.Null(signal.ActiveVariant);
         AssertEx.True(signal.Version > before, "the cleared pin must invalidate memos keyed to the signal stamp");
     }
@@ -280,7 +286,8 @@ public sealed class OperatorVariantPinTests
             _vendor = vendor;
         }
 
-        public Task<DetectedGpuVendor> DetectVendorAsync(CancellationToken ct) => Task.FromResult(_vendor);
+        public Task<DetectedGpuVendor> DetectVendorAsync(CancellationToken ct) =>
+            Task.FromResult(_vendor);
     }
 
     private sealed class NoNetworkHandler : HttpMessageHandler

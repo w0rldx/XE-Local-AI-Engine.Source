@@ -113,7 +113,7 @@ public sealed class BinaryManagerLinuxCudaCompanionTests
     {
         using var cache = new TempDirectory("xe-linux-cuda");
         var source = Directory.CreateDirectory(Path.Combine(cache.Path, "extracted", CompanionTopFolder)).FullName;
-        foreach (var name in (string[]) [.. CompleteCompanionSet, "LICENSE.txt", "cudart64_12.dll"])
+        foreach (var name in (string[])[.. CompleteCompanionSet, "LICENSE.txt", "cudart64_12.dll"])
         {
             File.WriteAllText(Path.Combine(source, name), name);
         }

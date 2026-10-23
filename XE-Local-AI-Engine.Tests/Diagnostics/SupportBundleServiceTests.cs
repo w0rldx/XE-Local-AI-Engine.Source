@@ -180,7 +180,13 @@ public sealed class SupportBundleServiceTests : IDisposable
         var perfLog = new LocalModelPerfLog(new ManualTimeProvider(DateTimeOffset.UnixEpoch));
         perfLog.RecordReadyLoad("/home/jane/models/llama.gguf", ModelRole.Chat, readinessDurationMs: 9_000);
         perfLog.RecordUnload("/home/jane/models/llama.gguf", ModelRole.Chat, LlamaServerUnloadReason.IdleTimeout);
-        perfLog.RecordTurn("/home/jane/models/llama.gguf", new InvocationThroughput { TimeToFirstTokenMs = 1_400, GenerationTokens = 150, GenerationMs = 2_000, SegmentCount = 1 });
+        perfLog.RecordTurn("/home/jane/models/llama.gguf", new InvocationThroughput
+        {
+            TimeToFirstTokenMs = 1_400,
+            GenerationTokens = 150,
+            GenerationMs = 2_000,
+            SegmentCount = 1
+        });
 
         var entries = await ReadAsync(await CreateService(_logs, perfLog).BuildAsync(isShellOwned: false, CancellationToken.None));
 

@@ -710,7 +710,8 @@ internal sealed class GraphWorkflowGraph
 
         if (questionType != DecisionChoice && provider == LlmDecisionProvider.ProviderName)
         {
-            throw new GraphWorkflowValidationException($"Node '{nodeKey}' asks a '{questionType}' question, which the 'llm' decision provider cannot answer; it answers 'choice' only. Use 'systemone'.");
+            throw new GraphWorkflowValidationException(
+                $"Node '{nodeKey}' asks a '{questionType}' question, which the 'llm' decision provider cannot answer; it answers 'choice' only. Use 'systemone'.");
         }
 
         var model = StrictOptionalString(config, "model", nodeKey)?.Trim() is { Length: > 0 } decisionModel ? decisionModel : null;
@@ -734,8 +735,7 @@ internal sealed class GraphWorkflowGraph
         var inputBindings = ParseBindings(config, "inputBindings", nodeKey);
         if (inputBindings.Count == 0 && provider == SystemOneDecisionProvider.ProviderName)
         {
-            throw new GraphWorkflowValidationException(
-                $"Node '{nodeKey}' uses the 'systemone' decision provider and needs at least one 'inputBindings' entry naming the text to decide on.");
+            throw new GraphWorkflowValidationException($"Node '{nodeKey}' uses the 'systemone' decision provider and needs at least one 'inputBindings' entry naming the text to decide on.");
         }
 
         var parsedLabels = questionType switch
@@ -776,7 +776,8 @@ internal sealed class GraphWorkflowGraph
             var description = member.Value.ValueKind == JsonValueKind.String ? member.Value.GetString()?.Trim() : null;
             if (string.IsNullOrEmpty(description) || description.Length > MaxDecisionCriterionLength)
             {
-                throw new GraphWorkflowValidationException($"The 'criteria' on node '{nodeKey}' describes '{member.Name}' with something that is not a string of 1 to {MaxDecisionCriterionLength} characters.");
+                throw new GraphWorkflowValidationException(
+                    $"The 'criteria' on node '{nodeKey}' describes '{member.Name}' with something that is not a string of 1 to {MaxDecisionCriterionLength} characters.");
             }
 
             parsed[member.Name] = description;

@@ -38,7 +38,14 @@ public sealed class BenchmarkReviewStoreTests : IDisposable
 
         var reviewed = await store.SubmitReviewAsync(Approve(run, score: 72) with
         {
-            Criteria = [new BenchmarkReviewCriterionScore { CriterionId = "accuracy", Score = 7 }],
+            Criteria =
+            [
+                new BenchmarkReviewCriterionScore
+                {
+                    CriterionId = "accuracy",
+                    Score = 7
+                }
+            ],
             Notes = "Correct, but terse."
         });
 
@@ -87,7 +94,10 @@ public sealed class BenchmarkReviewStoreTests : IDisposable
         var project = await CreateReviewProjectAsync(store, Prompt("q1"));
         var run = await StartSucceededRunAsync(store, project.Id, itemIndex: 0);
 
-        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => store.SubmitReviewAsync(Approve(run, score: 0) with { Score = null }),
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => store.SubmitReviewAsync(Approve(run, score: 0) with
+            {
+                Score = null
+            }),
             "An approval with no score would rank nothing; the schema's CHECK is the backstop behind this refusal.");
 
         AssertEx.Equal(expected: 0, await context.BenchmarkRunReviews.CountAsync());
@@ -126,7 +136,10 @@ public sealed class BenchmarkReviewStoreTests : IDisposable
     {
         await using var context = await CreateContextAsync("review-non-scoring.sqlite");
         var store = NewStore(context);
-        var project = await CreateReviewProjectAsync(store, Prompt("q1"), Prompt("display only") with { CountsTowardScore = false });
+        var project = await CreateReviewProjectAsync(store, Prompt("q1"), Prompt("display only") with
+        {
+            CountsTowardScore = false
+        });
         var displayOnly = await StartSucceededRunAsync(store, project.Id, itemIndex: 1);
 
         var conflict = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.SubmitReviewAsync(Approve(displayOnly, score: 50)));
@@ -223,7 +236,10 @@ public sealed class BenchmarkReviewStoreTests : IDisposable
     {
         await using var context = await CreateContextAsync("review-queue-pending.sqlite");
         var store = NewStore(context);
-        var project = await CreateReviewProjectAsync(store, Prompt("q1"), Prompt("q2"), Prompt("display only") with { CountsTowardScore = false });
+        var project = await CreateReviewProjectAsync(store, Prompt("q1"), Prompt("q2"), Prompt("display only") with
+        {
+            CountsTowardScore = false
+        });
         var pending = await StartSucceededRunAsync(store, project.Id, itemIndex: 0);
         var second = await StartSucceededRunAsync(store, project.Id, itemIndex: 1);
         _ = await StartSucceededRunAsync(store, project.Id, itemIndex: 0, warmup: true);
@@ -231,15 +247,26 @@ public sealed class BenchmarkReviewStoreTests : IDisposable
         var approved = await StartSucceededRunAsync(store, project.Id, itemIndex: 0);
         _ = await store.SubmitReviewAsync(Approve(approved, score: 70));
 
-        var page = await store.ListReviewQueueAsync(new BenchmarkReviewQuery { State = BenchmarkReviewStates.Pending, ProjectId = project.Id });
+        var page = await store.ListReviewQueueAsync(new BenchmarkReviewQuery
+        {
+            State = BenchmarkReviewStates.Pending,
+            ProjectId = project.Id
+        });
 
         AssertEx.Equal(expected: 2, page.TotalCount, "Only the succeeded, scoring, undecided runs are pending: no warm-up, no display-only leaf, no decided run.");
         AssertEx.True(page.Items.Select(static row => row.RunId).ToHashSet().SetEquals([pending.Id, second.Id]));
         AssertEx.True(page.Items.All(static row => row.State == BenchmarkReviewStates.Pending && row.ReviewScore is null));
-        var approvedPage = await store.ListReviewQueueAsync(new BenchmarkReviewQuery { State = BenchmarkReviewStates.Approved, ProjectId = project.Id });
+        var approvedPage = await store.ListReviewQueueAsync(new BenchmarkReviewQuery
+        {
+            State = BenchmarkReviewStates.Approved,
+            ProjectId = project.Id
+        });
         AssertEx.Equal(approved.Id, approvedPage.Items.Single().RunId);
         AssertEx.Equal<int?>(70, approvedPage.Items.Single().ReviewScore);
-        AssertEx.Equal(expected: 0, (await store.ListReviewQueueAsync(new BenchmarkReviewQuery { State = BenchmarkReviewStates.Rejected })).TotalCount);
+        AssertEx.Equal(expected: 0, (await store.ListReviewQueueAsync(new BenchmarkReviewQuery
+        {
+            State = BenchmarkReviewStates.Rejected
+        })).TotalCount);
 
         // Editing an item moves its input hash AND the project's set hash: every run was measured against a question set that no longer exists, and the
         // ranking excludes them before any review matters, so none of them is reviewable.
@@ -247,9 +274,15 @@ public sealed class BenchmarkReviewStoreTests : IDisposable
         _ = await store.UpdateTaskItemAsync(project.Id, item.Id, item.Version, Prompt("q2, reworded"));
         _ = await StartRunAsync(store, project.Id, itemIndex: 0);
 
-        AssertEx.Equal(expected: 0, (await store.ListReviewQueueAsync(new BenchmarkReviewQuery { State = BenchmarkReviewStates.Pending })).TotalCount,
+        AssertEx.Equal(expected: 0, (await store.ListReviewQueueAsync(new BenchmarkReviewQuery
+            {
+                State = BenchmarkReviewStates.Pending
+            })).TotalCount,
             "Runs on a revised item set and a queued run are not pending.");
-        AssertEx.Equal(expected: 0, (await store.ListReviewQueueAsync(new BenchmarkReviewQuery { State = BenchmarkReviewStates.Approved })).TotalCount);
+        AssertEx.Equal(expected: 0, (await store.ListReviewQueueAsync(new BenchmarkReviewQuery
+        {
+            State = BenchmarkReviewStates.Approved
+        })).TotalCount);
     }
 
     [Test]
@@ -260,19 +293,34 @@ public sealed class BenchmarkReviewStoreTests : IDisposable
         var project = await CreateReviewProjectAsync(store, Prompt("q1"));
         var run = await StartSucceededRunAsync(store, project.Id, itemIndex: 0);
         _ = await store.SubmitReviewAsync(Approve(run, score: 70));
-        AssertEx.Equal(expected: 0, (await store.ListReviewQueueAsync(new BenchmarkReviewQuery { State = BenchmarkReviewStates.Pending })).TotalCount,
+        AssertEx.Equal(expected: 0, (await store.ListReviewQueueAsync(new BenchmarkReviewQuery
+            {
+                State = BenchmarkReviewStates.Pending
+            })).TotalCount,
             "A decision under the current revision (no policy) is not pending.");
 
         // The rubric changes: the project now judges under a revision the decision was not made under, and the re-judge succeeds.
         var current = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
         _ = await store.ActivateJudgePolicyAsync(project.Id, current.Version, Encoding.UTF8.GetBytes("""{"rubric":"v2"}"""), PolicyHash, JudgeSeed(revisionId: null));
-        AssertEx.Equal(expected: 0, (await store.ListReviewQueueAsync(new BenchmarkReviewQuery { State = BenchmarkReviewStates.Pending })).TotalCount,
+        AssertEx.Equal(expected: 0, (await store.ListReviewQueueAsync(new BenchmarkReviewQuery
+            {
+                State = BenchmarkReviewStates.Pending
+            })).TotalCount,
             "Not back in the inbox while its re-judge is still queued.");
         _ = await SucceedNextJudgingAsync(store);
 
-        var pending = await store.ListReviewQueueAsync(new BenchmarkReviewQuery { State = BenchmarkReviewStates.Pending });
-        var stale = await store.ListReviewQueueAsync(new BenchmarkReviewQuery { State = BenchmarkReviewStates.Stale });
-        var approved = await store.ListReviewQueueAsync(new BenchmarkReviewQuery { State = BenchmarkReviewStates.Approved });
+        var pending = await store.ListReviewQueueAsync(new BenchmarkReviewQuery
+        {
+            State = BenchmarkReviewStates.Pending
+        });
+        var stale = await store.ListReviewQueueAsync(new BenchmarkReviewQuery
+        {
+            State = BenchmarkReviewStates.Stale
+        });
+        var approved = await store.ListReviewQueueAsync(new BenchmarkReviewQuery
+        {
+            State = BenchmarkReviewStates.Approved
+        });
 
         AssertEx.Equal(run.Id, pending.Items.Single().RunId, "A stale review returns to the inbox.");
         AssertEx.Equal(BenchmarkReviewStates.Stale, pending.Items.Single().State, "The row says why it is back.");
@@ -291,7 +339,12 @@ public sealed class BenchmarkReviewStoreTests : IDisposable
         var judged = await StartRunAsync(store, created.Id, itemIndex: 0);
         var failed = await StartRunAsync(store, created.Id, itemIndex: 0);
         var queued = await StartRunAsync(store, created.Id, itemIndex: 0);
-        foreach (var run in new[] { judged, failed, queued })
+        foreach (var run in new[]
+                 {
+                     judged,
+                     failed,
+                     queued
+                 })
         {
             _ = await SucceedClaimedPrimaryAsync(store, run, revision.Id);
         }
@@ -301,7 +354,10 @@ public sealed class BenchmarkReviewStoreTests : IDisposable
         AssertEx.Equal(failed.Id, failing.RunId);
         _ = await store.MarkJudgeFailedAsync(failing.RunId, failing.Version, "judge blew up");
 
-        var page = await store.ListReviewQueueAsync(new BenchmarkReviewQuery { State = BenchmarkReviewStates.Pending });
+        var page = await store.ListReviewQueueAsync(new BenchmarkReviewQuery
+        {
+            State = BenchmarkReviewStates.Pending
+        });
 
         AssertEx.Equal(judged.Id, page.Items.Single().RunId, "Only the run the review service would accept is listed: the queued and the failed judging are not.");
         AssertEx.False(page.Items.Any(row => row.RunId == queued.Id || row.RunId == failed.Id));
@@ -316,8 +372,14 @@ public sealed class BenchmarkReviewStoreTests : IDisposable
         var run = await StartSucceededRunAsync(store, project.Id, itemIndex: 0);
 
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
-            store.SubmitReviewAsync(Approve(run, score: 70) with { Notes = new string('n', BenchmarkReviewLimits.MaxNotesCharacters + 1) }));
-        var atCap = await store.SubmitReviewAsync(Approve(run, score: 70) with { Notes = new string('n', BenchmarkReviewLimits.MaxNotesCharacters) });
+            store.SubmitReviewAsync(Approve(run, score: 70) with
+            {
+                Notes = new string('n', BenchmarkReviewLimits.MaxNotesCharacters + 1)
+            }));
+        var atCap = await store.SubmitReviewAsync(Approve(run, score: 70) with
+        {
+            Notes = new string('n', BenchmarkReviewLimits.MaxNotesCharacters)
+        });
 
         AssertEx.Equal(BenchmarkReviewLimits.MaxNotesCharacters, AssertEx.NotNull(AssertEx.NotNull(atCap.Review).Notes).Length, "The cap itself is accepted.");
     }
@@ -333,14 +395,26 @@ public sealed class BenchmarkReviewStoreTests : IDisposable
             _ = await StartSucceededRunAsync(store, project.Id, itemIndex: 0);
         }
 
-        var first = await store.ListReviewQueueAsync(new BenchmarkReviewQuery { State = BenchmarkReviewStates.Pending, Take = 2 });
-        var second = await store.ListReviewQueueAsync(new BenchmarkReviewQuery { State = BenchmarkReviewStates.Pending, Skip = 2, Take = 2 });
+        var first = await store.ListReviewQueueAsync(new BenchmarkReviewQuery
+        {
+            State = BenchmarkReviewStates.Pending,
+            Take = 2
+        });
+        var second = await store.ListReviewQueueAsync(new BenchmarkReviewQuery
+        {
+            State = BenchmarkReviewStates.Pending,
+            Skip = 2,
+            Take = 2
+        });
 
         AssertEx.Equal(expected: 2, first.Items.Count);
         AssertEx.Equal(expected: 1, second.Items.Count);
         AssertEx.Equal(expected: 3, second.TotalCount, "The total counts the whole filter, not the page.");
         AssertEx.False(first.Items.Any(row => row.RunId == second.Items[0].RunId), "Pages do not overlap.");
-        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => store.ListReviewQueueAsync(new BenchmarkReviewQuery { State = "maybe" }));
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => store.ListReviewQueueAsync(new BenchmarkReviewQuery
+        {
+            State = "maybe"
+        }));
     }
 
     [Test]
@@ -350,7 +424,10 @@ public sealed class BenchmarkReviewStoreTests : IDisposable
         var store = NewStore(context);
         var project = await CreateReviewProjectAsync(store, Prompt("q1"));
         var run = await StartSucceededRunAsync(store, project.Id, itemIndex: 0);
-        AssertEx.Equal(expected: 1, (await store.ListReviewQueueAsync(new BenchmarkReviewQuery { State = BenchmarkReviewStates.Pending })).TotalCount);
+        AssertEx.Equal(expected: 1, (await store.ListReviewQueueAsync(new BenchmarkReviewQuery
+        {
+            State = BenchmarkReviewStates.Pending
+        })).TotalCount);
 
         await store.DeleteRunAsync(run.Id, run.Version);
 
@@ -364,7 +441,10 @@ public sealed class BenchmarkReviewStoreTests : IDisposable
         var store = NewStore(context);
         var project = await CreateReviewProjectAsync(store, Prompt("q1"));
         var run = await StartSucceededRunAsync(store, project.Id, itemIndex: 0);
-        var reviewed = await store.SubmitReviewAsync(Approve(run, score: 70) with { Notes = "keep" });
+        var reviewed = await store.SubmitReviewAsync(Approve(run, score: 70) with
+        {
+            Notes = "keep"
+        });
 
         await store.DeleteRunAsync(run.Id, reviewed.Version);
 

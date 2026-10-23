@@ -77,15 +77,16 @@ public sealed class CodexUsageReplayTests
 
     private static string BuildStreamingBody(string usageJson)
     {
-        const string Created = """{"type":"response.created","sequence_number":0,"response":{"id":"resp_1","object":"response","created_at":1700000000,"status":"in_progress","model":"gpt-5.4","output":[],"parallel_tool_calls":false,"tools":[]}}""";
+        const string Created =
+            """{"type":"response.created","sequence_number":0,"response":{"id":"resp_1","object":"response","created_at":1700000000,"status":"in_progress","model":"gpt-5.4","output":[],"parallel_tool_calls":false,"tools":[]}}""";
         const string Delta1 = """{"type":"response.output_text.delta","sequence_number":1,"item_id":"msg_1","output_index":0,"content_index":0,"delta":"hi "}""";
         const string Delta2 = """{"type":"response.output_text.delta","sequence_number":2,"item_id":"msg_1","output_index":0,"content_index":0,"delta":"there"}""";
         var completed = """{"type":"response.completed","sequence_number":3,"response":""" + BuildResponseJson(usageJson).Trim() + "}";
 
         return Sse("response.created", Created)
-            + Sse("response.output_text.delta", Delta1)
-            + Sse("response.output_text.delta", Delta2)
-            + Sse("response.completed", completed);
+               + Sse("response.output_text.delta", Delta1)
+               + Sse("response.output_text.delta", Delta2)
+               + Sse("response.completed", completed);
     }
 
     private static string Sse(string eventName, string data)

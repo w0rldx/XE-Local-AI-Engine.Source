@@ -255,7 +255,10 @@ public sealed class LocalModelEndpointTests
         var modelService = Substitute.For<IOllamaModelService>();
         var cloudModelResolver = Substitute.For<ICloudModelResolver>();
         cloudModelResolver.IsCloudModelAsync("gpt-4o-prod", Arg.Any<CancellationToken>()).Returns(true);
-        cloudModelResolver.ResolveContextWindowAsync("gpt-4o-prod", Arg.Any<CancellationToken>()).Returns(new CloudModelContextWindow { ContextTokens = declaredWindow });
+        cloudModelResolver.ResolveContextWindowAsync("gpt-4o-prod", Arg.Any<CancellationToken>()).Returns(new CloudModelContextWindow
+        {
+            ContextTokens = declaredWindow
+        });
         await using var context = CreateContext(modelService, new FakeNodeSettingsStore(new StoredNodeSettings()), cloudModelResolver);
         using var client = context.Factory.CreateClient();
 

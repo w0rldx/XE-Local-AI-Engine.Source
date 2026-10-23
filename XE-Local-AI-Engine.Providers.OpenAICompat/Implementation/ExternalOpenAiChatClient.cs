@@ -228,8 +228,7 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
         // The reasoning rewriting reads Chat Completions payloads only; the Responses adapter maps reasoning items itself.
         var client = surface == ExternalProviderApiSurface.Responses
             ? OpenAICompatibleClientFactory.CreateResponsesChatClient(baseAddress, registration.Model.WireId, apiKey, timeout, transport)
-            : new ExternalReasoningRewritingChatClient(
-                OpenAICompatibleClientFactory.CreateChatClient(baseAddress, registration.Model.WireId, apiKey, timeout, transport));
+            : new ExternalReasoningRewritingChatClient(OpenAICompatibleClientFactory.CreateChatClient(baseAddress, registration.Model.WireId, apiKey, timeout, transport));
 
         return new ResolvedEndpoint(identity, client, httpClient);
     }

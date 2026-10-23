@@ -70,8 +70,8 @@ public sealed partial class BenchmarkStore
                   && run.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded
                   && (run.TaskItemId == null
                       || _dbContext.BenchmarkTaskItems.Any(item => item.Id == run.TaskItemId
-                                                                  && item.Kind != BenchmarkTaskItemKinds.Niah
-                                                                  && item.CountsTowardScore))
+                                                                   && item.Kind != BenchmarkTaskItemKinds.Niah
+                                                                   && item.CountsTowardScore))
             join review in _dbContext.BenchmarkRunReviews.AsNoTracking() on run.Id equals review.RunId into reviews
             from review in reviews.DefaultIfEmpty()
             select new
@@ -81,8 +81,8 @@ public sealed partial class BenchmarkStore
                 Stale = review != null && review.PolicyRevisionId != project.CurrentJudgePolicyRevisionId,
                 JudgingCurrent = project.CurrentJudgePolicyRevisionId == null
                                  || _dbContext.BenchmarkJudgeAttempts.Any(attempt => attempt.Id == run.CurrentJudgeAttemptId
-                                                                                    && attempt.Status == BenchmarkJudgeAttemptStatus.Succeeded
-                                                                                    && attempt.PolicyRevisionId == project.CurrentJudgePolicyRevisionId)
+                                                                                     && attempt.Status == BenchmarkJudgeAttemptStatus.Succeeded
+                                                                                     && attempt.PolicyRevisionId == project.CurrentJudgePolicyRevisionId)
             }).ToArrayAsync(cancellationToken);
 
         // The same rule the review inbox and the review service apply: an open review waits for its judging to succeed under the current revision first.

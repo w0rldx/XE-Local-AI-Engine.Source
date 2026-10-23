@@ -260,7 +260,10 @@ public sealed class BenchmarkReviewServiceTests
             {
                 Id = RunId,
                 ProjectId = ProjectId,
-                RuntimeSnapshotJson = new byte[] { 1 },
+                RuntimeSnapshotJson = new byte[]
+                {
+                    1
+                },
                 PrimaryModelName = "model.gguf",
                 PrimaryModelOrigin = LocalModelOrigin.Imported,
                 ModelContentFingerprint = $"v1:{new string('a', count: 64)}",

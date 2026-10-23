@@ -806,7 +806,10 @@ public sealed class BenchmarkProjectServiceTests
     {
         // Comparisons in a review project would run for hours and never rank: refused before the verifying lease re-hashes the judge model.
         var context = new ServiceContext();
-        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(ServiceContext.CurrentProject() with { RequiresReview = true });
+        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(ServiceContext.CurrentProject() with
+        {
+            RequiresReview = true
+        });
 
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
             context.Service.UpdateJudgePolicyAsync(ProjectId, 1, PairwiseJudge(), confirmRejudge: true));

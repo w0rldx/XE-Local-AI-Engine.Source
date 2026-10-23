@@ -10,6 +10,7 @@ using System.Net.Sockets;
 using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json;
+using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Endpoints.Auth.V1;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Hosting;
@@ -524,9 +525,12 @@ public sealed class EngineCliProcessTests : IDisposable
         await SetupLockedVaultAsync();
 
         var refused = await RunAsync(["--mcp-only"], launchMode: null,
-            environment: new Dictionary<string, string>(StringComparer.Ordinal) { ["AgentHome__RunRetention__SweepInterval"] = "00:00:01" });
+            environment: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["AgentHome__RunRetention__SweepInterval"] = "00:00:01"
+            });
 
-        AssertEx.Equal(XE_Local_AI_Engine.Client.Program.OptionsValidationFailedExitCode, refused.ExitCode, refused.CombinedOutput);
+        AssertEx.Equal(Program.OptionsValidationFailedExitCode, refused.ExitCode, refused.CombinedOutput);
         var lastLine = AssertEx.NotNull(refused.StandardError.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries).LastOrDefault(), refused.CombinedOutput);
         AssertEx.True(lastLine.StartsWith(SettingValidationFailure.StandardErrorPrefix, StringComparison.Ordinal), $"The shell reads the stderr tail: {refused.StandardError}");
         AssertEx.Contains(lastLine, "AgentHome:RunRetention:SweepInterval");
@@ -560,14 +564,14 @@ public sealed class EngineCliProcessTests : IDisposable
         owned.StartDraining();
         await connected.WaitAsync(TimeSpan.FromSeconds(10));
         using (var client = await CreateSignedInClientAsync())
-        using (var accepted = await client.PostAsync(Route(LocalApiRoutes.Node.Restart), content: null))
-        {
-            AssertEx.Equal(HttpStatusCode.Accepted, accepted.StatusCode, await accepted.Content.ReadAsStringAsync());
-            AssertEx.Equal(0, (await accepted.Content.ReadAsByteArrayAsync()).Length, "The restart answers 202 with no body.");
-        }
+            using (var accepted = await client.PostAsync(Route(LocalApiRoutes.Node.Restart), content: null))
+            {
+                AssertEx.Equal(HttpStatusCode.Accepted, accepted.StatusCode, await accepted.Content.ReadAsStringAsync());
+                AssertEx.Equal(0, (await accepted.Content.ReadAsByteArrayAsync()).Length, "The restart answers 202 with no body.");
+            }
 
         var exitCode = await owned.WaitForExitAsync(TimeSpan.FromSeconds(60));
-        AssertEx.Equal(XE_Local_AI_Engine.Client.Program.RestartRequestedExitCode, exitCode, await owned.StandardErrorAsync());
+        AssertEx.Equal(Program.RestartRequestedExitCode, exitCode, await owned.StandardErrorAsync());
     }
 
     /// <summary>A client on the running engine's origin, signed in with the admin password.</summary>
@@ -735,9 +739,9 @@ public sealed class EngineCliProcessTests : IDisposable
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-            WorkingDirectory = Path.GetDirectoryName(typeof(Program).Assembly.Location)!
+            WorkingDirectory = Path.GetDirectoryName(typeof(global::Program).Assembly.Location)!
         };
-        startInfo.ArgumentList.Add(typeof(Program).Assembly.Location);
+        startInfo.ArgumentList.Add(typeof(global::Program).Assembly.Location);
         foreach (var argument in arguments)
         {
             startInfo.ArgumentList.Add(argument);

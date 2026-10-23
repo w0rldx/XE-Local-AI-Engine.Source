@@ -237,7 +237,8 @@ public sealed class GraphWorkflowChatContractTests
         AssertEx.Equal("the first", choice.Criteria["a"], "a description is trimmed.");
         AssertEx.False(choice.Criteria.ContainsKey("b"), "criteria may describe only some labels.");
 
-        var score = DecisionConfig("""{ "question": "Q?", "questionType": "score", "labels": ["low", "mid", "high"], "provider": "systemone", "model": "m", "inputBindings": { "text": "run.input.message" } }""");
+        var score = DecisionConfig(
+            """{ "question": "Q?", "questionType": "score", "labels": ["low", "mid", "high"], "provider": "systemone", "model": "m", "inputBindings": { "text": "run.input.message" } }""");
         AssertEx.Equal("score", score.QuestionType);
         AssertEx.Equal("low,mid,high", string.Join(",", score.Labels), "levels keep their order, lowest first.");
 
@@ -249,7 +250,8 @@ public sealed class GraphWorkflowChatContractTests
 
         var tenLevels = string.Join(", ", Enumerable.Range(0, 10).Select(static index => $"\"l{index}\""));
         AssertEx.Equal(expected: 10,
-            DecisionConfig($$"""{ "question": "Q?", "questionType": "score", "labels": [{{tenLevels}}], "provider": "systemone", "model": "m", "inputBindings": { "text": "run.input.message" } }""").Labels.Count);
+            DecisionConfig($$"""{ "question": "Q?", "questionType": "score", "labels": [{{tenLevels}}], "provider": "systemone", "model": "m", "inputBindings": { "text": "run.input.message" } }""")
+                .Labels.Count);
     }
 
     [Test]
@@ -275,7 +277,8 @@ public sealed class GraphWorkflowChatContractTests
     {
         var eleven = string.Join(", ", Enumerable.Range(0, 11).Select(static index => $"\"l{index}\""));
 
-        AssertEx.Contains(Refusal(DecisionModel($$"""{ "question": "Q?", "questionType": "score", "labels": [{{eleven}}], "provider": "systemone", "model": "m", "inputBindings": { "t": "run.input.message" } }""")),
+        AssertEx.Contains(
+            Refusal(DecisionModel($$"""{ "question": "Q?", "questionType": "score", "labels": [{{eleven}}], "provider": "systemone", "model": "m", "inputBindings": { "t": "run.input.message" } }""")),
             "needs between 2 and 10");
     }
 

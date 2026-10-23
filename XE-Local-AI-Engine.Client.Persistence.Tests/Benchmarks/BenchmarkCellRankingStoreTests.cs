@@ -315,7 +315,10 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
             TaskItemSetHash = project.TaskItemSetHash
         });
         var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
-        _ = await store.MarkPrimarySucceededAsync(PrimarySuccess(run.Id, claimed.Run.Version) with { PrimaryStopReason = "stop" });
+        _ = await store.MarkPrimarySucceededAsync(PrimarySuccess(run.Id, claimed.Run.Version) with
+        {
+            PrimaryStopReason = "stop"
+        });
 
         var page = await store.ListCellsAsync(project.Id);
 
@@ -332,7 +335,10 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
         var activation = await store.ActivateJudgePolicyAsync(project.Id, project.Version, Encoding.UTF8.GetBytes("""{"rubric":"a"}"""), new string('1', count: 64));
         _ = await JudgedSingleItemCellAsync(store, project.Id, activation.Revision.Id, judgeScore: 90);
         var approved = await JudgedSingleItemCellAsync(store, project.Id, activation.Revision.Id, judgeScore: 80);
-        _ = await store.SubmitReviewAsync(Approve(approved, score: 50) with { PolicyRevisionId = activation.Revision.Id });
+        _ = await store.SubmitReviewAsync(Approve(approved, score: 50) with
+        {
+            PolicyRevisionId = activation.Revision.Id
+        });
 
         var page = await store.ListCellsAsync(project.Id);
 
@@ -361,7 +367,10 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
         {
             var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
             AssertEx.Equal(runs[index].Id, claimed.RunId, "The queue is FIFO by insert order.");
-            _ = await store.MarkPrimarySucceededAsync(PrimarySuccess(claimed.RunId, claimed.Run.Version) with { PrimaryStopReason = stopReasons[index] });
+            _ = await store.MarkPrimarySucceededAsync(PrimarySuccess(claimed.RunId, claimed.Run.Version) with
+            {
+                PrimaryStopReason = stopReasons[index]
+            });
         }
 
         return [.. runs.Select(static run => run.Id)];
@@ -412,7 +421,10 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
     }
 
     private static async Task<BenchmarkProjectRecord> CreateSuiteAsync(BenchmarkStore store, int itemCount, bool requiresReview) =>
-        await store.CreateProjectAsync(NewProject() with { RequiresReview = requiresReview },
+        await store.CreateProjectAsync(NewProject() with
+            {
+                RequiresReview = requiresReview
+            },
             initialItems: [.. Enumerable.Range(0, itemCount).Select(index => Prompt("question " + index))]);
 
     private static async Task<BenchmarkProjectRecord> CreateSuiteAsync(BenchmarkStore store, int itemCount) =>

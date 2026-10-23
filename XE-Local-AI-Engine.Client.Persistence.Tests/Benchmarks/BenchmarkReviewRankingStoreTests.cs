@@ -74,7 +74,10 @@ public sealed class BenchmarkReviewRankingStoreTests : IDisposable
         var store = NewStore(context);
         var project = await CreateJudgedProjectAsync(store, requiresReview: true);
         var run = await JudgedRunAsync(store, project, judgeScore: 80);
-        _ = await store.SubmitReviewAsync(Approve(run, score: 60, project.Revision.Id) with { State = BenchmarkReviewStates.Rejected });
+        _ = await store.SubmitReviewAsync(Approve(run, score: 60, project.Revision.Id) with
+        {
+            State = BenchmarkReviewStates.Rejected
+        });
 
         // A user score no write path leaves beside a rejection, planted directly: the rejection outranks it.
         _ = await context.BenchmarkRuns.Where(entity => entity.Id == run.Id).ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.UserScore, 95));
@@ -127,7 +130,10 @@ public sealed class BenchmarkReviewRankingStoreTests : IDisposable
             "A review cannot open on a failed judging, so the run reports what it needs: a re-judge.");
         AssertEx.Equal(BenchmarkRunJudgeStates.ReasonJudgeFailed, read.Judge!.RankExclusionReason);
         AssertEx.Equal(BenchmarkRunJudgeStates.ReasonItemIncomplete, cells.Cells.Single().RankExclusionReason, "Not a review gap: the inbox does not list it.");
-        AssertEx.Equal(expected: 0, (await store.ListReviewQueueAsync(new BenchmarkReviewQuery { State = BenchmarkReviewStates.Pending })).TotalCount);
+        AssertEx.Equal(expected: 0, (await store.ListReviewQueueAsync(new BenchmarkReviewQuery
+        {
+            State = BenchmarkReviewStates.Pending
+        })).TotalCount);
     }
 
     [Test]
@@ -178,7 +184,10 @@ public sealed class BenchmarkReviewRankingStoreTests : IDisposable
 
         var listed = await ListedAsync(store, project.Project.Id, run.Id);
         var read = AssertEx.NotNull(await store.GetRunAsync(run.Id));
-        var queue = await store.ListReviewQueueAsync(new BenchmarkReviewQuery { State = BenchmarkReviewStates.Pending });
+        var queue = await store.ListReviewQueueAsync(new BenchmarkReviewQuery
+        {
+            State = BenchmarkReviewStates.Pending
+        });
 
         AssertEx.Equal<int?>(70, listed.QualityScore, "A display-only leaf keeps its judge score: it is the recall axis.");
         AssertEx.Equal(BenchmarkQualityScoreSources.Judge, listed.QualityScoreSource);

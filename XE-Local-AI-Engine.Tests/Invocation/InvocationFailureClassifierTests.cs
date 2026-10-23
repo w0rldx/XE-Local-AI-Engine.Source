@@ -187,7 +187,9 @@ public sealed class InvocationFailureClassifierTests
 
     // llama-server's context-size body (type plus counts) and an OpenAI-compatible one (code only), bare and wrapped by the agent framework.
     [Test]
-    [Arguments("""{"error":{"code":400,"message":"request (9000 tokens) exceeds the available context size (8192 tokens), try increasing it","type":"exceed_context_size_error","n_prompt_tokens":9000,"n_ctx":8192}}""", false)]
+    [Arguments(
+        """{"error":{"code":400,"message":"request (9000 tokens) exceeds the available context size (8192 tokens), try increasing it","type":"exceed_context_size_error","n_prompt_tokens":9000,"n_ctx":8192}}""",
+        false)]
     [Arguments("""{"error":{"message":"This model's maximum context length is 8192 tokens.","type":"invalid_request_error","param":"messages","code":"context_length_exceeded"}}""", true)]
     public void MapFailure_ProviderContextSizeRejection_IsContextWindowExceededWithTheFixedMessage(string body, bool wrapped)
     {

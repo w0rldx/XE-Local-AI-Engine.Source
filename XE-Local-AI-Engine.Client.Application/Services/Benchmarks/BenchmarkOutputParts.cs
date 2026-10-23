@@ -125,7 +125,12 @@ public static class BenchmarkOutputParts
         var graded = Coalesce(parts)
                      .Where(static part => !string.Equals(part.Kind, ReasoningKind, StringComparison.Ordinal))
                      // Tool timing is a display value, not the graded answer: cleared so a judge prompt is byte-identical timed or not.
-                     .Select(static part => part.DurationMs is null ? part : part with { DurationMs = null })
+                     .Select(static part => part.DurationMs is null
+                         ? part
+                         : part with
+                         {
+                             DurationMs = null
+                         })
                      .ToArray();
         var allowance = Math.Max(MinimumJudgeTextChars, judgeContextTokens / 2 * EstimatedCharsPerToken);
         if (graded.Sum(static part => part.Content?.Length ?? 0) <= allowance)

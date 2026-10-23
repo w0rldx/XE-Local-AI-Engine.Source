@@ -5,9 +5,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Configuration;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1;
 using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Validators;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
@@ -369,8 +369,7 @@ public sealed class NodeSettingsAdministrationServiceTests
     {
         // Installed: the nomic embedder and a chat model. A pin naming a missing embedder or a non-embedding model is refused.
         var store = new FakeNodeSettingsStore(new StoredNodeSettings());
-        var service = CreateService(store, localModelProviderResolver: EmbeddingProviderResolver(
-            "nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0", "unsloth/Qwen3-8B-GGUF:Q4_K_M"));
+        var service = CreateService(store, localModelProviderResolver: EmbeddingProviderResolver("nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0", "unsloth/Qwen3-8B-GGUF:Q4_K_M"));
 
         var result = await service.SaveTrustedMergedAsync(current => current with
         {
@@ -853,17 +852,17 @@ public sealed class NodeSettingsAdministrationServiceTests
         var provider = Substitute.For<ILocalModelProvider>();
         provider.ListModelsAsync(Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>(installedModels
-                                                                             .Select(static name => new LocalModelDescriptor
-                                                                             {
-                                                                                 ModelName = name,
-                                                                                 ProviderName = LlamaServerProviderConstants.ProviderName,
-                                                                                 IsAvailable = true,
-                                                                                 SizeBytes = null,
-                                                                                 ModifiedAt = null,
-                                                                                 MaxContextTokens = null,
-                                                                                 Capabilities = []
-                                                                             })
-                                                                             .ToList()));
+                                                                              .Select(static name => new LocalModelDescriptor
+                                                                              {
+                                                                                  ModelName = name,
+                                                                                  ProviderName = LlamaServerProviderConstants.ProviderName,
+                                                                                  IsAvailable = true,
+                                                                                  SizeBytes = null,
+                                                                                  ModifiedAt = null,
+                                                                                  MaxContextTokens = null,
+                                                                                  Capabilities = []
+                                                                              })
+                                                                              .ToList()));
         var resolver = Substitute.For<ILocalModelProviderResolver>();
         resolver.ResolveProvider(Arg.Any<string>()).Returns(provider);
         resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())

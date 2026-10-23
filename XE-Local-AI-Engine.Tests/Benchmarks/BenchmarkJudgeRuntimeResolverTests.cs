@@ -2,8 +2,8 @@ namespace XE_Local_AI_Engine.Tests.Benchmarks;
 
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -40,7 +40,10 @@ public sealed class BenchmarkJudgeRuntimeResolverTests
         var resolver = Resolver(carriesProjector: true, launchResolver);
 
         var exception = await AssertEx.ThrowsAsync<BenchmarkEligibilityException>(() =>
-            resolver.ResolveAsync(Policy(carriesProjector: true, BenchmarkJudgeRubricDefaults.Verifiable()) with { Mode = BenchmarkJudgePolicyModes.Pairwise },
+            resolver.ResolveAsync(Policy(carriesProjector: true, BenchmarkJudgeRubricDefaults.Verifiable()) with
+                {
+                    Mode = BenchmarkJudgePolicyModes.Pairwise
+                },
                 CancellationToken.None));
 
         AssertEx.True(exception.Message.Contains("auxiliary asset", StringComparison.Ordinal), exception.Message);

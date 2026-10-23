@@ -107,7 +107,11 @@ internal static class ResponsesEndpoint
             // The arguments arrive in two pieces, so a client must take the whole call from the done event.
             var half = toolCall.Arguments.Length / 2;
             await Emit("response.output_item.added", Item(1, FunctionCall(toolCall, arguments: string.Empty)));
-            foreach (var piece in new[] { toolCall.Arguments[..half], toolCall.Arguments[half..] })
+            foreach (var piece in new[]
+                     {
+                         toolCall.Arguments[..half],
+                         toolCall.Arguments[half..]
+                     })
             {
                 await Emit("response.function_call_arguments.delta", ItemEvent(FunctionCallId, piece, "delta"));
             }

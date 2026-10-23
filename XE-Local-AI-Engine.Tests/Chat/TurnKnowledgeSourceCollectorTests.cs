@@ -77,7 +77,10 @@ public sealed class TurnKnowledgeSourceCollectorTests
         IReadOnlyList<NodeChatMessageSource> preTurn = [shared, TurnKnowledgeSourceCollector.ToSource(Hit("pre"))];
         IReadOnlyList<NodeChatMessageSource> collected =
         [
-            shared with { Title = "shared-again" },
+            shared with
+            {
+                Title = "shared-again"
+            },
             .. Enumerable.Range(0, 30).Select(index => TurnKnowledgeSourceCollector.ToSource(Hit($"tool-{index}")))
         ];
 

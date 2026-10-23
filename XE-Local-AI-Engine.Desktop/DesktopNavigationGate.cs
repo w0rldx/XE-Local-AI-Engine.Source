@@ -31,13 +31,16 @@ internal sealed class DesktopNavigationGate
     }
 
     /// <summary>Counts every started navigation, a blocked one too, because its completion is reported as well.</summary>
-    internal void Started() => _pending++;
+    internal void Started() =>
+        _pending++;
 
     /// <summary>A new start-page load (the first one or a reload after an engine relaunch) gets the whole retry window.</summary>
-    internal void Restart() => _firstFailure = null;
+    internal void Restart() =>
+        _firstFailure = null;
 
     /// <summary>Whether a failed start page may still be tried again.</summary>
-    internal bool CanRetry() => _firstFailure is not { } first || _time.GetUtcNow() - first < RetryWindow;
+    internal bool CanRetry() =>
+        _firstFailure is not { } first || _time.GetUtcNow() - first < RetryWindow;
 
     internal Outcome Completed(bool success)
     {

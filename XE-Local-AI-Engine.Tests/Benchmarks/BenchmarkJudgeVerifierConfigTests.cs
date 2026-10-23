@@ -207,7 +207,12 @@ public sealed class BenchmarkJudgeVerifierConfigTests
                      JsonSerializer.Serialize(new
                      {
                          relations = Enumerable.Range(0, BenchmarkJudgeVerifierConfig.MaximumSceneRelations + 1)
-                                               .Select(static index => new { kind = "above", a = $"a{index}", b = "floor" })
+                                               .Select(static index => new
+                                               {
+                                                   kind = "above",
+                                                   a = $"a{index}",
+                                                   b = "floor"
+                                               })
                      })
                  })
         {

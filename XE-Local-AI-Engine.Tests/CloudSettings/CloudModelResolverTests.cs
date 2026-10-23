@@ -107,8 +107,15 @@ public sealed class CloudModelResolverTests
             {
                 Models =
                 [
-                    new StoredAzureFoundryModel { DeploymentName = "Azure-GPT", ContextLength = 128_000 },
-                    new StoredAzureFoundryModel { DeploymentName = "azure-mini" }
+                    new StoredAzureFoundryModel
+                    {
+                        DeploymentName = "Azure-GPT",
+                        ContextLength = 128_000
+                    },
+                    new StoredAzureFoundryModel
+                    {
+                        DeploymentName = "azure-mini"
+                    }
                 ]
             }
         });

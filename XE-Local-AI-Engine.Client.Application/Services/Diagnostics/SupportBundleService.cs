@@ -174,8 +174,14 @@ public sealed class SupportBundleService : ISupportBundleService
     {
         return snapshot with
         {
-            Turns = snapshot.Turns.Select(turn => turn with { Model = turn.Model is null ? null : _scrubber.Scrub(turn.Model) }).ToArray(),
-            Loads = snapshot.Loads.Select(load => load with { ModelName = _scrubber.Scrub(load.ModelName) }).ToArray()
+            Turns = snapshot.Turns.Select(turn => turn with
+            {
+                Model = turn.Model is null ? null : _scrubber.Scrub(turn.Model)
+            }).ToArray(),
+            Loads = snapshot.Loads.Select(load => load with
+            {
+                ModelName = _scrubber.Scrub(load.ModelName)
+            }).ToArray()
         };
     }
 

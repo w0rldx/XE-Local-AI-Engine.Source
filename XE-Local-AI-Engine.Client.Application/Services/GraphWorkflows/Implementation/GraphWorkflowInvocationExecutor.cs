@@ -1265,7 +1265,8 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         + "Turn on 'Let cloud models read local data' in Node Settings → Privacy & updates, or grant local data on the model's external connection when it has one, to allow it.";
 
     private void LogLocalDataRefusal(Guid runId, GraphWorkflowGraphNode node, GraphWorkflowGraphNode source) =>
-        _logger.LogInformation("Graph workflow run {RunId} refused node '{NodeKey}': it reads local-data Tool node '{SourceKey}', its effective model is cloud-hosted and AllowCloudModelAccess is off.",
+        _logger.LogInformation(
+            "Graph workflow run {RunId} refused node '{NodeKey}': it reads local-data Tool node '{SourceKey}', its effective model is cloud-hosted and AllowCloudModelAccess is off.",
             runId,
             node.NodeKey,
             source.NodeKey);

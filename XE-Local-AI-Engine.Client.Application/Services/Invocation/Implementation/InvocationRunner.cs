@@ -40,6 +40,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // The reasons sent with an operator's approval decision. The framework prefixes a denial with "Tool call invocation was rejected", which the
     // observability client keys Outcome=denied on; the reason after it tells the model that nothing ran, so it neither retries nor invents a result.
     private const string ApprovedToolCallReason = "Approved by user.";
+
     internal const string DeniedToolCallReason =
         "The user denied this tool call. Nothing ran and there is no result. Do not repeat this call in this turn; answer without it and say that the tool was not run.";
 

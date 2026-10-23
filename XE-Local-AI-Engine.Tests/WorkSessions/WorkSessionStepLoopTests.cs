@@ -512,9 +512,8 @@ public sealed class WorkSessionStepLoopTests
 
         var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId);
         AssertEx.Contains(events, entry => entry.EventType == WorkSessionEventTypes.ParkTimedOut, "The park outlived MaxParkedSeconds and was stopped.");
-        AssertEx.False(
-            events.Any(entry => entry.EventType == "SessionStatusChanged" && entry.Outcome == nameof(AgentWorkSessionStatus.Running) &&
-                                entry.Sequence > events.First(parked => parked.Outcome == nameof(AgentWorkSessionStatus.WaitingForApproval)).Sequence),
+        AssertEx.False(events.Any(entry => entry.EventType == "SessionStatusChanged" && entry.Outcome == nameof(AgentWorkSessionStatus.Running) &&
+                                           entry.Sequence > events.First(parked => parked.Outcome == nameof(AgentWorkSessionStatus.WaitingForApproval)).Sequence),
             "A reasoning-only delta must not move the session back to Running.");
     }
 

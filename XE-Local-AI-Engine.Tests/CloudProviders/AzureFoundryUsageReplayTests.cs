@@ -33,9 +33,9 @@ public sealed class AzureFoundryUsageReplayTests
 
         // The same chain AzureFoundryChatClientFactory.Create uses for the v1 surface, over a stub transport.
         using var client = new AzureFoundryChatClientFactory()
-            .CreateOpenAiV1ClientForTesting(connection, httpClient)
-            .GetChatClient(Deployment)
-            .AsIChatClient();
+                           .CreateOpenAiV1ClientForTesting(connection, httpClient)
+                           .GetChatClient(Deployment)
+                           .AsIChatClient();
 
         var updates = new List<ChatResponseUpdate>();
         await foreach (var update in client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hi")]))

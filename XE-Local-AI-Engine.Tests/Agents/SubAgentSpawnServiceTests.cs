@@ -2046,7 +2046,10 @@ public sealed class SubAgentSpawnServiceTests
                 _mcpWorkspaceSessionFactory,
                 _nodeSettingsStore,
                 ExternalRegistry,
-                Options.Create(new ProviderCallBudgetOptions { MaxProviderCallsPerInvocation = 7 }),
+                Options.Create(new ProviderCallBudgetOptions
+                {
+                    MaxProviderCallsPerInvocation = 7
+                }),
                 NullLoggerFactory.Instance,
                 _logger);
         }

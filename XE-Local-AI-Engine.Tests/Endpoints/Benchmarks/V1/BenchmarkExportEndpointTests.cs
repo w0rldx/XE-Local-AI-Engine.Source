@@ -369,7 +369,10 @@ public sealed class BenchmarkExportEndpointTests
         ArrangeProject(context);
         var variantId = Guid.Parse("90000000-0000-0000-0000-000000000009");
         ArrangeRuns(context,
-            Run(BenchmarkPrimaryStatus.Succeeded, runId: Guid.Parse("a0000000-0000-0000-0000-00000000000a")) with { CellKey = "cell:a" },
+            Run(BenchmarkPrimaryStatus.Succeeded, runId: Guid.Parse("a0000000-0000-0000-0000-00000000000a")) with
+            {
+                CellKey = "cell:a"
+            },
             Run(BenchmarkPrimaryStatus.Succeeded, runId: Guid.Parse("b0000000-0000-0000-0000-00000000000b")) with
             {
                 CellKey = "cell:b",

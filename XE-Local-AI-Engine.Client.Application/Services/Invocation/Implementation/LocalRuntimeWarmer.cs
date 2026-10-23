@@ -324,7 +324,10 @@ public sealed class LocalRuntimeWarmer
 
         if (_perfLog.TryGetLoadHistory(resolvedModel, ModelRole.Chat) is not { } history)
         {
-            return new InvocationRuntimePhaseDetail { Reason = InvocationRuntimePhaseReasons.FirstLoad };
+            return new InvocationRuntimePhaseDetail
+            {
+                Reason = InvocationRuntimePhaseReasons.FirstLoad
+            };
         }
 
         var reason = history.LastUnloadReason switch

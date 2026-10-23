@@ -113,7 +113,12 @@ public sealed class BenchmarkComparisonExecutorTests
             new("tool_result", ToolCallId: "call-1", ToolName: "search", Result: "ok", IsError: false),
             new("output", Content: "It is 42.")
         ];
-        var timed = untimed.Select(static part => part.Kind == "tool_result" ? part with { DurationMs = 1234 } : part).ToArray();
+        var timed = untimed.Select(static part => part.Kind == "tool_result"
+            ? part with
+            {
+                DurationMs = 1234
+            }
+            : part).ToArray();
 
         var timedPayloads = await JudgePayloadsAsync(timed);
         var untimedPayloads = await JudgePayloadsAsync(untimed);
@@ -131,8 +136,14 @@ public sealed class BenchmarkComparisonExecutorTests
         var storedParts = BenchmarkExecutionSerialization.SerializeParts(parts);
         BenchmarkRunRecord[] runs =
         [
-            BenchmarkPairwiseSuiteEndToEndTests.SuiteRun(snapshot, ItemZero, "cell-27b", "unused") with { OutputPartsJson = storedParts },
-            BenchmarkPairwiseSuiteEndToEndTests.SuiteRun(snapshot, ItemZero, "cell-9b", "unused") with { OutputPartsJson = storedParts }
+            BenchmarkPairwiseSuiteEndToEndTests.SuiteRun(snapshot, ItemZero, "cell-27b", "unused") with
+            {
+                OutputPartsJson = storedParts
+            },
+            BenchmarkPairwiseSuiteEndToEndTests.SuiteRun(snapshot, ItemZero, "cell-9b", "unused") with
+            {
+                OutputPartsJson = storedParts
+            }
         ];
         var plan = BenchmarkPairwisePlanner.Plan([
             .. runs.Select(static run => new BenchmarkPairwiseCandidate

@@ -647,7 +647,11 @@ public sealed class BinaryManagerInstallTagTests
         AssertEx.True(LlamaCppRuntimeTag.IsUpdateAvailable(OlderThanPinTag, LlamaCppReleasePins.PinnedTag), "The recorded tag must be older than the pin for this test.");
         using var cache = new TempDir();
         var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
-        foreach (var tag in new[] { LlamaCppReleasePins.PinnedTag, OlderThanPinTag })
+        foreach (var tag in new[]
+                 {
+                     LlamaCppReleasePins.PinnedTag,
+                     OlderThanPinTag
+                 })
         {
             var server = Path.Combine(cache.Path, "llama.cpp", tag, "cpu", pin.ServerRelativePath.Replace(oldChar: '/', newChar: Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(server)!);

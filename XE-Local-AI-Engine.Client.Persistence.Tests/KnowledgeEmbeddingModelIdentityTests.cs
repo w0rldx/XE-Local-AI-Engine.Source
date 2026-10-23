@@ -718,7 +718,8 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         {
             EmbeddingVectorMode = vectorMode
         });
-        return new KnowledgeDocumentCatalogService(context, CreateResolvingProviderResolver(), new EmbeddingModelResolver(options, new FakeNodeSettingsStore(new StoredNodeSettings())), options, TimeProvider.System);
+        return new KnowledgeDocumentCatalogService(context, CreateResolvingProviderResolver(), new EmbeddingModelResolver(options, new FakeNodeSettingsStore(new StoredNodeSettings())), options,
+            TimeProvider.System);
     }
 
     private static KnowledgeSearchService CreateSearchService(NodeChatDbContext context,

@@ -69,11 +69,11 @@ public sealed class BenchmarkReviewService : IBenchmarkReviewService
         {
             Score = overall,
             Criteria = criteria?.Select(static score => new BenchmarkReviewCriterionScore
-                                {
-                                    CriterionId = score.Id,
-                                    Score = score.Score
-                                })
-                                .ToArray(),
+                               {
+                                   CriterionId = score.Id,
+                                   Score = score.Score
+                               })
+                               .ToArray(),
             PolicyRevisionId = revision.Id
         }, cancellationToken);
     }

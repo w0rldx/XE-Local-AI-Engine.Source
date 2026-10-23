@@ -180,7 +180,11 @@ public sealed partial class EncryptedColumnRegistryTests
             }
         }
 
-        return new SetPropertyScan { DbSets = dbSets, Targets = targets };
+        return new SetPropertyScan
+        {
+            DbSets = dbSets,
+            Targets = targets
+        };
     }
 
     /// <summary>The entity type of the <c>DbSet</c> or <c>Set&lt;T&gt;()</c> nearest before the statement's <c>ExecuteUpdate</c>, or null.</summary>

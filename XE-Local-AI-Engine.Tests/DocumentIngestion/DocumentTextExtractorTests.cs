@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Extraction;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using PageSize = UglyToad.PdfPig.Content.PageSize;
 
 /// <summary>
 ///     The pure-.NET document extractor turns uploaded files into Markdown/plaintext for the chat/agent surfaces.
@@ -743,15 +744,17 @@ public sealed class DocumentTextExtractorTests
         var font = builder.AddStandard14Font(Standard14Font.Helvetica);
         foreach (var lines in pages)
         {
-            var page = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+            var page = builder.AddPage(PageSize.A4);
             for (var index = 0; index < lines.Length; index++)
             {
                 _ = page.AddText(lines[index], 12, new PdfPoint(72, 780 - (index * 100)), font);
             }
         }
 
-        builder.Bookmarks = new Bookmarks([.. bookmarks.Select(bookmark => (BookmarkNode)new DocumentBookmarkNode(bookmark.Title, 0,
-            new ExplicitDestination(bookmark.Page, ExplicitDestinationType.FitPage, ExplicitDestinationCoordinates.Empty), []))]);
+        builder.Bookmarks = new Bookmarks([
+            .. bookmarks.Select(bookmark => (BookmarkNode)new DocumentBookmarkNode(bookmark.Title, 0,
+                new ExplicitDestination(bookmark.Page, ExplicitDestinationType.FitPage, ExplicitDestinationCoordinates.Empty), []))
+        ]);
         using var stream = new MemoryStream(builder.Build());
 
         var result = await CreateExtractor().ExtractStructuredAsync(stream, "book.pdf", ".pdf", CancellationToken.None);
@@ -770,16 +773,20 @@ public sealed class DocumentTextExtractorTests
     {
         using var builder = new PdfDocumentBuilder();
         var font = builder.AddStandard14Font(Standard14Font.Helvetica);
-        foreach (var body in new[] { "Body one", "Body two", "Body three" })
+        foreach (var body in new[]
+                 {
+                     "Body one",
+                     "Body two",
+                     "Body three"
+                 })
         {
-            _ = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4).AddText(body, 12, new PdfPoint(72, 700), font);
+            _ = builder.AddPage(PageSize.A4).AddText(body, 12, new PdfPoint(72, 700), font);
         }
 
         static ExplicitDestination PageDestination(int page) =>
             new(page, ExplicitDestinationType.FitPage, ExplicitDestinationCoordinates.Empty);
 
-        builder.Bookmarks = new Bookmarks(
-        [
+        builder.Bookmarks = new Bookmarks([
             new DocumentBookmarkNode("Chapter  One", 0, PageDestination(1),
             [
                 new DocumentBookmarkNode("Section\t1.1", 1, PageDestination(2), [])

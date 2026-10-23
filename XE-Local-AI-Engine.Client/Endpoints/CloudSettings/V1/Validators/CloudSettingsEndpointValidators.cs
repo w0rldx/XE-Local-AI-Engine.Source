@@ -67,7 +67,7 @@ public sealed class SaveCloudSettingsRequestValidator : Validator<SaveCloudSetti
             .WithMessage("Deployment names must be 128 characters or fewer.")
             // A declared window is optional (null = unknown); a declared one stays within the node's own window bounds.
             .Must(static models => models is null || models.All(static model => model.ContextLength is null
-                                                                                 or (>= StoredNodeSettings.MinDefaultContextTokens and <= StoredNodeSettings.MaxDefaultContextTokens)))
+                or (>= StoredNodeSettings.MinDefaultContextTokens and <= StoredNodeSettings.MaxDefaultContextTokens)))
             .WithMessage($"Context length must be between {StoredNodeSettings.MinDefaultContextTokens} and {StoredNodeSettings.MaxDefaultContextTokens} tokens, or blank when unknown.");
     }
 

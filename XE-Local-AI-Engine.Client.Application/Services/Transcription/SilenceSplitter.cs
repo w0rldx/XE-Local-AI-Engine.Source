@@ -120,7 +120,10 @@ public static class SilenceSplitter
         {
             if (kept.Count > 0 && (run.Length < MinSpeechFrames || kept[^1].Length < MinSpeechFrames))
             {
-                kept[^1] = kept[^1] with { End = run.End };
+                kept[^1] = kept[^1] with
+                {
+                    End = run.End
+                };
             }
             else
             {

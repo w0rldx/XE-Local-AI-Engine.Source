@@ -21,7 +21,9 @@ public sealed class PendingRestartRegistryTests
     {
         var sut = new PendingRestartRegistry(Boot);
 
-        AssertEx.Empty(sut.GetPendingFields(Boot with { }));
+        AssertEx.Empty(sut.GetPendingFields(Boot with
+        {
+        }));
     }
 
     [Test]
@@ -29,7 +31,10 @@ public sealed class PendingRestartRegistryTests
     {
         var sut = new PendingRestartRegistry(Boot);
 
-        AssertEx.Equal("llamaMaxLoadedProcesses", string.Join(',', sut.GetPendingFields(Boot with { LlamaMaxLoadedProcesses = 3 })));
+        AssertEx.Equal("llamaMaxLoadedProcesses", string.Join(',', sut.GetPendingFields(Boot with
+        {
+            LlamaMaxLoadedProcesses = 3
+        })));
     }
 
     [Test]
@@ -37,17 +42,26 @@ public sealed class PendingRestartRegistryTests
     {
         var sut = new PendingRestartRegistry(Boot);
 
-        AssertEx.Empty(sut.GetPendingFields(Boot with { AgentHomeRunRetentionDays = 9 }));
+        AssertEx.Empty(sut.GetPendingFields(Boot with
+        {
+            AgentHomeRunRetentionDays = 9
+        }));
     }
 
     [Test]
     public void GetPendingFields_WhenTheBootValueIsRestored_ClearsTheField()
     {
         var sut = new PendingRestartRegistry(Boot);
-        var changed = Boot with { KvCacheType = "q8_0" };
+        var changed = Boot with
+        {
+            KvCacheType = "q8_0"
+        };
         AssertEx.Equal("kvCacheType", string.Join(',', sut.GetPendingFields(changed)));
 
-        AssertEx.Empty(sut.GetPendingFields(changed with { KvCacheType = "f16" }));
+        AssertEx.Empty(sut.GetPendingFields(changed with
+        {
+            KvCacheType = "f16"
+        }));
     }
 
     [Test]
@@ -55,7 +69,11 @@ public sealed class PendingRestartRegistryTests
     {
         var sut = new PendingRestartRegistry(Boot);
 
-        var pending = sut.GetPendingFields(Boot with { LlamaMaxLoadedProcesses = 4, KvCacheType = "q4_0" });
+        var pending = sut.GetPendingFields(Boot with
+        {
+            LlamaMaxLoadedProcesses = 4,
+            KvCacheType = "q4_0"
+        });
 
         AssertEx.Equal("kvCacheType,llamaMaxLoadedProcesses", string.Join(',', pending));
     }

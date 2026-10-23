@@ -204,7 +204,10 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
             if (current is { OperatorSelected: true })
             {
-                await _installedRuntimeStore.WriteAsync(current with { OperatorSelected = false }, ct).ConfigureAwait(false);
+                await _installedRuntimeStore.WriteAsync(current with
+                {
+                    OperatorSelected = false
+                }, ct).ConfigureAwait(false);
             }
 
             // Cleared even without a flagged record: a pin this process could not persist lives only in the signal.
@@ -499,7 +502,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     }
 
     // The CUDA prebuilts (Windows x64, Linux x64) ship their runtime libraries in a second, companion archive.
-    private bool PairsCudaCompanion(GpuVariant variant) => variant == GpuVariant.Cuda && (_os == OSPlatform.Windows || _os == OSPlatform.Linux);
+    private bool PairsCudaCompanion(GpuVariant variant) =>
+        variant == GpuVariant.Cuda && (_os == OSPlatform.Windows || _os == OSPlatform.Linux);
 
     /// <summary>
     ///     The pin a prebuilt acquisition of <paramref name="variant" /> uses on this host, shared by ensure and install so
@@ -580,7 +584,10 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         {
             if (!existing.OperatorSelected)
             {
-                await _installedRuntimeStore!.WriteAsync(existing with { OperatorSelected = true }, ct).ConfigureAwait(false);
+                await _installedRuntimeStore!.WriteAsync(existing with
+                {
+                    OperatorSelected = true
+                }, ct).ConfigureAwait(false);
             }
         }
         else if (string.Equals(resolvedTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal))
@@ -1066,7 +1073,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     private string[] CompanionFamilies => _os == OSPlatform.Linux ? LinuxCudaCompanionFamilies : WindowsCudaCompanionFamilies;
 
     /// <summary>The file pattern of the runtime libraries a companion archive lands next to the server on <paramref name="os" />.</summary>
-    private static string CompanionLibraryPattern(OSPlatform os) => os == OSPlatform.Linux ? "*.so*" : "*.dll";
+    private static string CompanionLibraryPattern(OSPlatform os) =>
+        os == OSPlatform.Linux ? "*.so*" : "*.dll";
 
     /// <summary>How every Failed status of a published-dir repair starts; the one mark a later cache hit clears it by, never another acquisition's failure.</summary>
     private const string CudaRepairFailurePrefix =

@@ -56,7 +56,12 @@ public sealed class LocalModelPerfLogTests
         perfLog.RecordTurn("cloud-model", throughput: null);
         for (var turn = 1; turn <= LocalModelPerfLog.MaxTurns + 2; turn++)
         {
-            perfLog.RecordTurn("llama-3.1", new InvocationThroughput { GenerationTokens = turn, GenerationMs = 100, SegmentCount = 1 });
+            perfLog.RecordTurn("llama-3.1", new InvocationThroughput
+            {
+                GenerationTokens = turn,
+                GenerationMs = 100,
+                SegmentCount = 1
+            });
         }
 
         var turns = perfLog.Snapshot().Turns;

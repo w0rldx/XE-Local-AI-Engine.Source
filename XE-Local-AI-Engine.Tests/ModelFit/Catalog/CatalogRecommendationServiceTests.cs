@@ -427,6 +427,7 @@ public sealed class CatalogRecommendationServiceTests
         var service = BuildService([entry], discovery, installedTag: "b9692");
         return service.BuildRecommendationsAsync(useCase: null, "Q4_K_M", ctxTarget: 8192, GpuProfile(64 * Gb), Empty, CancellationToken.None);
     }
+
     private static IReadOnlySet<string> Empty { get; } = new HashSet<string>(StringComparer.Ordinal);
 
     private static ModelCatalogEntry Entry(string id,

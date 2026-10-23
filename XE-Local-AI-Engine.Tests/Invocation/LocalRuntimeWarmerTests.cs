@@ -114,7 +114,10 @@ public sealed class LocalRuntimeWarmerTests
     {
         var resolver = CreateLlamaCppResolver();
         var cloudModels = Substitute.For<ICloudModelResolver>();
-        cloudModels.ResolveContextWindowAsync("gpt-5.6-terra", Arg.Any<CancellationToken>()).Returns(new CloudModelContextWindow { ContextTokens = 400_000 });
+        cloudModels.ResolveContextWindowAsync("gpt-5.6-terra", Arg.Any<CancellationToken>()).Returns(new CloudModelContextWindow
+        {
+            ContextTokens = 400_000
+        });
 
         var result = await CreateWarmer(resolver, cloudSelected: true, cloudModels: cloudModels).PrepareLocalRuntimeAsync("gpt-5.6-terra",
             Substitute.For<IWorkerEventDispatcher>(), Guid.NewGuid(), new InvocationRunner.StreamState(), turnStartedTimestamp: 0, CancellationToken.None);
@@ -134,7 +137,10 @@ public sealed class LocalRuntimeWarmerTests
         var resolver = Substitute.For<ILocalModelProviderResolver>();
         resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(ollama));
         var cloudModels = Substitute.For<ICloudModelResolver>();
-        cloudModels.ResolveContextWindowAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new CloudModelContextWindow { ContextTokens = 400_000 });
+        cloudModels.ResolveContextWindowAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new CloudModelContextWindow
+        {
+            ContextTokens = 400_000
+        });
 
         var result = await CreateWarmer(resolver, cloudModels: cloudModels).PrepareLocalRuntimeAsync("qwen3.5:0.8b",
             Substitute.For<IWorkerEventDispatcher>(), Guid.NewGuid(), new InvocationRunner.StreamState(), turnStartedTimestamp: 0, CancellationToken.None);
@@ -159,7 +165,10 @@ public sealed class LocalRuntimeWarmerTests
     {
         var resolver = CreateLlamaCppResolver();
         var cloudModels = Substitute.For<ICloudModelResolver>();
-        cloudModels.ResolveContextWindowAsync("gpt-5.6-terra", Arg.Any<CancellationToken>()).Returns(new CloudModelContextWindow { ContextTokens = 272_000 });
+        cloudModels.ResolveContextWindowAsync("gpt-5.6-terra", Arg.Any<CancellationToken>()).Returns(new CloudModelContextWindow
+        {
+            ContextTokens = 272_000
+        });
         var warmer = CreateWarmer(resolver, cloudSelected: true, cloudModels: cloudModels);
 
         AssertEx.Equal(272_000, await warmer.ResolveDeclaredRemoteContextAsync("gpt-5.6-terra", Guid.NewGuid(), CancellationToken.None));
@@ -170,7 +179,10 @@ public sealed class LocalRuntimeWarmerTests
     public async Task ResolveDeclaredRemoteContextAsync_ForALocalModel_IsNullAndNeverReadsTheCloudConfig()
     {
         var cloudModels = Substitute.For<ICloudModelResolver>();
-        cloudModels.ResolveContextWindowAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new CloudModelContextWindow { ContextTokens = 272_000 });
+        cloudModels.ResolveContextWindowAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new CloudModelContextWindow
+        {
+            ContextTokens = 272_000
+        });
         var warmer = CreateWarmer(CreateLlamaCppResolver(), cloudModels: cloudModels);
 
         AssertEx.Null(await warmer.ResolveDeclaredRemoteContextAsync("model.gguf", Guid.NewGuid(), CancellationToken.None));

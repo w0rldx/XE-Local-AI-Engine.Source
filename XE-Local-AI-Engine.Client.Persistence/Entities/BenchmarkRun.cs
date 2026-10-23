@@ -6,6 +6,7 @@ internal sealed record class BenchmarkRun
 {
     /// <summary>The run's id, which is also its primary invocation's id: a run launches its primary at most once. Plaintext (structural).</summary>
     public Guid Id { get; set; }
+
     public Guid ProjectId { get; set; }
 
     /// <summary>
@@ -22,6 +23,7 @@ internal sealed record class BenchmarkRun
 
     /// <summary>The agent definition the run was frozen against: the project's agent, or the variant its launch named. Plaintext (structural).</summary>
     public Guid AgentDefinitionId { get; set; }
+
     public int RequestedContextTokens { get; set; }
 
     /// <summary>

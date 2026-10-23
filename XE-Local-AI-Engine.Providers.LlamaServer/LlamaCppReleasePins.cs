@@ -242,7 +242,8 @@ public static class LlamaCppReleasePins
     }
 
     /// <summary>Whether a genuine prebuilt is pinned for EXACTLY this (os, arch, variant); the variant selector keys NVIDIA → CUDA on it.</summary>
-    public static bool HasPin(OSPlatform os, Architecture arch, GpuVariant variant) => Pins.ContainsKey(new PinKey(os, arch, variant));
+    public static bool HasPin(OSPlatform os, Architecture arch, GpuVariant variant) =>
+        Pins.ContainsKey(new PinKey(os, arch, variant));
 
     /// <summary>
     ///     Resolves the pin an ACQUISITION of <paramref name="variant" /> may use: the CPU floor for a CPU request, the

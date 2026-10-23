@@ -112,6 +112,5 @@ public sealed class DesktopCommandOverlayTests
     [Arguments("http://127.0.0.1:5000/command?x=1", false)]
     [Arguments(null, false)]
     public void ShouldReloadOnShow_OnlyWhenThePageLeftTheOverlayRoute(string? current, bool expected) =>
-        AssertEx.Equal(expected, DesktopCommandWindow.ShouldReloadOnShow(
-            current is null ? null : new Uri(current), new Uri("http://127.0.0.1:5000" + DesktopCommandWindow.Route)));
+        AssertEx.Equal(expected, DesktopCommandWindow.ShouldReloadOnShow(current is null ? null : new Uri(current), new Uri("http://127.0.0.1:5000" + DesktopCommandWindow.Route)));
 }

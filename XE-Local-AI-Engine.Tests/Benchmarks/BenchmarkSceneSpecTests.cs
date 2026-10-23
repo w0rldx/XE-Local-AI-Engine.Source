@@ -27,8 +27,7 @@ public sealed class BenchmarkSceneSpecTests
     [Test]
     public void TryParse_KeepsEveryStatedMember()
     {
-        var parsed = BenchmarkSceneSpec.TryParse(
-            """{"version":1,"objects":[{"id":"a","primitive":"cone","position":[0,0,0],"rotation":[90,-360,360],"scale":[2,0.5,1000],"color":"#A0b1C2"}]}""",
+        var parsed = BenchmarkSceneSpec.TryParse("""{"version":1,"objects":[{"id":"a","primitive":"cone","position":[0,0,0],"rotation":[90,-360,360],"scale":[2,0.5,1000],"color":"#A0b1C2"}]}""",
             out var scene, out var reason);
 
         AssertEx.True(parsed, reason);
@@ -41,7 +40,9 @@ public sealed class BenchmarkSceneSpecTests
     [Test]
     public void TryParse_RefusesEveryViolationOfTheClosedSchema_NamingIt()
     {
-        static string Scene(string objectJson) => $$"""{"version":1,"objects":[{{objectJson}}]}""";
+        static string Scene(string objectJson) =>
+            $$"""{"version":1,"objects":[{{objectJson}}]}""";
+
         const string Valid = """{"id":"a","primitive":"box","position":[0,0,0]}""";
         var tooMany = string.Join(',', Enumerable.Range(0, BenchmarkSceneSpec.MaximumObjects + 1)
                                                  .Select(static index => $$"""{"id":"o{{index}}","primitive":"box","position":[0,0,0]}"""));
@@ -86,7 +87,13 @@ public sealed class BenchmarkSceneSpecTests
     [Test]
     public void Bounds_ScaleTheUnitPrimitiveAroundThePosition_AndAPlaneHasNoThickness()
     {
-        foreach (var primitive in new[] { BenchmarkSceneSpec.Box, BenchmarkSceneSpec.Sphere, BenchmarkSceneSpec.Cylinder, BenchmarkSceneSpec.Cone })
+        foreach (var primitive in new[]
+                 {
+                     BenchmarkSceneSpec.Box,
+                     BenchmarkSceneSpec.Sphere,
+                     BenchmarkSceneSpec.Cylinder,
+                     BenchmarkSceneSpec.Cone
+                 })
         {
             var bounds = BenchmarkSceneSpec.Bounds(Object("o", primitive, position: Vector(1, 2, 3), scale: Vector(2, 4, 6)));
 
@@ -128,7 +135,12 @@ public sealed class BenchmarkSceneSpecTests
     }
 
     private static BenchmarkSceneVector Vector(double x, double y, double z) =>
-        new() { X = x, Y = y, Z = z };
+        new()
+        {
+            X = x,
+            Y = y,
+            Z = z
+        };
 
     private static BenchmarkSceneObject Object(string id, string primitive, BenchmarkSceneVector position, BenchmarkSceneVector scale) =>
         new()

@@ -185,7 +185,9 @@ public sealed class RetrievalEvalLiveTests : IDisposable
             new KnowledgeBaseOptions(),
             LiveCorpusView.SourcePathOf,
             ct);
-        var resolution = await new EmbeddingModelResolver(Microsoft.Extensions.Options.Options.Create(new KnowledgeBaseOptions()), new FakeNodeSettingsStore(new StoredNodeSettings())).ResolveAsync(embeddingProvider, ct);
+        var resolution =
+            await new EmbeddingModelResolver(Microsoft.Extensions.Options.Options.Create(new KnowledgeBaseOptions()), new FakeNodeSettingsStore(new StoredNodeSettings()))
+                .ResolveAsync(embeddingProvider, ct);
         record.EmbeddingVectors = $"resolved '{resolution.Name}' ({(resolution.IsConfident ? "confident" : "NOT confident: no vector policy applies")}); "
                                   + await RequireProductionVectorPolicyAsync(fixture, embedName, ct);
 

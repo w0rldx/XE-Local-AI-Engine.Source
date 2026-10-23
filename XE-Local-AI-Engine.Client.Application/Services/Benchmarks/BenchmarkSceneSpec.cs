@@ -33,8 +33,19 @@ public static class BenchmarkSceneSpec
 
     private static readonly string[] RequiredMembers = ["id", "primitive", "position"];
 
-    private static readonly BenchmarkSceneVector Zero = new() { X = 0, Y = 0, Z = 0 };
-    private static readonly BenchmarkSceneVector One = new() { X = 1, Y = 1, Z = 1 };
+    private static readonly BenchmarkSceneVector Zero = new()
+    {
+        X = 0,
+        Y = 0,
+        Z = 0
+    };
+
+    private static readonly BenchmarkSceneVector One = new()
+    {
+        X = 1,
+        Y = 1,
+        Z = 1
+    };
 
     /// <summary>
     ///     The scene <paramref name="json" /> describes, or <see langword="false" /> with the first schema violation as
@@ -64,7 +75,10 @@ public static class BenchmarkSceneSpec
                 return false;
             }
 
-            scene = new BenchmarkScene { Objects = objects };
+            scene = new BenchmarkScene
+            {
+                Objects = objects
+            };
             return true;
         }
     }
@@ -82,8 +96,18 @@ public static class BenchmarkSceneSpec
         var position = sceneObject.Position;
         return new BenchmarkSceneBounds
         {
-            Min = new BenchmarkSceneVector { X = position.X - halfX, Y = position.Y - halfY, Z = position.Z - halfZ },
-            Max = new BenchmarkSceneVector { X = position.X + halfX, Y = position.Y + halfY, Z = position.Z + halfZ }
+            Min = new BenchmarkSceneVector
+            {
+                X = position.X - halfX,
+                Y = position.Y - halfY,
+                Z = position.Z - halfZ
+            },
+            Max = new BenchmarkSceneVector
+            {
+                X = position.X + halfX,
+                Y = position.Y + halfY,
+                Z = position.Z + halfZ
+            }
         };
     }
 
@@ -97,8 +121,8 @@ public static class BenchmarkSceneSpec
             BenchmarkSceneSpecConfigV1.RelationAbove => first.Min.Y >= second.Max.Y,
             BenchmarkSceneSpecConfigV1.RelationLeftOf => first.Max.X <= second.Min.X,
             BenchmarkSceneSpecConfigV1.RelationInside => first.Min.X >= second.Min.X && first.Max.X <= second.Max.X
-                                                         && first.Min.Y >= second.Min.Y && first.Max.Y <= second.Max.Y
-                                                         && first.Min.Z >= second.Min.Z && first.Max.Z <= second.Max.Z,
+                                                                                     && first.Min.Y >= second.Min.Y && first.Max.Y <= second.Max.Y
+                                                                                     && first.Min.Z >= second.Min.Z && first.Max.Z <= second.Max.Z,
             _ => throw new UnreachableException(relation)
         };
     }
@@ -225,12 +249,17 @@ public static class BenchmarkSceneSpec
         value.ValueKind == JsonValueKind.Array
         && value.GetArrayLength() == 3
         && value.EnumerateArray().All(component => component.ValueKind == JsonValueKind.Number
-                                                    && component.TryGetDouble(out var number)
-                                                    && double.IsFinite(number)
-                                                    && inRange(number));
+                                                   && component.TryGetDouble(out var number)
+                                                   && double.IsFinite(number)
+                                                   && inRange(number));
 
     private static BenchmarkSceneVector ToVector(JsonElement value) =>
-        new() { X = value[0].GetDouble(), Y = value[1].GetDouble(), Z = value[2].GetDouble() };
+        new()
+        {
+            X = value[0].GetDouble(),
+            Y = value[1].GetDouble(),
+            Z = value[2].GetDouble()
+        };
 
     private static bool IsHexColor(string? value) =>
         value is { Length: 7 } && value[0] == '#' && value.Skip(1).All(char.IsAsciiHexDigit);

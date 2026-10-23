@@ -174,7 +174,10 @@ public sealed class ProcessGpuVendorProbeTests
             (name, args) =>
             {
                 spawns++;
-                return ScriptedProcess.Factory(new Dictionary<string, string?> { ["nvidia-smi"] = "NVIDIA GeForce RTX 4080\n" })(name, args);
+                return ScriptedProcess.Factory(new Dictionary<string, string?>
+                {
+                    ["nvidia-smi"] = "NVIDIA GeForce RTX 4080\n"
+                })(name, args);
             },
             ProcessGpuVendorProbe.ProbePlatform.Linux);
 
