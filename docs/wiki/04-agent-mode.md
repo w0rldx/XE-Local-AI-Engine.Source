@@ -501,6 +501,13 @@ resolved in `ToolApprovalCoordinator.RequestToolApprovalAsync`:
 
 The scope values, the session memo key and its fields, and the unattended fail-fast check are on the reference page. See [the reference page](reference/04-agent-skills.md#46-approval-scoping).
 
+A denial is never remembered across turns, but it holds for the rest of its own turn. The reason sent with it
+(`InvocationRunner.DeniedToolCallReason`) tells the model that nothing ran and that it must answer without the tool.
+The single-agent loop also withholds the denied tool from every later provider round of that turn
+(`InvocationRunner.WithholdDeniedTool`), so the model cannot request it again and then invent its result. The next turn
+offers the tool again. The three MAF skill tools are not withheld, because their approval is per skill. The
+orchestration path sends the same reason but cannot withhold, because the workflow owns each participant's offer.
+
 ---
 
 ## 5. Work Sessions (`Client.Application/Services/WorkSessions/*`)

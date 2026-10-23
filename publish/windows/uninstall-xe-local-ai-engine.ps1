@@ -68,7 +68,7 @@ if (-not $AllowAdmin) {
     $identity  = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($identity)
     if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-        Write-Error (("Do not run this uninstaller elevated. {0} stores its data under the " +
+        Write-Host ((">> Do not run this uninstaller elevated. {0} stores its data under the " +
             "current user's %LOCALAPPDATA%; an Administrator session may target the wrong " +
             "profile. Re-run it in a normal (non-elevated) window, or pass -AllowAdmin.") -f $AppName)
         exit 1

@@ -258,6 +258,9 @@ describe("ManagedPythonCard", () => {
 		renderWithProviders(<ManagedPythonCard />, { withRouter: true });
 
 		expect(await screen.findByText(copy.reasons.ComputeDisabled)).toBeTruthy();
+		// Switched off, not unsupported: only the Training row says Unsupported.
+		expect(within(screen.getByTestId("managed-python-environment-compute")).getByText(copy.disabled)).toBeTruthy();
+		expect(screen.getAllByText(copy.states.Unsupported)).toHaveLength(1);
 		expect(screen.getByTestId("managed-python-uv-badge").textContent).toBe(copy.uvMissing);
 		expect((screen.getByRole("button", { name: copy.repair }) as HTMLButtonElement).disabled).toBe(true);
 		expect((screen.getByRole("button", { name: copy.remove }) as HTMLButtonElement).disabled).toBe(true);

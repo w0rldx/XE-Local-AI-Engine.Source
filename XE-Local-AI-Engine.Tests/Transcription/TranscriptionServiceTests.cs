@@ -242,8 +242,10 @@ public sealed class TranscriptionServiceTests
     }
 
     [Test]
-    public async Task TranscribeFile_WhenNativeContainer_NeverCallsTheTranscoder()
+    public async Task TranscribeFile_WhenNativeContainerHasNoLongSilence_SendsTheOriginalFile()
     {
+        // ffmpeg converts a FLAC only to look for silences; the default conversion holds no audio, so nothing is cut
+        // and the runtime receives the upload itself, exactly as before splitting existed.
         await using var harness = await TranscriptionServiceHarness.CreateAsync();
         harness.Transcoder.IsAvailable = true;
 
@@ -255,8 +257,110 @@ public sealed class TranscriptionServiceTests
         }
 
         AssertEx.Equal(TranscribeFileOutcome.Succeeded, result.Outcome, result.ErrorMessage);
-        AssertEx.Empty(harness.Transcoder.Calls, "A natively decodable container must reach the runtime untouched.");
+        AssertEx.Equal(1, harness.Transcoder.Calls.Count, "A FLAC is converted once, to be measured.");
+        AssertEx.Equal(1, harness.Transcriber.CallCount);
+        AssertEx.Equal("audio/flac", harness.Transcriber.LastContentType, "An uncut native container reaches the runtime untouched.");
+        AssertEx.Empty(harness.TempFiles, "The measuring copy is the slot's to delete.");
+    }
+
+    [Test]
+    public async Task TranscribeFile_WhenNativeContainerAndNoFfmpeg_SendsTheOriginalFileOnce()
+    {
+        await using var harness = await TranscriptionServiceHarness.CreateAsync();
+        harness.Transcoder.IsAvailable = false;
+
+        var (_, slot) = await harness.BeginAsync(TranscriptionAudioFixtures.Flac, ".flac");
+        TranscribeFileResult result;
+        await using (slot)
+        {
+            result = await harness.Service.TranscribeFileAsync(slot, CancellationToken.None);
+        }
+
+        AssertEx.Equal(TranscribeFileOutcome.Succeeded, result.Outcome, result.ErrorMessage);
+        AssertEx.Empty(harness.Transcoder.Calls, "Without ffmpeg a FLAC cannot be measured and is never converted.");
+        AssertEx.Equal(1, harness.Transcriber.CallCount);
         AssertEx.Equal("audio/flac", harness.Transcriber.LastContentType);
+    }
+
+    // N-72: utterances parted by long silences must not be merged by the runtime into one segment.
+    [Test]
+    public async Task TranscribeFile_WavWithLongSilences_SendsOneRequestPerRegionAndOffsetsTheSegments()
+    {
+        await using var harness = await TranscriptionServiceHarness.CreateAsync();
+        var wav = TranscriptionAudioFixtures.ToneWav(16_000, 1, 22_000, [0, 10_000, 20_000], 1_000);
+
+        var (_, slot) = await harness.BeginAsync(wav);
+        TranscribeFileResult result;
+        await using (slot)
+        {
+            result = await harness.Service.TranscribeFileAsync(slot, CancellationToken.None);
+        }
+
+        AssertEx.Equal(TranscribeFileOutcome.Succeeded, result.Outcome, result.ErrorMessage);
+        AssertEx.Empty(harness.Transcoder.Calls, "A 16-bit PCM WAV is measured as uploaded.");
+        AssertEx.Equal(3, harness.Transcriber.CallCount, "Three utterances parted by long silences are three requests.");
+        AssertEx.Equal("audio/wav", harness.Transcriber.LastContentType);
+
+        // Cuts at the middle of each gap: 5500 ms and 15500 ms. Each request is a header plus its slice, and the
+        // slices add up to the whole payload, so no audio is dropped.
+        long[] expectedLengths = [44 + (5_500 * 32), 44 + (10_000 * 32), 44 + (6_500 * 32)];
+        AssertEx.True(harness.Transcriber.AudioLengths.SequenceEqual(expectedLengths),
+            $"Region sizes were {string.Join(", ", harness.Transcriber.AudioLengths)}.");
+
+        var session = AssertEx.NotNull(result.Session);
+        AssertEx.Equal(22_000L, session.DurationMs, "The duration is the clip's, not one region's.");
+        AssertEx.Equal("en", session.DetectedLanguage);
+        AssertEx.Equal(3, session.Segments.Count);
+        long[] expectedStarts = [0, 5_500, 15_500];
+        for (var index = 0; index < expectedStarts.Length; index++)
+        {
+            AssertEx.Equal(index + 1L, session.Segments[index].Seq);
+            AssertEx.Equal(expectedStarts[index], session.Segments[index].StartMs, $"Segment {index + 1} is shifted by its region's start.");
+            AssertEx.Equal(expectedStarts[index] + 1_250, session.Segments[index].EndMs);
+        }
+
+        AssertEx.Empty(harness.TempFiles);
+    }
+
+    [Test]
+    public async Task TranscribeFile_WavWithoutLongSilence_SendsTheWholeFileOnce()
+    {
+        await using var harness = await TranscriptionServiceHarness.CreateAsync();
+        var wav = TranscriptionAudioFixtures.ToneWav(16_000, 1, 3_000, [0, 1_500], 1_000);
+
+        var (_, slot) = await harness.BeginAsync(wav);
+        TranscribeFileResult result;
+        await using (slot)
+        {
+            result = await harness.Service.TranscribeFileAsync(slot, CancellationToken.None);
+        }
+
+        AssertEx.Equal(TranscribeFileOutcome.Succeeded, result.Outcome, result.ErrorMessage);
+        AssertEx.Equal(1, harness.Transcriber.CallCount, "A 500 ms pause is not a cut.");
+        AssertEx.Equal((long)wav.Length, harness.Transcriber.AudioLengths[0], "The upload itself is sent, not a rebuilt copy.");
+        AssertEx.Equal(0L, AssertEx.NotNull(result.Session).Segments[0].StartMs);
+    }
+
+    [Test]
+    public async Task TranscribeFile_FlacWithFfmpegAndLongSilence_IsCutFromTheConvertedWav()
+    {
+        await using var harness = await TranscriptionServiceHarness.CreateAsync();
+        harness.Transcoder.IsAvailable = true;
+        harness.Transcoder.Output = TranscriptionAudioFixtures.ToneWav(16_000, 1, 12_000, [0, 10_000], 1_000);
+
+        var (_, slot) = await harness.BeginAsync(TranscriptionAudioFixtures.Flac, ".flac");
+        TranscribeFileResult result;
+        await using (slot)
+        {
+            result = await harness.Service.TranscribeFileAsync(slot, CancellationToken.None);
+        }
+
+        AssertEx.Equal(TranscribeFileOutcome.Succeeded, result.Outcome, result.ErrorMessage);
+        AssertEx.Equal(1, harness.Transcoder.Calls.Count);
+        AssertEx.Equal(2, harness.Transcriber.CallCount, "Two utterances parted by 9 s are two requests.");
+        AssertEx.Equal("audio/wav", harness.Transcriber.LastContentType, "Regions are cut from the converted WAV.");
+        AssertEx.Equal(5_500L, AssertEx.NotNull(result.Session).Segments[1].StartMs);
+        AssertEx.Empty(harness.TempFiles, "The converted copy is the slot's to delete.");
     }
 
     [Test]

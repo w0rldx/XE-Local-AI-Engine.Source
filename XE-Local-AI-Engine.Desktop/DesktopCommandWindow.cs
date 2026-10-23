@@ -15,6 +15,7 @@ internal sealed class DesktopCommandWindow : IAsyncDisposable
     internal const string Route = "/command";
 
     private readonly DesktopWindow _window;
+    private readonly Uri _start;
     private readonly Action<DesktopOverlayBounds> _hidden;
     private readonly Action _shown;
     private bool _visible;
@@ -23,6 +24,7 @@ internal sealed class DesktopCommandWindow : IAsyncDisposable
     internal DesktopCommandWindow(DesktopLaunchOptions options, bool devTools, DesktopOverlayBounds? bounds, Action shown, Action<DesktopOverlayBounds> hidden)
     {
         _shown = shown;
+        _start = new Uri(options.Origin, Route);
         _hidden = hidden;
         // A borderless window has no title bar, so this strip is the only place to drag it from.
         var grip = new Border
@@ -74,6 +76,11 @@ internal sealed class DesktopCommandWindow : IAsyncDisposable
     internal static bool ShouldShow(bool visible, bool toggle) =>
         !(visible && toggle);
 
+    /// <summary>Whether a shown overlay must load its route again: the page left it (a sign-in page opened before the
+    ///     main window signed in). Nothing known, or already on the route, keeps the page as it is.</summary>
+    internal static bool ShouldReloadOnShow(Uri? current, Uri start) =>
+        current is not null && !string.Equals(current.AbsolutePath, start.AbsolutePath, StringComparison.Ordinal);
+
     internal void Show(bool toggle)
     {
         if (!ShouldShow(_visible, toggle))
@@ -86,6 +93,7 @@ internal sealed class DesktopCommandWindow : IAsyncDisposable
         _window.Show();
         _window.Activate();
         _shown();
+        _ = ReturnToRouteAsync();
     }
 
     internal void Hide()
@@ -103,6 +111,12 @@ internal sealed class DesktopCommandWindow : IAsyncDisposable
         _closing = true;
         await _window.DisposeAsync();
         _window.Close();
+    }
+
+    // Fire-and-forget from Show: the read never throws and Reload is a no-op once the window is disposed.
+    private async Task ReturnToRouteAsync()
+    {
+        if (ShouldReloadOnShow(await _window.ReadLocationAsync(CancellationToken.None), _start)) { _window.Reload(); }
     }
 
     private async Task RecordLoadFailureAsync()

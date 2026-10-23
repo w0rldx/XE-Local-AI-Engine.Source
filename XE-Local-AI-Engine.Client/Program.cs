@@ -43,6 +43,15 @@ catch (NodeKeyCustodyException ex)
     await Console.Error.WriteLineAsync(ex.Message);
     return XE_Local_AI_Engine.Client.Program.NodeKeyCustodyExitCode;
 }
+catch (Exception ex) when (SettingValidationFailure.TryFind(ex, out var failures))
+{
+    // A setting outside its validated range (ValidateOnStart, or a hosted service reading it first) is the operator's to fix, not a crash.
+    // Name it on stderr, as the last stderr line, for the desktop shell, which maps exit 13 and this line to its own notice.
+    Log.Fatal(ex, "Settings {OptionsTypes} failed their startup validation; startup stopped: {Failures}",
+        SettingValidationFailure.OptionsTypeNames(failures), SettingValidationFailure.Describe(failures));
+    await Console.Error.WriteLineAsync(SettingValidationFailure.Describe(failures));
+    return XE_Local_AI_Engine.Client.Program.OptionsValidationFailedExitCode;
+}
 catch (Exception ex) when (ApplicationControlBlock.TryDescribe(ex, out var blockedFile))
 {
     // Smart App Control or an application control policy refused an unsigned engine file (a Quartz assembly, first): not a crash the operator can

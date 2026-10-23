@@ -54,6 +54,9 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
     // The engine's exit code for an operator restart (node/restart), duplicated likewise: the shell relaunches the engine on it.
     internal const int RestartRequestedExitCode = 12;
 
+    // The engine's exit code for a node setting that failed options validation at start, duplicated likewise.
+    internal const int OptionsValidationFailedExitCode = 13;
+
     internal DesktopApplication(DesktopStartupOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -211,18 +214,10 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             if (_window is DesktopWindow failedWindow) { await failedWindow.DisposeAsync(); }
 
             _exitCode = StartupFailureExitCode(exception, engineReady);
-            string reason;
-            if (OperatingSystem.IsLinux() && _window is DesktopWindow) { reason = GtkDesktopBridge.FailureText; }
-            else if (exception is DesktopEngineStartupException startup
-                     && EngineExitNotice.IsApplicationControlBlock(startup.ExitCode, startup.Message))
-            {
-                reason = EngineExitNotice.For(startup.ExitCode, startup.Message, AppContext.BaseDirectory);
-            }
-            else { reason = engineReady ? DesktopText.WindowFailed : DesktopText.StartupFailed; }
-
+            var notice = DescribeStartupFailure(exception, engineReady, OperatingSystem.IsWindows(),
+                linuxWindow: OperatingSystem.IsLinux() && _window is DesktopWindow);
             // The engine's own last words (a missing shared runtime, a port conflict) are the only actionable part.
-            ShowFailure($"{reason}{Environment.NewLine}{Environment.NewLine}{exception.Message}",
-                includeWebViewLink: engineReady && OperatingSystem.IsWindows());
+            ShowFailure($"{notice.Text}{Environment.NewLine}{Environment.NewLine}{exception.Message}", notice.IncludeWebViewLink);
             await ReleaseAfterFailureAsync(stopEngine: true);
         }
     }
@@ -255,6 +250,26 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         {
             DesktopStartupDiagnostics.Record($"The failed shell could not stop its engine or close its activation pipe ({exception.GetType().Name}). {exception.Message}");
         }
+    }
+
+    /// <summary>The failure page's text for a failed start, and whether it offers the WebView2 download: only a window
+    ///     that could not open after the engine was ready on Windows; a page that never loaded is the engine's side.</summary>
+    internal static StartupFailureNotice DescribeStartupFailure(Exception exception, bool engineReady, bool windows, bool linuxWindow)
+    {
+        // The window's 30-second readiness deadline (TimeoutException) is a page that never loaded too; a missing WebView2
+        // runtime is the window constructor's PlatformNotSupportedException.
+        if (exception is DesktopPageLoadException || (engineReady && exception is TimeoutException)) { return new StartupFailureNotice(DesktopText.PageLoadFailed, IncludeWebViewLink: false); }
+
+        if (linuxWindow) { return new StartupFailureNotice(GtkDesktopBridge.FailureText, IncludeWebViewLink: false); }
+
+        if (exception is DesktopEngineStartupException startup && EngineExitNotice.IsApplicationControlBlock(startup.ExitCode, startup.Message))
+        {
+            return new StartupFailureNotice(EngineExitNotice.For(startup.ExitCode, startup.Message, AppContext.BaseDirectory), IncludeWebViewLink: false);
+        }
+
+        return engineReady
+            ? new StartupFailureNotice(DesktopText.WindowFailed, IncludeWebViewLink: windows)
+            : new StartupFailureNotice(DesktopText.StartupFailed, IncludeWebViewLink: false);
     }
 
     /// <summary>

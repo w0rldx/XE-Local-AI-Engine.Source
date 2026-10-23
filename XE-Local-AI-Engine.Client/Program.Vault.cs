@@ -31,6 +31,9 @@ public sealed partial class Program
     /// <summary>Exit code: the operator asked for a restart (<c>node/restart</c>); the desktop shell relaunches the engine on it.</summary>
     internal const int RestartRequestedExitCode = 12;
 
+    /// <summary>Exit code: a setting failed its startup validation (a value out of range, for example); stderr names it.</summary>
+    internal const int OptionsValidationFailedExitCode = 13;
+
     /// <summary>
     ///     Unwraps a locked v2 <c>node.key</c> before the host is built (ADR 0018). A CLI one-shot unlocks from what it
     ///     was given and never serves; anything else runs the <see cref="VaultUnlockHost" /> pre-host until the operator

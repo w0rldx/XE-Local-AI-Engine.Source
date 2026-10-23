@@ -370,6 +370,30 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Fixed
 
+- **Desktop start page after a vault unlock** — the desktop app retried its start page once, immediately, while the
+  engine host was still rebinding the port the unlock page had released, so an unlock sent the moment the window
+  appeared ended in "Desktop startup failed" and the shell stopped the engine mid-start. The start page is now retried
+  until the engine answers, for up to 15 seconds, and the engine relaunch after **Restart now** gets the same retry.
+- **Misleading WebView2 notice** — a start page that never loaded was shown as "Microsoft Edge WebView2 Runtime must be
+  installed" with a download button. That text is now reserved for a missing WebView2; a page that did not load says
+  the engine did not answer.
+- **Lost page after an engine restart** — a browser tab sent to the vault-unlock page returned to Home afterwards. The
+  unlock page now keeps the page the operator was on (`/vault?redirect=`), as the sign-in page already did.
+- **Command overlay stuck on the sign-in form** — an overlay opened before the desktop window signed in kept its sign-in
+  page. The shell now loads the command page again whenever the overlay is shown somewhere else.
+- **A setting out of range stopped the engine as an unexplained crash** — an invalid value for an optional setting such
+  as `Development:WorkspaceRetention:RetentionAge` failed host start after the unlock with a generic "engine stopped
+  unexpectedly". Startup now exits 13 and names the setting on stderr; the desktop app quotes it.
+- **Denied tool calls could be asked again and their result invented** — after the operator denied a tool call the
+  model could request the identical call again in the same turn and then present an output it never received. The
+  denial now tells the model that nothing ran, and the denied tool is withheld for the rest of that turn.
+- **File transcription merged speech across long silences** — an uploaded recording of repeated phrases parted by long
+  pauses came back as one or two segments, because whisper-server decodes all detected speech as one window. Uploads
+  are now cut at silences longer than 1.5 seconds and each part is transcribed on its own, with its own timestamps.
+- **Compute switched off read as "not supported"** — the Managed Python card now shows "Off" for a compute tool that is
+  only disabled.
+- **Uninstall script refusal in an elevated window** — the "do not run elevated" refusal is printed as a plain line
+  instead of a PowerShell error record.
 - The restart-gated settings list lived only in the web client and had drifted from the node: `AgentHomeRunRetentionDays`
   was documented as restart-only but applies at the next sweep, `externalAppsEnabled` was missing (the container bridge
   is decided at startup), and 17 gated settings carried no restart note. The node is now the single source and a test

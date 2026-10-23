@@ -84,6 +84,179 @@ public sealed class WavPcm16Tests
         AssertEx.Equal(expectedMs, WavPcm16.DurationMs(byteCount), $"Expected {expectedMs} ms for {because}.");
     }
 
+    [Test]
+    public void TryReadLayout_Mono16k_FindsThePayloadAfterTheCanonicalHeader()
+    {
+        var wav = WavPcm16.Wrap(Pcm(640));
+
+        var layout = Require(wav, "A canonical 16-bit mono WAV is readable.");
+
+        AssertEx.Equal(new WavPcm16.Layout(16_000, 1, 44, 640), layout);
+    }
+
+    [Test]
+    public void TryReadLayout_Stereo44k_WalksPastAnOddSizedChunkToTheData()
+    {
+        // A LIST chunk with an odd length is followed by one pad byte; a reader that ignores the pad lands one byte
+        // short of the next chunk id and never finds "data".
+        var wav = Build(Fmt(formatTag: 1, channels: 2, sampleRate: 44_100, bits: 16), extraChunk: [1, 2, 3], payload: Pcm(400));
+
+        var layout = Require(wav, "A stereo 44.1 kHz WAV with a metadata chunk is readable.");
+
+        AssertEx.Equal(44_100, layout.SamplesPerSecond);
+        AssertEx.Equal(2, layout.ChannelCount);
+        AssertEx.Equal(4, layout.BlockAlign, "Two channels of two bytes make a four-byte sample frame.");
+        AssertEx.Equal(400L, layout.DataLength);
+        AssertEx.Equal((byte)0, wav[(int)layout.DataOffset], "The payload starts where the first PCM byte was written.");
+        AssertEx.Equal((byte)1, wav[(int)layout.DataOffset + 1], "The payload offset accounts for the pad byte.");
+    }
+
+    [Test]
+    public void TryReadLayout_ExtensiblePcm_IsReadable()
+    {
+        var wav = Build(Extensible(subFormatTag: 1), extraChunk: null, payload: Pcm(320));
+
+        var layout = Require(wav, "WAVE_FORMAT_EXTENSIBLE with the PCM subformat is plain PCM.");
+
+        AssertEx.Equal(48_000, layout.SamplesPerSecond);
+        AssertEx.Equal(320L, layout.DataLength);
+    }
+
+    [Test]
+    public void TryReadLayout_DataSizeLargerThanTheFile_IsClampedToTheBytesPresent()
+    {
+        // A streaming writer that never patched its header leaves 0xFFFFFFFF there.
+        var wav = WavPcm16.Wrap(Pcm(322));
+        BinaryPrimitives.WriteUInt32LittleEndian(wav.AsSpan(40), uint.MaxValue);
+
+        var layout = Require(wav, "A placeholder data size must not make the file unreadable.");
+
+        AssertEx.Equal(322L, layout.DataLength);
+        AssertEx.True(layout.DataOffset + layout.DataLength <= wav.Length, "The payload never reaches past the end of the file.");
+    }
+
+    [Test]
+    [Arguments(3, 32, "32-bit float")]
+    [Arguments(1, 24, "24-bit integer")]
+    [Arguments(1, 8, "8-bit integer")]
+    [Arguments(6, 8, "A-law")]
+    public void TryReadLayout_NotSixteenBitPcm_IsNull(int formatTag, int bits, string because)
+    {
+        var wav = Build(Fmt(formatTag, channels: 1, sampleRate: 16_000, bits), extraChunk: null, payload: Pcm(96));
+
+        AssertEx.Null(Read(wav), $"{because} is not measured; the caller sends the file in one request.");
+    }
+
+    [Test]
+    [Arguments(384_000, 1, "a rate above 192 kHz")]
+    [Arguments(4_000, 1, "a rate below 8 kHz")]
+    [Arguments(16_000, 32_767, "32767 channels")]
+    [Arguments(16_000, 9, "nine channels")]
+    public void TryReadLayout_HeaderOutsideTheBounds_IsNull(int sampleRate, int channels, string because)
+    {
+        // An upload is untrusted: a tiny file declaring 384 kHz and 32767 channels would otherwise size a 500 MB frame.
+        var wav = Build(Fmt(formatTag: 1, channels, sampleRate, bits: 16), extraChunk: null, payload: Pcm(channels * 2));
+
+        AssertEx.Null(Read(wav), $"A header with {because} must be refused before it sizes any buffer.");
+    }
+
+    [Test]
+    public void TryReadLayout_UpperBounds_AreAccepted()
+    {
+        // The control for the refusals above: 192 kHz with eight channels is still a real recording.
+        var wav = Build(Fmt(formatTag: 1, channels: 8, sampleRate: 192_000, bits: 16), extraChunk: null, payload: Pcm(160));
+
+        var layout = Require(wav, "192 kHz eight-channel PCM is within the bounds.");
+
+        AssertEx.Equal(192_000, layout.SamplesPerSecond);
+        AssertEx.Equal(8, layout.ChannelCount);
+    }
+
+    [Test]
+    public void TryReadLayout_ExtensibleFloat_IsNull()
+    {
+        var wav = Build(Extensible(subFormatTag: 3), extraChunk: null, payload: Pcm(96));
+
+        AssertEx.Null(Read(wav), "WAVE_FORMAT_EXTENSIBLE carrying float samples is not 16-bit PCM.");
+    }
+
+    [Test]
+    public void TryReadLayout_TruncatedOrForeignBytes_IsNull()
+    {
+        AssertEx.Null(Read(TranscriptionAudioFixtures.Wav), "A header with no format body and no data chunk is unreadable.");
+        AssertEx.Null(Read(TranscriptionAudioFixtures.Ogg), "An Ogg file is not RIFF.");
+        AssertEx.Null(Read(WavPcm16.Wrap([])), "A WAV with no samples has nothing to measure.");
+    }
+
+    private static WavPcm16.Layout Require(byte[] wav, string message)
+    {
+        var layout = Read(wav);
+        AssertEx.True(layout.HasValue, message);
+        return layout.GetValueOrDefault();
+    }
+
+    private static WavPcm16.Layout? Read(byte[] wav)
+    {
+        using var stream = new MemoryStream(wav, writable: false);
+        return WavPcm16.TryReadLayout(stream);
+    }
+
+    private static byte[] Fmt(int formatTag, int channels, int sampleRate, int bits)
+    {
+        var fmt = new byte[16];
+        var blockAlign = channels * bits / 8;
+        BinaryPrimitives.WriteUInt16LittleEndian(fmt, (ushort)formatTag);
+        BinaryPrimitives.WriteUInt16LittleEndian(fmt.AsSpan(2), (ushort)channels);
+        BinaryPrimitives.WriteUInt32LittleEndian(fmt.AsSpan(4), (uint)sampleRate);
+        BinaryPrimitives.WriteUInt32LittleEndian(fmt.AsSpan(8), (uint)(sampleRate * blockAlign));
+        BinaryPrimitives.WriteUInt16LittleEndian(fmt.AsSpan(12), (ushort)blockAlign);
+        BinaryPrimitives.WriteUInt16LittleEndian(fmt.AsSpan(14), (ushort)bits);
+        return fmt;
+    }
+
+    private static byte[] Extensible(int subFormatTag)
+    {
+        var fmt = new byte[40];
+        var bits = subFormatTag == 3 ? 32 : 16;
+        Fmt(0xFFFE, channels: 2, sampleRate: 48_000, bits).CopyTo(fmt, 0);
+        BinaryPrimitives.WriteUInt16LittleEndian(fmt.AsSpan(16), 22);
+        BinaryPrimitives.WriteUInt16LittleEndian(fmt.AsSpan(18), (ushort)bits);
+        BinaryPrimitives.WriteUInt32LittleEndian(fmt.AsSpan(20), 3);
+        BinaryPrimitives.WriteUInt16LittleEndian(fmt.AsSpan(24), (ushort)subFormatTag);
+        byte[] guidTail = [0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71];
+        guidTail.CopyTo(fmt, 26);
+        return fmt;
+    }
+
+    private static byte[] Build(byte[] fmt, byte[]? extraChunk, byte[] payload)
+    {
+        using var output = new MemoryStream();
+        output.Write("RIFF"u8);
+        output.Write(new byte[4]);
+        output.Write("WAVE"u8);
+        WriteChunk(output, "fmt "u8, fmt);
+        if (extraChunk is not null)
+        {
+            WriteChunk(output, "LIST"u8, extraChunk);
+        }
+
+        WriteChunk(output, "data"u8, payload);
+        return output.ToArray();
+    }
+
+    private static void WriteChunk(MemoryStream output, ReadOnlySpan<byte> id, byte[] body)
+    {
+        Span<byte> size = stackalloc byte[4];
+        BinaryPrimitives.WriteUInt32LittleEndian(size, (uint)body.Length);
+        output.Write(id);
+        output.Write(size);
+        output.Write(body);
+        if (body.Length % 2 == 1)
+        {
+            output.WriteByte(0);
+        }
+    }
+
     private static string Ascii(byte[] wav, int offset, int length) =>
         Encoding.ASCII.GetString(wav, offset, length);
 

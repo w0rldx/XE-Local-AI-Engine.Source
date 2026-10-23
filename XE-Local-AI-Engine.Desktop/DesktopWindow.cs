@@ -1,20 +1,39 @@
 namespace XE_Local_AI_Engine.Desktop;
 
+using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Platform;
 using XE_Local_AI_Engine.Desktop.Linux;
 
 internal sealed class DesktopWindow : Window, IAsyncDisposable
 {
+    /// <summary>The route the start-page retry probes; the unlock page and the engine host both answer it. A protocol
+    ///     literal duplicated from the engine's LocalApiRoutes (the shell has no reference to the engine assembly).</summary>
+    internal const string EngineProbePath = "/api/local/v1/auth/status";
+
+    private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(400);
+
+    // Loopback only (DesktopLaunchOptions enforces an HTTP loopback origin), so no proxy may see it.
+    private static readonly HttpClient Probe = new(new SocketsHttpHandler { UseProxy = false })
+    {
+        Timeout = TimeSpan.FromSeconds(1)
+    };
+
     private readonly DesktopLaunchOptions _options;
     private readonly bool _devTools;
     private readonly NativeWebView _webView;
     private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private readonly DesktopNavigationGate _navigation = new();
+    private readonly DesktopNavigationGate _navigation = new(TimeProvider.System);
     private readonly Uri _start;
     private Task<GtkDesktopBridge>? _linuxInitialization;
     private GtkDesktopBridge? _linux;
     private bool _disposed;
+
+    // True from a start-page load until it loads or fails for good; afterwards a failed navigation is the page's concern.
+    private bool _startLoading = true;
+
+    // Counts start-page loads, so a retry still waiting on its probe knows a Reload has replaced its load.
+    private int _startGeneration;
 
     /// <summary>Opens <paramref name="path" /> on the engine origin under the shell's one profile, document policy and
     ///     navigation guard; <paramref name="top" />, when given, docks above the page.</summary>
@@ -65,6 +84,7 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
         }
 
         _start = new Uri(options.Origin, path);
+        _startGeneration++;
         _webView.Source = _start;
     }
 
@@ -120,7 +140,18 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
     /// <summary>Loads the start page again, after the engine behind the same origin was relaunched. UI thread only.</summary>
     internal void Reload()
     {
-        if (!_disposed) { _webView.Navigate(_start); }
+        if (_disposed) { return; }
+
+        _startLoading = true;
+        _startGeneration++;
+        _navigation.Restart();
+        try { _webView.Navigate(_start); }
+        catch (Exception)
+        {
+            // The caller (the engine relaunch) reports the failure; only the loading state is this window's to settle.
+            _startLoading = false;
+            throw;
+        }
     }
 
     internal Task WaitUntilReadyAsync(CancellationToken cancellationToken) =>
@@ -129,15 +160,23 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
     /// <summary>Reads the SPA's chosen UI language raw (WebView returns JSON: <c>"de"</c> quoted, a missing key as
     ///     <c>null</c>); null when the page cannot answer or the shell is stopping. UI thread only.</summary>
     // Never throws: every caller is a fire-and-forget UI handler that keeps the last-known language.
-    internal async Task<string?> ReadLanguageAsync(CancellationToken cancellationToken)
+    internal Task<string?> ReadLanguageAsync(CancellationToken cancellationToken) =>
+        EvaluateAsync("localStorage.getItem('i18nextLng')", cancellationToken);
+
+    /// <summary>The page's own address, client-side route changes included; null when the page cannot answer. UI thread only.</summary>
+    internal async Task<Uri?> ReadLocationAsync(CancellationToken cancellationToken)
+    {
+        if (await EvaluateAsync("location.href", cancellationToken) is not { } raw) { return null; }
+
+        try { return Uri.TryCreate(JsonSerializer.Deserialize<string>(raw), UriKind.Absolute, out var page) ? page : null; }
+        catch (JsonException) { return null; }
+    }
+
+    private async Task<string?> EvaluateAsync(string script, CancellationToken cancellationToken)
     {
         if (_disposed) { return null; }
 
-        try
-        {
-            return await _webView.InvokeScript("localStorage.getItem('i18nextLng')")
-                                 .WaitAsync(TimeSpan.FromSeconds(3), cancellationToken);
-        }
+        try { return await _webView.InvokeScript(script).WaitAsync(TimeSpan.FromSeconds(3), cancellationToken); }
         catch (Exception) { return null; }
     }
 
@@ -176,23 +215,22 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
         var outcome = _navigation.Completed(args.IsSuccess);
         if (outcome != DesktopNavigationGate.Outcome.Loaded)
         {
-            // Once the window is ready a failed navigation is the page's own concern.
-            if (_ready.Task.IsCompleted || _disposed || outcome == DesktopNavigationGate.Outcome.Superseded) { return; }
+            if (!_startLoading || _disposed || outcome == DesktopNavigationGate.Outcome.Superseded) { return; }
 
             if (outcome == DesktopNavigationGate.Outcome.Retry)
             {
-                DesktopStartupDiagnostics.Record("The desktop page did not load; retrying the start page once.");
-                try { _webView.Navigate(_start); }
-                catch (Exception exception) { _ready.TrySetException(exception); }
-
+                await RetryStartAsync();
                 return;
             }
 
-            _ready.TrySetException(new InvalidOperationException("The desktop page could not load."));
+            FailStart(new DesktopPageLoadException(
+                $"The desktop page could not load from the engine at {_options.Origin} within {DesktopNavigationGate.RetryWindow.TotalSeconds:0} seconds."));
             return;
         }
 
         if (DesktopLaunchOptions.ClassifyNavigation(_options.Origin, args.Request) != NavigationDisposition.SameOrigin || _disposed) { return; }
+
+        _startLoading = false;
 
         try
         {
@@ -207,6 +245,54 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
             _ready.TrySetResult();
         }
         catch (Exception exception) { _ready.TrySetException(exception); }
+    }
+
+    /// <summary>Waits until the engine origin answers any HTTP request, or the retry window ends, then loads the start
+    ///     page again; a retry that lands while the port is being rebound after a vault unlock would only fail again.</summary>
+    private async Task RetryStartAsync()
+    {
+        DesktopStartupDiagnostics.Record("The desktop page did not load; retrying the start page once the engine answers.");
+        var generation = _startGeneration;
+        do
+        {
+            // Continues on the UI thread (the caller is a UI event handler), so the WebView is safe to touch; a disposed
+            // window is caught by the check below, so the delay needs no token whose cancellation would throw here.
+            await Task.Delay(RetryDelay, CancellationToken.None);
+            if (IsStale(generation)) { return; }
+        }
+        while (!await EngineAnswersAsync() && _navigation.CanRetry());
+
+        // The probe can take a second: a disposal or a Reload during it owns the window now.
+        if (IsStale(generation)) { return; }
+
+        try { _webView.Navigate(_start); }
+        catch (Exception exception) { FailStart(exception); }
+    }
+
+    private bool IsStale(int generation) => _disposed || !_startLoading || generation != _startGeneration;
+
+    /// <summary>Ends the start-page load as failed; a reload after an engine relaunch finds the window already ready, so
+    ///     the desktop log is then the only record left.</summary>
+    private void FailStart(Exception failure)
+    {
+        _startLoading = false;
+        if (!_ready.TrySetException(failure))
+        {
+            DesktopStartupDiagnostics.Record($"The desktop page could not load ({failure.GetType().Name}). {failure.Message}");
+        }
+    }
+
+    /// <summary>True on any HTTP answer from the engine origin, and when the probe itself cannot be made (the plain
+    ///     delayed retry is then the fallback); false while nothing listens.</summary>
+    private async Task<bool> EngineAnswersAsync()
+    {
+        try
+        {
+            using var response = await Probe.GetAsync(new Uri(_options.Origin, EngineProbePath), HttpCompletionOption.ResponseHeadersRead, CancellationToken.None);
+            return true;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException) { return false; }
+        catch (Exception) { return true; }
     }
 
     private async void OnNewWindowRequested(object? sender, WebViewNewWindowRequestedEventArgs args)

@@ -14,7 +14,7 @@ import {
 	Title,
 } from "@mantine/core";
 import { IconLockOpen } from "@tabler/icons-react";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { isAxiosError } from "axios";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -24,6 +24,7 @@ import { getNodeAuthStatus, unlockNodeVault, unlockNodeVaultWithRecovery } from 
 import type { NodeAuthErrorResponse } from "@/core/auth/models/NodeAuthModels";
 import { RecoveryCodeReveal } from "@/core/auth/components/RecoveryCodeReveal";
 import { unmetPasswordRules } from "@/core/auth/models/PasswordPolicy";
+import { getSafeRedirectPath } from "@/core/auth/utils/RedirectPath";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { StandaloneScreenControls } from "@/core/ui/components/StandaloneScreenControls/StandaloneScreenControls";
 
@@ -122,6 +123,9 @@ function validateRecovery(values: RecoveryFormValues, t: Translate): Partial<Rec
 export function VaultUnlock() {
 	const { t } = useTranslation();
 	const navigate = useNavigate();
+	// The page the operator was on when the engine came back locked; the target's own guard handles sign-in.
+	const { redirect } = useSearch({ from: "/vault" });
+	const safeRedirect = getSafeRedirectPath(redirect);
 	const [useRecovery, setUseRecovery] = useState(false);
 	const [password, setPassword] = useState("");
 	const [recovery, setRecovery] = useState<RecoveryFormValues>({ recoveryCode: "", newPassword: "", confirmPassword: "" });
@@ -165,7 +169,7 @@ export function VaultUnlock() {
 						}
 
 						if (status.vault !== "locked") {
-							navigate({ to: "/" }).catch(() => undefined);
+							navigate({ to: safeRedirect }).catch(() => undefined);
 							return;
 						}
 
@@ -184,7 +188,7 @@ export function VaultUnlock() {
 			cancelled = true;
 			clearTimeout(timer);
 		};
-	}, [idle, navigate]);
+	}, [idle, navigate, safeRedirect]);
 
 	const visibleError = (field: keyof RecoveryFormValues): string | undefined =>
 		touched[field] === true ? recoveryErrors[field] : undefined;
@@ -209,7 +213,7 @@ export function VaultUnlock() {
 			}
 
 			// Unlocking issues no session; the layout guard sends the operator on to the normal sign-in.
-			await navigate({ to: "/" });
+			await navigate({ to: safeRedirect });
 			return;
 		}
 
@@ -258,7 +262,7 @@ export function VaultUnlock() {
 						onContinue={() => {
 							setNewRecoveryCode(undefined);
 							// Unlocking issues no session; the layout guard sends the operator on to the normal sign-in.
-							navigate({ to: "/" }).catch(() => undefined);
+							navigate({ to: safeRedirect }).catch(() => undefined);
 						}}
 					/>
 				</Stack>

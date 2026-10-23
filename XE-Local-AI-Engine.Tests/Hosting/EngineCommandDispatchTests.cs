@@ -87,7 +87,7 @@ public sealed class EngineCommandDispatchTests
         AssertEx.Contains(output.ToString(), "XE_DATA_DIR must be an absolute path");
         AssertEx.Contains(output.ToString(), "Desktop app: [--debug]");
         AssertEx.Contains(output.ToString(),
-            "Exit codes: 0 success; 1 stopped/unexpected failure; 2 usage; 3 validation; 4 instance busy; 5 setup/command failure; 6 requested port unavailable; 7 unlock port lost; 8 node key does not open the database; 9 database migration failed; 10 data directory or node settings unusable; 11 Windows application control blocked an engine file; 12 restart requested (the desktop app starts the engine again).");
+            "Exit codes: 0 success; 1 stopped/unexpected failure; 2 usage; 3 validation; 4 instance busy; 5 setup/command failure; 6 requested port unavailable; 7 unlock port lost; 8 node key does not open the database; 9 database migration failed; 10 data directory or node settings unusable; 11 Windows application control blocked an engine file; 12 restart requested (the desktop app starts the engine again); 13 a setting failed its startup validation.");
         AssertEx.Contains(output.ToString(), @"current\XE-Local-AI-Engine.WindowsLauncher.exe");
     }
 

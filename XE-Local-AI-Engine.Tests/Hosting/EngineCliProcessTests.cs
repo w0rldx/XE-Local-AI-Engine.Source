@@ -517,6 +517,23 @@ public sealed class EngineCliProcessTests : IDisposable
     }
 
     [Test]
+    public async Task Serve_WhenASettingIsOutOfRange_ExitsThirteenAndNamesItOnTheLastStderrLine()
+    {
+        // N-84: a value outside a ValidateOnStart range used to fall through to the generic crash handler after the unlock.
+        Directory.CreateDirectory(_root);
+        await SetupLockedVaultAsync();
+
+        var refused = await RunAsync(["--mcp-only"], launchMode: null,
+            environment: new Dictionary<string, string>(StringComparer.Ordinal) { ["AgentHome__RunRetention__SweepInterval"] = "00:00:01" });
+
+        AssertEx.Equal(XE_Local_AI_Engine.Client.Program.OptionsValidationFailedExitCode, refused.ExitCode, refused.CombinedOutput);
+        var lastLine = AssertEx.NotNull(refused.StandardError.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries).LastOrDefault(), refused.CombinedOutput);
+        AssertEx.True(lastLine.StartsWith(SettingValidationFailure.StandardErrorPrefix, StringComparison.Ordinal), $"The shell reads the stderr tail: {refused.StandardError}");
+        AssertEx.Contains(lastLine, "AgentHome:RunRetention:SweepInterval");
+        AssertEx.False(refused.StandardOutput.Contains(ReadyPrefix, StringComparison.Ordinal), "A refused setting must never announce readiness.");
+    }
+
+    [Test]
     public async Task NodeRestart_IsRefusedWithoutAShell_AndAShellOwnedEngineExitsWithTheRestartCode()
     {
         Directory.CreateDirectory(_root);
@@ -639,7 +656,8 @@ public sealed class EngineCliProcessTests : IDisposable
         string? dataDirectory = null,
         string? adminPassword = AdminPassword,
         string nodeName = DefaultNodeName,
-        string? standardInput = null)
+        string? standardInput = null,
+        IReadOnlyDictionary<string, string>? environment = null)
     {
         // 90 s, not 30: a real `--setup` measures 14-15 s idle at width 1 and timed out twice at 30 s on a shared 4-core
         // CI runner under four parallel groups with coverage (2026-10-18). Every caller still asserts exit code and output.
@@ -649,6 +667,11 @@ public sealed class EngineCliProcessTests : IDisposable
             StartInfo = CreateStartInfo(arguments, launchMode, dataDirectory ?? _root, adminPassword, nodeName)
         };
         process.StartInfo.RedirectStandardInput = standardInput is not null;
+        foreach (var (name, value) in environment ?? new Dictionary<string, string>(StringComparer.Ordinal))
+        {
+            process.StartInfo.Environment[name] = value;
+        }
+
         if (!process.Start())
         {
             throw new InvalidOperationException("The engine CLI process could not be started.");

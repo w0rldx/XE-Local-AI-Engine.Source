@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Transcription;
 
+using System.Buffers.Binary;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -55,6 +56,9 @@ internal sealed class FakeWhisperTranscriber : IWhisperTranscriber
 
     public int CallCount { get; private set; }
 
+    /// <summary>The byte length of every request's audio, in call order, so a test can prove how a clip was cut.</summary>
+    public List<long> AudioLengths { get; } = [];
+
     /// <summary>The media type of the last request, so a test can prove which file reached the runtime.</summary>
     public string? LastContentType { get; private set; }
 
@@ -83,6 +87,7 @@ internal sealed class FakeWhisperTranscriber : IWhisperTranscriber
         LastLanguageCode = request.LanguageCode;
         LastTranslate = request.Translate;
         LastStartPosition = request.Audio.Position;
+        AudioLengths.Add(request.Audio.Length);
 
         var head = new byte[16];
         var read = await request.Audio.ReadAsync(head.AsMemory(), ct);
@@ -178,6 +183,9 @@ internal sealed class FakeAudioTranscoder : IAudioTranscoder
 
     public IReadOnlyList<string> Calls => _calls;
 
+    /// <summary>What a successful conversion writes; a header with no audio by default.</summary>
+    public byte[] Output { get; set; } = TranscriptionAudioFixtures.TranscodedWav;
+
     public async Task<string> ToWav16kMonoAsync(string sourcePath, string destinationPath, CancellationToken cancellationToken)
     {
         _calls.Add(sourcePath);
@@ -188,7 +196,7 @@ internal sealed class FakeAudioTranscoder : IAudioTranscoder
             throw new AudioTranscodeException("The audio could not be converted.");
         }
 
-        await File.WriteAllBytesAsync(destinationPath, TranscriptionAudioFixtures.TranscodedWav, cancellationToken);
+        await File.WriteAllBytesAsync(destinationPath, Output, cancellationToken);
         return destinationPath;
     }
 }
@@ -244,6 +252,33 @@ internal static class TranscriptionAudioFixtures
         0x57, 0x41, 0x56, 0x45, 0x66, 0x6D, 0x74, 0x20,
         0x10, 0x00, 0x00, 0x00
     ];
+
+    /// <summary>
+    ///     A real 16-bit PCM WAV: digital silence with a 440 Hz tone at half scale for <paramref name="burstMs" /> from
+    ///     each of <paramref name="burstStartsMs" />. Interleaved channels carry the same signal.
+    /// </summary>
+    public static byte[] ToneWav(int sampleRate, int channels, long totalMs, IReadOnlyList<long> burstStartsMs, long burstMs)
+    {
+        var frames = (int)(totalMs * sampleRate / 1000);
+        var blockAlign = channels * 2;
+        var wav = new byte[WavPcm16.HeaderLength + (frames * blockAlign)];
+        WavPcm16.WriteHeader(wav, frames * blockAlign, sampleRate, channels);
+        foreach (var startMs in burstStartsMs)
+        {
+            var first = (int)(startMs * sampleRate / 1000);
+            var last = Math.Min(frames, (int)((startMs + burstMs) * sampleRate / 1000));
+            for (var i = first; i < last; i++)
+            {
+                var sample = (short)(16_000 * Math.Sin(2 * Math.PI * 440 * i / sampleRate));
+                for (var c = 0; c < channels; c++)
+                {
+                    BinaryPrimitives.WriteInt16LittleEndian(wav.AsSpan(WavPcm16.HeaderLength + (i * blockAlign) + (c * 2)), sample);
+                }
+            }
+        }
+
+        return wav;
+    }
 
     /// <summary>An Ogg page header.</summary>
     public static byte[] Ogg => [0x4F, 0x67, 0x67, 0x53, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];

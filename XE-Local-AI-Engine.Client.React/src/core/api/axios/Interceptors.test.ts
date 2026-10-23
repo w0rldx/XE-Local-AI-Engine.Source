@@ -26,7 +26,7 @@ import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { getPendingVaultStep } from "@/core/auth/utils/SessionRestore";
 
 registerLoginNavigator((redirect) => routerMock.navigate({ to: "/login", search: { redirect } }));
-registerVaultNavigator(() => routerMock.navigate({ to: "/vault" }));
+registerVaultNavigator((redirect) => routerMock.navigate({ to: "/vault", search: { redirect } }));
 
 function okResponse(config: InternalAxiosRequestConfig): AxiosResponse {
 	return {
@@ -293,10 +293,28 @@ describe("vault-locked interceptor", () => {
 		await expect(instance.get("/api/local/v1/protected")).rejects.toBeInstanceOf(AxiosError);
 
 		expect(useNodeAuthStore.getState().accessToken).toBeUndefined();
-		expect(routerMock.navigate).toHaveBeenCalledWith({ to: "/vault" });
+		expect(routerMock.navigate).toHaveBeenCalledWith({ to: "/vault", search: { redirect: "/" } });
 		authApiMock.getNodeAuthStatus.mockResolvedValue({ setupRequired: false, authenticated: false, vault: "locked" });
 		await expect(getPendingVaultStep()).resolves.toBe("vault-locked");
 		expect(authApiMock.getNodeAuthStatus).toHaveBeenCalledTimes(2);
+	});
+
+	it("hands the unlock page the path and query the tab was on", async () => {
+		globalThis.history.pushState({}, "", "/chat?thread=7");
+		try {
+			const instance = axios.create({
+				adapter: async (config) => {
+					throw serviceUnavailable(config, "Vault locked");
+				},
+			});
+			addVaultLockedInterceptor(instance);
+
+			await expect(instance.get("/api/local/v1/protected")).rejects.toBeInstanceOf(AxiosError);
+
+			expect(routerMock.navigate).toHaveBeenCalledWith({ to: "/vault", search: { redirect: "/chat?thread=7" } });
+		} finally {
+			globalThis.history.pushState({}, "", "/");
+		}
 	});
 
 	it("leaves any other 503 alone", async () => {

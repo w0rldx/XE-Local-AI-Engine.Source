@@ -413,11 +413,14 @@ the file; consumers must reject it when the PID is dead and poll `/health/ready`
 `--status --json` is one-shot, never starts the host or creates the data directory, and returns
 `{running,version,url,mcpUrl,dataDir,setupRequired,vault,installKind}`, where `vault` is `pending`, `locked` or `unlocked` (null when not running).
 
-Four startup refusals exit with their own code and an operator-facing stderr message instead of crashing: a node key
+Five startup refusals exit with their own code and an operator-facing stderr message instead of crashing: a node key
 that cannot open the database (it does not match the database's recorded key check, or `node.key` is missing next to
 an existing `node.sqlite`) exits **8**, a failed database migration exits **9** after the restore or move-aside
-hint, an unusable data directory exits **10**, and an engine file that Windows Smart App Control or an application
-control policy refused to load (HRESULT 0x800711C7, the build is unsigned) exits **11**. Exit 11 writes one stderr
+hint, an unusable data directory exits **10**, an engine file that Windows Smart App Control or an application
+control policy refused to load (HRESULT 0x800711C7, the build is unsigned) exits **11**, and a setting that fails its
+startup validation (a `[Range]` or validator on options registered with `ValidateOnStart`) exits **13**. Exit 13 writes
+one stderr line, the last, that starts with `Setting out of range: ` and joins the validation failures
+(`SettingValidationFailure`). Exit 11 writes one stderr
 line that starts with `Application control blocked: ` and the blocked file's name (`ApplicationControlBlock`); the
 desktop shell matches that line to show its own dialog. Exit 10 covers a data directory that cannot be created or written
 (`DesktopDataDirectoryException`, raised by `SingleInstanceLease.TryAcquire` on an access denial) and a

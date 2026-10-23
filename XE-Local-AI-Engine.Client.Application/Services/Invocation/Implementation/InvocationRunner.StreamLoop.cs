@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -416,6 +417,8 @@ public sealed partial class InvocationRunner
         }
 
         var approvalResponses = new List<AIContent>(loop.PendingApprovals.Count);
+        var deniedRequests = new List<ToolApprovalRequestContent>();
+        var approvedToolNames = new HashSet<string>(StringComparer.Ordinal);
         foreach (var approvalRequest in loop.PendingApprovals)
         {
             // A web review, like ask_user, always approves: the handler returns whatever the review stashed, the decline text included.
@@ -438,14 +441,55 @@ public sealed partial class InvocationRunner
             }
 
             var approved = await _toolApprovalCoordinator.RequestToolApprovalAsync(package, approvalRequest, ParkFor(package), invocationToken);
-            approvalResponses.Add(approvalRequest.CreateResponse(approved, approved ? "Approved by user." : "Rejected by user."));
+            approvalResponses.Add(approvalRequest.CreateResponse(approved, approved ? ApprovedToolCallReason : DeniedToolCallReason));
             if (approved)
             {
                 loop.OpenToolCalls.OpenApproved(approvalRequest);
+                _ = approvedToolNames.Add((approvalRequest.ToolCall as FunctionCallContent)?.Name ?? string.Empty);
+            }
+            else
+            {
+                deniedRequests.Add(approvalRequest);
             }
         }
 
+        // A tool approved for another call of this batch stays offered: the replay round runs that call, and withholding the tool would fail it.
+        foreach (var deniedRequest in deniedRequests.Where(request => !approvedToolNames.Contains((request.ToolCall as FunctionCallContent)?.Name ?? string.Empty)))
+        {
+            WithholdDeniedTool(loop, deniedRequest);
+        }
+
         loop.CurrentMessages.Add(new ChatMessage(ChatRole.User, approvalResponses));
+    }
+
+    // N-85: a denied tool leaves the offer for the rest of this turn, so the model cannot request it again and then invent its result; the next turn
+    // offers it again. The MAF skill tools stay: their approval is per skill, and one denied skill must not hide the others.
+    private static void WithholdDeniedTool(SingleAgentLoop loop, ToolApprovalRequestContent approvalRequest)
+    {
+        if ((approvalRequest.ToolCall as FunctionCallContent)?.Name is not { } toolName
+            || ToolRelevanceChatClient.SkillToolNames.Contains(toolName, StringComparer.Ordinal)
+            || !loop.DeniedToolNames.Add(toolName)
+            || loop.DeniedToolNames.Count > 1
+            || loop.AgentContext.RunOptions is not (null or ChatClientAgentRunOptions))
+        {
+            return;
+        }
+
+        // Installed once, at the first denial: the filter reads the live set, and it wraps the agent's whole pipeline, so the function invoker never sees the tool either.
+        var runOptions = loop.AgentContext.RunOptions as ChatClientAgentRunOptions ?? new ChatClientAgentRunOptions();
+        var innerFactory = runOptions.ChatClientFactory;
+        var denied = loop.DeniedToolNames;
+        runOptions.ChatClientFactory = client => (innerFactory?.Invoke(client) ?? client)
+                                                 .AsBuilder()
+                                                 .ConfigureOptions(options =>
+                                                 {
+                                                     if (options.Tools is { Count: > 0 } tools)
+                                                     {
+                                                         options.Tools = [.. tools.Where(tool => !denied.Contains(tool.Name))];
+                                                     }
+                                                 })
+                                                 .Build();
+        loop.AgentContext.RunOptions = runOptions;
     }
 
     // The one re-prompt after a final round whose reasoning holds an unparsed tool call: replay the segment without its reasoning
@@ -698,6 +742,9 @@ public sealed partial class InvocationRunner
         public required int SurrogateCallCount { get; set; }
 
         public required HashSet<string> NotifiedDisabledTools { get; init; }
+
+        // The tools the operator denied in this turn, withheld from its later provider rounds (WithholdDeniedTool).
+        public HashSet<string> DeniedToolNames { get; } = new(StringComparer.Ordinal);
 
         public required List<ChatMessage> CurrentMessages { get; set; }
 

@@ -104,4 +104,14 @@ public sealed class DesktopCommandOverlayTests
     [Arguments(true, false, true)]
     public void ShouldShow_TheHotkeyTogglesAndTheMenuAlwaysShows(bool visible, bool toggle, bool expected) =>
         AssertEx.Equal(expected, DesktopCommandWindow.ShouldShow(visible, toggle));
+
+    [Test]
+    [Arguments("http://127.0.0.1:5000/login?redirect=%2Fcommand", true)]
+    [Arguments("http://127.0.0.1:5000/", true)]
+    [Arguments("http://127.0.0.1:5000/command", false)]
+    [Arguments("http://127.0.0.1:5000/command?x=1", false)]
+    [Arguments(null, false)]
+    public void ShouldReloadOnShow_OnlyWhenThePageLeftTheOverlayRoute(string? current, bool expected) =>
+        AssertEx.Equal(expected, DesktopCommandWindow.ShouldReloadOnShow(
+            current is null ? null : new Uri(current), new Uri("http://127.0.0.1:5000" + DesktopCommandWindow.Route)));
 }

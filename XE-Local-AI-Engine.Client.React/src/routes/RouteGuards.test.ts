@@ -116,6 +116,14 @@ async function runGuard(route: { options: { beforeLoad?: unknown } }, queryClien
 	return await beforeLoad({ context: { queryClient }, location, search: {} });
 }
 
+async function runGuardWithSearch(route: { options: { beforeLoad?: unknown } }, search: Record<string, string>) {
+	const beforeLoad = route.options.beforeLoad;
+	if (typeof beforeLoad !== "function") {
+		throw new Error("the route declares no beforeLoad");
+	}
+	return await beforeLoad({ context: { queryClient: clientWith("recommended") }, location, search });
+}
+
 // Resolves to the redirect target, or "stay" when the guard let the navigation through.
 async function guardOutcome(run: Promise<unknown>): Promise<string | undefined> {
 	return await run.then(
@@ -352,6 +360,16 @@ describe("route guards for the vault states", () => {
 
 			await expect(guardOutcome(runGuard(LayoutRoute))).resolves.toBe("/vault");
 		});
+
+		it("carries the page the operator was on to the unlock page", async () => {
+			const thrown = await runGuard(LayoutRoute).then(
+				() => undefined,
+				(error: unknown) => error,
+			);
+
+			expect(redirectTarget(thrown)).toBe("/vault");
+			expect((thrown as { options?: { search?: unknown } }).options?.search).toEqual({ redirect: "/chat" });
+		});
 	});
 
 	describe("pending on a node that already has an admin", () => {
@@ -398,6 +416,17 @@ describe("route guards for the vault states", () => {
 
 			await expect(guardOutcome(runGuard(VaultRoute))).resolves.toBe("/");
 			await expect(guardOutcome(runGuard(VaultSetupRoute))).resolves.toBe("/");
+		});
+
+		it("returns from the unlock page to the carried page, never to an auth page or another origin", async () => {
+			restoreMock.mockResolvedValue("authenticated");
+			const leaveVault = (redirect: string) => guardOutcome(runGuardWithSearch(VaultRoute, { redirect }));
+
+			await expect(leaveVault("/chat?thread=7")).resolves.toBe("/chat?thread=7");
+			await expect(leaveVault("/login")).resolves.toBe("/");
+			await expect(leaveVault("/vault?redirect=/chat")).resolves.toBe("/");
+			await expect(leaveVault("https://example.com/")).resolves.toBe("/");
+			await expect(leaveVault("//example.com/")).resolves.toBe("/");
 		});
 
 		it("lets the layout through", async () => {

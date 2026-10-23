@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import en from "@/locales/en.json";
 import { installJsdomEnvironmentMocks, renderWithMantine } from "@/test/MantineTestRender";
 
-const { authApiMock, navigateMock } = vi.hoisted(() => ({
+const { authApiMock, navigateMock, searchMock } = vi.hoisted(() => ({
 	authApiMock: {
 		getNodeAuthStatus: vi.fn(),
 		unlockNodeVault: vi.fn(),
@@ -15,9 +15,10 @@ const { authApiMock, navigateMock } = vi.hoisted(() => ({
 	},
 	// Resolves like the router's navigate, which the pages chain a `.catch` onto.
 	navigateMock: vi.fn(async () => undefined),
+	searchMock: vi.fn((): { redirect?: string } => ({})),
 }));
 
-vi.mock("@tanstack/react-router", () => ({ useNavigate: () => navigateMock }));
+vi.mock("@tanstack/react-router", () => ({ useNavigate: () => navigateMock, useSearch: searchMock }));
 
 vi.mock("@/core/auth/api/NodeAuthApi", () => authApiMock);
 
@@ -46,6 +47,7 @@ function submitButton(name: string): HTMLButtonElement {
 describe("vault unlock page", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		searchMock.mockReturnValue({});
 		vi.useFakeTimers();
 		installJsdomEnvironmentMocks();
 		authApiMock.unlockNodeVault.mockResolvedValue(undefined);
@@ -80,6 +82,29 @@ describe("vault unlock page", () => {
 		await advance(2_000);
 		expect(authApiMock.getNodeAuthStatus).toHaveBeenCalledTimes(3);
 		expect(navigateMock).toHaveBeenCalledWith({ to: "/" });
+	});
+
+	it("returns to the page the operator was on after the hand-over", async () => {
+		searchMock.mockReturnValue({ redirect: "/chat?thread=7" });
+		authApiMock.getNodeAuthStatus.mockResolvedValue({ setupRequired: false, authenticated: false, vault: "unlocked" });
+		renderWithMantine(<VaultUnlock />);
+
+		fireEvent.change(screen.getByLabelText(new RegExp(`^${vault.passwordLabel}`)), { target: { value: "correct horse" } });
+		fireEvent.click(submitButton(vault.unlockButton));
+		await advance(500);
+
+		expect(navigateMock).toHaveBeenCalledWith({ to: "/chat?thread=7" });
+	});
+
+	it("goes home instead of to a redirect on another origin", async () => {
+		searchMock.mockReturnValue({ redirect: "https://example.com/" });
+		authApiMock.getNodeAuthStatus.mockResolvedValue({ setupRequired: false, authenticated: false, vault: "unlocked" });
+		renderWithMantine(<VaultUnlock />);
+
+		await advance(5_000);
+
+		expect(navigateMock).toHaveBeenCalledWith({ to: "/" });
+		expect(navigateMock).not.toHaveBeenCalledWith({ to: "https://example.com/" });
 	});
 
 	it("offers Try again once the hand-over budget runs out, and polls again", async () => {

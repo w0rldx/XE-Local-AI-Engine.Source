@@ -81,6 +81,28 @@ internal static class DesktopText
             ? "Das XE-Fenster konnte nicht geöffnet werden. Unter Windows muss Microsoft Edge WebView2 Runtime installiert sein. Prüfen Sie die Installation und die Engine-Protokolle."
             : "The XE window could not open. On Windows, Microsoft Edge WebView2 Runtime must be installed. Check the installation and engine logs.";
 
+    /// <summary>WebView2 works but the start page never loaded from the engine within the retry window.</summary>
+    internal static string PageLoadFailed =>
+        German
+            ? "Das XE-Fenster konnte die Engine nicht erreichen. Die Engine wurde gestartet, aber ihre Seite hat innerhalb der Wartezeit nicht geantwortet. Prüfen Sie die Engine-Protokolle und starten Sie XE erneut."
+            : "The XE window could not reach the engine. The engine started, but its page did not answer in time. Check the engine logs, then start XE again.";
+
+    /// <summary>The engine stopped at start because a node setting failed validation; <paramref name="report" /> is its
+    ///     own description of the setting, when it wrote one.</summary>
+    internal static string SettingOutOfRange(string? report)
+    {
+        if (string.IsNullOrWhiteSpace(report))
+        {
+            return German
+                ? "Eine Knoteneinstellung liegt außerhalb des gültigen Bereichs, daher wurde die Engine beendet. Korrigieren Sie die Einstellung (Umgebungsvariable oder node-settings.json) und starten Sie XE erneut."
+                : "A node setting is out of range, so the engine stopped. Fix the setting (environment variable or node-settings.json), then start XE again.";
+        }
+
+        return German
+            ? $"Eine Knoteneinstellung liegt außerhalb des gültigen Bereichs, daher wurde die Engine beendet. Sie meldete: {report}. Korrigieren Sie die Einstellung (Umgebungsvariable oder node-settings.json) und starten Sie XE erneut."
+            : $"A node setting is out of range, so the engine stopped. It reported: {report}. Fix the setting (environment variable or node-settings.json), then start XE again.";
+    }
+
     internal static string WebViewDownload => German ? "WebView2 herunterladen" : "Download WebView2";
     internal static string SaveFailed => German ? "Die Auswahl konnte nicht gespeichert werden. Sie gilt nur für dieses Fenster." : "The choice could not be saved. It applies only to this window.";
 

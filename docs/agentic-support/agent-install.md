@@ -422,6 +422,7 @@ Remove `~/.claude/skills/xe-local-ai-engine` and
 | 10 | Data directory unusable (not creatable or not writable), or `node-settings.json` present but unreadable; stderr names the path. |
 | 11 | Windows Smart App Control or an application control policy blocked an engine file; stderr names it. |
 | 12 | Not a failure: the operator restarted the node from the desktop app, which starts the engine again. A wrapper that supervises the engine itself should start it again too. |
+| 13 | A setting failed its startup validation (a value out of range, for example); the last stderr line starts with `Setting out of range: ` and names it. |
 
 ### Installer
 

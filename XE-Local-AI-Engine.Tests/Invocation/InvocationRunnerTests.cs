@@ -1644,6 +1644,102 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenAToolCallIsDenied_TheModelReadsWhyAndTheToolIsWithheldForTheRestOfTheTurnOnly()
+    {
+        // N-85: after a denial the model asked for the same call again and finally invented its result. It must read that nothing ran,
+        // must not be offered the tool again in this turn, and must be offered it again in the next turn.
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
+        using var model = new DenialScriptedChatClient();
+        var runner = CreateRunner(DenialPipelineFactory(model), eventDispatcher: dispatcher);
+        var conversationId = Guid.NewGuid();
+
+        var firstTurn = RunAsync(runner, DenialPackage(conversationId));
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(10));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals[0].RequestId,
+            Approved = false
+        });
+        await firstTurn.WaitAsync(TimeSpan.FromSeconds(10));
+
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<FailureCategory>());
+        AssertEx.Equal(expected: 2, model.OfferedTools.Count, "the denied call resumes the turn once");
+        AssertEx.Contains(model.OfferedTools[0], DenialScriptedChatClient.GuardedToolName);
+        AssertEx.False(model.OfferedTools[1].Contains(DenialScriptedChatClient.GuardedToolName, StringComparer.Ordinal),
+            "the round after the denial must not offer the denied tool");
+        AssertEx.Contains(model.OfferedTools[1], DenialScriptedChatClient.OtherToolName);
+        var result = AssertEx.NotNull(model.ToolResult);
+        AssertEx.True(result.StartsWith(ToolInvocationObservabilityChatClient.RejectedApprovalResultPrefix, StringComparison.Ordinal),
+            $"the framework prefix the observability client keys Outcome=denied on must lead the result: {result}");
+        AssertEx.Contains(result, InvocationRunner.DeniedToolCallReason);
+
+        var secondTurn = RunAsync(runner, DenialPackage(conversationId));
+        await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(10));
+        AssertEx.Contains(model.OfferedTools[2], DenialScriptedChatClient.GuardedToolName);
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals[1].RequestId,
+            Approved = false
+        });
+        await secondTurn.WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    [Test]
+    public async Task RunAsync_WhenOneCallOfAToolIsApprovedAndAnotherDeniedInOneSegment_TheApprovedCallRuns()
+    {
+        // Review finding on N-85: withholding the denied tool before the replay round hid it from the function invoker running the approved call.
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
+        using var model = new DenialScriptedChatClient(callsPerRound: 2);
+        var runner = CreateRunner(DenialPipelineFactory(model), eventDispatcher: dispatcher);
+
+        var turn = RunAsync(runner, DenialPackage(Guid.NewGuid()));
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(10));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals[0].RequestId,
+            Approved = true
+        });
+        await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(10));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals[1].RequestId,
+            Approved = false
+        });
+        await turn.WaitAsync(TimeSpan.FromSeconds(10));
+
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<FailureCategory>());
+        AssertEx.Equal(expected: 2, model.OfferedTools.Count);
+        AssertEx.Contains(model.OfferedTools[1], DenialScriptedChatClient.GuardedToolName);
+        AssertEx.Equal(expected: 2, model.ToolResults.Count, string.Join(" | ", model.ToolResults));
+        AssertEx.Contains(model.ToolResults, "ran");
+        AssertEx.True(model.ToolResults.Exists(static result => result.StartsWith(ToolInvocationObservabilityChatClient.RejectedApprovalResultPrefix, StringComparison.Ordinal)
+                                                                && result.Contains(InvocationRunner.DeniedToolCallReason, StringComparison.Ordinal)),
+            $"the denied call still reads the reason: {string.Join(" | ", model.ToolResults)}");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenAToolCallIsApproved_TheToolStaysOfferedForTheRestOfTheTurn()
+    {
+        // The control for the withhold: an approved call changes nothing about the offer.
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
+        using var model = new DenialScriptedChatClient();
+        var runner = CreateRunner(DenialPipelineFactory(model), eventDispatcher: dispatcher);
+
+        var turn = RunAsync(runner, DenialPackage(Guid.NewGuid()));
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(10));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals[0].RequestId,
+            Approved = true
+        });
+        await turn.WaitAsync(TimeSpan.FromSeconds(10));
+
+        AssertEx.Equal(expected: 2, model.OfferedTools.Count);
+        AssertEx.Contains(model.OfferedTools[1], DenialScriptedChatClient.GuardedToolName);
+        AssertEx.Equal("ran", model.ToolResult);
+    }
+
+    [Test]
     public async Task RunAsync_WhenAnApprovalExpires_FailsTheTurnWithoutRetakingTheSlot()
     {
         var time = new ManualTimeProvider();
@@ -7383,6 +7479,108 @@ public sealed class InvocationRunnerTests
                });
 
         return factory;
+    }
+
+    private static RuntimePackage DenialPackage(Guid conversationId) =>
+        RuntimePackageBuilder.Valid()
+                             .WithConversationId(conversationId)
+                             .WithAllowedTool(DenialScriptedChatClient.GuardedToolName, requiresApproval: true)
+                             .WithAllowedTool(DenialScriptedChatClient.OtherToolName)
+                             .Build();
+
+    // The production approval boundary over a real ChatClientAgent and FunctionInvokingChatClient, with production's run options.
+    private static IInvocationAgentFactory DenialPipelineFactory(IChatClient model)
+    {
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(callInfo =>
+               {
+                   var definition = callInfo.Arg<InvocationAgentDefinition>();
+                   var chatClient = model.AsBuilder().UseFunctionInvocation(NullLoggerFactory.Instance).Build();
+                   AITool[] tools =
+                   [
+                       new ApprovalRequiredAIFunction(AIFunctionFactory.Create(static () => "ran", DenialScriptedChatClient.GuardedToolName)),
+                       AIFunctionFactory.Create(static () => "other", DenialScriptedChatClient.OtherToolName)
+                   ];
+                   return Task.FromResult(new InvocationAgentContext
+                   {
+                       Agent = InvocationAgentFactory.BuildApprovalValidatedAgent(chatClient,
+                           "denial",
+                           "Denial withhold end to end.",
+                           tools,
+                           NullLoggerFactory.Instance,
+                           new ServiceCollection().BuildServiceProvider()),
+                       Session = null,
+                       SeedMessages = definition.ConversationContext.Prepend(new ChatMessage(ChatRole.System, definition.Instructions)).ToList(),
+                       RunOptions = new ChatClientAgentRunOptions
+                       {
+                           ChatOptions = new ChatOptions()
+                       }
+                   });
+               });
+
+        return factory;
+    }
+
+    // The model: calls the guarded tool until a result for it is back, then records the result and answers. Records every round's tool offer.
+    private sealed class DenialScriptedChatClient : IChatClient
+    {
+        public const string GuardedToolName = "run_in_agent_home";
+        public const string OtherToolName = "list_agent_home";
+
+        private readonly int _callsPerRound;
+        private int _calls;
+
+        public DenialScriptedChatClient(int callsPerRound = 1)
+        {
+            _callsPerRound = callsPerRound;
+        }
+
+        public List<string[]> OfferedTools { get; } = [];
+
+        public string? ToolResult { get; private set; }
+
+        public List<string> ToolResults { get; } = [];
+
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            var call = Interlocked.Increment(ref _calls);
+            lock (OfferedTools)
+            {
+                OfferedTools.Add([.. (options?.Tools ?? []).Select(static tool => tool.Name)]);
+            }
+
+            var results = messages.SelectMany(static message => message.Contents).OfType<FunctionResultContent>().ToList();
+            if (results.Count > 0)
+            {
+                ToolResult = results[0].Result?.ToString() ?? string.Empty;
+                ToolResults.AddRange(results.Select(static result => result.Result?.ToString() ?? string.Empty));
+                return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "answered without it")));
+            }
+
+            List<AIContent> calls = [.. Enumerable.Range(1, _callsPerRound)
+                                                  .Select(index => new FunctionCallContent(string.Create(CultureInfo.InvariantCulture, $"call-guarded-{call}-{index}"), GuardedToolName))];
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, calls)));
+        }
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
+        {
+            var response = await GetResponseAsync(messages, options, cancellationToken);
+            foreach (var message in response.Messages)
+            {
+                yield return new ChatResponseUpdate(message.Role, message.Contents);
+            }
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null) =>
+            serviceType == typeof(IChatClient) ? this : null;
+
+        public void Dispose()
+        {
+        }
     }
 
     // The model: round one calls load_skill; once the result (or the rejection) is back it records it and answers.

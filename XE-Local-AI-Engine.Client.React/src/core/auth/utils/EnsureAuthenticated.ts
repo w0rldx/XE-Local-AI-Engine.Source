@@ -17,7 +17,7 @@ export async function ensureAuthenticated(location: ParsedLocation): Promise<voi
 	}
 
 	if (restoreResult === "vault-locked") {
-		throw redirect({ to: "/vault" });
+		throw redirect({ to: "/vault", search: { redirect: location.href } });
 	}
 
 	if (restoreResult === "vault-setup-required") {

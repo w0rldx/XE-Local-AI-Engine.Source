@@ -9,6 +9,7 @@ import { navigateToLogin, navigateToVault } from "@/core/api/axios/LoginNavigati
 import type { ProblemDetails } from "@/core/api/models/ProblemDetails";
 import { refreshNodeAuthToken } from "@/core/auth/api/NodeAuthApi";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
+import { authPagePaths } from "@/core/auth/utils/RedirectPath";
 import { resetVaultSettled } from "@/core/auth/utils/SessionRestore";
 
 // A config field, not a WeakSet entry: axios merges a replayed config into a NEW object, so identity is lost on replay
@@ -17,7 +18,7 @@ type AuthRetryConfig = InternalAxiosRequestConfig & { authRetried?: boolean };
 let isRedirectingToLogin = false;
 
 function redirectToLoginOnce(): void {
-	if (["/login", "/setup", "/vault", "/vault-setup"].includes(globalThis.location.pathname)) {
+	if (authPagePaths.includes(globalThis.location.pathname)) {
 		return;
 	}
 
@@ -43,7 +44,8 @@ function redirectToVaultOnce(): void {
 	}
 
 	isRedirectingToVault = true;
-	Promise.resolve(navigateToVault())
+	// The unlock page returns here afterwards; `getSafeRedirectPath` there drops the auth pages.
+	Promise.resolve(navigateToVault(globalThis.location.pathname + globalThis.location.search))
 		.finally(() => {
 			isRedirectingToVault = false;
 		})

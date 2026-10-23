@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Desktop;
 
+using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Desktop;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -109,30 +110,133 @@ public sealed class DesktopEngineExitTests
     }
 
     [Test]
-    public void NavigationGate_IgnoresASupersededLoadAndRetriesOnceBeforeFailing()
+    public void For_QuotesTheEnginesReportForAnOutOfRangeSetting()
     {
-        var superseded = new DesktopNavigationGate();
+        var previous = DesktopText.Language;
+        try
+        {
+            AssertEx.Equal(XE_Local_AI_Engine.Client.Program.OptionsValidationFailedExitCode, DesktopApplication.OptionsValidationFailedExitCode,
+                "The shell's duplicate must stay the engine's code.");
+            AssertEx.Equal(SettingValidationFailure.StandardErrorPrefix, EngineExitNotice.SettingPrefix, "The shell's prefix must stay the engine's.");
+
+            DesktopText.Apply("en");
+            const string Tail = "warn: an earlier stderr line\nSetting out of range: DevelopmentWorkspaceRetentionOptions: RetentionAge must be between 1 hour and 365 days.\n";
+            AssertEx.Equal(
+                "A node setting is out of range, so the engine stopped. It reported: DevelopmentWorkspaceRetentionOptions: "
+                + "RetentionAge must be between 1 hour and 365 days. Fix the setting (environment variable or node-settings.json), then start XE again.",
+                EngineExitNotice.For(13, Tail, "/opt/xe"), "Only the engine's report line is quoted, without its prefix.");
+            foreach (var empty in new[] { null, "", " \n", "Unhandled exception without the report", "Setting out of range: " })
+            {
+                var generic = EngineExitNotice.For(13, empty, "/opt/xe");
+                AssertEx.Contains(generic, "A node setting is out of range");
+                AssertEx.False(generic.Contains("It reported", StringComparison.Ordinal), "No report means no empty quote.");
+            }
+
+            DesktopText.Apply("de");
+            AssertEx.Contains(EngineExitNotice.For(13, Tail, "/opt/xe"), "Sie meldete: DevelopmentWorkspaceRetentionOptions");
+            AssertEx.Contains(EngineExitNotice.For(13, errorTail: null, "/opt/xe"), "Korrigieren Sie die Einstellung");
+        }
+        finally
+        {
+            DesktopText.Apply(previous);
+        }
+    }
+
+    [Test]
+    public void DescribeStartupFailure_OffersWebView2OnlyForAWindowThatCouldNotOpen()
+    {
+        var previous = DesktopText.Language;
+        try
+        {
+            DesktopText.Apply("en");
+            var missing = DesktopApplication.DescribeStartupFailure(new PlatformNotSupportedException("WebView2"), engineReady: true, windows: true, linuxWindow: false);
+            AssertEx.Equal(DesktopText.WindowFailed, missing.Text);
+            AssertEx.True(missing.IncludeWebViewLink);
+
+            var pageLoad = DesktopApplication.DescribeStartupFailure(new DesktopPageLoadException("no page"), engineReady: true, windows: true, linuxWindow: false);
+            AssertEx.Equal(DesktopText.PageLoadFailed, pageLoad.Text);
+            AssertEx.False(pageLoad.IncludeWebViewLink, "A page that never loaded is the engine's side, not a missing runtime.");
+            AssertEx.False(pageLoad.Text.Contains("WebView2", StringComparison.Ordinal));
+            AssertEx.Equal(DesktopText.PageLoadFailed,
+                DesktopApplication.DescribeStartupFailure(new DesktopPageLoadException("no page"), engineReady: true, windows: false, linuxWindow: true).Text,
+                "The GTK prerequisite text is wrong for a page load too.");
+            var timedOut = DesktopApplication.DescribeStartupFailure(new TimeoutException("ready deadline"), engineReady: true, windows: true, linuxWindow: false);
+            AssertEx.Equal(DesktopText.PageLoadFailed, timedOut.Text, "The readiness deadline is a page that never loaded.");
+            AssertEx.False(timedOut.IncludeWebViewLink, "A timeout is never a missing WebView2 runtime.");
+            AssertEx.Equal(DesktopText.StartupFailed,
+                DesktopApplication.DescribeStartupFailure(new TimeoutException("engine"), engineReady: false, windows: true, linuxWindow: false).Text,
+                "Before the engine is ready there is no page to blame.");
+
+            var beforeReady = DesktopApplication.DescribeStartupFailure(new InvalidOperationException("engine"), engineReady: false, windows: true, linuxWindow: false);
+            AssertEx.Equal(DesktopText.StartupFailed, beforeReady.Text);
+            AssertEx.False(beforeReady.IncludeWebViewLink);
+            var afterReady = DesktopApplication.DescribeStartupFailure(new InvalidOperationException("window"), engineReady: true, windows: true, linuxWindow: false);
+            AssertEx.Equal(DesktopText.WindowFailed, afterReady.Text);
+            AssertEx.True(afterReady.IncludeWebViewLink);
+        }
+        finally
+        {
+            DesktopText.Apply(previous);
+        }
+    }
+
+    [Test]
+    public void EngineProbePath_IsTheEnginesAuthStatusRoute() =>
+        AssertEx.Equal($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.Auth.Status}", DesktopWindow.EngineProbePath,
+            "The shell's duplicate must stay the engine's route.");
+
+    [Test]
+    public void NavigationGate_IgnoresASupersededLoadAndRetriesUntilTheWindowEnds()
+    {
+        var clock = new ManualClock();
+        var superseded = new DesktopNavigationGate(clock);
         superseded.Started();
         superseded.Started();
         AssertEx.Equal(DesktopNavigationGate.Outcome.Superseded, superseded.Completed(success: false),
             "A failure with a newer navigation still in flight is the replaced load, not a broken page.");
         AssertEx.Equal(DesktopNavigationGate.Outcome.Loaded, superseded.Completed(success: true));
 
-        var failing = new DesktopNavigationGate();
+        var failing = new DesktopNavigationGate(clock);
         failing.Started();
         AssertEx.Equal(DesktopNavigationGate.Outcome.Retry, failing.Completed(success: false));
+        clock.Advance(DesktopNavigationGate.RetryWindow - TimeSpan.FromMilliseconds(1));
+        AssertEx.True(failing.CanRetry());
+        failing.Started();
+        AssertEx.Equal(DesktopNavigationGate.Outcome.Retry, failing.Completed(success: false),
+            "Inside the window the engine may still be rebinding its port.");
+        clock.Advance(TimeSpan.FromMilliseconds(1));
+        AssertEx.False(failing.CanRetry());
         failing.Started();
         AssertEx.Equal(DesktopNavigationGate.Outcome.Failed, failing.Completed(success: false),
-            "The start page is retried once, then the failure is real.");
+            "Once the window has passed the failure is real.");
 
-        var recovered = new DesktopNavigationGate();
+        failing.Restart();
+        failing.Started();
+        AssertEx.Equal(DesktopNavigationGate.Outcome.Retry, failing.Completed(success: false),
+            "A reload after an engine relaunch gets a fresh window.");
+
+        var recovered = new DesktopNavigationGate(clock);
         recovered.Started();
         AssertEx.Equal(DesktopNavigationGate.Outcome.Retry, recovered.Completed(success: false));
+        clock.Advance(DesktopNavigationGate.RetryWindow);
         recovered.Started();
         AssertEx.Equal(DesktopNavigationGate.Outcome.Loaded, recovered.Completed(success: true));
+        recovered.Started();
+        AssertEx.Equal(DesktopNavigationGate.Outcome.Retry, recovered.Completed(success: false),
+            "A load clears the failure, so a later start-page failure is timed from scratch.");
 
-        var unannounced = new DesktopNavigationGate();
+        var unannounced = new DesktopNavigationGate(clock);
         AssertEx.Equal(DesktopNavigationGate.Outcome.Retry, unannounced.Completed(success: false),
             "A completion without a reported start never drives the count below zero.");
+    }
+
+    /// <summary>A clock the test moves by hand, so the retry window is crossed without waiting.</summary>
+    private sealed class ManualClock : TimeProvider
+    {
+        private DateTimeOffset _now = new(2026, 10, 23, 12, 0, 0, TimeSpan.Zero);
+
+        public override DateTimeOffset GetUtcNow() => _now;
+
+        internal void Advance(TimeSpan by) => _now += by;
     }
 }

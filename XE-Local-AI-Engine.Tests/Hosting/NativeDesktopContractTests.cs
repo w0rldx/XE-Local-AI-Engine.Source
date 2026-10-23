@@ -96,11 +96,14 @@ public sealed class NativeDesktopContractTests
     [Test]
     public void StartupFailureView_OffersTheWebView2DownloadOnlyAfterTheEngineWasReady()
     {
-        var source = File.ReadAllText(RepositoryPaths.Combine("XE-Local-AI-Engine.Desktop", "DesktopApplication.cs"));
+        var failure = new InvalidOperationException("the window could not open");
 
-        AssertEx.Contains(source, "includeWebViewLink: engineReady && OperatingSystem.IsWindows()");
-        AssertEx.False(source.Contains("includeWebViewLink: OperatingSystem.IsWindows()", StringComparison.Ordinal),
+        AssertEx.False(DesktopApplication.DescribeStartupFailure(failure, engineReady: false, windows: true, linuxWindow: false).IncludeWebViewLink,
             "An engine failure before readiness must not offer the WebView2 download.");
+        AssertEx.True(DesktopApplication.DescribeStartupFailure(failure, engineReady: true, windows: true, linuxWindow: false).IncludeWebViewLink,
+            "A window that could not open after the engine was ready offers the download on Windows.");
+        AssertEx.False(DesktopApplication.DescribeStartupFailure(failure, engineReady: true, windows: false, linuxWindow: false).IncludeWebViewLink,
+            "The download is a Windows runtime; other platforms never offer it.");
     }
 
     [Test]

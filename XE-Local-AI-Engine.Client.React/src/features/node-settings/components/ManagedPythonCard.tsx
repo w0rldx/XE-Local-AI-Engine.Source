@@ -114,6 +114,10 @@ export function ManagedPythonCard() {
 		if (removePending(environment) || (environment.reasonCode && removingCodes.has(environment.reasonCode))) {
 			return t(`${translationPrefix}.removing`);
 		}
+		// Compute switched off reads state Unsupported on the wire; the platform supports it, it is only turned off.
+		if (environment.reasonCode === "ComputeDisabled") {
+			return t(`${translationPrefix}.disabled`);
+		}
 		return Object.hasOwn(stateColors, environment.state)
 			? t(`${translationPrefix}.states.${environment.state}`)
 			: environment.state;

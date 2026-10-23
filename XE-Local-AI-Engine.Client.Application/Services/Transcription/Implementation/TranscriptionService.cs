@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Transcription.Implementation;
 
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -30,6 +31,9 @@ public sealed class TranscriptionService : ITranscriptionService
     private const int MinConfigWindowSeconds = 2;
     private const int MaxConfigWindowSeconds = 10;
     private const int CanonicalWavHeaderBytes = 44;
+
+    // The largest region a silence split buffers in memory; a bigger one sends the file as one streamed request.
+    private const long MaxRegionBytes = 256L * 1024 * 1024;
 
     // A file is one channel. The array exists so the transcription loop below is the same shape the live capture
     // slices reuse when they feed it two.
@@ -605,6 +609,7 @@ public sealed class TranscriptionService : ITranscriptionService
     {
         var audioPath = slot.SourcePath;
         var contentType = AudioContainerSniffer.MediaTypeFor(container);
+        var transcoded = false;
 
         if (AudioContainerSniffer.RequiresFfmpeg(container))
         {
@@ -613,14 +618,17 @@ public sealed class TranscriptionService : ITranscriptionService
             var destination = slot.AddOwnedPath(".wav");
             audioPath = await _transcoder.ToWav16kMonoAsync(slot.SourcePath, destination, cancellationToken);
             contentType = "audio/wav";
+            transcoded = true;
         }
+
+        var split = await PlanSplitAsync(slot, container, audioPath, transcoded, cancellationToken);
 
         _ = await _supervisor.EnsureRunningAsync(session.ModelId, cancellationToken);
 
         var config = DeserializeConfig(session.ConfigJson);
         var explicitLanguage = string.Equals(config.LanguageMode, "override", StringComparison.OrdinalIgnoreCase);
 
-        var stream = new FileStream(audioPath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 64 * 1024, useAsync: true);
+        var stream = new FileStream(split?.Path ?? audioPath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 64 * 1024, useAsync: true);
         await using (stream)
         {
             var pending = new List<ChannelSegment>();
@@ -629,32 +637,40 @@ public sealed class TranscriptionService : ITranscriptionService
 
             foreach (var channel in SingleChannel)
             {
-                // Rewound per call: the provider requires a seekable stream and reads it from wherever it is left.
-                _ = stream.Seek(0, SeekOrigin.Begin);
-                var transcribed = await _transcriber.TranscribeAsync(session.ModelId, new WhisperTranscriptionRequest
+                if (split is not { } plan)
                 {
-                    Audio = stream,
-                    ContentType = contentType,
-                    LanguageMode = explicitLanguage ? WhisperLanguageMode.Explicit : WhisperLanguageMode.Auto,
-                    LanguageCode = explicitLanguage ? config.LanguageOverride : null,
-                    Translate = config.Translate
-                }, cancellationToken);
+                    // Rewound per call: the provider requires a seekable stream and reads it from wherever it is left.
+                    _ = stream.Seek(0, SeekOrigin.Begin);
+                    var transcribed = await TranscribeOnceAsync(session.ModelId, stream, contentType, config, explicitLanguage, cancellationToken);
+                    detectedLanguage ??= transcribed.DetectedLanguageCode;
+                    durationSeconds = Math.Max(durationSeconds, transcribed.DurationSeconds);
+                    pending.AddRange(transcribed.Segments.Select(segment => new ChannelSegment(channel, segment, 0)));
+                    continue;
+                }
 
-                detectedLanguage ??= transcribed.DetectedLanguageCode;
-                durationSeconds = Math.Max(durationSeconds, transcribed.DurationSeconds);
-                pending.AddRange(transcribed.Segments.Select(segment => new ChannelSegment(channel, segment)));
+                // One request per region, in order: the runtime is single-slot, and each region's segments are
+                // shifted by where the region starts in the clip.
+                durationSeconds = plan.Layout.DataLength / plan.Layout.BlockAlign / (double)plan.Layout.SamplesPerSecond;
+                foreach (var region in plan.Regions)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await using var regionWav = await ReadRegionAsync(stream, plan.Layout, region, region == plan.Regions[^1], cancellationToken);
+                    var transcribed = await TranscribeOnceAsync(session.ModelId, regionWav, "audio/wav", config, explicitLanguage, cancellationToken);
+                    detectedLanguage ??= transcribed.DetectedLanguageCode;
+                    pending.AddRange(transcribed.Segments.Select(segment => new ChannelSegment(channel, segment, region.StartMs)));
+                }
             }
 
             var segments = pending
-                           .OrderBy(entry => entry.Segment.StartSeconds)
+                           .OrderBy(entry => entry.OffsetMs + ToMilliseconds(entry.Segment.StartSeconds))
                            .ThenBy(entry => (int)entry.Channel)
                            .Select((entry, index) => new TranscriptSegmentWrite
                            {
                                // Sequence numbers start at 1, never 0, so a subscriber cannot confuse "no segments
                                // yet" with "segment zero".
                                Seq = index + 1,
-                               StartMs = ToMilliseconds(entry.Segment.StartSeconds),
-                               EndMs = ToMilliseconds(entry.Segment.EndSeconds),
+                               StartMs = entry.OffsetMs + ToMilliseconds(entry.Segment.StartSeconds),
+                               EndMs = entry.OffsetMs + ToMilliseconds(entry.Segment.EndSeconds),
                                Text = entry.Segment.Text,
                                Channel = entry.Channel,
                                Confidence = entry.Segment.Confidence
@@ -755,7 +771,114 @@ public sealed class TranscriptionService : ITranscriptionService
     private static long ToMilliseconds(double seconds) =>
         (long)Math.Round(seconds * 1000);
 
-    private readonly record struct ChannelSegment(TranscriptChannel Channel, WhisperTranscriptSegment Segment);
+    private readonly record struct ChannelSegment(TranscriptChannel Channel, WhisperTranscriptSegment Segment, long OffsetMs);
+
+    // The PCM WAV the regions are cut from, where its payload lives, and the regions; only built for two or more.
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct SplitPlan(string Path, WavPcm16.Layout Layout, IReadOnlyList<SilenceSplitter.Region> Regions);
+
+    private Task<WhisperTranscriptionResult> TranscribeOnceAsync(string modelId,
+        Stream audio,
+        string contentType,
+        TranscriptionSessionConfig config,
+        bool explicitLanguage,
+        CancellationToken cancellationToken) =>
+        _transcriber.TranscribeAsync(modelId, new WhisperTranscriptionRequest
+        {
+            Audio = audio,
+            ContentType = contentType,
+            LanguageMode = explicitLanguage ? WhisperLanguageMode.Explicit : WhisperLanguageMode.Auto,
+            LanguageCode = explicitLanguage ? config.LanguageOverride : null,
+            Translate = config.Translate
+        }, cancellationToken);
+
+    /// <summary>
+    ///     Finds the long silences in the upload, or <see langword="null" /> when there are none or the audio cannot be
+    ///     measured; the caller then sends the file in one request, as before splitting existed.
+    /// </summary>
+    /// <remarks>
+    ///     A 16-bit PCM WAV (the upload itself, or the converter's output) is measured as is. Anything else is converted
+    ///     to 16 kHz mono first when ffmpeg is present, purely to be cut; a failed conversion is not a failed session.
+    /// </remarks>
+    private async Task<SplitPlan?> PlanSplitAsync(TranscriptionUploadSlot slot,
+        AudioContainer container,
+        string audioPath,
+        bool transcoded,
+        CancellationToken cancellationToken)
+    {
+        var plan = container == AudioContainer.Wav || transcoded ? await TryPlanAsync(audioPath, cancellationToken) : null;
+        if (plan is not null || transcoded || !_transcoder.IsAvailable)
+        {
+            return plan?.Regions.Count > 1 ? plan : null;
+        }
+
+        string converted;
+        try
+        {
+            var destination = slot.AddOwnedPath(".wav");
+            converted = await _transcoder.ToWav16kMonoAsync(slot.SourcePath, destination, cancellationToken);
+        }
+        catch (AudioTranscodeException exception)
+        {
+            _logger.LogDebug(exception, "Session {SessionId}: converting the upload to find silences failed; sending it in one request.", slot.SessionId);
+            return null;
+        }
+
+        plan = await TryPlanAsync(converted, cancellationToken);
+        return plan?.Regions.Count > 1 ? plan : null;
+    }
+
+    /// <summary>Measures the 16-bit PCM WAV at <paramref name="path" /> and plans its regions, or returns <see langword="null" />.</summary>
+    /// <remarks>
+    ///     Accepted ceiling: each region is buffered whole in memory, so a plan whose largest region exceeds
+    ///     <see cref="MaxRegionBytes" /> (256 MB) returns <see langword="null" /> and the file goes out as today's single
+    ///     streamed request.
+    /// </remarks>
+    private async Task<SplitPlan?> TryPlanAsync(string path, CancellationToken cancellationToken)
+    {
+        var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 64 * 1024, useAsync: true);
+        await using (stream)
+        {
+            var layout = WavPcm16.TryReadLayout(stream);
+            if (layout is not { } found)
+            {
+                _logger.LogDebug("The audio at {Path} is not 16-bit PCM WAV; it is not split at silences.", Path.GetFileName(path));
+                return null;
+            }
+
+            var regions = await SilenceSplitter.SplitAsync(stream, found, cancellationToken);
+            var largest = regions.Max(region => region.EndMs - region.StartMs);
+            if (ByteOffset(found, largest) + found.BlockAlign > MaxRegionBytes)
+            {
+                _logger.LogDebug("The audio at {Path} has a region larger than {MaxRegionBytes} bytes; it is not split at silences.", Path.GetFileName(path), MaxRegionBytes);
+                return null;
+            }
+
+            _logger.LogDebug("The audio at {Path} splits into {RegionCount} region(s) at long silences.", Path.GetFileName(path), regions.Count);
+            return new SplitPlan(path, found, regions);
+        }
+    }
+
+    // One region as its own WAV in memory, with the upload's own rate and channel count, so nothing is resampled.
+    private static async Task<MemoryStream> ReadRegionAsync(FileStream stream,
+        WavPcm16.Layout layout,
+        SilenceSplitter.Region region,
+        bool last,
+        CancellationToken cancellationToken)
+    {
+        // The last region runs to the final sample, which whole milliseconds can fall short of.
+        var start = ByteOffset(layout, region.StartMs);
+        var end = last ? layout.DataLength : ByteOffset(layout, region.EndMs);
+        var length = (int)(end - start);
+        var wav = new byte[WavPcm16.HeaderLength + length];
+        WavPcm16.WriteHeader(wav, length, layout.SamplesPerSecond, layout.ChannelCount);
+        stream.Position = layout.DataOffset + start;
+        await stream.ReadExactlyAsync(wav.AsMemory(WavPcm16.HeaderLength), cancellationToken);
+        return new MemoryStream(wav, writable: false);
+    }
+
+    private static long ByteOffset(WavPcm16.Layout layout, long ms) =>
+        checked(ms * layout.SamplesPerSecond / 1000 * layout.BlockAlign);
 
     private static TranscriptionSessionConfig DeserializeConfig(string configJson)
     {
