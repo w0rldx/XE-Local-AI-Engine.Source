@@ -1,5 +1,5 @@
 <Project>
-  <Sdk Name="Aspire.AppHost.Sdk" Version="13.6.1"/>
+  <Sdk Name="Aspire.AppHost.Sdk" Version="13.6.3"/>
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
