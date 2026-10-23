@@ -51,6 +51,9 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
     // The engine's exit code for a file blocked by Smart App Control or an application control policy, duplicated likewise.
     internal const int ApplicationControlBlockedExitCode = 11;
 
+    // The engine's exit code for an operator restart (node/restart), duplicated likewise: the shell relaunches the engine on it.
+    internal const int RestartRequestedExitCode = 12;
+
     internal DesktopApplication(DesktopStartupOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -524,6 +527,12 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         }
 
         _exitCode = _engine?.EngineExitCode ?? 0;
+        if (RelaunchesEngine(_exitCode))
+        {
+            await RelaunchEngineAsync();
+            return;
+        }
+
         if (_exitCode != 0)
         {
             var errorTail = _engine is null ? null : await _engine.ReadExitErrorTailAsync();
@@ -534,6 +543,46 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         }
 
         await QuitAsync();
+    }
+
+    /// <summary>Whether an owned engine's exit asks for a relaunch rather than ending the session; every other code keeps its meaning.</summary>
+    internal static bool RelaunchesEngine(int engineExitCode) =>
+        engineExitCode == RestartRequestedExitCode;
+
+    /// <summary>
+    ///     Starts the engine again exactly as the first start did (same options, same readiness wait) and reloads the window,
+    ///     which only works on the same origin; a relaunch that fails or moves is shown and the shell quits.
+    /// </summary>
+    private async Task RelaunchEngineAsync()
+    {
+        var origin = _engine!.Origin;
+        var previous = _engine;
+        _engine = null;
+        try
+        {
+            await previous.DisposeAsync();
+            _engine = await DesktopEngineSession.StartAsync(_options, _stopping.Token);
+            DesktopEngineSession.ValidateRequestedPort(_engine.Origin, origin.Port);
+            _exitCode = 0;
+            (_window as DesktopWindow)?.Reload();
+            if (_engine.WaitForEngineExitAsync() is { } exit)
+            {
+                _ = ExitWithEngineAsync(exit);
+            }
+        }
+        catch (OperationCanceledException) when (_stopping.IsCancellationRequested)
+        {
+            // Quit during the relaunch: QuitAsync disposes whatever engine was started.
+        }
+        catch (Exception exception)
+        {
+            DesktopStartupDiagnostics.Record($"The engine relaunch after a requested restart failed ({exception.GetType().Name}). {exception.Message}");
+            _exitCode = StartupFailureExitCode(exception, engineReady: false);
+            ShowWindow();
+            await ReleaseAfterFailureAsync(stopEngine: true);
+            await ShowNoticeAsync($"{DesktopText.RestartFailed}{Environment.NewLine}{Environment.NewLine}{exception.Message}");
+            await QuitAsync();
+        }
     }
 
     /// <summary>Adopts the SPA's current language choice, relabels the tray and remembers it for the next start.</summary>

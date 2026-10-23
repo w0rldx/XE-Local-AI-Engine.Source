@@ -655,6 +655,7 @@ export type XeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse = {
 	setupRequired: boolean;
 	authenticated: boolean;
 	vault: string;
+	processGeneration: string;
 };
 
 export type XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordRequest = {
@@ -5304,6 +5305,8 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	schedulerEnabled?: boolean;
 	devWorkflowsEnabled?: boolean;
 	executionPreviewsEnabled?: boolean;
+	restartRequiredFields?: Array<string>;
+	pendingRestartFields?: Array<string>;
 };
 
 export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest = {
@@ -18572,6 +18575,34 @@ export type RestoreNodeBackupResponses = {
 };
 
 export type RestoreNodeBackupResponse = RestoreNodeBackupResponses[keyof RestoreNodeBackupResponses];
+
+export type RestartNodeData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/node/restart";
+};
+
+export type RestartNodeErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type RestartNodeError = RestartNodeErrors[keyof RestartNodeErrors];
+
+export type RestartNodeResponses = {
+	/**
+	 * Accepted
+	 */
+	202: unknown;
+};
 
 export type RevokeLocalModelProxyApiKeyData = {
 	body?: never;

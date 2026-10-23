@@ -130,7 +130,8 @@ internal static class VaultUnlockHost
         {
             SetupRequired = false,
             Authenticated = false,
-            Vault = NodeAuthVaultStatus.Locked
+            Vault = NodeAuthVaultStatus.Locked,
+            ProcessGeneration = NodeProcessIdentity.Generation
         }));
 
         app.MapPost(prefix + LocalApiRoutes.Auth.VaultUnlock,

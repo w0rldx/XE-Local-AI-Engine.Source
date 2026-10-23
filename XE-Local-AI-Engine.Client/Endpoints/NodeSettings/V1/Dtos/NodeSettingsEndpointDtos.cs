@@ -23,6 +23,7 @@ public sealed record NodeSettingsResponse
 
     public int MaxAllowedMessageRequestTimeoutSeconds { get; init; }
 
+    /// <summary>Local chat model a request falls back to when it names none. Applies after a node restart.</summary>
     public string? DefaultModelName { get; init; }
 
     public bool? EnableTools { get; init; }
@@ -133,16 +134,20 @@ public sealed record NodeSettingsResponse
 
     public IReadOnlyList<string>? ToolCapableModels { get; init; }
 
+    /// <summary>Ollama endpoint for the optional Ollama runtime. Applies after a node restart.</summary>
     public string? OllamaEndpoint { get; init; }
 
+    /// <summary>Quantization a model download picks when the request names none. Applies after a node restart.</summary>
     public string? HuggingFaceDefaultQuant { get; init; }
 
+    /// <summary>llama-server processes kept loaded at once. Applies after a node restart.</summary>
     public int? LlamaMaxLoadedProcesses { get; init; }
 
     public int MinLlamaMaxLoadedProcesses { get; init; }
 
     public int MaxAllowedLlamaMaxLoadedProcesses { get; init; }
 
+    /// <summary>Idle time-to-live of a llama-server process, in seconds. Applies after a node restart.</summary>
     public int? LlamaIdleTimeToLiveSeconds { get; init; }
 
     public int MinLlamaIdleTimeToLiveSeconds { get; init; }
@@ -159,6 +164,7 @@ public sealed record NodeSettingsResponse
 
     public int MaxAllowedKeepModelWarmIntervalSeconds { get; init; }
 
+    /// <summary>Worker response-size cap in MiB. Applies after a node restart.</summary>
     public int? MaxResponseSizeMb { get; init; }
 
     public int MinMaxResponseSizeMb { get; init; }
@@ -167,15 +173,17 @@ public sealed record NodeSettingsResponse
 
     public string? RecommendedLlamaCppTag { get; init; }
 
+    /// <summary>Chat-role prompt-cache reuse window in tokens; <c>0</c> disables it. Applies after a node restart.</summary>
     public int? ChatCacheReuse { get; init; }
 
     public int MinChatCacheReuse { get; init; }
 
     public int MaxAllowedChatCacheReuse { get; init; }
 
+    /// <summary>Speculative-decoding mode for chat spawns. Applies after a node restart.</summary>
     public string? SpeculativeMode { get; init; }
 
-    /// <summary>KV-cache element type for GPU chat spawns: <c>f16</c> | <c>q8_0</c> | <c>q4_0</c>. Null means the node default.</summary>
+    /// <summary>KV-cache element type for GPU chat spawns: <c>f16</c> | <c>q8_0</c> | <c>q4_0</c>. Null means the node default. Applies after a node restart.</summary>
     public string? KvCacheType { get; init; }
 
     /// <summary>
@@ -189,14 +197,17 @@ public sealed record NodeSettingsResponse
     /// </remarks>
     public string ContainerRuntimeSelection { get; init; } = StoredNodeSettings.DefaultContainerRuntimeSelection;
 
+    /// <summary>Installed model name used as the speculative draft. Applies after a node restart.</summary>
     public string? SpeculativeDraftModelName { get; init; }
 
+    /// <summary>Draft tokens per speculative step. Applies after a node restart.</summary>
     public int? SpeculativeDraftMaxTokens { get; init; }
 
     public int MinSpeculativeDraftMaxTokens { get; init; }
 
     public int MaxAllowedSpeculativeDraftMaxTokens { get; init; }
 
+    /// <summary>GPU layers of the speculative draft model. Applies after a node restart.</summary>
     public int? SpeculativeDraftGpuLayers { get; init; }
 
     public int MinSpeculativeDraftGpuLayers { get; init; }
@@ -217,12 +228,14 @@ public sealed record NodeSettingsResponse
 
     public string? AutoEffortFastModelName { get; init; }
 
+    /// <summary>Free disk space a model download must leave, in bytes. Applies after a node restart.</summary>
     public long? HuggingFaceDiskMarginBytes { get; init; }
 
     public long MinHuggingFaceDiskMarginBytes { get; init; }
 
     public long MaxAllowedHuggingFaceDiskMarginBytes { get; init; }
 
+    /// <summary>Orchestration-agent idle timeout, in seconds. Applies after a node restart.</summary>
     public int? OrchestrationIdleTimeoutSeconds { get; init; }
 
     public int MinOrchestrationIdleTimeoutSeconds { get; init; }
@@ -241,6 +254,7 @@ public sealed record NodeSettingsResponse
 
     public long? AgentHomeMaxPatchBytes { get; init; }
 
+    /// <summary>Minutes a tool call may wait for approval. Applies after a node restart.</summary>
     public int? MaxPendingToolCallAgeMinutes { get; init; }
 
     public int MinMaxPendingToolCallAgeMinutes { get; init; }
@@ -447,7 +461,7 @@ public sealed record NodeSettingsResponse
 
     public int MaxAllowedAgentHomeMaxRunSeconds { get; init; }
 
-    /// <summary>Days an AgentHome run folder is kept. Applies after a node restart. Effective value: stored, else the configuration seed.</summary>
+    /// <summary>Days an AgentHome run folder is kept. Applies to the next retention sweep. Effective value: stored, else the configuration seed.</summary>
     public int AgentHomeRunRetentionDays { get; init; }
 
     public int MinAgentHomeRunRetentionDays { get; init; }
@@ -737,7 +751,7 @@ public sealed record NodeSettingsResponse
 
     public long MaxAllowedAgentHomeRunRetentionMaxTotalBytes { get; init; }
 
-    /// <summary>Whether Development Mode is on. After a node restart for its endpoints, services and hub; the live switch closes them sooner. Effective value: stored, else the configuration seed.</summary>
+    /// <summary>Whether Development Mode is on. Applies after a node restart for its endpoints, services and hub; the live switch closes them sooner. Effective value: stored, else the configuration seed.</summary>
     public bool DevelopmentEnabled { get; init; }
 
     /// <summary>Whether work sessions run. Applies to the next request. Effective value: stored, else the configuration seed.</summary>
@@ -749,7 +763,7 @@ public sealed record NodeSettingsResponse
     /// <summary>Whether transcription runs. Applies to the next request. Effective value: stored, else the configuration seed.</summary>
     public bool TranscriptionEnabled { get; init; }
 
-    /// <summary>Whether external apps are on. Applies to the next request; the container bridge after a node restart. Effective value: stored, else the configuration seed.</summary>
+    /// <summary>Whether external apps are on. The routes follow the next request; the container bridge applies after a node restart. Effective value: stored, else the configuration seed.</summary>
     public bool ExternalAppsEnabled { get; init; }
 
     /// <summary>Whether the <c>run_python</c> tool executes. Applies to the next call; the Mathematician agent is seeded on the next restart. Effective value: stored, else the configuration seed.</summary>
@@ -769,6 +783,12 @@ public sealed record NodeSettingsResponse
     ///     Applies to the next sandbox created. Effective value: stored, else the configuration seed (off).
     /// </summary>
     public bool ExecutionPreviewsEnabled { get; init; }
+
+    /// <summary>Every field the node reads once at start, so a change to it waits for a node restart.</summary>
+    public IReadOnlyList<string> RestartRequiredFields { get; init; } = [];
+
+    /// <summary>The restart-required fields whose stored value differs from the one this node started with.</summary>
+    public IReadOnlyList<string> PendingRestartFields { get; init; } = [];
 }
 
 /// <summary>
@@ -789,6 +809,7 @@ public sealed record SaveNodeSettingsRequest
 
     public int? MaxMessageRequestTimeoutSeconds { get; init; }
 
+    /// <summary>Local chat model a request falls back to when it names none. Applies after a node restart.</summary>
     public string? DefaultModelName { get; init; }
 
     public bool? EnableTools { get; init; }
@@ -895,14 +916,16 @@ public sealed record SaveNodeSettingsRequest
 
     public IReadOnlyList<string>? ToolCapableModels { get; init; }
 
+    /// <summary>Ollama endpoint for the optional Ollama runtime. Applies after a node restart.</summary>
     public string? OllamaEndpoint { get; init; }
 
+    /// <summary>Quantization a model download picks when the request names none. Applies after a node restart.</summary>
     public string? HuggingFaceDefaultQuant { get; init; }
 
-    /// <summary>llama-server processes kept loaded at once; null resets to the default.</summary>
+    /// <summary>llama-server processes kept loaded at once; null resets to the default. Applies after a node restart.</summary>
     public int? LlamaMaxLoadedProcesses { get; init; }
 
-    /// <summary>Idle time-to-live of a llama-server, in seconds; null resets to the default.</summary>
+    /// <summary>Idle time-to-live of a llama-server, in seconds; null resets to the default. Applies after a node restart.</summary>
     public int? LlamaIdleTimeToLiveSeconds { get; init; }
 
     public bool? KeepModelWarmEnabled { get; init; }
@@ -912,19 +935,20 @@ public sealed record SaveNodeSettingsRequest
     /// <summary>Seconds between keep-warm touches; null resets to the default.</summary>
     public int? KeepModelWarmIntervalSeconds { get; init; }
 
-    /// <summary>Worker response-size cap in MiB; null resets to the default.</summary>
+    /// <summary>Worker response-size cap in MiB; null resets to the default. Applies after a node restart.</summary>
     public int? MaxResponseSizeMb { get; init; }
 
     public string? RecommendedLlamaCppTag { get; init; }
 
-    /// <summary>Chat-role prompt-cache reuse window in tokens; <c>0</c> disables it and null resets to the default.</summary>
+    /// <summary>Chat-role prompt-cache reuse window in tokens; <c>0</c> disables it and null resets to the default. Applies after a node restart.</summary>
     public int? ChatCacheReuse { get; init; }
 
+    /// <summary>Speculative-decoding mode for chat spawns. Applies after a node restart.</summary>
     public string? SpeculativeMode { get; init; }
 
     /// <summary>
     ///     KV-cache element type for GPU chat spawns: <c>f16</c> | <c>q8_0</c> | <c>q4_0</c>. Changing it invalidates
-    ///     every frozen inference profile on this node.
+    ///     every frozen inference profile on this node. Applies after a node restart.
     /// </summary>
     public string? KvCacheType { get; init; }
 
@@ -937,12 +961,13 @@ public sealed record SaveNodeSettingsRequest
     /// </remarks>
     public string? ContainerRuntimeSelection { get; init; }
 
+    /// <summary>Installed model name used as the speculative draft. Applies after a node restart.</summary>
     public string? SpeculativeDraftModelName { get; init; }
 
-    /// <summary>Draft tokens per step; <c>0</c> omits the flag and null resets to the default.</summary>
+    /// <summary>Draft tokens per step; <c>0</c> omits the flag and null resets to the default. Applies after a node restart.</summary>
     public int? SpeculativeDraftMaxTokens { get; init; }
 
-    /// <summary>Draft-model GPU layers; null resets to the default.</summary>
+    /// <summary>Draft-model GPU layers; null resets to the default. Applies after a node restart.</summary>
     public int? SpeculativeDraftGpuLayers { get; init; }
 
     /// <summary>Installed cross-encoder reranker model name for knowledge-base search rerank. Null disables reranking.</summary>
@@ -956,10 +981,10 @@ public sealed record SaveNodeSettingsRequest
 
     public string? AutoEffortFastModelName { get; init; }
 
-    /// <summary>Hugging Face disk-guard safety margin in bytes; null resets to the default.</summary>
+    /// <summary>Hugging Face disk-guard safety margin in bytes; null resets to the default. Applies after a node restart.</summary>
     public long? HuggingFaceDiskMarginBytes { get; init; }
 
-    /// <summary>Orchestration idle timeout in seconds; null resets to the default.</summary>
+    /// <summary>Orchestration idle timeout in seconds; null resets to the default. Applies after a node restart.</summary>
     public int? OrchestrationIdleTimeoutSeconds { get; init; }
 
     /// <summary>AgentHome prepare-phase timeout in seconds; null resets to the default.</summary>
@@ -974,7 +999,7 @@ public sealed record SaveNodeSettingsRequest
     /// <summary>AgentHome exported-patch byte budget; null resets to the default.</summary>
     public long? AgentHomeMaxPatchBytes { get; init; }
 
-    /// <summary>Minutes an unanswered tool approval waits before it expires; null resets to the default.</summary>
+    /// <summary>Minutes an unanswered tool approval waits before it expires; null resets to the default. Applies after a node restart.</summary>
     public int? MaxPendingToolCallAgeMinutes { get; init; }
 
     /// <summary>Seconds a run with no attached client keeps going before it is cancelled. <c>0</c> never cancels; null resets to the default.</summary>
@@ -1080,7 +1105,7 @@ public sealed record SaveNodeSettingsRequest
     /// <summary>AgentHome whole-run time limit in seconds; must be at least the command timeout; null resets to the default. Applies to the next run.</summary>
     public int? AgentHomeMaxRunSeconds { get; init; }
 
-    /// <summary>Days an AgentHome run folder is kept; null resets to the default. Applies after a node restart.</summary>
+    /// <summary>Days an AgentHome run folder is kept; null resets to the default. Applies to the next retention sweep.</summary>
     public int? AgentHomeRunRetentionDays { get; init; }
 
     /// <summary>Tool-loop iterations per request; null resets to the default. Applies after a node restart.</summary>
@@ -1236,7 +1261,7 @@ public sealed record SaveNodeSettingsRequest
     /// <summary>AgentHome runs byte ceiling, 0 = no byte limit (developer-only); null resets to the default. Applies to the next sweep.</summary>
     public long? AgentHomeRunRetentionMaxTotalBytes { get; init; }
 
-    /// <summary>Whether Development Mode is on. After a node restart for its endpoints, services and hub; the live switch closes them sooner.</summary>
+    /// <summary>Whether Development Mode is on. Applies after a node restart for its endpoints, services and hub; the live switch closes them sooner.</summary>
     public bool? DevelopmentEnabled { get; init; }
 
     /// <summary>Whether work sessions run. Applies to the next request.</summary>
@@ -1248,7 +1273,7 @@ public sealed record SaveNodeSettingsRequest
     /// <summary>Whether transcription runs. Applies to the next request.</summary>
     public bool? TranscriptionEnabled { get; init; }
 
-    /// <summary>Whether external apps are on. Applies to the next request; the container bridge after a node restart.</summary>
+    /// <summary>Whether external apps are on. The routes follow the next request; the container bridge applies after a node restart.</summary>
     public bool? ExternalAppsEnabled { get; init; }
 
     /// <summary>Whether the <c>run_python</c> tool executes. Applies to the next call; the Mathematician agent is seeded on the next restart.</summary>

@@ -7522,6 +7522,16 @@
 				"revoked": "Arbeitsbereichszugriff entzogen.",
 				"title": "MCP-Arbeitsbereichszugriff"
 			},
+			"pendingRestart": {
+				"browserHint": "Starten Sie den Node neu, um die Änderungen zu übernehmen.",
+				"dismiss": "Schließen",
+				"restartError": "Der Node konnte nicht neu gestartet werden.",
+				"restartNow": "Jetzt neu starten",
+				"restarting": "Wird neu gestartet…",
+				"timedOut": "Der Node ist nicht innerhalb einer Minute zurückgekehrt. Prüfen Sie, ob die App läuft, und laden Sie diese Seite dann neu.",
+				"title_one": "{{count}} Einstellung wartet auf einen Neustart des Nodes",
+				"title_other": "{{count}} Einstellungen warten auf einen Neustart des Nodes"
+			},
 			"placeholder": {
 				"description": "Lokale Node-Einstellungen werden über die Node-FastEndpoints-API angebunden.",
 				"title": "Node-Einstellungen"
@@ -7548,7 +7558,7 @@
 				"unsaved_other": "{{count}} ungespeicherte Änderungen"
 			},
 			"saved": "Node-Einstellungen gespeichert.",
-			"savedRestartRequired": "Node-Einstellungen gespeichert. Einige der geänderten Einstellungen werden erst nach einem Neustart des Nodes wirksam.",
+			"savedRestartRequired": "Node-Einstellungen gespeichert. Einige Änderungen warten auf einen Neustart des Nodes; das Banner oben listet sie auf.",
 			"sections": {
 				"chat": "Chat & Agenten",
 				"general": "Allgemein",

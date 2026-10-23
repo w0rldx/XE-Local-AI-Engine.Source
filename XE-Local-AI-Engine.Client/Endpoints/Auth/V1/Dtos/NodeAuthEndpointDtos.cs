@@ -13,6 +13,9 @@ public sealed record NodeAuthStatusResponse
     ///     An operator-custody secret reports <c>unlocked</c>.
     /// </summary>
     public required string Vault { get; init; }
+
+    /// <summary>The engine process's id, new on every start; a changed value means the engine restarted.</summary>
+    public required string ProcessGeneration { get; init; }
 }
 
 /// <summary>The <c>auth/setup</c> success body.</summary>

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Auth.V1;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 public sealed class NodeAuthStatusEndpoint : EndpointWithoutRequest<NodeAuthStatusResponse>
@@ -28,7 +29,8 @@ public sealed class NodeAuthStatusEndpoint : EndpointWithoutRequest<NodeAuthStat
         {
             SetupRequired = status.SetupRequired,
             Authenticated = status.Authenticated,
-            Vault = NodeAuthVaultStatus.From(status.Vault)
+            Vault = NodeAuthVaultStatus.From(status.Vault),
+            ProcessGeneration = NodeProcessIdentity.Generation
         }, ct);
     }
 }

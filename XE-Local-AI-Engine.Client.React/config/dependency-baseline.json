@@ -5,6 +5,7 @@
   "[\"no-core-to-features\",\"src/core/layout/components/Layout/Layout.tsx\",\"src/features/chat/components/ChatConnectionStatusChip.tsx\"]",
   "[\"no-core-to-features\",\"src/core/layout/components/Layout/Layout.tsx\",\"src/features/model-fit/components/CpuFallbackBanner.tsx\"]",
   "[\"no-core-to-features\",\"src/core/layout/components/Layout/Layout.tsx\",\"src/features/node-settings/components/LlamaCppUpdateBanner.tsx\"]",
+  "[\"no-core-to-features\",\"src/core/layout/components/Layout/Layout.tsx\",\"src/features/node-settings/components/PendingRestartBanner.tsx\"]",
   "[\"no-core-to-features\",\"src/core/layout/components/Layout/Layout.tsx\",\"src/features/node-settings/components/RuntimeAcquisitionBanner.tsx\"]",
   "[\"no-core-to-features\",\"src/core/layout/components/MobileNavigationBar/MobileNavigationBar.tsx\",\"src/features/about/components/AboutDialog/AboutDialog.tsx\"]",
   "[\"no-core-to-features\",\"src/core/layout/components/MobileNavigationBar/MobileNavigationBar.tsx\",\"src/features/diagnostics/hooks/useReportProblem.ts\"]",

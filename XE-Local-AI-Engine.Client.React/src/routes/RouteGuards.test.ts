@@ -22,6 +22,7 @@ const { restoreMock, pendingVaultStepMock, statusMock } = vi.hoisted(() => ({
 		setupRequired: false,
 		authenticated: false,
 		vault: "unlocked",
+		processGeneration: "generation-1",
 	})),
 }));
 
@@ -124,7 +125,7 @@ async function guardOutcome(run: Promise<unknown>): Promise<string | undefined> 
 }
 
 function statusWith(vault: NodeVaultState, setupRequired = false): NodeAuthStatusResponse {
-	return { setupRequired, authenticated: false, vault };
+	return { setupRequired, authenticated: false, vault, processGeneration: "generation-1" };
 }
 
 function redirectTarget(error: unknown): string | undefined {

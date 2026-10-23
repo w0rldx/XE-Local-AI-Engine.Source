@@ -1,36 +1,25 @@
-import { Badge, Group } from "@mantine/core";
 import type { ReactNode } from "react";
 import type { useTranslation } from "react-i18next";
 
-import {
-	type NodeSettingsFieldsForm,
-	restartGatedNodeSettingsFields,
-} from "@/features/node-settings/models/NodeSettingsFieldsModel";
+import { NodeSettingsFieldLabel } from "@/features/node-settings/components/NodeSettingsFieldLabel";
+import type { NodeSettingsFieldsForm } from "@/features/node-settings/models/NodeSettingsFieldsModel";
 
 type Translate = ReturnType<typeof useTranslation>["t"];
 
-// A field label, with a "Needs restart" badge when the field is restart-gated. The badge sits in the label so it is
-// read with the field's accessible name, and the save bar counts the same set (restartGatedNodeSettingsFields).
+// A field label with the "Needs restart" badge when the node reports the field as restart-gated.
 export function nodeSettingsFieldLabel(t: Translate, field: keyof NodeSettingsFieldsForm, label: string): ReactNode {
-	if (!restartGatedNodeSettingsFields.has(field)) {
-		return label;
-	}
+	return <NodeSettingsFieldLabel t={t} field={field} label={label} />;
+}
 
-	return (
-		<Group component="span" gap={6} wrap="nowrap" style={{ display: "inline-flex" }}>
-			{label}
-			<Badge
-				component="span"
-				size="xs"
-				variant="light"
-				color="orange"
-				title={t("pages.nodeSettings.fields.restartRequired", "Takes effect after the node restarts.")}
-				data-testid={`node-settings-restart-badge-${field}`}
-			>
-				{t("pages.nodeSettings.fields.restartBadge", "Needs restart")}
-			</Badge>
-		</Group>
-	);
+// The form's label for a wire field name, for surfaces outside the form (the pending-restart banner). Two fields are
+// labelled under a different key; a field this client does not know shows its wire name.
+const labelKeyAliases: Readonly<Record<string, string>> = {
+	speculativeDraftModelName: "speculativeDraftModel",
+	llamaChatCacheRamMiB: "llamaChatCacheRam",
+};
+
+export function nodeSettingsFieldLabelText(t: Translate, field: string): string {
+	return t(`pages.nodeSettings.fields.${labelKeyAliases[field] ?? field}.label`, field);
 }
 
 export function nodeSettingsFieldError(

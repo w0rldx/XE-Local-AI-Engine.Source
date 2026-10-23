@@ -63,6 +63,8 @@ public sealed class VaultUnlockHostTests : IDisposable
         AssertEx.False(status.GetProperty("setupRequired").GetBoolean());
         AssertEx.False(status.GetProperty("authenticated").GetBoolean());
         AssertEx.Equal(NodeAuthVaultStatus.Locked, status.GetProperty("vault").GetString());
+        // The same per-process id the real host's auth/status serves (NodeAuthEndpointTests).
+        AssertEx.Equal(NodeProcessIdentity.Generation, status.GetProperty("processGeneration").GetString());
 
         using (var other = await client.GetAsync(Route("node/settings")))
         {

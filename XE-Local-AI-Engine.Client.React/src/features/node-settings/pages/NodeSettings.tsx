@@ -77,6 +77,7 @@ import {
 	nodeSettingsSectionIds,
 	nodeSettingsSectionOf,
 } from "@/features/node-settings/models/NodeSettingsSections";
+import { RestartRequiredFieldsContext } from "@/features/node-settings/models/RestartRequiredFieldsContext";
 import { useEffectiveToolCapableModels } from "@/features/node-settings/queries/useEffectiveToolCapableModels";
 import { useHfTokenStatus, useSetHfToken } from "@/features/node-settings/queries/useLocalRuntime";
 import { useOllamaRuntimeConfigured } from "@/features/node-settings/queries/useOllamaRuntimeConfigured";
@@ -188,7 +189,11 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 			buildNodeSettingsRequest(fieldsForm, fieldsBaseline, fieldBounds, developerMode, pendingPreset, effectiveToolCapableModels),
 		[fieldsForm, fieldsBaseline, fieldBounds, developerMode, pendingPreset, effectiveToolCapableModels],
 	);
-	const pendingChanges = summarizePendingChanges(draftRequest, fieldsForm, fieldsBaseline);
+	const restartRequiredFields = useMemo(
+		() => new Set<string>(settings?.restartRequiredFields ?? []),
+		[settings?.restartRequiredFields],
+	);
+	const pendingChanges = summarizePendingChanges(draftRequest, fieldsForm, fieldsBaseline, restartRequiredFields);
 	const timeoutChanged = timeoutSeconds !== timeoutBaseline;
 	const changedFields: string[] = [...pendingChanges.changed, ...(timeoutChanged ? ["maxMessageRequestTimeoutSeconds"] : [])];
 	const dirtyCounts = new Map<NodeSettingsSectionId, number>();
@@ -232,13 +237,13 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 	const saveMutation = useMutation({
 		...saveNodeSettingsMutation(),
 		onSuccess: async (updatedSettings: SaveNodeSettingsResponse, variables: { body: SaveNodeSettingsRequest }) => {
-			// Restart-gated fields (see restartGatedNodeSettingsFields) persist immediately but the running node keeps its
+			// Restart-gated fields (the response's restartRequiredFields) persist immediately but the running node keeps its
 			// old value, so the save notice has to say so instead of implying the change is already live.
 			toast.success(
-				touchesRestartGatedField(variables.body)
+				touchesRestartGatedField(variables.body, new Set(updatedSettings.restartRequiredFields ?? []))
 					? t(
 							"pages.nodeSettings.savedRestartRequired",
-							"Node settings saved. Some of the changed settings only take effect after the node restarts.",
+							"Node settings saved. Some changes wait for a node restart; the banner at the top lists them.",
 						)
 					: t("pages.nodeSettings.saved", "Node settings saved."),
 			);
@@ -538,53 +543,55 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 
 	return (
 		<PageShell>
-			<PageHeader
-				title={t("pages.nodeSettings.title", "Node settings")}
-				icon={<IconSettings size={24} />}
-				subtitle={t("pages.nodeSettings.subtitle", "Tune non-secret local runtime settings stored on this worker.")}
-			/>
+			<RestartRequiredFieldsContext.Provider value={restartRequiredFields}>
+				<PageHeader
+					title={t("pages.nodeSettings.title", "Node settings")}
+					icon={<IconSettings size={24} />}
+					subtitle={t("pages.nodeSettings.subtitle", "Tune non-secret local runtime settings stored on this worker.")}
+				/>
 
-			{settingsIsLoading ? (
-				<Group gap="sm">
-					<Loader size="sm" />
-					<Text c="dimmed">{t("pages.nodeSettings.loading", "Loading node settings…")}</Text>
-				</Group>
-			) : null}
+				{settingsIsLoading ? (
+					<Group gap="sm">
+						<Loader size="sm" />
+						<Text c="dimmed">{t("pages.nodeSettings.loading", "Loading node settings…")}</Text>
+					</Group>
+				) : null}
 
-			{settingsError ? <InlineErrorAlert message={errorMessage(settingsError)} /> : null}
+				{settingsError ? <InlineErrorAlert message={errorMessage(settingsError)} /> : null}
 
-			<Grid gap="lg">
-				<Grid.Col span={{ base: 12, sm: 4, md: 3 }}>
-					<Box pos={{ base: "static", sm: "sticky" }} top={0}>
-						<NodeSettingsSectionNav
-							sections={visibleSections}
-							active={activeSection}
-							onSelect={selectSection}
-							dirtyCounts={dirtyCounts}
-							advancedToggle={
-								isSimpleMode
-									? { shown: showAdvancedSections, onToggle: () => setShowAdvancedSections((shown) => !shown) }
-									: undefined
-							}
-						/>
-					</Box>
-				</Grid.Col>
-				<Grid.Col span={{ base: 12, sm: 8, md: 9 }}>
-					<Stack gap="lg" data-testid={`node-settings-section-content-${activeSection}`}>
-						{renderSection()}
-					</Stack>
-				</Grid.Col>
-			</Grid>
+				<Grid gap="lg">
+					<Grid.Col span={{ base: 12, sm: 4, md: 3 }}>
+						<Box pos={{ base: "static", sm: "sticky" }} top={0}>
+							<NodeSettingsSectionNav
+								sections={visibleSections}
+								active={activeSection}
+								onSelect={selectSection}
+								dirtyCounts={dirtyCounts}
+								advancedToggle={
+									isSimpleMode
+										? { shown: showAdvancedSections, onToggle: () => setShowAdvancedSections((shown) => !shown) }
+										: undefined
+								}
+							/>
+						</Box>
+					</Grid.Col>
+					<Grid.Col span={{ base: 12, sm: 8, md: 9 }}>
+						<Stack gap="lg" data-testid={`node-settings-section-content-${activeSection}`}>
+							{renderSection()}
+						</Stack>
+					</Grid.Col>
+				</Grid>
 
-			<NodeSettingsSaveBar
-				unsavedCount={changedFields.length}
-				restartCount={pendingChanges.restartRequired.length}
-				canSave={changedFields.length > 0 && !saveMutation.isPending}
-				canReset={isDirty && !settingsIsFetching}
-				isSaving={saveMutation.isPending}
-				onSave={handleSave}
-				onReset={handleReset}
-			/>
+				<NodeSettingsSaveBar
+					unsavedCount={changedFields.length}
+					restartCount={pendingChanges.restartRequired.length}
+					canSave={changedFields.length > 0 && !saveMutation.isPending}
+					canReset={isDirty && !settingsIsFetching}
+					isSaving={saveMutation.isPending}
+					onSave={handleSave}
+					onReset={handleReset}
+				/>
+			</RestartRequiredFieldsContext.Provider>
 		</PageShell>
 	);
 }

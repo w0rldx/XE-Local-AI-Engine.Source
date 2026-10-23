@@ -2,7 +2,9 @@ namespace XE_Local_AI_Engine.Tests.Hosting;
 
 using System.Diagnostics;
 using System.Globalization;
+using System.IO.Pipes;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Runtime.Versioning;
@@ -514,6 +516,69 @@ public sealed class EngineCliProcessTests : IDisposable
         AssertEx.False(mismatched.StandardOutput.Contains(ReadyPrefix, StringComparison.Ordinal), "A refused key must never announce readiness.");
     }
 
+    [Test]
+    public async Task NodeRestart_IsRefusedWithoutAShell_AndAShellOwnedEngineExitsWithTheRestartCode()
+    {
+        Directory.CreateDirectory(_root);
+        await SetupLockedVaultAsync();
+
+        // MCP-only is local mode, so the route is mapped, but no shell would start the engine again.
+        await using (var standalone = StartServing(["--mcp-only"]))
+        {
+            AssertEx.NotNull(await standalone.ReadReadyLineAsync());
+            standalone.StartDraining();
+            using var client = await CreateSignedInClientAsync();
+            using var refused = await client.PostAsync(Route(LocalApiRoutes.Node.Restart), content: null);
+            AssertEx.Equal(HttpStatusCode.Conflict, refused.StatusCode, await refused.Content.ReadAsStringAsync());
+            AssertEx.False(standalone.HasExited, "A refused restart must leave the engine running.");
+        }
+
+        // The shell's side of the lifetime pipe, as DesktopEngineSession.StartOwnedAsync opens it.
+        var pipeName = "xe-restart-test-" + Guid.NewGuid().ToString("N");
+        await using var shellPipe = new NamedPipeServerStream(pipeName, PipeDirection.Out, 1, PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        var connected = shellPipe.WaitForConnectionAsync();
+        await using var owned = StartServing(["--desktop", "--no-browser"], lifetimePipe: pipeName);
+        AssertEx.NotNull(await owned.ReadReadyLineAsync());
+        owned.StartDraining();
+        await connected.WaitAsync(TimeSpan.FromSeconds(10));
+        using (var client = await CreateSignedInClientAsync())
+        using (var accepted = await client.PostAsync(Route(LocalApiRoutes.Node.Restart), content: null))
+        {
+            AssertEx.Equal(HttpStatusCode.Accepted, accepted.StatusCode, await accepted.Content.ReadAsStringAsync());
+            AssertEx.Equal(0, (await accepted.Content.ReadAsByteArrayAsync()).Length, "The restart answers 202 with no body.");
+        }
+
+        var exitCode = await owned.WaitForExitAsync(TimeSpan.FromSeconds(60));
+        AssertEx.Equal(XE_Local_AI_Engine.Client.Program.RestartRequestedExitCode, exitCode, await owned.StandardErrorAsync());
+    }
+
+    /// <summary>A client on the running engine's origin, signed in with the admin password.</summary>
+    private async Task<HttpClient> CreateSignedInClientAsync()
+    {
+        var ready = AssertEx.NotNull(await DesktopPortStore.ReadReadyAsync(_root));
+        var client = new HttpClient
+        {
+            BaseAddress = new Uri(ready.Url)
+        };
+        try
+        {
+            using var login = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.Login), new
+            {
+                password = AdminPassword
+            });
+            AssertEx.Equal(HttpStatusCode.OK, login.StatusCode, await login.Content.ReadAsStringAsync());
+            var token = AssertEx.NotNull(await login.Content.ReadFromJsonAsync<NodeAccessTokenResponse>()).AccessToken;
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            return client;
+        }
+        catch
+        {
+            client.Dispose();
+            throw;
+        }
+    }
+
     private static bool TryHold(int port, out TcpListener? holder)
     {
         var listener = new TcpListener(IPAddress.Loopback, port);
@@ -615,12 +680,17 @@ public sealed class EngineCliProcessTests : IDisposable
         };
     }
 
-    private RunningEngine StartServing(IReadOnlyList<string> arguments, string? adminPassword = AdminPassword)
+    private RunningEngine StartServing(IReadOnlyList<string> arguments, string? adminPassword = AdminPassword, string? lifetimePipe = null)
     {
         var process = new Process
         {
             StartInfo = CreateStartInfo(arguments, launchMode: null, _root, adminPassword)
         };
+        if (lifetimePipe is not null)
+        {
+            process.StartInfo.Environment[DesktopParentLifetime.EnvironmentVariable] = lifetimePipe;
+        }
+
         if (!process.Start())
         {
             process.Dispose();

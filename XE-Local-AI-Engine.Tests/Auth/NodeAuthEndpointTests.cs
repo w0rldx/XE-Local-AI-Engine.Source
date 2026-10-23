@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Endpoints.Auth.V1;
+using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Hosting.Vault;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -33,6 +34,9 @@ public sealed class NodeAuthEndpointTests
 
         var initialStatus = await client.GetFromJsonAsync<AuthStatusResponse>("/api/local/v1/auth/status");
         AssertEx.True(AssertEx.NotNull(initialStatus).SetupRequired);
+        // The same per-process id the vault-unlock host serves (VaultUnlockHostTests), so a client sees no restart between the two.
+        AssertEx.Equal(NodeProcessIdentity.Generation, AssertEx.NotNull(initialStatus).ProcessGeneration);
+        AssertEx.Equal(expected: 32, NodeProcessIdentity.Generation.Length);
 
         using var setupResponse = await SetupAsync(client);
         AssertEx.Equal(HttpStatusCode.OK, setupResponse.StatusCode);
@@ -806,7 +810,7 @@ public sealed class NodeAuthEndpointTests
         }
     }
 
-    private sealed record AuthStatusResponse(bool SetupRequired, bool Authenticated);
+    private sealed record AuthStatusResponse(bool SetupRequired, bool Authenticated, string? ProcessGeneration);
 
     private sealed record AuthTokenResponse(string AccessToken, DateTime ExpiresAtUtc);
 

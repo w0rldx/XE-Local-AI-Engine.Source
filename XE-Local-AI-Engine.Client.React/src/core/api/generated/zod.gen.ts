@@ -611,6 +611,7 @@ export const zXeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse = z.obj
 	setupRequired: z.boolean(),
 	authenticated: z.boolean(),
 	vault: z.string(),
+	processGeneration: z.string(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordRequest = z.object({
@@ -8811,6 +8812,8 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 	schedulerEnabled: z.boolean().optional(),
 	devWorkflowsEnabled: z.boolean().optional(),
 	executionPreviewsEnabled: z.boolean().optional(),
+	restartRequiredFields: z.array(z.string()).optional(),
+	pendingRestartFields: z.array(z.string()).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest = z.object({

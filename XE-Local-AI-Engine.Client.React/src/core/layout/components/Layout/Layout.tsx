@@ -19,6 +19,7 @@ import { useDesktopNavigationBarStore } from "@/core/layout/stores/DesktopNaviga
 import { ChatConnectionStatusChip } from "@/features/chat/components/ChatConnectionStatusChip";
 import { CpuFallbackBanner } from "@/features/model-fit/components/CpuFallbackBanner";
 import { LlamaCppUpdateBanner } from "@/features/node-settings/components/LlamaCppUpdateBanner";
+import { PendingRestartBanner } from "@/features/node-settings/components/PendingRestartBanner";
 import { RuntimeAcquisitionBanner } from "@/features/node-settings/components/RuntimeAcquisitionBanner";
 
 const DevelopmentUi = import.meta.env.DEV
@@ -94,6 +95,8 @@ export function Layout() {
 						{/* First-run runtime acquisition. Mounted here, not on a page, because the download starts at host boot
 						    and the user can be anywhere in the app while it runs. */}
 						<RuntimeAcquisitionBanner />
+						{/* Saved settings the running node applies only after a restart; shown on every page until then. */}
+						<PendingRestartBanner />
 					</div>
 
 					{/* The routed content is the `main` landmark and the skip link's target. `tabIndex={-1}` makes it

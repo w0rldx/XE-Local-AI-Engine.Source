@@ -89,6 +89,11 @@ internal static class DesktopText
             ? "Die Engine wurde unerwartet beendet. XE wird geschlossen. Prüfen Sie vor einem Neustart die Engine-Protokolle."
             : "The engine stopped unexpectedly. XE will close. Check the engine logs before restarting.";
 
+    internal static string RestartFailed =>
+        German
+            ? "Die Engine konnte nach dem angeforderten Neustart nicht wieder gestartet werden. XE wird geschlossen. Prüfen Sie die Engine-Protokolle und starten Sie XE erneut."
+            : "The engine could not start again after the requested restart. XE will close. Check the engine logs, then start XE again.";
+
     /// <summary>The engine exited because Windows Smart App Control or an application control policy blocked one of its
     ///     files; <paramref name="file" /> is the blocked file the engine named, when it named one.</summary>
     internal static string ApplicationControlBlocked(string? file, string installFolder)

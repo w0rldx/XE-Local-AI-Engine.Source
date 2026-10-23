@@ -128,6 +128,18 @@ public sealed class NodeStartupSettingsTests : IDisposable
     }
 
     [Test]
+    public void Read_KeepsTheWholeStoredRecord_AsTheBootValuesForPendingRestart()
+    {
+        var content = Dir("content");
+        Write(content, """{ "llamaMaxLoadedProcesses": 3, "kvCacheType": "q8_0" }""");
+
+        var sut = Read(contentRoot: content);
+
+        AssertEx.Equal(expected: 3, sut.StoredSettings.LlamaMaxLoadedProcesses);
+        AssertEx.Equal("q8_0", sut.StoredSettings.KvCacheType);
+    }
+
+    [Test]
     public void Read_WhenOnlySomeFieldsAreStored_TheRestFallToTheSeed()
     {
         var content = Dir("content");

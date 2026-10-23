@@ -12,6 +12,8 @@ const settingsResponse = {
 	maxMessageRequestTimeoutSeconds: 600,
 	minMessageRequestTimeoutSeconds: 5,
 	maxAllowedMessageRequestTimeoutSeconds: 3600,
+	// The node's restart gate, served on both the GET and the PUT; a slice is enough for these page tests.
+	restartRequiredFields: ["huggingFaceDefaultQuant", "llamaChatCacheRamMiB", "llamaMaxLoadedProcesses", "schedulerEnabled"],
 };
 
 const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }));
@@ -1141,9 +1143,25 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		await waitFor(() => expect(generatedMock.saveFn).toHaveBeenCalled());
 		await waitFor(() =>
 			expect(toastMock.success).toHaveBeenCalledWith(
-				"Node settings saved. Some of the changed settings only take effect after the node restarts.",
+				"Node settings saved. Some changes wait for a node restart; the banner at the top lists them.",
 			),
 		);
+	});
+
+	it("decides the restart notice from the save response, not from a list of its own", async () => {
+		generatedMock.getNodeSettingsOptions.mockReturnValue({
+			queryKey: ["getNodeSettings"],
+			queryFn: async () => ({ ...settingsResponse, huggingFaceDefaultQuant: "Q4_K_M" }),
+		});
+		// A node that no longer reads the quant once answers the save with a gate that lacks it.
+		generatedMock.saveFn.mockResolvedValue({ ...settingsResponse, restartRequiredFields: [] });
+		renderPage("models");
+		await screen.findByDisplayValue("Q4_K_M");
+
+		fireEvent.change(screen.getByTestId("node-settings-hf-default-quant"), { target: { value: "Q5_K_M" } });
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
+
+		await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Node settings saved."));
 	});
 
 	it("saves a feature switch from the General Features card and says a restart is needed", async () => {
@@ -1166,7 +1184,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		);
 		await waitFor(() =>
 			expect(toastMock.success).toHaveBeenCalledWith(
-				"Node settings saved. Some of the changed settings only take effect after the node restarts.",
+				"Node settings saved. Some changes wait for a node restart; the banner at the top lists them.",
 			),
 		);
 	});

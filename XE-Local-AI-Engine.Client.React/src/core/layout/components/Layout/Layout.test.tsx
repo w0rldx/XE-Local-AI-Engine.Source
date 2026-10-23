@@ -21,6 +21,9 @@ vi.mock("@/features/node-settings/components/LlamaCppUpdateBanner", () => ({ Lla
 vi.mock("@/features/node-settings/components/RuntimeAcquisitionBanner", () => ({
 	RuntimeAcquisitionBanner: () => <div data-testid="runtime-acquisition-banner-mount" />,
 }));
+vi.mock("@/features/node-settings/components/PendingRestartBanner", () => ({
+	PendingRestartBanner: () => <div data-testid="pending-restart-banner-mount" />,
+}));
 // The page-crash fallback reads stored snapshots and node info; neither matters for where it renders.
 vi.mock("@/features/diagnostics/UseSnapshots", () => ({ useSnapshots: () => ({ data: [] }) }));
 vi.mock("@/features/diagnostics/queries/useNodeInfo", () => ({ useNodeInfo: () => ({ data: undefined }) }));
@@ -69,6 +72,16 @@ describe("Layout", () => {
 
 		const main = await screen.findByRole("main");
 		const banner = screen.getByTestId("runtime-acquisition-banner-mount");
+		expect(main.contains(banner)).toBe(false);
+		expect(banner.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+	});
+
+	// A restart-gated save is invisible until the node restarts, so the reminder sits in the shell on every page.
+	it("mounts the pending-restart banner above the routed page", async () => {
+		renderWithProviders(<Layout />, { route: "/chat" });
+
+		const main = await screen.findByRole("main");
+		const banner = screen.getByTestId("pending-restart-banner-mount");
 		expect(main.contains(banner)).toBe(false);
 		expect(banner.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 	});

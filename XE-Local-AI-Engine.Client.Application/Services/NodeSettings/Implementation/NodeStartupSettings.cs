@@ -36,6 +36,9 @@ public sealed class NodeStartupSettings
     /// <summary>The switch is on but the catalog listed no application at startup, so installing waits for a node restart.</summary>
     public bool ExternalAppsAwaitingCatalog { get; init; }
 
+    /// <summary>The whole stored record this read saw: the boot values <see cref="PendingRestartRegistry" /> compares against.</summary>
+    public StoredNodeSettings StoredSettings { get; init; } = new();
+
     /// <summary>Reads the stored switches for the data directory <paramref name="configuration" /> resolves.</summary>
     /// <param name="includeLegacyContentRoot">
     ///     <see langword="false" /> ignores a <c>node-settings.json</c> in the content root. A test host passes it, because its
@@ -81,7 +84,8 @@ public sealed class NodeStartupSettings
             DevelopmentEnabled = stored.DevelopmentEnabled ?? configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true),
             SchedulerEnabled = stored.SchedulerEnabled ?? configuration.GetValue($"{SchedulerOptions.Section}:Enabled", defaultValue: true),
             ExternalAppsEnabled = catalogListsApplications,
-            ExternalAppsAwaitingCatalog = externalAppsSwitch && !catalogListsApplications
+            ExternalAppsAwaitingCatalog = externalAppsSwitch && !catalogListsApplications,
+            StoredSettings = stored
         };
     }
 

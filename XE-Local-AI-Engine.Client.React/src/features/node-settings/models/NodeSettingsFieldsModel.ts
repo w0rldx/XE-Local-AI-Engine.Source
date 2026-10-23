@@ -1062,112 +1062,6 @@ export function toNodeSettingsFieldBounds(response: NodeSettingsResponse | undef
 	};
 }
 
-// The fields whose runtime consumer reads them exactly ONCE — at DI composition / singleton construction — so a Save
-// persists immediately but the running node keeps its old value until it restarts. This is the single source of truth
-// for both the per-field hint in NodeSettingsFieldsCard and the post-save "restart required" notice; verify the named
-// backend consumer before adding or removing an entry (every one below confirmed against the composition root):
-//   defaultModelName                — AddNodeModelRuntimeExtensions.ResolveChatConnectionSettings (GetDefaultModelName)
-//                                     + InvocationRunner ctor. PARTIAL: the scheduler (RunSavedAgentHandler) reads live.
-//   ollamaEndpoint                  — AddNodeModelRuntimeExtensions.ResolveChatConnectionSettings (GetOllamaEndpoint)
-//   huggingFaceDefaultQuant         — AddNodeModelRuntimeExtensions.BuildSeededHuggingFaceOptions
-//   llamaMaxLoadedProcesses         — AddNodeModelRuntimeExtensions.BuildSeededLlamaServerSupervisorOptions
-//   llamaIdleTimeToLiveSeconds      — same seed method
-//   chatCacheReuse                  — same seed method (LlamaServerSupervisorOptions.ChatCacheReuse)
-//   kvCacheType                     — AddNodeModelRuntimeExtensions.BuildSeededLlamaServerLaunchPolicyOptions, the
-//                                     ONLY consumer (LlamaServerLaunchPolicyOptions is built once at host build)
-//   speculativeMode                 — same seed method
-//   speculativeDraftModelName       — same seed method
-//   speculativeDraftMaxTokens       — same seed method
-//   maxResponseSizeMb               — InvocationRunner ctor (GetMaxResponseSizeMb)
-//   orchestrationIdleTimeoutSeconds — AddNodeModelRuntimeExtensions Configure<OrchestrationAgentOptions>
-//   maxPendingToolCallAgeMinutes    — InvocationRunner ctor. PARTIAL: ToolCallCleanupService sweeps with a live read,
-//                                     but a running invocation's own approval-wait timer was fixed at process start.
-//   speculativeDraftGpuLayers       — BuildSeededLlamaServerLaunchPolicyOptions
-//   huggingFaceDiskMarginBytes      — BuildSeededHuggingFaceOptions
-//   llamaReadinessTimeoutCap / llamaChatHttp / llamaEmbeddingHttp / llamaChatCacheRamMiB / llamaCpuThreadReserve /
-//   llamaGpu+RamReservePercent / imageIdleTimeToLive / maxProviderCallsPerInvocation / huggingFaceDownloadConnections /
-//   transcriptionIdle+InferenceTimeoutMinutes
-//                                   — the synchronous INodeRuntimeSettings getters, each read once by a seed factory.
-//   imageMaxLoadedProcesses / imageTextEncoderOnGpu
-//                                   — AddNodeImagesExtensions host-build factory for StableDiffusionRuntimeOptions.
-//   graphWorkflowMaxConcurrentRuns / graphWorkflowDefaultNodeTimeoutSeconds
-//                                   — AddNodeGraphWorkflowsExtensions Configure<GraphWorkflowOptions>: the in-flight lanes
-//                                     size their semaphores once.
-//   workSessionMaxStepsPerRun / workSessionMaxConcurrentSessions
-//                                   — AddNodeWorkSessionsExtensions Configure<WorkSessionOptions>: the supervisor sizes its
-//                                     admission once.
-//   developmentMaxAttemptDurationSeconds / developmentMaxToolCalls / developmentMaxOutputTokens
-//                                   — AddNodeDevelopmentExtensions Configure<DevelopmentOptions>.
-//   toolPipelineMaxIterationsPerRequest / toolPipelineMaxToolResultChars / toolPipelineMaxConsecutiveInvalidToolCalls
-//                                   — AddNodeModelRuntimeExtensions Configure<AgentToolPipelineOptions>: the chat-client
-//                                     pipeline and the tool wrappers are built once.
-//   knowledgeScheduledReindexEnabled / knowledgeScheduledReindexIntervalMinutes
-//                                   — AddNodeKnowledgeBaseExtensions Configure<KnowledgeBaseOptions>: the hosted reindex
-//                                     worker reads both once at start.
-//   developmentEnabled / schedulerEnabled
-//                                   — NodeStartupSettings, read from node-settings.json BEFORE the host is built: the
-//                                     Development endpoints and hub, and the Quartz scheduler, are registered or not.
-// Live and NOT listed: modelFitSafetyMarginPercent, customToolMaxTimeoutSeconds, webFetch*, knowledgeSearch*,
-// agentHomeMaxRunSeconds, agentHomeMaxInnerToolCalls, agentHomePatchApplyTimeoutSeconds, every agentHomeRunRetention* field
-// (read per sweep) and containerRuntimeSelection (read per call); and the other chat knobs — defaultContextTokens,
-// providerBudget*, contextBudgetRecentTurnKeepCount, compaction*, maxInlinedAttachmentChars, knowledgeChatTopK,
-// providerRetryEnabled / providerMaxRetries and spawn* — each read per turn, job, send or root run; and the knowledge,
-// privacy and usage knobs — rerankerModelName, knowledgeEmbeddingModelName, knowledgeAdaptiveRerankingEnabled, knowledgeRetrievalLatencyBudgetMs, knowledgeAgentToolsEnabled,
-// allowCloudModelAccess and the four other cloud-model permissions, the three background models, the two retention switches, every retention window,
-// nodeDbBackupRetainCount and benchmarkKldCacheMaxBytes — each read per search, offer, turn, run, sweep or backup; and the
-// other seven feature switches — FeatureSwitchMiddleware and every per-service check read them per request. Three carry
-// help text instead of a badge: externalAppsEnabled (its container-bridge listener is bound at host build) and
-// computeEnabled / devWorkflowsEnabled (their agent and workflow definitions are seeded at startup).
-// Every other form field is read live on each call and must NOT be listed here: agentHome*, keepModelWarm*,
-// toolCapableModels, enableTools, customToolsEnabled, toolRelevanceEnabled, webAccessEnabled, webSearchSearxngUrl,
-// detachedGraceSeconds, usageRates, uiMode, sandboxSecurityProfile, voiceFeatureEnabled, defaultVoiceProfile, the two intent
-// settings (GraphWorkflowIntentService reads both per request), and the message-request timeout.
-export const restartGatedNodeSettingsFields: ReadonlySet<keyof NodeSettingsFieldsForm> = new Set<keyof NodeSettingsFieldsForm>([
-	"defaultModelName",
-	"ollamaEndpoint",
-	"huggingFaceDefaultQuant",
-	"llamaMaxLoadedProcesses",
-	"llamaIdleTimeToLiveSeconds",
-	"chatCacheReuse",
-	"kvCacheType",
-	"speculativeMode",
-	"speculativeDraftModelName",
-	"speculativeDraftMaxTokens",
-	"maxResponseSizeMb",
-	"orchestrationIdleTimeoutSeconds",
-	"maxPendingToolCallAgeMinutes",
-	"speculativeDraftGpuLayers",
-	"huggingFaceDiskMarginBytes",
-	"llamaReadinessTimeoutCapSeconds",
-	"llamaChatHttpTimeoutSeconds",
-	"llamaEmbeddingHttpTimeoutSeconds",
-	"llamaChatCacheRamMiB",
-	"llamaCpuThreadReserve",
-	"llamaGpuReservePercent",
-	"llamaRamReservePercent",
-	"imageIdleTimeToLiveSeconds",
-	"maxProviderCallsPerInvocation",
-	"huggingFaceDownloadConnections",
-	"transcriptionIdleTimeoutMinutes",
-	"transcriptionInferenceTimeoutMinutes",
-	"toolPipelineMaxIterationsPerRequest",
-	"toolPipelineMaxToolResultChars",
-	"toolPipelineMaxConsecutiveInvalidToolCalls",
-	"knowledgeScheduledReindexEnabled",
-	"knowledgeScheduledReindexIntervalMinutes",
-	"imageMaxLoadedProcesses",
-	"imageTextEncoderOnGpu",
-	"graphWorkflowMaxConcurrentRuns",
-	"graphWorkflowDefaultNodeTimeoutSeconds",
-	"workSessionMaxStepsPerRun",
-	"workSessionMaxConcurrentSessions",
-	"developmentMaxAttemptDurationSeconds",
-	"developmentMaxToolCalls",
-	"developmentMaxOutputTokens",
-	"developmentEnabled",
-	"schedulerEnabled",
-]);
-
 // True when a built save body carries at least one restart-gated field, so the page can tell the operator a restart is
 // needed. The request keys mirror the form keys 1:1, and the body only ever holds CHANGED fields.
 // The save turns execution previews ON. The body carries changed fields only, so a true here is always the off-to-on
@@ -1182,14 +1076,16 @@ export function lowersSandboxSecurityProfile(body: SaveNodeSettingsRequest): boo
 	return body.sandboxSecurityProfile === "low";
 }
 
-export function touchesRestartGatedField(body: SaveNodeSettingsRequest): boolean {
-	return Object.entries(body).some(([key, value]) => needsRestartFor(key as keyof NodeSettingsFieldsForm, value));
+// `restartRequiredFields` is the node's own list (the settings response's `restartRequiredFields`, wire names equal to
+// the form keys): the fields it reads once at host build, so a save persists but applies only after a node restart.
+export function touchesRestartGatedField(body: SaveNodeSettingsRequest, restartRequiredFields: ReadonlySet<string>): boolean {
+	return Object.entries(body).some(([key, value]) => needsRestartFor(key, value, restartRequiredFields));
 }
 
 // Development mode is mapped at startup but its request gate reads the live setting, so only turning it ON waits for
 // a restart; turning it off applies at once.
-function needsRestartFor(field: keyof NodeSettingsFieldsForm, newValue: unknown): boolean {
-	return restartGatedNodeSettingsFields.has(field) && !(field === "developmentEnabled" && newValue === false);
+function needsRestartFor(field: string, newValue: unknown, restartRequiredFields: ReadonlySet<string>): boolean {
+	return restartRequiredFields.has(field) && !(field === "developmentEnabled" && newValue === false);
 }
 
 // The outcome of validating the whole form: the request body containing ONLY changed fields, plus a per-field error
@@ -1873,6 +1769,7 @@ export function summarizePendingChanges(
 	result: NodeSettingsValidationResult,
 	form: NodeSettingsFieldsForm,
 	baseline: NodeSettingsFieldsForm,
+	restartRequiredFields: ReadonlySet<string>,
 ): NodeSettingsPendingChanges {
 	const changed = new Set(Object.keys(result.body) as (keyof NodeSettingsFieldsForm)[]);
 	for (const key of Object.keys(result.errors)) {
@@ -1882,5 +1779,5 @@ export function summarizePendingChanges(
 		}
 	}
 	const list = [...changed];
-	return { changed: list, restartRequired: list.filter((field) => needsRestartFor(field, form[field])) };
+	return { changed: list, restartRequired: list.filter((field) => needsRestartFor(field, form[field], restartRequiredFields)) };
 }

@@ -56,6 +56,48 @@ public sealed class NodeSettingsEndpointTests
     }
 
     [Test]
+    public async Task GetAndSaveNodeSettings_ReportTheRestartGateAndTheFieldsChangedSinceStart()
+    {
+        // Started on defaults; since then one restart-gated knob and one live knob changed.
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
+        {
+            LlamaMaxLoadedProcesses = 3,
+            AgentHomeRunRetentionDays = 9
+        });
+        await using var factory = new TestServerWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<INodeSettingsStore>();
+                services.AddSingleton(nodeSettingsStore);
+                services.RemoveAll<PendingRestartRegistry>();
+                services.AddSingleton(new PendingRestartRegistry(new StoredNodeSettings()));
+            }
+        };
+        using var client = factory.CreateClient();
+
+        using var getRequest = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/node-settings");
+        using var getResponse = await client.SendAsync(getRequest);
+        var fetched = await ReadJsonAsync<NodeSettingsResponse>(getResponse);
+
+        AssertEx.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+        AssertEx.Equal(string.Join(',', NodeSettingsRestartGate.Fields), string.Join(',', fetched.RestartRequiredFields));
+        AssertEx.Equal("llamaMaxLoadedProcesses", string.Join(',', fetched.PendingRestartFields));
+
+        using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        putRequest.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
+        {
+            KvCacheType = "q8_0"
+        });
+        using var putResponse = await client.SendAsync(putRequest);
+        var saved = await ReadJsonAsync<NodeSettingsResponse>(putResponse);
+
+        AssertEx.Equal(HttpStatusCode.OK, putResponse.StatusCode);
+        AssertEx.Equal(string.Join(',', NodeSettingsRestartGate.Fields), string.Join(',', saved.RestartRequiredFields));
+        AssertEx.Equal("kvCacheType,llamaMaxLoadedProcesses", string.Join(',', saved.PendingRestartFields));
+    }
+
+    [Test]
     public async Task SaveNodeSettings_WhenValid_SavesAndReportsCapabilities()
     {
         var nodeSettingsStore = NewSettingsStore();

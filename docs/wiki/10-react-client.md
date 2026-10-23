@@ -197,8 +197,8 @@ and a `Select` on phone width; the active section is driven by the route's `?sec
 every section is a bookmarkable, linkable URL.
 
 **General holds the Features card** (`components/NodeSettingsFeaturesCard.tsx`): the feature switches, each
-showing its effective value (the execution-previews switch is not among them: it lives in the **Sandbox & isolation** section below). `developmentEnabled` and `schedulerEnabled` are in `restartGatedNodeSettingsFields`; the
-External apps, Compute tools and Development workflows descriptions name the part that waits for a restart (the
+showing its effective value (the execution-previews switch is not among them: it lives in the **Sandbox & isolation** section below). `developmentEnabled`, `schedulerEnabled` and `externalAppsEnabled` are in the
+node's `restartRequiredFields`; the External apps, Compute tools and Development workflows descriptions name the part that waits for a restart (the
 container bridge listener, the seeded Mathematician agent and workflow definitions). `buildNodeSettingsRequest`
 mirrors the server's two couplings so the refusal lands on the field: development workflows without work sessions
 (`requiresWorkSessions`), and AgentHome with an empty tool-capable list (`requiresToolCapableModels`). The second rule
@@ -235,10 +235,17 @@ nothing preselected and no skip control; it recommends `high` only when no role 
 **The draft is `fieldsForm`; `fieldsBaseline` is the server state it was last seeded from.** `buildNodeSettingsRequest`
 diffs the two and sends only the changed fields, matching the PUT DTO's optional-field-keeps-current-value contract
 (`08-data-and-persistence.md`'s save protocol). That diff also drives `NodeSettingsSaveBar` — one sticky bar at the
-foot of the page reporting the unsaved-field count and, separately, how many touch a
-`restartGatedNodeSettingsFields` entry (a toast on save says so, worded differently, instead of implying every saved
-change is already live) — and `NodeSettingsSectionNav`'s per-section unsaved badges, so an edit left behind in a
+foot of the page reporting the unsaved-field count and, separately, how many are restart-gated (a toast on save says
+so, worded differently, instead of implying every saved change is already live) — and `NodeSettingsSectionNav`'s per-section unsaved badges, so an edit left behind in a
 section the operator has since navigated away from stays visible rather than silently riding along on the next Save.
+**Which fields need a restart is the node's answer, not the client's.** The settings GET and PUT carry
+`restartRequiredFields` (the backend `NodeSettingsRestartGate`) and `pendingRestartFields` (gated fields whose stored
+value differs from the boot value). The page passes the first to the field badges through
+`RestartRequiredFieldsContext`, the save bar and the save toast. `PendingRestartBanner`, mounted in the layout beside
+`RuntimeAcquisitionBanner`, reads the second from the cached settings query and names the fields with the form's
+labels. It can be dismissed for the session. Inside the desktop app (`isDesktop` on the app-update status) it offers
+**Restart now**: it posts `POST node/restart` and waits through `useRestartPoll`, the same poll-and-reload the app
+update uses, until the node reports nothing pending. A browser session sees "Restart the node to apply." instead.
 **A fresh server response is adopted into the draft only while it is pristine.** The page can mount against a cached
 query response, seed from it, and then have the mount's own refetch resolve with fresher values; adopting those
 unconditionally is what the pristine check prevents once the operator has typed a single keystroke — a background

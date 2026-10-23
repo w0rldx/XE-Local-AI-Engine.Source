@@ -1,23 +1,20 @@
 import { Button, Loader, Stack, Text } from "@mantine/core";
 import { IconRefresh } from "@tabler/icons-react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { useRestartPoll } from "@/core/ui/hooks/useRestartPoll";
 import { AppUpdateBusyDialog } from "@/features/app-update/components/AppUpdateBusyDialog";
 import { type AppUpdateBusyItem, parseAppUpdateBusy } from "@/features/app-update/models/AppUpdateBusy";
 import { useApplyAppUpdate, useAppUpdateStatus, useProbeAppUpdateStatus } from "@/features/app-update/queries/useAppUpdate";
 
-// Interval (ms) between health-live polls while waiting for the server to come back.
-const HEALTH_POLL_INTERVAL_MS = 2000;
-// Maximum time (ms) to wait for the server to recover before giving up.
-const HEALTH_POLL_TIMEOUT_MS = 60_000;
-
-type ApplyState = "idle" | "applying" | "restarting" | "ready" | "error";
+type ApplyState = "idle" | "applying" | "error";
 
 /**
  * Owns the full ready-state update UI. Keeping this component mounted while an update is applying is load-bearing:
  * the old host clears its cached availability before exit, but restart polling must continue until the new version
- * answers. Calls `applyAppUpdate`, probes `/health/live` plus the side-effect-free version endpoint, then reloads.
+ * answers. Calls `applyAppUpdate`, then waits through `useRestartPoll` for the side-effect-free version endpoint to
+ * report the installed version.
  */
 export function AppUpdateButton() {
 	const { t } = useTranslation();
@@ -28,70 +25,13 @@ export function AppUpdateButton() {
 	const [applyState, setApplyState] = useState<ApplyState>("idle");
 	// The running work a refused apply listed; non-null opens the confirm dialog that re-sends with force.
 	const [busyItems, setBusyItems] = useState<AppUpdateBusyItem[] | null>(null);
-	const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const pollStartRef = useRef<number>(0);
-	const expectedVersionRef = useRef<string | null>(null);
-	// doHealthPoll re-arms the timer AFTER an awaited fetch — without this guard, an unmount that lands mid-await
-	// would run the cleanup first and then arm a timer nothing ever clears (a stray recurring /health/live poll).
-	const mountedRef = useRef(true);
-
-	useEffect(() => {
-		const timerRef = pollTimerRef;
-		mountedRef.current = true;
-		return () => {
-			mountedRef.current = false;
-			if (timerRef.current !== null) {
-				clearTimeout(timerRef.current);
-			}
-		};
-	}, []);
+	const restartPoll = useRestartPoll();
 
 	const availableVersion = status?.availableVersion ?? null;
 	const shouldRender = status?.isDesktop === true && status.isConfigured === true;
 
 	if (!shouldRender) {
 		return null;
-	}
-
-	function stopPolling() {
-		if (pollTimerRef.current !== null) {
-			clearTimeout(pollTimerRef.current);
-			pollTimerRef.current = null;
-		}
-	}
-
-	function scheduleHealthPoll() {
-		stopPolling();
-		if (!mountedRef.current) {
-			return;
-		}
-		pollTimerRef.current = setTimeout(() => {
-			doHealthPoll();
-		}, HEALTH_POLL_INTERVAL_MS);
-	}
-
-	async function doHealthPoll() {
-		const elapsed = Date.now() - pollStartRef.current;
-		if (elapsed > HEALTH_POLL_TIMEOUT_MS) {
-			setApplyState("error");
-			return;
-		}
-
-		try {
-			const response = await fetch("/health/live", { cache: "no-store" });
-			if (response.ok) {
-				const probedStatus = await probeStatusMutation.mutateAsync();
-				if (probedStatus.currentVersion === expectedVersionRef.current) {
-					setApplyState("ready");
-					window.location.reload();
-					return;
-				}
-			}
-		} catch {
-			// Server still down — keep polling.
-		}
-
-		scheduleHealthPoll();
 	}
 
 	async function handleApply(force: boolean) {
@@ -108,10 +48,9 @@ export function AppUpdateButton() {
 				return;
 			}
 			// The apply's live re-check can install a newer release than the cached offer; wait for what it installs.
-			expectedVersionRef.current = result.targetVersion ?? availableVersion;
-			setApplyState("restarting");
-			pollStartRef.current = Date.now();
-			scheduleHealthPoll();
+			const expectedVersion = result.targetVersion ?? availableVersion;
+			setApplyState("idle");
+			restartPoll.start(async () => (await probeStatusMutation.mutateAsync()).currentVersion === expectedVersion);
 		} catch (error: unknown) {
 			const busy = parseAppUpdateBusy(error);
 			if (busy !== null) {
@@ -124,7 +63,7 @@ export function AppUpdateButton() {
 		}
 	}
 
-	if (applyState === "restarting") {
+	if (restartPoll.status === "restarting") {
 		return (
 			<Stack gap="xs" align="center">
 				<Loader size="sm" />
@@ -135,7 +74,7 @@ export function AppUpdateButton() {
 		);
 	}
 
-	if (applyState === "error") {
+	if (applyState === "error" || restartPoll.status === "timedOut") {
 		return (
 			<Text size="sm" c="red">
 				{t("pages.about.appUpdate.applyError")}

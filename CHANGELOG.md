@@ -24,6 +24,11 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Added
 
+- **Settings that wait for a restart are visible** — the node reports which settings apply only after a restart
+  (`restartRequiredFields`) and which saved values the running node has not applied yet (`pendingRestartFields`,
+  compared against the values it started with). A persistent banner lists them on every page; inside the desktop app
+  it offers **Restart now**, which restarts the engine in place (exit code 12 asks the shell to relaunch it); a browser
+  session is told to restart the node.
 - **Why the model is loading, and how long it took last time** — the chat loading indicator names the model and the
   reason (first load, unloaded after idle, evicted for the loaded-model cap or for memory) with the last load duration.
 - **Per-turn throughput in chat (Advanced UI mode)** — one muted line under an assistant reply: time to first token,
@@ -365,6 +370,10 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Fixed
 
+- The restart-gated settings list lived only in the web client and had drifted from the node: `AgentHomeRunRetentionDays`
+  was documented as restart-only but applies at the next sweep, `externalAppsEnabled` was missing (the container bridge
+  is decided at startup), and 17 gated settings carried no restart note. The node is now the single source and a test
+  keeps the documentation in step.
 - The live terminal chat event now carries the message's sources and context window; before, only the refetch after the
   stream did.
 - **First page load no longer downloads the code editor** — a chunk-splitting group had captured Vite's preload

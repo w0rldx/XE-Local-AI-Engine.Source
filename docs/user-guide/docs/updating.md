@@ -195,6 +195,7 @@ the node runs again.
 | `8` | The node key does not match the database, or the key file for the database is missing. | Do not delete `node.key` or the database. Restore the matching pair from your backup, as above. |
 | `9` | The database migration failed. | Follow the restore hint the node prints: it names the newest pre-migration snapshot and the files to delete and copy, or tells you to move a damaged database aside. Then report the failure before retrying. |
 | `10` | The data directory is unusable: it cannot be created or written, or its `node-settings.json` is present but cannot be read. | Fix the ownership or permissions of the folder the message names. For `node-settings.json`, repair the file or move it aside; moving it aside resets the node's settings, not your data. The maintenance commands, including the admin password reset, also stop with `10` while `node-settings.json` cannot be read. |
+| `12` | Not a failure: you chose **Restart now** in the desktop app to apply settings that wait for a restart. | Nothing. The desktop app starts the engine again and reloads its window; if it cannot, it says so and closes, and you start XE again. |
 
 ## Signing warnings after an update
 

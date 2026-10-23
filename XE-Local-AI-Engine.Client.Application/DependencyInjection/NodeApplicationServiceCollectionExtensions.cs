@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection;
 
 using XE_Local_AI_Engine.Client.DependencyInjection.Modules;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
 
@@ -31,6 +32,8 @@ public static class NodeApplicationServiceCollectionExtensions
 
         builder.AddNodeCoreOptions(configuration);
         builder.AddNodeAuth(configuration);
+        // The boot record comes from the pre-container read, so a save before the first settings load still counts as pending.
+        builder.Services.AddSingleton(new PendingRestartRegistry(startupSettings.StoredSettings));
         builder.AddNodeInvocation(configuration);
         builder.AddNodeWorkspaceAndAgents(configuration);
         builder.AddNodeAnalysis(configuration);

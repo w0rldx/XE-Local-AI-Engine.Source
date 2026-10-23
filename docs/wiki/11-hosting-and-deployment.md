@@ -325,6 +325,14 @@ update while a native shell holds its lease: close that shell and update through
 Owned-engine updates coordinate through the shell/launcher process lifetime
 (`AppUpdateService`, `FrameworkDependentVelopackBootstrap`).
 
+An operator restart is the one engine exit that does not end the shell. `POST node/restart` (`RestartNodeEndpoint`,
+desktop-mode only, 409 when no shell owns the engine) answers 202, then the host stops and `Program` returns **12**
+(`Program.RestartRequestedExitCode`). The shell (`DesktopApplication.RelaunchEngineAsync`) starts the engine again with
+the same options through `DesktopEngineSession.StartAsync`, so it waits for readiness the way the first start does, and
+reloads the main window. The engine re-binds its remembered port, so the origin stays the same. A relaunch that fails or
+comes back on another port is shown with the reason, and the shell quits with the failure's code. Every other exit code
+keeps its meaning.
+
 A desktop launch shows no console. The Windows launcher starts the shell with `CreateNoWindow` and
 calls `FreeConsole` (`WindowsLauncherApplication.ShouldDetachConsole`); every engine mode keeps its
 console. The shell redirects an owned engine's stdout and stderr and reads them only for the
@@ -417,7 +425,8 @@ desktop shell matches that line to show its own dialog. Exit 10 covers a data di
 (`NodeStartupSettings.IsStoredFileUnreadableAsync`), because the tolerant read every service uses would start the node
 on default settings and show first-run onboarding. A missing file is a fresh node, not a failure. The desktop shell
 exits with the engine's code (`DesktopEngineStartupException`, `DesktopApplication.QuitAsync`) and the launcher
-forwards it. A busy data directory answers every one-shot command, the maintenance commands included, with **4**.
+forwards it. Exit **12** is not a refusal: it follows an operator restart, and the desktop shell starts the engine
+again instead of exiting (see the native shell section above). A busy data directory answers every one-shot command, the maintenance commands included, with **4**.
 The full exit-code list is in `--help` and the [agent install guide](../agentic-support/agent-install.md#11-exit-codes-and-troubleshooting).
 
 **Windows command line.** The top-level `XE-Local-AI-Engine.exe` is Velopack's native stub: it starts the current

@@ -6,26 +6,38 @@ import {
 	buildNodeSettingsRequest,
 	featureSwitchFields,
 	isExternalAccessBooleanField,
+	kvCacheTypeSelectValues,
 	lowersSandboxSecurityProfile,
 	newUsageRateRow,
-	nodeSettingsFieldDefaults,
-	kvCacheTypeSelectValues,
 	nodeSettingsDisplayScale,
+	nodeSettingsFieldDefaults,
 	nodeSettingsScaleOf,
-	restartGatedNodeSettingsFields,
 	shippedDefaults,
 	speculativeModeSelectValues,
 	summarizePendingChanges,
 	toNodeSettingsFieldBounds,
 	toNodeSettingsFieldsForm,
-	touchesRestartGatedField,
 	toUsageRateRows,
+	touchesRestartGatedField,
 	turnsOnExecutionPreviews,
 	type UsageRateRow,
 	validateOptionalHttpUrl,
 	validateToolCapableModels,
 	validateUsageRates,
 } from "@/features/node-settings/models/NodeSettingsFieldsModel";
+
+// A slice of the node's restart gate as the settings response serves it (`restartRequiredFields`). Which fields are
+// gated is the backend's call (NodeSettingsRestartGate); these tests cover only how the form uses the list.
+const restartRequiredFields: ReadonlySet<string> = new Set([
+	"chatCacheReuse",
+	"llamaMaxLoadedProcesses",
+	"llamaChatCacheRamMiB",
+	"toolPipelineMaxIterationsPerRequest",
+	"knowledgeScheduledReindexIntervalMinutes",
+	"workSessionMaxConcurrentSessions",
+	"schedulerEnabled",
+	"developmentEnabled",
+]);
 
 function rateRow(overrides: Partial<UsageRateRow>): UsageRateRow {
 	return { id: "row-1", modelName: "gpt-5", inputPer1M: 1.25, outputPer1M: 10, ...overrides };
@@ -217,8 +229,6 @@ describe("buildNodeSettingsRequest", () => {
 		const { body, errors } = buildNodeSettingsRequest({ ...baseline, webAccessEnabled: true }, baseline, bounds, false);
 		expect(errors).toEqual({});
 		expect(body).toEqual({ webAccessEnabled: true });
-		expect(restartGatedNodeSettingsFields.has("webAccessEnabled")).toBe(false);
-		expect(restartGatedNodeSettingsFields.has("webSearchSearxngUrl")).toBe(false);
 	});
 
 	it("sends a trimmed absolute SearXNG URL and rejects a relative one", () => {
@@ -419,7 +429,6 @@ describe("buildNodeSettingsRequest", () => {
 
 	it("marks the KV cache type as restart-gated", () => {
 		// The seeded LlamaServerLaunchPolicyOptions is built once at host build, so a save needs a node restart.
-		expect(restartGatedNodeSettingsFields.has("kvCacheType")).toBe(true);
 		expect(kvCacheTypeSelectValues).toEqual(["f16", "q8_0", "q4_0"]);
 		expect(nodeSettingsFieldDefaults.kvCacheType).toBe("q8_0");
 	});
@@ -531,16 +540,6 @@ describe("buildNodeSettingsRequest", () => {
 		expect(buildNodeSettingsRequest(off, withModel, bounds, false).body.autoEffortFastModelName).toBeNull();
 	});
 
-	it("does not restart-gate the fast model for automatic reasoning effort", () => {
-		// The dispatcher reads it per send, so a save applies to the very next turn — telling the operator to restart
-		// would be wrong, and would train them to ignore the hint on the fields that do need one.
-		expect(restartGatedNodeSettingsFields.has("autoEffortFastModelName")).toBe(false);
-	});
-
-	it("does not restart-gate the reranker model, which knowledge search reads per search", () => {
-		expect(restartGatedNodeSettingsFields.has("rerankerModelName")).toBe(false);
-	});
-
 	it("sends the usage-rate map when a rate row is added (no developer gate)", () => {
 		const form = { ...baseline, usageRates: [rateRow({ id: "a", modelName: "gpt-5", inputPer1M: 1.25, outputPer1M: 10 })] };
 		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
@@ -640,7 +639,7 @@ describe("restart-gated fields", () => {
 	it("flags a body that changed a seeded-once field", () => {
 		// chatCacheReuse is read once into LlamaServerSupervisorOptions at composition.
 		const { body } = buildNodeSettingsRequest({ ...baseline, chatCacheReuse: 512 }, baseline, bounds, false);
-		expect(touchesRestartGatedField(body)).toBe(true);
+		expect(touchesRestartGatedField(body, restartRequiredFields)).toBe(true);
 	});
 
 	it("does not flag a body that only changed live fields", () => {
@@ -652,35 +651,11 @@ describe("restart-gated fields", () => {
 			true,
 		);
 		expect(Object.keys(body).length).toBeGreaterThan(0);
-		expect(touchesRestartGatedField(body)).toBe(false);
+		expect(touchesRestartGatedField(body, restartRequiredFields)).toBe(false);
 	});
 
 	it("does not flag an empty (nothing changed) body", () => {
-		expect(touchesRestartGatedField({})).toBe(false);
-	});
-
-	it("never lists a field that is read live on the backend", () => {
-		// Regression guard for the labelling rule: mislabelling a live field would tell operators to restart for nothing.
-		for (const live of [
-			"enableTools",
-			"customToolsEnabled",
-			"toolRelevanceEnabled",
-			"toolCapableModels",
-			"keepModelWarmEnabled",
-			"keepModelWarmModelName",
-			"keepModelWarmIntervalSeconds",
-			"agentHomePrepareTimeoutSeconds",
-			"agentHomeCommandTimeoutSeconds",
-			"agentHomeMaxSelectedFolderBytes",
-			"agentHomeMaxPatchBytes",
-			"detachedGraceSeconds",
-			"usageRates",
-			"uiMode",
-			"voiceFeatureEnabled",
-			"defaultVoiceProfile",
-		] as const) {
-			expect(restartGatedNodeSettingsFields.has(live)).toBe(false);
-		}
+		expect(touchesRestartGatedField({}, restartRequiredFields)).toBe(false);
 	});
 });
 
@@ -786,21 +761,16 @@ describe("external access", () => {
 	it("never lists an external-access field as restart-gated", () => {
 		// Both check services read the setting live; the ACTION runs once per process, which is why the copy says "at
 		// startup" and why nothing here joins the restart set.
-		for (const field of [
-			"externalAccessProfile",
-			"autoCheckApplicationUpdates",
-			"autoCheckRuntimeUpdates",
-			"autoProvisionFirstRunModel",
-		] as const) {
-			expect(restartGatedNodeSettingsFields.has(field)).toBe(false);
-		}
 		expect(
-			touchesRestartGatedField({
-				externalAccessProfile: "offline",
-				autoCheckApplicationUpdates: false,
-				autoCheckRuntimeUpdates: false,
-				autoProvisionFirstRunModel: false,
-			}),
+			touchesRestartGatedField(
+				{
+					externalAccessProfile: "offline",
+					autoCheckApplicationUpdates: false,
+					autoCheckRuntimeUpdates: false,
+					autoProvisionFirstRunModel: false,
+				},
+				restartRequiredFields,
+			),
 		).toBe(false);
 	});
 });
@@ -899,10 +869,6 @@ describe("sandbox security profile", () => {
 		expect(buildNodeSettingsRequest({ ...high, sandboxSecurityProfile: "pending" }, high, bounds, false).body).toEqual({});
 		expect(buildNodeSettingsRequest({ ...pending, sandboxSecurityProfile: "" }, pending, bounds, false).body).toEqual({});
 	});
-
-	it("is read live, so it never asks for a restart", () => {
-		expect(restartGatedNodeSettingsFields.has("sandboxSecurityProfile")).toBe(false);
-	});
 });
 
 describe("unified node fields and the pending-change summary", () => {
@@ -913,21 +879,26 @@ describe("unified node fields and the pending-change summary", () => {
 		const form = { ...baseline, uiMode: "simple", voiceFeatureEnabled: true, defaultVoiceProfile: "b" };
 		const { body } = buildNodeSettingsRequest(form, baseline, bounds, false);
 		expect(body).toEqual({ uiMode: "simple", voiceFeatureEnabled: true, defaultVoiceProfile: "b" });
-		expect(touchesRestartGatedField(body)).toBe(false);
+		expect(touchesRestartGatedField(body, restartRequiredFields)).toBe(false);
 	});
 
 	it("counts sendable changes, invalid edits and the restart-gated subset", () => {
 		const form = { ...baseline, uiMode: "simple", chatCacheReuse: 512, llamaMaxLoadedProcesses: "abc" };
 		const result = buildNodeSettingsRequest(form, baseline, bounds, false);
 
-		const summary = summarizePendingChanges(result, form, baseline);
+		const summary = summarizePendingChanges(result, form, baseline, restartRequiredFields);
 
 		expect([...summary.changed].sort()).toEqual(["chatCacheReuse", "llamaMaxLoadedProcesses", "uiMode"]);
 		expect([...summary.restartRequired].sort()).toEqual(["chatCacheReuse", "llamaMaxLoadedProcesses"]);
 	});
 
 	it("reports nothing for an untouched draft", () => {
-		const summary = summarizePendingChanges(buildNodeSettingsRequest(baseline, baseline, bounds, true), baseline, baseline);
+		const summary = summarizePendingChanges(
+			buildNodeSettingsRequest(baseline, baseline, bounds, true),
+			baseline,
+			baseline,
+			restartRequiredFields,
+		);
 		expect(summary.changed).toEqual([]);
 		expect(summary.restartRequired).toEqual([]);
 	});
@@ -956,7 +927,7 @@ describe("curated tunables", () => {
 		).toEqual({ llamaChatCacheRamMiB: 4096 });
 		// Touching the mode and returning to the same meaning sends nothing.
 		expect(buildNodeSettingsRequest({ ...custom }, custom, bounds, false).body).toEqual({});
-		expect(touchesRestartGatedField({ llamaChatCacheRamMiB: null })).toBe(true);
+		expect(touchesRestartGatedField({ llamaChatCacheRamMiB: null }, restartRequiredFields)).toBe(true);
 	});
 
 	it("refuses a custom prompt-cache size that is blank or zero", () => {
@@ -1022,20 +993,6 @@ describe("curated tunables", () => {
 			containerRuntimeSelection: "docker",
 			speculativeDraftGpuLayers: 99,
 		});
-		expect(restartGatedNodeSettingsFields.has("llamaChatHttpTimeoutSeconds")).toBe(true);
-		expect(restartGatedNodeSettingsFields.has("huggingFaceDiskMarginBytes")).toBe(true);
-		for (const live of [
-			"modelFitSafetyMarginPercent",
-			"customToolMaxTimeoutSeconds",
-			"webFetchTimeoutSeconds",
-			"webFetchMaxContentChars",
-			"knowledgeSearchDefaultResults",
-			"knowledgeSearchMaxResults",
-			"agentHomeMaxRunSeconds",
-			"containerRuntimeSelection",
-		] as const) {
-			expect(restartGatedNodeSettingsFields.has(live)).toBe(false);
-		}
 	});
 
 	it("sends the reasoning budgets and the unspecified-effort rung live, within the shared token range", () => {
@@ -1070,15 +1027,6 @@ describe("curated tunables", () => {
 			defaultReasoningEffort: "high",
 			reasoningBudgetLowTokens: 512,
 		});
-		for (const live of [
-			"reasoningBudgetMinimalTokens",
-			"reasoningBudgetLowTokens",
-			"reasoningBudgetMediumTokens",
-			"reasoningBudgetHighTokens",
-			"defaultReasoningEffort",
-		] as const) {
-			expect(restartGatedNodeSettingsFields.has(live)).toBe(false);
-		}
 	});
 
 	it("sends the chat output cap live, its ceiling within its own range", () => {
@@ -1107,8 +1055,6 @@ describe("curated tunables", () => {
 			chatOutputCapMode: "off",
 			chatOutputCapMaxTokens: 2048,
 		});
-		expect(restartGatedNodeSettingsFields.has("chatOutputCapMode")).toBe(false);
-		expect(restartGatedNodeSettingsFields.has("chatOutputCapMaxTokens")).toBe(false);
 	});
 
 	it("resets stored thinking budgets and output-cap fields to the default with null, and leaves unset ones alone", () => {
@@ -1297,14 +1243,8 @@ describe("chat knobs", () => {
 	});
 
 	it("restart-gates only the three tool-pipeline limits", () => {
-		for (const field of restartGated) {
-			expect(restartGatedNodeSettingsFields.has(field)).toBe(true);
-		}
-		for (const field of live) {
-			expect(restartGatedNodeSettingsFields.has(field)).toBe(false);
-		}
-		expect(touchesRestartGatedField({ toolPipelineMaxIterationsPerRequest: 80 })).toBe(true);
-		expect(touchesRestartGatedField({ spawnMaxConcurrent: 1, compactionAutoEnabled: false })).toBe(false);
+		expect(touchesRestartGatedField({ toolPipelineMaxIterationsPerRequest: 80 }, restartRequiredFields)).toBe(true);
+		expect(touchesRestartGatedField({ spawnMaxConcurrent: 1, compactionAutoEnabled: false }, restartRequiredFields)).toBe(false);
 	});
 
 	it("shows every knob in its own unit, so none is display-scaled", () => {
@@ -1524,14 +1464,10 @@ describe("knowledge, privacy and usage knobs", () => {
 	});
 
 	it("restart-gates only the scheduled reindex pair", () => {
-		for (const field of restartGated) {
-			expect(restartGatedNodeSettingsFields.has(field)).toBe(true);
-		}
-		for (const field of live) {
-			expect(restartGatedNodeSettingsFields.has(field)).toBe(false);
-		}
-		expect(touchesRestartGatedField({ knowledgeScheduledReindexIntervalMinutes: 30 })).toBe(true);
-		expect(touchesRestartGatedField({ allowCloudModelAccess: true, chatRetentionEnabled: true })).toBe(false);
+		expect(touchesRestartGatedField({ knowledgeScheduledReindexIntervalMinutes: 30 }, restartRequiredFields)).toBe(true);
+		expect(touchesRestartGatedField({ allowCloudModelAccess: true, chatRetentionEnabled: true }, restartRequiredFields)).toBe(
+			false,
+		);
 	});
 
 	it("shows only the benchmark cache in a scaled unit", () => {
@@ -1649,14 +1585,10 @@ describe("runtime and workspace knobs", () => {
 	});
 
 	it("restart-gates the image pair and the workspace limits, and the AgentHome retention window is live now", () => {
-		for (const field of restartGated) {
-			expect(restartGatedNodeSettingsFields.has(field)).toBe(true);
-		}
-		for (const field of live) {
-			expect(restartGatedNodeSettingsFields.has(field)).toBe(false);
-		}
-		expect(touchesRestartGatedField({ workSessionMaxConcurrentSessions: 2 })).toBe(true);
-		expect(touchesRestartGatedField({ agentHomeRunRetentionDays: 7, agentHomeMaxInnerToolCalls: 12 })).toBe(false);
+		expect(touchesRestartGatedField({ workSessionMaxConcurrentSessions: 2 }, restartRequiredFields)).toBe(true);
+		expect(
+			touchesRestartGatedField({ agentHomeRunRetentionDays: 7, agentHomeMaxInnerToolCalls: 12 }, restartRequiredFields),
+		).toBe(false);
 	});
 
 	it("shows only the AgentHome byte cap in a scaled unit", () => {
@@ -1734,29 +1666,25 @@ describe("feature switches", () => {
 
 	it("restart-gates only Development and Scheduler", () => {
 		expect([...featureSwitchFields].sort()).toEqual([...restartGated, ...live].sort());
-		for (const field of restartGated) {
-			expect(restartGatedNodeSettingsFields.has(field)).toBe(true);
-		}
-		for (const field of live) {
-			expect(restartGatedNodeSettingsFields.has(field)).toBe(false);
-		}
-		expect(touchesRestartGatedField({ schedulerEnabled: false })).toBe(true);
-		expect(touchesRestartGatedField({ workSessionsEnabled: false, externalAppsEnabled: true })).toBe(false);
+		expect(touchesRestartGatedField({ schedulerEnabled: false }, restartRequiredFields)).toBe(true);
+		expect(touchesRestartGatedField({ workSessionsEnabled: false, computeEnabled: true }, restartRequiredFields)).toBe(false);
 	});
 
 	it("needs a restart for Development on, but not for Development off", () => {
-		expect(touchesRestartGatedField({ developmentEnabled: true })).toBe(true);
-		expect(touchesRestartGatedField({ developmentEnabled: false })).toBe(false);
+		expect(touchesRestartGatedField({ developmentEnabled: true }, restartRequiredFields)).toBe(true);
+		expect(touchesRestartGatedField({ developmentEnabled: false }, restartRequiredFields)).toBe(false);
 
 		const loaded = { ...baseline, developmentEnabled: true };
 		const off = { ...loaded, developmentEnabled: false };
-		expect(summarizePendingChanges(buildNodeSettingsRequest(off, loaded, bounds, false), off, loaded).restartRequired).toEqual(
-			[],
-		);
+		expect(
+			summarizePendingChanges(buildNodeSettingsRequest(off, loaded, bounds, false), off, loaded, restartRequiredFields)
+				.restartRequired,
+		).toEqual([]);
 		const on = { ...baseline, developmentEnabled: true };
 		const onBaseline = { ...baseline, developmentEnabled: false };
 		expect(
-			summarizePendingChanges(buildNodeSettingsRequest(on, onBaseline, bounds, false), on, onBaseline).restartRequired,
+			summarizePendingChanges(buildNodeSettingsRequest(on, onBaseline, bounds, false), on, onBaseline, restartRequiredFields)
+				.restartRequired,
 		).toEqual(["developmentEnabled"]);
 	});
 
@@ -1854,10 +1782,5 @@ describe("intent settings", () => {
 		const tooLong = buildNodeSettingsRequest({ ...baseline, intentMaxUtteranceAgeSeconds: 601 }, baseline, bounds, false);
 		expect(tooLong.body).toEqual({});
 		expect(tooLong.errors).toEqual({ intentMaxUtteranceAgeSeconds: "range" });
-	});
-
-	it("applies both without a restart", () => {
-		expect(restartGatedNodeSettingsFields.has("intentRouterDefinitionId")).toBe(false);
-		expect(restartGatedNodeSettingsFields.has("intentMaxUtteranceAgeSeconds")).toBe(false);
 	});
 });

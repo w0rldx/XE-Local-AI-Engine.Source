@@ -16,13 +16,17 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 public sealed class SaveNodeSettingsEndpoint : Endpoint<SaveNodeSettingsRequest, NodeSettingsResponse>
 {
     private readonly INodeSettingsAdministrationService _administrationService;
+    private readonly PendingRestartRegistry _pendingRestart;
     private readonly INodeRuntimeSettings _runtimeSettings;
 
-    public SaveNodeSettingsEndpoint(INodeSettingsAdministrationService administrationService, INodeRuntimeSettings runtimeSettings)
+    public SaveNodeSettingsEndpoint(INodeSettingsAdministrationService administrationService,
+        INodeRuntimeSettings runtimeSettings,
+        PendingRestartRegistry pendingRestart)
     {
         ArgumentNullException.ThrowIfNull(administrationService);
         _administrationService = administrationService;
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        _pendingRestart = pendingRestart ?? throw new ArgumentNullException(nameof(pendingRestart));
     }
 
     public override void Configure()
@@ -61,7 +65,7 @@ public sealed class SaveNodeSettingsEndpoint : Endpoint<SaveNodeSettingsRequest,
             return;
         }
 
-        await Send.OkAsync(result.Settings.ToResponse(_runtimeSettings.ResolveEffectiveValues(result.Settings)), ct);
+        await Send.OkAsync(result.Settings.ToResponse(_runtimeSettings.ResolveEffectiveValues(result.Settings), _pendingRestart), ct);
     }
 
     // Maps a policy violation back onto the request property it belongs to, so the 400 body keeps naming the same

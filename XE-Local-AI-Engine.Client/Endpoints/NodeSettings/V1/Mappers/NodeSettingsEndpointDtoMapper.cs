@@ -6,6 +6,16 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 
 internal static class NodeSettingsEndpointDtoMapper
 {
+    /// <summary>The full response: <see cref="ToResponse(StoredNodeSettings, NodeSettingsEffectiveValues)" /> plus the fields waiting for a restart.</summary>
+    public static NodeSettingsResponse ToResponse(this StoredNodeSettings settings, NodeSettingsEffectiveValues effective, PendingRestartRegistry pendingRestart)
+    {
+        ArgumentNullException.ThrowIfNull(pendingRestart);
+        return settings.ToResponse(effective) with
+        {
+            PendingRestartFields = pendingRestart.GetPendingFields(settings)
+        };
+    }
+
     /// <summary>Maps the stored record; the migrated switches and retention windows come from <paramref name="effective" />.</summary>
     public static NodeSettingsResponse ToResponse(this StoredNodeSettings settings, NodeSettingsEffectiveValues effective)
     {
@@ -290,7 +300,8 @@ internal static class NodeSettingsEndpointDtoMapper
             AgentHomeEnabled = effective.AgentHomeEnabled,
             SchedulerEnabled = effective.SchedulerEnabled,
             DevWorkflowsEnabled = effective.DevWorkflowsEnabled,
-            ExecutionPreviewsEnabled = effective.ExecutionPreviewsEnabled
+            ExecutionPreviewsEnabled = effective.ExecutionPreviewsEnabled,
+            RestartRequiredFields = NodeSettingsRestartGate.Fields
         };
     }
 

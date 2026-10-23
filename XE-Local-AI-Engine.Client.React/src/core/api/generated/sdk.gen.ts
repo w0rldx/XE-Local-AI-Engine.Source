@@ -1159,6 +1159,9 @@ import type {
 	RestartExternalAppData,
 	RestartExternalAppErrors,
 	RestartExternalAppResponses,
+	RestartNodeData,
+	RestartNodeErrors,
+	RestartNodeResponses,
 	RestoreNodeBackupData,
 	RestoreNodeBackupErrors,
 	RestoreNodeBackupResponses,
@@ -9988,6 +9991,26 @@ export const restoreNodeBackup = <ThrowOnError extends boolean = true>(
 			},
 		],
 		url: "/api/local/v1/node/backups/{name}/restore",
+		...options,
+	});
+
+export const restartNode = <ThrowOnError extends boolean = true>(
+	options?: Options<RestartNodeData, ThrowOnError>,
+): RequestResult<RestartNodeResponses, RestartNodeErrors, ThrowOnError> =>
+	(options?.client ?? client).post<RestartNodeResponses, RestartNodeErrors, ThrowOnError>({
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/node/restart",
 		...options,
 	});
 

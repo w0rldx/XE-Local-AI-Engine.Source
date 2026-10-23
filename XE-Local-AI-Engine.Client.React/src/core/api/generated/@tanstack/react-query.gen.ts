@@ -395,6 +395,7 @@ import {
 	resolveToolApproval,
 	resolveUserQuestion,
 	restartExternalApp,
+	restartNode,
 	restoreNodeBackup,
 	resumeDevWorkflowRun,
 	resumeEvaluation,
@@ -1422,6 +1423,8 @@ import type {
 	RestartExternalAppData,
 	RestartExternalAppError,
 	RestartExternalAppResponse,
+	RestartNodeData,
+	RestartNodeError,
 	RestoreNodeBackupData,
 	RestoreNodeBackupError,
 	RestoreNodeBackupResponse,
@@ -9708,6 +9711,22 @@ export const restoreNodeBackupMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await restoreNodeBackup({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const restartNodeMutation = (
+	options?: Partial<Options<RestartNodeData>>,
+): UseMutationOptions<unknown, AxiosError<RestartNodeError>, Options<RestartNodeData>> => {
+	const mutationOptions: UseMutationOptions<unknown, AxiosError<RestartNodeError>, Options<RestartNodeData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await restartNode({
 				...options,
 				...fnOptions,
 				throwOnError: true,

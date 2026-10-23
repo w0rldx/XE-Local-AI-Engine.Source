@@ -7522,6 +7522,16 @@
 				"revoked": "Workspace access revoked.",
 				"title": "MCP workspace access"
 			},
+			"pendingRestart": {
+				"browserHint": "Restart the node to apply.",
+				"dismiss": "Dismiss",
+				"restartError": "Could not restart the node.",
+				"restartNow": "Restart now",
+				"restarting": "Restarting…",
+				"timedOut": "The node did not come back within a minute. Check that the app is running, then reload this page.",
+				"title_one": "{{count}} setting waits for a node restart",
+				"title_other": "{{count}} settings wait for a node restart"
+			},
 			"placeholder": {
 				"description": "Local node settings will be backed by the node FastEndpoints API.",
 				"title": "Node settings"
@@ -7548,7 +7558,7 @@
 				"unsaved_other": "{{count}} unsaved changes"
 			},
 			"saved": "Node settings saved.",
-			"savedRestartRequired": "Node settings saved. Some of the changed settings only take effect after the node restarts.",
+			"savedRestartRequired": "Node settings saved. Some changes wait for a node restart; the banner at the top lists them.",
 			"sections": {
 				"chat": "Chat & agents",
 				"general": "General",

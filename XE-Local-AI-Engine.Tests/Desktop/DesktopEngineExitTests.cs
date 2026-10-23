@@ -24,6 +24,18 @@ public sealed class DesktopEngineExitTests
     }
 
     [Test]
+    public void RelaunchesEngine_OnlyOnTheEnginesRestartCode()
+    {
+        AssertEx.Equal(XE_Local_AI_Engine.Client.Program.RestartRequestedExitCode, DesktopApplication.RestartRequestedExitCode,
+            "The shell's duplicate must stay the engine's code.");
+        AssertEx.True(DesktopApplication.RelaunchesEngine(12));
+        foreach (var other in new[] { 0, 1, 8, 9, 10, 11, -532462766 })
+        {
+            AssertEx.False(DesktopApplication.RelaunchesEngine(other), $"Exit {other} must keep its own meaning.");
+        }
+    }
+
+    [Test]
     [Arguments("Quartz.Serialization.SystemTextJson.dll")]
     [Arguments("Quartz.Serialization.SystemTextJson, Version=3.22.6.0, Culture=neutral, PublicKeyToken=null")]
     [Arguments("an engine file")]

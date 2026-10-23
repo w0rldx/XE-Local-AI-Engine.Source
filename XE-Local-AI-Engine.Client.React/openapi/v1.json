@@ -19252,6 +19252,43 @@
         ]
       }
     },
+    "/api/local/v1/node/restart": {
+      "post": {
+        "tags": [
+          "Node"
+        ],
+        "operationId": "restartNode",
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/proxy/key": {
       "delete": {
         "tags": [
@@ -28240,7 +28277,8 @@
         "required": [
           "setupRequired",
           "authenticated",
-          "vault"
+          "vault",
+          "processGeneration"
         ],
         "properties": {
           "setupRequired": {
@@ -28250,6 +28288,9 @@
             "type": "boolean"
           },
           "vault": {
+            "type": "string"
+          },
+          "processGeneration": {
             "type": "string"
           }
         }
@@ -45330,6 +45371,18 @@
           },
           "executionPreviewsEnabled": {
             "type": "boolean"
+          },
+          "restartRequiredFields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pendingRestartFields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },

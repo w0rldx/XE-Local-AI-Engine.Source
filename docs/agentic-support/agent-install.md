@@ -420,6 +420,8 @@ Remove `~/.claude/skills/xe-local-ai-engine` and
 | 8 | The node key cannot open the database (key mismatch, or `node.key` missing next to an existing database). |
 | 9 | Database migration failed; stderr names how to restore or move the database aside. |
 | 10 | Data directory unusable (not creatable or not writable), or `node-settings.json` present but unreadable; stderr names the path. |
+| 11 | Windows Smart App Control or an application control policy blocked an engine file; stderr names it. |
+| 12 | Not a failure: the operator restarted the node from the desktop app, which starts the engine again. A wrapper that supervises the engine itself should start it again too. |
 
 ### Installer
 

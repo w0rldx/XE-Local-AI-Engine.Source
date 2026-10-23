@@ -25,6 +25,21 @@ public sealed class AppUpdateEndpointDesktopGateTests
         (HttpMethod.Put, "/api/local/v1/app-update/channel")
     ];
 
+    [Test]
+    public async Task NodeRestart_WhenNotDesktop_IsUnmapped()
+    {
+        using var client = Factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/node/restart");
+        Factory.AddNodeBearerToken(request);
+        request.Headers.Add("Origin", "http://localhost");
+
+        using var response = await client.SendAsync(request);
+
+        // The restart is desktop-only too: a mapped endpoint would answer 202 or 409 to this operator token.
+        AssertEx.True(response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed,
+            $"node/restart should be unmapped off desktop, but returned {response.StatusCode}");
+    }
+
     private static readonly string[] GetRoutes =
     [
         "/api/local/v1/app-update/status"

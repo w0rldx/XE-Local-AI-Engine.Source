@@ -17,6 +17,7 @@ import {
 	type UsageRateRow,
 } from "@/features/node-settings/models/NodeSettingsFieldsModel";
 import type { NodeSettingsSectionId } from "@/features/node-settings/models/NodeSettingsSections";
+import { RestartRequiredFieldsContext } from "@/features/node-settings/models/RestartRequiredFieldsContext";
 import { nonEnglishLocales } from "@/test/Locales";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
@@ -61,7 +62,56 @@ function installJsdomEnvironmentMocks(): void {
 	});
 }
 
+// The node's restart gate as the settings response serves it (`restartRequiredFields`, NodeSettingsRestartGate.Fields).
+const nodeRestartGate: ReadonlySet<string> = new Set([
+	"defaultModelName",
+	"ollamaEndpoint",
+	"huggingFaceDefaultQuant",
+	"huggingFaceDiskMarginBytes",
+	"huggingFaceDownloadConnections",
+	"llamaMaxLoadedProcesses",
+	"llamaIdleTimeToLiveSeconds",
+	"chatCacheReuse",
+	"speculativeMode",
+	"speculativeDraftModelName",
+	"speculativeDraftMaxTokens",
+	"speculativeDraftGpuLayers",
+	"llamaReadinessTimeoutCapSeconds",
+	"llamaChatHttpTimeoutSeconds",
+	"llamaEmbeddingHttpTimeoutSeconds",
+	"llamaChatCacheRamMiB",
+	"kvCacheType",
+	"llamaCpuThreadReserve",
+	"llamaGpuReservePercent",
+	"llamaRamReservePercent",
+	"orchestrationIdleTimeoutSeconds",
+	"maxProviderCallsPerInvocation",
+	"toolPipelineMaxIterationsPerRequest",
+	"toolPipelineMaxToolResultChars",
+	"toolPipelineMaxConsecutiveInvalidToolCalls",
+	"maxResponseSizeMb",
+	"maxPendingToolCallAgeMinutes",
+	"transcriptionIdleTimeoutMinutes",
+	"transcriptionInferenceTimeoutMinutes",
+	"imageIdleTimeToLiveSeconds",
+	"imageMaxLoadedProcesses",
+	"imageTextEncoderOnGpu",
+	"knowledgeScheduledReindexEnabled",
+	"knowledgeScheduledReindexIntervalMinutes",
+	"graphWorkflowMaxConcurrentRuns",
+	"graphWorkflowDefaultNodeTimeoutSeconds",
+	"workSessionMaxStepsPerRun",
+	"workSessionMaxConcurrentSessions",
+	"developmentMaxAttemptDurationSeconds",
+	"developmentMaxToolCalls",
+	"developmentMaxOutputTokens",
+	"developmentEnabled",
+	"schedulerEnabled",
+	"externalAppsEnabled",
+]);
+
 interface RenderOverrides {
+	restartRequiredFields?: ReadonlySet<string>;
 	section?: NodeSettingsSectionId;
 	onDownloadRecommendedReranker?: () => void;
 	isDownloadRecommendedRerankerPending?: boolean;
@@ -89,29 +139,31 @@ function renderCard(overrides: RenderOverrides = {}): {
 	const onChange = overrides.onChange ?? vi.fn();
 	render(
 		<MantineProvider env="test" theme={testMantineTheme}>
-			<NodeSettingsFieldsCard
-				section={overrides.section ?? "chat"}
-				form={overrides.form ?? toNodeSettingsFieldsForm(undefined)}
-				bounds={toNodeSettingsFieldBounds(undefined)}
-				errors={overrides.errors ?? {}}
-				onChange={onChange as unknown as NodeSettingsFieldsCardProps["onChange"]}
-				onApplyPreset={vi.fn()}
-				showDeveloperFields={false}
-				draftModelOptions={[]}
-				intentRouterOptions={overrides.intentRouterOptions ?? []}
-				keepWarmModelOptions={overrides.keepWarmModelOptions ?? []}
-				autoEffortFastModelOptions={overrides.autoEffortFastModelOptions ?? []}
-				backgroundModelOptions={overrides.backgroundModelOptions ?? []}
-				rerankerModelOptions={[]}
-				embeddingModelOptions={[]}
-				onDownloadRecommendedReranker={onDownload}
-				isDownloadRecommendedRerankerPending={overrides.isDownloadRecommendedRerankerPending ?? false}
-				isRecommendedRerankerInFlight={overrides.isRecommendedRerankerInFlight ?? false}
-				onDownloadRecommendedEmbedding={onDownloadEmbedding}
-				isDownloadRecommendedEmbeddingPending={overrides.isDownloadRecommendedEmbeddingPending ?? false}
-				isRecommendedEmbeddingInFlight={overrides.isRecommendedEmbeddingInFlight ?? false}
-				ollamaRuntimeDisabled={overrides.ollamaRuntimeDisabled ?? false}
-			/>
+			<RestartRequiredFieldsContext.Provider value={overrides.restartRequiredFields ?? nodeRestartGate}>
+				<NodeSettingsFieldsCard
+					section={overrides.section ?? "chat"}
+					form={overrides.form ?? toNodeSettingsFieldsForm(undefined)}
+					bounds={toNodeSettingsFieldBounds(undefined)}
+					errors={overrides.errors ?? {}}
+					onChange={onChange as unknown as NodeSettingsFieldsCardProps["onChange"]}
+					onApplyPreset={vi.fn()}
+					showDeveloperFields={false}
+					draftModelOptions={[]}
+					intentRouterOptions={overrides.intentRouterOptions ?? []}
+					keepWarmModelOptions={overrides.keepWarmModelOptions ?? []}
+					autoEffortFastModelOptions={overrides.autoEffortFastModelOptions ?? []}
+					backgroundModelOptions={overrides.backgroundModelOptions ?? []}
+					rerankerModelOptions={[]}
+					embeddingModelOptions={[]}
+					onDownloadRecommendedReranker={onDownload}
+					isDownloadRecommendedRerankerPending={overrides.isDownloadRecommendedRerankerPending ?? false}
+					isRecommendedRerankerInFlight={overrides.isRecommendedRerankerInFlight ?? false}
+					onDownloadRecommendedEmbedding={onDownloadEmbedding}
+					isDownloadRecommendedEmbeddingPending={overrides.isDownloadRecommendedEmbeddingPending ?? false}
+					isRecommendedEmbeddingInFlight={overrides.isRecommendedEmbeddingInFlight ?? false}
+					ollamaRuntimeDisabled={overrides.ollamaRuntimeDisabled ?? false}
+				/>
+			</RestartRequiredFieldsContext.Provider>
 		</MantineProvider>,
 	);
 	return { onDownload, onDownloadEmbedding, onChange };
@@ -172,8 +224,7 @@ describe("NodeSettingsFieldsCard — tool-relevance switch", () => {
 	afterEach(() => cleanup());
 
 	it("renders off by default", () => {
-		// That the field is NOT restart-gated is pinned in NodeSettingsFieldsModel.test.ts against
-		// restartGatedNodeSettingsFields; a queryByTestId for the hint here could not fail, so it is not asserted.
+		// Whether the field is restart-gated is the node's call (NodeSettingsRestartGate), so it is not asserted here.
 		renderCard({ section: "chat" });
 
 		const toggle = screen.getByTestId("node-settings-tool-relevance-enabled") as HTMLInputElement;
@@ -437,6 +488,13 @@ describe("NodeSettingsFieldsCard — restart-required badge", () => {
 
 		renderCard({ section: "chat" });
 		expect(screen.getByTestId("node-settings-restart-badge-defaultModelName")).toBeTruthy();
+	});
+
+	it("badges exactly the fields the node lists, not a list of its own", () => {
+		renderCard({ section: "runtime", restartRequiredFields: new Set(["kvCacheType"]) });
+
+		expect(screen.getByTestId("node-settings-restart-badge-kvCacheType")).toBeTruthy();
+		expect(screen.queryByTestId("node-settings-restart-badge-chatCacheReuse")).toBeNull();
 	});
 
 	it("does not mark a field that is read live on every call", () => {
@@ -1062,12 +1120,12 @@ describe("NodeSettingsFieldsCard — feature switches", () => {
 		expect(onChange).toHaveBeenCalledWith("schedulerEnabled", false);
 	});
 
-	it("badges only Development and Scheduler, and explains the delayed parts of the others", () => {
+	it("badges Development, Scheduler and External apps, and explains the delayed parts of the others", () => {
 		renderCard({ section: "general" });
 
 		expect(screen.getByTestId("node-settings-restart-badge-developmentEnabled")).toBeTruthy();
 		expect(screen.getByTestId("node-settings-restart-badge-schedulerEnabled")).toBeTruthy();
-		expect(screen.queryByTestId("node-settings-restart-badge-externalAppsEnabled")).toBeNull();
+		expect(screen.getByTestId("node-settings-restart-badge-externalAppsEnabled")).toBeTruthy();
 		expect(screen.queryByTestId("node-settings-restart-badge-workSessionsEnabled")).toBeNull();
 		expect(screen.getByText(/the container bridge listener applies after a restart/)).toBeTruthy();
 		expect(screen.getByText(/The Mathematician agent is seeded on the next restart/)).toBeTruthy();

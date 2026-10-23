@@ -117,6 +117,12 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
         if (linux is not null) { await linux.DisposeAsync(); }
     }
 
+    /// <summary>Loads the start page again, after the engine behind the same origin was relaunched. UI thread only.</summary>
+    internal void Reload()
+    {
+        if (!_disposed) { _webView.Navigate(_start); }
+    }
+
     internal Task WaitUntilReadyAsync(CancellationToken cancellationToken) =>
         _ready.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
 

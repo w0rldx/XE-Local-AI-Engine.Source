@@ -85,7 +85,7 @@ describe("auth client", () => {
 		const sent: SentRequest[] = [];
 		authInstance.defaults.adapter = async (config) => {
 			const answer = config.url?.endsWith("/auth/status")
-				? { setupRequired: false, authenticated: true, vault: "unlocked" }
+				? { setupRequired: false, authenticated: true, vault: "unlocked", processGeneration: "generation-1" }
 				: undefined;
 			return fakeAdapter(sent, answer ? 200 : 204, answer)(config);
 		};
