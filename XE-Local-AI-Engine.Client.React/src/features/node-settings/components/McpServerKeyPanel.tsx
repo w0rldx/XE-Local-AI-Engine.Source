@@ -2,6 +2,7 @@ import { Alert, Badge, Button, Card, Code, CopyButton, Group, Select, Stack, Tex
 import { IconAlertTriangle, IconCheck, IconCopy, IconPlugConnected, IconRefresh, IconTrash } from "@tabler/icons-react";
 
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import {
 	useGenerateMcpServerApiKey,
 	useMcpServerApiKey,
@@ -20,6 +21,7 @@ import { useTranslation } from "react-i18next";
 // means regenerating and reconfiguring every client, so the reveal carries an explicit copy-it-now warning.
 export function McpServerKeyPanel() {
 	const { t } = useTranslation();
+	const { confirm } = useConfirm();
 	const { data, isLoading } = useMcpServerApiKey();
 	const revoke = useRevokeMcpServerApiKey();
 
@@ -31,6 +33,21 @@ export function McpServerKeyPanel() {
 
 	const isConfigured = data?.configured === true;
 	const isBusy = generate.isPending || revoke.isPending;
+
+	const handleRevoke = async (): Promise<void> => {
+		const confirmed = await confirm({
+			title: t("pages.nodeSettings.mcpServerKey.revokeConfirm.title", "Revoke the MCP server key?"),
+			description: t(
+				"pages.nodeSettings.mcpServerKey.revokeConfirm.description",
+				"Every MCP client using this key loses access immediately. This cannot be undone; a new key has to be generated and configured in each client.",
+			),
+			confirmationText: t("pages.nodeSettings.mcpServerKey.revokeConfirm.confirm", "Revoke"),
+			cancellationText: t("common.cancel", "Cancel"),
+		});
+		if (confirmed) {
+			revoke.mutate({}, { onSuccess: () => setRevealedKey(null) });
+		}
+	};
 
 	return (
 		<Card withBorder={true} radius="md" p="lg" data-testid="mcp-server-key-card">
@@ -220,7 +237,7 @@ export function McpServerKeyPanel() {
 						leftSection={<IconTrash size={16} />}
 						loading={revoke.isPending}
 						disabled={!isConfigured || isBusy}
-						onClick={() => revoke.mutate({}, { onSuccess: () => setRevealedKey(null) })}
+						onClick={handleRevoke}
 						data-testid="mcp-server-key-revoke"
 					>
 						{t("pages.nodeSettings.mcpServerKey.revoke", "Revoke key")}

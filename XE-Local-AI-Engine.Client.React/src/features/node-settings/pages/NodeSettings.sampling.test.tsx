@@ -49,6 +49,8 @@ async function renderWithProviders(ui: ReactElement) {
 // Mock the generated API hooks so NodeSettings renders without a real backend.
 // The effective tool-capable list only feeds the client mirror of the AgentHome rule; unknown (undefined) reads as satisfied.
 vi.mock("@/core/ui/hooks/useConfirm", () => ({ useConfirm: () => ({ confirm: vi.fn() }) }));
+// The unsaved-changes guard needs router context this file does not mount; the guard is pinned in NodeSettings.test.tsx.
+vi.mock("@/core/ui/hooks/useUnsavedChangesGuard", () => ({ useUnsavedChangesGuard: () => undefined }));
 vi.mock("@/features/node-settings/queries/useEffectiveToolCapableModels", () => ({
 	useEffectiveToolCapableModels: () => undefined,
 }));

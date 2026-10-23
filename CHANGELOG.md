@@ -189,6 +189,10 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **Error toasts stay until dismissed**; warnings close after 15 s; success and info keep 5 s. A failed delete,
+  revoke or download no longer disappears while the user looks elsewhere.
+- **Confirmation before five irreversible actions**: deleting a training checkpoint, removing the Python training
+  runtime, revoking the MCP server key or the local model proxy key, and clearing the stored cloud connection.
 - **An explicitly installed llama.cpp variant now sticks** — installing a variant from the Node Settings runtime card
   (or an update that names one) pins variant selection to it, so a Vulkan install on an NVIDIA machine is what every
   later spawn uses; before, each launch re-applied the vendor rule and the install changed nothing. Implicit installs
@@ -349,6 +353,16 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Fixed
 
+- **First page load no longer downloads the code editor** — a chunk-splitting group had captured Vite's preload
+  helper, so every page, including the login page, modulepreloaded the 3 MB Monaco chunk. The helper now has its own
+  group, and the bundle check fails if `index.html` ever loads a lazy editor or scene-viewer asset again.
+- **Node Settings asks before leaving with unsaved edits**, like every other editor; switching a section on the page
+  does not prompt.
+- **Home during first-run provisioning** shows "Setting up your first model" with the download progress instead of
+  "no local models installed, install one".
+- Fifteen error and success messages that reached the German UI in English (Development page, launch arguments,
+  cloud and external-provider settings, Codex logout, node settings) are translated; lint now rejects a bare literal
+  passed to `apiErrorMessage` or `toast`.
 - The Sandboxed MCP link-chain walk now stops at 20 hops instead of 40, so a working directory behind a deep link chain
   is refused with a margin below the Linux limit of 40 (the kernel's lock-free path walk retries and re-counts links
   whenever anything mounts), and the backend gate keeps a failing test's assertion text.

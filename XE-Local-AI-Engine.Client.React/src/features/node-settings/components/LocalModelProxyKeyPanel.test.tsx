@@ -18,6 +18,9 @@ const getMock = vi.fn();
 const generateMock = vi.fn();
 const revokeMock = vi.fn();
 
+const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }));
+vi.mock("@/core/ui/hooks/useConfirm", () => ({ useConfirm: () => ({ confirm: confirmMock }) }));
+
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getLocalModelProxyApiKeyOptions: () => ({ queryKey: ["local-model-proxy-key"], queryFn: () => getMock() }),
 	getLocalModelProxyApiKeyQueryKey: () => ["local-model-proxy-key"],
@@ -235,9 +238,25 @@ describe("LocalModelProxyKeyPanel", () => {
 		});
 	});
 
-	it("calls the revoke mutation when a key exists", async () => {
+	it("revokes nothing when the operator cancels the confirmation", async () => {
+		getMock.mockResolvedValue(configuredResponse);
+		confirmMock.mockResolvedValue(false);
+
+		renderPanel();
+		await waitFor(() => {
+			expect((screen.getByTestId("local-model-proxy-key-revoke") as HTMLButtonElement).disabled).toBe(false);
+		});
+		fireEvent.click(screen.getByTestId("local-model-proxy-key-revoke"));
+
+		await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1));
+		await confirmMock.mock.results[0]?.value;
+		expect(revokeMock).not.toHaveBeenCalled();
+	});
+
+	it("names the consequence and calls the revoke mutation once confirmed", async () => {
 		getMock.mockResolvedValue(configuredResponse);
 		revokeMock.mockResolvedValue(undefined);
+		confirmMock.mockResolvedValue(true);
 
 		renderPanel();
 		await waitFor(() => {
@@ -248,5 +267,8 @@ describe("LocalModelProxyKeyPanel", () => {
 		await waitFor(() => {
 			expect(revokeMock).toHaveBeenCalledTimes(1);
 		});
+		expect(String(confirmMock.mock.calls[0]?.[0]?.description)).toContain(
+			"Every OpenAI-compatible client using this key loses access",
+		);
 	});
 });

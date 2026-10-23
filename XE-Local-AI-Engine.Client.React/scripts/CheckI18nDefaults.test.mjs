@@ -1,4 +1,10 @@
-import { checkI18nDefaults, findI18nDefaultDrift, findTranslationDefaults, flattenBundle } from "./CheckI18nDefaults.mjs";
+import {
+	checkI18nDefaults,
+	findI18nDefaultDrift,
+	findLiteralMessages,
+	findTranslationDefaults,
+	flattenBundle,
+} from "./CheckI18nDefaults.mjs";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -133,9 +139,38 @@ test("the shipped en and de bundles hold exactly the same keys", () => {
 	);
 });
 
-test("the guard walks the real src tree and finds no drifted default and no missing key", () => {
-	const { files, drifted, missing } = checkI18nDefaults();
+// An apiErrorMessage fallback or a toast message written as a bare literal skips t() entirely: a German operator reads
+// English and nothing else would notice.
+test("a literal apiErrorMessage fallback or toast message is reported with its line and call", () => {
+	const source = [
+		`toast.error(apiErrorMessage(error, "Logout failed"));`,
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: fixture TypeScript source that holds a template literal.
+		"toast.success(`Saved ${name}`);",
+		`toast.warning(saved ? "Saved." : t("a.b", "Not saved."));`,
+	].join("\n");
+	assert.deepEqual(findLiteralMessages(source), [
+		{ line: 1, call: "apiErrorMessage" },
+		{ line: 2, call: "toast.success" },
+		{ line: 3, call: "toast.warning" },
+	]);
+});
+
+test("translated, empty and already-translated-joined messages are not literals", () => {
+	const source = [
+		`toast.error(apiErrorMessage(error, t("a.failed", "Failed")));`,
+		`const probe = apiErrorMessage(error, "");`,
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: fixture TypeScript source that holds a template literal.
+		'toast.warning(`${message} ${t("a.full", "Queue full.")}`);',
+		"toast.info(message);",
+		`notifications.show("Not a toast call");`,
+	].join("\n");
+	assert.deepEqual(findLiteralMessages(source), []);
+});
+
+test("the guard walks the real src tree and finds no drifted default, no missing key and no literal message", () => {
+	const { files, drifted, missing, literals } = checkI18nDefaults();
 	assert.ok(files > 500);
 	assert.deepEqual(drifted, []);
 	assert.deepEqual(missing, []);
+	assert.deepEqual(literals, []);
 });

@@ -32,6 +32,10 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal)
 	};
 });
 
+// The confirm dialog is its own component's subject; here only the answer matters.
+const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }));
+vi.mock("@/core/ui/hooks/useConfirm", () => ({ useConfirm: () => ({ confirm: confirmMock }) }));
+
 import { CloudSettings } from "@/features/cloud-settings/pages/CloudSettings";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
@@ -119,6 +123,40 @@ describe("CloudSettings — Azure Foundry connection form (generated hey-api dat
 		fireEvent.click(screen.getByTestId("cloud-settings-remove-model-0"));
 		expect(screen.getAllByLabelText(/Deployment name/i)).toHaveLength(1);
 		expect(document.activeElement).toBe(secondDeployment);
+	});
+
+	const storedConnection = makeSettings({
+		azureFoundry: {
+			endpoint: "https://example.openai.azure.com/",
+			authMode: "ApiKey",
+			hasStoredApiKey: true,
+			models: [{ deploymentName: "gpt-4o", displayLabel: null }],
+		},
+	});
+
+	it("clears nothing when the operator cancels the confirmation", async () => {
+		generatedMock.getFn.mockResolvedValue(storedConnection);
+		confirmMock.mockResolvedValue(false);
+		renderCloudSettings();
+		await waitFor(() => expect(screen.queryByText(/Loading cloud settings/i)).toBeNull());
+
+		fireEvent.click(screen.getByRole("button", { name: /clear saved credentials/i }));
+
+		await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1));
+		await confirmMock.mock.results[0]?.value;
+		expect(generatedMock.clearFn).not.toHaveBeenCalled();
+	});
+
+	it("names what is deleted and clears the stored connection once confirmed", async () => {
+		generatedMock.getFn.mockResolvedValue(storedConnection);
+		confirmMock.mockResolvedValue(true);
+		renderCloudSettings();
+		await waitFor(() => expect(screen.queryByText(/Loading cloud settings/i)).toBeNull());
+
+		fireEvent.click(screen.getByRole("button", { name: /clear saved credentials/i }));
+
+		await waitFor(() => expect(generatedMock.clearFn).toHaveBeenCalledTimes(1));
+		expect(String(confirmMock.mock.calls[0]?.[0]?.description)).toContain("connection and its credentials are deleted");
 	});
 
 	it("saves the nested Azure Foundry connection body", async () => {

@@ -30,6 +30,7 @@ import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
+import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
 import { toast } from "@/core/ui/notifications/Toast";
 import { DownloadProgressPanel } from "@/features/models/components/DownloadProgressPanel";
 import { HfTokenPanel } from "@/features/node-settings/components/HfTokenPanel";
@@ -82,10 +83,6 @@ import { useOllamaRuntimeConfigured } from "@/features/node-settings/queries/use
 import { useHfTokenStore } from "@/features/node-settings/stores/HfTokenStore";
 import { VoiceSettingsCard } from "@/features/voice/components/VoiceSettingsCard";
 
-function errorMessage(error: unknown): string {
-	return apiErrorMessage(error, "Unexpected node settings error");
-}
-
 interface NodeSettingsProps {
 	// The active section, from the route's `?section=` search param. Absent means the page keeps its own selection,
 	// starting at General.
@@ -101,6 +98,8 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
 	const { confirm } = useConfirm();
+	const errorMessage = (error: unknown): string =>
+		apiErrorMessage(error, t("pages.nodeSettings.unexpectedError", "Unexpected node settings error"));
 	const {
 		data: settings,
 		isLoading: settingsIsLoading,
@@ -128,6 +127,8 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 	// they decide whether a newly arrived `settings` may be adopted.
 	const [seededSource, setSeededSource] = useState<NodeSettingsResponse | SaveNodeSettingsResponse>();
 	const [isDirty, setIsDirty] = useState(false);
+	// Sections are a `?section=` search param on the same route, so switching one is not leaving the page.
+	useUnsavedChangesGuard({ isDirty, allowSameRoute: true });
 	// The profile the operator just picked and has not since overridden by hand. UI-only, deliberately NOT a form field:
 	// keeping it out of the draft is what makes "a save carries the profile OR the switches, never both" expressible.
 	const [pendingPreset, setPendingPreset] = useState<ExternalAccessPreset | null>(null);

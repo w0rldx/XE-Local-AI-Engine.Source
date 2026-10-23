@@ -41,19 +41,28 @@ export function evaluateBundleBudget(measurements, budget) {
 		.map(([name, limit]) => ({ name, limit, actual: measurements[name] }));
 }
 
+// A lazy asset that index.html loads or modulepreloads is downloaded on every page, so its separate budget would lie.
+// This happened when the monaco chunk group captured Vite's preload helper (see the codeSplitting groups in vite.config.ts).
+export function findEagerlyLoadedLazyAssets(indexHtml) {
+	return [...indexHtml.matchAll(/<(?:script|link)\b[^>]*\b(?:src|href)="([^"]+)"/g)]
+		.map((match) => match[1])
+		.filter((url) => lazyEditorAssetPattern.test(url) || lazySceneViewerAssetPattern.test(url));
+}
+
 export function checkBundleBudget({
 	distDirectory = resolve(process.cwd(), "dist"),
 	budgetPath = resolve(process.cwd(), "config/bundle-budget.json"),
 } = {}) {
 	const budget = JSON.parse(readFileSync(budgetPath, "utf8"));
 	const measurements = measureJavaScriptAssets(distDirectory);
-	return { measurements, budget, violations: evaluateBundleBudget(measurements, budget) };
+	const eagerLazyAssets = findEagerlyLoadedLazyAssets(readFileSync(join(distDirectory, "index.html"), "utf8"));
+	return { measurements, budget, violations: evaluateBundleBudget(measurements, budget), eagerLazyAssets };
 }
 
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
 if (isMain) {
 	try {
-		const { measurements, violations, budget } = checkBundleBudget();
+		const { measurements, violations, budget, eagerLazyAssets } = checkBundleBudget();
 		const app = measurements.applicationJavaScriptBytes;
 		const appBudget = budget.applicationJavaScriptBytes;
 		process.stdout.write(`app: ${app} of ${appBudget} (${((appBudget - app) / 1_000).toFixed(1)} kB headroom)\n`);
@@ -66,6 +75,13 @@ if (isMain) {
 				process.stderr.write(`${violation.name}: ${violation.actual} bytes exceeds ${violation.limit} bytes.\n`);
 			}
 			process.stderr.write("Reduce bundle growth or approve a measured budget update.\n");
+			process.exitCode = 1;
+		}
+		if (eagerLazyAssets.length > 0) {
+			process.stderr.write(
+				`dist/index.html loads lazy assets on every page: ${eagerLazyAssets.join(", ")}. ` +
+					"A codeSplitting group in vite.config.ts has captured a module the app shell imports (e.g. Vite's preload helper).\n",
+			);
 			process.exitCode = 1;
 		}
 	} catch (error) {

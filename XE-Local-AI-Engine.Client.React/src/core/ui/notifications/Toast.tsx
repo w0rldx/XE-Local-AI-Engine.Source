@@ -3,10 +3,16 @@ import { notifications } from "@mantine/notifications";
 import { t } from "i18next";
 import type { ToastConfig, ToastOptions, ToastProgressOptions, ToastType } from "@/core/ui/notifications/Toast.types";
 
-// Default auto-close duration (ms) for finalized toasts. Mirrors the ThemeProvider's <Notifications autoClose={5000} />
-// so a toast.success/error finalizing a sticky progress toast re-arms the dismiss timer instead of inheriting the
-// progress toast's autoClose:false (which left it stuck on screen, dismissable only by manual swipe).
-const DEFAULT_AUTO_CLOSE_MS = 5000;
+// Default auto-close per type (ms, or false = sticky until dismissed). An error stays until the operator closes it, a
+// warning gets 15 s, success and info keep the ThemeProvider's <Notifications autoClose={5000} />. Every toast passes
+// its value explicitly so one finalizing a sticky progress toast re-arms (or, for an error, keeps off) the timer
+// instead of inheriting the progress toast's autoClose:false.
+const defaultAutoCloseByType: Record<ToastType, number | false> = {
+	success: 5000,
+	info: 5000,
+	warning: 15_000,
+	error: false,
+};
 
 const toastConfigByType: Record<ToastType, ToastConfig> = {
 	success: {
@@ -48,15 +54,16 @@ function show(type: ToastType, message: string, options?: ToastOptions) {
 	// Open-or-update by id (mirrors `progress` below): `notifications.show` opens a fresh toast, and is a no-op when
 	// a toast with this id already exists — e.g. the sticky loading toast left by `toast.progress`. `notifications.update`
 	// then patches that existing toast, explicitly clearing `loading`, restoring the close button, and re-arming
-	// `autoClose`, so a progress→success/error finalize turns into an auto-dismissing toast instead of staying stuck on
-	// screen. When no toast with this id exists, `update` is a no-op and the values from `show` stand.
+	// `autoClose`, so a progress→success finalize turns into an auto-dismissing toast instead of staying stuck on
+	// screen; an error finalize stays until closed, by policy, but loses the spinner and gains the close button. When no
+	// toast with this id exists, `update` is a no-op and the values from `show` stand.
 	const payload = {
 		message: resolveMessage(type, message, options?.title),
 		color,
 		icon,
 		loading: false,
 		withCloseButton: true,
-		autoClose: options?.autoClose ?? DEFAULT_AUTO_CLOSE_MS,
+		autoClose: options?.autoClose ?? defaultAutoCloseByType[type],
 		id: options?.id,
 		title: options?.title,
 	};
@@ -93,7 +100,7 @@ export const toast = {
 	// toast on the first call (and is a no-op if one with this id already exists), then `notifications.update` patches
 	// the message/percent in place on every subsequent call so a long download surfaces as ONE animating notification
 	// rather than a stack. Finalize by calling toast.success / toast.error with the SAME id (the finalize toast turns
-	// off the loading spinner and re-applies autoClose).
+	// off the loading spinner and applies its type's autoClose).
 	progress(options: ToastProgressOptions) {
 		const message = progressMessage(options.message, options.percent);
 		const payload = {

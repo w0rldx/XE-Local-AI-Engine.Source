@@ -177,6 +177,22 @@ vi.mock("@/features/node-settings/components/ManagedPythonCard", () => ({
 // The runtime card renders a TanStack Router <Link> (eject-first notice) and the change-password card calls
 // useNavigate (a successful change is a sign-out that routes to /login). Stub both so the page mounts without a
 // RouterProvider OR loading the generated route tree (which eval-fails outside a real router).
+// The unsaved-changes guard's `useBlocker` is recorded, not run: the test reads the predicate the page armed it with
+// and can report a transition as blocked, which is what makes the real guard hook open its confirm.
+interface BlockerOptions {
+	readonly shouldBlockFn: (args: { current: { pathname: string }; next: { pathname: string } }) => boolean;
+	readonly disabled?: boolean;
+}
+
+const { blocker } = vi.hoisted(() => ({
+	blocker: {
+		status: "idle" as "idle" | "blocked",
+		proceed: vi.fn(),
+		reset: vi.fn(),
+		options: vi.fn((_options: BlockerOptions) => undefined),
+	},
+}));
+
 vi.mock("@tanstack/react-router", () => ({
 	Link: ({ children, to, ...props }: { children: ReactNode; to: string; [key: string]: unknown }) => (
 		<a href={to} {...props}>
@@ -184,7 +200,23 @@ vi.mock("@tanstack/react-router", () => ({
 		</a>
 	),
 	useNavigate: () => vi.fn(),
+	useBlocker: (options: BlockerOptions) => {
+		blocker.options(options);
+		return { status: blocker.status, proceed: blocker.proceed, reset: blocker.reset };
+	},
 }));
+
+/** Whether the guard the page most recently armed would block a move from Node Settings to `nextPathname`. */
+function guardBlocks(nextPathname: string): boolean {
+	const options = blocker.options.mock.calls.at(-1)?.[0];
+	if (options === undefined) {
+		throw new Error("the page never armed the navigation guard");
+	}
+	return (
+		options.disabled !== true &&
+		options.shouldBlockFn({ current: { pathname: "/node-settings" }, next: { pathname: nextPathname } })
+	);
+}
 
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { useThemeStore } from "@/core/theme/stores/ThemeStore";
@@ -281,6 +313,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 	// file's own hooks (Vitest stacks them), so clearing there would drop the unmount's calls into the next test.
 	beforeEach(() => {
 		vi.clearAllMocks();
+		blocker.status = "idle";
 		installJsdomEnvironmentMocks();
 		useThemeStore.setState({ accentColor: null });
 		generatedMock.getNodeSettingsOptions.mockReturnValue({
@@ -620,6 +653,39 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 
 		expect(generatedMock.getNodeSettingsOptions).toHaveBeenCalled();
 		expect(await screen.findByDisplayValue(/600/)).toBeTruthy();
+	});
+
+	it("asks before leaving the page with unsaved edits, and keeps them on Keep editing", async () => {
+		renderPage("chat");
+		await screen.findByDisplayValue(/600/);
+		expect(guardBlocks("/chat")).toBe(false);
+
+		fireEvent.change(screen.getByLabelText(/Maximum message request timeout/), { target: { value: "610" } });
+		expect(guardBlocks("/chat")).toBe(true);
+
+		// The router reports the departure as blocked; the guard must put the discard question to the operator.
+		confirmMock.mockResolvedValueOnce(false);
+		blocker.status = "blocked";
+		fireEvent.change(screen.getByLabelText(/Maximum message request timeout/), { target: { value: "611" } });
+
+		await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1));
+		expect(confirmMock.mock.calls[0]?.[0]?.title).toBe("Discard unsaved changes?");
+		await waitFor(() => expect(blocker.reset).toHaveBeenCalledTimes(1));
+		expect(blocker.proceed).not.toHaveBeenCalled();
+	});
+
+	it("does not treat a section switch with unsaved edits as leaving the page", async () => {
+		renderPage("chat");
+		await screen.findByDisplayValue(/600/);
+		fireEvent.change(screen.getByLabelText(/Maximum message request timeout/), { target: { value: "610" } });
+
+		openSection("runtime");
+
+		expect(sectionChanges).toHaveBeenCalledWith("runtime");
+		// Sections are a search param on the same route: the guard lets that move through and asks nothing.
+		expect(guardBlocks("/node-settings")).toBe(false);
+		expect(guardBlocks("/chat")).toBe(true);
+		expect(confirmMock).not.toHaveBeenCalled();
 	});
 
 	it("saves an edited timeout through the generated mutation", async () => {

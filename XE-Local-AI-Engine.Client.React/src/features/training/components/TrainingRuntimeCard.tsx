@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
+import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useTrainingRuntimeHub } from "@/features/training/hooks/useTrainingRuntimeHub";
 import { isRuntimeInstalling, mergeTrainingLogs, trainingLogEntries } from "@/features/training/models/TrainingModels";
 import {
@@ -22,6 +23,7 @@ import {
  */
 export function TrainingRuntimeCard() {
 	const { t } = useTranslation();
+	const { confirm } = useConfirm();
 
 	const statusQuery = useTrainingRuntimeStatus();
 	const status = statusQuery.data;
@@ -56,6 +58,26 @@ export function TrainingRuntimeCard() {
 	const installed = current?.installed ?? null;
 	const prerequisites = prerequisitesQuery.data;
 	const busy = installing || installMutation.isPending || removeMutation.isPending;
+
+	// Removing an installed runtime deletes a multi-gigabyte install; cancelling one still in flight discards only the
+	// partial download, so only the removal asks first.
+	const handleRemoveOrCancel = async (): Promise<void> => {
+		if (
+			!installing &&
+			!(await confirm({
+				title: t("pages.training.runtime.removeConfirm.title", "Remove the training runtime?"),
+				description: t(
+					"pages.training.runtime.removeConfirm.description",
+					"The installed Python training runtime is deleted from disk. Training runs cannot start until you install it again, which downloads several gigabytes.",
+				),
+				confirmationText: t("pages.training.runtime.removeConfirm.confirm", "Remove"),
+				cancellationText: t("common.cancel", "Cancel"),
+			}))
+		) {
+			return;
+		}
+		removeMutation.mutate({});
+	};
 
 	return (
 		<SectionCard title={t("pages.training.runtime.title", "Python training runtime")}>
@@ -137,7 +159,7 @@ export function TrainingRuntimeCard() {
 						color="red"
 						disabled={removeMutation.isPending || (installed == null && !installing)}
 						loading={removeMutation.isPending}
-						onClick={() => removeMutation.mutate({})}
+						onClick={handleRemoveOrCancel}
 						variant="light"
 					>
 						{installing

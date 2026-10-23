@@ -1,4 +1,4 @@
-import { Button, Card, Center, Group, Loader, Stack, Text, Title } from "@mantine/core";
+import { Button, Card, Center, Group, Loader, Progress, Stack, Text, Title } from "@mantine/core";
 import { IconDownload, IconMessageCircle } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -7,7 +7,9 @@ import { useTranslation } from "react-i18next";
 import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
 import { toExternalModelOptions } from "@/features/chat/pages/ChatModelOptions";
+import { isTerminalAcquisitionPhase } from "@/features/models/models/GgufAcquisitionModels";
 import { isInstalledLocalModel } from "@/features/models/models/LocalModelMappers";
+import { useActiveGgufDownloads } from "@/features/models/queries/useGgufDownload";
 
 /**
  * The post-setup landing page.
@@ -31,6 +33,12 @@ export function Home() {
 	// node can answer anything; the second argument is the same `true` the picker passes — an external endpoint is
 	// reachable independently of the local runtime's availability flag.
 	const canChat = hasModels || toExternalModelOptions(items, true).length > 0;
+	// First-run provisioning downloads the default model through the shared download coordinator. The feed is pushed
+	// over the download hub (with that hook's own bounded fallback), so a node mid-setup says so instead of "install one".
+	const downloads = useActiveGgufDownloads();
+	const setupDownload = hasModels
+		? undefined
+		: [...downloads.values()].find((download) => !isTerminalAcquisitionPhase(download.phase));
 
 	return (
 		// The only centred, non-scrolling page in the app, but still a routed page: it goes through the shared
@@ -45,6 +53,23 @@ export function Home() {
 
 						{isLoading ? (
 							<Loader size="sm" aria-label={t("pages.home.loading", "Checking installed models")} />
+						) : setupDownload !== undefined ? (
+							<Stack gap="xs" w="100%" data-testid="home-setup">
+								<Text fw={500}>{t("pages.home.setup.title", "Setting up your first model…")}</Text>
+								<Text c="dimmed" size="sm" data-testid="home-setup-model">
+									{setupDownload.pct === undefined
+										? setupDownload.modelName
+										: t("pages.home.setup.progress", "{{model}} · {{pct}}%", {
+												model: setupDownload.modelName,
+												pct: setupDownload.pct,
+											})}
+								</Text>
+								<Progress
+									value={setupDownload.pct ?? 100}
+									animated={setupDownload.pct === undefined}
+									aria-label={t("pages.home.setup.title", "Setting up your first model…")}
+								/>
+							</Stack>
 						) : (
 							<Text c="dimmed" data-testid="home-status">
 								{hasModels
@@ -69,11 +94,13 @@ export function Home() {
 							<Button
 								component={Link}
 								to="/models"
-								variant={canChat ? "light" : "filled"}
+								variant={canChat || setupDownload !== undefined ? "light" : "filled"}
 								leftSection={<IconDownload size={16} />}
 								data-testid="home-go-to-models"
 							>
-								{t("pages.home.goToModels", "Install a model")}
+								{setupDownload === undefined
+									? t("pages.home.goToModels", "Install a model")
+									: t("pages.home.setup.viewModels", "View on the Models page")}
 							</Button>
 							{canChat ? (
 								<Button component={Link} to="/chat" leftSection={<IconMessageCircle size={16} />} data-testid="home-go-to-chat">

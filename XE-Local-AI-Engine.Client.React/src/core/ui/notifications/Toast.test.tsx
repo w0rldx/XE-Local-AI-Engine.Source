@@ -38,23 +38,37 @@ describe("toast", () => {
 
 		const finalize = { id: "pull-x", title: "Model pulled", message: "x is ready.", loading: false, withCloseButton: true };
 		expect(notificationsMock.update).toHaveBeenCalledWith(expect.objectContaining(finalize));
-		const updatePayload = notificationsMock.update.mock.calls[0]?.[0];
-		expect(typeof updatePayload?.autoClose).toBe("number");
-		expect(updatePayload?.autoClose).toBeGreaterThan(0);
+		expect(notificationsMock.update.mock.calls[0]?.[0]?.autoClose).toBe(5000);
 	});
 
-	it("error finalize is also a numeric-auto-close, non-loading update keyed to the same id", () => {
+	// Operator policy: an error stays until dismissed, so a progress→error finalize must keep the timer off while still
+	// clearing the spinner and restoring the close button (the only way to dismiss it).
+	it("error finalize is a sticky, closable, non-loading update keyed to the same id", () => {
 		toast.error("Could not pull x.", { id: "pull-x", title: "Pull failed" });
 
 		const updatePayload = notificationsMock.update.mock.calls[0]?.[0];
-		expect(updatePayload).toMatchObject({ id: "pull-x", loading: false, withCloseButton: true });
-		expect(typeof updatePayload?.autoClose).toBe("number");
+		expect(updatePayload).toMatchObject({ id: "pull-x", loading: false, withCloseButton: true, autoClose: false });
+	});
+
+	it.each([
+		["success", 5000, () => toast.success("s")],
+		["info", 5000, () => toast.info("i")],
+		["warning", 15_000, () => toast.warning("w")],
+		["warn", 15_000, () => toast.warn("w")],
+		["error", false, () => toast.error("e")],
+	] as const)("defaults %s to autoClose %s and keeps the close button", (_type, expected, fire) => {
+		fire();
+
+		expect(notificationsMock.show.mock.calls[0]?.[0]).toMatchObject({ autoClose: expected, withCloseButton: true });
+		expect(notificationsMock.update.mock.calls[0]?.[0]).toMatchObject({ autoClose: expected, withCloseButton: true });
 	});
 
 	it("an explicit autoClose option is honored over the default", () => {
 		toast.info("hi", { id: "info-1", autoClose: 1234 });
+		toast.error("bad", { id: "error-1", autoClose: 8000 });
+		toast.warning("careful", { id: "warning-1", autoClose: false });
 
-		expect(notificationsMock.update.mock.calls[0]?.[0]?.autoClose).toBe(1234);
+		expect(notificationsMock.update.mock.calls.map((call) => call[0]?.autoClose)).toEqual([1234, 8000, false]);
 	});
 
 	// Regression guard: callers derive a toast message from a server failure, and ApiError deliberately resolves its

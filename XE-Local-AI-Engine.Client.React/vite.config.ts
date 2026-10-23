@@ -149,6 +149,11 @@ export default defineConfig(({ command, mode }) => {
 				output: {
 					codeSplitting: {
 						groups: [
+							// Vite's preload helper is a dependency of monaco's own lazy grammars, so the monaco group below would pull
+							// it in (includeDependenciesRecursively) and every app chunk would statically import, and index.html
+							// modulepreload, the 3 MB editor. The higher priority claims the helper first; CheckBundleBudget fails if
+							// index.html preloads a lazy asset again.
+							{ name: "preload-helper", test: /vite[\\/]preload-helper/, priority: 1 },
 							// Everything from monaco-editor (core + the lazily-loaded Monarch grammars) lands in ONE chunk named
 							// `monaco-editor-*`, which is only fetched when CodeEditor first mounts. `scripts/CheckBundleBudget.mjs`
 							// measures that name (plus the editor worker) under `lazyEditorJavaScriptBytes` instead of the app budget.

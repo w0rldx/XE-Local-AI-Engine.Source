@@ -43,7 +43,8 @@ export function ModelLaunchArgumentsPanel({ modelName }: ModelLaunchArgumentsPan
 			toast.success(t("pages.models.launchArgs.saved", "Launch arguments saved. They apply the next time this model loads."));
 			await invalidate();
 		},
-		onError: (error) => toast.error(apiErrorMessage(error, "Failed to save launch arguments")),
+		onError: (error) =>
+			toast.error(apiErrorMessage(error, t("pages.models.launchArgs.saveError", "Failed to save launch arguments"))),
 	});
 
 	const clearMutation = useMutation({
@@ -53,7 +54,8 @@ export function ModelLaunchArgumentsPanel({ modelName }: ModelLaunchArgumentsPan
 			toast.success(t("pages.models.launchArgs.resetSuccess", "Launch arguments reset to defaults."));
 			await invalidate();
 		},
-		onError: (error) => toast.error(apiErrorMessage(error, "Failed to reset launch arguments")),
+		onError: (error) =>
+			toast.error(apiErrorMessage(error, t("pages.models.launchArgs.resetError", "Failed to reset launch arguments"))),
 	});
 
 	const isPending = saveMutation.isPending || clearMutation.isPending;
@@ -70,7 +72,11 @@ export function ModelLaunchArgumentsPanel({ modelName }: ModelLaunchArgumentsPan
 
 			{query.isLoading ? <Loader size="sm" /> : null}
 
-			{query.error ? <InlineErrorAlert message={apiErrorMessage(query.error, "Failed to load launch arguments")} /> : null}
+			{query.error ? (
+				<InlineErrorAlert
+					message={apiErrorMessage(query.error, t("pages.models.launchArgs.loadError", "Failed to load launch arguments"))}
+				/>
+			) : null}
 
 			<Textarea
 				label={t("pages.models.launchArgs.label", "Extra llama.cpp arguments")}

@@ -49,7 +49,8 @@ pnpm audit --prod --audit-level=high
 - An `await import()` inside `it()` counts against `testTimeout`; hoist imports.
 - i18n is initialised suite-wide: `src/i18n.ts` is the first vitest `setupFiles` entry, so every test file — hand-rolled
   wrapper or not — resolves `t()` against the shipped `en` bundle. Assert the bundle string the operator sees, never the
-  in-code `defaultValue`; `scripts/CheckI18nDefaults.mjs` fails lint on a drifted or missing default.
+  in-code `defaultValue`; `scripts/CheckI18nDefaults.mjs` fails lint on a drifted or missing default, and on a bare
+  string literal passed as the `apiErrorMessage` fallback or as a `toast.<type>` message.
   The `"New conversation"` literal in `Chat.tsx` stays untranslated (persisted, compared by exact string).
 - `src/locales/*.json` are kept sorted by key (`pnpm run locales:sort`, `scripts/SortLocales.mjs`); its `--check`
   runs in `lint`, so `acceptance` fails on an unsorted file. On a merge conflict in a locale file, take either side,

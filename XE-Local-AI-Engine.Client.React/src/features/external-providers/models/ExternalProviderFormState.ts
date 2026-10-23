@@ -1,3 +1,5 @@
+import { t } from "i18next";
+
 import { ApiError } from "@/core/api/errors/ApiError";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import type {
@@ -34,7 +36,7 @@ type SaveConnectionBody = XeLocalAiEngineClientEndpointsExternalProvidersV1SaveE
 type ProbeBody = XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeRequest;
 
 export function errorMessage(error: unknown): string {
-	return apiErrorMessage(error, "Unexpected external provider error");
+	return apiErrorMessage(error, t("pages.externalProviders.unexpectedError", "Unexpected external provider error"));
 }
 
 const HTTP_CONFLICT = 409;

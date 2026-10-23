@@ -58,7 +58,9 @@ those durations. A test rendering through `renderWithProviders` has no provider 
 `scripts/CheckBundleBudget.mjs` (`bundle:check`, the last step of `build:bundle`) sums the built JavaScript against
 `config/bundle-budget.json`: `applicationJavaScriptBytes` for everything every user downloads, and
 `lazyEditorJavaScriptBytes` for the Monaco chunks, measured separately so one large lazy vendor chunk cannot mask
-growth in the app bundle.
+growth in the app bundle. It also fails when `dist/index.html` loads or modulepreloads a lazy asset, because a
+`codeSplitting` group that captures a module the app shell imports (Vite's preload helper once) makes every page
+download the editor while the separate budget still reports it as lazy.
 
 `dependency-cruiser` runs through `scripts/CheckDependencyBaseline.mjs` (`pnpm run depcruise`): `error`-severity
 rules (`no-circular`, `not-to-test`, `not-to-dev-dep`, …) fail outright, and the `warn`-severity boundary rules

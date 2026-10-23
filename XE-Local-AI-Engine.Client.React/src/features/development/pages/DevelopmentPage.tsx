@@ -111,7 +111,10 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 				{fallbackHeading}
 				<Alert color={capabilityQuery.error ? "red" : "yellow"} icon={<IconAlertTriangle size={16} />}>
 					{capabilityQuery.error
-						? apiErrorMessage(capabilityQuery.error, "Could not verify whether Development Mode is available.")
+						? apiErrorMessage(
+								capabilityQuery.error,
+								t("pages.development.errors.capability", "Could not verify whether Development Mode is available."),
+							)
 						: t("pages.development.disabled", "Development Mode is disabled by this node's runtime configuration.")}
 				</Alert>
 
@@ -140,7 +143,10 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 				confirming={confirmContainerRuntimeMutation.isPending}
 				confirmError={
 					confirmContainerRuntimeMutation.error
-						? apiErrorMessage(confirmContainerRuntimeMutation.error, "Could not confirm the container runtime.")
+						? apiErrorMessage(
+								confirmContainerRuntimeMutation.error,
+								t("pages.development.errors.confirmContainerRuntime", "Could not confirm the container runtime."),
+							)
 						: undefined
 				}
 			/>
@@ -182,7 +188,10 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 					onSubmit: createProject,
 					repositories,
 					repositoriesError: repositoriesQuery.error
-						? apiErrorMessage(repositoriesQuery.error, "Could not load registered Development repositories.")
+						? apiErrorMessage(
+								repositoriesQuery.error,
+								t("pages.development.errors.repositories", "Could not load registered Development repositories."),
+							)
 						: undefined,
 					repositoriesLoading: repositoriesQuery.isLoading,
 					sandboxProvider,
@@ -191,7 +200,9 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 				}}
 				projects={{
 					count: projects.length,
-					error: projectsQuery.error ? apiErrorMessage(projectsQuery.error, "Could not load Development projects.") : undefined,
+					error: projectsQuery.error
+						? apiErrorMessage(projectsQuery.error, t("pages.development.errors.projects", "Could not load Development projects."))
+						: undefined,
 					loading: projectsQuery.isLoading,
 				}}
 			/>
@@ -200,7 +211,12 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 					<Grid.Col span={{ base: 12, lg: 3 }}>
 						<DevelopmentProjectList
 							error={
-								projectQuery.error ? apiErrorMessage(projectQuery.error, "Could not load the Development project.") : undefined
+								projectQuery.error
+									? apiErrorMessage(
+											projectQuery.error,
+											t("pages.development.errors.project", "Could not load the Development project."),
+										)
+									: undefined
 							}
 							loading={projectQuery.isLoading}
 							onSelect={(id) => {
@@ -231,7 +247,10 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 									attempt={{ active: activeAttempt !== null, cancel: cancelActive, canceling: cancelMutation.isPending }}
 									nextAction={{
 										error: startMutation.error
-											? apiErrorMessage(startMutation.error, "Could not start the next action.")
+											? apiErrorMessage(
+													startMutation.error,
+													t("pages.development.errors.start", "Could not start the next action."),
+												)
 											: undefined,
 										label: [nextActionKey, nextActionDefault],
 										run: startNext,
@@ -240,7 +259,10 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 									project={detail.project}
 									reconnect={{
 										error: reconnectMutation.error
-											? apiErrorMessage(reconnectMutation.error, "Could not reconnect the repository.")
+											? apiErrorMessage(
+													reconnectMutation.error,
+													t("pages.development.errors.reconnect", "Could not reconnect the repository."),
+												)
 											: undefined,
 										folderId: reconnectFolderId,
 										loading: reconnectMutation.isPending,

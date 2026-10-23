@@ -2601,6 +2601,12 @@
 				"save": "Save cloud settings",
 				"title": "Azure OpenAI"
 			},
+			"clearConfirm": {
+				"confirm": "Clear",
+				"description": "The stored Azure AI Foundry connection and its credentials are deleted. Its cloud models stop working until you enter the connection again. This cannot be undone.",
+				"title": "Clear the cloud connection?"
+			},
+			"cleared": "Cloud settings cleared.",
 			"codex": {
 				"accountId": "Account",
 				"authorizeUrlDescription": "If no browser opened, click or copy this link to sign in.",
@@ -2614,6 +2620,7 @@
 				"egressNotice": "Messages sent with this provider leave your device to OpenAI. Server-side response storage is disabled on every call.",
 				"expires": "Session expires",
 				"loginError": "Failed to start sign-in. Please try again.",
+				"logoutError": "Logout failed",
 				"openLink": "Open in browser",
 				"pendingHint": "Complete sign-in in the browser window that opened, or use the link below.",
 				"polling": "Waiting for sign-in to complete…",
@@ -2692,8 +2699,10 @@
 				"label": "Active cloud provider",
 				"none": "None"
 			},
+			"saved": "Cloud settings saved. Capability reporting was requested.",
 			"subtitle": "Store Azure OpenAI credentials locally for cloud-backed runtime mode. Saved API keys are never returned to this page.",
-			"title": "Cloud settings"
+			"title": "Cloud settings",
+			"unexpectedError": "Unexpected cloud settings error"
 		},
 		"command": {
 			"empty": "Type or dictate a command and press Enter. Shift+Enter starts a new line.",
@@ -3517,8 +3526,15 @@
 				"title": "No Development projects yet"
 			},
 			"errors": {
+				"capability": "Could not verify whether Development Mode is available.",
+				"confirmContainerRuntime": "Could not confirm the container runtime.",
 				"create": "Could not create the Development project.",
-				"profileDetection": "Could not inspect the repository for a build system."
+				"profileDetection": "Could not inspect the repository for a build system.",
+				"project": "Could not load the Development project.",
+				"projects": "Could not load Development projects.",
+				"reconnect": "Could not reconnect the repository.",
+				"repositories": "Could not load registered Development repositories.",
+				"start": "Could not start the next action."
 			},
 			"form": {
 				"acceptanceCriteria": "Acceptance criteria (JSON)",
@@ -4263,7 +4279,8 @@
 			"saveConflict": "Someone else changed the external-provider configuration while you were editing. The stored state is shown below — review it and save again.",
 			"saved": "Connection saved.",
 			"subtitle": "Register OpenAI-compatible endpoints this node may chat with — a self-hosted llama-server or vLLM, LM Studio, or a hosted API. Saved API keys are never returned to this page.",
-			"title": "External providers"
+			"title": "External providers",
+			"unexpectedError": "Unexpected external provider error"
 		},
 		"graphWorkflows": {
 			"conditionOperator": {
@@ -4869,6 +4886,11 @@
 			"goToChat": "Start chatting",
 			"goToModels": "Install a model",
 			"loading": "Checking installed models",
+			"setup": {
+				"progress": "{{model}} · {{pct}}%",
+				"title": "Setting up your first model…",
+				"viewModels": "View on the Models page"
+			},
 			"status": {
 				"empty": "No local models are installed yet, so this node cannot answer anything. Install one to get started.",
 				"externalOnly": "No local models are installed, but this node can chat through a registered external provider.",
@@ -6302,9 +6324,12 @@
 				"description": "Space-separated flags, for example ",
 				"descriptionSuffix": ". The model path, host and port are managed by the app and cannot be set here.",
 				"label": "Extra llama.cpp arguments",
+				"loadError": "Failed to load launch arguments",
 				"reset": "Reset to default",
+				"resetError": "Failed to reset launch arguments",
 				"resetSuccess": "Launch arguments reset to defaults.",
 				"save": "Save",
+				"saveError": "Failed to save launch arguments",
 				"saved": "Launch arguments saved. They apply the next time this model loads.",
 				"tab": "Advanced",
 				"warning": "Advanced: these raw flags are passed to llama.cpp when this model loads. An invalid flag can stop the model from starting — it only affects this model, and clearing the override restores the defaults. Changes take effect the next time the model loads."
@@ -7350,6 +7375,11 @@
 				"revealTitle": "Copy this key now",
 				"revealWarning": "This is the only time this key will be shown. It is not stored and cannot be recovered — if you lose it you must generate a new one and update every client that uses it.",
 				"revoke": "Revoke key",
+				"revokeConfirm": {
+					"confirm": "Revoke",
+					"description": "Every OpenAI-compatible client using this key loses access immediately. This cannot be undone; a new key has to be generated and configured in each client.",
+					"title": "Revoke the local model proxy key?"
+				},
 				"title": "Local model proxy"
 			},
 			"managedPython": {
@@ -7439,6 +7469,11 @@
 				"revealTitle": "Copy this key now",
 				"revealWarning": "This is the only time this key will be shown. It is not stored and cannot be recovered — if you lose it you must generate a new one and update every client that uses it.",
 				"revoke": "Revoke key",
+				"revokeConfirm": {
+					"confirm": "Revoke",
+					"description": "Every MCP client using this key loses access immediately. This cannot be undone; a new key has to be generated and configured in each client.",
+					"title": "Revoke the MCP server key?"
+				},
 				"scopeLabel": "Scope",
 				"title": "MCP server"
 			},
@@ -7595,7 +7630,8 @@
 			"uiMode": {
 				"description": "Simple shows the everyday pages only; Advanced shows every page this build offers. This changes the navigation and nothing else — every page stays reachable by its own address, and nothing is deleted.",
 				"title": "Interface mode"
-			}
+			},
+			"unexpectedError": "Unexpected node settings error"
 		},
 		"notFound": {
 			"backToHomeText": "Take me back to home page",
@@ -8015,6 +8051,11 @@
 			"baseArtifacts": {
 				"cancel": "Cancel download",
 				"delete": "Delete checkpoint",
+				"deleteConfirm": {
+					"confirm": "Delete",
+					"description": "Delete the downloaded checkpoint '{{name}}'? Its files are removed from disk, and training against it needs a new download.",
+					"title": "Delete checkpoint?"
+				},
 				"description": "Fine-tuning needs the original safetensors checkpoint, not a quantized copy. Enter the Hugging Face repository to download.",
 				"download": "Download",
 				"empty": "No base checkpoints yet. Download one to make it available to training runs.",
@@ -8062,6 +8103,11 @@
 				"prerequisites": "Prerequisites",
 				"reinstall": "Reinstall runtime",
 				"remove": "Remove runtime",
+				"removeConfirm": {
+					"confirm": "Remove",
+					"description": "The installed Python training runtime is deleted from disk. Training runs cannot start until you install it again, which downloads several gigabytes.",
+					"title": "Remove the training runtime?"
+				},
 				"title": "Python training runtime"
 			},
 			"subtitle": "Fine-tune a local model on your own data. Training holds the whole GPU while it runs, so no chat, image or benchmark work happens at the same time.",

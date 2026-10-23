@@ -1,3 +1,5 @@
+import { t } from "i18next";
+
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import type { SaveCloudSettingsResponse } from "@/core/api/generated";
 import { toast } from "@/core/ui/notifications/Toast";
@@ -16,7 +18,7 @@ import {
 type CloudSettings = SaveCloudSettingsResponse;
 
 export function errorMessage(error: unknown): string {
-	return apiErrorMessage(error, "Unexpected cloud settings error");
+	return apiErrorMessage(error, t("pages.cloudSettings.unexpectedError", "Unexpected cloud settings error"));
 }
 
 // Always show at least one (blank) deployment row so the user has somewhere to type on a fresh connection.
@@ -60,7 +62,11 @@ export function settingsToFormValues(settings: CloudSettings): CloudSettingsForm
 }
 
 export function toastSettingsResult(settings: CloudSettings): void {
-	toast.success(settings.azureFoundry ? "Cloud settings saved. Capability reporting was requested." : "Cloud settings cleared.");
+	toast.success(
+		settings.azureFoundry
+			? t("pages.cloudSettings.saved", "Cloud settings saved. Capability reporting was requested.")
+			: t("pages.cloudSettings.cleared", "Cloud settings cleared."),
+	);
 }
 
 const emptyFormValues: CloudSettingsFormValues = {

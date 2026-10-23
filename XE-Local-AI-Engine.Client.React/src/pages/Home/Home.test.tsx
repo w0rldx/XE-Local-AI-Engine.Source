@@ -36,6 +36,17 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal)
 	})),
 }));
 
+// The download feed is the models feature's hub-backed hook, tested there; here it is the switch for the setup state.
+const { activeDownloads } = vi.hoisted(() => ({ activeDownloads: { current: new Map<string, unknown>() } }));
+
+vi.mock("@/features/models/queries/useGgufDownload", () => ({
+	useActiveGgufDownloads: () => activeDownloads.current,
+}));
+
+function download(phase: string, pct: number | undefined) {
+	return { operationId: "op-1", operationKind: "Download", modelName: "qwen3.5-9b-q4_k_m", phase, pct };
+}
+
 function renderHome(): void {
 	renderWithProviders(<Home />);
 }
@@ -43,6 +54,46 @@ function renderHome(): void {
 describe("Home landing card", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		activeDownloads.current = new Map();
+	});
+
+	it("shows the first-model setup with its name and progress while the first-run download runs", async () => {
+		listLocalModelsQueryFn.mockResolvedValue({ items: [], isAvailable: true });
+		activeDownloads.current = new Map([["qwen3.5-9b-q4_k_m", download("Downloading", 42)]]);
+
+		renderHome();
+
+		expect(await screen.findByTestId("home-setup")).toBeTruthy();
+		expect(screen.getByText("Setting up your first model…")).toBeTruthy();
+		expect(screen.getByTestId("home-setup-model").textContent).toBe("qwen3.5-9b-q4_k_m · 42%");
+		expect(screen.queryByTestId("home-status")).toBeNull();
+		expect(screen.queryByTestId("home-go-to-chat")).toBeNull();
+	});
+
+	it("asks for an install when nothing is installed and the only download already finished", async () => {
+		listLocalModelsQueryFn.mockResolvedValue({ items: [], isAvailable: true });
+		activeDownloads.current = new Map([["qwen3.5-9b-q4_k_m", download("Failed", 10)]]);
+
+		renderHome();
+
+		await waitFor(() => {
+			expect(screen.getByTestId("home-status").textContent).toContain("Install one to get started");
+		});
+		expect(screen.queryByTestId("home-setup")).toBeNull();
+		expect(screen.getByTestId("home-go-to-models").textContent).toContain("Install a model");
+	});
+
+	it("offers chat, not the setup state, once a model is installed even while another download runs", async () => {
+		listLocalModelsQueryFn.mockResolvedValue({
+			items: [{ modelName: "qwen3-27b.gguf", provider: "LlamaServer", kind: "Chat" }],
+			isAvailable: true,
+		});
+		activeDownloads.current = new Map([["qwen3.5-9b-q4_k_m", download("Downloading", 42)]]);
+
+		renderHome();
+
+		expect(await screen.findByTestId("home-go-to-chat")).toBeTruthy();
+		expect(screen.queryByTestId("home-setup")).toBeNull();
 	});
 
 	afterEach(() => {

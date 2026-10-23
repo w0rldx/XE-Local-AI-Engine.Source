@@ -4,7 +4,20 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { evaluateBundleBudget, measureJavaScriptAssets } from "./CheckBundleBudget.mjs";
+import { evaluateBundleBudget, findEagerlyLoadedLazyAssets, measureJavaScriptAssets } from "./CheckBundleBudget.mjs";
+
+test("flags lazy editor and scene viewer assets that index.html loads eagerly", () => {
+	const indexHtml = [
+		'<script type="module" crossorigin src="/assets/index-Ab12.js"></script>',
+		'<link rel="modulepreload" crossorigin href="/assets/preload-helper-Cd34.js">',
+		'<link rel="modulepreload" crossorigin href="/assets/monaco-editor-Ef56.js">',
+		'<link rel="modulepreload" crossorigin href="/assets/three-Gh78.js">',
+		'<link rel="stylesheet" crossorigin href="/assets/index-Ij90.css">',
+	].join("\n");
+
+	assert.deepEqual(findEagerlyLoadedLazyAssets(indexHtml), ["/assets/monaco-editor-Ef56.js", "/assets/three-Gh78.js"]);
+	assert.deepEqual(findEagerlyLoadedLazyAssets(indexHtml.replace(/.*(monaco|three).*\n?/g, "")), []);
+});
 
 test("recursively measures all deployed js/mjs", (context) => {
 	const root = mkdtempSync(join(tmpdir(), "xe-bundle-"));

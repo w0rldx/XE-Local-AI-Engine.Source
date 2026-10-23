@@ -16,6 +16,7 @@ import { toHeaderRequests } from "@/core/http-headers/CustomHeaders";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { CodexSignInCard } from "@/features/cloud-settings/codex/components/CodexSignInCard";
 import { AzureCloudSettingsEditor } from "@/features/cloud-settings/components/AzureCloudSettingsEditor";
@@ -65,6 +66,7 @@ function configuredHostSuffixes(suffixes: readonly string[]) {
 export function CloudSettings() {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
+	const { confirm } = useConfirm();
 	const {
 		data: settingsData,
 		isLoading: settingsIsLoading,
@@ -134,6 +136,21 @@ export function CloudSettings() {
 		},
 		onError: (error) => toast.error(errorMessage(error)),
 	});
+
+	const handleClear = async (): Promise<void> => {
+		const confirmed = await confirm({
+			title: t("pages.cloudSettings.clearConfirm.title", "Clear the cloud connection?"),
+			description: t(
+				"pages.cloudSettings.clearConfirm.description",
+				"The stored Azure AI Foundry connection and its credentials are deleted. Its cloud models stop working until you enter the connection again. This cannot be undone.",
+			),
+			confirmationText: t("pages.cloudSettings.clearConfirm.confirm", "Clear"),
+			cancellationText: t("common.cancel", "Cancel"),
+		});
+		if (confirmed) {
+			clearMutation.mutate({});
+		}
+	};
 
 	const isActionPending = saveMutation.isPending || clearMutation.isPending;
 	const settings = settingsData;
@@ -272,7 +289,7 @@ export function CloudSettings() {
 					isReloading: settingsIsFetching,
 				}}
 				onSave={handleSave}
-				onClear={() => clearMutation.mutate({})}
+				onClear={handleClear}
 				onReload={() => settingsRefetch()}
 			/>
 		</PageShell>

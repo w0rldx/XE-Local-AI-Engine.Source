@@ -7,7 +7,13 @@ import { ApiError } from "@/core/api/errors/ApiError";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
-import { downloadPercent, formatBytes, isArtifactDownloading } from "@/features/training/models/TrainingModels";
+import { useConfirm } from "@/core/ui/hooks/useConfirm";
+import {
+	type BaseArtifactView,
+	downloadPercent,
+	formatBytes,
+	isArtifactDownloading,
+} from "@/features/training/models/TrainingModels";
 import {
 	useBaseArtifacts,
 	useCancelBaseArtifact,
@@ -39,6 +45,23 @@ export function BaseArtifactManager() {
 	const createMutation = useCreateBaseArtifact();
 	const deleteMutation = useDeleteBaseArtifact();
 	const cancelMutation = useCancelBaseArtifact();
+	const { confirm } = useConfirm();
+
+	const handleDelete = async (artifact: BaseArtifactView): Promise<void> => {
+		const confirmed = await confirm({
+			title: t("pages.training.baseArtifacts.deleteConfirm.title", "Delete checkpoint?"),
+			description: t(
+				"pages.training.baseArtifacts.deleteConfirm.description",
+				"Delete the downloaded checkpoint '{{name}}'? Its files are removed from disk, and training against it needs a new download.",
+				{ name: `${artifact.repoId}@${artifact.revision}` },
+			),
+			confirmationText: t("pages.training.baseArtifacts.deleteConfirm.confirm", "Delete"),
+			cancellationText: t("common.cancel", "Cancel"),
+		});
+		if (confirmed) {
+			deleteMutation.mutate({ path: { artifactId: artifact.id } });
+		}
+	};
 
 	const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
 		event.preventDefault();
@@ -195,7 +218,7 @@ export function BaseArtifactManager() {
 																aria-label={t("pages.training.baseArtifacts.delete", "Delete checkpoint")}
 																color="red"
 																loading={deleteMutation.isPending}
-																onClick={() => deleteMutation.mutate({ path: { artifactId: artifact.id } })}
+																onClick={() => handleDelete(artifact)}
 																variant="subtle"
 															>
 																<IconTrash size={16} />

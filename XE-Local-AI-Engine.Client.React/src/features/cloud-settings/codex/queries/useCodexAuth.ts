@@ -2,6 +2,7 @@
 // pending; polling stops once the user is signed in, an error is detected, or the caller disables it.
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { t } from "i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import {
@@ -61,7 +62,7 @@ export function useCodexLogout(onSuccess?: () => void) {
 			onSuccess?.();
 		},
 		onError: (error) => {
-			const message = apiErrorMessage(error, "Logout failed");
+			const message = apiErrorMessage(error, t("pages.cloudSettings.codex.logoutError", "Logout failed"));
 			toast.error(message);
 		},
 	});

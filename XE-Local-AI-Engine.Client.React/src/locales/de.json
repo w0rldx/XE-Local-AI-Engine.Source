@@ -2601,6 +2601,12 @@
 				"save": "Cloud-Einstellungen speichern",
 				"title": "Azure OpenAI"
 			},
+			"clearConfirm": {
+				"confirm": "Löschen",
+				"description": "Die gespeicherte Azure-AI-Foundry-Verbindung und ihre Anmeldedaten werden gelöscht. Ihre Cloud-Modelle funktionieren erst wieder, wenn Sie die Verbindung erneut eingeben. Dies kann nicht rückgängig gemacht werden.",
+				"title": "Cloud-Verbindung löschen?"
+			},
+			"cleared": "Cloud-Einstellungen gelöscht.",
 			"codex": {
 				"accountId": "Konto",
 				"authorizeUrlDescription": "Falls sich kein Browser geöffnet hat, klicken oder kopieren Sie diesen Link zur Anmeldung.",
@@ -2614,6 +2620,7 @@
 				"egressNotice": "Nachrichten, die mit diesem Anbieter gesendet werden, verlassen Ihr Gerät in Richtung OpenAI. Die serverseitige Antwortspeicherung ist bei jedem Aufruf deaktiviert.",
 				"expires": "Sitzung läuft ab",
 				"loginError": "Anmeldung konnte nicht gestartet werden. Bitte versuchen Sie es erneut.",
+				"logoutError": "Abmeldung fehlgeschlagen",
 				"openLink": "Im Browser öffnen",
 				"pendingHint": "Schließen Sie die Anmeldung im geöffneten Browserfenster ab oder nutzen Sie den Link unten.",
 				"polling": "Warten auf den Abschluss der Anmeldung…",
@@ -2692,8 +2699,10 @@
 				"label": "Aktiver Cloud-Anbieter",
 				"none": "Keiner"
 			},
+			"saved": "Cloud-Einstellungen gespeichert. Die Meldung der Fähigkeiten wurde angefordert.",
 			"subtitle": "Azure-OpenAI-Zugangsdaten lokal für den cloudgestützten Runtime-Modus speichern. Gespeicherte API-Schlüssel werden nie an diese Seite zurückgegeben.",
-			"title": "Cloud-Einstellungen"
+			"title": "Cloud-Einstellungen",
+			"unexpectedError": "Unerwarteter Fehler in den Cloud-Einstellungen"
 		},
 		"command": {
 			"empty": "Geben Sie einen Befehl ein oder diktieren Sie ihn und drücken Sie Enter. Umschalt+Enter beginnt eine neue Zeile.",
@@ -3517,8 +3526,15 @@
 				"title": "Noch keine Entwicklungsprojekte"
 			},
 			"errors": {
+				"capability": "Es konnte nicht geprüft werden, ob der Entwicklungsmodus verfügbar ist.",
+				"confirmContainerRuntime": "Die Container-Laufzeit konnte nicht bestätigt werden.",
 				"create": "Das Entwicklungsprojekt konnte nicht erstellt werden.",
-				"profileDetection": "Das Repository konnte nicht auf ein Build-System untersucht werden."
+				"profileDetection": "Das Repository konnte nicht auf ein Build-System untersucht werden.",
+				"project": "Das Entwicklungsprojekt konnte nicht geladen werden.",
+				"projects": "Die Entwicklungsprojekte konnten nicht geladen werden.",
+				"reconnect": "Das Repository konnte nicht erneut verbunden werden.",
+				"repositories": "Die registrierten Entwicklungs-Repositories konnten nicht geladen werden.",
+				"start": "Die nächste Aktion konnte nicht gestartet werden."
 			},
 			"form": {
 				"acceptanceCriteria": "Abnahmekriterien (JSON)",
@@ -4263,7 +4279,8 @@
 			"saveConflict": "Jemand anderes hat die Konfiguration der externen Anbieter geändert, während Sie sie bearbeitet haben. Unten steht der gespeicherte Stand. Prüfen Sie ihn und speichern Sie erneut.",
 			"saved": "Verbindung gespeichert.",
 			"subtitle": "Registrieren Sie OpenAI-kompatible Endpunkte, mit denen dieser Node chatten darf: einen selbst gehosteten llama-server oder vLLM, LM Studio oder eine gehostete API. Gespeicherte API-Schlüssel werden nie an diese Seite zurückgegeben.",
-			"title": "Externe Anbieter"
+			"title": "Externe Anbieter",
+			"unexpectedError": "Unerwarteter Fehler bei den externen Anbietern"
 		},
 		"graphWorkflows": {
 			"conditionOperator": {
@@ -4869,6 +4886,11 @@
 			"goToChat": "Chat starten",
 			"goToModels": "Modell installieren",
 			"loading": "Installierte Modelle werden geprüft",
+			"setup": {
+				"progress": "{{model}} · {{pct}}%",
+				"title": "Ihr erstes Modell wird eingerichtet…",
+				"viewModels": "Auf der Seite Modelle ansehen"
+			},
 			"status": {
 				"empty": "Es ist noch kein lokales Modell installiert, daher kann dieser Node nichts beantworten. Installieren Sie eines, um zu starten.",
 				"externalOnly": "Es ist kein lokales Modell installiert, dieser Node kann aber über einen registrierten externen Anbieter chatten.",
@@ -6302,9 +6324,12 @@
 				"description": "Durch Leerzeichen getrennte Flags, zum Beispiel ",
 				"descriptionSuffix": ". Modellpfad, Host und Port werden von der App verwaltet und können hier nicht gesetzt werden.",
 				"label": "Zusätzliche llama.cpp-Argumente",
+				"loadError": "Startargumente konnten nicht geladen werden",
 				"reset": "Auf Standard zurücksetzen",
+				"resetError": "Startargumente konnten nicht zurückgesetzt werden",
 				"resetSuccess": "Startargumente auf die Standardwerte zurückgesetzt.",
 				"save": "Speichern",
+				"saveError": "Startargumente konnten nicht gespeichert werden",
 				"saved": "Startargumente gespeichert. Sie gelten beim nächsten Laden dieses Modells.",
 				"tab": "Erweitert",
 				"warning": "Erweitert: Diese rohen Flags werden an llama.cpp übergeben, wenn dieses Modell geladen wird. Ein ungültiges Flag kann den Start des Modells verhindern — es betrifft nur dieses Modell, und das Leeren der Überschreibung stellt die Standardwerte wieder her. Änderungen werden beim nächsten Laden des Modells wirksam."
@@ -7350,6 +7375,11 @@
 				"revealTitle": "Kopieren Sie diesen Schlüssel jetzt",
 				"revealWarning": "Dies ist das einzige Mal, dass dieser Schlüssel angezeigt wird. Er wird nicht gespeichert und kann nicht wiederhergestellt werden. Wenn Sie ihn verlieren, müssen Sie einen neuen erzeugen und jeden Client aktualisieren, der ihn verwendet.",
 				"revoke": "Schlüssel widerrufen",
+				"revokeConfirm": {
+					"confirm": "Widerrufen",
+					"description": "Jeder OpenAI-kompatible Client, der diesen Schlüssel verwendet, verliert sofort den Zugriff. Dies kann nicht rückgängig gemacht werden; Sie müssen einen neuen Schlüssel erzeugen und in jedem Client eintragen.",
+					"title": "Schlüssel des lokalen Modell-Proxys widerrufen?"
+				},
 				"title": "Lokaler Modell-Proxy"
 			},
 			"managedPython": {
@@ -7439,6 +7469,11 @@
 				"revealTitle": "Kopieren Sie diesen Schlüssel jetzt",
 				"revealWarning": "Dies ist das einzige Mal, dass dieser Schlüssel angezeigt wird. Er wird nicht gespeichert und kann nicht wiederhergestellt werden. Wenn Sie ihn verlieren, müssen Sie einen neuen erzeugen und jeden Client aktualisieren, der ihn verwendet.",
 				"revoke": "Schlüssel widerrufen",
+				"revokeConfirm": {
+					"confirm": "Widerrufen",
+					"description": "Jeder MCP-Client, der diesen Schlüssel verwendet, verliert sofort den Zugriff. Dies kann nicht rückgängig gemacht werden; Sie müssen einen neuen Schlüssel erzeugen und in jedem Client eintragen.",
+					"title": "MCP-Server-Schlüssel widerrufen?"
+				},
 				"scopeLabel": "Geltungsbereich",
 				"title": "MCP-Server"
 			},
@@ -7595,7 +7630,8 @@
 			"uiMode": {
 				"description": "„Einfach“ zeigt nur die alltäglichen Seiten, „Erweitert“ jede Seite, die dieser Build anbietet. Das ändert nur die Navigation — jede Seite bleibt über ihre eigene Adresse erreichbar, und nichts wird gelöscht.",
 				"title": "Oberflächenmodus"
-			}
+			},
+			"unexpectedError": "Unerwarteter Fehler in den Node-Einstellungen"
 		},
 		"notFound": {
 			"backToHomeText": "Zurück zur Startseite",
@@ -8015,6 +8051,11 @@
 			"baseArtifacts": {
 				"cancel": "Download abbrechen",
 				"delete": "Checkpoint löschen",
+				"deleteConfirm": {
+					"confirm": "Löschen",
+					"description": "Den heruntergeladenen Checkpoint „{{name}}“ löschen? Seine Dateien werden von der Festplatte entfernt, und ein Training damit erfordert einen erneuten Download.",
+					"title": "Checkpoint löschen?"
+				},
 				"description": "Für das Feintuning wird der originale safetensors-Checkpoint benötigt, keine quantisierte Kopie. Geben Sie das Hugging-Face-Repository zum Herunterladen an.",
 				"download": "Herunterladen",
 				"empty": "Noch keine Basis-Checkpoints. Laden Sie einen herunter, um ihn für Trainingsläufe verfügbar zu machen.",
@@ -8062,6 +8103,11 @@
 				"prerequisites": "Voraussetzungen",
 				"reinstall": "Umgebung neu installieren",
 				"remove": "Umgebung entfernen",
+				"removeConfirm": {
+					"confirm": "Entfernen",
+					"description": "Die installierte Python-Trainingsumgebung wird von der Festplatte gelöscht. Trainingsläufe können erst wieder starten, wenn Sie sie erneut installieren; dabei werden mehrere Gigabyte heruntergeladen.",
+					"title": "Trainingsumgebung entfernen?"
+				},
 				"title": "Python-Trainingsumgebung"
 			},
 			"subtitle": "Passen Sie ein lokales Modell mit eigenen Daten an. Ein Training belegt die gesamte GPU, daher laufen währenddessen keine Chat-, Bild- oder Benchmark-Aufgaben.",

@@ -103,6 +103,71 @@ export function findTranslationDefaults(source, fileName = "source.tsx") {
 	return sites;
 }
 
+const toastTypes = new Set(["success", "error", "warning", "info"]);
+
+const hasWords = (text) => /\p{L}/u.test(text);
+
+// A conditional or parenthesised argument is literal text when either branch is: `x ? "Saved." : "Cleared."`.
+function isLiteralText(node) {
+	if (node === undefined) {
+		return false;
+	}
+	if (ts.isParenthesizedExpression(node)) {
+		return isLiteralText(node.expression);
+	}
+	if (ts.isConditionalExpression(node)) {
+		return isLiteralText(node.whenTrue) || isLiteralText(node.whenFalse);
+	}
+	if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+		return hasWords(node.text);
+	}
+	if (ts.isTemplateExpression(node)) {
+		return hasWords(node.head.text) || node.templateSpans.some((span) => hasWords(span.literal.text));
+	}
+	return false;
+}
+
+/**
+ * Operator-facing text written as a bare literal where it bypasses `t()`: the fallback of `apiErrorMessage(error, …)`
+ * and the message of `toast.<type>(…)`. Only literal text with letters counts: `""` is a probe value and
+ * `${a} ${t(…)}` joins already-translated parts.
+ */
+export function findLiteralMessages(source, fileName = "source.tsx") {
+	const sourceFile = ts.createSourceFile(
+		fileName,
+		source,
+		ts.ScriptTarget.Latest,
+		true,
+		fileName.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+	);
+	const sites = [];
+
+	function visit(node) {
+		if (ts.isCallExpression(node)) {
+			const callee = node.expression;
+			let call;
+			if (ts.isIdentifier(callee) && callee.text === "apiErrorMessage" && isLiteralText(node.arguments[1])) {
+				call = "apiErrorMessage";
+			} else if (
+				ts.isPropertyAccessExpression(callee) &&
+				ts.isIdentifier(callee.expression) &&
+				callee.expression.text === "toast" &&
+				toastTypes.has(callee.name.text) &&
+				isLiteralText(node.arguments[0])
+			) {
+				call = `toast.${callee.name.text}`;
+			}
+			if (call !== undefined) {
+				sites.push({ line: sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1, call });
+			}
+		}
+		ts.forEachChild(node, visit);
+	}
+
+	visit(sourceFile);
+	return sites;
+}
+
 /**
  * Splits one file's call sites into drifted defaults and keys the bundle does not have. Every literal key is checked
  * for presence; drift is only meaningful where the call carries a default to disagree with.
@@ -144,9 +209,12 @@ export function checkI18nDefaults({
 	const files = sourceFilesUnder(sourceRoot);
 	const drifted = [];
 	const missing = [];
+	const literals = [];
 	for (const file of files) {
-		const result = findI18nDefaultDrift(readFileSync(file, "utf8"), bundle, file);
+		const source = readFileSync(file, "utf8");
+		const result = findI18nDefaultDrift(source, bundle, file);
 		const at = (site) => `${relative(root, file)}:${site.line}`;
+		literals.push(...findLiteralMessages(source, file).map((site) => `${at(site)} ${site.call}`));
 		drifted.push(
 			...result.drifted.map(
 				(site) => `${at(site)} ${site.key}\n    code:   ${site.codeDefault}\n    bundle: ${site.bundleValue}`,
@@ -154,12 +222,19 @@ export function checkI18nDefaults({
 		);
 		missing.push(...result.missing.map((site) => `${at(site)} ${site.key}`));
 	}
-	return { files: files.length, drifted, missing, failOnMissing };
+	return { files: files.length, drifted, missing, literals, failOnMissing };
 }
 
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
 if (isMain) {
-	const { files, drifted, missing, failOnMissing } = checkI18nDefaults();
+	const { files, drifted, missing, literals, failOnMissing } = checkI18nDefaults();
+	if (literals.length > 0) {
+		process.stderr.write(`CheckI18nDefaults: ERROR — ${literals.length} untranslated literal message(s):\n`);
+		for (const entry of literals) {
+			process.stderr.write(`  ${entry}\n`);
+		}
+		process.stderr.write('Fix: pass t("key", "default") instead of the literal, with the key in en.json and de.json.\n');
+	}
 	if (missing.length > 0) {
 		// A warning run stays a one-liner: the list is long today and would bury the drift failures below it.
 		if (failOnMissing) {
@@ -182,10 +257,10 @@ if (isMain) {
 			"\nFix: make the two agree — adopt the bundle string in code, or update en.json (and de.json) to the code's wording.\n",
 		);
 	}
-	if (drifted.length > 0 || (failOnMissing && missing.length > 0)) {
+	if (drifted.length > 0 || literals.length > 0 || (failOnMissing && missing.length > 0)) {
 		process.exit(1);
 	}
 	process.stdout.write(
-		`CheckI18nDefaults: OK — every literal t() key in ${files} files exists in en.json, and every in-code default matches it.\n`,
+		`CheckI18nDefaults: OK — every literal t() key in ${files} files exists in en.json, every in-code default matches it, and no apiErrorMessage/toast message is a bare literal.\n`,
 	);
 }
