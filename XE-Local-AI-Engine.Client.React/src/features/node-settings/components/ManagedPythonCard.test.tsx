@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import de from "@/locales/de.json";
 import en from "@/locales/en.json";
-import { domainErrorRoute, jsonRoute } from "@/test/msw/Handlers";
+import { domainErrorRoute, jsonRoute, localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
@@ -313,6 +314,37 @@ describe("ManagedPythonCard", () => {
 		expect(await within(row).findByText(copy.removing)).toBeTruthy();
 		expect(within(row).queryByText(copy.states.Provisioning)).toBeNull();
 		expect(within(row).getByText(copy.reasons.Removing)).toBeTruthy();
+	});
+
+	// N-74: the removal is one blocking POST, so no poll sees the node's brief Removing code; the pending POST says it.
+	it("labels Compute as Removing while the remove request is still pending", async () => {
+		let release: () => void = () => undefined;
+		const released = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		server.use(
+			jsonRoute("get", statusPath, status([environment("compute")])),
+			http.post(localApiPath("python/environments/compute/remove"), async () => {
+				await released;
+				return HttpResponse.json(status([environment("compute", { state: "NotProvisioned", installed: false })]));
+			}),
+		);
+		renderWithProviders(<ManagedPythonCard />, { withRouter: true });
+
+		const remove = await screen.findByRole("button", { name: copy.remove });
+		await waitFor(() => expect((remove as HTMLButtonElement).disabled).toBe(false));
+		fireEvent.click(remove);
+		fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: copy.removeConfirm }));
+
+		const row = screen.getByTestId("managed-python-environment-compute");
+		expect(await within(row).findByText(copy.removing)).toBeTruthy();
+		expect(within(row).getByText(copy.reasons.Removing)).toBeTruthy();
+		expect(within(row).queryByText(copy.states.Ready)).toBeNull();
+
+		release();
+		expect(await within(row).findByText(copy.states.NotProvisioned)).toBeTruthy();
+		expect(within(row).queryByText(copy.removing)).toBeNull();
+		expect(within(row).queryByText(copy.reasons.Removing)).toBeNull();
 	});
 
 	it("offers Repair but not Remove while Compute is not provisioned", async () => {

@@ -404,10 +404,13 @@ the file; consumers must reject it when the PID is dead and poll `/health/ready`
 `--status --json` is one-shot, never starts the host or creates the data directory, and returns
 `{running,version,url,mcpUrl,dataDir,setupRequired,vault,installKind}`, where `vault` is `pending`, `locked` or `unlocked` (null when not running).
 
-Three startup refusals exit with their own code and an operator-facing stderr message instead of crashing: a node key
+Four startup refusals exit with their own code and an operator-facing stderr message instead of crashing: a node key
 that cannot open the database (it does not match the database's recorded key check, or `node.key` is missing next to
 an existing `node.sqlite`) exits **8**, a failed database migration exits **9** after the restore or move-aside
-hint, and an unusable data directory exits **10**. Exit 10 covers a data directory that cannot be created or written
+hint, an unusable data directory exits **10**, and an engine file that Windows Smart App Control or an application
+control policy refused to load (HRESULT 0x800711C7, the build is unsigned) exits **11**. Exit 11 writes one stderr
+line that starts with `Application control blocked: ` and the blocked file's name (`ApplicationControlBlock`); the
+desktop shell matches that line to show its own dialog. Exit 10 covers a data directory that cannot be created or written
 (`DesktopDataDirectoryException`, raised by `SingleInstanceLease.TryAcquire` on an access denial) and a
 `node-settings.json` that is present but unreadable. That file is checked right after the lease with a strict read
 (`NodeStartupSettings.IsStoredFileUnreadableAsync`), because the tolerant read every service uses would start the node
@@ -543,7 +546,7 @@ exit 4.
 
 **Token file.** `$XDG_CONFIG_HOME/xe/tokens.json` (`~/.config/xe/tokens.json` when unset) on Linux,
 `%APPDATA%\xe\tokens.json` on Windows (`TokenFileStore`). On Unix the file is 0600 and its directory 0700; on Windows
-the profile ACL protects it. A pair issued by another origin is ignored, so a node on a new port forces a fresh
+it gets a protected ACL that grants the current user alone. A pair issued by another origin is ignored, so a node on a new port forces a fresh
 sign-in. `--token-file <path>` moves it; `--no-token-file` keeps the tokens in memory for the one run. Several `xe`
 processes may share the file: when the node rejects this process's refresh token because another process rotated it,
 the client re-reads the file once and adopts the newer pair before it asks for a password.
@@ -660,7 +663,7 @@ Windows Portable ZIP or Linux AppImage:
 - `publish/windows/uninstall-xe-local-ai-engine.ps1` (packaged as `Uninstall-XE-Local-AI-Engine.ps1`) — PowerShell 5.1-compatible.
 - `publish/linux/uninstall-xe-local-ai-engine.sh` (packaged as `uninstall-xe-local-ai-engine.sh`) — plain POSIX `sh`.
 
-Both always **stop** the running node process and the `llama-server` / `sd-server` child runtimes it spawned — matched **strictly** by executable path under the app's own per-user data dir, mirroring the startup `StaleProcessReaper`'s own-binaries-root discrimination so an unrelated `llama-server` (e.g. Ollama's) is never touched. They then branch:
+Both always **stop** the running node process and the `llama-server` / `sd-server` child runtimes it spawned — matched **strictly** by executable path under the app's own per-user data dir, mirroring the startup `StaleProcessReaper`'s own-binaries-root discrimination so an unrelated `llama-server` (e.g. Ollama's) is never touched. On Windows the launcher runs the shell and the engine as `dotnet.exe <dll>`, so the PowerShell script also reads `Win32_Process` command lines: a `dotnet.exe` whose `XE-Local-AI-Engine.Desktop.dll` / `XE-Local-AI-Engine.Client.dll` lies in this install, and a `msedgewebview2.exe` whose command line names the data dir. It fails closed: if that query fails, or `ready.json` still names a live engine pid (started no later than its `StartedAtUtc`), it exits 1 and deletes nothing. They then branch:
 
 - **Velopack-managed install detected** (a `current/` dir or `Update`/`Update.exe` helper at the data-dir root — on the default Windows layout the managed install root *is* the data dir): the script **does not delete** the tree. It delegates to Velopack (on Windows it can best-effort invoke `Update.exe --uninstall`; otherwise it points at the OS "Apps & features" uninstall) and stops. This is the safety valve that prevents brute-force-deleting a live managed install.
 - **Portable / manual install** (no Velopack tree present): after an **explicit confirmation** (typed `y`; `--yes`/`-Yes` skips it for automation), it deletes **only** the per-user data dir (`%LOCALAPPDATA%\XE-Local-AI-Engine` / `$XDG_DATA_HOME/XE-Local-AI-Engine`) — `node.sqlite`, `node.key`, `node-settings.json`, `hf-token.enc`, the downloaded `llama.cpp`/`stable-diffusion.cpp` binaries, `models/`, and the AgentHome workspace.

@@ -955,18 +955,18 @@ different case: see "Known limitations".
 ### Known limitations
 
 - **An unexpected capture end fails the live session through the registry.** `ProcessAudioCaptureCoordinator.SessionCapture.RunAsync`
-  detaches before calling `EndAsync(Failed)`, so a recorder initialization failure, an unexpected clean return, or an
-  uncancelled `OperationCanceledException` reaches persistence and the browser's terminal status event instead of leaving
-  a session recording without a producer. Requested cancellation keeps the registry caller's status and graceful-flush
-  semantics.
+  detaches before calling `EndAsync`, so a recorder initialization failure or an uncancelled `OperationCanceledException`
+  (`Failed`) and an unrequested clean return (`Completed`, with the graceful final flush) reach persistence and the
+  browser's terminal status event instead of leaving a session recording without a producer. Requested cancellation keeps
+  the registry caller's status and graceful-flush semantics.
 - **The target process exiting ends the capture.** WASAPI stops yielding packets once its target is gone and its
   enumerator does not end, so `WindowsProcessAudioCaptureSource.CaptureAsync` races the capture against the target's
   `WaitForExitAsync` (`ProcessAudioCaptureSupport.RunUntilProcessExitsAsync`, which runs on every gate). An exit, or a
-  target already gone at start, returns normally, and the coordinator ends the session once through `EndAsync(Failed)`.
+  target already gone at start, returns normally, and the coordinator ends the session once through `EndAsync(Completed)`.
   Closing one browser tab does not exit the process: Chromium plays audio from a long-lived utility process.
 - **Capturing a browser captures every tab of that browser.** The target is the browser's audio process (Chromium
   plays audio from one long-lived utility process), not one tab. Closing one tab does not end the session: it keeps
-  running with the quiet notice until Stop or Cancel. Closing the browser does, as a captured process exit (`Failed`).
+  running with the quiet notice until Stop or Cancel. Closing the browser does, as a captured process exit (`Completed`).
 - **A quiet source never ends a session.** A quiet target either delivers no packets (its stream is closed, or NAudio
   drops the silent-flagged ones) or delivers zero-valued ones (a paused video keeps its stream open), and a silence
   timeout would end a healthy session either way. Instead, while an in-host producer is attached, the registry stamps

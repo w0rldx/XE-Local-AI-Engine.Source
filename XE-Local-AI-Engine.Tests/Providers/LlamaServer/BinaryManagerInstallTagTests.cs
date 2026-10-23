@@ -561,8 +561,8 @@ public sealed class BinaryManagerInstallTagTests
         // live catalog resolves the pinned floor (e.g. a node whose recommended setting points back at the pin) while a
         // newer tag is already recorded — the recorded tag must survive (only the live/tier-2 resolve may advance it).
         using var cache = new TempDir();
-        const string newerTag = "b9799";
-        AssertEx.False(string.Equals(newerTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal), "The recorded tag must differ from the pinned floor for this test to be meaningful.");
+        var newerTag = $"b{LlamaCppRuntimeTag.TryParseTagNumber(LlamaCppReleasePins.PinnedTag)!.Value + 1}";
+        AssertEx.True(LlamaCppRuntimeTag.IsUpdateAvailable(LlamaCppReleasePins.PinnedTag, newerTag), "The recorded tag must be newer than the pinned floor for this test to be meaningful.");
 
         // The pinned-floor binary is cached on disk so the resolve serves it without a download.
         var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
@@ -613,6 +613,64 @@ public sealed class BinaryManagerInstallTagTests
         AssertEx.Equal(LlamaCppReleasePins.PinnedTag, binary.Version);
         AssertEx.True(binary.IsPinnedFallback);
     }
+
+    [Test]
+    public async Task EnsureBinary_WhenSameVariantRecordIsOlderThanThePin_RecordsThePinnedRuntime()
+    {
+        // N-71: a record left from before a pin bump must follow the pinned runtime the ensure served, or the status
+        // surface keeps reporting the old tag and an update after the new binary is already in use.
+        var (state, pin) = await EnsureOverRecordOnlineAsync(operatorSelected: false);
+
+        AssertEx.Equal(LlamaCppReleasePins.PinnedTag, state.Tag);
+        AssertEx.Equal(GpuVariant.Cpu, state.Variant);
+        AssertEx.Equal(pin.AssetName, state.Asset);
+        AssertEx.Equal(pin.Sha256, state.Sha256);
+        AssertEx.False(state.OperatorSelected);
+    }
+
+    [Test]
+    public async Task EnsureBinary_WhenOlderRecordIsOperatorSelected_LeavesTheRecordUntouched()
+    {
+        var (state, _) = await EnsureOverRecordOnlineAsync(operatorSelected: true);
+
+        AssertEx.Equal(OlderThanPinTag, state.Tag);
+        AssertEx.Equal(AssetName, state.Asset);
+        AssertEx.Equal(new string('b', 64), state.Sha256);
+        AssertEx.True(state.OperatorSelected);
+    }
+
+    private const string OlderThanPinTag = "b9000";
+
+    /// <summary>Records an older-than-pin CPU runtime, puts both binaries on disk, ensures CPU online and returns the record afterwards.</summary>
+    private static async Task<EnsuredRecord> EnsureOverRecordOnlineAsync(bool operatorSelected)
+    {
+        AssertEx.True(LlamaCppRuntimeTag.IsUpdateAvailable(OlderThanPinTag, LlamaCppReleasePins.PinnedTag), "The recorded tag must be older than the pin for this test.");
+        using var cache = new TempDir();
+        var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
+        foreach (var tag in new[] { LlamaCppReleasePins.PinnedTag, OlderThanPinTag })
+        {
+            var server = Path.Combine(cache.Path, "llama.cpp", tag, "cpu", pin.ServerRelativePath.Replace(oldChar: '/', newChar: Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(server)!);
+            await File.WriteAllTextAsync(server, tag);
+        }
+
+        using var store = new InstalledRuntimeStore(cache.Path);
+        await store.WriteAsync(new InstalledRuntimeState(OlderThanPinTag, AssetName, new string('b', 64), GpuVariant.Cpu, DateTimeOffset.UtcNow, OperatorSelected: operatorSelected),
+            CancellationToken.None);
+
+        using var handler = new ScriptedHandler(() => throw new InvalidOperationException("Cached reuse must not download."));
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, new ResolvesPinnedFloorCatalog(), store);
+
+        var binary = await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
+
+        AssertEx.Equal(expected: 0, handler.CallCount);
+        AssertEx.Equal(LlamaCppReleasePins.PinnedTag, binary.Version);
+        return new EnsuredRecord(AssertEx.NotNull(await store.ReadAsync(CancellationToken.None)), pin);
+    }
+
+    private readonly record struct EnsuredRecord(InstalledRuntimeState State, LlamaCppAssetPin Pin);
 
     /// <summary>Records <paramref name="installedTag" />, puts its binary and the pin's on disk, and ensures CPU with an online catalog.</summary>
     private static async Task<LlamaBinary> EnsureWithInstalledTagOnDiskOnlineAsync(string installedTag)

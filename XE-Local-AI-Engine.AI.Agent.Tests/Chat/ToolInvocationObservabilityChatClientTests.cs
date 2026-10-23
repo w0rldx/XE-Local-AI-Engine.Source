@@ -348,6 +348,8 @@ public sealed class ToolInvocationObservabilityChatClientTests
     [Test]
     [Arguments("[tool error: timeout] The MCP tool 'slow' did not respond.", "timeout")]
     [Arguments("[tool error: tool_reported] ticket 9 does not exist", "error")]
+    [Arguments("Tool call invocation was rejected by the approver and must not be retried.", "denied")]
+    [Arguments("Tool call invocation was rejected by the approver and must not be retried. approving a tool needs an interactive terminal", "denied")]
     public async Task GetStreamingResponseAsync_WhenAWrapperReturnsItsFailure_LogsThatOutcomeNotSuccess(string result, string expectedOutcome)
     {
         var callId = $"call-{Guid.NewGuid():N}";

@@ -1,12 +1,16 @@
 namespace XE_Local_AI_Engine.Cli.Auth;
 
+using System.Runtime.Versioning;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text.Json;
 using XE_Local_AI_Engine.Cli.Api;
 
-/// <summary>Keeps a token pair between runs in an owner-only (0600) file under the user's config directory.</summary>
+/// <summary>Keeps a token pair between runs in an owner-only file under the user's config directory.</summary>
 /// <remarks>
 ///     A pair issued by another origin is ignored on read, so a node on a new port forces a fresh sign-in rather than
-///     sending one node's refresh token to another. On Windows the per-user profile ACL is the protection.
+///     sending one node's refresh token to another. Owner-only is mode 0600 on Linux and macOS, and on Windows a
+///     protected DACL that grants the current user alone, set on the temp file before it replaces the target.
 /// </remarks>
 internal static class TokenFileStore
 {
@@ -54,12 +58,37 @@ internal static class TokenFileStore
                 await JsonSerializer.SerializeAsync(stream, tokens, NodeHttp.Json, cancellationToken);
             }
 
+            if (OperatingSystem.IsWindows())
+            {
+                RestrictToCurrentUser(temporary);
+            }
+
             File.Move(temporary, path, overwrite: true);
         }
         finally
         {
             File.Delete(temporary);
         }
+    }
+
+    /// <summary>
+    ///     Gives the file a protected DACL with one FullControl rule for the current user, so it inherits nothing from
+    ///     the profile folder. The same rule as the node's <c>SecureFilePermissions.Apply</c>, inlined because the CLI
+    ///     references no engine project.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    private static void RestrictToCurrentUser(string path)
+    {
+        var fileSecurity = new FileSecurity();
+        fileSecurity.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+
+        using var currentIdentity = WindowsIdentity.GetCurrent();
+        if (currentIdentity.User is not null)
+        {
+            fileSecurity.AddAccessRule(new FileSystemAccessRule(currentIdentity.User, FileSystemRights.FullControl, AccessControlType.Allow));
+        }
+
+        new FileInfo(path).SetAccessControl(fileSecurity);
     }
 
     /// <summary>The stored pair for <paramref name="origin" />, or null when there is none or it cannot be read.</summary>

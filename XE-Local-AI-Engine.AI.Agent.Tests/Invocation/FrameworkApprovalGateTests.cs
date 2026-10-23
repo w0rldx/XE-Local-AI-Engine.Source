@@ -5,6 +5,7 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -75,9 +76,14 @@ public sealed class FrameworkApprovalGateTests
         var resume = new List<ChatMessage>(seed);
         resume.AddRange(first.Messages);
         resume.Add(new ChatMessage(ChatRole.User, requests.Select(r => (AIContent)r.CreateResponse(false)).ToList()));
-        _ = await agent.RunAsync(resume, session: null, options: null, CancellationToken.None);
+        var second = await agent.RunAsync(resume, session: null, options: null, CancellationToken.None);
 
         AssertEx.Equal(expected: 0, executed, "rejected tool must never execute");
+        // The tool-call telemetry reads a denial from this framework text (ToolInvocationObservabilityChatClient).
+        var rejection = second.Messages.SelectMany(m => m.Contents).OfType<FunctionResultContent>().Single();
+        AssertEx.True(rejection.Result is string text
+                      && text.StartsWith(ToolInvocationObservabilityChatClient.RejectedApprovalResultPrefix, StringComparison.Ordinal),
+            $"the framework's rejection result must start with the prefix the telemetry matches; got '{rejection.Result}'");
     }
 
     [Test]

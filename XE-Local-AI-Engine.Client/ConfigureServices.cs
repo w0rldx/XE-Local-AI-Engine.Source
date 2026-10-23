@@ -95,6 +95,7 @@ public static class ConfigureServices
                       .MinimumLevel.ControlledBy(logLevelSwitch.Level)
                       .ReadFrom.Services(serviceCollection)
                       .Enrich.FromLogContext()
+                      .Enrich.With<AccessTokenQueryLogEnricher>()
                       .Filter.ByExcluding(static logEvent => logEvent.Exception is HubException && FromHubDispatcher(logEvent))
                       .WriteTo.Console(theme: ConsoleTheme.None, outputTemplate: ConsoleOutputTemplate);
 

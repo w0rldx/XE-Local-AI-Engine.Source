@@ -3,6 +3,8 @@ namespace XE_Local_AI_Engine.Tests.Chat;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting.Internal;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -47,6 +49,7 @@ using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
+using XE_Local_AI_Engine.Tests.Transcription;
 
 [Category(TestCategories.Unit)]
 public sealed partial class NodeChatStreamServiceTests
@@ -7083,5 +7086,31 @@ public sealed partial class NodeChatStreamServiceTests
                 return ValueTask.CompletedTask;
             }
         }
+    }
+
+    // A pump that hits a disposed service while the host stops (a staged restore quits the node) is a shutdown, not a fault.
+    [Test]
+    public async Task SendMessageAsync_WhenPumpHitsADisposedServiceWhileTheHostStops_LogsNoError()
+    {
+        var lifetime = new ApplicationLifetime(NullLogger<ApplicationLifetime>.Instance);
+        lifetime.StopApplication();
+        var logger = new RecordingLogger<NodeChatStreamService>();
+
+        await DrainWithDisposedPumpAsync(lifetime, logger);
+
+        AssertEx.Equal(0, logger.CountContaining(PumpFaultedFragment, LogLevel.Error), "A disposal during host stop is not an Error.");
+        AssertEx.Equal(1, logger.CountContaining("pump stopped with the host", LogLevel.Debug), "The disposal is still recorded at Debug.");
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenPumpHitsADisposedServiceWhileTheHostRuns_LogsTheFault()
+    {
+        // The control for the test above: the same disposal on a running host is a real fault and stays loud.
+        var lifetime = new ApplicationLifetime(NullLogger<ApplicationLifetime>.Instance);
+        var logger = new RecordingLogger<NodeChatStreamService>();
+
+        await DrainWithDisposedPumpAsync(lifetime, logger);
+
+        AssertEx.Equal(1, logger.CountContaining(PumpFaultedFragment, LogLevel.Error), "A disposal on a running host is an Error.");
     }
 }

@@ -10,6 +10,8 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
     private readonly bool _devTools;
     private readonly NativeWebView _webView;
     private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly DesktopNavigationGate _navigation = new();
+    private readonly Uri _start;
     private Task<GtkDesktopBridge>? _linuxInitialization;
     private GtkDesktopBridge? _linux;
     private bool _disposed;
@@ -62,7 +64,8 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
             };
         }
 
-        _webView.Source = new Uri(options.Origin, path);
+        _start = new Uri(options.Origin, path);
+        _webView.Source = _start;
     }
 
     private void OnEnvironmentRequested(object? sender, WebViewEnvironmentRequestedEventArgs args)
@@ -134,6 +137,7 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
 
     private async void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs args)
     {
+        _navigation.Started();
         var disposition = DesktopLaunchOptions.ClassifyNavigation(_options.Origin, args.Request);
         if (disposition == NavigationDisposition.SameOrigin)
         {
@@ -163,8 +167,21 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
 
     private async void OnNavigationCompleted(object? sender, WebViewNavigationCompletedEventArgs args)
     {
-        if (!args.IsSuccess)
+        var outcome = _navigation.Completed(args.IsSuccess);
+        if (outcome != DesktopNavigationGate.Outcome.Loaded)
         {
+            // Once the window is ready a failed navigation is the page's own concern.
+            if (_ready.Task.IsCompleted || _disposed || outcome == DesktopNavigationGate.Outcome.Superseded) { return; }
+
+            if (outcome == DesktopNavigationGate.Outcome.Retry)
+            {
+                DesktopStartupDiagnostics.Record("The desktop page did not load; retrying the start page once.");
+                try { _webView.Navigate(_start); }
+                catch (Exception exception) { _ready.TrySetException(exception); }
+
+                return;
+            }
+
             _ready.TrySetException(new InvalidOperationException("The desktop page could not load."));
             return;
         }

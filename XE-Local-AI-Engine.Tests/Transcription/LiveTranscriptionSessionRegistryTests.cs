@@ -39,7 +39,34 @@ public sealed class LiveTranscriptionSessionRegistryTests
     private static readonly TimeSpan ProducerStopBound = TimeSpan.FromSeconds(5);
 
     [Test]
-    [Arguments(0)]
+    public async Task ProcessCapture_TargetExit_CompletesAndPublishesToTheWatchingBrowser()
+    {
+        // The source returns normally when the captured process exits: that is the session's natural end, not a failure.
+        await using var fixture = new RegistryFixture(new ScriptedWhisperTranscriber(OneSegment));
+        var sessionId = Guid.NewGuid();
+        var statuses = fixture.RecordStatuses();
+        var source = Substitute.For<IProcessAudioCaptureSource>();
+        _ = source.IsSupported.Returns(true);
+        _ = source.CaptureAsync(sessionId, 4321, Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+        await using var coordinator = new ProcessAudioCaptureCoordinator(source, fixture.Registry, fixture.Time,
+            NullLogger<ProcessAudioCaptureCoordinator>.Instance);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+        fixture.Registry.NoteBrowserAttached(sessionId, "watching-browser");
+
+        AssertEx.Equal(StartProcessCaptureOutcome.Started, coordinator.Start(sessionId, 4321),
+            "Admission succeeds before the detached recorder returns.");
+        await AssertEx.EventuallyAsync(() => Snapshot(statuses).Count == 1, TimeSpan.FromSeconds(5),
+            "A watching browser receives the completion without disconnecting or waiting for abandonment.");
+
+        AssertEx.Equal(LiveEndReason.Completed, Snapshot(statuses)[0], "A target exit completes the session.");
+        AssertEx.False(coordinator.IsCapturing(sessionId), "The finished producer was detached before session teardown.");
+        AssertEx.False(fixture.Registry.IsLive(sessionId), "No live session is left without its producer.");
+        await fixture.Service.Received(1).CompleteLiveAsync(sessionId, TranscriptionSessionStatus.Completed,
+            Arg.Any<long>(), Arg.Any<string?>(), Arg.Is<string?>(static code => code == null), Arg.Is<string?>(static message => message == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     [Arguments(1)]
     [Arguments(2)]
     public async Task ProcessCapture_UnexpectedEnd_FailsAndPublishesToTheWatchingBrowser(int outcome)
@@ -51,7 +78,6 @@ public sealed class LiveTranscriptionSessionRegistryTests
         _ = source.IsSupported.Returns(true);
         _ = source.CaptureAsync(sessionId, 4321, Arg.Any<CancellationToken>()).Returns(_ => outcome switch
         {
-            0 => Task.CompletedTask,
             1 => Task.FromException(new IOException("Recorder unavailable")),
             _ => Task.FromException(new OperationCanceledException("Recorder cancelled without a stop request"))
         });

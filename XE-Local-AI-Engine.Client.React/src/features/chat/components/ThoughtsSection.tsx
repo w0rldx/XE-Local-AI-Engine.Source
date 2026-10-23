@@ -106,7 +106,7 @@ export function ThoughtsSection({
 							</Text>
 						)}
 						<Text size="xs" c="dimmed" ff="monospace" data-testid="chat-live-reasoning-size">
-							· {liveWordCount} {t("chat.words", "words")}
+							· {liveWordCount} {t("chat.words", "words", { count: liveWordCount })}
 						</Text>
 					</Group>
 					<Text ref={streamingBodyRef} component="div" size="sm" className={classes["streaming-body"]}>
@@ -148,7 +148,7 @@ export function ThoughtsSection({
 									<IconBrain size={11} />
 								</ThemeIcon>
 								<Text component="span" size="sm" fw={600} c="dimmed">
-									{t("chat.thoughts", "Thoughts")} · {finalWordCount} {t("chat.words", "words")}
+									{t("chat.thoughts", "Thoughts")} · {finalWordCount} {t("chat.words", "words", { count: finalWordCount })}
 								</Text>
 								{reasoningBypassed ? (
 									<Tooltip

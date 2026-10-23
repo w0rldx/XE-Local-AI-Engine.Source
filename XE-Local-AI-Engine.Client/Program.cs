@@ -43,6 +43,19 @@ catch (NodeKeyCustodyException ex)
     await Console.Error.WriteLineAsync(ex.Message);
     return XE_Local_AI_Engine.Client.Program.NodeKeyCustodyExitCode;
 }
+catch (Exception ex) when (ApplicationControlBlock.TryDescribe(ex, out var blockedFile))
+{
+    // Smart App Control or an application control policy refused an unsigned engine file (a Quartz assembly, first): not a crash the operator can
+    // read from a stack trace. Name the file on stderr for the desktop shell, which maps exit 11 and this line to its own dialog.
+    if (!XE_Local_AI_Engine.Client.Program.StartupLoggerReady)
+    {
+        await StartupCrashLog.RecordAsync("Windows application control blocked an engine file during early startup", ex, CancellationToken.None);
+    }
+
+    Log.Fatal(ex, "Windows application control blocked {BlockedFile}; startup stopped.", blockedFile);
+    await Console.Error.WriteLineAsync(ApplicationControlBlock.Describe(blockedFile));
+    return XE_Local_AI_Engine.Client.Program.ApplicationControlBlockedExitCode;
+}
 catch (Exception ex)
 {
     // Before the startup logger is installed Log.Fatal writes nothing, so a crash in the Velopack / desktop bootstrap window would vanish with no console and

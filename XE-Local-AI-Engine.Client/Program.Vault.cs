@@ -25,6 +25,9 @@ public sealed partial class Program
     /// <summary>Exit code: the data directory is not usable (not writable or not creatable) or node-settings.json is present but unreadable.</summary>
     internal const int DataDirectoryUnusableExitCode = 10;
 
+    /// <summary>Exit code: Windows application control (Smart App Control or a policy) blocked an engine file; stderr names it.</summary>
+    internal const int ApplicationControlBlockedExitCode = 11;
+
     /// <summary>
     ///     Unwraps a locked v2 <c>node.key</c> before the host is built (ADR 0018). A CLI one-shot unlocks from what it
     ///     was given and never serves; anything else runs the <see cref="VaultUnlockHost" /> pre-host until the operator

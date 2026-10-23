@@ -71,6 +71,11 @@ internal static class DesktopText
             : "XE could not start. Check the installation, data directory and engine logs.";
 
     /// <summary>The engine is ready but the native window could not open: on Windows that is a missing WebView2 runtime.</summary>
+    internal static string PreviousWindowUnresponsive =>
+        German
+            ? "Ein früheres XE-Fenster ist noch geöffnet, antwortet aber nicht; vermutlich zeigt es eine Fehlermeldung vom Start. Schließen Sie es und starten Sie XE erneut."
+            : "An earlier XE window is still open but not responding; it is probably showing a startup error. Close it, then start XE again.";
+
     internal static string WindowFailed =>
         German
             ? "Das XE-Fenster konnte nicht geöffnet werden. Unter Windows muss Microsoft Edge WebView2 Runtime installiert sein. Prüfen Sie die Installation und die Engine-Protokolle."
@@ -83,6 +88,20 @@ internal static class DesktopText
         German
             ? "Die Engine wurde unerwartet beendet. XE wird geschlossen. Prüfen Sie vor einem Neustart die Engine-Protokolle."
             : "The engine stopped unexpectedly. XE will close. Check the engine logs before restarting.";
+
+    /// <summary>The engine exited because Windows Smart App Control or an application control policy blocked one of its
+    ///     files; <paramref name="file" /> is the blocked file the engine named, when it named one.</summary>
+    internal static string ApplicationControlBlocked(string? file, string installFolder)
+    {
+        if (!German)
+        {
+            var named = file is null ? "a program file" : $"\"{file}\"";
+            return $"Windows blocked a file XE needs: Smart App Control or an application control policy stopped {named} from loading, so the engine stopped. XE is installed in: {installFolder}. XE's files are not digitally signed, so the policy can also block files that an update just replaced. The details are in the engine log in the logs folder, or in startup-crash.log if the engine stopped before its log opened. Smart App Control is in Windows Security under \"App & browser control\"; an organization's policy is managed by its IT administrators.";
+        }
+
+        var benannt = file is null ? "eine Programmdatei" : $"„{file}“";
+        return $"Windows hat eine Datei blockiert, die XE benötigt: Smart App Control oder eine Richtlinie zur Anwendungssteuerung hat {benannt} am Laden gehindert, daher wurde die Engine beendet. XE ist installiert in: {installFolder}. Die XE-Dateien sind nicht digital signiert, deshalb kann die Richtlinie auch Dateien blockieren, die ein Update gerade ersetzt hat. Details stehen im Engine-Protokoll im Protokollordner, oder in startup-crash.log, falls die Engine beendet wurde, bevor ihr Protokoll geöffnet war. Smart App Control finden Sie in der Windows-Sicherheit unter „App- und Browsersteuerung“; eine Unternehmensrichtlinie verwaltet Ihre IT-Abteilung.";
+    }
 
     internal static string StopFailed =>
         German ? "Die Engine konnte nicht vollständig beendet werden. Prüfen Sie die Prozesse vor einem Neustart." : "The engine could not be fully stopped. Check its processes before restarting.";

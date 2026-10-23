@@ -340,6 +340,9 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                 throw new LlamaRuntimeNotInstalledException(refusal);
             }
 
+            var acquisitionStarted = _timeProvider.GetTimestamp();
+            _logger.LogInformation("Acquiring llama.cpp {Tag} ({Variant}) from release asset {AssetName}.", resolvedTag, variant, pin.AssetName);
+
             // The pinned path has no catalog-reported size — pass "unknown" (0) so only the absolute ceiling is enforced.
             var stagingDir = await DownloadVerifyExtractAsync(LlamaCppReleasePins.DownloadUri(resolvedTag, pin.AssetName), pin.AssetName, pin.Sha256, expectedSize: 0, variantDir,
                     reporter,
@@ -365,6 +368,11 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                              ?? throw new LlamaRuntimeException("The downloaded llama.cpp runtime did not contain the expected server executable.");
 
             await RecordResolvedRuntimeAsync(resolvedTag, pin, variant, pinVariant, ct).ConfigureAwait(false);
+            _logger.LogInformation("Acquired llama.cpp {Tag} ({Variant}) into {VariantDir} in {ElapsedMs} ms.",
+                resolvedTag,
+                variant,
+                variantDir,
+                (long)_timeProvider.GetElapsedTime(acquisitionStarted).TotalMilliseconds);
 
             // A NEW binary is on disk (the cached-serve branch above deliberately does not do this — it runs on every
             // model spawn): bump the stamp so the device audit re-probes instead of serving a memo taken mid-download.
@@ -546,9 +554,11 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                 return;
             }
 
-            // A record already exists for this variant, pinning either the same tag (steady state) or a newer explicitly-installed one, and the pinned floor must not
-            // overwrite it — so a write happens only on a first pinned-floor ensure with no matching record, and neither a steady-state ensure nor an operator pin is rewritten.
-            if (current is { } existing && (existing.Variant == variant || existing.OperatorSelected))
+            // Kept: an operator-selected record, and a same-variant record of the same tag (steady state) or a newer one (an explicit install the floor
+            // must not downgrade). Replaced: a same-variant record OLDER than the pin (pre pin bump): this ensure just served the pinned tag, and status reads the record.
+            if (current is { } existing
+                && (existing.OperatorSelected
+                    || (existing.Variant == variant && !LlamaCppRuntimeTag.IsUpdateAvailable(existing.Tag, resolvedTag))))
             {
                 return;
             }

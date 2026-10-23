@@ -58,6 +58,22 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
         }
     }
 
+    /// <summary>The owned engine's stderr tail once its drain caught up with the exit; bounded, because a descendant can
+    ///     hold the pipe open.</summary>
+    internal async Task<string> ReadExitErrorTailAsync()
+    {
+        try
+        {
+            await _errors.WaitAsync(TimeSpan.FromSeconds(5), CancellationToken.None);
+        }
+        catch (Exception exception) when (exception is TimeoutException or IOException or ObjectDisposedException)
+        {
+            // Whatever was captured so far is what the exit notice gets.
+        }
+
+        return ErrorTail;
+    }
+
     internal Task? WaitForEngineExitAsync() =>
         _process?.WaitForExitAsync(CancellationToken.None);
 

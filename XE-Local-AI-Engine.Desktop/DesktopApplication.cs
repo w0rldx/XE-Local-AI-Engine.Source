@@ -48,6 +48,9 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
     // The engine's Program.DataDirectoryUnusableExitCode, duplicated: the shell has no reference to the engine assembly.
     internal const int DataDirectoryUnusableExitCode = 10;
 
+    // The engine's exit code for a file blocked by Smart App Control or an application control policy, duplicated likewise.
+    internal const int ApplicationControlBlockedExitCode = 11;
+
     internal DesktopApplication(DesktopStartupOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -127,7 +130,21 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
                 }
 
                 await WriteNotStreamedAsync();
-                await DesktopInstance.ActivateAsync(_options.DataDirectory, _stopping.Token);
+                try
+                {
+                    await DesktopInstance.ActivateAsync(_options.DataDirectory, _stopping.Token);
+                }
+                catch (Exception exception) when (exception is OperationCanceledException or IOException or TimeoutException
+                                                  && !_stopping.IsCancellationRequested)
+                {
+                    // The holder keeps the lease until it exits (the updater reads it as "shell loaded") but stopped
+                    // listening: a shell parked on its failure dialog. Say so instead of quitting as if it had been shown.
+                    DesktopStartupDiagnostics.Record($"Another shell holds the instance lease but does not answer activation ({exception.GetType().Name}).");
+                    _exitCode = 1;
+                    ShowFailure(DesktopText.PreviousWindowUnresponsive, includeWebViewLink: false);
+                    return;
+                }
+
                 Dispatcher.UIThread.Post(() => _ = QuitAsync());
                 return;
             }
@@ -193,17 +210,53 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             _exitCode = StartupFailureExitCode(exception, engineReady);
             string reason;
             if (OperatingSystem.IsLinux() && _window is DesktopWindow) { reason = GtkDesktopBridge.FailureText; }
+            else if (exception is DesktopEngineStartupException startup
+                     && EngineExitNotice.IsApplicationControlBlock(startup.ExitCode, startup.Message))
+            {
+                reason = EngineExitNotice.For(startup.ExitCode, startup.Message, AppContext.BaseDirectory);
+            }
             else { reason = engineReady ? DesktopText.WindowFailed : DesktopText.StartupFailed; }
 
             // The engine's own last words (a missing shared runtime, a port conflict) are the only actionable part.
             ShowFailure($"{reason}{Environment.NewLine}{Environment.NewLine}{exception.Message}",
                 includeWebViewLink: engineReady && OperatingSystem.IsWindows());
+            await ReleaseAfterFailureAsync(stopEngine: true);
         }
     }
 
     /// <summary>
-    ///     A failed start's exit code: the engine's own when it reported one, 10 for an access denial before the engine
-    ///     is ready (data or profile directory, instance lock), else 1.
+    ///     While a failure keeps this process open: stops the owned engine and closes the activation pipe, so a fresh
+    ///     launch neither attaches to this engine nor activates a dead window. The instance lease stays held until exit.
+    /// </summary>
+    /// <remarks>
+    ///     The lease is also the updater's "a shell is loaded" check (AppUpdateService.AcquireStandaloneShellLease): an
+    ///     engine this shell did not own, or could not stop, must not apply an update while these assemblies are loaded.
+    ///     A launch that then cannot activate this shell reads <see cref="DesktopText.PreviousWindowUnresponsive" />.
+    /// </remarks>
+    private async Task ReleaseAfterFailureAsync(bool stopEngine)
+    {
+        try
+        {
+            if (stopEngine && _engine is { } engine)
+            {
+                _engine = null;
+                await engine.DisposeAsync();
+            }
+
+            if (_instance is { } instance)
+            {
+                await instance.StopListeningAsync();
+            }
+        }
+        catch (Exception exception)
+        {
+            DesktopStartupDiagnostics.Record($"The failed shell could not stop its engine or close its activation pipe ({exception.GetType().Name}). {exception.Message}");
+        }
+    }
+
+    /// <summary>
+    ///     A failed start's exit code: the engine's own when it reported one (11 for an application control block), 10 for
+    ///     an access denial before the engine is ready (data or profile directory, instance lock), else 1.
     /// </summary>
     internal static int StartupFailureExitCode(Exception exception, bool engineReady) =>
         exception switch
@@ -473,9 +526,11 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         _exitCode = _engine?.EngineExitCode ?? 0;
         if (_exitCode != 0)
         {
+            var errorTail = _engine is null ? null : await _engine.ReadExitErrorTailAsync();
             ShowWindow();
             await RefreshLanguageAsync();
-            await ShowNoticeAsync(DesktopText.EngineStopped);
+            await ReleaseAfterFailureAsync(stopEngine: true);
+            await ShowNoticeAsync(EngineExitNotice.For(_exitCode, errorTail, AppContext.BaseDirectory));
         }
 
         await QuitAsync();
@@ -552,6 +607,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             await Console.Error.WriteLineAsync("Desktop shutdown could not complete.");
             _exiting = false;
             ShowFailure(DesktopText.StopFailed, includeWebViewLink: false);
+            await ReleaseAfterFailureAsync(stopEngine: false);
         }
     }
 

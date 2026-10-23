@@ -24,9 +24,24 @@ BeforeAll {
         param([int] $Id, [string] $Name, [string] $Path)
         [pscustomobject]@{ Id = $Id; Name = $Name; Path = $Path }
     }
+    function New-FakeCimProcess {
+        param([int] $Id, [string] $Name, [string] $ExecutablePath, [string] $CommandLine)
+        [pscustomobject]@{ ProcessId = $Id; Name = $Name; ExecutablePath = $ExecutablePath; CommandLine = $CommandLine }
+    }
+    # CimCmdlets ships only on Windows; Pester can mock only a command that exists.
+    if (-not (Get-Command Get-CimInstance -ErrorAction SilentlyContinue)) {
+        function Get-CimInstance {
+            [CmdletBinding()]
+            param([string] $ClassName, [string] $Filter)
+        }
+    }
 }
 
 Describe 'Get-XEUninstallTarget' {
+    BeforeEach {
+        Mock Get-CimInstance { }
+    }
+
     It 'stops the shell and launcher first, then the app, then owned whisper-server and trainer processes' {
         Mock Get-Process -ParameterFilter { $Name -contains 'XE-Local-AI-Engine.Desktop' } -MockWith {
             New-FakeProcess -Id 10 -Name 'XE-Local-AI-Engine.Desktop' -Path (Join-Path $script:InstallDir 'XE-Local-AI-Engine.Desktop.exe')
@@ -51,6 +66,44 @@ Describe 'Get-XEUninstallTarget' {
         $ids = @(Get-XEUninstallTarget -DataDirectory $script:DataDir -InstallDirectory @($script:InstallDir) | ForEach-Object { $_.Id })
 
         $ids | Should -Be @(10, 11, 20, 21, 30, 31)
+    }
+
+    It 'finds dotnet-hosted shell and app and the WebView2 of this data dir, in stop order, and nothing foreign' {
+        $dotnet = 'C:/Program Files/dotnet/dotnet.exe'
+        $clientDll = Join-Path $script:InstallDir 'with space/XE-Local-AI-Engine.Client.dll'
+        $desktopDll = Join-Path $script:InstallDir 'XE-Local-AI-Engine.Desktop.dll'
+        $webView = 'C:/WebView2/msedgewebview2.exe'
+        Mock Get-CimInstance -MockWith {
+            New-FakeCimProcess -Id 50 -Name 'dotnet.exe' -ExecutablePath $dotnet -CommandLine "`"$dotnet`" `"$clientDll`" --desktop --no-browser"
+            New-FakeCimProcess -Id 51 -Name 'msedgewebview2.exe' -ExecutablePath $webView -CommandLine "`"$webView`" --type=renderer --user-data-dir=`"$(Join-Path $script:DataDir 'desktop-profile/EBWebView')`""
+            New-FakeCimProcess -Id 52 -Name 'dotnet.exe' -ExecutablePath $dotnet -CommandLine "`"$dotnet`" $desktopDll"
+            # Another checkout's engine, an unrelated dotnet app, a sibling-prefix WebView2 profile and a row with no
+            # visible command line (another user's process) all keep running.
+            New-FakeCimProcess -Id 60 -Name 'dotnet.exe' -ExecutablePath $dotnet -CommandLine "`"$dotnet`" `"$(Join-Path $script:Elsewhere 'XE-Local-AI-Engine.Client.dll')`""
+            New-FakeCimProcess -Id 61 -Name 'dotnet.exe' -ExecutablePath $dotnet -CommandLine "`"$dotnet`" `"$(Join-Path $script:InstallDir 'Other.App.dll')`""
+            New-FakeCimProcess -Id 62 -Name 'msedgewebview2.exe' -ExecutablePath $webView -CommandLine "`"$webView`" --user-data-dir=`"$($script:DataDir)-sibling/EBWebView`""
+            New-FakeCimProcess -Id 63 -Name 'dotnet.exe' -ExecutablePath $null -CommandLine $null
+        }
+        Mock Get-Process -MockWith { }
+        Mock Get-Process -ParameterFilter { $Name -contains 'XE-Local-AI-Engine.WindowsLauncher' } -MockWith {
+            New-FakeProcess -Id 11 -Name 'XE-Local-AI-Engine.WindowsLauncher' -Path (Join-Path $script:InstallDir 'XE-Local-AI-Engine.WindowsLauncher.exe')
+        }
+        Mock Get-Process -ParameterFilter { $Name -contains 'llama-server' } -MockWith {
+            New-FakeProcess -Id 30 -Name 'llama-server' -Path (Join-Path $script:DataDir 'llama.cpp/llama-server.exe')
+        }
+
+        $targets = @(Get-XEUninstallTarget -DataDirectory $script:DataDir -InstallDirectory @($script:InstallDir))
+
+        @($targets | ForEach-Object { $_.Id }) | Should -Be @(52, 11, 50, 51, 30)
+        ($targets | Where-Object Id -EQ 50).Path | Should -Be "$dotnet $clientDll" -Because 'the listing names the dll the dotnet host runs'
+        Should -Invoke Get-CimInstance -Exactly -Times 1 -ParameterFilter { $ClassName -eq 'Win32_Process' }
+    }
+
+    It 'throws when the process query fails, so the caller can stop before any delete' {
+        Mock Get-CimInstance { throw 'The RPC server is unavailable.' }
+        Mock Get-Process -MockWith { }
+
+        { Get-XEUninstallTarget -DataDirectory $script:DataDir } | Should -Throw '*RPC server*'
     }
 
     It 'returns an empty list when nothing runs' {
@@ -155,6 +208,7 @@ Describe 'uninstall script end to end' -Skip:(-not $IsLinux) {
         Mock Write-Host { }
         Mock Start-Sleep { }
         Mock Get-Process { }
+        Mock Get-CimInstance { }
         Mock Read-Host { 'n' }
         # Every run must set its own exit code; a stale one from an earlier test would pass silently.
         $global:LASTEXITCODE = -1
@@ -243,5 +297,48 @@ Describe 'uninstall script end to end' -Skip:(-not $IsLinux) {
         Test-Path -LiteralPath (Join-Path $script:Data 'node.sqlite') | Should -BeTrue
         Should -Invoke Write-Host -ParameterFilter { "$Object" -like '*Could not stop: pid 4242*' }
         Should -Invoke Write-Host -Exactly -Times 0 -ParameterFilter { "$Object" -like '*Processes stopped*' }
+    }
+
+    It 'stops and deletes nothing when the process list cannot be read' {
+        Mock Get-CimInstance { throw 'The RPC server is unavailable.' }
+        Mock Stop-Process { }
+        & $script:Run -Yes -AllowAdmin
+        $LASTEXITCODE | Should -Be 1
+        Test-Path -LiteralPath (Join-Path $script:Data 'node.sqlite') | Should -BeTrue
+        Should -Invoke Stop-Process -Exactly -Times 0
+        Should -Invoke Write-Host -ParameterFilter { "$Object" -like '*Could not enumerate processes*' }
+    }
+
+    It 'refuses the delete while the engine named in ready.json is alive' {
+        $startedAt = [DateTimeOffset]::UtcNow
+        Set-Content -LiteralPath (Join-Path $script:Data 'ready.json') -Value (
+            @{ version = '1.0.0'; pid = 7777; startedAtUtc = $startedAt.ToString('o') } | ConvertTo-Json)
+        Mock Get-Process -ParameterFilter { $Id -eq 7777 } -MockWith {
+            [pscustomobject]@{ Id = 7777; StartTime = $startedAt.AddSeconds(-3).LocalDateTime }
+        }
+        & $script:Run -Yes -AllowAdmin
+        $LASTEXITCODE | Should -Be 1
+        Test-Path -LiteralPath (Join-Path $script:Data 'node.sqlite') | Should -BeTrue
+        Should -Invoke Read-Host -Exactly -Times 0
+        Should -Invoke Write-Host -ParameterFilter { "$Object" -like '*Engine pid 7777 still running. Nothing was deleted.*' }
+    }
+
+    It 'deletes when ready.json names a pid that is <Case>' -ForEach @(
+        @{ Case = 'gone'; Alive = $false; Malformed = $false }
+        @{ Case = 'reused by a process started after the engine'; Alive = $true; Malformed = $false }
+        @{ Case = 'unreadable (malformed ready.json)'; Alive = $true; Malformed = $true }
+    ) {
+        $startedAt = [DateTimeOffset]::UtcNow.AddMinutes(-10)
+        $content = if ($Malformed) { '{ "pid": 7777,' } else {
+            @{ pid = 7777; startedAtUtc = $startedAt.ToString('o') } | ConvertTo-Json }
+        Set-Content -LiteralPath (Join-Path $script:Data 'ready.json') -Value $content
+        if ($Alive) {
+            Mock Get-Process -ParameterFilter { $Id -eq 7777 } -MockWith {
+                [pscustomobject]@{ Id = 7777; StartTime = [DateTime]::Now }
+            }
+        }
+        & $script:Run -Yes -AllowAdmin
+        $LASTEXITCODE | Should -Be 0
+        Test-Path -LiteralPath $script:Data | Should -BeFalse
     }
 }

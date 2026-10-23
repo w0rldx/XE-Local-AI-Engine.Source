@@ -43,7 +43,11 @@ internal static class StatusCommand
             grid.AddRow(new Text(name, new Style(decoration: Decoration.Bold)), new Text(string.IsNullOrEmpty(value) ? "-" : value));
 
         Row("Origin", session.Node.Origin.GetLeftPart(UriPartial.Authority));
-        Row("Version", info.Commit is { Length: > 0 } commit ? $"{info.Version} ({commit})" : info.Version);
+        // The node's Version is already the informational x.y.z+sha; append the commit only when it does not carry it.
+        Row("Version",
+            info.Commit is { Length: > 0 } commit && !info.Version.Contains(commit, StringComparison.OrdinalIgnoreCase)
+                ? $"{info.Version} ({commit})"
+                : info.Version);
         Row("Flavour", info.Flavour);
         Row("OS", info.OsDescription);
         Row("GPU", info.GpuVendor);

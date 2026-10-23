@@ -75,6 +75,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     private readonly IGraphWorkflowStore _graphWorkflows;
     private readonly ILogger<NodeChatStreamService> _logger;
     private readonly IGpuWorkGate _gpuWorkGate;
+    private readonly IHostApplicationLifetime? _applicationLifetime;
 
     public NodeChatStreamService(INodeChatPersistenceService persistence,
         ChatInvocationStatePump invocationStatePump,
@@ -99,10 +100,12 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         IToolApprovalPolicy toolApprovalPolicy,
         IGraphWorkflowStore graphWorkflows,
         ILogger<NodeChatStreamService> logger,
-        IGpuWorkGate gpuWorkGate)
+        IGpuWorkGate gpuWorkGate,
+        IHostApplicationLifetime? applicationLifetime = null)
     {
         ArgumentNullException.ThrowIfNull(gpuWorkGate);
         _gpuWorkGate = gpuWorkGate;
+        _applicationLifetime = applicationLifetime;
         _persistence = persistence;
         _invocationStatePump = invocationStatePump;
         _turnResolver = turnResolver;
@@ -1059,6 +1062,13 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             catch (OperationCanceledException)
             {
                 // The cancelled/interrupted terminal is persisted by the pump.
+            }
+            catch (ObjectDisposedException exception) when (_applicationLifetime?.ApplicationStopping.IsCancellationRequested == true)
+            {
+                // The host is stopping (a staged restore quits the node) and disposed what the pump writes through: a
+                // shutdown, not a fault. Restart recovery reconciles the row on the next launch.
+                _logger.LogDebug(exception, "Local node chat stream pump stopped with the host; cancelling the run. RequestId={RequestId}", requestId);
+                await runCancellation.CancelAsync();
             }
             catch (Exception exception)
             {

@@ -788,7 +788,7 @@ describe("Chat workflow mode", () => {
 
 		const card = await screen.findByTestId("chat-workflow-status-card");
 		const summary = await within(card).findByTestId("chat-message-reasoning-summary-workflow-node-code");
-		expect(summary.textContent).toContain(`${i18next.t("chat.thoughts")} · 3 ${i18next.t("chat.words")}`);
+		expect(summary.textContent).toContain(`${i18next.t("chat.thoughts")} · 3 ${i18next.t("chat.words", { count: 3 })}`);
 		expect(nodeActivity.calls.at(-1)).toEqual([runId, "code", invocationId]);
 		const row = await screen.findByTestId("chat-workflow-activity-node-code");
 		expect(within(row).getByTestId("chat-message-reasoning-summary-workflow-node-code")).toBeTruthy();

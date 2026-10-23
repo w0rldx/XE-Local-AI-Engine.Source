@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Cli.Tests.Auth;
 
 using System.Runtime.Versioning;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using XE_Local_AI_Engine.Cli.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
@@ -31,6 +33,33 @@ public sealed class TokenFileStoreTests
                 AssertEx.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(path));
                 AssertEx.Equal("tokens.json", string.Join(',', Directory.GetFiles(Path.GetDirectoryName(path)!).Select(Path.GetFileName)));
             }
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Test]
+    [RunOn(OS.Windows)]
+    [SupportedOSPlatform("windows")]
+    public async Task SaveAsync_OnWindows_LeavesAProtectedAclThatGrantsOnlyTheCurrentUser()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"xe-cli-config-{Guid.NewGuid():N}");
+        var path = Path.Combine(directory, "xe", "tokens.json");
+        try
+        {
+            await TokenFileStore.SaveAsync(path, Pair(Written[0]), CancellationToken.None);
+
+            var security = new FileInfo(path).GetAccessControl();
+            var rules = security.GetAccessRules(includeExplicit: true, includeInherited: true, typeof(SecurityIdentifier))
+                .Cast<FileSystemAccessRule>()
+                .ToList();
+            using var currentIdentity = WindowsIdentity.GetCurrent();
+            AssertEx.True(security.AreAccessRulesProtected);
+            AssertEx.Equal(currentIdentity.User!.Value, string.Join(',', rules.Select(rule => rule.IdentityReference.Value)));
+            AssertEx.Equal(AccessControlType.Allow, rules[0].AccessControlType);
+            AssertEx.Equal(Written[0], (await TokenFileStore.LoadAsync(path, Origin, CancellationToken.None))?.AccessToken);
         }
         finally
         {

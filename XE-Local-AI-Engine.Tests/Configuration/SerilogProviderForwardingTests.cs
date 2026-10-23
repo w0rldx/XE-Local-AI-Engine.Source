@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Configuration;
 
+using System.Globalization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
@@ -90,6 +91,40 @@ public sealed class SerilogProviderForwardingTests : IDisposable
         AssertEx.Contains(messages, "other-source-probe");
     }
 
+    // With Hosting.Diagnostics at Information the framework's "Request finished" line carried the SignalR JWT from the query:
+    // logged here in its own template, category and QueryString property through the real pipeline, no copy may keep the token.
+    [Test]
+    public void AddServices_RedactsTheAccessTokenInHostingDiagnosticsRequestLines()
+    {
+        const string Token = "eyJhbGciOiJIUzI1NiJ9.secret-jwt-body.signature";
+        var sink = new CapturingSink();
+        var forwarded = new List<string>();
+        var builder = CreateBuilder();
+        builder.Logging.ClearProviders();
+        builder.Services.AddSingleton<ILogEventSink>(sink);
+        builder.AddServices(builder.Configuration, NodeStartupSettings.Read(builder.Configuration, builder.Environment));
+        using var recordingProvider = new RecordingLoggerProvider(forwarded);
+        builder.Logging.AddProvider(recordingProvider);
+
+        using var provider = builder.Services.BuildServiceProvider();
+        var hostingDiagnostics = provider.GetRequiredService<ILoggerFactory>().CreateLogger("Microsoft.AspNetCore.Hosting.Diagnostics");
+
+        // Warning, not the framework's Information, only so the configured minimum level cannot drop the probe.
+#pragma warning disable CA2254 // The framework's exact template is the point of the probe.
+        hostingDiagnostics.LogWarning("Request finished {Protocol} {Method} {Scheme}://{Host}{PathBase}{Path}{QueryString} - {StatusCode} {ContentLength} {ContentType} {ElapsedMilliseconds}ms",
+            "HTTP/1.1", "GET", "http", "127.0.0.1:5000", "", "/api/local/v1/hubs/local-chat", $"?id=abc&access_token={Token}",
+            101, null, null, 1.5);
+#pragma warning restore CA2254
+
+        var rendered = sink.Rendered();
+        AssertEx.True(rendered.Any(line => line.Contains("access_token=[REDACTED]", StringComparison.Ordinal)),
+            "The rendered request line must keep the parameter with its value redacted.");
+        AssertEx.False(rendered.Any(line => line.Contains(Token, StringComparison.Ordinal)), "No sink may receive the JWT.");
+        AssertEx.True(forwarded.Any(line => line.Contains("access_token=[REDACTED]", StringComparison.Ordinal)),
+            "The provider copy (the OTLP path) carries the redacted line.");
+        AssertEx.False(forwarded.Any(line => line.Contains(Token, StringComparison.Ordinal)), "No forwarded provider may receive the JWT.");
+    }
+
     private WebApplicationBuilder CreateBuilder()
     {
         Directory.CreateDirectory(_rootPath);
@@ -112,12 +147,14 @@ public sealed class SerilogProviderForwardingTests : IDisposable
     private sealed class CapturingSink : ILogEventSink
     {
         private readonly List<string> _messages = [];
+        private readonly List<string> _rendered = [];
 
         public void Emit(LogEvent logEvent)
         {
             lock (_messages)
             {
                 _messages.Add(logEvent.MessageTemplate.Text);
+                _rendered.Add(logEvent.RenderMessage(CultureInfo.InvariantCulture));
             }
         }
 
@@ -126,6 +163,14 @@ public sealed class SerilogProviderForwardingTests : IDisposable
             lock (_messages)
             {
                 return [.. _messages];
+            }
+        }
+
+        public List<string> Rendered()
+        {
+            lock (_messages)
+            {
+                return [.. _rendered];
             }
         }
     }

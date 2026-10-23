@@ -66,7 +66,7 @@ describe("ChatNoticeRow", () => {
 
 		expect(
 			screen.getByText(
-				"run_python wurde nicht angeboten, weil die Rechen-Tools ausgeschaltet sind. Schalte sie in den Node-Einstellungen unter Funktionen ein.",
+				"run_python wurde nicht angeboten, weil die Rechen-Tools ausgeschaltet sind. Schalten Sie sie in den Node-Einstellungen unter Funktionen ein.",
 			),
 		).toBeTruthy();
 	});

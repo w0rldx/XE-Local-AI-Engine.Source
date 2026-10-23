@@ -23,6 +23,10 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 /// </remarks>
 internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClient
 {
+    // The result FunctionInvokingChatClient writes for a call whose approval was denied (a reason may follow it).
+    // FrameworkApprovalGateTests pins the text against the framework, so a package bump that rewords it fails there.
+    internal const string RejectedApprovalResultPrefix = "Tool call invocation was rejected";
+
     private readonly ILogger<ToolInvocationObservabilityChatClient> _logger;
 
     public ToolInvocationObservabilityChatClient(IChatClient innerClient, ILogger<ToolInvocationObservabilityChatClient> logger)
@@ -134,16 +138,19 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
 
         var duration = Stopwatch.GetElapsedTime(requested.StartTimestamp);
         var durationMs = duration.TotalMilliseconds;
-        // A wrapper that RETURNS its failure (the MCP timeout, an isError result) leaves no exception, so its text prefix
-        // is the evidence: "timeout" for a fired deadline, "error" for any other returned failure.
-        var outcome = functionResult.Exception is not null
-            ? "error"
-            : ToolFailureText.TryGetCode(functionResult.Result) switch
+        // A wrapper that RETURNS its failure leaves no exception, so its text prefix is the evidence ("timeout", "error");
+        // a denied approval is the function-invocation hop's own rejection text: the tool never ran, so "denied".
+        var outcome = functionResult switch
+        {
+            { Exception: not null } => "error",
+            { Result: string text } when text.StartsWith(RejectedApprovalResultPrefix, StringComparison.Ordinal) => "denied",
+            _ => ToolFailureText.TryGetCode(functionResult.Result) switch
             {
                 null => "success",
                 ToolFailureText.TimeoutCode => "timeout",
                 _ => "error"
-            };
+            }
+        };
         var (resultLength, resultHash) = SummarizePayload(functionResult.Result);
         ProviderCallBudget.Current?.RecordToolCallCompleted(duration, resultLength, functionResult.Exception is not null);
 

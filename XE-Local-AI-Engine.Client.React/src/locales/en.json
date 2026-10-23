@@ -278,7 +278,8 @@
 			"textLabel": "Retrieved page text",
 			"truncated": "Truncated"
 		},
-		"words": "words"
+		"words_one": "word",
+		"words_other": "words"
 	},
 	"common": {
 		"actions": "Actions",
@@ -2480,7 +2481,8 @@
 				"on": "Web content reaches the model without review"
 			},
 			"windowTitle": "Chat window",
-			"words": "words",
+			"words_one": "word",
+			"words_other": "words",
 			"workflow": {
 				"activity": {
 					"attachmentsSkipped": "Skipped attachments: {{names}}",

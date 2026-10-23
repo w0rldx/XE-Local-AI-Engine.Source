@@ -167,7 +167,7 @@
 			"attachmentsTruncated": "Anhang abgeschnitten",
 			"attachmentsTruncatedText": "Einige angehängte Dateien waren zu lang für das Anhangslimit, deshalb hat das Modell nur ihren Anfang erhalten.",
 			"cloudToolsWithheld": "Tools für Cloud-Modell zurückgehalten",
-			"computeWithheldText": "run_python wurde nicht angeboten, weil die Rechen-Tools ausgeschaltet sind. Schalte sie in den Node-Einstellungen unter Funktionen ein.",
+			"computeWithheldText": "run_python wurde nicht angeboten, weil die Rechen-Tools ausgeschaltet sind. Schalten Sie sie in den Node-Einstellungen unter Funktionen ein.",
 			"cpuFallback": "Läuft auf der CPU",
 			"effortDispatched": "Reasoning-Aufwand festgelegt",
 			"emptyAnswer": "Keine Antwort",
@@ -213,7 +213,7 @@
 			"failed": "Fehlgeschlagen",
 			"imageAlt": "Vom Tool {{tool}} zurückgegebenes Bild",
 			"inFlight": "Aktiv",
-			"live": "live",
+			"live": "läuft",
 			"name": "Tool",
 			"noOutput": "(keine Ausgabe)",
 			"patchApply": {
@@ -278,7 +278,8 @@
 			"textLabel": "Abgerufener Seitentext",
 			"truncated": "Gekürzt"
 		},
-		"words": "Wörter"
+		"words_one": "Wort",
+		"words_other": "Wörter"
 	},
 	"common": {
 		"actions": "Aktionen",
@@ -2480,7 +2481,8 @@
 				"on": "Webinhalte gehen ungeprüft an das Modell"
 			},
 			"windowTitle": "Chatfenster",
-			"words": "Wörter",
+			"words_one": "Wort",
+			"words_other": "Wörter",
 			"workflow": {
 				"activity": {
 					"attachmentsSkipped": "Übersprungene Anhänge: {{names}}",
@@ -7366,40 +7368,40 @@
 				"mismatchesTitle": "Veraltet wegen:",
 				"noPythonInstalls": "Noch keine installiert.",
 				"profiles": {
-					"compute": "Compute",
+					"compute": "Rechen-Laufzeit",
 					"training": "Training"
 				},
 				"pythonInstallsTitle": "Installierte Python-Interpreter",
 				"pythonMinor": "Python {{version}}",
 				"reasons": {
-					"ComputeDisabled": "Das Python-Rechen-Tool ist auf diesem Node ausgeschaltet. Schalte die Rechen-Tools in den Node-Einstellungen unter Funktionen ein.",
+					"ComputeDisabled": "Das Python-Rechen-Tool ist auf diesem Node ausgeschaltet. Schalten Sie die Rechen-Tools in den Node-Einstellungen unter Funktionen ein.",
 					"ExecutionPreviewsDisabled": "Das Python-Rechen-Tool benötigt eingeschaltete Ausführungs-Vorschauen. Ein Operator kann sie im Abschnitt „Sandbox & Isolation“ der Node-Einstellungen einschalten.",
-					"IncompleteProvision": "Eine unterbrochene Einrichtung hat eine unvollständige Compute-Laufzeit hinterlassen.",
-					"InterpreterMissing": "Der Python-Interpreter der Compute-Laufzeit fehlt.",
-					"LockfileMissing": "Die festgelegte Lock-Datei der Compute-Laufzeit fehlt in dieser Installation.",
-					"OlderBuild": "Die Compute-Laufzeit wurde von einem älteren Build eingerichtet und wird bei der nächsten Verwendung neu aufgebaut.",
+					"IncompleteProvision": "Eine unterbrochene Einrichtung hat eine unvollständige Rechen-Laufzeit hinterlassen.",
+					"InterpreterMissing": "Der Python-Interpreter der Rechen-Laufzeit fehlt.",
+					"LockfileMissing": "Die festgelegte Lock-Datei der Rechen-Laufzeit fehlt in dieser Installation.",
+					"OlderBuild": "Die Rechen-Laufzeit wurde von einem älteren Build eingerichtet und wird bei der nächsten Verwendung neu aufgebaut.",
 					"PlatformUnsupported": "Das Python-Rechen-Tool ist nur unter Linux x64 und Windows x64 verfügbar.",
-					"Provisioning": "Die Compute-Laufzeit wird eingerichtet.",
-					"RecordUnreadable": "Der Zustandsdatensatz der Compute-Laufzeit ist nicht lesbar.",
-					"Removing": "Die Compute-Laufzeit wird entfernt.",
+					"Provisioning": "Die Rechen-Laufzeit wird eingerichtet.",
+					"RecordUnreadable": "Der Zustandsdatensatz der Rechen-Laufzeit ist nicht lesbar.",
+					"Removing": "Die Rechen-Laufzeit wird entfernt.",
 					"TrainingInstalling": "Die Trainings-Laufzeit wird installiert.",
 					"TrainingInterpreterMissing": "Der Python-Interpreter der Trainings-Laufzeit fehlt. Installieren Sie sie auf der Trainingsseite neu.",
 					"TrainingOutOfDate": "Die Trainings-Laufzeit ist veraltet. Installieren Sie sie auf der Trainingsseite neu.",
 					"TrainingPlatformUnsupported": "Training ist nur unter Linux x64 verfügbar.",
 					"TrainingRemoving": "Die Trainings-Laufzeit wird entfernt.",
-					"UpdateRequired": "Die Compute-Laufzeit ist veraltet und wird bei der nächsten Verwendung neu aufgebaut."
+					"UpdateRequired": "Die Rechen-Laufzeit ist veraltet und wird bei der nächsten Verwendung neu aufgebaut."
 				},
 				"remove": "Entfernen",
 				"removeConfirm": "Entfernen",
-				"removeConfirmBody": "Die Python-Umgebung für Compute wird gelöscht; der nächste Python-Tool-Aufruf richtet sie erneut ein und lädt dabei ihre Pakete herunter. Solange ein Python-Tool-Aufruf läuft, lehnt der Node das ab; versuchen Sie es erneut, sobald der Aufruf beendet ist.",
-				"removeConfirmTitle": "Compute-Umgebung entfernen?",
-				"removeError": "Die Compute-Umgebung konnte nicht entfernt werden.",
+				"removeConfirmBody": "Die Rechen-Laufzeit wird gelöscht; der nächste Python-Tool-Aufruf richtet sie erneut ein und lädt dabei ihre Pakete herunter. Solange ein Python-Tool-Aufruf läuft, lehnt der Node das ab; versuchen Sie es erneut, sobald der Aufruf beendet ist.",
+				"removeConfirmTitle": "Rechen-Laufzeit entfernen?",
+				"removeError": "Die Rechen-Laufzeit konnte nicht entfernt werden.",
 				"removing": "Wird entfernt",
 				"repair": "Reparieren",
 				"repairConfirm": "Reparieren",
-				"repairConfirmBody": "Die Python-Umgebung für Compute wird aus ihrer Lock-Datei neu aufgebaut. Solange ein Python-Tool-Aufruf läuft, lehnt der Node das ab; versuchen Sie es erneut, sobald der Aufruf beendet ist.",
-				"repairConfirmTitle": "Compute-Umgebung reparieren?",
-				"repairError": "Die Compute-Umgebung konnte nicht repariert werden.",
+				"repairConfirmBody": "Die Rechen-Laufzeit wird aus ihrer Lock-Datei neu aufgebaut. Solange ein Python-Tool-Aufruf läuft, lehnt der Node das ab; versuchen Sie es erneut, sobald der Aufruf beendet ist.",
+				"repairConfirmTitle": "Rechen-Laufzeit reparieren?",
+				"repairError": "Die Rechen-Laufzeit konnte nicht repariert werden.",
 				"states": {
 					"Failed": "Fehlgeschlagen",
 					"NotProvisioned": "Nicht eingerichtet",

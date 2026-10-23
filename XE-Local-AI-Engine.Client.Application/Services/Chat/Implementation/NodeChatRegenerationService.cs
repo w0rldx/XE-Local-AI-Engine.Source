@@ -56,6 +56,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
     private readonly IToolApprovalPolicy _toolApprovalPolicy;
     private readonly ILogger<NodeChatRegenerationService> _logger;
     private readonly IGpuWorkGate _gpuWorkGate;
+    private readonly IHostApplicationLifetime? _applicationLifetime;
 
     public NodeChatRegenerationService(INodeChatPersistenceService persistence,
         ChatInvocationStatePump invocationStatePump,
@@ -78,10 +79,12 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         TimeProvider timeProvider,
         IToolApprovalPolicy toolApprovalPolicy,
         ILogger<NodeChatRegenerationService> logger,
-        IGpuWorkGate gpuWorkGate)
+        IGpuWorkGate gpuWorkGate,
+        IHostApplicationLifetime? applicationLifetime = null)
     {
         ArgumentNullException.ThrowIfNull(gpuWorkGate);
         _gpuWorkGate = gpuWorkGate;
+        _applicationLifetime = applicationLifetime;
         _persistence = persistence;
         _invocationStatePump = invocationStatePump;
         _turnResolver = turnResolver;
@@ -506,6 +509,12 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         catch (OperationCanceledException)
         {
             // The cancelled/interrupted terminal is persisted by the pump.
+        }
+        catch (ObjectDisposedException exception) when (_applicationLifetime?.ApplicationStopping.IsCancellationRequested == true)
+        {
+            // The host is stopping and disposed what the pump writes through: a shutdown, not a fault (NodeChatStreamService.DrainRunAsync).
+            _logger.LogDebug(exception, "Local node chat regeneration pump stopped with the host; cancelling the run. RequestId={RequestId}", requestId);
+            await runCancellation.CancelAsync();
         }
         catch (Exception exception)
         {

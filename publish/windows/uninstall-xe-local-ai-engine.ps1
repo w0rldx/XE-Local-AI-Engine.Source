@@ -101,27 +101,58 @@ function Test-UnderDirectory {
 
 # Every process to stop, in stop order. The desktop shell and the launcher come first: the shell holds
 # desktop-shell.lock and its WebView2 profile inside the data dir, so a live shell makes the delete abort
-# half-way. Then the app process, then the child runtimes and the trainer's Python interpreter. Nothing is
-# matched by name alone: the shell, launcher and app only when their executable lives in this install
+# half-way. Then the app process, then WebView2, then the child runtimes and the trainer's Python interpreter.
+# Nothing is matched by name alone: the shell, launcher and app only when their executable lives in this install
 # (the data dir, the folder this script ships in, or the Velopack root), so a same-named host of another
 # install or checkout keeps running; the runtimes and Python only when they live under our own data dir.
+# The launcher starts the shell and the app as "dotnet.exe <dll>" (WindowsLauncherApplication,
+# DesktopEngineSession.CreateStartInfo), so those are found through Win32_Process by the dll path on their
+# command line; WebView2 by the data dir on its command line. A failed CIM query throws: the caller must stop.
 function Get-XEUninstallTarget {
     param([Parameter(Mandatory)][string] $DataDirectory, [string[]] $InstallDirectory = @())
-    $appNames = @('XE-Local-AI-Engine.Desktop', 'XE-Local-AI-Engine.WindowsLauncher', 'XE-Local-AI-Engine.Client')
     $ownedNames = @('llama-server', 'sd-server', 'whisper-server', 'python', 'pythonw')
     $appRoots = @($DataDirectory) + @($InstallDirectory | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 
+    $rows = @(Get-CimInstance -ClassName Win32_Process -Filter "Name='dotnet.exe' OR Name='msedgewebview2.exe'" -ErrorAction Stop)
+    $hosts = @{ Desktop = @(); Client = @() }
+    $webViews = @()
+    $dataDirPattern = '(?i)' + [regex]::Escape([IO.Path]::GetFullPath($DataDirectory).TrimEnd('\', '/')) + '([\\/"\s]|$)'
+    foreach ($row in $rows) {
+        $commandLine = "$($row.CommandLine)"
+        $entry = [pscustomobject]@{ Id = [int]$row.ProcessId; Name = $row.Name; Path = $row.ExecutablePath }
+        if ($row.Name -ieq 'dotnet.exe') {
+            $match = [regex]::Match($commandLine, '(?i)"([^"]*XE-Local-AI-Engine\.(Desktop|Client)\.dll)"|(\S*XE-Local-AI-Engine\.(Desktop|Client)\.dll)')
+            if (-not $match.Success) { continue }
+            $dll = if ($match.Groups[1].Success) { $match.Groups[1].Value } else { $match.Groups[3].Value }
+            $kind = if ($match.Groups[2].Success) { $match.Groups[2].Value } else { $match.Groups[4].Value }
+            if (@($appRoots | Where-Object { Test-UnderDirectory -Path $dll -Root $_ }).Count -gt 0) {
+                # The display path names the dll: "dotnet.exe" alone would not say which host it is.
+                $entry.Path = "$($row.ExecutablePath) $dll"
+                if ($kind -ieq 'Desktop') { $hosts.Desktop += $entry } else { $hosts.Client += $entry }
+            }
+        } elseif ($commandLine -match $dataDirPattern) {
+            $webViews += $entry
+        }
+    }
+
     $found = New-Object System.Collections.Generic.List[object]
-    # One name at a time keeps the stop order: shell, launcher, then the app.
-    foreach ($name in $appNames) {
-        foreach ($p in @(Get-Process -Name $name -ErrorAction SilentlyContinue)) {
+    # Apphost first, then the dotnet-hosted dll, per stage: shell, launcher, app, WebView2.
+    $stages = @(
+        @{ Name = 'XE-Local-AI-Engine.Desktop'; Hosted = $hosts.Desktop }
+        @{ Name = 'XE-Local-AI-Engine.WindowsLauncher'; Hosted = @() }
+        @{ Name = 'XE-Local-AI-Engine.Client'; Hosted = $hosts.Client }
+    )
+    foreach ($stage in $stages) {
+        foreach ($p in @(Get-Process -Name $stage.Name -ErrorAction SilentlyContinue)) {
             $path = $null
             try { $path = $p.Path } catch { $path = $null }
             if (@($appRoots | Where-Object { Test-UnderDirectory -Path $path -Root $_ }).Count -gt 0) {
                 $found.Add($p)
             }
         }
+        foreach ($p in $stage.Hosted) { $found.Add($p) }
     }
+    foreach ($p in $webViews) { $found.Add($p) }
     foreach ($p in @(Get-Process -Name $ownedNames -ErrorAction SilentlyContinue)) {
         $path = $null
         try { $path = $p.Path } catch { $path = $null }
@@ -134,7 +165,19 @@ function Get-XEUninstallTarget {
 
 # The portable zip ships this script beside the app; a Velopack install lives in the "-app" root.
 $installDirs = @($PSScriptRoot, (Join-Path $localAppData "$DataDirName-app"))
-$targets = @(Get-XEUninstallTarget -DataDirectory $dataDir -InstallDirectory $installDirs)
+
+# Without a full process list a live shell or engine could be missed, and the delete would run under it.
+function Get-XETargetOrExit {
+    try {
+        return @(Get-XEUninstallTarget -DataDirectory $dataDir -InstallDirectory $installDirs)
+    } catch {
+        Write-Host ">> Could not enumerate processes: $($_.Exception.Message)"
+        Write-Host "   Nothing was deleted."
+        exit 1
+    }
+}
+
+$targets = @(Get-XETargetOrExit)
 
 if ($targets.Count -gt 0) {
     Write-Host ">> Running $AppName processes to stop:"
@@ -151,11 +194,11 @@ if ($targets.Count -gt 0) {
         }
         Start-Sleep -Seconds 1
         # Sweep any stragglers (a relaunched app, a child that outlived its job).
-        foreach ($p in @(Get-XEUninstallTarget -DataDirectory $dataDir -InstallDirectory $installDirs)) {
+        foreach ($p in @(Get-XETargetOrExit)) {
             try { Stop-Process -Id $p.Id -Force -ErrorAction Stop } catch { $null = $_ }
         }
         # Deleting under a live process aborts half-way, so a survivor stops the run before step 3.
-        $survivors = @(Get-XEUninstallTarget -DataDirectory $dataDir -InstallDirectory $installDirs)
+        $survivors = @(Get-XETargetOrExit)
         if ($survivors.Count -gt 0) {
             Write-Host ">> Could not stop: pid $(@($survivors | ForEach-Object { $_.Id }) -join ', ')."
             Write-Host "   Quit the app (Quit XE in the tray menu) or end these processes, then run this again."
@@ -277,6 +320,33 @@ function Confirm-XEDataRemoval {
         if ($reply -ne 'delete key') { return $false }
     }
     return $true
+}
+
+# The engine pid from ready.json (DesktopReadyPublisher.Publish) when that process is still alive, or $null.
+# Independent of the process scan above: a host the scan cannot recognise still blocks the delete. A process
+# that started after StartedAtUtc only reuses the pid. A missing or unreadable ready.json proves nothing either way.
+function Get-XERunningEnginePid {
+    param([Parameter(Mandatory)][string] $DataDirectory)
+    try {
+        $ready = Get-Content -LiteralPath (Join-Path $DataDirectory 'ready.json') -Raw -ErrorAction Stop | ConvertFrom-Json
+        $enginePid = [int]$ready.PSObject.Properties['pid'].Value
+    } catch { return $null }
+    if ($enginePid -le 0) { return $null }
+    $process = Get-Process -Id $enginePid -ErrorAction SilentlyContinue
+    if ($null -eq $process) { return $null }
+    try {
+        $value = $ready.PSObject.Properties['startedAtUtc'].Value
+        $startedAt = if ($value -is [DateTime]) { [DateTimeOffset]$value } else { [DateTimeOffset]::Parse([string]$value, [Globalization.CultureInfo]::InvariantCulture) }
+        if ($process.StartTime.ToUniversalTime() -gt $startedAt.UtcDateTime) { return $null }
+    } catch { $null = $_ }
+    return $enginePid
+}
+
+$enginePid = Get-XERunningEnginePid -DataDirectory $dataDir
+if ($null -ne $enginePid) {
+    Write-Host ">> Engine pid $enginePid still running. Nothing was deleted."
+    Write-Host "   Quit the app (Quit XE in the tray menu) or end that process, then run this again."
+    exit 1
 }
 
 if (-not (Confirm-XEDataRemoval -DataDirectory $dataDir -Name $AppName -Yes:$Yes)) {

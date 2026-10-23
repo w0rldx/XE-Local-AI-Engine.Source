@@ -96,13 +96,22 @@ export function ManagedPythonCard() {
 		);
 	};
 
-	const reasonText = (environment: ManagedPythonEnvironment): string =>
-		environment.reasonCode && translatedReasonCodes.has(environment.reasonCode)
+	// The removal is one blocking POST whose reply (already NotProvisioned) replaces the cached status, so a poll almost
+	// never sees the node's brief Removing code: while the POST is pending, the Compute row reads as Removing itself.
+	const removePending = (environment: ManagedPythonEnvironment): boolean =>
+		remove.isPending && environment.profileId === "compute";
+
+	const reasonText = (environment: ManagedPythonEnvironment): string => {
+		if (removePending(environment)) {
+			return t(`${translationPrefix}.reasons.Removing`);
+		}
+		return environment.reasonCode && translatedReasonCodes.has(environment.reasonCode)
 			? t(`${translationPrefix}.reasons.${environment.reasonCode}`)
 			: (environment.reason ?? "");
+	};
 
 	const stateLabel = (environment: ManagedPythonEnvironment): string => {
-		if (environment.reasonCode && removingCodes.has(environment.reasonCode)) {
+		if (removePending(environment) || (environment.reasonCode && removingCodes.has(environment.reasonCode))) {
 			return t(`${translationPrefix}.removing`);
 		}
 		return Object.hasOwn(stateColors, environment.state)
@@ -129,11 +138,19 @@ export function ManagedPythonCard() {
 							? t(`${translationPrefix}.profiles.${environment.profileId}`)
 							: environment.profileId}
 					</Title>
-					<Badge color={Object.hasOwn(stateColors, environment.state) ? stateColors[environment.state] : "gray"}>
+					<Badge
+						color={
+							removePending(environment)
+								? stateColors["Provisioning"]
+								: Object.hasOwn(stateColors, environment.state)
+									? stateColors[environment.state]
+									: "gray"
+						}
+					>
 						{stateLabel(environment)}
 					</Badge>
 				</Group>
-				{environment.reason ? (
+				{environment.reason || removePending(environment) ? (
 					<Text size="sm" c="dimmed">
 						{reasonText(environment)}
 					</Text>

@@ -280,12 +280,16 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
 
         private async Task RunAsync(CancellationToken cancellationToken)
         {
+            // A normal return is the source's "the target process exited" signal: the session completed, with its graceful
+            // final flush. Only an exception ends it as Failed.
+            var endReason = LiveEndReason.Failed;
             try
             {
                 // A stop that won the interlock before Attach finished has already cancelled this token. Bail
                 // before building a recorder only to tear it straight down again.
                 cancellationToken.ThrowIfCancellationRequested();
                 await _owner._source.CaptureAsync(_sessionId, _processId, cancellationToken);
+                endReason = LiveEndReason.Completed;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -294,7 +298,7 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
             // The loop is detached: an escaping exception would be an unobserved task fault.
             catch (Exception exception)
             {
-                // The target process exited, or CoreAudio failed. The registry must tell the browser capture ended.
+                // CoreAudio or the recorder failed. The registry must tell the browser capture ended.
                 _owner._logger.LogError(exception, "Per-application capture for transcription session {SessionId} ended unexpectedly.", _sessionId);
             }
             finally
@@ -311,7 +315,7 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
                 // A requested stop retains the registry caller's reason (and its graceful flush).
                 if (unexpected)
                 {
-                    await _owner._registry.EndAsync(_sessionId, LiveEndReason.Failed, CancellationToken.None);
+                    await _owner._registry.EndAsync(_sessionId, endReason, CancellationToken.None);
                 }
             }
         }

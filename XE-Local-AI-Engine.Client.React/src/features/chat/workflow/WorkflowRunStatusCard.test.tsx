@@ -169,7 +169,7 @@ describe("WorkflowRunStatusCard", () => {
 
 		const card = screen.getByTestId("chat-workflow-status-card");
 		const summary = within(card).getByTestId("chat-message-reasoning-summary-workflow-node-lookup");
-		expect(summary.textContent).toContain(`${i18next.t("chat.thoughts")} · 3 ${i18next.t("chat.words")}`);
+		expect(summary.textContent).toContain(`${i18next.t("chat.thoughts")} · 3 ${i18next.t("chat.words", { count: 3 })}`);
 		expect(within(card).getByTestId("chat-message-reasoning-workflow-node-lookup").hasAttribute("open")).toBe(false);
 	});
 

@@ -218,6 +218,15 @@ internal sealed class NodeAuthClient : IDisposable
             },
             NodeHttp.Json,
             cancellationToken);
+
+        // A wrong password is a 401 with no body (the lockout 401 carries its own message, kept as the node wrote it);
+        // the generic "node answered 401" would read like an expired session.
+        if (response.StatusCode == HttpStatusCode.Unauthorized
+            && (await response.Content.ReadAsByteArrayAsync(cancellationToken)).Length == 0)
+        {
+            throw new NodeApiException(HttpStatusCode.Unauthorized, "Sign-in failed: wrong email or password.");
+        }
+
         return await StoreAsync(await NodeHttp.ReadJsonAsync<TokenPair>(response, cancellationToken), cancellationToken);
     }
 

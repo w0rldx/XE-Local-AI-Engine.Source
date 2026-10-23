@@ -67,6 +67,52 @@ public sealed class NodeSessionTests
     }
 
     [Test]
+    [Arguments("1.2.3+abc1234", "abc1234", "1.2.3+abc1234", "(abc1234)")]
+    [Arguments("1.2.3", "abc1234", "1.2.3 (abc1234)", "+abc1234")]
+    public async Task Status_PrintsTheCommitOnlyWhenTheVersionDoesNotCarryIt(string version, string commit, string expected, string absent)
+    {
+        using var handler = new ScriptedHttpHandler(request => (request.Method, request.Path) switch
+        {
+            ("GET", "/api/local/v1/auth/status") => ScriptedHttpHandler.Json(HttpStatusCode.OK, """{"setupRequired":false,"authenticated":false,"vault":"unlocked"}"""),
+            ("POST", "/api/local/v1/auth/login") => ScriptedHttpHandler.Json(HttpStatusCode.OK, ScriptedHttpHandler.Tokens("access-1", DateTimeOffset.UtcNow.AddHours(1), "refresh-1")),
+            ("GET", "/api/local/v1/diagnostics/node-info") => ScriptedHttpHandler.Json(HttpStatusCode.OK,
+                $$"""{"version":"{{version}}","commit":"{{commit}}","flavour":"cpu","osDescription":"Linux","uptimeSeconds":5,"warnings":[]}"""),
+            _ => throw new InvalidOperationException($"unexpected {request}")
+        });
+        using var cli = new TestCli(() => handler, new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [PasswordSource.EnvironmentVariable] = "secret"
+        });
+
+        var exitCode = await cli.RunAsync("status", "--url", "http://127.0.0.1:5123", "--no-token-file");
+
+        AssertEx.Equal(ExitCodes.Success, exitCode, cli.Error);
+        AssertEx.Contains(cli.Out, expected);
+        AssertEx.False(cli.Out.Contains(absent, StringComparison.Ordinal), cli.Out);
+    }
+
+    [Test]
+    public async Task Status_WhenThePasswordIsWrong_SaysSoWithTheSignInCode()
+    {
+        using var handler = new ScriptedHttpHandler(request => (request.Method, request.Path) switch
+        {
+            ("GET", "/api/local/v1/auth/status") => ScriptedHttpHandler.Json(HttpStatusCode.OK, """{"setupRequired":false,"authenticated":false,"vault":"unlocked"}"""),
+            ("POST", "/api/local/v1/auth/login") => new HttpResponseMessage(HttpStatusCode.Unauthorized),
+            _ => throw new InvalidOperationException($"unexpected {request}")
+        });
+        using var cli = new TestCli(() => handler, new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [PasswordSource.EnvironmentVariable] = "wrong"
+        });
+
+        var exitCode = await cli.RunAsync("status", "--url", "http://127.0.0.1:5123", "--no-token-file");
+
+        AssertEx.Equal(ExitCodes.AuthOrVault, exitCode);
+        AssertEx.Contains(cli.Error, "xe: Sign-in failed: wrong email or password.");
+        AssertEx.False(cli.Error.Contains("401", StringComparison.Ordinal), cli.Error);
+    }
+
+    [Test]
     public async Task Status_WhenTheVaultIsLockedAndNoPasswordIsAvailable_ExitsWithTheVaultCodeWithoutTryingToUnlock()
     {
         using var handler = new ScriptedHttpHandler(request => request.Path switch

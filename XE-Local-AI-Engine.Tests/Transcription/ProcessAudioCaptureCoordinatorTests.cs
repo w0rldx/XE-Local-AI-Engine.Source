@@ -295,8 +295,25 @@ public sealed class ProcessAudioCaptureCoordinatorTests
 
         await AssertEx.EventuallyAsync(() => !harness.Registry.Ends.IsEmpty && !harness.Coordinator.IsCapturing(sessionId), Bound,
             "A capture that ends on its own ends its session.");
+        AssertEx.Equal($"{sessionId}:{LiveEndReason.Completed}", string.Join(",", harness.Registry.Ends),
+            "A target exit is a normal return: exactly one Completed end, through the registry, for this session.");
+        AssertEx.Equal(1, harness.Registry.DetachCount(sessionId), "The producer detached before the session ended.");
+    }
+
+    [Test]
+    public async Task CaptureThatThrows_EndsTheSessionAsFailed()
+    {
+        // The counterpart of the test above: only a capture that faults ends its session as Failed.
+        await using var harness = Harness.Create();
+        harness.Source.ThrowsOnItsOwn = true;
+        var sessionId = Guid.NewGuid();
+
+        _ = harness.Coordinator.Start(sessionId, processId: 4321);
+
+        await AssertEx.EventuallyAsync(() => !harness.Registry.Ends.IsEmpty && !harness.Coordinator.IsCapturing(sessionId), Bound,
+            "A capture that faults ends its session.");
         AssertEx.Equal($"{sessionId}:{LiveEndReason.Failed}", string.Join(",", harness.Registry.Ends),
-            "Exactly one end, through the registry, for this session.");
+            "Exactly one Failed end, through the registry, for this session.");
         AssertEx.Equal(1, harness.Registry.DetachCount(sessionId), "The producer detached before the session ended.");
     }
 
@@ -545,6 +562,9 @@ public sealed class ProcessAudioCaptureCoordinatorTests
         /// <summary>When set, the capture returns on its own after pushing, as it does when the target process exits.</summary>
         public bool EndsOnItsOwn { get; set; }
 
+        /// <summary>When set, the capture throws after pushing, as it does when the recorder fails.</summary>
+        public bool ThrowsOnItsOwn { get; set; }
+
         public int CaptureCalls => Volatile.Read(ref _captureCalls);
 
         public ValueTask<IReadOnlyList<ProcessAudioCaptureCandidate>> ListCandidatesAsync(CancellationToken cancellationToken) =>
@@ -559,6 +579,11 @@ public sealed class ProcessAudioCaptureCoordinatorTests
             for (var frame = 0; frame < FramesToPush && !cancellationToken.IsCancellationRequested; frame++)
             {
                 await _registry.PushAudioAsync(sessionId, TranscriptChannel.Others, new byte[320], cancellationToken);
+            }
+
+            if (ThrowsOnItsOwn)
+            {
+                throw new InvalidOperationException("The recorder failed.");
             }
 
             if (EndsOnItsOwn)
