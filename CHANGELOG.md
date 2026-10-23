@@ -608,6 +608,12 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Internal
 
+- **Safety nets** — two new Architecture tests: the save and materialization encryption interceptors must list the
+  same columns, and no `ExecuteUpdate` may target an encrypted column; every feature `*NotFoundException` /
+  `*ConflictException` / `*ValidationException` / `*UnavailableException` is either named by an exception handler or
+  reasoned in `UnhandledExceptionAllowlist.txt`. The five shrink-only allowlists pin a `MaxEntries` ceiling. The gate's
+  fail-fast lane prints a `RULE:` line per failing Architecture test, and the gate-history row gains `unreported=`,
+  `failed=`, `flakes=` and `ratchets=` columns. `LocalApiRoutes` is a partial class with one file per route family.
 - `scripts/run-backend-tests.sh` is now the one backend gate: one Release build, then the batched module and every
   sibling project enrolled from the solution concurrently, each assembly-guarded at a pinned width, with a hollow-gate
   guard and process-group cancellation. Persistence tests copy pre-migrated SQLite templates instead of replaying the

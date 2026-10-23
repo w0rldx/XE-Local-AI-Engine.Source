@@ -78,6 +78,7 @@ scripts/run-backend-tests.sh   # THE backend gate: one Release build, then every
 - The backend gate runs the Architecture namespace alone right after the Release build; red there stops the gate
   (`FAIL-FAST`, exit 1) before the long lanes; `XE_GATE_FAIL_FAST=0` skips it. Every gate run appends one line to the
   main checkout's `.tmp/gate-history.log`; a failing test listed in `scripts/known-flakes.txt` is annotated, never skipped.
+  Before hand-off run the Architecture namespace alone (`--treenode-filter '/*/*.Architecture/*/*'`).
 - Scope with `--treenode-filter '/*/*/(ClassA|ClassB)/*'`, never `--filter`; `--list-tests` is authoritative, a
   no-match filter exits 8, and zero tests is never a pass. Before hand-off run the whole changed test project.
 - Cross-cutting triggers: a startup, DI or `Program.cs` change runs the whole `Integration` namespace; a new or renamed

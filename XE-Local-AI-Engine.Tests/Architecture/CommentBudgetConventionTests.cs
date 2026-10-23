@@ -34,6 +34,9 @@ public sealed partial class CommentBudgetConventionTests
     private static readonly string AllowlistPath =
         RepositoryPaths.Combine("XE-Local-AI-Engine.Tests", "Architecture", "CommentBudgetAllowlist.txt");
 
+    /// <summary>Today's entry count. Only ever lowered, in the commit that shrinks the list.</summary>
+    private const int MaxEntries = 1665;
+
     /// <summary>
     ///     A floor a little under today's file count, which the cleanup batches do not lower. A walk that lost
     ///     its roots reads too few files and fails here rather than reporting a clean tree.
@@ -205,6 +208,17 @@ public sealed partial class CommentBudgetConventionTests
             + $"room cannot be spent again. Apply the replacements below, or re-run with {ShrinkVariable}=1 to "
             + "rewrite the whole file:"
             + Environment.NewLine + string.Join(Environment.NewLine, stale.Order(StringComparer.Ordinal)));
+    }
+
+    /// <summary>The ratchet: a new exemption has to retire an old one, so the list never grows back.</summary>
+    [Test]
+    public void TheAllowlist_DoesNotGrow()
+    {
+        var entries = Allowlist().Count;
+
+        AssertEx.True(entries <= MaxEntries,
+            $"Architecture/CommentBudgetAllowlist.txt holds {entries} entries, above MaxEntries ({MaxEntries}): "
+            + "shrink the allowlist, then lower MaxEntries.");
     }
 
     /// <summary>

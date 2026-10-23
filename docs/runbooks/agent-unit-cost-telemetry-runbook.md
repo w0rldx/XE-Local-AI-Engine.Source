@@ -37,7 +37,7 @@ new column.
 
 ```bash
 # Retry arm: every earlier attempt of every node in the run, summed per additive member.
-# Route: api/local/v1/development-workflows/runs/{runId}/events (LocalApiRoutes.cs:5,:901); page with sinceSeq.
+# Route: api/local/v1/development-workflows/runs/{runId}/events (LocalApiRoutes.Prefix + LocalApiRoutes.DevelopmentWorkflows.RunEvents); page with sinceSeq.
 curl -s "$NODE/api/local/v1/development-workflows/runs/$RUN_ID/events?sinceSeq=0&limit=200" \
   | jq '[.items[] | select(.eventType == "node.retry.scheduled") | (.detailJson | fromjson)]
         | {attempts: length,

@@ -191,7 +191,9 @@ tests scripts rather than assemblies, and it runs unguarded.
 
 After its Release build, `scripts/run-backend-tests.sh` runs the Architecture namespace of `XE-Local-AI-Engine.Tests`
 alone with the batched runner's own filter (`--list-tests` first, so a filter that matches nothing fails). A red result
-stops the gate with exit 1 and a `FAIL-FAST` line before any lane starts. `XE_GATE_FAIL_FAST=0` skips the pre-lane;
+stops the gate with exit 1 and a `FAIL-FAST` line before any lane starts; each failing test gets `FAILED TEST`,
+`FAILED CLASS` and a `RULE:` line, the first sentence of the test's `<summary>`, else its class's, else
+`(no summary)`. `XE_GATE_FAIL_FAST=0` skips the pre-lane;
 `--siblings-only` never runs it. The namespace still runs inside the batched lane, and the pre-lane is never counted
 in the totals. Every run (green, red, void 75, lock 69) appends one tab-separated line to the main checkout's
 `.tmp/gate-history.log`: time, worktree, the tip HEAD had when the lock was taken (suffixed `+dirty` when the tree had
@@ -199,12 +201,22 @@ changes then and `+moved` when HEAD changed during the run; a suffixed tip certi
 `scope` (`full` only when this invocation built and ran every lane unsharded; otherwise the first of `no-build`, `shard`,
 `siblings-only` or `contracts-skipped`, the last meaning the diff needed the release contract tests but
 `XE_GATE_CONTRACT_TESTS=skip` or `GITHUB_ACTIONS=true` suppressed them; `Contracts=skipped` alone does not tell a
-bypass from a lane that was not needed), wall seconds, `reason`, `skips` and exit code, always last. `reason` is `ok`
+bypass from a lane that was not needed), wall seconds, `reason`, `skips`, `unreported`, `failed`, `flakes`,
+`ratchets` and exit code, always last. The sixteen columns in order:
+
+`<time> <worktree> <tip> Tests= Persistence= Agent= Contracts= scope= wall= reason= skips= unreported= failed= flakes= ratchets= exit=`
+
+Rows before 2026-10-23 have twelve: they lack `unreported`, `failed`, `flakes` and `ratchets`, and their `skips`
+carried the unreported count as `unreported:<n>`. `scripts/squash-guard.sh` reads the first three columns by position
+and the rest by name. `reason` is `ok`
 on exit 0, else `lock-timeout` (69), `contaminated` (75), `killed` (130/143), `build`, `fail-fast` (the Architecture
 pre-lane), `tests` (a lane red) or `setup`. `skips` groups the finished lanes' skipped tests by reason as
-`<slug>:<count>,...`: a sibling project's slug is its TUnit skip text from the TRX, cut to 24 characters, and a skip
-without a recorded reason counts as `unreported`, which is every skip of the batched module (its runner writes no TRX
-without `COVERAGE_DIR`). A failing test
+`<slug>:<count>,...`: a sibling project's slug is its TUnit skip text from the TRX, cut to 24 characters.
+`unreported` counts the skips without a recorded reason, which is every skip of the batched module (its runner writes
+no TRX without `COVERAGE_DIR`). `failed` holds up to three distinct failing test method names and `flakes` the
+known-flakes entries they matched, `-` when none. `ratchets` counts the entries of the five shrink-only allowlists
+(`DbContextUser`, `PositionalRecord`, `Tuple`, `FilePlacement`, `CommentBudget`) under
+`XE-Local-AI-Engine.Tests/Architecture/`, so allowlist drift shows in the history. A failing test
 named in [`scripts/known-flakes.txt`](../../scripts/known-flakes.txt) is printed with `[KNOWN FLAKE: <note>]`, and
 the run stays red.
 

@@ -25,6 +25,9 @@ public sealed class NoTupleConventionTests
     private static readonly string AllowlistPath =
         RepositoryPaths.Combine("XE-Local-AI-Engine.Tests", "Architecture", "TupleAllowlist.txt");
 
+    /// <summary>Today's entry count. Only ever lowered, in the commit that shrinks the list.</summary>
+    private const int MaxEntries = 281;
+
     /// <summary>The same non-vacuity floor as the positional-record guard, which reads the same walk.</summary>
     private const int EnforcedFileFloor = 4200;
 
@@ -144,6 +147,17 @@ public sealed class NoTupleConventionTests
             "Architecture/TupleAllowlist.txt allows more tuples than the file(s) below hold. The list is "
             + "shrink-only: lower the count to the one shown, or delete the line, in the commit that converted them."
             + Environment.NewLine + string.Join(Environment.NewLine, stale));
+    }
+
+    /// <summary>The ratchet: a new exemption has to retire an old one, so the list never grows back.</summary>
+    [Test]
+    public void TheAllowlist_DoesNotGrow()
+    {
+        var entries = Allowlist().Count;
+
+        AssertEx.True(entries <= MaxEntries,
+            $"Architecture/TupleAllowlist.txt holds {entries} entries, above MaxEntries ({MaxEntries}): "
+            + "shrink the allowlist, then lower MaxEntries.");
     }
 
     /// <summary>

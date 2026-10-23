@@ -1,0 +1,26 @@
+# Public *NotFoundException/*ConflictException/*ValidationException/*UnavailableException types in
+# Client.Application and AI.Agent that no XE-Local-AI-Engine.Client/ExceptionHandling handler names.
+#
+# Format: <type full name>|<section>|<catching symbol and why that is every escape route>
+# Sections:
+#   service - caught or classified inside XE-Local-AI-Engine.Client.Application; it never reaches the host.
+#   host    - caught by the host endpoint(s) or hub that call the throwing service, each with its own status.
+#
+# Shrink-only in both directions, like DbContextUserAllowlist.txt beside it: an unlisted unhandled type fails, and a
+# listed type a handler now names, or that no longer exists, fails as stale. Enforced by
+# Architecture/ExceptionHandlerCoverageTests.cs. A new throw site of a listed type must be caught the same way.
+
+# ---------------------------------------------------------------- service
+XE_Local_AI_Engine.Client.Services.Invocation.ApprovalUnavailableException|service|Thrown only for an unattended invocation (ToolApprovalCoordinator); InvocationFailureClassifier.MapFailure turns it into an AgentRuntime failure, and IntegrationExecutionCoordinator.RunLeasedAsync catches it for the integration path.
+XE_Local_AI_Engine.Client.Services.Benchmarks.BenchmarkJudgePolicyValidationException|service|Caught where policies and rubrics are validated: BenchmarkProjectService.BuildPolicyAsync and MatchesCurrentPolicy, BenchmarkTaskItemService.EnsureOverridesFitRubric, BenchmarkJudgeVerifiers.Verify, BenchmarkPythonTestsVerifier.VerifyAsync.
+XE_Local_AI_Engine.Client.Services.Mcp.McpServerUnavailableException|service|Thrown inside McpServerConnectionManager and caught by its own InvokeRoutedAsync, which returns the reason as the tool result.
+XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation.SandboxIsolationUnavailableException|service|Caught by ProcessSandboxRuntimeProvider.ExecuteAsync and StartInteractiveAsync around every launch, and by HostSandboxFilesystemIsolationProbe.Measure for the probe.
+
+# ---------------------------------------------------------------- host
+XE_Local_AI_Engine.Client.Services.Chat.NodeChatConversationNotFoundException|host|Thrown by NodeChatStreamService and NodeChatRegenerationService; LocalChatHub.TranslateDomainRejections turns it into a HubException. The other stream caller, WorkSessionExecutionSupervisor, is a background loop, not an HTTP request.
+XE_Local_AI_Engine.Client.Services.Chat.NodeChatMessageNotFoundException|host|Thrown by NodeChatRegenerationService, whose only host caller is LocalChatHub; its TranslateDomainRejections turns it into a HubException.
+XE_Local_AI_Engine.Client.Services.Chat.NodeChatMessageCorrelationNotFoundException|host|Thrown by NodeChatMessageCommands.UpdateCorrelatedMessageAsync; CancelNodeChatMessageEndpoint.HandleAsync catches it on the one HTTP route that reaches it. The other callers are chat-stream persistence steps (NodeChatStreamService, NodeChatInvocationPump), not request handlers.
+XE_Local_AI_Engine.Client.Services.Automation.SlashCommandConflictException|host|Thrown by SlashCommandService create/update; CreateSlashCommandEndpoint.HandleAsync and UpdateSlashCommandEndpoint.HandleAsync catch it as a 409.
+XE_Local_AI_Engine.Client.Services.Models.GgufAcquisitionConflictException|host|GgufDownloadEndpointSupport.IsHandled filters it for the download endpoints; NodeAdminMcpTools.StartModelPullAsync, GgufDownloadCoordinator.RunDownloadAsync and GgufImportTransactionCoordinator.StartAsync catch it in the service.
+XE_Local_AI_Engine.Client.Services.Development.DevelopmentRepositoryStateConflictException|host|Derives from DevelopmentWorkspaceSecurityException, which DevelopmentConflictExceptionHandler leaves out on purpose (no single status); each Development V1 endpoint catches the base (e.g. ReconnectDevelopmentRepositoryEndpoint.HandleAsync), DevWorkflowToolCommands.RunAsync and DevWorkflowApplyCommands.ApplyOneAsync catch it in the service.
+XE_Local_AI_Engine.Client.Services.GraphWorkflows.GraphWorkflowValidationException|host|A multi-error type, so DomainValidationExceptionHandler leaves it out on purpose; the Graph Workflows V1 endpoints catch it per endpoint (e.g. CreateGraphWorkflowDefinitionEndpoint.HandleAsync, StartGraphWorkflowRunEndpoint.HandleAsync), and the scheduler, integration and chat paths catch it in the service.

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -272,12 +272,21 @@ export function checkHubPayloadEnums({ repositoryRoot: root = repositoryRoot, fr
 	return hubPayloadEnums.length;
 }
 
+// LocalApiRoutes is a partial class: the shell LocalApiRoutes.cs plus one LocalApiRoutes.<Family>.cs per route family.
+export function readLocalApiRoutes(directory = resolve(repositoryRoot, "XE-Local-AI-Engine.Client/Endpoints/Common")) {
+	const files = readdirSync(directory)
+		.filter((name) => /^LocalApiRoutes(\.\w+)?\.cs$/.test(name))
+		.sort()
+		.map((name) => resolve(directory, name));
+	return files.map((path) => readFileSync(path, "utf8")).join("\n");
+}
+
 export function checkSignalrProxySync({
 	programPath = resolve(repositoryRoot, "XE-Local-AI-Engine.Client/Program.cs"),
-	routesPath = resolve(repositoryRoot, "XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs"),
+	routesDirectory = resolve(repositoryRoot, "XE-Local-AI-Engine.Client/Endpoints/Common"),
 	proxyPathsPath = resolve(frontendRoot, "config/signalr-proxy-paths.json"),
 } = {}) {
-	const mappedPaths = extractMappedHubPaths(readFileSync(programPath, "utf8"), readFileSync(routesPath, "utf8"));
+	const mappedPaths = extractMappedHubPaths(readFileSync(programPath, "utf8"), readLocalApiRoutes(routesDirectory));
 	const proxyPaths = JSON.parse(readFileSync(proxyPathsPath, "utf8"));
 	const { missing, stale } = compareProxyPaths(mappedPaths, proxyPaths);
 	if (missing.length > 0 || stale.length > 0) {

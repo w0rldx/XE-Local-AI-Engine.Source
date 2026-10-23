@@ -43,7 +43,7 @@ Model-fit is the node's **hardware-aware GGUF recommendation advisor**: given th
 | Process VRAM-budget probe | `XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaListDevicesProcessVramBudgetProbe.cs` (`IProcessVramBudgetProbe`) |
 | Quartz handler | `XE-Local-AI-Engine.Client.Application/Services/Scheduler/Handlers/ModelRecommendationCheckHandler.cs` |
 | Local endpoints | `XE-Local-AI-Engine.Client/Endpoints/ModelFit/V1/` |
-| Route constants | `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs` (`ModelFit`) |
+| Route constants | `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.ModelFit.cs` (`ModelFit`) |
 | React feature | `XE-Local-AI-Engine.Client.React/src/features/model-fit/` |
 
 ## The two paths: cache-read vs. scheduler refresh
@@ -68,7 +68,7 @@ This is the single most important invariant of the feature. The "latest" read an
           → SignalR scheduler hub broadcasts terminal run → page invalidates the latest cache & refetches
 ```
 
-The route comment makes the contract explicit: *"Cache-first: the latest endpoint reads the cached recommendation snapshot and never runs the advisor; the refresh endpoint delegates to the scheduler trigger and never executes the advisor directly."* (`LocalApiRoutes.cs`).
+The route comment makes the contract explicit: *"Cache-first: the latest endpoint reads the cached recommendation snapshot and never runs the advisor; the refresh endpoint delegates to the scheduler trigger and never executes the advisor directly."* (`LocalApiRoutes.ModelFit`).
 
 ## The memory-fit estimator (pure core)
 

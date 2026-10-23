@@ -54,9 +54,10 @@ fixture() {
   log_line "$TIP" 120/0/3 0 >"$LOG"
 }
 
-# <tip> <tests p/f/s> <exit> [scope, default full]: one line in the shared tab-separated format.
+# <tip> <tests p/f/s> <exit> [scope, default full]: one line in the shared tab-separated format, with
+# every column scripts/run-backend-tests.sh writes today.
 log_line() {
-  printf '2026-10-08T10:00:00Z\t%s\t%s\tTests=%s\tPersistence=40/0/0\tAgent=30/0/0\tContracts=skipped\tscope=%s\twall=900\texit=%s\n' \
+  printf '2026-10-08T10:00:00Z\t%s\t%s\tTests=%s\tPersistence=40/0/0\tAgent=30/0/0\tContracts=skipped\tscope=%s\twall=900\treason=ok\tskips=needs-a-gpu:3\tunreported=0\tfailed=-\tflakes=-\tratchets=DbContextUser:31,PositionalRecord:314,Tuple:281,FilePlacement:251,CommentBudget:1665\texit=%s\n' \
     "$WT" "$1" "$2" "${4:-full}" "$3"
 }
 
@@ -79,6 +80,12 @@ grep -q 'merge --squash refs/heads/feature' "$TMP/out" \
 mv "$LOG" "$TMP/a/elsewhere.log"
 guard feature --repo "$WT" --gate-log "$TMP/a/elsewhere.log"
 check "a happy path, --gate-log and --repo pointing at the branch worktree" 0 "$status"
+# A twelve-field row written before 2026-10-23 (no unreported=, failed=, flakes=, ratchets=) still certifies.
+fixture a-twelve
+printf '2026-10-08T10:00:00Z\t%s\t%s\tTests=120/0/3\tPersistence=40/0/0\tAgent=30/0/0\tContracts=skipped\tscope=full\twall=900\treason=ok\tskips=unreported:3\texit=0\n' \
+  "$WT" "$TIP" >"$LOG"
+guard feature --repo "$MAIN"
+check "a happy path, twelve-field row" 0 "$status"
 
 # (b) dirty main tree: an untracked file counts
 fixture b

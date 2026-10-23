@@ -234,6 +234,19 @@ class DocsInventoryCheckTests(unittest.TestCase):
         self.assertEqual(("Gadgets", "Widgets"), result.inventory)
         self.assertEqual((), result.missing)
 
+    def test_route_families_include_the_partial_family_files(self) -> None:
+        root = self.make_repo()
+        family = root / "XE-Local-AI-Engine.Client" / "Endpoints" / "Common" / "LocalApiRoutes.Sprockets.cs"
+        family.write_text(
+            "public static partial class LocalApiRoutes\n{\n    public static class Sprockets\n    {\n    }\n}\n",
+            encoding="utf-8",
+        )
+
+        result = MODULE.check_local_api_route_families(root)
+
+        self.assertEqual(("Gadgets", "Sprockets", "Widgets"), result.inventory)
+        self.assertEqual(["Sprockets"], [item.name for item in result.missing])
+
     def test_route_families_report_a_family_missing_from_the_api_page(self) -> None:
         root = self.make_repo()
         self.drop(root, "docs/wiki/09-api-and-hubs.md", "Widgets")

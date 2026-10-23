@@ -7,6 +7,7 @@ import {
 	extractMappedHubPaths,
 	extractQuotedNames,
 	hubPayloadEnums,
+	readLocalApiRoutes,
 } from "./CheckSignalrProxySync.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -28,10 +29,7 @@ test("keeps the generalized GGUF acquisition hub on the single compatible downlo
 	const proxyPaths = JSON.parse(readFileSync(new URL("../config/signalr-proxy-paths.json", import.meta.url), "utf8"));
 	assert.equal(proxyPaths.filter((path) => path === acquisitionHubPath).length, 1);
 	assert.ok(checkSignalrProxySync() > 0);
-	const routes = readFileSync(
-		new URL("../../XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs", import.meta.url),
-		"utf8",
-	);
+	const routes = readLocalApiRoutes();
 	const program = readFileSync(new URL("../../XE-Local-AI-Engine.Client/Program.cs", import.meta.url), "utf8");
 	assert.ok(routes.includes(`public const string DownloadHub = "${acquisitionHubPath}"`));
 	assert.ok(extractMappedHubPaths(program, routes).includes(acquisitionHubPath));

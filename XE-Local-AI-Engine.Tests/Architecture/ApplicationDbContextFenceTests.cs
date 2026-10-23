@@ -34,6 +34,9 @@ public sealed class ApplicationDbContextFenceTests
     private static readonly string AllowlistPath =
         RepositoryPaths.Combine("XE-Local-AI-Engine.Tests", "Architecture", "DbContextUserAllowlist.txt");
 
+    /// <summary>Today's entry count. Only ever lowered, in the commit that shrinks the list.</summary>
+    private const int MaxEntries = 31;
+
     /// <summary>The two node contexts, by full type name.</summary>
     /// <remarks>
     ///     NetArchTest matches a dependency by name PREFIX, so <c>NodeChatDbContext</c> also covers
@@ -83,6 +86,17 @@ public sealed class ApplicationDbContextFenceTests
             "Architecture/DbContextUserAllowlist.txt reasons away a type that no longer depends on a node DbContext. "
             + "The list is shrink-only: delete the line(s) below in the commit that migrated the type."
             + Environment.NewLine + string.Join(Environment.NewLine, stale));
+    }
+
+    /// <summary>The ratchet: a new exemption has to retire an old one, so the list never grows back.</summary>
+    [Test]
+    public void TheAllowlist_DoesNotGrow()
+    {
+        var entries = Allowlist().Count;
+
+        AssertEx.True(entries <= MaxEntries,
+            $"Architecture/DbContextUserAllowlist.txt holds {entries} entries, above MaxEntries ({MaxEntries}): "
+            + "shrink the allowlist, then lower MaxEntries.");
     }
 
     [Test]

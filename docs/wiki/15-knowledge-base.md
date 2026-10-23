@@ -167,7 +167,7 @@ the fused score: a reciprocal-rank fusion score is a rank, not a relevance measu
 
 ## Endpoints
 
-Routes under `knowledge-base/*` (`LocalApiRoutes.KnowledgeBase` in `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs`), one endpoint class per file in `Endpoints/Knowledge/V1/`:
+Routes under `knowledge-base/*` (`LocalApiRoutes.KnowledgeBase` in `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.KnowledgeBase.cs`), one endpoint class per file in `Endpoints/Knowledge/V1/`:
 
 | Endpoint | Role |
 |---|---|

@@ -300,7 +300,7 @@ A conversation can carry uploaded file attachments that the model reads as turn 
 
 Large pasted text takes a different, deliberately smaller path. `Security:MaxMessageSizeKb` caps one inbound message's UTF-8 content at a configurable **256 KiB default** (valid range 1–1,024 KiB). `LocalChatHub.EnsureMessageWithinSizeCap` enforces it before the user row is persisted; SignalR's receive ceiling is derived from it (at least 512 KiB, twice the cap plus envelope) and stays above it, so the application can return a readable `HubException`. The conversation-list response exposes the effective cap, and React's `ComposerSizeLimit` uses `TextEncoder` to mirror the UTF-8 count, shows an indicator near the threshold, and refuses an over-limit send. That precheck is advisory only—the hub remains authoritative. Larger documents belong on the attachment upload path.
 
-**Endpoints** (FastEndpoints, Operator-policy, routes in `Endpoints/Common/LocalApiRoutes.cs`):
+**Endpoints** (FastEndpoints, Operator-policy, routes in `Endpoints/Common/LocalApiRoutes.LocalChat.cs`):
 
 - `POST chat/conversations/{conversationId}/uploads` (`UploadConversationFileEndpoint.cs`) — multipart single-file upload. It enforces the `SecurityOptions.MaxUploadFileSizeMb` cap, sanitizes the client filename to a leaf (`UploadFileNameSanitizer.ToSafeLeafFileName`, so no client string forms a path), checks the extractor's extension allowlist, runs extraction, and persists. The storage path is server-generated; the original name is kept only as **encrypted display metadata**.
 - `GET chat/conversations/{conversationId}/uploads` (`ListConversationFilesEndpoint.cs`) — metadata only, never the raw bytes or extracted text.

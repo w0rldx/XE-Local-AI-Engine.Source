@@ -42,7 +42,8 @@
 # Fail-fast: Architecture conventions first
 #   After the build and before any lane, the Architecture namespace of XE-Local-AI-Engine.Tests runs
 #   alone (`--list-tests` first, so a filter that matches nothing is a failure, then the run under the
-#   assembly guard). Red: the failing tests and their classes are printed with
+#   assembly guard). Red: the failing tests, their classes and one "RULE: <text>" line each (the first
+#   sentence of the test's `/// <summary>`, else the class's, else "(no summary)") are printed with
 #   "FAIL-FAST: Architecture conventions red; long lanes not run" and the gate exits 1 without starting
 #   a lane. The pre-lane is not a row of the summary table or of the history line; the batched lane
 #   still runs that namespace as one of its batches, because run-tests-memory-safe.sh has no exclusion
@@ -53,14 +54,21 @@
 #   Every run that got past argument parsing appends ONE tab-separated line to the MAIN checkout's
 #   .tmp/gate-history.log (resolved like the build lock, so all worktrees share one file; never truncated):
 #     <ISO time> <worktree real path or -> <tip> Tests=p/f/s Persistence=p/f/s Agent=p/f/s
-#     Contracts=p/f/s|skipped scope=<scope> wall=<seconds> reason=<reason> skips=<slug:n,...> exit=<code>
-#   Twelve fields, exit= always last (scripts/squash-guard.sh keys on it). reason is ok on exit 0;
+#     Contracts=p/f/s|skipped scope=<scope> wall=<seconds> reason=<reason> skips=<slug:n,...> unreported=<n>
+#     failed=<name,...|-> flakes=<name,...|-> ratchets=<Name:n,...> exit=<code>
+#   Sixteen fields, exit= always last (scripts/squash-guard.sh keys on it; it reads the others by name, f[0..2]
+#   by position). Rows before 2026-10-23 have twelve: no unreported=, failed=, flakes= or ratchets=, and
+#   skips= carried the unreported count as "unreported:<n>". reason is ok on exit 0;
 #   otherwise lock-timeout (69), contaminated (75), killed (130/143), build (Release build red), fail-fast
 #   (Architecture pre-lane red), tests (a lane red, hollow or without a summary), setup (anything else).
 #   skips groups every skipped test of the finished lanes by reason: a sibling's reason is the TUnit skip
-#   text from its TRX, lowercased with non-alphanumerics folded to "-" and cut to 24 characters; a skip
-#   with no recorded reason counts as "unreported", which is every skip of the batched lane (its runner
-#   writes no TRX without COVERAGE_DIR). Empty when nothing was skipped or no lane finished.
+#   text from its TRX, lowercased with non-alphanumerics folded to "-" and cut to 24 characters. Empty when
+#   nothing was skipped or no lane finished. unreported counts the skips with no recorded reason, which is
+#   every skip of the batched lane (its runner writes no TRX without COVERAGE_DIR).
+#   failed holds up to three distinct failing test method names (parameters dropped) that the "FAILED TEST"
+#   lines printed, flakes the scripts/known-flakes.txt entries they matched; "-" when none. ratchets counts
+#   the entries of the five shrink-only XE-Local-AI-Engine.Tests/Architecture allowlists (DbContextUser,
+#   PositionalRecord, Tuple, FilePlacement, CommentBudget; "-" for a missing file) in the tree at exit.
 #   tip is HEAD when the lock was taken, before the build ("-" outside git), suffixed "+dirty" when the
 #   tree had changes (untracked included) then and "+moved" when HEAD differed at exit; a suffixed tip
 #   certifies nothing. scope is full only when this invocation built and ran every lane unsharded;
@@ -221,6 +229,9 @@ GATE_TIP=""
 GATE_BUILT=""
 GATE_ACK=""
 CONTRACT_BYPASSED=""
+# Failing test method names, and the known-flakes entries they matched (print_failed_tests).
+GATE_FAILED=()
+GATE_FLAKES=()
 # "p/f/s" of a finished lane, empty when it did not run. CONTRACT_* exist only once the locked instance
 # has reached them, hence the defaults.
 history_lane() {
@@ -229,18 +240,41 @@ history_lane() {
   read -r p f rc dur s <"$LANE_DIR/$1.result"
   printf '%s/%s/%s' "$p" "$f" "$s"
 }
-# "<slug>:<count>,..." over every finished lane: a sibling's slugs come from its TRX (run_sibling), and a
-# lane's skips without a recorded reason (the batched lane writes no TRX) count as "unreported".
+# "<slug>:<count>,..." over every finished lane, from each sibling's TRX (run_sibling).
 history_skips() {
-  local r s n
   [[ -n "${LANE_DIR:-}" && -d "$LANE_DIR" ]] || return 0
+  cat "$LANE_DIR"/*.skips 2>/dev/null | sort | uniq -c | awk '{ printf "%s%s:%s", (NR > 1 ? "," : ""), $2, $1 }'
+}
+# The skips of every finished lane that no TRX names a reason for (the batched lane writes none).
+history_unreported() {
+  local r s n=0
+  [[ -n "${LANE_DIR:-}" && -d "$LANE_DIR" ]] || { echo 0; return 0; }
   for r in "$LANE_DIR"/*.result; do
     [[ -f "$r" ]] || continue
     read -r _ _ _ _ s <"$r"
-    n=0
-    if [[ -f "${r%.result}.skips" ]]; then n="$(wc -l <"${r%.result}.skips")"; cat "${r%.result}.skips"; fi
-    for ((; n < ${s:-0}; n++)); do echo unreported; done
-  done | sort | uniq -c | awk '{ printf "%s%s:%s", (NR > 1 ? "," : ""), $2, $1 }'
+    s="${s:-0}"
+    [[ -f "${r%.result}.skips" ]] && s=$((s - $(wc -l <"${r%.result}.skips")))
+    (( s > 0 )) && n=$((n + s))
+  done
+  echo "$n"
+}
+# Up to three distinct names from the arguments, comma-joined; "-" when there are none.
+history_names() {
+  local names
+  names="$(printf '%s\n' "$@" | tr '\t' ' ' | awk 'NF && !seen[$0]++' | head -3 | paste -sd, -)"
+  echo "${names:--}"
+}
+# "<Name>:<entries>,..." for the shrink-only Architecture allowlists: non-blank lines not starting with "#",
+# as their tests count them; "-" for a missing file.
+history_ratchets() {
+  local name file n out=""
+  for name in DbContextUser PositionalRecord Tuple FilePlacement CommentBudget; do
+    file="$REPO/XE-Local-AI-Engine.Tests/Architecture/${name}Allowlist.txt"
+    n=-
+    [[ -f "$file" ]] && n="$(grep -cvE '^[[:space:]]*(#|$)' "$file")"
+    out+="${out:+,}$name:$n"
+  done
+  echo "$out"
 }
 # Set just before the exits that a bare exit code cannot tell apart (all three are 1); see "Gate history".
 GATE_REASON=""
@@ -272,10 +306,12 @@ gate_history_on_exit() {
       130|143) reason=killed ;;
       *)       reason="${GATE_REASON:-setup}" ;;
     esac
-    mkdir -p "$(dirname "$file")" && printf '%s\t%s\t%s\tTests=%s\tPersistence=%s\tAgent=%s\tContracts=%s\tscope=%s\twall=%s\treason=%s\tskips=%s\texit=%s\n' \
+    mkdir -p "$(dirname "$file")" && printf '%s\t%s\t%s\tTests=%s\tPersistence=%s\tAgent=%s\tContracts=%s\tscope=%s\twall=%s\treason=%s\tskips=%s\tunreported=%s\tfailed=%s\tflakes=%s\tratchets=%s\texit=%s\n' \
       "$(date -Iseconds)" "$worktree" "$sha" "$(history_lane XE-Local-AI-Engine.Tests)" \
       "$(history_lane XE-Local-AI-Engine.Client.Persistence.Tests)" "$(history_lane XE-Local-AI-Engine.AI.Agent.Tests)" \
-      "$contracts" "$scope" "$((EPOCHSECONDS - GATE_T0))" "$reason" "$(history_skips)" "$rc" >>"$file" \
+      "$contracts" "$scope" "$((EPOCHSECONDS - GATE_T0))" "$reason" "$(history_skips)" "$(history_unreported)" \
+      "$(history_names ${GATE_FAILED[@]+"${GATE_FAILED[@]}"})" "$(history_names ${GATE_FLAKES[@]+"${GATE_FLAKES[@]}"})" \
+      "$(history_ratchets)" "$rc" >>"$file" \
       || echo "WARN: could not append to $file" >&2
   fi
   [[ -z "$LANE_DIR" ]] || rm -rf "$LANE_DIR"
@@ -509,21 +545,49 @@ if [[ -z "${NO_BUILD:-}" ]]; then
 fi
 
 # "FAILED TEST: <name>" per MTP failure line in <log>, annotated from scripts/known-flakes.txt. Report
-# only: the caller's verdict stands.
+# only: the caller's verdict stands. The method names land in GATE_FAILED / GATE_FLAKES for failed= and flakes=.
 FLAKES_FILE="$REPO/scripts/known-flakes.txt"
 print_failed_tests() {
   local name line entry note
   while IFS= read -r name; do
     line="FAILED TEST: $name"
+    GATE_FAILED+=("${name%%(*}")
     if [[ -r "$FLAKES_FILE" ]]; then
       while IFS='|' read -r entry _ note; do
         [[ -n "$entry" && "$entry" != \#* && "${name%%(*}" == "$entry" ]] || continue
         line+=" [KNOWN FLAKE: $note]"
+        GATE_FLAKES+=("$entry")
         break
       done <"$FLAKES_FILE"
     fi
     echo "$line" >&2
   done < <(sed -nE 's/^(.*\] )?[[:space:]]*failed (.+) \([0-9][^()]*\)[[:space:]]*$/\2/p' "$1" | sort -u)
+}
+
+# The rule a failing Architecture test enforces: the first sentence of the `/// <summary>` above <method>'s
+# declaration in <file>, else above the class named like the file, else "(no summary)". Plain text, tags dropped.
+summary_rule() {
+  local rule=""
+  [[ -f "$1" ]] && rule="$(awk -v m="$2" -v c="$(basename "$1" .cs)" '
+    function sentence(s) {
+      gsub(/[[:space:]]*\/\/\/[[:space:]]?/, " ", s)
+      if (!match(s, /<summary>.*<\/summary>/)) return ""
+      s = substr(s, RSTART + 9, RLENGTH - 19)
+      gsub(/<[a-z]+[[:space:]]+[a-z]+="([A-Z]:)?/, "", s); gsub(/"[[:space:]]*\/>/, "", s); gsub(/<[^>]*>/, "", s)
+      gsub(/&lt;/, "<", s); gsub(/&gt;/, ">", s); gsub(/&amp;/, "\\&", s)
+      gsub(/[[:space:]]+/, " ", s); sub(/^ /, "", s)
+      if (match(s, /[.!?]( |$)/)) s = substr(s, 1, RSTART)
+      sub(/ $/, "", s)
+      return s
+    }
+    /^[[:space:]]*\/\/\// { doc = doc " " $0; next }
+    /^[[:space:]]*\[/ { next }
+    !msum && $0 ~ ("[[:space:]]" m "[[:space:]]*[(<]") { msum = sentence(doc) }
+    !csum && $0 ~ ("class[[:space:]]+" c "([^A-Za-z0-9_]|$)") { csum = sentence(doc) }
+    { doc = "" }
+    END { print (msum != "" ? msum : csum) }
+  ' "$1")"
+  echo "${rule:-(no summary)}"
 }
 
 # The Architecture pre-lane — see "Fail-fast" in the header. The filter is the batched runner's own
@@ -560,7 +624,9 @@ run_architecture_fail_fast() {
   print_failed_tests "$log"
   while IFS= read -r name; do
     class="$(grep -rlw -- "${name%%(*}" "$REPO/$BATCHED_MODULE/Architecture" --include='*.cs' 2>/dev/null | head -1)"
-    echo "FAILED CLASS: ${class:+$(basename "$class" .cs)}${class:-? (no source matched $name)}" >&2
+    if [[ -n "$class" ]]; then echo "FAILED CLASS: $(basename "$class" .cs)" >&2
+    else echo "FAILED CLASS: ? (no source matched $name)" >&2; fi
+    echo "RULE: $(summary_rule "$class" "${name%%(*}")" >&2
   done < <(sed -nE 's/^[[:space:]]*failed (.+) \([0-9][^()]*\)[[:space:]]*$/\1/p' "$log" | sort -u)
   echo "FAIL-FAST: Architecture conventions red; long lanes not run" >&2
   GATE_REASON=fail-fast

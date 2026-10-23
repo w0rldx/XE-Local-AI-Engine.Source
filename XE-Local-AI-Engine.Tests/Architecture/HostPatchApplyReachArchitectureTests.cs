@@ -31,7 +31,7 @@ public sealed class HostPatchApplyReachArchitectureTests
         "XE-Local-AI-Engine.Client/Endpoints/AgentHome/V1/ApplyAgentHomePatchEndpoint.cs",
         "XE-Local-AI-Engine.Client/Endpoints/AgentHome/V1/Mappers/AgentHomePatchContractMapper.cs",
         "XE-Local-AI-Engine.Client/Endpoints/AgentHome/V1/PreviewAgentHomePatchEndpoint.cs",
-        "XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs"
+        "XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.AgentHomePatch.cs"
     ];
 
     [Test]

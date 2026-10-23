@@ -65,6 +65,8 @@ PROJECT_LAYOUT_PAGE = WIKI_DIR / "02-project-layout.md"
 
 CLIENT_PROJECT_DIR = Path("XE-Local-AI-Engine.Client")
 LOCAL_API_ROUTES = CLIENT_PROJECT_DIR / "Endpoints" / "Common" / "LocalApiRoutes.cs"
+# `LocalApiRoutes` is partial: the shell above plus one LocalApiRoutes.<Family>.cs per route family beside it.
+LOCAL_API_ROUTE_FAMILIES_GLOB = "LocalApiRoutes.*.cs"
 REACT_FEATURES_DIR = Path("XE-Local-AI-Engine.Client.React/src/features")
 SOLUTION_FILE = Path("XE-Local-AI-Engine.slnx")
 
@@ -319,9 +321,11 @@ def check_signalr_hubs(root: Path) -> CheckResult:
 
 
 def check_local_api_route_families(root: Path) -> CheckResult:
-    """Every nested route class in LocalApiRoutes.cs has its row in 09-api-and-hubs.md."""
+    """Every route class nested in the partial LocalApiRoutes has its row in 09-api-and-hubs.md."""
     check = "local-api-routes"
-    source = read_text(root, LOCAL_API_ROUTES)
+    families = sorted((root / LOCAL_API_ROUTES.parent).glob(LOCAL_API_ROUTE_FAMILIES_GLOB))
+    sources = [LOCAL_API_ROUTES, *(path.relative_to(root) for path in families)]
+    source = "\n".join(read_text(root, relative) for relative in sources)
     names = (match.group("name") for match in NESTED_ROUTE_CLASS_RE.finditer(source))
     inventory = require_non_empty(check, LOCAL_API_ROUTES.as_posix(), names)
     return build_result(check, API_AND_HUBS_PAGE, read_text(root, API_AND_HUBS_PAGE), inventory)

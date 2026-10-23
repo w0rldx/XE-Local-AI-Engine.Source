@@ -38,7 +38,7 @@ This page covers the C# scheduler subsystem (`XE-Local-AI-Engine.Client.Applicat
 | SignalR hub + publisher | `XE-Local-AI-Engine.Client/Hubs/SchedulerHub.cs`, `…/Hubs/SchedulerEventPublisher.cs` |
 | Retention sweep | `XE-Local-AI-Engine.Client.Application/Services/Scheduler/Implementation/SchedulerHistoryRetentionService.cs` |
 | REST endpoints (FastEndpoints) | `XE-Local-AI-Engine.Client/Endpoints/Scheduler/V1/` |
-| Route constants | `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs` (`Scheduler`) |
+| Route constants | `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.Scheduler.cs` (`Scheduler`) |
 | React feature | `XE-Local-AI-Engine.Client.React/src/features/scheduler/` |
 
 ---
@@ -295,7 +295,7 @@ Quartz's fluent config exposes **no per-connection PRAGMA hook**. If evidence of
 
 ## SignalR hub (live run updates)
 
-`SchedulerHub` (`XE-Local-AI-Engine.Client/Hubs/SchedulerHub.cs`) is a **server-push-only** hub: it has no client-callable server methods. It is mapped via `MapHub` at the full path `/api/local/v1/scheduler/hub` (`LocalApiRoutes.cs`) and is `[Authorize]`d under the JWT bearer scheme with the `NodeAuthorizationPolicies.Operator` policy — the same operator gate as the other local hubs. See [API & Hubs](09-api-and-hubs.md).
+`SchedulerHub` (`XE-Local-AI-Engine.Client/Hubs/SchedulerHub.cs`) is a **server-push-only** hub: it has no client-callable server methods. It is mapped via `MapHub` at the full path `/api/local/v1/scheduler/hub` (`LocalApiRoutes.Scheduler.Hub`) and is `[Authorize]`d under the JWT bearer scheme with the `NodeAuthorizationPolicies.Operator` policy — the same operator gate as the other local hubs. See [API & Hubs](09-api-and-hubs.md).
 
 `SchedulerEventPublisher` (`Hubs/SchedulerEventPublisher.cs`) implements `ISchedulerEventPublisher` over `IHubContext<SchedulerHub>`: callers publish domain events (`SchedulerRunEvent` with a `SchedulerRunEventKind`, `SchedulerRunProgressEvent`, `SchedulerDefinitionEvent`), and the publisher picks the SignalR method name, repeats it as the payload's `eventType` and broadcasts the `*HubMessage` wire shape (`Hubs/SchedulerHubContracts.cs`) to `Clients.All`. **Events are already sanitized by callers** (no parameters, details, or stack traces). In Application-only/test hosts a no-op `NullSchedulerEventPublisher` is registered (`TryAddSingleton`) and superseded by the hub-backed publisher in the Client host.
 
@@ -314,7 +314,7 @@ Event names (`SchedulerHubEvents`, `Hubs/SchedulerHubContracts.cs`) and their hu
 
 ## REST surface
 
-All under the FastEndpoints local prefix; route constants in `LocalApiRoutes.Scheduler` (`LocalApiRoutes.cs`), one endpoint class per file in `Endpoints/Scheduler/V1/`. DTOs in `SchedulerEndpointDtos.cs`, mapping in `Mappers/SchedulerMapper.cs`.
+All under the FastEndpoints local prefix; route constants in `LocalApiRoutes.Scheduler` (`Endpoints/Common/LocalApiRoutes.Scheduler.cs`), one endpoint class per file in `Endpoints/Scheduler/V1/`. DTOs in `SchedulerEndpointDtos.cs`, mapping in `Mappers/SchedulerMapper.cs`.
 
 | Route (relative to `scheduler/`) | Endpoint |
 |---|---|

@@ -26,6 +26,9 @@ public sealed class PositionalRecordConventionTests
     private static readonly string AllowlistPath =
         RepositoryPaths.Combine("XE-Local-AI-Engine.Tests", "Architecture", "PositionalRecordAllowlist.txt");
 
+    /// <summary>Today's entry count. Only ever lowered, in the commit that shrinks the list.</summary>
+    private const int MaxEntries = 314;
+
     /// <summary>
     ///     A non-vacuity floor under today's count, the way <see cref="PrimaryConstructorConventionTests" /> sets its
     ///     own: a renamed directory reads too few files and fails here rather than passing on an empty scan.
@@ -131,6 +134,17 @@ public sealed class PositionalRecordConventionTests
             + "declared there. The list is shrink-only: delete the line(s) below in the commit that converted or "
             + "moved the type."
             + Environment.NewLine + string.Join(Environment.NewLine, stale));
+    }
+
+    /// <summary>The ratchet: a new exemption has to retire an old one, so the list never grows back.</summary>
+    [Test]
+    public void TheAllowlist_DoesNotGrow()
+    {
+        var entries = Allowlist().Values.Sum();
+
+        AssertEx.True(entries <= MaxEntries,
+            $"Architecture/PositionalRecordAllowlist.txt holds {entries} entries, above MaxEntries ({MaxEntries}): "
+            + "shrink the allowlist, then lower MaxEntries.");
     }
 
     /// <summary>

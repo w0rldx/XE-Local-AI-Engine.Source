@@ -62,11 +62,12 @@ The middleware/mapping order above is authoritative — see `Program.ConfigureRe
 - **A request-shape check belongs in the validator, not the handler.** Required, length, range, enum-membership and format checks over the request's own fields go in a `Validator<TRequest>` under `V1/Validators/`; the handler keeps only what needs a service or the database. Moving one is not free, though: the validator runs before the handler and, by default, reports every failure at once, so a handler that returned on the first failure needs `ClassLevelCascadeMode = CascadeMode.Stop` (or `.Cascade(CascadeMode.Stop)` on the rule) to keep answering with the same single error, and a handler that used the unkeyed `AddError(message)` needs the failure reported under the general-errors field rather than the property. Running earlier also decides more: a check that used to sit behind a lookup now pre-empts the 404/409/403 that lookup answered, so only a check that was already the handler's first statement moves unchanged. The rule must judge the exact string the handler goes on to use — decode, trim and case-fold all sit between what was bound and what is used — and it must not change the OpenAPI document; see the two schema bullets below.
 - **Route prefix:** every endpoint is mounted under `api/local/v1` via `config.Endpoints.RoutePrefix = LocalApiRoutes.Prefix` in `XE-Local-AI-Engine.Client/Hosting/Pipeline/FastEndpointsPipelineExtensions.cs`; the value is `LocalApiRoutes.Prefix` in `Endpoints/Common/LocalApiRoutes.cs`.
 - **Routes are centralized**, not string-literal'd per endpoint. Every route and hub path is a
-  `public const string` on a nested route-family class in
-  `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs` (for example,
-  `LocalApiRoutes.Scheduler.JobById`), alongside `Prefix`. That file is the inventory — read it rather
-  than a count here, which drifts every time a family lands. Change a path there and both the endpoint
-  and any `Send.CreatedAtAsync<TEndpoint>()` location resolution follow.
+  `public const string` on a nested route-family class of the partial `LocalApiRoutes` (for example,
+  `LocalApiRoutes.Scheduler.JobById`). The shell `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs`
+  holds `Prefix`; each family lives beside it in its own `Endpoints/Common/LocalApiRoutes.<Family>.cs`.
+  Those files are the inventory — read them rather than a count here, which drifts every time a family
+  lands. Change a path there and both the endpoint and any `Send.CreatedAtAsync<TEndpoint>()` location
+  resolution follow.
 - **operationId = camelCased class name.** The global `NameGenerator` in `FastEndpointsPipelineExtensions.UseNodeFastEndpoints` strips the `Endpoint` suffix and lowercases the first char: `CreateScheduledJobEndpoint` → `createScheduledJob`. These operationIds are what the hey-api React SDK function names are derived from, so **the C# class name is the public contract name** — rename with care.
 - **Errors → ProblemDetails.** `config.Errors.UseProblemDetails()` in `FastEndpointsPipelineExtensions.UseNodeFastEndpoints` turns validation failures into RFC7807. Domain exceptions are handled by the `IExceptionHandler` chain (see §4). Note that not every non-2xx is ProblemDetails: several families answer a **typed domain object** instead (the source-build `409` is the notable one — see §1 design notes).
 - **Desktop-only endpoints.** The `config.Endpoints.Filter` configured in `FastEndpointsPipelineExtensions.UseNodeFastEndpoints` drops any endpoint implementing `IDesktopOnlyEndpoint` unless the host launched in desktop mode. The `app-update/*` family and Custom Tools executable probe use it, so those endpoints are absent from a headless OpenAPI regen.
@@ -78,7 +79,7 @@ The middleware/mapping order above is authoritative — see `Program.ConfigureRe
 
 ### Endpoint inventory (by feature)
 
-One row per nested class in `LocalApiRoutes.cs`, in file order. The "Owner page" column points to the subsystem wiki page that explains the behavior behind the routes.
+One row per route family (`Endpoints/Common/LocalApiRoutes.<Family>.cs`); `scripts/docs-inventory-check.py` fails when a family has no row. The "Owner page" column points to the subsystem wiki page that explains the behavior behind the routes.
 
 | Group (route base) | Routes | Owner page |
 |---|---|---|
@@ -257,7 +258,7 @@ Everything except `authClient` goes through the shared axios instance via `build
 
 ## 2. SignalR hubs (inbound, browser ↔ node)
 
-Hub classes live in `Client/Hubs/` and every one of them is mapped by a `MapHub<>` call in `Program.cs` — that call site, not a number here, is the inventory. All are `[Authorize(AuthenticationSchemes = JwtBearer, Policy = NodeAuthorizationPolicies.Operator)]` and mapped with `.RequireAuthorization(Operator)`. Their full paths are constants (`...Hub` in `LocalApiRoutes.cs`), mapped via `MapHub` *outside* the FastEndpoints prefix.
+Hub classes live in `Client/Hubs/` and every one of them is mapped by a `MapHub<>` call in `Program.cs` — that call site, not a number here, is the inventory. All are `[Authorize(AuthenticationSchemes = JwtBearer, Policy = NodeAuthorizationPolicies.Operator)]` and mapped with `.RequireAuthorization(Operator)`. Their full paths are constants (`...Hub` on the `LocalApiRoutes` families), mapped via `MapHub` *outside* the FastEndpoints prefix.
 
 **Adding a hub is two edits, not one.** Besides the `MapHub` call, the hub's path goes into `XE-Local-AI-Engine.Client.React/config/signalr-proxy-paths.json`, which `vite.config.ts` reads to decide which paths get the WebSocket-capable dev proxy. A hub missing from that file has no dev transport, and because the client shares one connection manager the failure is not confined to that hub: every hub in the dev app stops delivering (this has shipped once). Two guards read the real `MapHub` calls and fail on a mapped path missing from the file and on a proxied path no longer mapped: `SignalRProxyPathDriftTests` in the backend suite, and `pnpm run signalr:check` (`scripts/CheckSignalrProxySync.mjs`, which also checks the hub payload enums against their client member lists) in the frontend `validate`. Neither is the check `scripts/docs-inventory-check.py` runs: that one only requires every mapped hub to be named in the table below.
 

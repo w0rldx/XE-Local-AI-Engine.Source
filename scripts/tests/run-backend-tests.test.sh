@@ -202,13 +202,24 @@ if [[ " $* " == *" --list-tests "* ]]; then
 fi
 echo "arch-run $*" >>"$FAKE_LOG"
 if [[ -n "${FAKE_ARCH_FAIL:-}" ]]; then
-  printf 'failed Layers_NeverReferenceUp (12ms)\n  boom\nTest run summary: Failed!\n  total: 2\n  failed: 1\n  succeeded: 1\n  skipped: 0\n'
+  for name in ${FAKE_ARCH_FAIL_NAME:-Layers_NeverReferenceUp}; do printf 'failed %s (12ms)\n  boom\n' "$name"; done
+  printf 'Test run summary: Failed!\n  total: 2\n  failed: 1\n  succeeded: 1\n  skipped: 0\n'
   exit 2
 fi
 printf 'Test run summary: Passed!\n  total: 2\n  failed: 0\n  succeeded: 2\n  skipped: 0\n'
 EOF
-printf 'public sealed class LayerDependencyTests { public void Layers_NeverReferenceUp() { } }\n' \
+# The RULE line's sources: a method summary (preferred over the class's), a class summary alone, none.
+printf '%s\n' '/// <summary>Freezes the layers.</summary>' 'public sealed class LayerDependencyTests' '{' \
+  '    /// <summary>' '    ///     A leaf never references <see cref="T:Host"/> up. Second sentence.' '    /// </summary>' \
+  '    [Test]' '    public void Layers_NeverReferenceUp() { }' '    public void Layers_Undocumented() { }' '}' \
   >"$FAKE/XE-Local-AI-Engine.Tests/Architecture/LayerDependencyTests.cs"
+printf '%s\n' 'public sealed class BareTests { public void Bare_Rule() { } }' \
+  >"$FAKE/XE-Local-AI-Engine.Tests/Architecture/BareTests.cs"
+# Ratchet fixtures: comments, indented comments and blank lines are not entries; a missing file reads "-".
+printf '# header\n\nA|reason\n  # indented\nB|reason\n' >"$FAKE/XE-Local-AI-Engine.Tests/Architecture/DbContextUserAllowlist.txt"
+printf 'x.cs|1\n' >"$FAKE/XE-Local-AI-Engine.Tests/Architecture/TupleAllowlist.txt"
+printf '# only comments\n' >"$FAKE/XE-Local-AI-Engine.Tests/Architecture/CommentBudgetAllowlist.txt"
+RATCHETS='DbContextUser:2,PositionalRecord:-,Tuple:1,FilePlacement:-,CommentBudget:0'
 # A fixture list, so the annotation cases do not depend on what the shipped list currently names.
 printf '# comment|x|y\nFlaky_Method|2026-10-08|fixture flake note\n' >"$FAKE/scripts/known-flakes.txt"
 HISTORY="$FAKE/.tmp/gate-history.log"
@@ -284,8 +295,21 @@ refute_grep -iE '^architecture' <<<"$output"
 run_gate arch-red env FAKE_ARCH_FAIL=1
 [[ "$status" -eq 1 ]] || { echo "arch-red exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
 grep -Fq 'FAIL-FAST: Architecture conventions red; long lanes not run' <<<"$output"
-grep -Fq 'FAILED CLASS: LayerDependencyTests' <<<"$output"
+grep -Fxq 'FAILED CLASS: LayerDependencyTests' <<<"$output" \
+  || { echo "arch-red printed no exact class line:" >&2; printf '%s\n' "$output" >&2; exit 1; }
 grep -Fq 'FAILED TEST: Layers_NeverReferenceUp' <<<"$output"
+grep -Fxq 'RULE: A leaf never references Host up.' <<<"$output" \
+  || { echo "arch-red printed no method RULE line:" >&2; printf '%s\n' "$output" >&2; exit 1; }
+run_gate arch-red-class-rule env FAKE_ARCH_FAIL=1 FAKE_ARCH_FAIL_NAME=Layers_Undocumented
+grep -Fxq 'RULE: Freezes the layers.' <<<"$output" \
+  || { echo "no class-summary RULE fallback:" >&2; printf '%s\n' "$output" >&2; exit 1; }
+run_gate arch-red-no-rule env FAKE_ARCH_FAIL=1 FAKE_ARCH_FAIL_NAME=Bare_Rule
+grep -Fxq 'FAILED CLASS: BareTests' <<<"$output"
+grep -Fxq 'RULE: (no summary)' <<<"$output" \
+  || { echo "no '(no summary)' RULE fallback:" >&2; printf '%s\n' "$output" >&2; exit 1; }
+run_gate arch-red-no-source env FAKE_ARCH_FAIL=1 FAKE_ARCH_FAIL_NAME=Nowhere_Declared
+grep -Fxq 'FAILED CLASS: ? (no source matched Nowhere_Declared)' <<<"$output"
+grep -Fxq 'RULE: (no summary)' <<<"$output"
 refute_grep -E '^(runner |test project=|contract )' "$TMP/arch-red.log"
 refute_grep -F 'BACKEND GATE GREEN' <<<"$output"
 
@@ -309,7 +333,7 @@ refute_grep '^arch-' "$TMP/arch-off.log"
 grep -Fq 'BACKEND GATE GREEN' <<<"$output"
 
 # --- gate history: one tab-separated line per run, appended, on every exit path ---
-# Arguments: the line count expected now, then fields 0-8 and the exit field (always the last of twelve);
+# Arguments: the line count expected now, then fields 0-8 and the exit field (always the last of sixteen);
 # "*" skips a field, "~re" is a regex. reason= and skips= are checked by assert_reason.
 # HISTORY_FILE overrides the log read (the real-git fixture keeps its own).
 assert_history() {
@@ -318,10 +342,10 @@ assert_history() {
     || { echo "history has $(wc -l <"$file") lines, wanted $want_lines" >&2; cat "$file" >&2; exit 1; }
   local -a f
   IFS=$'\t' read -r -a f < <(tail -1 "$file")
-  [[ "$(tail -1 "$file" | awk -F'\t' '{print NF}')" -eq 12 ]] || { echo "history line is not 12 fields: $(tail -1 "$file")" >&2; exit 1; }
+  [[ "$(tail -1 "$file" | awk -F'\t' '{print NF}')" -eq 16 ]] || { echo "history line is not 16 fields: $(tail -1 "$file")" >&2; exit 1; }
   for ((i = 0; i < 10; i++)); do
     want="${*:i+1:1}"; got="${f[i]:-}"
-    (( i == 9 )) && got="${f[11]:-}"
+    (( i == 9 )) && got="${f[15]:-}"
     [[ "$want" == "*" ]] && continue
     if [[ "$want" == ~* ]]; then [[ "$got" =~ ${want#\~} ]] && continue
     elif [[ "$got" == "$want" ]]; then continue; fi
@@ -335,6 +359,13 @@ assert_reason() {
   [[ "${f[9]:-} ${f[10]:-}" == "reason=$1 skips=$2" ]] \
     || { echo "history has '${f[9]:-} ${f[10]:-}', wanted 'reason=$1 skips=$2'" >&2; exit 1; }
 }
+# The last line's unreported=, failed=, flakes= and ratchets= fields (12 to 15), exactly.
+assert_extra() {
+  local -a f
+  IFS=$'\t' read -r -a f < <(tail -1 "${HISTORY_FILE:-$HISTORY}")
+  [[ "${f[11]:-} ${f[12]:-} ${f[13]:-} ${f[14]:-}" == "$*" ]] \
+    || { echo "history has '${f[11]:-} ${f[12]:-} ${f[13]:-} ${f[14]:-}', wanted '$*'" >&2; exit 1; }
+}
 history_lines() { if [[ -f "$HISTORY" ]]; then wc -l <"$HISTORY"; else echo 0; fi; }
 n="$(history_lines)"
 run_gate history-green env
@@ -344,10 +375,12 @@ run_gate history-green env
 assert_history $((n + 1)) '~^20[0-9]{2}-[0-9]{2}-[0-9]{2}T' "$FAKE_REAL" - Tests=7/0/0 Persistence=3/0/0 \
   Agent=3/0/0 Contracts=skipped scope=no-build '~^wall=[0-9]+$' exit=0
 assert_reason ok ''
+assert_extra unreported=0 failed=- flakes=- "ratchets=$RATCHETS"
 run_gate history-fail-fast env FAKE_ARCH_FAIL=1
 [[ "$status" -eq 1 ]]
 assert_history $((n + 2)) '*' "$FAKE_REAL" '*' Tests= Persistence= Agent= Contracts=skipped '*' '*' exit=1
 assert_reason fail-fast ''
+assert_extra unreported=0 failed=Layers_NeverReferenceUp flakes=- "ratchets=$RATCHETS"
 run_gate history-lock env FAKE_LOCK_EXIT=69
 [[ "$status" -eq 69 ]] || { echo "history-lock exited $status" >&2; exit 1; }
 assert_history $((n + 3)) '*' "$FAKE_REAL" '*' Tests= Persistence= Agent= Contracts= scope=no-build '*' exit=69
@@ -406,6 +439,11 @@ GATE_ARGS=(--siblings-only)
 run_gate history-scope-contracts-siblings env NO_BUILD= XE_GATE_CONTRACT_TESTS=skip FAKE_GIT_DIFF=$'scripts/dev-start.sh\n'
 GATE_ARGS=()
 assert_history $((n + 20)) '*' '*' '*' '*' '*' '*' Contracts=skipped scope=siblings-only '*' exit=0
+# failed= stops at three distinct names (the FAILED TEST lines' sorted order), and one RULE line per test.
+run_gate history-failed-cap env FAKE_ARCH_FAIL=1 FAKE_ARCH_FAIL_NAME='D_Four C_Three(1) C_Three(2) B_Two A_One'
+[[ "$(grep -c '^RULE: ' <<<"$output")" -eq 5 ]] || { echo "wanted 5 RULE lines:" >&2; printf '%s\n' "$output" >&2; exit 1; }
+assert_history $((n + 21)) '*' '*' '*' Tests= '*' '*' '*' '*' '*' exit=1
+assert_extra unreported=0 failed=A_One,B_Two,C_Three flakes=- "ratchets=$RATCHETS"
 
 # --- the acknowledgment file: nothing ever removes or rewrites an inherited one ---
 printf 'keep me\n' >"$TMP/inherited-ack"
@@ -479,10 +517,19 @@ grep -Fxq 'FAILED TEST: Flaky_Method(True) [KNOWN FLAKE: fixture flake note]' <<
   || { echo "known flake not annotated:" >&2; printf '%s\n' "$output" >&2; exit 1; }
 refute_grep -F 'BACKEND GATE GREEN' <<<"$output"
 assert_reason tests ''
+# The whole row, exactly, with only the clock fields (time, wall) normalised: parameters are dropped from
+# failed=, the two red siblings' identical name is listed once, and flakes= names the matched entry.
+want_row="$(printf '%s\t' T "$FAKE_REAL" - Tests=7/0/0 Persistence=2/1/0 Agent=2/1/0 Contracts=skipped \
+  scope=no-build wall=W reason=tests skips= unreported=0 failed=Flaky_Method flakes=Flaky_Method \
+  "ratchets=$RATCHETS")exit=1"
+got_row="$(tail -1 "$HISTORY" | awk -F'\t' -v OFS='\t' '{ $1 = "T"; $9 = "wall=W"; print }')"
+[[ "$got_row" == "$want_row" ]] \
+  || { printf 'flake-known history row\n got: %s\nwant: %s\n' "$got_row" "$want_row" >&2; exit 1; }
 run_gate flake-unknown env FAKE_FAILED_TEST=Real_Failure
 [[ "$status" -eq 1 ]]
 grep -Fxq 'FAILED TEST: Real_Failure' <<<"$output"
 refute_grep -F 'KNOWN FLAKE' <<<"$output"
+assert_extra unreported=0 failed=Real_Failure flakes=- "ratchets=$RATCHETS"
 # A prefix of a listed name is a different test.
 run_gate flake-prefix env FAKE_FAILED_TEST=Flaky_Method_Other
 grep -Fxq 'FAILED TEST: Flaky_Method_Other' <<<"$output"
@@ -829,12 +876,14 @@ run_gate all-skipped env FAKE_ALL_SKIPPED=1
 grep -Fq 'HOLLOW: all 3 tests skipped in XE-Local-AI-Engine.AI.Agent.Tests' <<<"$output"
 grep -Fq 'FAILED: XE-Local-AI-Engine.Client.Persistence.Tests(hollow)' <<<"$output"
 grep -Fq 'Skipped (all lanes): 6' <<<"$output"
-# A red lane is reason=tests; skips without a TRX reason are "unreported".
-assert_reason tests 'unreported:6'
+# A red lane is reason=tests; skips without a TRX reason are counted by unreported=, not named in skips=.
+assert_reason tests ''
+assert_extra unreported=6 failed=- flakes=- "ratchets=$RATCHETS"
 # With TUnit's TRX the reasons are slugged and grouped across lanes; the third skip of each lane has none.
 run_gate all-skipped-trx env FAKE_ALL_SKIPPED=1 FAKE_SKIP_TRX=1
 [[ "$status" -eq 1 ]] || { echo "all-skipped-trx run exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
-assert_reason tests 'live-retrieval-eval-set:2,needs-a-gpu-amp-cuda:2,unreported:2'
+assert_reason tests 'live-retrieval-eval-set:2,needs-a-gpu-amp-cuda:2'
+assert_extra unreported=2 failed=- flakes=- "ratchets=$RATCHETS"
 refute_grep -F 'BACKEND GATE GREEN' <<<"$output"
 
 # --- a failed Release build exits before any lane starts ---

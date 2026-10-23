@@ -22,6 +22,9 @@ public sealed class FilePlacementConventionTests
     private static readonly string AllowlistPath =
         RepositoryPaths.Combine("XE-Local-AI-Engine.Tests", "Architecture", "FilePlacementAllowlist.txt");
 
+    /// <summary>Today's entry count. Only ever lowered, in the commit that shrinks the list.</summary>
+    private const int MaxEntries = 251;
+
     /// <summary>
     ///     A floor a little under today's file count, which the cleanup batches do not lower.
     /// </summary>
@@ -268,6 +271,17 @@ public sealed class FilePlacementConventionTests
             + $"room cannot be spent again. Apply the replacements below, or re-run with {ShrinkVariable}=1 to "
             + "rewrite the whole file:"
             + Environment.NewLine + string.Join(Environment.NewLine, stale.Order(StringComparer.Ordinal)));
+    }
+
+    /// <summary>The ratchet: a new exemption has to retire an old one, so the list never grows back.</summary>
+    [Test]
+    public void TheAllowlist_DoesNotGrow()
+    {
+        var entries = Allowlist().Count;
+
+        AssertEx.True(entries <= MaxEntries,
+            $"Architecture/FilePlacementAllowlist.txt holds {entries} entries, above MaxEntries ({MaxEntries}): "
+            + "shrink the allowlist, then lower MaxEntries.");
     }
 
     /// <summary>The guard's own check: every shape the scanner must read, and every lookalike it must not.</summary>
