@@ -12,8 +12,9 @@ overrides:
   # seroval GHSA-p6vx-979v-rg4c covers >=0.12.0 <=1.6.0 (pulled at 1.5.x by solid-js 1.9.15 under the devtools panels); 1.6.8 is the fixed line.
   'seroval@<1.6.2': '1.6.8'
   'seroval-plugins@<1.6.2': '1.6.8'
-  # fast-uri GHSA-hrr3-gc8f-f4qj covers <3.1.8 (dev-only, via ajv under stylelint and react-doctor); 3.1.8 is the fixed patch.
-  'fast-uri@<3.1.8': '3.1.8'
+  # fast-uri GHSA-hrr3-gc8f-f4qj, GHSA-w74x-v6f9-j3xg, GHSA-wjr9-j795-jxcr, GHSA-xhq7-xmqj-769h and GHSA-333x-w4r6-6crp
+  # cover <3.1.9 (dev-only, via ajv under stylelint and react-doctor); 3.1.9 is the fixed patch.
+  'fast-uri@<3.1.9': '3.1.9'
 
 allowBuilds:
   msgpackr-extract: true
@@ -23,3 +24,7 @@ allowBuilds:
 
 trustPolicyExclude:
   - 'semver@6.3.1'
+
+minimumReleaseAgeExclude:
+  # Security patch for the fast-uri advisories above; wanted fresh, so exempt from the 7-day maturity hold.
+  - 'fast-uri@3.1.9'

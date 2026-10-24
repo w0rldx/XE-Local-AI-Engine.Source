@@ -36,6 +36,8 @@
 #     cap transformers<=5.5.0, so the floor is unsatisfiable.
 #   * setuptools 81.0.0, floor 83.0.0 (GHSA-h35f-9h28-mq5c): the torch 2.11.0+cu128 wheel
 #     metadata requires setuptools<82.
+#   * setuptools 81.0.0, floor 84.1.0 (GHSA-xmj3-9gf7-h52w, Windows path escape in legacy wheel
+#     installs; 2026-10-24): same torch cap; the runtime is Linux-only.
 #   * torch 2.11.0+cu128, floor 2.13.0 (GHSA-rrmf-rvhw-rf47): the cu128 index ships no
 #     2.12/2.13, unsloth caps torch<2.13.0, torchvision 0.26.0+cu128 pins torch==2.11.0.
 #   * transformers 5.5.0, no patched release (GHSA-x9r9-c232-4q39, load_custom_generate writes a
