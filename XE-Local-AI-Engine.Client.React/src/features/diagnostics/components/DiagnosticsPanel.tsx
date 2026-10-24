@@ -6,8 +6,7 @@
 // zip. Nothing leaves the machine: the issue button only opens a link, and the operator attaches the zip themselves.
 // Below the list, the node's database snapshots (NodeBackupsCard) are taken and restored.
 
-import { Alert, Badge, Button, FileButton, Group, Loader, Switch, Table, Text, Tooltip } from "@mantine/core";
-import { useMutation } from "@tanstack/react-query";
+import { Alert, Badge, Button, FileButton, Group, Loader, Switch, Text, Tooltip } from "@mantine/core";
 import {
 	IconAlertTriangle,
 	IconBrandGithub,
@@ -18,6 +17,7 @@ import {
 	IconTrash,
 	IconUpload,
 } from "@tabler/icons-react";
+import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -27,6 +27,7 @@ import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import { ResponsiveTable } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
@@ -43,8 +44,8 @@ function errorMessage(snapshot: Snapshot): string {
 	return snapshot.error?.message ?? "—";
 }
 
-// Columns that must not give up width: the timestamp (a wrapped date/time is unreadable) and the row actions. The
-// error column is the one deliberately left wrapping, so it absorbs whatever width is left.
+// The timestamp must not give up width (a wrapped date/time is unreadable); the row actions stay on one line in the
+// table anyway. The error column is the one deliberately left wrapping, so it absorbs whatever width is left.
 const nowrapCell = { whiteSpace: "nowrap" as const };
 
 export function DiagnosticsPanel() {
@@ -184,69 +185,66 @@ export function DiagnosticsPanel() {
 			{!isLoading && !isError && snapshots && snapshots.length > 0 && (
 				<SectionCard>
 					{/*
-					 * The three row actions are ~300px of buttons on their own; at the old 720 floor the error column
-					 * (which is allowed to wrap) took the slack and pushed View/Export/Delete past the right edge with
-					 * nothing to scroll to — live-observed at 390px. The floor now covers the actions column at its
-					 * natural width, and that column is held `nowrap` so the scroll actually reaches all three buttons.
+					 * The three row actions are ~300px of buttons on their own, so the floor covers the actions column at
+					 * its natural width (the table keeps it on one line); a narrower container gets cards instead.
 					 */}
-					<Table.ScrollContainer minWidth={900}>
-						<Table striped={true} highlightOnHover={true}>
-							<Table.Thead>
-								<Table.Tr>
-									<Table.Th style={nowrapCell}>{t("diagnostics.columns.time")}</Table.Th>
-									<Table.Th>{t("diagnostics.columns.kind")}</Table.Th>
-									<Table.Th>{t("diagnostics.columns.route")}</Table.Th>
-									<Table.Th>{t("diagnostics.columns.error")}</Table.Th>
-									<Table.Th style={nowrapCell}>{t("diagnostics.columns.actions")}</Table.Th>
-								</Table.Tr>
-							</Table.Thead>
-							<Table.Tbody>
-								{snapshots.map((snapshot) => (
-									<Table.Tr key={snapshot.id}>
-										<Table.Td style={nowrapCell}>{formatTimestamp(snapshot.createdAt)}</Table.Td>
-										<Table.Td>
-											<Badge color={snapshot.kind === "error" ? "red" : "blue"} variant="light">
-												{t(`diagnostics.kind.${snapshot.kind}`)}
-											</Badge>
-										</Table.Td>
-										<Table.Td>{snapshot.env.route}</Table.Td>
-										<Table.Td style={{ wordBreak: "break-word" }}>{errorMessage(snapshot)}</Table.Td>
-										<Table.Td style={nowrapCell}>
-											<Group gap="xs" wrap="nowrap">
-												<Button
-													size="xs"
-													variant="subtle"
-													leftSection={<IconEye size={14} />}
-													onClick={() => setSelectedId(snapshot.id)}
-												>
-													{t("diagnostics.actions.view")}
-												</Button>
-												<Button
-													size="xs"
-													variant="subtle"
-													leftSection={<IconDownload size={14} />}
-													loading={exportBundle.isPending && exportBundle.variables?.id === snapshot.id}
-													onClick={() => exportBundle.mutate(snapshot)}
-												>
-													{t("diagnostics.actions.export")}
-												</Button>
-												<Button
-													size="xs"
-													variant="subtle"
-													color="red"
-													leftSection={<IconTrash size={14} />}
-													loading={deleteSnapshot.isPending && deleteSnapshot.variables === snapshot.id}
-													onClick={() => deleteSnapshot.mutate(snapshot.id)}
-												>
-													{t("diagnostics.actions.delete")}
-												</Button>
-											</Group>
-										</Table.Td>
-									</Table.Tr>
-								))}
-							</Table.Tbody>
-						</Table>
-					</Table.ScrollContainer>
+					<ResponsiveTable
+						rows={snapshots}
+						rowKey={(snapshot) => snapshot.id}
+						minWidth={900}
+						columns={[
+							{
+								key: "time",
+								header: t("diagnostics.columns.time"),
+								primary: true,
+								style: nowrapCell,
+								cell: (snapshot) => formatTimestamp(snapshot.createdAt),
+							},
+							{
+								key: "kind",
+								header: t("diagnostics.columns.kind"),
+								cell: (snapshot) => (
+									<Badge color={snapshot.kind === "error" ? "red" : "blue"} variant="light">
+										{t(`diagnostics.kind.${snapshot.kind}`)}
+									</Badge>
+								),
+							},
+							{ key: "route", header: t("diagnostics.columns.route"), cell: (snapshot) => snapshot.env.route },
+							{
+								key: "error",
+								header: t("diagnostics.columns.error"),
+								style: { wordBreak: "break-word" },
+								cell: (snapshot) => errorMessage(snapshot),
+							},
+						]}
+						actionsHeader={t("diagnostics.columns.actions")}
+						actions={(snapshot) => (
+							<>
+								<Button size="xs" variant="subtle" leftSection={<IconEye size={14} />} onClick={() => setSelectedId(snapshot.id)}>
+									{t("diagnostics.actions.view")}
+								</Button>
+								<Button
+									size="xs"
+									variant="subtle"
+									leftSection={<IconDownload size={14} />}
+									loading={exportBundle.isPending && exportBundle.variables?.id === snapshot.id}
+									onClick={() => exportBundle.mutate(snapshot)}
+								>
+									{t("diagnostics.actions.export")}
+								</Button>
+								<Button
+									size="xs"
+									variant="subtle"
+									color="red"
+									leftSection={<IconTrash size={14} />}
+									loading={deleteSnapshot.isPending && deleteSnapshot.variables === snapshot.id}
+									onClick={() => deleteSnapshot.mutate(snapshot.id)}
+								>
+									{t("diagnostics.actions.delete")}
+								</Button>
+							</>
+						)}
+					/>
 				</SectionCard>
 			)}
 

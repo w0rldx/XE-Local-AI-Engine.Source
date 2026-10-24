@@ -3,6 +3,8 @@ import { IconAlertTriangle, IconDeviceFloppy, IconRefresh, IconTrash } from "@ta
 import type { Dispatch } from "react";
 import { useTranslation } from "react-i18next";
 
+import { COMPACT_CONTROLS_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
+import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { AzureCloudSettingsDynamicFields } from "@/features/cloud-settings/components/AzureCloudSettingsDynamicFields";
 import { EntraConnectionFields } from "@/features/cloud-settings/entra/components/EntraConnectionFields";
@@ -49,6 +51,9 @@ export function AzureCloudSettingsEditor(props: AzureCloudSettingsEditorProps) {
 	const { formValues, visibleErrors, modelRowIds, headerRowIds, hostSuffixRowIds, dispatch, connection, signIn, status } = props;
 	const isManagedIdentity = formValues.authMode === "ManagedIdentity";
 	const isEntraId = formValues.authMode === "EntraId";
+	// On a phone the long option labels wrapped to three lines inside each segment; stacked, each reads on one line.
+	const { width } = useWindowDimensions();
+	const segmentOrientation = width < COMPACT_CONTROLS_BREAKPOINT ? "vertical" : "horizontal";
 	return (
 		<SectionCard
 			title={t("pages.cloudSettings.azure.title", "Azure OpenAI")}
@@ -80,6 +85,7 @@ export function AzureCloudSettingsEditor(props: AzureCloudSettingsEditorProps) {
 				<SegmentedControl
 					fullWidth={true}
 					styles={segmentedControlStyles}
+					orientation={segmentOrientation}
 					data-testid="cloud-settings-auth-mode"
 					value={formValues.authMode}
 					onChange={(value) => dispatch({ type: "setAuthMode", value: value as CloudAuthMode })}
@@ -101,6 +107,7 @@ export function AzureCloudSettingsEditor(props: AzureCloudSettingsEditorProps) {
 				<SegmentedControl
 					fullWidth={true}
 					styles={segmentedControlStyles}
+					orientation={segmentOrientation}
 					data-testid="cloud-settings-api-surface"
 					value={formValues.apiSurface}
 					onChange={(value) => dispatch({ type: "setApiSurface", value: value as CloudApiSurface })}

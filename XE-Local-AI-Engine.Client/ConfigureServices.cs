@@ -405,6 +405,9 @@ public static class ConfigureServices
         // permit limit is computed HERE, outside the AddRateLimiter lambda, so its closure captures ints, never `builder`. Why: docs/wiki/11-hosting-and-deployment.md ("Registration-time closures").
         var isTestingEnvironment = builder.Environment.IsEnvironment("Testing");
         var authPermitLimit = isTestingEnvironment ? 10_000 : 10;
+
+        // One refresh per SPA load or tab: 60/min covers a reload a second, and a rotated high-entropy cookie needs no password-guessing cap.
+        var refreshPermitLimit = isTestingEnvironment ? 10_000 : 60;
         var mcpPermitLimit = isTestingEnvironment ? 100_000 : 120;
         var mcpAnonymousPermitLimit = isTestingEnvironment ? 100_000 : 20;
         var proxyPermitLimit = isTestingEnvironment ? 100_000 : 6_000;
@@ -428,6 +431,16 @@ public static class ConfigureServices
                     {
                         AutoReplenishment = true,
                         PermitLimit = authPermitLimit,
+                        QueueLimit = 0,
+                        Window = TimeSpan.FromMinutes(1)
+                    }));
+
+            options.AddPolicy(NodeAuthRateLimits.RefreshPolicy, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(GetRateLimitPartitionKey(httpContext),
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        AutoReplenishment = true,
+                        PermitLimit = refreshPermitLimit,
                         QueueLimit = 0,
                         Window = TimeSpan.FromMinutes(1)
                     }));
@@ -461,7 +474,7 @@ public static class ConfigureServices
                         Window = TimeSpan.FromMinutes(1)
                     }));
 
-            // External integration API, on the same shared IP partition function as the three above: this middleware runs BEFORE UseAuthentication, so no
+            // External integration API, on the same shared IP partition function as the four above: this middleware runs BEFORE UseAuthentication, so no
             // claim exists to partition on. Per-principal fairness is IntegrationPrincipalRateLimiter plus the admission cap inside the accept transaction.
             options.AddPolicy(NodeAuthRateLimits.IntegrationApiPolicy, httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(GetRateLimitPartitionKey(httpContext),

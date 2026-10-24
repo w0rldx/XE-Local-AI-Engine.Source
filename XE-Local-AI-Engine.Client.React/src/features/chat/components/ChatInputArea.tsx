@@ -3,6 +3,7 @@ import { type DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
+import { isCompactViewport } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { usePendingComposerTextStore } from "@/core/ui/stores/PendingComposerTextStore";
 import { ChatAttachmentChips } from "@/features/chat/components/ChatAttachmentChips";
@@ -201,8 +202,11 @@ export function ChatInputArea({
 	// Voice controls require only the operator-owned node gate (capabilities.showVoiceControls, derived from
 	// manifest.Enabled). The leaf components additionally self-gate on the runtime context.
 	const showVoiceControls = capabilities.showVoiceControls;
-	const { width } = useWindowDimensions();
+	const { width, height } = useWindowDimensions();
 	const showContextUsage = Boolean(contextUsage) && width >= CONTEXT_USAGE_HIDE_WIDTH;
+	// A phone (or a phone in landscape) folds the secondary toolbar controls and starts the input at one row, so the
+	// message list keeps the height.
+	const compact = isCompactViewport(width, height);
 	const autocomplete = useSlashCommandAutocomplete({
 		content,
 		selectionStart: selection.start,
@@ -314,6 +318,7 @@ export function ChatInputArea({
 	const toolbar = (
 		<ChatComposerToolbar
 			toolbarRef={toolbarRef}
+			compact={compact}
 			disabled={disabled}
 			isSending={isSending}
 			modelOptions={modelOptions}
@@ -464,8 +469,8 @@ export function ChatInputArea({
 							}
 						}}
 						autosize={true}
-						minRows={2}
-						maxRows={8}
+						minRows={compact ? 1 : 2}
+						maxRows={compact ? 4 : 8}
 						radius="md"
 						disabled={disabled || isSending}
 						bottomSection={toolbar}

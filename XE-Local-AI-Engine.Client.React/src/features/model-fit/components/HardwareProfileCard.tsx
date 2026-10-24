@@ -179,7 +179,7 @@ export function HardwareProfileCard({ profile, isLoading, isFetching, error, onR
 				) : null}
 
 				{profile && !isLoading && !error ? (
-					<SimpleGrid cols={{ base: 2, sm: 3, md: 5 }} spacing="lg">
+					<SimpleGrid cols={{ base: 2, sm: 3, lg: 5 }} spacing="lg">
 						<Stat
 							label={t("pages.modelFit.hardware.totalRam", "Total RAM")}
 							value={formatBytesAsGb(profile.totalRamBytes)}

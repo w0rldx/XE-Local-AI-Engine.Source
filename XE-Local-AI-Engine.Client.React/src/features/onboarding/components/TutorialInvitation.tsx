@@ -26,6 +26,10 @@ export function TutorialInvitation({ tutorialId }: { tutorialId: Exclude<Tutoria
 			icon={<IconRoute size={18} />}
 			title={t(`onboarding.tutorials.${tutorialId}.invitationTitle`)}
 			withCloseButton={true}
+			closeButtonLabel={t("common.close")}
+			// Mantine draws the close button at 16 px; a 32 px hit area (pulled back by the margin so the icon stays put)
+			// is what a phone needs.
+			styles={{ closeButton: { width: 32, height: 32, margin: -8 } }}
 			onClose={() => onboarding.dismiss(tutorialId)}
 			data-testid={`tutorial-invitation-${tutorialId}`}
 		>

@@ -83,6 +83,19 @@ describe("LabelValueRow", () => {
 		expect(group.style.getPropertyValue("--group-gap")).toBe("var(--mantine-spacing-md)");
 	});
 
+	// An unspaced value (a source path, a collection id) set the row's min width and pushed a phone-width dialog
+	// sideways; the row breaks such a value anywhere instead.
+	it("lets an unspaced value break anywhere rather than widen the row", () => {
+		renderWithProviders(
+			<LabelValueRow label="Source" justify="space-between">
+				uploads/0b5c8f3e9d2a4b7c/softwarearchitecturewithc10andnet6.pdf
+			</LabelValueRow>,
+		);
+
+		const group = screen.getByText("Source").parentElement as HTMLElement;
+		expect(group.style.overflowWrap).toBe("anywhere");
+	});
+
 	it("scales the label to the surrounding content when a size is given", () => {
 		renderWithProviders(
 			<LabelValueRow label="Prompt" size="xs">

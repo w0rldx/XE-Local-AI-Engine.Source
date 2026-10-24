@@ -81,7 +81,7 @@ export function KnowledgeDocumentDrawer({ opened, detail, isLoading, highlightSe
 								gap="md"
 								label={t("pages.knowledgeBase.table.embeddingModel", "Embedding model")}
 							>
-								<Group gap={6} justify="flex-end" wrap="nowrap">
+								<Group gap={6} justify="flex-end">
 									<Text size="sm">{detail.embeddingModel || "—"}</Text>
 									{detail.staleModel ? (
 										<Badge color="orange" variant="light" size="xs">
@@ -145,7 +145,7 @@ export function KnowledgeDocumentDrawer({ opened, detail, isLoading, highlightSe
 														{t("pages.knowledgeBase.detail.chunkLabel", "Chunk {{index}}", { index: chunk.chunkIndex })}
 													</Badge>
 													{chunk.headingPath ? (
-														<Text size="xs" c="dimmed" truncate="end">
+														<Text size="xs" c="dimmed" lineClamp={1}>
 															{chunk.headingPath}
 														</Text>
 													) : null}

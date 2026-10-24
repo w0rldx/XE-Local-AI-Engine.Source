@@ -134,6 +134,21 @@ public sealed class RateLimitPolicyTests
     }
 
     [Test]
+    public async Task Refresh_PastTheAuthPermitLimit_IsNotThrottled()
+    {
+        using var client = Host.Factory.CreateClient();
+
+        // Every SPA load spends a refresh, so it has its own larger window: 2*Limit+1 calls cross AuthPolicy's limit in any window
+        // and must all reach the cookie-less 401. On the shared policy this fails whether or not login already spent the window.
+        for (var attempt = 1; attempt <= (ProductionAuthPermitLimit * 2) + 1; attempt++)
+        {
+            using var response = await client.PostAsync(new Uri("/api/local/v1/auth/refresh", UriKind.Relative), content: null);
+            AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode,
+                $"auth/refresh call {attempt} carried no cookie, so anything but 401 means it was throttled on the password endpoints' window.");
+        }
+    }
+
+    [Test]
     public async Task UnlimitedEndpoint_IsNotThrottled()
     {
         using var client = Host.Factory.CreateClient();
@@ -167,6 +182,7 @@ public sealed class RateLimitPolicyTests
         AssertEx.True(referenced.SetEquals(new[]
             {
                 NodeAuthRateLimits.AuthPolicy,
+                NodeAuthRateLimits.RefreshPolicy,
                 NodeAuthRateLimits.McpPolicy,
                 NodeAuthRateLimits.LocalModelProxyPolicy,
                 NodeAuthRateLimits.IntegrationApiPolicy

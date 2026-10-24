@@ -141,13 +141,15 @@ export function CommandPage() {
 
 	return (
 		<Stack gap="xs" p="sm" h="100dvh" data-testid="command-page">
-			<Group gap="xs" align="flex-start" wrap="nowrap">
+			{/* Wraps: on a phone the input keeps the full first row and the controls move to a second one, instead of
+			    the input being squeezed to a sliver beside them. */}
+			<Group gap="xs" align="flex-start">
 				<Textarea
 					autoFocus={true}
 					autosize={true}
 					minRows={1}
 					maxRows={3}
-					style={{ flex: 1 }}
+					style={{ flex: "1 1 16rem" }}
 					aria-label={t("pages.command.input.label")}
 					placeholder={t("pages.command.input.placeholder")}
 					value={text}

@@ -9,11 +9,7 @@ import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { RootErrorComponent } from "@/core/integrations/tanstack-router/RootErrorComponent";
 import { DesktopNavigationBar } from "@/core/layout/components/DesktopNavigationBar/DesktopNavigationBar";
 import { HeaderBar } from "@/core/layout/components/HeaderBar/HeaderBar";
-import {
-	DESKTOP_NAV_BREAKPOINT,
-	SIDEBAR_WIDTH_COLLAPSED,
-	SIDEBAR_WIDTH_EXPANDED,
-} from "@/core/layout/constants/LayoutBreakpoints";
+import { isDesktopShell, SIDEBAR_WIDTH_COLLAPSED, SIDEBAR_WIDTH_EXPANDED } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { useDesktopNavigationBarStore } from "@/core/layout/stores/DesktopNavigationBarStore";
 import { ChatConnectionStatusChip } from "@/features/chat/components/ChatConnectionStatusChip";
@@ -49,10 +45,11 @@ export function Layout() {
 	// `width` reflects the real window, so there is no flash in practice, but SSR/prerender
 	// would briefly render the mobile (100%) layout. Keeping it here avoids duplicating the
 	// breakpoint across JS and CSS and keeps margin/width as a single source of truth.
-	// The cutoff and the two widths come from LayoutBreakpoints so this and DesktopNavigationBar's own
-	// framer-motion widths cannot drift apart; the `md:` UnoCSS class below is the same 768px.
-	const { width } = useWindowDimensions();
-	const isDesktopViewport = width >= DESKTOP_NAV_BREAKPOINT;
+	// The switch and the two widths come from LayoutBreakpoints so this and DesktopNavigationBar's own
+	// framer-motion widths cannot drift apart. The sidebar mounts on the same predicate rather than a CSS class,
+	// because the switch needs width AND height (a phone in landscape is wide but far too short for it).
+	const { width, height } = useWindowDimensions();
+	const isDesktopViewport = isDesktopShell(width, height);
 
 	let contentMarginLeft = "0px";
 	let contentWidth = "100%";
@@ -72,9 +69,9 @@ export function Layout() {
 				{t("components.layout.skipToContent")}
 			</a>
 			<div className="flex flex-row h-dvh w-full overflow-hidden">
-				<div className="hidden md:block">
+				{isDesktopViewport ? (
 					<DesktopNavigationBar sideBarCollapsed={sideBarCollapsed} setSideBarCollapsed={setSideBarCollapsed} />
-				</div>
+				) : null}
 				<m.div
 					className="w-full flex flex-col h-dvh overflow-hidden"
 					initial={false}

@@ -21,6 +21,8 @@ import type {
 } from "@/features/chat/models/ChatModels";
 import { VoiceMessagePlayButton } from "@/features/voice/components/VoiceMessagePlayButton";
 
+import classes from "./ChatMessageActions.module.css";
+
 interface ChatMessageActionsProps {
 	message: ChatMessageModel;
 	capabilities: ChatMessageActionCapabilities;
@@ -61,7 +63,7 @@ export function ChatMessageActions({
 	const { t } = useTranslation();
 
 	return (
-		<Group gap={2} align="center" data-testid={`chat-message-actions-${message.id}`}>
+		<Group gap={2} align="center" className={classes["actions"]} data-testid={`chat-message-actions-${message.id}`}>
 			{showRevisionNav && revisionNav ? (
 				<Group gap={0} align="center" data-testid={`message-revision-nav-${message.id}`}>
 					<Tooltip label={t("pages.chat.revisions.previous", "Previous revision")} withArrow={true}>

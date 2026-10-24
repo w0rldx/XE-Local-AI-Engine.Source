@@ -1,10 +1,11 @@
-import { ActionIcon, Badge, Group, Loader, Select, Stack, Table, Text } from "@mantine/core";
+import { ActionIcon, Badge, Group, Loader, Select, Stack, Text } from "@mantine/core";
 import { IconEye, IconX } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { formatDurationSeconds, formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { ResponsiveTable } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { useTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
 import { scheduledRunStatusColor } from "@/features/scheduler/components/SchedulerRunFormatters";
@@ -121,71 +122,75 @@ export function ScheduledJobRunHistoryPanel({
 
 			{!isLoading && !error && runs.length > 0 ? (
 				<>
-					<Table.ScrollContainer minWidth={760}>
-						<Table striped={true} highlightOnHover={true} verticalSpacing="sm" data-testid="scheduler-runs-table">
-							<Table.Thead>
-								<Table.Tr>
-									<Table.Th>{t("pages.scheduler.runs.columns.status", "Status")}</Table.Th>
-									<Table.Th>{t("pages.scheduler.runs.columns.trigger", "Trigger")}</Table.Th>
-									<Table.Th>{t("pages.scheduler.runs.columns.fired", "Fired")}</Table.Th>
-									<Table.Th>{t("pages.scheduler.runs.columns.duration", "Duration")}</Table.Th>
-									<Table.Th>{t("pages.scheduler.runs.columns.summary", "Summary")}</Table.Th>
-									<Table.Th>{t("pages.scheduler.runs.columns.actions", "Actions")}</Table.Th>
-								</Table.Tr>
-							</Table.Thead>
-							<Table.Tbody>
-								{pagination.pageItems.map((run) => {
-									const isActive = isActiveRunStatus(run.status);
-									const isSelected = run.id === selectedRunId;
-									return (
-										<Table.Tr
-											key={run.id}
-											data-testid={`scheduler-run-row-${run.id}`}
-											bg={isSelected ? "var(--mantine-primary-color-light)" : undefined}
-										>
-											<Table.Td>
-												<Badge color={scheduledRunStatusColor(run.status)} variant="light">
-													{t(`pages.scheduler.runs.status.${run.status}`, run.status)}
-												</Badge>
-											</Table.Td>
-											<Table.Td>{t(`pages.scheduler.runs.trigger.${run.triggeredBy}`, run.triggeredBy)}</Table.Td>
-											<Table.Td>{formatTimestamp(run.actualFireTimeUtc ?? run.scheduledFireTimeUtc)}</Table.Td>
-											<Table.Td>{formatDurationSeconds(run.durationMs)}</Table.Td>
-											<Table.Td>
-												<Text size="sm" lineClamp={1}>
-													{run.summary ?? "—"}
-												</Text>
-											</Table.Td>
-											<Table.Td>
-												<Group gap="xs">
-													<ActionIcon
-														aria-label={t("pages.scheduler.runs.viewAria", "View run")}
-														variant="subtle"
-														onClick={() => onSelectRun(run.id)}
-														data-testid={`scheduler-run-view-${run.id}`}
-													>
-														<IconEye size={16} />
-													</ActionIcon>
-													{isActive ? (
-														<ActionIcon
-															aria-label={t("pages.scheduler.runs.cancelAria", "Cancel run")}
-															variant="subtle"
-															color="red"
-															disabled={isCancelling}
-															onClick={() => onCancelRun(run)}
-															data-testid={`scheduler-run-cancel-${run.id}`}
-														>
-															<IconX size={16} />
-														</ActionIcon>
-													) : null}
-												</Group>
-											</Table.Td>
-										</Table.Tr>
-									);
-								})}
-							</Table.Tbody>
-						</Table>
-					</Table.ScrollContainer>
+					<ResponsiveTable
+						rows={pagination.pageItems}
+						rowKey={(run) => run.id}
+						rowTestId={(run) => `scheduler-run-row-${run.id}`}
+						rowStyle={(run) => (run.id === selectedRunId ? { background: "var(--mantine-primary-color-light)" } : undefined)}
+						minWidth={760}
+						data-testid="scheduler-runs-table"
+						columns={[
+							{
+								key: "status",
+								header: t("pages.scheduler.runs.columns.status", "Status"),
+								primary: true,
+								cell: (run) => (
+									<Badge color={scheduledRunStatusColor(run.status)} variant="light">
+										{t(`pages.scheduler.runs.status.${run.status}`, run.status)}
+									</Badge>
+								),
+							},
+							{
+								key: "trigger",
+								header: t("pages.scheduler.runs.columns.trigger", "Trigger"),
+								cell: (run) => t(`pages.scheduler.runs.trigger.${run.triggeredBy}`, run.triggeredBy),
+							},
+							{
+								key: "fired",
+								header: t("pages.scheduler.runs.columns.fired", "Fired"),
+								cell: (run) => formatTimestamp(run.actualFireTimeUtc ?? run.scheduledFireTimeUtc),
+							},
+							{
+								key: "duration",
+								header: t("pages.scheduler.runs.columns.duration", "Duration"),
+								cell: (run) => formatDurationSeconds(run.durationMs),
+							},
+							{
+								key: "summary",
+								header: t("pages.scheduler.runs.columns.summary", "Summary"),
+								cell: (run) => (
+									<Text size="sm" lineClamp={1}>
+										{run.summary ?? "—"}
+									</Text>
+								),
+							},
+						]}
+						actionsHeader={t("pages.scheduler.runs.columns.actions", "Actions")}
+						actions={(run) => (
+							<>
+								<ActionIcon
+									aria-label={t("pages.scheduler.runs.viewAria", "View run")}
+									variant="subtle"
+									onClick={() => onSelectRun(run.id)}
+									data-testid={`scheduler-run-view-${run.id}`}
+								>
+									<IconEye size={16} />
+								</ActionIcon>
+								{isActiveRunStatus(run.status) ? (
+									<ActionIcon
+										aria-label={t("pages.scheduler.runs.cancelAria", "Cancel run")}
+										variant="subtle"
+										color="red"
+										disabled={isCancelling}
+										onClick={() => onCancelRun(run)}
+										data-testid={`scheduler-run-cancel-${run.id}`}
+									>
+										<IconX size={16} />
+									</ActionIcon>
+								) : null}
+							</>
+						)}
+					/>
 					<TablePaginationFooter
 						page={pagination.page}
 						pageCount={pagination.pageCount}

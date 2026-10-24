@@ -558,3 +558,93 @@ describe("ChatInputArea message-size pre-check", () => {
 		expect(screen.getByRole("textbox", { name: "Type your message" })).toBe(screen.getByTestId("chat-input"));
 	});
 });
+
+// On a phone (and a phone in landscape) the toolbar wrapped to four rows and left the message list ~200px; the
+// secondary toggles now fold into one overflow menu.
+describe("ChatInputArea compact viewport", () => {
+	const originalWidth = window.innerWidth;
+	const originalHeight = window.innerHeight;
+
+	function setViewport(width: number, height: number): void {
+		Object.defineProperty(window, "innerWidth", { writable: true, configurable: true, value: width });
+		Object.defineProperty(window, "innerHeight", { writable: true, configurable: true, value: height });
+	}
+
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+	});
+
+	afterEach(() => {
+		setViewport(originalWidth, originalHeight);
+		cleanup();
+	});
+
+	it.each([
+		[360, 640],
+		[844, 390],
+	])("folds the reasoning and local-tools toggles into the overflow menu at %i×%i", async (width, height) => {
+		setViewport(width, height);
+		const onToggleTools = vi.fn();
+		renderWithProviders(
+			<ChatInputArea
+				{...baseProps()}
+				capabilities={toolsCapabilities()}
+				activeModelToolCapable={true}
+				onToggleTools={onToggleTools}
+			/>,
+		);
+
+		expect(screen.queryByTestId("chat-reasoning-effort-menu-trigger")).toBeNull();
+		expect(screen.queryByTestId("chat-local-tools-toggle")).toBeNull();
+		// Send keeps its accessible name after dropping the visible label.
+		expect(screen.getByRole("button", { name: "Send" })).toBe(screen.getByTestId("chat-send-button"));
+
+		fireEvent.click(screen.getByRole("button", { name: "More composer options" }));
+		fireEvent.click(await screen.findByTestId("chat-local-tools-toggle"));
+
+		expect(onToggleTools).toHaveBeenCalledTimes(1);
+		expect(screen.getByTestId("chat-input").getAttribute("rows")).toBe("1");
+	});
+
+	// The folded toggles are out of sight, so the trigger itself has to say when one of them is on.
+	it("marks the overflow trigger active only while a folded toggle is on", () => {
+		setViewport(390, 844);
+		renderWithProviders(
+			<ChatInputArea
+				{...baseProps()}
+				reasoningEffort="none"
+				capabilities={toolsCapabilities()}
+				activeModelToolCapable={true}
+				toolsEnabled={false}
+				onToggleTools={vi.fn()}
+			/>,
+		);
+		expect(screen.getByTestId("chat-composer-overflow-trigger").getAttribute("data-active")).toBeNull();
+		cleanup();
+
+		renderWithProviders(
+			<ChatInputArea
+				{...baseProps()}
+				reasoningEffort="none"
+				capabilities={toolsCapabilities()}
+				activeModelToolCapable={true}
+				toolsEnabled={true}
+				onToggleTools={vi.fn()}
+			/>,
+		);
+		expect(screen.getByTestId("chat-composer-overflow-trigger").getAttribute("data-active")).toBe("true");
+		cleanup();
+
+		renderWithProviders(<ChatInputArea {...baseProps()} reasoningEffort="medium" />);
+		expect(screen.getByTestId("chat-composer-overflow-trigger").getAttribute("data-active")).toBe("true");
+	});
+
+	it("keeps the toggles inline on a desktop viewport", () => {
+		setViewport(1280, 800);
+		renderWithProviders(<ChatInputArea {...baseProps()} capabilities={toolsCapabilities()} activeModelToolCapable={true} />);
+
+		expect(screen.queryByTestId("chat-composer-overflow-trigger")).toBeNull();
+		expect(screen.getByTestId("chat-reasoning-effort-menu-trigger")).toBeTruthy();
+		expect(screen.getByTestId("chat-local-tools-toggle")).toBeTruthy();
+	});
+});

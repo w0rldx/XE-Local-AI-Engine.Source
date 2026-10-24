@@ -6,7 +6,7 @@ import { useCallback, useLayoutEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { getNodeSettingsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { TWO_PANE_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
+import { isCompactViewport, TWO_PANE_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { ChatInputArea } from "@/features/chat/components/ChatInputArea";
 import { ChatMessageList } from "@/features/chat/components/ChatMessageList";
@@ -104,10 +104,12 @@ export function ChatDisplayShell({
 		modelOptions.find((option) => option.value === selectedModel),
 		reasoningEffort,
 	);
-	// The app shell shows a persistent expanded sidebar from DESKTOP_NAV_BREAKPOINT up, so the two-pane grid does not
-	// have room to breathe until TWO_PANE_BREAKPOINT. Below that, the conversation list moves into a drawer.
-	const { width } = useWindowDimensions();
+	// Below TWO_PANE_BREAKPOINT the conversation list moves into a drawer. On a compact viewport (phone, or phone
+	// landscape) the pane also drops to the smallest padding and gaps, because every pixel of height the chrome keeps is
+	// taken from the message list.
+	const { width, height } = useWindowDimensions();
 	const isMobile = width < TWO_PANE_BREAKPOINT;
+	const isCompact = isCompactViewport(width, height);
 	const [conversationDrawerOpened, { open: openConversationDrawer, close: closeConversationDrawer }] = useDisclosure(false);
 
 	// The sidebar renders only conversation summaries (title, preview, timestamp, pin/archive/origin), never the
@@ -221,7 +223,7 @@ export function ChatDisplayShell({
 	const chatPane = (
 		<Paper
 			withBorder={true}
-			p="md"
+			p={isCompact ? "xs" : "md"}
 			h="100%"
 			data-testid="chat-pane"
 			{...dropProps}
@@ -259,7 +261,7 @@ export function ChatDisplayShell({
 					</Group>
 				</Box>
 			) : null}
-			<Stack gap="md" style={{ flex: 1, minHeight: 0 }}>
+			<Stack gap={isCompact ? "xs" : "md"} style={{ flex: 1, minHeight: 0 }}>
 				{chatPaneHeader}
 				<ChatMessageList
 					conversation={conversation}

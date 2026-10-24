@@ -4,7 +4,7 @@
 // on demand and stages a restore. An accepted restore stops the node (it does not restart itself), so the card then
 // shows a persistent notice and disables itself until the operator starts the app again.
 
-import { Alert, Button, Table, Text } from "@mantine/core";
+import { Alert, Button, Text } from "@mantine/core";
 import { IconDatabase, IconHistory, IconPlayerStop } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -14,6 +14,7 @@ import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { humanizeBytes } from "@/core/formatting/BytesFormatting";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { ResponsiveTable } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
@@ -114,40 +115,46 @@ export function NodeBackupsCard() {
 			)}
 
 			{data && data.backups.length > 0 && (
-				<Table.ScrollContainer minWidth={600}>
-					<Table striped={true}>
-						<Table.Thead>
-							<Table.Tr>
-								<Table.Th>{t("diagnostics.backups.columns.name")}</Table.Th>
-								<Table.Th style={nowrapCell}>{t("diagnostics.backups.columns.size")}</Table.Th>
-								<Table.Th style={nowrapCell}>{t("diagnostics.backups.columns.created")}</Table.Th>
-								<Table.Th style={nowrapCell}>{t("diagnostics.columns.actions")}</Table.Th>
-							</Table.Tr>
-						</Table.Thead>
-						<Table.Tbody>
-							{data.backups.map((backup) => (
-								<Table.Tr key={backup.name}>
-									<Table.Td style={{ wordBreak: "break-all" }}>{backup.name}</Table.Td>
-									<Table.Td style={nowrapCell}>{humanizeBytes(backup.sizeBytes)}</Table.Td>
-									<Table.Td style={nowrapCell}>{formatTimestamp(backup.createdUtc)}</Table.Td>
-									<Table.Td style={nowrapCell}>
-										<Button
-											size="xs"
-											variant="subtle"
-											color="red"
-											disabled={busy || restoreUnavailable}
-											loading={restoreBackup.isPending && restoreBackup.variables?.path.name === backup.name}
-											onClick={() => handleRestore(backup.name)}
-											aria-label={t("diagnostics.backups.restoreLabel", { name: backup.name })}
-										>
-											{t("diagnostics.backups.restore")}
-										</Button>
-									</Table.Td>
-								</Table.Tr>
-							))}
-						</Table.Tbody>
-					</Table>
-				</Table.ScrollContainer>
+				<ResponsiveTable
+					rows={data.backups}
+					rowKey={(backup) => backup.name}
+					minWidth={600}
+					columns={[
+						{
+							key: "name",
+							header: t("diagnostics.backups.columns.name"),
+							primary: true,
+							// `break-all` split the name at every character; `anywhere` breaks only where it would otherwise overflow.
+							cell: (backup) => <span style={{ overflowWrap: "anywhere" }}>{backup.name}</span>,
+						},
+						{
+							key: "size",
+							header: t("diagnostics.backups.columns.size"),
+							style: nowrapCell,
+							cell: (backup) => humanizeBytes(backup.sizeBytes),
+						},
+						{
+							key: "created",
+							header: t("diagnostics.backups.columns.created"),
+							style: nowrapCell,
+							cell: (backup) => formatTimestamp(backup.createdUtc),
+						},
+					]}
+					actionsHeader={t("diagnostics.columns.actions")}
+					actions={(backup) => (
+						<Button
+							size="xs"
+							variant="subtle"
+							color="red"
+							disabled={busy || restoreUnavailable}
+							loading={restoreBackup.isPending && restoreBackup.variables?.path.name === backup.name}
+							onClick={() => handleRestore(backup.name)}
+							aria-label={t("diagnostics.backups.restoreLabel", { name: backup.name })}
+						>
+							{t("diagnostics.backups.restore")}
+						</Button>
+					)}
+				/>
 			)}
 		</SectionCard>
 	);

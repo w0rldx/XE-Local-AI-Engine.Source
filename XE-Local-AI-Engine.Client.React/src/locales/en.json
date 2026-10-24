@@ -2090,6 +2090,7 @@
 				},
 				"dropToAttach": "Drop files to attach",
 				"image": "Attach image",
+				"moreControls": "More composer options",
 				"samplingOptions": "Advanced sampling options",
 				"size": {
 					"overLimit": "This message is {{used}} KB — over the {{limit}} KB limit for a single message. Shorten it, or attach the text as a file.",
@@ -4510,7 +4511,7 @@
 				"descriptionLabel": "Description",
 				"descriptionPlaceholder": "What this workflow is for.",
 				"empty": "No workflows yet. Create one to start authoring.",
-				"import": "Import…",
+				"import": "Import file",
 				"loadFailed": "Could not load the workflow list.",
 				"meta_one": "{{count}} node · v{{version}} · updated {{updated}}",
 				"meta_other": "{{count}} nodes · v{{version}} · updated {{updated}}",

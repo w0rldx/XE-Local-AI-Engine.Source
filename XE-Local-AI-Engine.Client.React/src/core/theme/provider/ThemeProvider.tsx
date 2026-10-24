@@ -9,6 +9,7 @@ import {
 	localStorageColorSchemeManager,
 	MantineProvider,
 	PasswordInput,
+	Popover,
 	parseThemeColor,
 	ScrollArea,
 	ScrollAreaAutosize,
@@ -36,6 +37,22 @@ const cssVariablesResolver: CSSVariablesResolver = () => ({
 	},
 	dark: {},
 });
+
+interface FloatingSizeState {
+	readonly availableWidth: number;
+	readonly availableHeight: number;
+	readonly elements: { readonly floating: HTMLElement };
+}
+
+// Caps a floating dropdown to the room the viewport leaves on its side and scrolls it when its content is taller. The
+// overflow is set only when needed: a permanent `overflow-y: auto` would clip the arrow of every small popover.
+function capFloatingToViewport({ availableWidth, availableHeight, elements }: FloatingSizeState): void {
+	const floating = elements.floating;
+	const maxHeight = Math.max(0, availableHeight);
+	floating.style.maxWidth = `${Math.max(0, availableWidth)}px`;
+	floating.style.maxHeight = `${maxHeight}px`;
+	floating.style.overflowY = floating.scrollHeight > maxHeight ? "auto" : "";
+}
 
 // One manager for the app's lifetime, on the key the store's one-shot migration writes to.
 const colorSchemeManager = localStorageColorSchemeManager({ key: colorSchemeStorageKey });
@@ -125,6 +142,17 @@ export function ThemeProvider({ children }: ThemeProviderProperties) {
 					type: "auto",
 					scrollbarSize: 8,
 					offsetScrollbars: "present",
+				},
+			}),
+			// Every floating dropdown — Popover, Menu, and Select/Autocomplete/MultiSelect through Combobox — renders a
+			// Popover, and none of them passes `middlewares` unless a call site does, so this one default reaches all of
+			// them. Mantine's own default only flips and shifts: on a short screen (phone landscape) where neither side
+			// has room, the dropdown kept its full height and ran past the top or bottom of the viewport. The size
+			// middleware caps it to the space it has and lets it scroll. A call site passing its own `middlewares`
+			// replaces the whole object, so it has to bring `size` itself.
+			Popover: Popover.extend({
+				defaultProps: {
+					middlewares: { flip: true, shift: true, size: { padding: 8, apply: capFloatingToViewport } },
 				},
 			}),
 			// Mantine's Alert close button is an icon-only button with no text, and `closeButtonLabel` is what gives

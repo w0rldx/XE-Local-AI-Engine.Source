@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
+import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { sourceThemeConfiguration } from "@/core/theme/config/ThemeConfiguration";
 import { NewTranscriptionSessionDialog } from "@/features/transcription/components/NewTranscriptionSessionDialog";
 import { useTranscriptionCaptureStore } from "@/features/transcription/stores/TranscriptionCaptureStore";
 import { jsonRoute, localApiPath } from "@/test/msw/Handlers";
@@ -12,6 +13,8 @@ import { renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
 
 setupMswServer();
+
+const { sm } = sourceThemeConfiguration.breakpoints.values;
 
 // The dialog reads the whisper runtime status to decide whether the Windows application source exists at all, so
 // every test in this file answers that endpoint. The body is the runtime response in full because the generated
@@ -107,6 +110,27 @@ describe("NewTranscriptionSessionDialog", () => {
 
 		for (const label of ["File", "Microphone", "System audio", "Microphone + system"]) {
 			expect(screen.getByRole("radio", { name: label })).toHaveProperty("disabled", false);
+		}
+	});
+
+	// Side by side the source labels are wider than a phone and pushed Close and Transcribe off-screen; below the
+	// theme's `sm` they stack instead.
+	it("stacks the sources below the compact breakpoint and keeps them in a row above it", () => {
+		const setViewportWidth = (width: number): void => {
+			Object.defineProperty(window, "innerWidth", { writable: true, configurable: true, value: width });
+		};
+		const originalWidth = window.innerWidth;
+		try {
+			setViewportWidth(sm - 1);
+			renderDialog();
+			expect(screen.getByTestId("new-transcription-session-source").getAttribute("data-orientation")).toBe("vertical");
+			cleanup();
+
+			setViewportWidth(sm);
+			renderDialog();
+			expect(screen.getByTestId("new-transcription-session-source").getAttribute("data-orientation")).toBe("horizontal");
+		} finally {
+			setViewportWidth(originalWidth);
 		}
 	});
 

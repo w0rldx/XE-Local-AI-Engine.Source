@@ -143,4 +143,26 @@ describe("ScheduledJobList", () => {
 
 		expect(handlers.onEdit).toHaveBeenCalledWith("job-1");
 	});
+
+	it("keeps the row actions on one line so delete never wraps under the others (R6)", () => {
+		renderList();
+
+		const group = screen.getByTestId("scheduler-job-delete-job-1").parentElement as HTMLElement;
+		expect(group.style.getPropertyValue("--group-wrap")).toBe("nowrap");
+	});
+
+	it("renders a card per job on a phone with the switch and every action in reach (T4)", () => {
+		const originalWidth = window.innerWidth;
+		Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 390 });
+		try {
+			const handlers = renderList();
+
+			expect(screen.getByTestId("scheduler-job-row-job-1").tagName).toBe("LI");
+			fireEvent.click(screen.getByTestId("scheduler-job-delete-job-1"));
+			expect(handlers.onDelete).toHaveBeenCalledWith(cronJob);
+			expect(screen.getByTestId("scheduler-job-enabled-job-1")).toBeTruthy();
+		} finally {
+			Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: originalWidth });
+		}
+	});
 });

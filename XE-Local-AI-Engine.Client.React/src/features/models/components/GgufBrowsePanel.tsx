@@ -1,18 +1,4 @@
-import {
-	Anchor,
-	Badge,
-	Button,
-	Card,
-	CloseButton,
-	Group,
-	Loader,
-	Stack,
-	Table,
-	Text,
-	TextInput,
-	Title,
-	Tooltip,
-} from "@mantine/core";
+import { Anchor, Badge, Button, Card, CloseButton, Group, Loader, Stack, Text, TextInput, Title, Tooltip } from "@mantine/core";
 import { IconAlertTriangle, IconCloudDownload, IconExternalLink, IconSearch } from "@tabler/icons-react";
 import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -21,6 +7,7 @@ import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { ResponsiveTable, type ResponsiveTableColumn } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
 import {
 	fitVerdictColor,
 	fitVerdictLabelKey,
@@ -71,6 +58,159 @@ export function GgufBrowsePanel({
 		setInput("");
 		onSearch("");
 	};
+
+	const isInstalled = (model: GgufTestedModel): boolean => installedRepoIds.has(model.ggufRepo.toLowerCase());
+
+	const testedColumns: readonly ResponsiveTableColumn<GgufTestedModel>[] = [
+		{
+			key: "model",
+			header: t("pages.models.gguf.browse.tested.columns.model", "Model"),
+			primary: true,
+			cell: (model) => (
+				<>
+					<Group gap="xs">
+						<Text size="sm" fw={500}>
+							{model.displayName}
+						</Text>
+						{isInstalled(model) ? (
+							<Badge
+								color="teal"
+								variant="light"
+								size="sm"
+								style={{ minWidth: "max-content" }}
+								data-testid={`model-fit-browse-tested-installed-${model.id}`}
+							>
+								{t("pages.models.gguf.browse.tested.installed", "Installed")}
+							</Badge>
+						) : null}
+					</Group>
+					<Anchor
+						href={`https://huggingface.co/${model.ggufRepo}`}
+						target="_blank"
+						rel="noopener noreferrer"
+						size="xs"
+						style={{ wordBreak: "break-word" }}
+					>
+						{model.ggufRepo}
+						<IconExternalLink size={12} style={{ marginLeft: 4, verticalAlign: "middle" }} />
+					</Anchor>
+				</>
+			),
+		},
+		{ key: "size", header: t("pages.models.gguf.browse.tested.columns.size", "Size"), cell: (model) => `${model.totalParamsB}B` },
+		{
+			key: "testedQuant",
+			header: t("pages.models.gguf.browse.tested.columns.testedQuant", "Tested quant"),
+			cell: (model) => {
+				const fitColor = fitVerdictColor[model.fitVerdict];
+				const fitLabelKey = model.fitVerdict === "Unknown" ? null : fitVerdictLabelKey[model.fitVerdict];
+				return (
+					<Group gap="xs" wrap="nowrap">
+						<Text size="sm" data-testid={`model-fit-browse-tested-quant-${model.id}`}>
+							{`${model.testedQuant} · ${formatBytesAsGb(model.testedSizeBytes)}`}
+						</Text>
+						{fitColor !== null && fitLabelKey !== null ? (
+							<Tooltip
+								label={
+									model.fitVerdict === "WontFit"
+										? t(
+												"pages.models.gguf.browse.tested.fitHintWontFit",
+												"The tested quant does not fit this machine. Download opens the picker, which offers smaller quants.",
+											)
+										: t(
+												"pages.models.gguf.browse.tested.fitHint",
+												"Compares the tested file's size with this machine's free memory. The Model Recommendations page does the detailed sizing, including context.",
+											)
+								}
+								multiline={true}
+								maw={260}
+							>
+								<Badge
+									color={fitColor}
+									variant="light"
+									size="sm"
+									style={{ minWidth: "max-content" }}
+									data-testid={`model-fit-browse-tested-fit-${model.id}`}
+								>
+									{t(`pages.models.gguf.download.fit.${fitLabelKey}`, model.fitVerdict)}
+								</Badge>
+							</Tooltip>
+						) : null}
+					</Group>
+				);
+			},
+		},
+		{ key: "license", header: t("pages.models.gguf.browse.columns.license", "License"), cell: (model) => model.license },
+		{ key: "notes", header: t("pages.models.gguf.browse.tested.columns.notes", "Notes"), cell: (model) => model.notes ?? "—" },
+	];
+
+	const repositoryColumns: readonly ResponsiveTableColumn<GgufRepository>[] = [
+		{
+			key: "repo",
+			header: t("pages.models.gguf.browse.columns.repo", "Repository"),
+			primary: true,
+			cell: (repository) => (
+				<Group gap="xs">
+					<Anchor
+						href={`https://huggingface.co/${repository.repoId}`}
+						target="_blank"
+						rel="noopener noreferrer"
+						size="sm"
+						fw={500}
+						style={{ wordBreak: "break-word" }}
+					>
+						{repository.repoId}
+						<IconExternalLink size={12} style={{ marginLeft: 4, verticalAlign: "middle" }} />
+					</Anchor>
+					{repository.isGated ? (
+						<Badge color="yellow" variant="light" size="sm">
+							{t("pages.models.gguf.browse.gated", "Gated")}
+						</Badge>
+					) : null}
+					{!repository.isTrustedPublisher ? (
+						<Tooltip
+							label={t(
+								"pages.models.gguf.browse.untrustedPublisherHint",
+								"This publisher is not a known GGUF packager — review the repo before downloading.",
+							)}
+							multiline={true}
+							maw={260}
+						>
+							<Badge
+								color="orange"
+								variant="light"
+								size="sm"
+								leftSection={<IconAlertTriangle size={12} />}
+								data-testid={`model-fit-browse-untrusted-${repository.repoId}`}
+							>
+								{t("pages.models.gguf.browse.untrustedPublisher", "Unverified publisher")}
+							</Badge>
+						</Tooltip>
+					) : null}
+				</Group>
+			),
+		},
+		{
+			key: "downloads",
+			header: t("pages.models.gguf.browse.columns.downloads", "Downloads"),
+			cell: (repository) => repository.downloads.toLocaleString(),
+		},
+		{
+			key: "likes",
+			header: t("pages.models.gguf.browse.columns.likes", "Likes"),
+			cell: (repository) => repository.likes.toLocaleString(),
+		},
+		{
+			key: "updated",
+			header: t("pages.models.gguf.browse.columns.updated", "Updated"),
+			cell: (repository) => formatTimestamp(repository.lastModifiedAtUtc),
+		},
+		{
+			key: "license",
+			header: t("pages.models.gguf.browse.columns.license", "License"),
+			cell: (repository) => repository.license ?? "—",
+		},
+	];
 
 	return (
 		<Card withBorder={true} radius="md" p="lg" data-testid="model-fit-browse-card">
@@ -125,109 +265,31 @@ export function GgufBrowsePanel({
 								"These models passed the authors' live scenario checks. Pick one to choose a quantization that fits this machine, or search Hugging Face above.",
 							)}
 						</Text>
-						<Table.ScrollContainer minWidth={760}>
-							<Table striped={true} highlightOnHover={true} verticalSpacing="sm" data-testid="model-fit-browse-tested-table">
-								<Table.Thead>
-									<Table.Tr>
-										<Table.Th>{t("pages.models.gguf.browse.tested.columns.model", "Model")}</Table.Th>
-										<Table.Th>{t("pages.models.gguf.browse.tested.columns.size", "Size")}</Table.Th>
-										<Table.Th>{t("pages.models.gguf.browse.tested.columns.testedQuant", "Tested quant")}</Table.Th>
-										<Table.Th>{t("pages.models.gguf.browse.columns.license", "License")}</Table.Th>
-										<Table.Th>{t("pages.models.gguf.browse.tested.columns.notes", "Notes")}</Table.Th>
-										<Table.Th>{t("pages.models.gguf.browse.columns.action", "Action")}</Table.Th>
-									</Table.Tr>
-								</Table.Thead>
-								<Table.Tbody>
-									{testedModels.map((model) => {
-										const fitColor = fitVerdictColor[model.fitVerdict];
-										const fitLabelKey = model.fitVerdict === "Unknown" ? null : fitVerdictLabelKey[model.fitVerdict];
-										const isInstalled = installedRepoIds.has(model.ggufRepo.toLowerCase());
-										return (
-											<Table.Tr key={model.id} data-testid={`model-fit-browse-tested-row-${model.id}`}>
-												<Table.Td>
-													<Group gap="xs" wrap="nowrap">
-														<Text size="sm" fw={500}>
-															{model.displayName}
-														</Text>
-														{isInstalled ? (
-															<Badge
-																color="teal"
-																variant="light"
-																size="sm"
-																data-testid={`model-fit-browse-tested-installed-${model.id}`}
-															>
-																{t("pages.models.gguf.browse.tested.installed", "Installed")}
-															</Badge>
-														) : null}
-													</Group>
-													<Anchor
-														href={`https://huggingface.co/${model.ggufRepo}`}
-														target="_blank"
-														rel="noopener noreferrer"
-														size="xs"
-													>
-														{model.ggufRepo}
-														<IconExternalLink size={12} style={{ marginLeft: 4, verticalAlign: "middle" }} />
-													</Anchor>
-												</Table.Td>
-												<Table.Td>{`${model.totalParamsB}B`}</Table.Td>
-												<Table.Td>
-													<Group gap="xs" wrap="nowrap">
-														<Text size="sm" data-testid={`model-fit-browse-tested-quant-${model.id}`}>
-															{`${model.testedQuant} · ${formatBytesAsGb(model.testedSizeBytes)}`}
-														</Text>
-														{fitColor !== null && fitLabelKey !== null ? (
-															<Tooltip
-																label={
-																	model.fitVerdict === "WontFit"
-																		? t(
-																				"pages.models.gguf.browse.tested.fitHintWontFit",
-																				"The tested quant does not fit this machine. Download opens the picker, which offers smaller quants.",
-																			)
-																		: t(
-																				"pages.models.gguf.browse.tested.fitHint",
-																				"Compares the tested file's size with this machine's free memory. The Model Recommendations page does the detailed sizing, including context.",
-																			)
-																}
-																multiline={true}
-																maw={260}
-															>
-																<Badge
-																	color={fitColor}
-																	variant="light"
-																	size="sm"
-																	data-testid={`model-fit-browse-tested-fit-${model.id}`}
-																>
-																	{t(`pages.models.gguf.download.fit.${fitLabelKey}`, model.fitVerdict)}
-																</Badge>
-															</Tooltip>
-														) : null}
-													</Group>
-												</Table.Td>
-												<Table.Td>{model.license}</Table.Td>
-												<Table.Td>{model.notes ?? "—"}</Table.Td>
-												<Table.Td>
-													<Button
-														size="xs"
-														variant="light"
-														leftSection={<IconCloudDownload size={14} />}
-														loading={downloadingRepoId === model.ggufRepo}
-														disabled={downloadingRepoId === model.ggufRepo}
-														onClick={() => onDownload({ repoId: model.ggufRepo, preferredQuant: model.testedQuant })}
-														data-testid={`model-fit-browse-tested-download-${model.id}`}
-													>
-														{/* Installed means some quant of the repo is; the picker can still fetch another one. */}
-														{isInstalled
-															? t("pages.models.gguf.browse.downloadOtherQuant", "Other quant")
-															: t("pages.models.gguf.browse.download", "Download")}
-													</Button>
-												</Table.Td>
-											</Table.Tr>
-										);
-									})}
-								</Table.Tbody>
-							</Table>
-						</Table.ScrollContainer>
+						<ResponsiveTable
+							rows={testedModels}
+							columns={testedColumns}
+							rowKey={(model) => model.id}
+							rowTestId={(model) => `model-fit-browse-tested-row-${model.id}`}
+							minWidth={760}
+							data-testid="model-fit-browse-tested-table"
+							actionsHeader={t("pages.models.gguf.browse.columns.action", "Action")}
+							actions={(model) => (
+								<Button
+									size="xs"
+									variant="light"
+									leftSection={<IconCloudDownload size={14} />}
+									loading={downloadingRepoId === model.ggufRepo}
+									disabled={downloadingRepoId === model.ggufRepo}
+									onClick={() => onDownload({ repoId: model.ggufRepo, preferredQuant: model.testedQuant })}
+									data-testid={`model-fit-browse-tested-download-${model.id}`}
+								>
+									{/* Installed means some quant of the repo is; the picker can still fetch another one. */}
+									{isInstalled(model)
+										? t("pages.models.gguf.browse.downloadOtherQuant", "Other quant")
+										: t("pages.models.gguf.browse.download", "Download")}
+								</Button>
+							)}
+						/>
 					</Stack>
 				) : null}
 
@@ -252,84 +314,30 @@ export function GgufBrowsePanel({
 				) : null}
 
 				{!isLoading && !error && hasSearched && repositories.length > 0 ? (
-					<Table.ScrollContainer minWidth={760}>
-						<Table striped={true} highlightOnHover={true} verticalSpacing="sm" data-testid="model-fit-browse-table">
-							<Table.Thead>
-								<Table.Tr>
-									<Table.Th>{t("pages.models.gguf.browse.columns.repo", "Repository")}</Table.Th>
-									<Table.Th>{t("pages.models.gguf.browse.columns.downloads", "Downloads")}</Table.Th>
-									<Table.Th>{t("pages.models.gguf.browse.columns.likes", "Likes")}</Table.Th>
-									<Table.Th>{t("pages.models.gguf.browse.columns.updated", "Updated")}</Table.Th>
-									<Table.Th>{t("pages.models.gguf.browse.columns.license", "License")}</Table.Th>
-									<Table.Th>{t("pages.models.gguf.browse.columns.action", "Action")}</Table.Th>
-								</Table.Tr>
-							</Table.Thead>
-							<Table.Tbody>
-								{repositories.map((repository) => (
-									<Table.Tr key={repository.repoId} data-testid={`model-fit-browse-row-${repository.repoId}`}>
-										<Table.Td>
-											<Group gap="xs" wrap="nowrap">
-												<Anchor
-													href={`https://huggingface.co/${repository.repoId}`}
-													target="_blank"
-													rel="noopener noreferrer"
-													size="sm"
-													fw={500}
-												>
-													{repository.repoId}
-													<IconExternalLink size={12} style={{ marginLeft: 4, verticalAlign: "middle" }} />
-												</Anchor>
-												{repository.isGated ? (
-													<Badge color="yellow" variant="light" size="sm">
-														{t("pages.models.gguf.browse.gated", "Gated")}
-													</Badge>
-												) : null}
-												{!repository.isTrustedPublisher ? (
-													<Tooltip
-														label={t(
-															"pages.models.gguf.browse.untrustedPublisherHint",
-															"This publisher is not a known GGUF packager — review the repo before downloading.",
-														)}
-														multiline={true}
-														maw={260}
-													>
-														<Badge
-															color="orange"
-															variant="light"
-															size="sm"
-															leftSection={<IconAlertTriangle size={12} />}
-															data-testid={`model-fit-browse-untrusted-${repository.repoId}`}
-														>
-															{t("pages.models.gguf.browse.untrustedPublisher", "Unverified publisher")}
-														</Badge>
-													</Tooltip>
-												) : null}
-											</Group>
-										</Table.Td>
-										<Table.Td>{repository.downloads.toLocaleString()}</Table.Td>
-										<Table.Td>{repository.likes.toLocaleString()}</Table.Td>
-										<Table.Td>{formatTimestamp(repository.lastModifiedAtUtc)}</Table.Td>
-										<Table.Td>{repository.license ?? "—"}</Table.Td>
-										<Table.Td>
-											<Button
-												size="xs"
-												variant="light"
-												leftSection={<IconCloudDownload size={14} />}
-												loading={downloadingRepoId === repository.repoId}
-												disabled={!repository.hasUsableGguf || downloadingRepoId === repository.repoId}
-												onClick={() => onDownload(repository)}
-												data-testid={`model-fit-browse-download-${repository.repoId}`}
-											>
-												{repository.hasUsableGguf
-													? t("pages.models.gguf.browse.download", "Download")
-													: t("pages.models.gguf.browse.noGguf", "No GGUF")}
-											</Button>
-										</Table.Td>
-									</Table.Tr>
-								))}
-							</Table.Tbody>
-						</Table>
-					</Table.ScrollContainer>
+					<ResponsiveTable
+						rows={repositories}
+						columns={repositoryColumns}
+						rowKey={(repository) => repository.repoId}
+						rowTestId={(repository) => `model-fit-browse-row-${repository.repoId}`}
+						minWidth={760}
+						data-testid="model-fit-browse-table"
+						actionsHeader={t("pages.models.gguf.browse.columns.action", "Action")}
+						actions={(repository) => (
+							<Button
+								size="xs"
+								variant="light"
+								leftSection={<IconCloudDownload size={14} />}
+								loading={downloadingRepoId === repository.repoId}
+								disabled={!repository.hasUsableGguf || downloadingRepoId === repository.repoId}
+								onClick={() => onDownload(repository)}
+								data-testid={`model-fit-browse-download-${repository.repoId}`}
+							>
+								{repository.hasUsableGguf
+									? t("pages.models.gguf.browse.download", "Download")
+									: t("pages.models.gguf.browse.noGguf", "No GGUF")}
+							</Button>
+						)}
+					/>
 				) : null}
 			</Stack>
 		</Card>

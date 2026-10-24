@@ -20,6 +20,7 @@ import { useTranslation } from "react-i18next";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { ResponsiveTable } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
 import {
 	type BrowseInstallRequest,
 	type ImageModelFamily,
@@ -412,95 +413,102 @@ function RepositoryResults({ isSearching, hasSearched, repositories, onOpen }: R
 	}
 
 	return (
-		<Table.ScrollContainer minWidth={720}>
-			<Table striped={true} highlightOnHover={true} verticalSpacing="sm" data-testid="image-model-browse-table">
-				<Table.Thead>
-					<Table.Tr>
-						<Table.Th>{t("pages.images.models.browse.columns.repo", "Repository")}</Table.Th>
-						<Table.Th>{t("pages.images.models.browse.columns.downloads", "Downloads")}</Table.Th>
-						<Table.Th>{t("pages.images.models.browse.columns.likes", "Likes")}</Table.Th>
-						<Table.Th>{t("pages.images.models.browse.columns.updated", "Updated")}</Table.Th>
-						<Table.Th>{t("pages.images.models.browse.columns.license", "License")}</Table.Th>
-						<Table.Th>{t("pages.images.models.browse.columns.action", "Action")}</Table.Th>
-					</Table.Tr>
-				</Table.Thead>
-				<Table.Tbody>
-					{repositories.map((repository) => (
-						<Table.Tr key={repository.repoId} data-testid={`image-model-browse-row-${repository.repoId}`}>
-							<Table.Td>
-								<Group gap="xs" wrap="nowrap">
-									<Anchor
-										href={`https://huggingface.co/${repository.repoId}`}
-										target="_blank"
-										rel="noopener noreferrer"
-										size="sm"
-										fw={500}
-									>
-										{repository.repoId}
-										<IconExternalLink size={12} style={{ marginLeft: 4, verticalAlign: "middle" }} />
-									</Anchor>
-									{repository.isGated ? (
-										<Tooltip
-											label={t(
-												"pages.images.models.browse.gatedHint",
-												"This repository requires an accepted licence and a Hugging Face token — a one-click install will fail with 401 until you add one.",
-											)}
-											multiline={true}
-											maw={280}
-										>
-											<Badge
-												color="yellow"
-												variant="light"
-												size="sm"
-												data-testid={`image-model-browse-gated-${repository.repoId}`}
-											>
-												{t("pages.images.models.browse.gated", "Gated")}
-											</Badge>
-										</Tooltip>
-									) : null}
-									{repository.isTrustedPublisher ? null : (
-										<Tooltip
-											label={t(
-												"pages.images.models.browse.untrustedPublisherHint",
-												"This publisher is not a known packager — review the repository before downloading.",
-											)}
-											multiline={true}
-											maw={280}
-										>
-											<Badge
-												color="orange"
-												variant="light"
-												size="sm"
-												leftSection={<IconAlertTriangle size={12} />}
-												data-testid={`image-model-browse-untrusted-${repository.repoId}`}
-											>
-												{t("pages.images.models.browse.untrustedPublisher", "Unverified publisher")}
-											</Badge>
-										</Tooltip>
+		<ResponsiveTable
+			rows={repositories}
+			rowKey={(repository) => repository.repoId}
+			rowTestId={(repository) => `image-model-browse-row-${repository.repoId}`}
+			minWidth={720}
+			data-testid="image-model-browse-table"
+			columns={[
+				{
+					key: "repo",
+					header: t("pages.images.models.browse.columns.repo", "Repository"),
+					primary: true,
+					cell: (repository) => (
+						<Group gap="xs">
+							<Anchor
+								href={`https://huggingface.co/${repository.repoId}`}
+								target="_blank"
+								rel="noopener noreferrer"
+								size="sm"
+								fw={500}
+								style={{ wordBreak: "break-word" }}
+							>
+								{repository.repoId}
+								<IconExternalLink size={12} style={{ marginLeft: 4, verticalAlign: "middle" }} />
+							</Anchor>
+							{repository.isGated ? (
+								<Tooltip
+									label={t(
+										"pages.images.models.browse.gatedHint",
+										"This repository requires an accepted licence and a Hugging Face token — a one-click install will fail with 401 until you add one.",
 									)}
-								</Group>
-							</Table.Td>
-							<Table.Td>{repository.downloads.toLocaleString()}</Table.Td>
-							<Table.Td>{repository.likes.toLocaleString()}</Table.Td>
-							<Table.Td>{formatTimestamp(repository.lastModifiedAtUtc)}</Table.Td>
-							<Table.Td>{repository.license ?? "—"}</Table.Td>
-							<Table.Td>
-								<Button
-									size="xs"
-									variant="light"
-									disabled={!repository.hasUsableWeights}
-									onClick={() => onOpen(repository.repoId)}
-									data-testid={`image-model-browse-open-${repository.repoId}`}
+									multiline={true}
+									maw={280}
 								>
-									{repository.hasUsableWeights
-										? t("pages.images.models.browse.select", "Open")
-										: t("pages.images.models.browse.noWeights", "No weights")}
-								</Button>
-							</Table.Td>
-						</Table.Tr>
-					))}
-				</Table.Tbody>
-			</Table>
-		</Table.ScrollContainer>
+									<Badge color="yellow" variant="light" size="sm" data-testid={`image-model-browse-gated-${repository.repoId}`}>
+										{t("pages.images.models.browse.gated", "Gated")}
+									</Badge>
+								</Tooltip>
+							) : null}
+							{repository.isTrustedPublisher ? null : (
+								<Tooltip
+									label={t(
+										"pages.images.models.browse.untrustedPublisherHint",
+										"This publisher is not a known packager — review the repository before downloading.",
+									)}
+									multiline={true}
+									maw={280}
+								>
+									<Badge
+										color="orange"
+										variant="light"
+										size="sm"
+										leftSection={<IconAlertTriangle size={12} />}
+										data-testid={`image-model-browse-untrusted-${repository.repoId}`}
+									>
+										{t("pages.images.models.browse.untrustedPublisher", "Unverified publisher")}
+									</Badge>
+								</Tooltip>
+							)}
+						</Group>
+					),
+				},
+				{
+					key: "downloads",
+					header: t("pages.images.models.browse.columns.downloads", "Downloads"),
+					cell: (repository) => repository.downloads.toLocaleString(),
+				},
+				{
+					key: "likes",
+					header: t("pages.images.models.browse.columns.likes", "Likes"),
+					cell: (repository) => repository.likes.toLocaleString(),
+				},
+				{
+					key: "updated",
+					header: t("pages.images.models.browse.columns.updated", "Updated"),
+					cell: (repository) => formatTimestamp(repository.lastModifiedAtUtc),
+				},
+				{
+					key: "license",
+					header: t("pages.images.models.browse.columns.license", "License"),
+					cell: (repository) => repository.license ?? "—",
+				},
+			]}
+			actionsHeader={t("pages.images.models.browse.columns.action", "Action")}
+			actions={(repository) => (
+				<Button
+					size="xs"
+					variant="light"
+					disabled={!repository.hasUsableWeights}
+					onClick={() => onOpen(repository.repoId)}
+					data-testid={`image-model-browse-open-${repository.repoId}`}
+				>
+					{repository.hasUsableWeights
+						? t("pages.images.models.browse.select", "Open")
+						: t("pages.images.models.browse.noWeights", "No weights")}
+				</Button>
+			)}
+		/>
 	);
 }

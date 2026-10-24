@@ -43,12 +43,14 @@ export function TranscriptionModelRow({
 
 	return (
 		<Stack gap={4} data-testid={`transcription-model-row-${model.id}`}>
-			<Group justify="space-between" wrap="nowrap" align="center">
-				<Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
-					<Text size="sm" fw={500} truncate={true}>
+			{/* Wraps instead of squeezing: on a phone the action drops below the name and badges rather than clipping
+			    its own label and the model name. */}
+			<Group justify="space-between" align="center">
+				<Group gap="xs" style={{ minWidth: 0, flex: "1 1 12rem" }}>
+					<Text size="sm" fw={500} style={{ overflowWrap: "anywhere" }}>
 						{model.id}
 					</Text>
-					<Text size="xs" c="dimmed">
+					<Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
 						{humanizeBytes(model.sizeBytes)}
 					</Text>
 					{isSelected ? (
@@ -75,6 +77,7 @@ export function TranscriptionModelRow({
 						leftSection={<IconX size={14} />}
 						loading={isBusy}
 						disabled={isBusy}
+						style={{ flexShrink: 0 }}
 						onClick={() => onCancel(model.id)}
 						data-testid={`transcription-model-cancel-${model.id}`}
 					>
@@ -87,6 +90,7 @@ export function TranscriptionModelRow({
 							variant="light"
 							loading={isBusy}
 							disabled={isBusy || isOtherBusy}
+							style={{ flexShrink: 0 }}
 							onClick={() => onSelect(model.id)}
 							data-testid={`transcription-model-select-${model.id}`}
 						>
@@ -100,6 +104,7 @@ export function TranscriptionModelRow({
 						leftSection={<IconDownload size={14} />}
 						loading={isBusy}
 						disabled={isBusy || isOtherBusy}
+						style={{ flexShrink: 0 }}
 						onClick={() => onDownload(model.id)}
 						data-testid={`transcription-model-download-${model.id}`}
 					>

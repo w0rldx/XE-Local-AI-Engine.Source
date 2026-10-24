@@ -27,19 +27,16 @@ function LocalToolRow({ tool }: LocalToolRowProps) {
 	return (
 		<Paper withBorder={true} p="xs" data-testid={`local-tool-row-${tool.name}`}>
 			<Stack gap={4}>
-				<Group gap="xs" wrap="nowrap" align="center">
+				<Group gap="xs" align="center">
 					{toolIcon(tool.name)}
-					{/* The name is the only element in this nowrap row that may give up width. `flex: 1` alone is not
-					    enough: a flex item's default `min-width: auto` refuses to shrink below its content, so a long
-					    MCP tool name held the row open and pushed the badges past the right edge of the Paper on a
-					    390px viewport (the source badge is `flexShrink: 0`, so the approval badge absorbed the squeeze
-					    and got clipped). `minWidth: 0` lets it shrink and `truncate` ends it in an ellipsis. */}
+					{/* The row wraps: when the name and both badges do not fit, the badges drop to the next line instead of
+					    the name being cut to an ellipsis nobody can expand. The name takes the remaining width (`flex`
+					    with a basis) and breaks anywhere, so a long MCP tool name never pushes the Paper wider. */}
 					<Text
 						size="sm"
 						fw={600}
 						ff="monospace"
-						truncate="end"
-						style={{ flex: 1, minWidth: 0 }}
+						style={{ flex: "1 1 10rem", minWidth: 0, overflowWrap: "anywhere" }}
 						data-testid={`local-tool-name-${tool.name}`}
 					>
 						{toToolDisplayName(tool.name)}

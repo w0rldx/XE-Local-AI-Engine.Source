@@ -1,9 +1,10 @@
-import { Badge, Button, Card, Group, Loader, Stack, Table, Text, Title } from "@mantine/core";
+import { Badge, Button, Card, Group, Loader, Stack, Text, Title } from "@mantine/core";
 import { IconPlayerEject, IconServer2 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { ResponsiveTable } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
 import type { RunningModel } from "@/features/loaded-models/models/RunningModelsModels";
 
 interface RunningModelsPanelProps {
@@ -55,87 +56,90 @@ export function RunningModelsPanel({ runningModels, isLoading, error, onEject, e
 				) : null}
 
 				{!isLoading && !error && runningModels.length > 0 ? (
-					<Table.ScrollContainer minWidth={600}>
-						<Table striped={true} highlightOnHover={true} verticalSpacing="sm" data-testid="loaded-models-llamacpp-table">
-							<Table.Thead>
-								<Table.Tr>
-									<Table.Th>{t("pages.loadedModels.llamaCpp.columns.model", "Model")}</Table.Th>
-									<Table.Th>{t("pages.loadedModels.llamaCpp.columns.role", "Role")}</Table.Th>
-									<Table.Th>{t("pages.loadedModels.llamaCpp.columns.status", "Status")}</Table.Th>
-									<Table.Th>{t("pages.loadedModels.llamaCpp.columns.action", "Action")}</Table.Th>
-								</Table.Tr>
-							</Table.Thead>
-							<Table.Tbody>
-								{runningModels.map((model) => (
-									<Table.Tr
-										key={`${model.modelName}-${model.role}`}
-										data-testid={`loaded-models-llamacpp-row-${model.modelName}`}
-									>
-										<Table.Td>
-											<Text size="sm" fw={500}>
-												{model.modelName}
+					<ResponsiveTable
+						rows={runningModels}
+						rowKey={(model) => `${model.modelName}-${model.role}`}
+						rowTestId={(model) => `loaded-models-llamacpp-row-${model.modelName}`}
+						minWidth={600}
+						data-testid="loaded-models-llamacpp-table"
+						columns={[
+							{
+								key: "model",
+								header: t("pages.loadedModels.llamaCpp.columns.model", "Model"),
+								primary: true,
+								cell: (model) => (
+									<>
+										<Text size="sm" fw={500} style={{ overflowWrap: "anywhere" }}>
+											{model.modelName}
+										</Text>
+										{model.detailCode !== null || model.detail ? (
+											<Text size="xs" c="dimmed" data-testid={`loaded-models-llamacpp-detail-${model.modelName}`}>
+												{model.detailCode === null
+													? model.detail
+													: t(`pages.loadedModels.llamaCpp.details.${model.detailCode}`, model.detail)}
 											</Text>
-											{model.detailCode !== null || model.detail ? (
-												<Text size="xs" c="dimmed" data-testid={`loaded-models-llamacpp-detail-${model.modelName}`}>
-													{model.detailCode === null
-														? model.detail
-														: t(`pages.loadedModels.llamaCpp.details.${model.detailCode}`, model.detail)}
-												</Text>
-											) : null}
-											{model.effectiveContextTokens !== null ? (
-												<Text size="xs" c="dimmed" data-testid={`loaded-models-llamacpp-context-${model.modelName}`}>
-													{t("pages.loadedModels.llamaCpp.contextWindow", {
-														defaultValue: "Context window: {{tokens}} tokens",
-														tokens: model.effectiveContextTokens.toLocaleString(i18n.language),
-													})}
-												</Text>
-											) : null}
-											{model.expertsOffloaded ? (
-												<Badge
-													mt={4}
-													color="orange"
-													variant="light"
-													title={t(
-														"pages.loadedModels.llamaCpp.expertsOffloadedHint",
-														"This mixture-of-experts model keeps its expert weights in system RAM instead of on the GPU, so it generates noticeably slower.",
-													)}
-													data-testid={`loaded-models-llamacpp-experts-offloaded-${model.modelName}`}
-												>
-													{t("pages.loadedModels.llamaCpp.expertsOffloaded", "Experts in system RAM")}
-												</Badge>
-											) : null}
-										</Table.Td>
-										<Table.Td>{model.role ? <Badge variant="outline">{model.role}</Badge> : "—"}</Table.Td>
-										<Table.Td>
-											{model.isResponsive ? (
-												<Badge color="green" variant="light">
-													{t("pages.loadedModels.llamaCpp.responsive", "Responsive")}
-												</Badge>
-											) : (
-												<Badge color="yellow" variant="light">
-													{t("pages.loadedModels.llamaCpp.unresponsive", "Starting / unresponsive")}
-												</Badge>
-											)}
-										</Table.Td>
-										<Table.Td>
-											<Button
-												size="xs"
+										) : null}
+										{model.effectiveContextTokens !== null ? (
+											<Text size="xs" c="dimmed" data-testid={`loaded-models-llamacpp-context-${model.modelName}`}>
+												{t("pages.loadedModels.llamaCpp.contextWindow", {
+													defaultValue: "Context window: {{tokens}} tokens",
+													tokens: model.effectiveContextTokens.toLocaleString(i18n.language),
+												})}
+											</Text>
+										) : null}
+										{model.expertsOffloaded ? (
+											<Badge
+												mt={4}
+												color="orange"
 												variant="light"
-												color="red"
-												leftSection={<IconPlayerEject size={14} />}
-												loading={ejectingModelName === model.modelName}
-												disabled={ejectingModelName === model.modelName}
-												onClick={() => onEject(model)}
-												data-testid={`loaded-models-llamacpp-eject-${model.modelName}`}
+												title={t(
+													"pages.loadedModels.llamaCpp.expertsOffloadedHint",
+													"This mixture-of-experts model keeps its expert weights in system RAM instead of on the GPU, so it generates noticeably slower.",
+												)}
+												data-testid={`loaded-models-llamacpp-experts-offloaded-${model.modelName}`}
 											>
-												{t("pages.loadedModels.llamaCpp.eject", "Eject")}
-											</Button>
-										</Table.Td>
-									</Table.Tr>
-								))}
-							</Table.Tbody>
-						</Table>
-					</Table.ScrollContainer>
+												{t("pages.loadedModels.llamaCpp.expertsOffloaded", "Experts in system RAM")}
+											</Badge>
+										) : null}
+									</>
+								),
+							},
+							{
+								key: "role",
+								header: t("pages.loadedModels.llamaCpp.columns.role", "Role"),
+								cell: (model) => (model.role ? <Badge variant="outline">{model.role}</Badge> : "—"),
+							},
+							{
+								key: "status",
+								header: t("pages.loadedModels.llamaCpp.columns.status", "Status"),
+								cell: (model) =>
+									model.isResponsive ? (
+										<Badge color="green" variant="light" style={{ minWidth: "max-content" }}>
+											{t("pages.loadedModels.llamaCpp.responsive", "Responsive")}
+										</Badge>
+									) : (
+										<Badge color="yellow" variant="light" style={{ minWidth: "max-content" }}>
+											{t("pages.loadedModels.llamaCpp.unresponsive", "Starting / unresponsive")}
+										</Badge>
+									),
+							},
+						]}
+						actionsHeader={t("pages.loadedModels.llamaCpp.columns.action", "Action")}
+						actions={(model) => (
+							<Button
+								size="xs"
+								variant="light"
+								color="red"
+								leftSection={<IconPlayerEject size={14} />}
+								loading={ejectingModelName === model.modelName}
+								disabled={ejectingModelName === model.modelName}
+								onClick={() => onEject(model)}
+								data-testid={`loaded-models-llamacpp-eject-${model.modelName}`}
+							>
+								{t("pages.loadedModels.llamaCpp.eject", "Eject")}
+							</Button>
+						)}
+					/>
 				) : null}
 			</Stack>
 		</Card>

@@ -1,4 +1,4 @@
-import { Chip, Group, Loader, Select, Text } from "@mantine/core";
+import { Chip, Group, Loader, Select, Stack, Text } from "@mantine/core";
 import { IconPlug } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -208,7 +208,9 @@ export function IntegrationExecutionsPage() {
 			/>
 
 			<SectionCard data-testid="integration-executions-card">
-				<Group gap="sm" align="flex-end">
+				{/* Chips on their own line and the two selects together below: in one wrapping row the selects split
+				    across lines whenever the chips left room for only one of them. */}
+				<Stack gap="sm">
 					<Chip.Group
 						multiple={false}
 						value={statusChipValue(filters.status)}
@@ -235,21 +237,23 @@ export function IntegrationExecutionsPage() {
 							))}
 						</Group>
 					</Chip.Group>
-					<Select
-						label={t("pages.integrations.executions.filters.trigger", "Trigger")}
-						data={triggerData}
-						value={filters.triggerId ?? ALL_VALUE}
-						onChange={handleTriggerChange}
-						data-testid="integration-executions-filter-trigger"
-					/>
-					<Select
-						label={t("pages.integrations.executions.filters.session", "Session")}
-						data={sessionData}
-						value={filters.sessionId ?? ALL_VALUE}
-						onChange={handleSessionChange}
-						data-testid="integration-executions-filter-session"
-					/>
-				</Group>
+					<Group gap="sm" align="flex-end">
+						<Select
+							label={t("pages.integrations.executions.filters.trigger", "Trigger")}
+							data={triggerData}
+							value={filters.triggerId ?? ALL_VALUE}
+							onChange={handleTriggerChange}
+							data-testid="integration-executions-filter-trigger"
+						/>
+						<Select
+							label={t("pages.integrations.executions.filters.session", "Session")}
+							data={sessionData}
+							value={filters.sessionId ?? ALL_VALUE}
+							onChange={handleSessionChange}
+							data-testid="integration-executions-filter-session"
+						/>
+					</Group>
+				</Stack>
 
 				{executionsQuery.isLoading ? (
 					<Group gap="sm">

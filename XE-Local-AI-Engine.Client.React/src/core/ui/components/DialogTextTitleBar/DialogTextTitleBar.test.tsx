@@ -50,6 +50,15 @@ describe("DialogTextTitleBar", () => {
 		expect(handleClose).toHaveBeenCalledTimes(1);
 	});
 
+	// An unspaced title (a document's file name) widened the dialog past a phone's edge and pushed Close off-screen.
+	it("lets a long unspaced title shrink and break instead of widening the bar", () => {
+		renderWithProviders(<DialogTextTitleBar title="softwarearchitecturewithc10andnet6.pdf" handleClose={vi.fn()} />);
+
+		const title = screen.getByText("softwarearchitecturewithc10andnet6.pdf");
+		expect(title.style.minWidth).toBe("0px");
+		expect(title.style.overflowWrap).toBe("anywhere");
+	});
+
 	it("does not render the fullscreen toggle by default", () => {
 		renderWithProviders(<DialogTextTitleBar title="My dialog" handleClose={vi.fn()} />);
 

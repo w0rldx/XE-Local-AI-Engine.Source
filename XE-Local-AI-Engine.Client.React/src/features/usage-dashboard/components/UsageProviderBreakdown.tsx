@@ -1,11 +1,15 @@
-import { Card, Group, Stack, Table, Text, Title } from "@mantine/core";
 import { DonutChart } from "@mantine/charts";
+import { Card, Group, Stack, Text, Title } from "@mantine/core";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ResponsiveTable } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
 import type { ProviderTotalsDto } from "@/features/usage-dashboard/models/UsageDashboardModel";
 import { formatCostUsd, formatCount, formatTokensCompact } from "@/features/usage-dashboard/models/UsageDashboardModel";
 import { providerColor, providerLabel } from "@/features/usage-dashboard/models/UsageProviderPresentation";
+
+// The width the four columns need; also the table's flex basis beside the donut.
+const PROVIDER_TABLE_MIN_WIDTH = 360;
 
 // Per-provider breakdown: a token-share donut beside a compact per-provider table (runs + total tokens). Providers
 // with zero tokens are dropped from the donut (a zero slice renders nothing) but kept in the table so their run
@@ -56,36 +60,45 @@ export function UsageProviderBreakdown({
 						</Text>
 					)}
 					{/*
-					 * `minWidth` on the table itself only made the four columns overflow the card silently. Moving the
-					 * floor onto a ScrollContainer keeps the same minimum but gives the overflow somewhere to go, so on a
-					 * phone the cost column is reachable by scrolling instead of clipped.
+					 * The basis is the table's own minimum: when the donut and the table no longer fit side by side, the
+					 * table wraps below the donut instead of being squeezed beside it, and only a container too narrow
+					 * even for that turns it into cards.
 					 */}
-					<Table.ScrollContainer minWidth={280} style={{ flex: 1, minWidth: 0 }}>
-						<Table verticalSpacing="xs">
-							<Table.Thead>
-								<Table.Tr>
-									<Table.Th>{t("pages.usage.providers.columns.provider", "Provider")}</Table.Th>
-									<Table.Th>{t("pages.usage.providers.columns.runs", "Runs")}</Table.Th>
-									<Table.Th>{t("pages.usage.providers.columns.totalTokens", "Total tokens")}</Table.Th>
-									<Table.Th>{t("pages.usage.providers.columns.estimatedCost", "Est. cost")}</Table.Th>
-								</Table.Tr>
-							</Table.Thead>
-							<Table.Tbody>
-								{rows.map((entry) => (
-									<Table.Tr key={entry.provider} data-testid={`usage-provider-row-${entry.provider}`}>
-										<Table.Td>{providerLabel(entry.provider, t, externalConnectionNames)}</Table.Td>
-										<Table.Td>{formatCount(entry.runCount)}</Table.Td>
-										<Table.Td>
-											<Text aria-label={formatCount(entry.totalTokens)}>{formatTokensCompact(entry.totalTokens)}</Text>
-										</Table.Td>
-										<Table.Td>
-											<Text data-testid={`usage-provider-cost-${entry.provider}`}>{formatCostUsd(entry.estimatedCostUsd)}</Text>
-										</Table.Td>
-									</Table.Tr>
-								))}
-							</Table.Tbody>
-						</Table>
-					</Table.ScrollContainer>
+					<div style={{ flex: `1 1 ${PROVIDER_TABLE_MIN_WIDTH}px`, minWidth: 0 }}>
+						<ResponsiveTable
+							rows={rows}
+							rowKey={(entry) => entry.provider}
+							rowTestId={(entry) => `usage-provider-row-${entry.provider}`}
+							minWidth={PROVIDER_TABLE_MIN_WIDTH}
+							columns={[
+								{
+									key: "provider",
+									header: t("pages.usage.providers.columns.provider", "Provider"),
+									primary: true,
+									cell: (entry) => providerLabel(entry.provider, t, externalConnectionNames),
+								},
+								{
+									key: "runs",
+									header: t("pages.usage.providers.columns.runs", "Runs"),
+									cell: (entry) => formatCount(entry.runCount),
+								},
+								{
+									key: "totalTokens",
+									header: t("pages.usage.providers.columns.totalTokens", "Total tokens"),
+									cell: (entry) => (
+										<Text aria-label={formatCount(entry.totalTokens)}>{formatTokensCompact(entry.totalTokens)}</Text>
+									),
+								},
+								{
+									key: "estimatedCost",
+									header: t("pages.usage.providers.columns.estimatedCost", "Est. cost"),
+									cell: (entry) => (
+										<Text data-testid={`usage-provider-cost-${entry.provider}`}>{formatCostUsd(entry.estimatedCostUsd)}</Text>
+									),
+								},
+							]}
+						/>
+					</div>
 				</Group>
 			</Stack>
 		</Card>

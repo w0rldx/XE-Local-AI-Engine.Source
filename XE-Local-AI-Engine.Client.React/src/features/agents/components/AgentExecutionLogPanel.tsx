@@ -1,10 +1,11 @@
-import { Badge, Group, Loader, Paper, Stack, Table, Text } from "@mantine/core";
+import { Badge, Group, Loader, Paper, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { ResponsiveTable } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { useTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
 import type { AgentExecutionLog } from "@/features/agents/models/AgentExecutionLogModels";
@@ -79,48 +80,65 @@ export function AgentExecutionLogPanel({ agentDefinitionId, agentName, enabled }
 
 				{!logsQuery.isLoading && !logsQuery.error && logs.length > 0 ? (
 					<>
-						<Table.ScrollContainer minWidth={720}>
-							<Table striped={true} highlightOnHover={true} verticalSpacing="sm" data-testid="agent-execution-log-table">
-								<Table.Thead>
-									<Table.Tr>
-										<Table.Th>{t("pages.agents.executionLog.columns.outcome", "Outcome")}</Table.Th>
-										<Table.Th>{t("pages.agents.executionLog.columns.when", "When")}</Table.Th>
-										<Table.Th>{t("pages.agents.executionLog.columns.model", "Model")}</Table.Th>
-										<Table.Th>{t("pages.agents.executionLog.columns.latency", "Latency")}</Table.Th>
-										<Table.Th>{t("pages.agents.executionLog.columns.promptTokens", "Prompt")}</Table.Th>
-										<Table.Th>{t("pages.agents.executionLog.columns.completionTokens", "Completion")}</Table.Th>
-										<Table.Th>{t("pages.agents.executionLog.columns.error", "Error class")}</Table.Th>
-									</Table.Tr>
-								</Table.Thead>
-								<Table.Tbody>
-									{pagination.pageItems.map((log) => (
-										<Table.Tr key={log.id} data-testid={`agent-execution-log-row-${log.id}`}>
-											<Table.Td>
-												<Badge color={log.success ? "teal" : "red"} variant="light">
-													{log.success
-														? t("pages.agents.executionLog.outcome.success", "Success")
-														: t("pages.agents.executionLog.outcome.failed", "Failed")}
-												</Badge>
-											</Table.Td>
-											<Table.Td>{formatTimestamp(log.createdAtUtc > 0 ? log.createdAtUtc : null)}</Table.Td>
-											<Table.Td>
-												<Text size="sm" lineClamp={1}>
-													{log.modelName || "—"}
-												</Text>
-											</Table.Td>
-											<Table.Td>{t("pages.agents.executionLog.latencyValue", "{{ms}} ms", { ms: log.latencyMs })}</Table.Td>
-											<Table.Td>{formatTokens(log.promptTokens)}</Table.Td>
-											<Table.Td>{formatTokens(log.completionTokens)}</Table.Td>
-											<Table.Td>
-												<Text size="sm" lineClamp={1}>
-													{log.errorClass ?? "—"}
-												</Text>
-											</Table.Td>
-										</Table.Tr>
-									))}
-								</Table.Tbody>
-							</Table>
-						</Table.ScrollContainer>
+						<ResponsiveTable
+							rows={pagination.pageItems}
+							rowKey={(log) => log.id}
+							rowTestId={(log) => `agent-execution-log-row-${log.id}`}
+							minWidth={720}
+							data-testid="agent-execution-log-table"
+							columns={[
+								{
+									key: "outcome",
+									header: t("pages.agents.executionLog.columns.outcome", "Outcome"),
+									primary: true,
+									cell: (log) => (
+										<Badge color={log.success ? "teal" : "red"} variant="light">
+											{log.success
+												? t("pages.agents.executionLog.outcome.success", "Success")
+												: t("pages.agents.executionLog.outcome.failed", "Failed")}
+										</Badge>
+									),
+								},
+								{
+									key: "when",
+									header: t("pages.agents.executionLog.columns.when", "When"),
+									cell: (log) => formatTimestamp(log.createdAtUtc > 0 ? log.createdAtUtc : null),
+								},
+								{
+									key: "model",
+									header: t("pages.agents.executionLog.columns.model", "Model"),
+									cell: (log) => (
+										<Text size="sm" lineClamp={1}>
+											{log.modelName || "—"}
+										</Text>
+									),
+								},
+								{
+									key: "latency",
+									header: t("pages.agents.executionLog.columns.latency", "Latency"),
+									cell: (log) => t("pages.agents.executionLog.latencyValue", "{{ms}} ms", { ms: log.latencyMs }),
+								},
+								{
+									key: "promptTokens",
+									header: t("pages.agents.executionLog.columns.promptTokens", "Prompt"),
+									cell: (log) => formatTokens(log.promptTokens),
+								},
+								{
+									key: "completionTokens",
+									header: t("pages.agents.executionLog.columns.completionTokens", "Completion"),
+									cell: (log) => formatTokens(log.completionTokens),
+								},
+								{
+									key: "error",
+									header: t("pages.agents.executionLog.columns.error", "Error class"),
+									cell: (log) => (
+										<Text size="sm" lineClamp={1}>
+											{log.errorClass ?? "—"}
+										</Text>
+									),
+								},
+							]}
+						/>
 						<TablePaginationFooter
 							page={pagination.page}
 							pageCount={pagination.pageCount}

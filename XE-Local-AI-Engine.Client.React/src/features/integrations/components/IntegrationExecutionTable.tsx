@@ -1,9 +1,10 @@
-import { ActionIcon, Badge, Code, Group, Table, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, Badge, Code, Group, Text, Tooltip } from "@mantine/core";
 import { IconEye, IconPlayerStop } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
-import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { ResponsiveTable } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
 import {
 	formatFailureCategory,
 	formatIntegrationDuration,
@@ -38,110 +39,118 @@ export function IntegrationExecutionTable({
 }: IntegrationExecutionTableProps) {
 	const { t } = useTranslation();
 
-	if (executions.length === 0) {
-		return (
-			<EmptyState
-				message={t("pages.integrations.executions.list.empty", "No executions match these filters yet.")}
-				data-testid="integration-executions-empty"
-			/>
-		);
-	}
-
 	// The summary projection carries only the trigger id, so the name comes from the trigger list already on the page.
 	// A trigger deleted after the run stays as its id rather than becoming blank.
 	const triggerLabel = (id: string): string => triggers.find((trigger) => trigger.id === id)?.displayName ?? id;
 
 	return (
-		<Table.ScrollContainer minWidth={1100}>
-			<Table striped={true} highlightOnHover={true} verticalSpacing="sm" data-testid="integration-executions-table">
-				<Table.Thead>
-					<Table.Tr>
-						<Table.Th>{t("pages.integrations.executions.list.columns.trigger", "Trigger")}</Table.Th>
-						<Table.Th>{t("pages.integrations.executions.list.columns.session", "Session")}</Table.Th>
-						<Table.Th>{t("pages.integrations.executions.list.columns.execution", "Execution")}</Table.Th>
-						<Table.Th>{t("pages.integrations.executions.list.columns.status", "Status")}</Table.Th>
-						<Table.Th>{t("pages.integrations.executions.list.columns.received", "Received")}</Table.Th>
-						<Table.Th>{t("pages.integrations.executions.list.columns.started", "Started")}</Table.Th>
-						<Table.Th>{t("pages.integrations.executions.list.columns.ended", "Ended")}</Table.Th>
-						<Table.Th>{t("pages.integrations.executions.list.columns.duration", "Duration")}</Table.Th>
-						<Table.Th>{t("pages.integrations.executions.list.columns.outputs", "Outputs")}</Table.Th>
-						<Table.Th>{t("pages.integrations.executions.list.columns.actions", "Actions")}</Table.Th>
-					</Table.Tr>
-				</Table.Thead>
-				<Table.Tbody>
-					{executions.map((execution) => (
-						<Table.Tr key={execution.id} data-testid={`integration-execution-row-${execution.id}`}>
-							<Table.Td>
-								<Text fw={600}>{triggerLabel(execution.triggerId)}</Text>
-							</Table.Td>
-							<Table.Td>
-								<Tooltip label={execution.sessionId}>
-									<Code title={execution.sessionId}>{shortPrincipalId(execution.sessionId)}</Code>
-								</Tooltip>
-							</Table.Td>
-							<Table.Td>
-								<Tooltip label={execution.id}>
-									<Code title={execution.id}>{shortPrincipalId(execution.id)}</Code>
-								</Tooltip>
-							</Table.Td>
-							<Table.Td>
-								<Group gap={4} wrap="nowrap">
-									<IntegrationExecutionStatusBadge
-										status={execution.status}
-										data-testid={`integration-execution-status-${execution.id}`}
-									/>
-									{/* The category rides beside the status so an operator scanning the list can tell an
-									    approval-required run from a queue-timeout without opening either dialog. */}
-									{execution.failureCategory === null ? null : (
-										<Badge variant="light" color="gray" data-testid={`integration-execution-category-${execution.id}`}>
-											{formatFailureCategory(t, execution.failureCategory)}
-										</Badge>
-									)}
-								</Group>
-							</Table.Td>
-							<Table.Td>
-								<Text size="sm">{formatTimestamp(execution.receivedAtUtc)}</Text>
-							</Table.Td>
-							<Table.Td>
-								<Text size="sm">{formatTimestamp(execution.startedAtUtc)}</Text>
-							</Table.Td>
-							<Table.Td>
-								<Text size="sm">{formatTimestamp(execution.endedAtUtc)}</Text>
-							</Table.Td>
-							<Table.Td>
-								<Text size="sm">{formatIntegrationDuration(execution.startedAtUtc, execution.endedAtUtc)}</Text>
-							</Table.Td>
-							<Table.Td>
-								<Text size="sm">{execution.outputCount}</Text>
-							</Table.Td>
-							<Table.Td>
-								<Group gap={4} wrap="nowrap">
-									<ActionIcon
-										aria-label={t("pages.integrations.executions.list.viewAria", "View execution details")}
-										variant="subtle"
-										onClick={() => onView(execution)}
-										data-testid={`integration-execution-view-${execution.id}`}
-									>
-										<IconEye size={16} />
-									</ActionIcon>
-									{isActiveExecutionStatus(execution.status) ? (
-										<ActionIcon
-											aria-label={t("pages.integrations.executions.list.cancelAria", "Cancel execution")}
-											variant="subtle"
-											color="red"
-											disabled={isCancelling}
-											onClick={() => onCancel(execution)}
-											data-testid={`integration-execution-cancel-${execution.id}`}
-										>
-											<IconPlayerStop size={16} />
-										</ActionIcon>
-									) : null}
-								</Group>
-							</Table.Td>
-						</Table.Tr>
-					))}
-				</Table.Tbody>
-			</Table>
-		</Table.ScrollContainer>
+		<ResponsiveTable
+			rows={executions}
+			rowKey={(execution) => execution.id}
+			rowTestId={(execution) => `integration-execution-row-${execution.id}`}
+			minWidth={1100}
+			data-testid="integration-executions-table"
+			empty={
+				<EmptyState
+					message={t("pages.integrations.executions.list.empty", "No executions match these filters yet.")}
+					data-testid="integration-executions-empty"
+				/>
+			}
+			columns={[
+				{
+					key: "trigger",
+					header: t("pages.integrations.executions.list.columns.trigger", "Trigger"),
+					primary: true,
+					cell: (execution) => <Text fw={600}>{triggerLabel(execution.triggerId)}</Text>,
+				},
+				{
+					key: "session",
+					header: t("pages.integrations.executions.list.columns.session", "Session"),
+					cell: (execution) => (
+						<Tooltip label={execution.sessionId}>
+							<Code title={execution.sessionId}>{shortPrincipalId(execution.sessionId)}</Code>
+						</Tooltip>
+					),
+				},
+				{
+					key: "execution",
+					header: t("pages.integrations.executions.list.columns.execution", "Execution"),
+					cell: (execution) => (
+						<Tooltip label={execution.id}>
+							<Code title={execution.id}>{shortPrincipalId(execution.id)}</Code>
+						</Tooltip>
+					),
+				},
+				{
+					key: "status",
+					header: t("pages.integrations.executions.list.columns.status", "Status"),
+					cell: (execution) => (
+						<Group gap={4} wrap="nowrap">
+							<IntegrationExecutionStatusBadge
+								status={execution.status}
+								data-testid={`integration-execution-status-${execution.id}`}
+							/>
+							{/* The category rides beside the status so an operator scanning the list can tell an
+							    approval-required run from a queue-timeout without opening either dialog. */}
+							{execution.failureCategory === null ? null : (
+								<Badge variant="light" color="gray" data-testid={`integration-execution-category-${execution.id}`}>
+									{formatFailureCategory(t, execution.failureCategory)}
+								</Badge>
+							)}
+						</Group>
+					),
+				},
+				{
+					key: "received",
+					header: t("pages.integrations.executions.list.columns.received", "Received"),
+					cell: (execution) => <Text size="sm">{formatTimestamp(execution.receivedAtUtc)}</Text>,
+				},
+				{
+					key: "started",
+					header: t("pages.integrations.executions.list.columns.started", "Started"),
+					cell: (execution) => <Text size="sm">{formatTimestamp(execution.startedAtUtc)}</Text>,
+				},
+				{
+					key: "ended",
+					header: t("pages.integrations.executions.list.columns.ended", "Ended"),
+					cell: (execution) => <Text size="sm">{formatTimestamp(execution.endedAtUtc)}</Text>,
+				},
+				{
+					key: "duration",
+					header: t("pages.integrations.executions.list.columns.duration", "Duration"),
+					cell: (execution) => <Text size="sm">{formatIntegrationDuration(execution.startedAtUtc, execution.endedAtUtc)}</Text>,
+				},
+				{
+					key: "outputs",
+					header: t("pages.integrations.executions.list.columns.outputs", "Outputs"),
+					cell: (execution) => <Text size="sm">{execution.outputCount}</Text>,
+				},
+			]}
+			actionsHeader={t("pages.integrations.executions.list.columns.actions", "Actions")}
+			actions={(execution) => (
+				<>
+					<ActionIcon
+						aria-label={t("pages.integrations.executions.list.viewAria", "View execution details")}
+						variant="subtle"
+						onClick={() => onView(execution)}
+						data-testid={`integration-execution-view-${execution.id}`}
+					>
+						<IconEye size={16} />
+					</ActionIcon>
+					{isActiveExecutionStatus(execution.status) ? (
+						<ActionIcon
+							aria-label={t("pages.integrations.executions.list.cancelAria", "Cancel execution")}
+							variant="subtle"
+							color="red"
+							disabled={isCancelling}
+							onClick={() => onCancel(execution)}
+							data-testid={`integration-execution-cancel-${execution.id}`}
+						>
+							<IconPlayerStop size={16} />
+						</ActionIcon>
+					) : null}
+				</>
+			)}
+		/>
 	);
 }

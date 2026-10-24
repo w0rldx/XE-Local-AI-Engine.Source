@@ -208,9 +208,10 @@ export function AgentSelectorCard({
 						aria-expanded={pickerOpened}
 						aria-haspopup="menu"
 						aria-label={t("pages.chat.agentSelector.triggerLabel", "Agent")}
-						style={{ width: "100%" }}
+						// Stretched to the paper's full height so the whole 36px control is the hit area, not just the label.
+						style={{ width: "100%", alignSelf: "stretch", display: "flex", alignItems: "center" }}
 					>
-						<Group gap="xs" wrap="nowrap" align="center">
+						<Group gap="xs" wrap="nowrap" align="center" style={{ flex: 1, minWidth: 0 }}>
 							<IconUsers
 								size={16}
 								color={isOff ? "var(--mantine-color-dimmed)" : "var(--mantine-primary-color-filled)"}

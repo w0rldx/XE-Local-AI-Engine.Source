@@ -7,6 +7,14 @@ public static class NodeAuthRateLimits
 {
     public const string AuthPolicy = "AuthRateLimit";
 
+    /// <summary>Bounds <c>auth/refresh</c>, apart from <see cref="AuthPolicy" />.</summary>
+    /// <remarks>
+    ///     Every full SPA load and every tab spends one refresh, so on the password endpoints' 10/min a handful of reloads
+    ///     locked the operator out behind a 429. A refresh presents a high-entropy, rotated cookie, not a guessable password,
+    ///     so the password-guessing cap does not apply; this one only bounds a runaway client.
+    /// </remarks>
+    public const string RefreshPolicy = "RefreshRateLimit";
+
     /// <summary>Guards the inbound MCP endpoint against offline-speed guessing of the bearer key.</summary>
     /// <remarks>
     ///     Separate from <see cref="AuthPolicy" /> and deliberately far more permissive: an authenticated MCP client

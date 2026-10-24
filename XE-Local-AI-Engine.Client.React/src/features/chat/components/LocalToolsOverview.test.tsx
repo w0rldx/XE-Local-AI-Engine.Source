@@ -5,7 +5,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ToolCatalogEntry } from "@/features/tools/models/ToolCatalogModels";
+import { type ToolCatalogEntry, toToolDisplayName } from "@/features/tools/models/ToolCatalogModels";
 
 const { useToolCatalogMock } = vi.hoisted(() => ({
 	useToolCatalogMock: vi.fn(),
@@ -148,11 +148,10 @@ describe("LocalToolsOverview", () => {
 		expect(screen.getByText("MCP · filesystem-tools")).toBeTruthy();
 	});
 
-	// Regression guard for a live 390px squeeze: the row is `wrap="nowrap"`, and once ToolSourceBadge stopped
-	// shrinking the only item left able to absorb the overflow was the approval badge, which got clipped. The name
-	// has to be the element that yields (minWidth: 0 defeats the flex item's default `min-width: auto`, truncate
-	// gives it an ellipsis) and the approval badge has to hold its width.
-	it("lets a long tool name shrink so the badges next to it stay intact", () => {
+	// Regression guard for two live 390px squeezes: first the approval badge got clipped, then the name was cut to an
+	// ellipsis nobody could expand. The name now wraps in full (minWidth: 0 plus an anywhere-break, never a truncate)
+	// and the badges hold their width, dropping to the next line when the row is too narrow.
+	it("keeps a long tool name whole and the badges next to it intact", () => {
 		const longNameTool: ToolCatalogEntry = {
 			...mcpTool,
 			name: "mcp__filesystem-tools__read_a_very_long_file_path_from_the_workspace_root",
@@ -163,7 +162,9 @@ describe("LocalToolsOverview", () => {
 
 		const name = screen.getByTestId(`local-tool-name-${longNameTool.name}`);
 		expect(name.style.minWidth).toBe("0px");
-		expect(name.getAttribute("data-truncate")).toBe("end");
+		expect(name.getAttribute("data-truncate")).toBeNull();
+		expect(name.style.overflowWrap).toBe("anywhere");
+		expect(name.textContent).toBe(toToolDisplayName(longNameTool.name));
 
 		const approvalBadge = screen.getByTestId(`local-tool-approval-badge-${longNameTool.name}`);
 		expect(approvalBadge.style.flexShrink).toBe("0");

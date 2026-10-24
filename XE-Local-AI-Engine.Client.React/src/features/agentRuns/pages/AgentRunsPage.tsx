@@ -1,4 +1,4 @@
-import { Badge, Button, Code, Group, Loader, Stack, Table, Text } from "@mantine/core";
+import { Badge, Button, Code, Group, Loader, Stack, Text } from "@mantine/core";
 import { IconFileText, IconHistory, IconMessage, IconTrash } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
@@ -12,6 +12,7 @@ import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import { ResponsiveTable, type ResponsiveTableColumn } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { useServerTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
@@ -140,49 +141,36 @@ function AgentRunTable({
 }) {
 	const { t } = useTranslation();
 
+	const columns: readonly ResponsiveTableColumn<AgentRunView>[] = [
+		{ key: "run", header: t("pages.agentRuns.columns.run", "Run"), primary: true, cell: (run) => <Code>{run.runId}</Code> },
+		{ key: "started", header: t("pages.agentRuns.columns.started", "Started"), cell: (run) => formatTimestamp(run.startedAtUtc) },
+		{
+			key: "outcome",
+			header: t("pages.agentRuns.columns.outcome", "Outcome"),
+			// A badge clips its label with an ellipsis, and the table's auto layout squeezed this one to "COMPL…" even
+			// with room to spare; the max-content floor keeps the whole label.
+			cell: (run) => (
+				<Badge color={agentRunOutcomeColor(run.outcome)} variant="light" style={{ minWidth: "max-content" }}>
+					{t(`pages.agentRuns.outcome.${run.outcome}`, run.outcome)}
+				</Badge>
+			),
+		},
+		{ key: "changes", header: t("pages.agentRuns.columns.changes", "Changes"), cell: (run) => <ChangesCell run={run} /> },
+		{ key: "size", header: t("pages.agentRuns.columns.size", "Size"), cell: (run) => formatAgentRunSize(run.sizeBytes) },
+	];
+
 	return (
-		<Table.ScrollContainer minWidth={900}>
-			<Table striped={true} highlightOnHover={true} verticalSpacing="sm" data-testid="agent-runs-table">
-				<Table.Thead>
-					<Table.Tr>
-						<Table.Th>{t("pages.agentRuns.columns.run", "Run")}</Table.Th>
-						<Table.Th>{t("pages.agentRuns.columns.started", "Started")}</Table.Th>
-						<Table.Th>{t("pages.agentRuns.columns.outcome", "Outcome")}</Table.Th>
-						<Table.Th>{t("pages.agentRuns.columns.changes", "Changes")}</Table.Th>
-						<Table.Th>{t("pages.agentRuns.columns.size", "Size")}</Table.Th>
-						<Table.Th />
-					</Table.Tr>
-				</Table.Thead>
-				<Table.Tbody>
-					{runs.map((run) => (
-						<Table.Tr key={run.runId} data-testid={`agent-run-row-${run.runId}`}>
-							<Table.Td>
-								<Code>{run.runId}</Code>
-							</Table.Td>
-							<Table.Td>{formatTimestamp(run.startedAtUtc)}</Table.Td>
-							<Table.Td>
-								<Badge color={agentRunOutcomeColor(run.outcome)} variant="light">
-									{t(`pages.agentRuns.outcome.${run.outcome}`, run.outcome)}
-								</Badge>
-							</Table.Td>
-							<Table.Td>
-								<ChangesCell run={run} />
-							</Table.Td>
-							<Table.Td>{formatAgentRunSize(run.sizeBytes)}</Table.Td>
-							<Table.Td>
-								<RunActionsCell
-									run={run}
-									onReview={onReview}
-									onOpenConversation={onOpenConversation}
-									onView={onView}
-									onDelete={onDelete}
-								/>
-							</Table.Td>
-						</Table.Tr>
-					))}
-				</Table.Tbody>
-			</Table>
-		</Table.ScrollContainer>
+		<ResponsiveTable
+			rows={runs}
+			columns={columns}
+			rowKey={(run) => run.runId}
+			rowTestId={(run) => `agent-run-row-${run.runId}`}
+			minWidth={900}
+			data-testid="agent-runs-table"
+			actions={(run) => (
+				<RunActions run={run} onReview={onReview} onOpenConversation={onOpenConversation} onView={onView} onDelete={onDelete} />
+			)}
+		/>
 	);
 }
 
@@ -195,7 +183,7 @@ function AgentRunTable({
  * disabled button explaining that to every such row would cost a tooltip a keyboard cannot reach for no gain. View
  * and delete are always offered: every run has a directory, even an empty one, and the viewer says so honestly.
  */
-function RunActionsCell({
+function RunActions({
 	run,
 	onReview,
 	onOpenConversation,
@@ -212,7 +200,7 @@ function RunActionsCell({
 	const conversationId = run.conversationId;
 
 	return (
-		<Group gap="xs" wrap="nowrap">
+		<>
 			{run.patchExported ? (
 				<Button size="xs" variant="light" onClick={() => onReview(run.runId)} data-testid={`agent-run-review-${run.runId}`}>
 					{t("pages.agentRuns.review", "Review changes")}
@@ -248,7 +236,7 @@ function RunActionsCell({
 			>
 				{t("pages.agentRuns.delete.action", "Delete")}
 			</Button>
-		</Group>
+		</>
 	);
 }
 
@@ -265,14 +253,19 @@ function ChangesCell({ run }: { readonly run: AgentRunView }) {
 	}
 
 	return (
-		<Group gap="xs" wrap="nowrap">
+		<Group gap="xs">
 			<Text size="sm">
 				{run.changedFileCount === null
 					? t("pages.agentRuns.filesUnknown", "Patch exported")
 					: t("pages.agentRuns.files", "{{value}} file(s)", { value: run.changedFileCount })}
 			</Text>
 			{run.applyState === "none" ? null : (
-				<Badge size="sm" variant="outline" color={run.applyState === "applied" ? "teal" : "orange"}>
+				<Badge
+					size="sm"
+					variant="outline"
+					color={run.applyState === "applied" ? "teal" : "orange"}
+					style={{ minWidth: "max-content" }}
+				>
 					{run.applyState === "applied"
 						? t("pages.agentRuns.applyState.applied", "Applied")
 						: t("pages.agentRuns.applyState.rejected", "Apply refused")}

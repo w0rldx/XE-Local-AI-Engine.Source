@@ -52,7 +52,7 @@ export function GraphWorkflowDefinitionList({
 						onClick={() => fileInput.current?.click()}
 						data-testid="gw-definition-import"
 					>
-						{t("pages.graphWorkflows.definitions.import", "Import…")}
+						{t("pages.graphWorkflows.definitions.import", "Import file")}
 					</Button>
 					<Button
 						size="xs"

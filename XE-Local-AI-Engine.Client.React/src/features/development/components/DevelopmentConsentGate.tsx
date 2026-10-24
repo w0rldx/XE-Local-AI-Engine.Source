@@ -69,8 +69,21 @@ export function DevelopmentConsentGate({ children }: DevelopmentConsentGateProps
 			closeOnClickOutside={false}
 			closeOnEscape={false}
 			data-testid="development-consent-dialog"
+			// The checkbox sits in the sticky footer beside the action it unlocks, so on a phone neither is below the fold
+			// behind the long notice. Full width puts it on its own row above the buttons; `md` grows its hit area.
 			footer={
 				<>
+					<Checkbox
+						w="100%"
+						size="md"
+						checked={confirmed}
+						onChange={(event) => {
+							const checked = event.currentTarget.checked;
+							setConfirmed(checked);
+						}}
+						label={t("pages.development.consent.checkbox", "I understand what Development Mode executes on this machine.")}
+						data-testid="development-consent-checkbox"
+					/>
 					<Button
 						variant="subtle"
 						leftSection={<IconX size={16} />}
@@ -147,16 +160,6 @@ export function DevelopmentConsentGate({ children }: DevelopmentConsentGateProps
 						"This notice is a disclosure, not a protection. Acknowledging it is recorded in this browser only and changes nothing about what a Development run is allowed to do.",
 					)}
 				</Text>
-
-				<Checkbox
-					checked={confirmed}
-					onChange={(event) => {
-						const checked = event.currentTarget.checked;
-						setConfirmed(checked);
-					}}
-					label={t("pages.development.consent.checkbox", "I understand what Development Mode executes on this machine.")}
-					data-testid="development-consent-checkbox"
-				/>
 			</Stack>
 		</DialogShell>
 	);

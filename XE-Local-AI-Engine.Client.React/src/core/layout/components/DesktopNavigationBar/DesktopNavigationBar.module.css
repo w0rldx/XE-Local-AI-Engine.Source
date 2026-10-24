@@ -55,6 +55,17 @@
 	margin-right: calc(-1 * var(--mantine-spacing-xs));
 }
 
+/* Scroll cue for items hidden under the pinned footer: a shadow fixed to the viewport's bottom edge (`scroll`), and
+   a cover in the sidebar's own surface that travels with the content (`local`) and hides the shadow once the last
+   item is in view. Backgrounds only, so it needs no scroll listener and never covers an item's text. */
+
+.links-viewport {
+	background:
+		linear-gradient(transparent, light-dark(var(--mantine-color-white), var(--mantine-color-dark-7)) 40%) bottom / 100% 40px
+			no-repeat local,
+		linear-gradient(transparent, light-dark(rgb(0 0 0 / 12%), rgb(0 0 0 / 50%))) bottom / 100% 16px no-repeat scroll;
+}
+
 .links-inner {
 	display: flex;
 	flex-direction: column;

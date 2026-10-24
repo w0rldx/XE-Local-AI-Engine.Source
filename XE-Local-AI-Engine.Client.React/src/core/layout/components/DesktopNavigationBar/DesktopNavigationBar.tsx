@@ -271,7 +271,14 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 			    because the inner column already clips X, and `offsetScrollbars={false}` because the theme's
 			    "present" would pad the content away from the bar and undo the gutter the CSS just carved out.
 			    `type="auto"` is the theme default, repeated so the whole scroll contract reads in one place. */}
-			<ScrollArea className={classes["links"]} type="auto" scrollbarSize={6} scrollbars="y" offsetScrollbars={false}>
+			<ScrollArea
+				className={classes["links"]}
+				classNames={{ viewport: classes["links-viewport"] }}
+				type="auto"
+				scrollbarSize={6}
+				scrollbars="y"
+				offsetScrollbars={false}
+			>
 				<div className={classes["links-inner"]}>{viewableNavigationLinks.map((item) => renderNavigationItem(item))}</div>
 			</ScrollArea>
 

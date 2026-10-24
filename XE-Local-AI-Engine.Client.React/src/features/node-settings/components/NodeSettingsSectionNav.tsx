@@ -11,6 +11,7 @@ interface Props {
 	readonly dirtyCounts: ReadonlyMap<NodeSettingsSectionId, number>;
 	// Present only in Simple UI mode, where the advanced sections sit behind this toggle.
 	readonly advancedToggle?: { readonly shown: boolean; readonly onToggle: () => void };
+	readonly compact: boolean;
 }
 
 type Translate = ReturnType<typeof useTranslation>["t"];
@@ -33,55 +34,57 @@ function sectionLabel(t: Translate, section: NodeSettingsSectionId): string {
 	return labels[section];
 }
 
-// A navigation landmark: a vertical list from the sm breakpoint up, a select on phone width.
-export function NodeSettingsSectionNav({ sections, active, onSelect, dirtyCounts, advancedToggle }: Props) {
+// A navigation landmark: a vertical list, or a select on a compact viewport (phone width, or too short for the list).
+export function NodeSettingsSectionNav({ sections, active, onSelect, dirtyCounts, advancedToggle, compact }: Props) {
 	const { t } = useTranslation();
 	const label = (section: NodeSettingsSectionId): string => sectionLabel(t, section);
 	const navLabel = t("pages.nodeSettings.sections.navLabel", "Settings sections");
 
 	return (
 		<Box component="nav" aria-label={navLabel} data-testid="node-settings-section-nav">
-			<Select
-				hiddenFrom="sm"
-				aria-label={navLabel}
-				data={sections.map((section) => ({ value: section, label: label(section) }))}
-				value={active}
-				onChange={(value) => {
-					if (value !== null) {
-						onSelect(value as NodeSettingsSectionId);
-					}
-				}}
-				allowDeselect={false}
-				data-testid="node-settings-section-select"
-			/>
-			<Stack gap={2} visibleFrom="sm">
-				{sections.map((section) => {
-					const dirty = dirtyCounts.get(section) ?? 0;
-					return (
-						<NavLink
-							key={section}
-							component="button"
-							type="button"
-							label={label(section)}
-							active={section === active}
-							aria-current={section === active ? "page" : undefined}
-							onClick={() => onSelect(section)}
-							rightSection={
-								dirty > 0 ? (
-									<Badge
-										size="xs"
-										circle={true}
-										aria-label={t("pages.nodeSettings.saveBar.unsaved", "{{count}} unsaved changes", { count: dirty })}
-									>
-										{dirty}
-									</Badge>
-								) : null
-							}
-							data-testid={`node-settings-section-${section}`}
-						/>
-					);
-				})}
-			</Stack>
+			{compact ? (
+				<Select
+					aria-label={navLabel}
+					data={sections.map((section) => ({ value: section, label: label(section) }))}
+					value={active}
+					onChange={(value) => {
+						if (value !== null) {
+							onSelect(value as NodeSettingsSectionId);
+						}
+					}}
+					allowDeselect={false}
+					data-testid="node-settings-section-select"
+				/>
+			) : (
+				<Stack gap={2}>
+					{sections.map((section) => {
+						const dirty = dirtyCounts.get(section) ?? 0;
+						return (
+							<NavLink
+								key={section}
+								component="button"
+								type="button"
+								label={label(section)}
+								active={section === active}
+								aria-current={section === active ? "page" : undefined}
+								onClick={() => onSelect(section)}
+								rightSection={
+									dirty > 0 ? (
+										<Badge
+											size="xs"
+											circle={true}
+											aria-label={t("pages.nodeSettings.saveBar.unsaved", "{{count}} unsaved changes", { count: dirty })}
+										>
+											{dirty}
+										</Badge>
+									) : null
+								}
+								data-testid={`node-settings-section-${section}`}
+							/>
+						);
+					})}
+				</Stack>
+			)}
 			{advancedToggle ? (
 				<Button
 					variant="subtle"

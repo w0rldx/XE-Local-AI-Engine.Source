@@ -16,6 +16,8 @@ vi.mock("@/core/layout/components/DesktopNavigationBar/DesktopNavigationBar", ()
 	DesktopNavigationBar: () => <nav aria-label="Main navigation" />,
 }));
 vi.mock("@/features/chat/components/ChatConnectionStatusChip", () => ({ ChatConnectionStatusChip: () => null }));
+// The dev-only devtools mount asynchronously and throw when a test unmounts them before they finished mounting.
+vi.mock("@/core/dev-tools/components/DevelopmentUi/DevelopmentUi", () => ({ DevelopmentUi: () => null }));
 vi.mock("@/features/model-fit/components/CpuFallbackBanner", () => ({ CpuFallbackBanner: () => null }));
 vi.mock("@/features/node-settings/components/LlamaCppUpdateBanner", () => ({ LlamaCppUpdateBanner: () => null }));
 vi.mock("@/features/node-settings/components/RuntimeAcquisitionBanner", () => ({
@@ -95,6 +97,28 @@ describe("Layout", () => {
 		const goHome = await screen.findByRole("button", { name: en.app.errorFallback.goHome });
 		expect(screen.getByRole("navigation", { name: "Main navigation" })).toBeTruthy();
 		expect(screen.getByRole("main").contains(goHome)).toBe(true);
+	});
+
+	// A phone in landscape is wide enough for the sidebar by width alone; the audit found it with six nav items and a
+	// ~330px content area. The shell switch needs the height too.
+	it.each([
+		[844, 390, false],
+		[768, 1024, false],
+		[1280, 720, true],
+	])("mounts the desktop sidebar at %i×%i: %s", async (width, height, expected) => {
+		const originalWidth = window.innerWidth;
+		const originalHeight = window.innerHeight;
+		Object.defineProperty(window, "innerWidth", { writable: true, configurable: true, value: width });
+		Object.defineProperty(window, "innerHeight", { writable: true, configurable: true, value: height });
+		try {
+			renderWithProviders(<Layout />, { route: "/" });
+			await screen.findByRole("main");
+
+			expect(screen.queryByRole("navigation", { name: "Main navigation" }) !== null).toBe(expected);
+		} finally {
+			Object.defineProperty(window, "innerWidth", { writable: true, configurable: true, value: originalWidth });
+			Object.defineProperty(window, "innerHeight", { writable: true, configurable: true, value: originalHeight });
+		}
 	});
 
 	// The link must come FIRST in the tab order, which is the whole point: a keyboard user reaching it after the

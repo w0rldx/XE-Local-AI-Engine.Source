@@ -1,9 +1,9 @@
-import type { ModalProps } from "@mantine/core";
+import type { ModalProps, ScrollAreaAutosizeProps } from "@mantine/core";
 import { Group, Modal, ScrollArea } from "@mantine/core";
 import { type ReactNode, use, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { DESKTOP_NAV_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
+import { isDesktopShell } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { DialogTextTitleBar } from "@/core/ui/components/DialogTextTitleBar/DialogTextTitleBar";
 import { ConfirmContext } from "@/core/ui/context/ConfirmContext";
@@ -46,6 +46,16 @@ const MODAL_PADDING = "var(--mb-padding, var(--mantine-spacing-md))";
 // another one takes it through `raised`, so no call site has to know the number.
 const RAISED_DIALOG_Z_INDEX = 400;
 
+const dialogScrollStyles = { content: { minWidth: 0 } };
+
+// Mantine's autosize scroll area gives its content `min-width: min-content`, so a dialog could never be narrower than
+// its widest unbreakable descendant: one nowrap/truncated line (a chunk heading, a tool name beside its badges) made
+// the whole dialog wider than a phone and pushed values and Close off-screen. A dialog scrolls vertically only, so
+// its content is held to the dialog's width and those lines shrink and truncate as they were written to.
+function DialogScrollArea(props: ScrollAreaAutosizeProps) {
+	return <ScrollArea.Autosize {...props} styles={dialogScrollStyles} />;
+}
+
 /**
  * Normalized dialog shell that wraps Mantine Modal with the application's consistent overlay,
  * transition, title bar, and sizing defaults.
@@ -66,7 +76,7 @@ export function DialogShell({
 	onClose,
 	// Slightly wider default than Mantine's "xl"; capped at 95vw so it never exceeds the viewport on small screens.
 	size = "min(54rem, 95vw)",
-	scrollAreaComponent = ScrollArea.Autosize,
+	scrollAreaComponent = DialogScrollArea,
 	closeOnClickOutside,
 	closeOnEscape,
 	transitionProps,
@@ -87,11 +97,11 @@ export function DialogShell({
 	// directly rather than via the throwing useConfirm() hook. Only used when confirmCloseWhen.
 	const confirmContext = use(ConfirmContext);
 	const [isFullScreen, setIsFullScreen] = useState(false);
-	// Below the app shell's desktop-navigation cutoff (the same DESKTOP_NAV_BREAKPOINT Layout.tsx branches on)
-	// dialogs go full-screen automatically: a floating card on a phone wastes gutter space and traps nested scroll
-	// areas. The user-facing toggle is hidden in that state since leaving full-screen isn't meaningful there.
-	const { width } = useWindowDimensions();
-	const isMobileViewport = width < DESKTOP_NAV_BREAKPOINT;
+	// Wherever the app shell is not the desktop one (the same isDesktopShell switch Layout.tsx branches on) dialogs go
+	// full-screen automatically: a floating card on a phone wastes gutter space and traps nested scroll areas. The
+	// user-facing toggle is hidden in that state since leaving full-screen isn't meaningful there.
+	const { width, height } = useWindowDimensions();
+	const isMobileViewport = !isDesktopShell(width, height);
 	const effectiveFullScreen = isFullScreen || isMobileViewport;
 
 	const toggleFullScreen = useCallback(() => {
@@ -136,6 +146,8 @@ export function DialogShell({
 			size={size}
 			radius={effectiveFullScreen ? 0 : radius}
 			scrollAreaComponent={scrollAreaComponent}
+			// Mantine sets this only when the component IS ScrollArea.Autosize; the wrapper above is one too.
+			data-offset-scrollbars={scrollAreaComponent === DialogScrollArea || undefined}
 			transitionProps={effectiveFullScreen ? { transition: "fade" } : transitionProps}
 			closeOnClickOutside={confirmCloseWhen ? false : closeOnClickOutside}
 			closeOnEscape={confirmCloseWhen ? false : closeOnEscape}

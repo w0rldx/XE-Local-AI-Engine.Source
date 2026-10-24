@@ -60,7 +60,13 @@ export const ChatSourcesStrip = memo(function ChatSourcesStrip({ sources }: Chat
 
 	return (
 		<Stack gap={4} data-testid="chat-sources-strip">
-			<UnstyledButton onClick={toggle} aria-expanded={opened} data-testid="chat-sources-toggle">
+			{/* 24px tall so the strip's only control is still a fingertip-sized target on a phone. */}
+			<UnstyledButton
+				onClick={toggle}
+				aria-expanded={opened}
+				style={{ display: "flex", alignItems: "center", minHeight: 24 }}
+				data-testid="chat-sources-toggle"
+			>
 				<Group gap={6} align="center">
 					<IconChevronRight
 						size={14}

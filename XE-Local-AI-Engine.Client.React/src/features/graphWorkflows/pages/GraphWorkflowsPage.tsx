@@ -30,7 +30,8 @@ export function GraphWorkflowsPage({ selection, onSelectionChange }: GraphWorkfl
 
 	return (
 		<FullHeightPage ref={paneContainerRef} data-testid="graph-workflows-page">
-			<Stack gap="sm" h="100%" style={{ minHeight: 0 }}>
+			{/* FullHeightPage pads only vertically; px="md" is the inline gutter PageShell's Container gives every other page. */}
+			<Stack gap="sm" h="100%" px="md" style={{ minHeight: 0 }}>
 				<PageHeader
 					title={t("pages.graphWorkflows.title", "Graph Workflows")}
 					icon={<IconSitemap size={24} />}

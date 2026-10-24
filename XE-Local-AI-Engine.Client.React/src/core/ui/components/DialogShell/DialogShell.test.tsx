@@ -48,6 +48,23 @@ describe("DialogShell", () => {
 		cleanup();
 	});
 
+	// Mantine's autosize scroll area holds its content at `min-width: min-content`, so one nowrap line inside a dialog
+	// (a KB chunk heading) widened the whole dialog to ~1370px on a phone. The dialog's scroll content is held to the
+	// dialog's width instead; jsdom does no layout, so the rule itself is what is asserted.
+	it("lets the dialog's scroll content shrink below its children's min-content", () => {
+		renderWithProviders(
+			<DialogShell opened={true} onClose={vi.fn()} title="Editor" data-testid="sample-dialog">
+				<div data-testid="dialog-child">body</div>
+			</DialogShell>,
+		);
+
+		const scrollContent = screen.getByTestId("dialog-child").closest<HTMLElement>(".mantine-ScrollArea-content");
+		expect(scrollContent).not.toBeNull();
+		expect(Number.parseFloat(scrollContent?.style.minWidth ?? "")).toBe(0);
+		// The wrapper is still an autosize scroll area, so Mantine keeps the scrollbar offset it gives that component.
+		expect(document.querySelector("[data-offset-scrollbars]")).not.toBeNull();
+	});
+
 	// REGRESSION (capture run 2026-08-01): the test id landed on Mantine's Modal ROOT — a zero-size portal wrapper that
 	// Playwright resolves but reports as `hidden` — so `waitFor({ state: "visible" })` timed out against a dialog that
 	// was plainly on screen. It must land on the visible dialog card instead.

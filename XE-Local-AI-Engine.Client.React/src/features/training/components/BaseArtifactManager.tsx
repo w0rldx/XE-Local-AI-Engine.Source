@@ -100,14 +100,17 @@ export function BaseArtifactManager() {
 				</Text>
 				<form onSubmit={handleSubmit}>
 					<Group align="flex-end" gap="sm">
+						{/* The repository gets the space (a 16rem floor, then the rest of the row); on a narrow screen the
+						    revision and the button wrap below it instead of squeezing it to a few characters. */}
 						<TextInput
-							flex={1}
+							flex="1 1 16rem"
 							label={t("pages.training.baseArtifacts.repoId", "Repository")}
 							onChange={(event) => setRepoId(event.currentTarget.value)}
 							placeholder="unsloth/Llama-3.2-1B-Instruct"
 							value={repoId}
 						/>
 						<TextInput
+							flex="0 1 10rem"
 							label={t("pages.training.baseArtifacts.revision", "Revision (optional)")}
 							onChange={(event) => setRevision(event.currentTarget.value)}
 							placeholder="main"

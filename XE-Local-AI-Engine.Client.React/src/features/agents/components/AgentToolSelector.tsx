@@ -164,13 +164,15 @@ export function AgentToolSelector({
 				return (
 					<Paper withBorder={true} p="xs" key={tool.name} data-testid={`agent-tool-row-${tool.name}`}>
 						<Stack gap={4}>
-							<Group justify="space-between" align="center" wrap="nowrap">
+							{/* Both rows wrap: on a phone a long tool name plus its badges pushed the approval switch past the
+							    row's own border; wrapped, the switch drops to the next line instead. */}
+							<Group justify="space-between" align="center">
 								<Checkbox
 									checked={isSelected}
 									disabled={locked || withheld}
 									label={
-										<Group gap="xs" wrap="nowrap" align="center">
-											<Text size="sm" fw={600} ff="monospace">
+										<Group gap="xs" align="center">
+											<Text size="sm" fw={600} ff="monospace" style={{ overflowWrap: "anywhere" }}>
 												{toToolDisplayName(tool.name)}
 											</Text>
 											<ToolSourceBadge source={tool.source} />

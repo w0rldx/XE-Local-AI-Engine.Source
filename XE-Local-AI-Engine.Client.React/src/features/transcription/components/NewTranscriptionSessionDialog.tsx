@@ -15,9 +15,11 @@ import { IconRefresh } from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { type AudioInputDevice, listAudioInputDevices } from "@/core/audio/capture/CaptureSource";
+import { COMPACT_CONTROLS_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
+import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import { type AudioInputDevice, listAudioInputDevices } from "@/core/audio/capture/CaptureSource";
 import {
 	type TranscriptionLanguageMode,
 	type TranscriptionSourceKind,
@@ -145,6 +147,9 @@ export function NewTranscriptionSessionDialog({
 	const [file, setFile] = useState<File | null>(null);
 	const [processId, setProcessId] = useState<number | null>(null);
 
+	// Four or five source labels side by side are wider than a phone; stacked they fit any width.
+	const { width } = useWindowDimensions();
+	const stackSources = width < COMPACT_CONTROLS_BREAKPOINT;
 	const languageChoices = useMemo(() => languageOptions(i18n.language), [i18n.language]);
 	const isFileSource = sourceKind === "File";
 	// Enumerated only while the dialog is open on this source: listing the box's audio sessions is work the node
@@ -256,6 +261,8 @@ export function NewTranscriptionSessionDialog({
 					</Text>
 					<SegmentedControl
 						value={sourceKind}
+						orientation={stackSources ? "vertical" : "horizontal"}
+						fullWidth={stackSources}
 						onChange={(value) => setSourceKind(value as TranscriptionSourceKind)}
 						// The fifth option is absent, never disabled: per-application capture exists only on a recent
 						// Windows build, and an option that can never be chosen on this machine explains nothing.

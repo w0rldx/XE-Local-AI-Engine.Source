@@ -89,6 +89,33 @@ describe("AgentRunsPage", () => {
 		expect(screen.getByText("3 file(s)")).toBeTruthy();
 	});
 
+	it("floors the outcome badge at its full label so the table cannot ellipsize it (R1)", async () => {
+		server.use(...listRoutes({ items: [runDto()], totalCount: 1 }));
+
+		renderWithProviders(<AgentRunsPage />);
+
+		const label = await screen.findByText("Completed");
+		expect((label.closest(".mantine-Badge-root") as HTMLElement).style.minWidth).toBe("max-content");
+	});
+
+	it("renders each run as a card with its actions in reach on a phone (T1)", async () => {
+		const originalWidth = window.innerWidth;
+		Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 390 });
+		try {
+			server.use(...listRoutes({ items: [runDto({ conversationId })], totalCount: 1 }));
+
+			renderWithProviders(<AgentRunsPage />);
+
+			const card = await screen.findByTestId(`agent-run-row-${runId}`);
+			expect(card.tagName).toBe("LI");
+			expect(screen.queryByRole("table")).toBeNull();
+			expect(screen.getByTestId(`agent-run-delete-${runId}`)).toBeTruthy();
+			expect(screen.getByTestId(`agent-run-conversation-${runId}`)).toBeTruthy();
+		} finally {
+			Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: originalWidth });
+		}
+	});
+
 	it("shows an empty state when the node has kept no runs", async () => {
 		server.use(...listRoutes({ items: [], totalCount: 0 }));
 

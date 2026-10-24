@@ -209,3 +209,69 @@ describe("ThemeProvider accent colour", () => {
 		expect(primary?.[6]).not.toBe(sourceThemeConfiguration.palette.primary.scale[6]);
 	});
 });
+
+describe("ThemeProvider floating dropdown cap", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+	});
+
+	afterEach(() => {
+		cleanup();
+	});
+
+	interface SizeMiddleware {
+		readonly padding?: number;
+		readonly apply: (state: { availableWidth: number; availableHeight: number; elements: { floating: HTMLElement } }) => void;
+	}
+
+	function popoverMiddlewares(): { flip?: boolean; shift?: boolean; size?: SizeMiddleware } | undefined {
+		const { result } = renderHook(() => useMantineTheme(), { wrapper: ThemeProvider });
+		const defaultProps = result.current.components["Popover"]?.defaultProps as
+			| { middlewares?: { flip?: boolean; shift?: boolean; size?: SizeMiddleware } }
+			| undefined;
+		return defaultProps?.middlewares;
+	}
+
+	function sizeMiddleware(): SizeMiddleware | undefined {
+		return popoverMiddlewares()?.size;
+	}
+
+	// The default replaces Mantine's whole middleware object, so it has to keep Mantine's own flip and shift.
+	it("keeps flip and shift beside the size cap", () => {
+		const middlewares = popoverMiddlewares();
+
+		expect(middlewares?.flip).toBe(true);
+		expect(middlewares?.shift).toBe(true);
+	});
+
+	function floatingWithContentHeight(height: number): HTMLElement {
+		const floating = document.createElement("div");
+		Object.defineProperty(floating, "scrollHeight", { configurable: true, value: height });
+		return floating;
+	}
+
+	// On a phone in landscape neither side of a trigger had room for a Menu, Select or Popover dropdown, which then
+	// ran past the top or bottom of the screen. Every one of them renders a Popover, so the cap lives in its theme default.
+	it("caps a dropdown taller than the room it has and lets it scroll", () => {
+		const size = sizeMiddleware();
+		const floating = floatingWithContentHeight(500);
+
+		size?.apply({ availableWidth: 820, availableHeight: 180, elements: { floating } });
+
+		expect(size?.padding).toBe(8);
+		expect(floating.style.maxHeight).toBe("180px");
+		expect(floating.style.maxWidth).toBe("820px");
+		expect(floating.style.overflowY).toBe("auto");
+	});
+
+	// A dropdown that fits keeps visible overflow, so a popover's arrow outside its box is not clipped.
+	it("leaves a dropdown that fits unscrolled", () => {
+		const size = sizeMiddleware();
+		const floating = floatingWithContentHeight(120);
+
+		size?.apply({ availableWidth: 820, availableHeight: 180, elements: { floating } });
+
+		expect(floating.style.maxHeight).toBe("180px");
+		expect(floating.style.overflowY).toBe("");
+	});
+});

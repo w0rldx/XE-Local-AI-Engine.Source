@@ -133,7 +133,7 @@ export function ImagesPage() {
 				)}
 			/>
 
-			<SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
+			<SimpleGrid cols={{ base: 1, lg: 2 }} spacing="lg">
 				<Stack gap="lg">
 					<Card>
 						<ImageGenerationForm

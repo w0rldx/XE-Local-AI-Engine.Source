@@ -2090,6 +2090,7 @@
 				},
 				"dropToAttach": "Dateien zum Anhängen ablegen",
 				"image": "Bild anhängen",
+				"moreControls": "Weitere Eingabeoptionen",
 				"samplingOptions": "Erweiterte Sampling-Optionen",
 				"size": {
 					"overLimit": "Diese Nachricht ist {{used}} KB groß — über dem Limit von {{limit}} KB pro Nachricht. Kürzen Sie sie oder hängen Sie den Text als Datei an.",
@@ -4510,7 +4511,7 @@
 				"descriptionLabel": "Beschreibung",
 				"descriptionPlaceholder": "Wozu dieser Workflow dient.",
 				"empty": "Noch keine Workflows. Erstellen Sie einen, um mit dem Entwurf zu beginnen.",
-				"import": "Importieren…",
+				"import": "Datei importieren",
 				"loadFailed": "Die Workflow-Liste konnte nicht geladen werden.",
 				"meta_one": "{{count}} Knoten · v{{version}} · aktualisiert {{updated}}",
 				"meta_other": "{{count}} Knoten · v{{version}} · aktualisiert {{updated}}",

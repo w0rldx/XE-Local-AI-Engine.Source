@@ -83,7 +83,7 @@ export function BenchmarkProjectWorkspace({ controller }: { readonly controller:
 			/>
 
 			<Grid gap="lg">
-				<Grid.Col span={{ base: 12, md: 4 }}>
+				<Grid.Col span={{ base: 12, lg: 4 }}>
 					<SectionCard
 						gap="sm"
 						title={t("pages.benchmarks.projects", "Projects")}
@@ -138,7 +138,7 @@ export function BenchmarkProjectWorkspace({ controller }: { readonly controller:
 					</SectionCard>
 				</Grid.Col>
 
-				<Grid.Col span={{ base: 12, md: 8 }}>
+				<Grid.Col span={{ base: 12, lg: 8 }}>
 					<SectionCard>
 						{projectQuery.isLoading ? (
 							<Group gap="sm">

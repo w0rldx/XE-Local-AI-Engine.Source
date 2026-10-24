@@ -112,10 +112,12 @@ function CatalogRow({ entry, isBusy, onInstall }: CatalogRowProps) {
 	return (
 		<Card withBorder={true} padding="sm" radius="sm" data-testid={`image-model-catalog-row-${entry.id}`}>
 			<Stack gap="xs">
-				<Group justify="space-between" wrap="nowrap" align="flex-start">
-					<Stack gap={2} style={{ minWidth: 0 }}>
-						<Group gap="xs" wrap="nowrap">
-							<Text size="sm" fw={600} truncate={true}>
+				{/* Wraps instead of squeezing: on a narrow card the Install button drops below the title rather than
+				    clipping its own label and the title to a few letters. */}
+				<Group justify="space-between" align="flex-start">
+					<Stack gap={2} style={{ minWidth: 0, flex: "1 1 12rem" }}>
+						<Group gap="xs">
+							<Text size="sm" fw={600}>
 								{entry.displayName}
 							</Text>
 							{entry.recommended ? (
@@ -124,7 +126,7 @@ function CatalogRow({ entry, isBusy, onInstall }: CatalogRowProps) {
 								</Badge>
 							) : null}
 						</Group>
-						<Text size="xs" c="dimmed" truncate={true}>
+						<Text size="xs" c="dimmed" style={{ overflowWrap: "anywhere" }}>
 							{entry.repoId} · {entry.license}
 						</Text>
 						{entry.license === "qwen-research" ? (
@@ -155,6 +157,7 @@ function CatalogRow({ entry, isBusy, onInstall }: CatalogRowProps) {
 							leftSection={<IconCloudDownload size={14} />}
 							loading={isBusy}
 							disabled={isBusy}
+							style={{ flexShrink: 0 }}
 							onClick={() => onInstall(entry)}
 							data-testid={`image-model-catalog-install-${entry.id}`}
 						>

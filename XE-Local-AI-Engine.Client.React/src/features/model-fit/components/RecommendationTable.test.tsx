@@ -252,11 +252,11 @@ describe("RecommendationTable", () => {
 
 		renderTable(<RecommendationTable recommendations={[dated]} />);
 
-		// Formatted (not the raw ISO string), and the raw value is preserved on the cell's title/tooltip attribute.
+		// Formatted (not the raw ISO string), and the raw value is preserved on the date's title/tooltip attribute.
 		const cell = screen.getByText("Jan 15, 2026");
 		expect(cell).toBeTruthy();
 		expect(screen.queryByText("2026-01-15")).toBeNull();
-		expect(cell.closest("td")?.getAttribute("title")).toBe("2026-01-15");
+		expect(cell.getAttribute("title")).toBe("2026-01-15");
 	});
 
 	it("renders a date-only ISO release date without shifting a day for the local time zone", () => {

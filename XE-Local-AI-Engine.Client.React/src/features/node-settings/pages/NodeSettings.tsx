@@ -24,7 +24,9 @@ import {
 	saveNodeSettingsMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
+import { isCompactViewport } from "@/core/layout/constants/LayoutBreakpoints";
 import { useUiMode } from "@/core/layout/hooks/useUiMode";
+import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
@@ -111,6 +113,9 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 	const developerMode = useDeveloperModeStore((state) => state.developerMode);
 	const { toggle: toggleDeveloperMode } = useDeveloperModeStore((state) => state.actions);
 	const savedUiMode = useUiMode();
+	// Phone width, or a viewport too short for a sticky section list beside the content (phone landscape).
+	const { width, height } = useWindowDimensions();
+	const compactNav = isCompactViewport(width, height);
 	const [timeoutSeconds, setTimeoutSeconds] = useState<NodeSettingsTimeoutInput>(
 		nodeSettingsDefaults.maxMessageRequestTimeoutSeconds,
 	);
@@ -560,9 +565,18 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 				{settingsError ? <InlineErrorAlert message={errorMessage(settingsError)} /> : null}
 
 				<Grid gap="lg">
-					<Grid.Col span={{ base: 12, sm: 4, md: 3 }}>
-						<Box pos={{ base: "static", sm: "sticky" }} top={0}>
+					{/* xl, not md, for the narrow column: from lg the desktop sidebar takes 220px, so md's quarter left the
+					    labels ~100px. The sticky list caps at the viewport minus the header and the save bar and scrolls
+					    itself, so on a short window its last sections are not stranded under the save bar. */}
+					<Grid.Col span={compactNav ? 12 : { base: 12, sm: 4, xl: 3 }}>
+						<Box
+							pos={compactNav ? "static" : "sticky"}
+							top={0}
+							mah={compactNav ? undefined : "calc(100dvh - 10rem)"}
+							style={compactNav ? undefined : { overflowY: "auto" }}
+						>
 							<NodeSettingsSectionNav
+								compact={compactNav}
 								sections={visibleSections}
 								active={activeSection}
 								onSelect={selectSection}
@@ -575,7 +589,7 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 							/>
 						</Box>
 					</Grid.Col>
-					<Grid.Col span={{ base: 12, sm: 8, md: 9 }}>
+					<Grid.Col span={compactNav ? 12 : { base: 12, sm: 8, xl: 9 }}>
 						<Stack gap="lg" data-testid={`node-settings-section-content-${activeSection}`}>
 							{renderSection()}
 						</Stack>
@@ -583,6 +597,7 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 				</Grid>
 
 				<NodeSettingsSaveBar
+					compact={compactNav}
 					unsavedCount={changedFields.length}
 					restartCount={pendingChanges.restartRequired.length}
 					canSave={changedFields.length > 0 && !saveMutation.isPending}

@@ -585,7 +585,7 @@ revocation instant", which would let another client's login or rotation on the s
 (`Refresh_WhenTheOwnChainIsDeadButAnotherSessionIsLive_FailsInsideTheWindow`). Because the grace pair is a sibling of the
 head, out-of-order `Set-Cookie` responses no longer lose the session; the price is one extra live token until expiry
 (14 days) or logout per graced race, and a copy of the cookie captured inside the window can mint pairs until it closes
-(bounded by the auth rate limit). Each such pair is an independent full-lifetime session, so cookie theft inside the
+(bounded by the refresh rate limit). Each such pair is an independent full-lifetime session, so cookie theft inside the
 window is no longer revealed by the other client being signed out. Tests written 2026-09-17, rewritten 2026-09-23.
 
 ### `dev-stop.sh` resolves the AppHost of your CURRENT DIRECTORY, and `pgrep -af` matches its own shell

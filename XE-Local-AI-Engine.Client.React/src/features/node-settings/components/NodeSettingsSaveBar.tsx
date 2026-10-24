@@ -10,11 +10,21 @@ interface Props {
 	readonly isSaving: boolean;
 	readonly onSave: () => void;
 	readonly onReset: () => void;
+	readonly compact: boolean;
 }
 
 // The page's single save point, sticky at the bottom of the scroll area. The status line is a polite live region, so a
 // screen reader hears the counts change as fields are edited.
-export function NodeSettingsSaveBar({ unsavedCount, restartCount, canSave, canReset, isSaving, onSave, onReset }: Props) {
+export function NodeSettingsSaveBar({
+	unsavedCount,
+	restartCount,
+	canSave,
+	canReset,
+	isSaving,
+	onSave,
+	onReset,
+	compact,
+}: Props) {
 	const { t } = useTranslation();
 	const status =
 		unsavedCount === 0
@@ -31,20 +41,30 @@ export function NodeSettingsSaveBar({ unsavedCount, restartCount, canSave, canRe
 			withBorder={true}
 			shadow="sm"
 			radius="md"
-			p="sm"
+			p={compact ? "xs" : "sm"}
 			pos="sticky"
 			bottom={0}
 			style={{ zIndex: 2 }}
 			data-testid="node-settings-save-bar"
 		>
-			<Group justify="space-between" gap="sm">
-				<Text size="sm" role="status" aria-live="polite" data-testid="node-settings-save-bar-status">
+			{/* One row on every width: the status text gives way (two lines at most) and, when compact, the buttons drop
+			    their icons and shrink, so a phone does not lose a sixth of its height to the bar. */}
+			<Group justify="space-between" gap="sm" wrap="nowrap">
+				<Text
+					size={compact ? "xs" : "sm"}
+					lineClamp={2}
+					style={{ minWidth: 0 }}
+					role="status"
+					aria-live="polite"
+					data-testid="node-settings-save-bar-status"
+				>
 					{status}
 				</Text>
-				<Group gap="sm">
+				<Group gap={compact ? "xs" : "sm"} wrap="nowrap" style={{ flexShrink: 0 }}>
 					<Button
 						variant="default"
-						leftSection={<IconRestore size={16} />}
+						size={compact ? "xs" : "sm"}
+						leftSection={compact ? undefined : <IconRestore size={16} />}
 						onClick={onReset}
 						disabled={!canReset}
 						data-testid="node-settings-reset-button"
@@ -52,7 +72,8 @@ export function NodeSettingsSaveBar({ unsavedCount, restartCount, canSave, canRe
 						{t("pages.nodeSettings.saveBar.reset", "Reset")}
 					</Button>
 					<Button
-						leftSection={<IconDeviceFloppy size={16} />}
+						size={compact ? "xs" : "sm"}
+						leftSection={compact ? undefined : <IconDeviceFloppy size={16} />}
 						onClick={onSave}
 						loading={isSaving}
 						disabled={!canSave}

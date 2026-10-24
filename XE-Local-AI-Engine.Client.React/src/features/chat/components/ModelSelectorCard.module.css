@@ -49,6 +49,9 @@
 .compact-trigger-button {
 	display: flex;
 	align-items: center;
+
+	/* Fill the paper's full height: the hit area is the whole 36px control, not just the text lines. */
+	align-self: stretch;
 	width: 100%;
 	text-align: left;
 	cursor: pointer;

@@ -1,4 +1,4 @@
-import { Code, Text } from "@mantine/core";
+import { Box, Code, Table, Text } from "@mantine/core";
 import { memo, useMemo } from "react";
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
@@ -50,6 +50,16 @@ const chatWordBreakOverrides: Partial<Components> = {
 					{children}
 				</Text>
 			</li>
+		);
+	},
+	// The opposite for tables: the anywhere-break inherited from the wrapper below lets every column shrink to one
+	// character, so cells broke mid-word. With normal wrapping a table keeps whole words and the shared renderer's
+	// box scrolls it sideways instead.
+	table({ children }) {
+		return (
+			<Box style={{ overflowX: "auto", maxWidth: "100%", overflowWrap: "normal" }}>
+				<Table>{children}</Table>
+			</Box>
 		);
 	},
 };

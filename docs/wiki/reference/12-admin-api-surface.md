@@ -64,7 +64,7 @@ A non-browser loopback client (the `xe` terminal client) uses **body mode** inst
 `returnRefreshToken: true` returns `refreshToken` and `refreshTokenExpiresAtUtc` in the body and writes no cookie, and
 `auth/refresh` reads the `X-XE-Refresh-Token` header **only when no `node_rt` cookie is sent** (the cookie always
 wins). A header refresh runs the same `RefreshAsync`, so rotation, the grace, logout, the password change and the
-auth rate limit apply unchanged; it answers in body mode and never sets or clears a cookie, and its failure is the
+refresh rate limit apply unchanged; it answers in body mode and never sets or clears a cookie, and its failure is the
 same bodyless 401. The header is not gated on `Origin`; the loopback peer and `Host` checks above still apply.
 `NodeAuthEndpointTests` pins the header and cookie combinations.
 
@@ -83,7 +83,9 @@ The grace pair is a **sibling** of the chain's head, not its replacement, becaus
 the winner's token cannot be handed back: the winner's token stays live, so whichever `Set-Cookie` a browser keeps
 when the two responses arrive out of order still works, and a third presenter inside the window is served too. The
 cost is one extra live token per graced race, which ends at expiry or logout, and a copy of the cookie captured
-inside the window can mint pairs until it closes (bounded by the auth endpoints' rate limit). Each such pair is an
+inside the window can mint pairs until it closes (bounded by `auth/refresh`'s own rate limit,
+`NodeAuthRateLimits.RefreshPolicy`: 60/min per client IP, apart from the 10/min the password endpoints share, because
+every SPA load spends a refresh). Each such pair is an
 independent session with the full refresh lifetime, so a cookie stolen inside the window is no longer revealed by
 the other client being signed out: only logout, a password change or a reset ends it.
 

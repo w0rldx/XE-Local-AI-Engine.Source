@@ -138,7 +138,7 @@ export function UsageDashboard() {
 					days: retentionDays,
 				})}
 				actions={
-					<Button variant="subtle" leftSection={<IconRefresh size={16} />} onClick={() => refetch()} disabled={isFetching}>
+					<Button variant="default" leftSection={<IconRefresh size={16} />} onClick={() => refetch()} disabled={isFetching}>
 						{t("common.refresh", "Refresh")}
 					</Button>
 				}

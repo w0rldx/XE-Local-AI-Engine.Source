@@ -1,4 +1,4 @@
-import { ActionIcon, Button, Flex, Group, NumberInput, Stack, Text, TextInput } from "@mantine/core";
+import { ActionIcon, Button, Group, NumberInput, Stack, Text, TextInput } from "@mantine/core";
 import { IconPlus, IconTrash } from "@tabler/icons-react";
 import type { Dispatch } from "react";
 import { useTranslation } from "react-i18next";
@@ -34,14 +34,12 @@ export function AzureCloudSettingsDynamicFields(props: AzureCloudSettingsDynamic
 				</Text>
 				{formValues.models.map((model, index) => (
 					<Group key={modelRowIds[index]} align="flex-end" gap="xs" wrap="nowrap">
-						<Flex
-							direction={{ base: "column", sm: "row" }}
-							gap="xs"
-							align={{ base: "stretch", sm: "flex-end" }}
-							style={{ flex: "1 1 auto", minWidth: 0 }}
-						>
+						{/* A wrapping row, not a column switch: the fields share one line where it fits and take a full line
+						    each where it does not, so every field has the same width on a phone and no flex basis turns into
+						    a block of empty height beside the delete button. */}
+						<Group gap="xs" align="flex-end" style={{ flex: "1 1 auto", minWidth: 0 }}>
 							<TextInput
-								style={{ flex: "1 1 auto", minWidth: 0 }}
+								style={{ flex: "1 1 12rem", minWidth: 0 }}
 								aria-label={t("pages.cloudSettings.azure.deploymentNameLabel", "Deployment name")}
 								label={index === 0 ? t("pages.cloudSettings.azure.deploymentNameLabel", "Deployment name") : undefined}
 								placeholder={t("pages.cloudSettings.azure.deploymentNamePlaceholder", "gpt-4o")}
@@ -53,7 +51,7 @@ export function AzureCloudSettingsDynamicFields(props: AzureCloudSettingsDynamic
 								onBlur={() => dispatch({ type: "touchField", field: "models" })}
 							/>
 							<TextInput
-								style={{ flex: "1 1 auto", minWidth: 0 }}
+								style={{ flex: "1 1 12rem", minWidth: 0 }}
 								aria-label={t("pages.cloudSettings.azure.displayLabelLabel", "Display label (optional)")}
 								label={index === 0 ? t("pages.cloudSettings.azure.displayLabelLabel", "Display label (optional)") : undefined}
 								placeholder={t("pages.cloudSettings.azure.displayLabelPlaceholder", "GPT-4o")}
@@ -64,7 +62,7 @@ export function AzureCloudSettingsDynamicFields(props: AzureCloudSettingsDynamic
 								}}
 							/>
 							<NumberInput
-								style={{ flex: "0 1 12rem", minWidth: 0 }}
+								style={{ flex: "1 1 10rem", minWidth: 0 }}
 								aria-label={t("pages.cloudSettings.azure.contextLengthLabel", "Context length (tokens)")}
 								label={index === 0 ? t("pages.cloudSettings.azure.contextLengthLabel", "Context length (tokens)") : undefined}
 								placeholder={t("pages.cloudSettings.azure.contextLengthPlaceholder", "128000")}
@@ -77,7 +75,7 @@ export function AzureCloudSettingsDynamicFields(props: AzureCloudSettingsDynamic
 								onChange={(value) => dispatch({ type: "setModelField", index, field: "contextLength", value: String(value) })}
 								onBlur={() => dispatch({ type: "touchField", field: "models" })}
 							/>
-						</Flex>
+						</Group>
 						<ActionIcon
 							variant="subtle"
 							color="red"

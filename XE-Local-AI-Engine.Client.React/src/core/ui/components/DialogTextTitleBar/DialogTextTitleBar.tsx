@@ -23,7 +23,11 @@ export function DialogTextTitleBar({
 	// div) so the fullscreen toggle and close button line up with each other and with the title.
 	return (
 		<Group justify="space-between" align="center" wrap="nowrap" gap="sm" mb="md">
-			<Text size="xl">{title}</Text>
+			{/* minWidth 0 + an anywhere-break: an unspaced title (a file name) wraps instead of widening the dialog past a
+			    phone's edge and pushing the action icons off-screen. */}
+			<Text size="xl" style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+				{title}
+			</Text>
 			<Group gap="xs" align="center" wrap="nowrap">
 				{showFullScreenToggle ? (
 					<Tooltip label={fullScreenLabel}>

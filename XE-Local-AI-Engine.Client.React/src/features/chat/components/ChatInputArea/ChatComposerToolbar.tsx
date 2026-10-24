@@ -3,7 +3,9 @@ import {
 	IconAdjustments,
 	IconBooks,
 	IconBrain,
+	IconCheck,
 	IconDeviceDesktop,
+	IconDots,
 	IconPaperclip,
 	IconPlayerStopFilled,
 	IconSend,
@@ -25,6 +27,8 @@ import { VoiceComposerControls } from "@/features/voice/components/VoiceComposer
 
 interface ChatComposerToolbarProps {
 	toolbarRef: RefObject<HTMLDivElement | null>;
+	/** Phone or phone-landscape viewport: secondary toggles fold into an overflow menu and Send drops its label. */
+	compact: boolean;
 	disabled: boolean;
 	isSending: boolean;
 	modelOptions: ModelOption[];
@@ -77,6 +81,7 @@ interface ChatComposerToolbarProps {
 // right edge of whichever row it ends up on, including a row of its own.
 export function ChatComposerToolbar({
 	toolbarRef,
+	compact,
 	disabled,
 	isSending,
 	modelOptions,
@@ -120,6 +125,125 @@ export function ChatComposerToolbar({
 	onSubmit,
 }: ChatComposerToolbarProps) {
 	const { t } = useTranslation();
+	const reasoningLabel = t("pages.chat.reasoningEffortLabel", "Reasoning effort");
+	const reasoningItems = (
+		<>
+			<Menu.Label>{reasoningLabel}</Menu.Label>
+			{availableReasoningEfforts.map((effort) => (
+				<Menu.Item
+					key={effort}
+					data-testid={`chat-reasoning-effort-option-${effort}`}
+					disabled={reasoningMenuDisabled}
+					onClick={() => onReasoningEffortChange(effort)}
+					color={effort === reasoningEffort && effort !== "none" ? "primary" : undefined}
+				>
+					{t(`pages.chat.reasoningEffortOptions.${effort}`, effort)}
+				</Menu.Item>
+			))}
+		</>
+	);
+	const sendControls = (
+		<>
+			{isSending && answerNowMessageId ? <AnswerNowButton messageId={answerNowMessageId} /> : null}
+			<Button
+				data-testid="chat-send-button"
+				onClick={() => {
+					if (isSending) {
+						onCancel();
+						return;
+					}
+					onSubmit();
+				}}
+				disabled={sendDisabled}
+				color={isSending ? "red" : "dark"}
+				size="sm"
+				px={compact ? "xs" : undefined}
+				style={{ flexShrink: 0 }}
+				leftSection={compact ? undefined : isSending ? <IconPlayerStopFilled size={13} /> : <IconSend size={13} />}
+				aria-label={isSending ? t("pages.chat.stop", "Stop") : t("pages.chat.send", "Send")}
+			>
+				{compact ? (
+					isSending ? (
+						<IconPlayerStopFilled size={15} />
+					) : (
+						<IconSend size={15} />
+					)
+				) : isSending ? (
+					t("pages.chat.stop", "Stop")
+				) : (
+					t("pages.chat.send", "Send")
+				)}
+			</Button>
+		</>
+	);
+
+	// Compact: the reasoning, local-tools, knowledge-base and sampling toggles fold into one overflow menu, and Send joins
+	// the wrapping row instead of reserving a column of its own, so a phone keeps the composer to about two rows.
+	// The folded toggles are out of sight, so the trigger carries the same active look the desktop toggles have whenever
+	// any of them is on — otherwise a phone sends with reasoning, local tools or the knowledge base enabled unannounced.
+	const overflowActive =
+		reasoningEnabled ||
+		(showLocalToolControls && toolsEnabled) ||
+		(showKnowledgeBaseControls && knowledgeBaseEnabled && knowledgeBaseHasDocuments);
+	const overflowMenu = compact ? (
+		<Menu position="top-end" offset={8} withinPortal={true}>
+			<Menu.Target>
+				<Tooltip label={t("pages.chat.composer.moreControls", "More composer options")}>
+					<ActionIcon
+						size={36}
+						variant={overflowActive ? "light" : "subtle"}
+						color={overflowActive ? "primary" : "gray"}
+						data-active={overflowActive ? "true" : undefined}
+						aria-label={t("pages.chat.composer.moreControls", "More composer options")}
+						data-testid="chat-composer-overflow-trigger"
+					>
+						<IconDots size={15} />
+					</ActionIcon>
+				</Tooltip>
+			</Menu.Target>
+			<Menu.Dropdown>
+				{reasoningItems}
+				{showLocalToolControls || showKnowledgeBaseControls || showSamplingOptions ? <Menu.Divider /> : null}
+				{showLocalToolControls ? (
+					<Menu.Item
+						leftSection={<IconDeviceDesktop size={15} />}
+						rightSection={toolsEnabled ? <IconCheck size={15} /> : null}
+						disabled={disabled || isSending || !onToggleTools}
+						onClick={onToggleTools}
+						data-testid="chat-local-tools-toggle"
+					>
+						{toolsEnabled
+							? t("pages.chat.localToolsEnabled", "Local tools enabled")
+							: t("pages.chat.localToolsDisabled", "Local tools disabled")}
+					</Menu.Item>
+				) : null}
+				{showKnowledgeBaseControls ? (
+					<Menu.Item
+						leftSection={<IconBooks size={15} />}
+						rightSection={knowledgeBaseEnabled && knowledgeBaseHasDocuments ? <IconCheck size={15} /> : null}
+						disabled={disabled || isSending || !onToggleKnowledgeBase || !knowledgeBaseHasDocuments}
+						onClick={onToggleKnowledgeBase}
+						data-testid="chat-knowledge-base-toggle"
+					>
+						{!knowledgeBaseHasDocuments
+							? t("pages.chat.knowledgeBaseNoDocuments", "No indexed documents to search")
+							: knowledgeBaseEnabled
+								? t("pages.chat.knowledgeBaseEnabled", "Knowledge base enabled")
+								: t("pages.chat.knowledgeBaseDisabled", "Knowledge base disabled")}
+					</Menu.Item>
+				) : null}
+				{showSamplingOptions ? (
+					<Menu.Item
+						leftSection={<IconAdjustments size={15} />}
+						onClick={onOpenSamplingOptions}
+						data-testid="chat-sampling-options-trigger"
+					>
+						{t("pages.chat.composer.samplingOptions", "Advanced sampling options")}
+					</Menu.Item>
+				) : null}
+			</Menu.Dropdown>
+		</Menu>
+	) : null;
 
 	return (
 		<Group ref={toolbarRef} align="center" wrap="wrap" gap="xs" style={{ width: "100%" }}>
@@ -131,36 +255,26 @@ export function ChatComposerToolbar({
 					disabled={modelSelectorDisabled || isSending || modelOptions.length === 0}
 					onModelChange={onModelChange}
 				/>
-				<Menu position="top-start" offset={8} withinPortal={true} disabled={reasoningMenuDisabled}>
-					<Menu.Target>
-						<Tooltip label={t("pages.chat.reasoningEffortLabel", "Reasoning effort")}>
-							<ActionIcon
-								size={36}
-								variant={reasoningEnabled ? "light" : "subtle"}
-								color={reasoningEnabled ? "primary" : "gray"}
-								disabled={reasoningMenuDisabled}
-								aria-label={t("pages.chat.reasoningEffortLabel", "Reasoning effort")}
-								data-testid="chat-reasoning-effort-menu-trigger"
-							>
-								<IconBrain size={15} />
-							</ActionIcon>
-						</Tooltip>
-					</Menu.Target>
-					<Menu.Dropdown>
-						<Menu.Label>{t("pages.chat.reasoningEffortLabel", "Reasoning effort")}</Menu.Label>
-						{availableReasoningEfforts.map((effort) => (
-							<Menu.Item
-								key={effort}
-								data-testid={`chat-reasoning-effort-option-${effort}`}
-								onClick={() => onReasoningEffortChange(effort)}
-								color={effort === reasoningEffort && effort !== "none" ? "primary" : undefined}
-							>
-								{t(`pages.chat.reasoningEffortOptions.${effort}`, effort)}
-							</Menu.Item>
-						))}
-					</Menu.Dropdown>
-				</Menu>
-				{showLocalToolControls ? (
+				{compact ? null : (
+					<Menu position="top-start" offset={8} withinPortal={true} disabled={reasoningMenuDisabled}>
+						<Menu.Target>
+							<Tooltip label={reasoningLabel}>
+								<ActionIcon
+									size={36}
+									variant={reasoningEnabled ? "light" : "subtle"}
+									color={reasoningEnabled ? "primary" : "gray"}
+									disabled={reasoningMenuDisabled}
+									aria-label={reasoningLabel}
+									data-testid="chat-reasoning-effort-menu-trigger"
+								>
+									<IconBrain size={15} />
+								</ActionIcon>
+							</Tooltip>
+						</Menu.Target>
+						<Menu.Dropdown>{reasoningItems}</Menu.Dropdown>
+					</Menu>
+				)}
+				{showLocalToolControls && !compact ? (
 					<Tooltip
 						label={
 							toolsEnabled
@@ -186,7 +300,7 @@ export function ChatComposerToolbar({
 				{showLocalToolControls && toolsEnabled ? (
 					<WebContentAutoAcceptToggle conversationId={conversationId} disabled={disabled || isSending} />
 				) : null}
-				{showKnowledgeBaseControls ? (
+				{showKnowledgeBaseControls && !compact ? (
 					<DisabledReasonTooltip
 						// Only the empty-corpus reason earns a keyboard stop; while sending the control is simply busy.
 						controlDisabled={!knowledgeBaseHasDocuments}
@@ -251,7 +365,8 @@ export function ChatComposerToolbar({
 						)}
 					</FileButton>
 				) : null}
-				{showSamplingOptions ? (
+				{overflowMenu}
+				{showSamplingOptions && !compact ? (
 					<Tooltip label={t("pages.chat.composer.samplingOptions", "Advanced sampling options")}>
 						<ActionIcon
 							size={36}
@@ -292,26 +407,13 @@ export function ChatComposerToolbar({
 						<ContextStateButton />
 					</Group>
 				) : null}
+				{compact ? (
+					<Group gap="xs" wrap="nowrap" ml="auto">
+						{sendControls}
+					</Group>
+				) : null}
 			</Group>
-			{isSending && answerNowMessageId ? <AnswerNowButton messageId={answerNowMessageId} /> : null}
-			<Button
-				data-testid="chat-send-button"
-				onClick={() => {
-					if (isSending) {
-						onCancel();
-						return;
-					}
-					onSubmit();
-				}}
-				disabled={sendDisabled}
-				color={isSending ? "red" : "dark"}
-				size="sm"
-				style={{ flexShrink: 0 }}
-				leftSection={isSending ? <IconPlayerStopFilled size={13} /> : <IconSend size={13} />}
-				aria-label={isSending ? t("pages.chat.stop", "Stop") : t("pages.chat.send", "Send")}
-			>
-				{isSending ? t("pages.chat.stop", "Stop") : t("pages.chat.send", "Send")}
-			</Button>
+			{compact ? null : sendControls}
 		</Group>
 	);
 }

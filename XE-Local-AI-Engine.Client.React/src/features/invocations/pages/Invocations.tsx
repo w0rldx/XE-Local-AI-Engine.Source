@@ -1,17 +1,4 @@
-import {
-	ActionIcon,
-	Badge,
-	Button,
-	CopyButton,
-	Group,
-	Loader,
-	SimpleGrid,
-	Stack,
-	Table,
-	Text,
-	Title,
-	Tooltip,
-} from "@mantine/core";
+import { ActionIcon, Badge, Button, CopyButton, Group, Loader, SimpleGrid, Stack, Text, Title, Tooltip } from "@mantine/core";
 import { IconCheck, IconCopy, IconHistory, IconPlayerPlay, IconRefresh } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import type { TFunction } from "i18next";
@@ -24,6 +11,7 @@ import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import { ResponsiveTable } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { toInvocationMonitor } from "@/features/invocations/models/InvocationMonitorMappers";
 import type { InvocationCurrentDto, InvocationHistoryDto } from "@/features/invocations/models/InvocationMonitorModel";
@@ -170,37 +158,67 @@ function CurrentInvocation({ current, title }: { readonly current: InvocationCur
 	);
 }
 
-function HistoryRows({ history }: { readonly history: InvocationHistoryDto[] }) {
+function HistoryTable({ history }: { readonly history: InvocationHistoryDto[] }) {
 	const { t } = useTranslation();
-	if (history.length === 0) {
-		return (
-			<Table.Tr>
-				<Table.Td colSpan={8}>
-					<EmptyState message={t("pages.invocations.monitor.history.empty", "No completed invocations recorded yet.")} />
-				</Table.Td>
-			</Table.Tr>
-		);
-	}
 
-	return history.map((entry) => (
-		<Table.Tr key={entry.invocationId}>
-			<Table.Td>
-				<Text size="sm" style={{ wordBreak: "break-all" }}>
-					{entry.invocationId}
-				</Text>
-				<TraceIdLine traceId={entry.traceId} />
-			</Table.Td>
-			<Table.Td>
-				<InvocationStatusBadge run={entry} />
-			</Table.Td>
-			<Table.Td>{formatInvocationText(entry.modelUsed)}</Table.Td>
-			<Table.Td>{formatInvocationTimestamp(entry.completedAt)}</Table.Td>
-			<Table.Td>{formatInvocationDuration(entry.durationMs)}</Table.Td>
-			<Table.Td>{entry.streamedChunkCount}</Table.Td>
-			<Table.Td>{entry.streamedThinkingChunkCount}</Table.Td>
-			<Table.Td>{formatInvocationText(getInvocationErrorText(entry, t))}</Table.Td>
-		</Table.Tr>
-	));
+	return (
+		<ResponsiveTable
+			rows={history}
+			rowKey={(entry) => entry.invocationId}
+			minWidth={980}
+			empty={<EmptyState message={t("pages.invocations.monitor.history.empty", "No completed invocations recorded yet.")} />}
+			columns={[
+				{
+					key: "invocation",
+					header: t("pages.invocations.monitor.history.columns.invocation", "Invocation"),
+					primary: true,
+					cell: (entry) => (
+						<>
+							<Text size="sm" style={{ wordBreak: "break-all" }}>
+								{entry.invocationId}
+							</Text>
+							<TraceIdLine traceId={entry.traceId} />
+						</>
+					),
+				},
+				{
+					key: "status",
+					header: t("pages.invocations.monitor.history.columns.status", "Status"),
+					cell: (entry) => <InvocationStatusBadge run={entry} />,
+				},
+				{
+					key: "model",
+					header: t("pages.invocations.monitor.history.columns.model", "Model"),
+					cell: (entry) => formatInvocationText(entry.modelUsed),
+				},
+				{
+					key: "completed",
+					header: t("pages.invocations.monitor.history.columns.completed", "Completed"),
+					cell: (entry) => formatInvocationTimestamp(entry.completedAt),
+				},
+				{
+					key: "duration",
+					header: t("pages.invocations.monitor.history.columns.duration", "Duration"),
+					cell: (entry) => formatInvocationDuration(entry.durationMs),
+				},
+				{
+					key: "chunks",
+					header: t("pages.invocations.monitor.history.columns.chunks", "Chunks"),
+					cell: (entry) => entry.streamedChunkCount,
+				},
+				{
+					key: "thinking",
+					header: t("pages.invocations.monitor.history.columns.thinking", "Thinking"),
+					cell: (entry) => entry.streamedThinkingChunkCount,
+				},
+				{
+					key: "result",
+					header: t("pages.invocations.monitor.history.columns.result", "Result"),
+					cell: (entry) => formatInvocationText(getInvocationErrorText(entry, t)),
+				},
+			]}
+		/>
+	);
 }
 
 function InvocationStatusBadge({ run }: { run: InvocationCurrentDto | InvocationHistoryDto }) {
@@ -283,25 +301,7 @@ export function Invocations() {
 						count: monitor?.historyCapacity ?? 0,
 					})}
 				</Text>
-				<Table.ScrollContainer minWidth={980}>
-					<Table striped={true} highlightOnHover={true} verticalSpacing="sm">
-						<Table.Thead>
-							<Table.Tr>
-								<Table.Th>{t("pages.invocations.monitor.history.columns.invocation", "Invocation")}</Table.Th>
-								<Table.Th>{t("pages.invocations.monitor.history.columns.status", "Status")}</Table.Th>
-								<Table.Th>{t("pages.invocations.monitor.history.columns.model", "Model")}</Table.Th>
-								<Table.Th>{t("pages.invocations.monitor.history.columns.completed", "Completed")}</Table.Th>
-								<Table.Th>{t("pages.invocations.monitor.history.columns.duration", "Duration")}</Table.Th>
-								<Table.Th>{t("pages.invocations.monitor.history.columns.chunks", "Chunks")}</Table.Th>
-								<Table.Th>{t("pages.invocations.monitor.history.columns.thinking", "Thinking")}</Table.Th>
-								<Table.Th>{t("pages.invocations.monitor.history.columns.result", "Result")}</Table.Th>
-							</Table.Tr>
-						</Table.Thead>
-						<Table.Tbody>
-							<HistoryRows history={history} />
-						</Table.Tbody>
-					</Table>
-				</Table.ScrollContainer>
+				<HistoryTable history={history} />
 			</SectionCard>
 		</PageShell>
 	);

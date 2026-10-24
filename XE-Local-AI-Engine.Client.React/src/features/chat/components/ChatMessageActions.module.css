@@ -1,0 +1,9 @@
+/* Below the theme's `sm` the 22px action icons are too small to hit with a finger. min-width/min-height grow the hit
+   area without touching Mantine's inline --ai-size, so the desktop row keeps its compact look. */
+@media (width < 40em) {
+
+	.actions button {
+		min-width: 32px;
+		min-height: 32px;
+	}
+}

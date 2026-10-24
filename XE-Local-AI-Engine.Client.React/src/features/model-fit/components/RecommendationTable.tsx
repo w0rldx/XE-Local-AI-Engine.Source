@@ -1,4 +1,4 @@
-import { Badge, Button, Group, Stack, Table, Text, Tooltip } from "@mantine/core";
+import { Badge, Button, Group, Stack, Text, Tooltip } from "@mantine/core";
 import {
 	IconAlertTriangle,
 	IconCheck,
@@ -10,6 +10,7 @@ import {
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { ResponsiveTable, type ResponsiveTableColumn } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { useTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
 import {
@@ -262,143 +263,176 @@ export function RecommendationTable({ recommendations, onDownload, downloadingMo
 
 	const pagination = useTablePagination(recommendations, { storageKey: "model-fit-recommendations" });
 
+	const columns: readonly ResponsiveTableColumn<ModelFitRecommendation>[] = [
+		{
+			key: "rank",
+			header: t("pages.modelFit.recommendations.columns.rank", "Rank"),
+			cell: (recommendation) => recommendation.rank,
+		},
+		{
+			key: "model",
+			header: t("pages.modelFit.recommendations.columns.model", "Model"),
+			primary: true,
+			cell: (recommendation) => (
+				<>
+					<Group gap={4} wrap="wrap" align="center">
+						<Text size="sm" fw={500}>
+							{recommendation.catalogDisplayName ?? recommendation.modelName}
+						</Text>
+						<TierBadge tier={recommendation.tier} rank={recommendation.rank} />
+						<TestedBadge tested={recommendation.tested} rank={recommendation.rank} />
+						<GatedBadge isGated={recommendation.isGated} rank={recommendation.rank} />
+					</Group>
+					{recommendation.catalogDisplayName ? (
+						<Text size="xs" c="dimmed">
+							{recommendation.modelName}
+						</Text>
+					) : recommendation.providerModelName ? (
+						<Text size="xs" c="dimmed">
+							{recommendation.providerModelName}
+						</Text>
+					) : null}
+					{recommendation.catalogNotes ? (
+						<Text size="xs" c="dimmed" data-testid={`model-fit-catalog-notes-${recommendation.rank}`}>
+							{recommendation.catalogNotes}
+						</Text>
+					) : null}
+					{!recommendation.isTrustedPublisher ? (
+						<Tooltip
+							label={t(
+								"pages.modelFit.recommendations.untrustedPublisherHint",
+								"This publisher is not a known GGUF packager — review the repo before downloading.",
+							)}
+							multiline={true}
+							maw={260}
+						>
+							<Badge
+								color="yellow"
+								variant="light"
+								size="sm"
+								mt={4}
+								leftSection={<IconAlertTriangle size={12} />}
+								data-testid={`model-fit-untrusted-badge-${recommendation.rank}`}
+							>
+								{t("pages.modelFit.recommendations.untrustedPublisher", "Unverified publisher")}
+							</Badge>
+						</Tooltip>
+					) : null}
+				</>
+			),
+		},
+		{
+			key: "score",
+			header: t("pages.modelFit.recommendations.columns.score", "Score"),
+			cell: (recommendation) => formatModelFitMetric(recommendation.score, "", 1),
+		},
+		{
+			key: "fit",
+			header: t("pages.modelFit.recommendations.columns.fit", "Fit"),
+			cell: (recommendation) => (
+				<Stack gap={4}>
+					<FitCell recommendation={recommendation} />
+					<MoeOffloadBadge recommendation={recommendation} />
+				</Stack>
+			),
+		},
+		{
+			key: "tps",
+			header: t("pages.modelFit.recommendations.columns.tps", "Est. TPS"),
+			cell: (recommendation) => formatModelFitMetric(recommendation.estimatedTokensPerSecond, "", 1),
+		},
+		{
+			key: "context",
+			header: t("pages.modelFit.recommendations.columns.context", "Context"),
+			cell: (recommendation) => formatContextTokens(recommendation.contextTokens),
+		},
+		{
+			key: "quantization",
+			header: t("pages.modelFit.recommendations.columns.quantization", "Quant"),
+			cell: (recommendation) => recommendation.quantization ?? "—",
+		},
+		{
+			key: "ram",
+			header: t("pages.modelFit.recommendations.columns.ram", "Req. RAM"),
+			cell: (recommendation) => formatMemoryMb(recommendation.requiredRamMb),
+		},
+		{
+			key: "vram",
+			header: t("pages.modelFit.recommendations.columns.vram", "Req. VRAM"),
+			cell: (recommendation) => (
+				<>
+					{formatMemoryMb(recommendation.requiredVramMb)}
+					<KvQuantHint recommendation={recommendation} />
+					<KvPerTokenHint recommendation={recommendation} />
+				</>
+			),
+		},
+		{
+			key: "released",
+			header: t("pages.modelFit.recommendations.columns.released", "Released"),
+			// Date-only, locale-formatted; the raw ISO value stays available as the tooltip.
+			cell: (recommendation) => (
+				<span title={recommendation.releaseDate ?? undefined}>{formatModelFitReleaseDate(recommendation.releaseDate)}</span>
+			),
+		},
+		{
+			key: "status",
+			header: t("pages.modelFit.recommendations.columns.installed", "Status"),
+			// The max-content floor stops the table's auto layout from clipping the badge to "I…".
+			cell: (recommendation) =>
+				recommendation.isInstalled ? (
+					<Badge color="green" variant="light" leftSection={<IconCheck size={12} />} style={{ minWidth: "max-content" }}>
+						{t("pages.modelFit.recommendations.installed", "Installed")}
+					</Badge>
+				) : recommendation.pullModelName ? (
+					<Badge color="blue" variant="light" leftSection={<IconDownload size={12} />} style={{ minWidth: "max-content" }}>
+						{t("pages.modelFit.recommendations.available", "Available")}
+					</Badge>
+				) : (
+					<Badge color="gray" variant="light" style={{ minWidth: "max-content" }}>
+						{t("pages.modelFit.recommendations.catalogOnly", "Catalog only")}
+					</Badge>
+				),
+		},
+	];
+
 	return (
 		<Stack gap="sm">
-			<Table.ScrollContainer minWidth={1040}>
-				<Table striped={true} highlightOnHover={true} verticalSpacing="sm" data-testid="model-fit-recommendations-table">
-					<Table.Thead>
-						<Table.Tr>
-							<Table.Th>{t("pages.modelFit.recommendations.columns.rank", "Rank")}</Table.Th>
-							<Table.Th>{t("pages.modelFit.recommendations.columns.model", "Model")}</Table.Th>
-							<Table.Th>{t("pages.modelFit.recommendations.columns.score", "Score")}</Table.Th>
-							<Table.Th>{t("pages.modelFit.recommendations.columns.fit", "Fit")}</Table.Th>
-							<Table.Th>{t("pages.modelFit.recommendations.columns.tps", "Est. TPS")}</Table.Th>
-							<Table.Th>{t("pages.modelFit.recommendations.columns.context", "Context")}</Table.Th>
-							<Table.Th>{t("pages.modelFit.recommendations.columns.quantization", "Quant")}</Table.Th>
-							<Table.Th>{t("pages.modelFit.recommendations.columns.ram", "Req. RAM")}</Table.Th>
-							<Table.Th>{t("pages.modelFit.recommendations.columns.vram", "Req. VRAM")}</Table.Th>
-							<Table.Th>{t("pages.modelFit.recommendations.columns.released", "Released")}</Table.Th>
-							<Table.Th>{t("pages.modelFit.recommendations.columns.installed", "Status")}</Table.Th>
-							{showActions ? <Table.Th>{t("pages.modelFit.recommendations.columns.action", "Action")}</Table.Th> : null}
-						</Table.Tr>
-					</Table.Thead>
-					<Table.Tbody>
-						{pagination.pageItems.map((recommendation) => (
-							<Table.Tr
-								key={`${recommendation.rank}-${recommendation.modelName}`}
-								data-testid={`model-fit-recommendation-row-${recommendation.rank}`}
-							>
-								<Table.Td>{recommendation.rank}</Table.Td>
-								<Table.Td>
-									<Group gap={4} wrap="wrap" align="center">
-										<Text size="sm" fw={500}>
-											{recommendation.catalogDisplayName ?? recommendation.modelName}
-										</Text>
-										<TierBadge tier={recommendation.tier} rank={recommendation.rank} />
-										<TestedBadge tested={recommendation.tested} rank={recommendation.rank} />
-										<GatedBadge isGated={recommendation.isGated} rank={recommendation.rank} />
-									</Group>
-									{recommendation.catalogDisplayName ? (
-										<Text size="xs" c="dimmed">
-											{recommendation.modelName}
-										</Text>
-									) : recommendation.providerModelName ? (
-										<Text size="xs" c="dimmed">
-											{recommendation.providerModelName}
-										</Text>
-									) : null}
-									{recommendation.catalogNotes ? (
-										<Text size="xs" c="dimmed" data-testid={`model-fit-catalog-notes-${recommendation.rank}`}>
-											{recommendation.catalogNotes}
-										</Text>
-									) : null}
-									{!recommendation.isTrustedPublisher ? (
-										<Tooltip
-											label={t(
-												"pages.modelFit.recommendations.untrustedPublisherHint",
-												"This publisher is not a known GGUF packager — review the repo before downloading.",
-											)}
-											multiline={true}
-											maw={260}
-										>
-											<Badge
-												color="yellow"
-												variant="light"
-												size="sm"
-												mt={4}
-												leftSection={<IconAlertTriangle size={12} />}
-												data-testid={`model-fit-untrusted-badge-${recommendation.rank}`}
-											>
-												{t("pages.modelFit.recommendations.untrustedPublisher", "Unverified publisher")}
-											</Badge>
-										</Tooltip>
-									) : null}
-								</Table.Td>
-								<Table.Td>{formatModelFitMetric(recommendation.score, "", 1)}</Table.Td>
-								<Table.Td>
-									<Stack gap={4}>
-										<FitCell recommendation={recommendation} />
-										<MoeOffloadBadge recommendation={recommendation} />
-									</Stack>
-								</Table.Td>
-								<Table.Td>{formatModelFitMetric(recommendation.estimatedTokensPerSecond, "", 1)}</Table.Td>
-								<Table.Td>{formatContextTokens(recommendation.contextTokens)}</Table.Td>
-								<Table.Td>{recommendation.quantization ?? "—"}</Table.Td>
-								<Table.Td>{formatMemoryMb(recommendation.requiredRamMb)}</Table.Td>
-								<Table.Td>
-									{formatMemoryMb(recommendation.requiredVramMb)}
-									<KvQuantHint recommendation={recommendation} />
-									<KvPerTokenHint recommendation={recommendation} />
-								</Table.Td>
-								{/* Date-only, locale-formatted; the raw ISO value stays available as the cell's tooltip. */}
-								<Table.Td title={recommendation.releaseDate ?? undefined}>
-									{formatModelFitReleaseDate(recommendation.releaseDate)}
-								</Table.Td>
-								<Table.Td>
-									{recommendation.isInstalled ? (
-										<Badge color="green" variant="light" leftSection={<IconCheck size={12} />}>
-											{t("pages.modelFit.recommendations.installed", "Installed")}
-										</Badge>
-									) : recommendation.pullModelName ? (
-										<Badge color="blue" variant="light" leftSection={<IconDownload size={12} />}>
-											{t("pages.modelFit.recommendations.available", "Available")}
-										</Badge>
-									) : (
-										<Badge color="gray" variant="light">
-											{t("pages.modelFit.recommendations.catalogOnly", "Catalog only")}
-										</Badge>
-									)}
-								</Table.Td>
-								{showActions ? (
-									<Table.Td>
-										{/* Download is offered for a not-installed row that carries a model name to download. Installed rows
-										    and catalog-only rows (pullModelName === null) show nothing actionable. */}
-										{!recommendation.isInstalled && recommendation.pullModelName ? (
-											<Button
-												size="xs"
-												variant="light"
-												leftSection={<IconCloudDownload size={14} />}
-												loading={downloadingModelName === recommendation.pullModelName}
-												disabled={downloadingModelName === recommendation.pullModelName}
-												onClick={() => onDownload?.(recommendation)}
-												data-testid={`model-fit-download-button-${recommendation.rank}`}
-											>
-												{downloadingModelName === recommendation.pullModelName
-													? t("pages.modelFit.recommendations.downloading", "Downloading…")
-													: t("pages.modelFit.recommendations.download", "Download")}
-											</Button>
-										) : (
-											<Text size="xs" c="dimmed">
-												—
-											</Text>
-										)}
-									</Table.Td>
-								) : null}
-							</Table.Tr>
-						))}
-					</Table.Tbody>
-				</Table>
-			</Table.ScrollContainer>
+			<ResponsiveTable
+				rows={pagination.pageItems}
+				columns={columns}
+				rowKey={(recommendation) => `${recommendation.rank}-${recommendation.modelName}`}
+				rowTestId={(recommendation) => `model-fit-recommendation-row-${recommendation.rank}`}
+				minWidth={1040}
+				data-testid="model-fit-recommendations-table"
+				actionsHeader={t("pages.modelFit.recommendations.columns.action", "Action")}
+				actions={
+					showActions
+						? (recommendation) =>
+								// Download is offered for a not-installed row that carries a model name to download. Installed rows
+								// and catalog-only rows (pullModelName === null) show nothing actionable.
+								!recommendation.isInstalled && recommendation.pullModelName ? (
+									<Button
+										size="xs"
+										variant="light"
+										leftSection={<IconCloudDownload size={14} />}
+										loading={downloadingModelName === recommendation.pullModelName}
+										disabled={downloadingModelName === recommendation.pullModelName}
+										onClick={() => onDownload?.(recommendation)}
+										data-testid={`model-fit-download-button-${recommendation.rank}`}
+									>
+										{downloadingModelName === recommendation.pullModelName
+											? t("pages.modelFit.recommendations.downloading", "Downloading…")
+											: t("pages.modelFit.recommendations.download", "Download")}
+									</Button>
+								) : (
+									<Text size="xs" c="dimmed">
+										—
+									</Text>
+								)
+						: undefined
+				}
+			/>
 			<TablePaginationFooter
 				page={pagination.page}
 				pageCount={pagination.pageCount}

@@ -718,8 +718,13 @@ shell's static layout classes (`core/layout/components/Layout/Layout.tsx`). Do n
 ### Responsive layout: breakpoints come from `LayoutBreakpoints.ts`
 
 **Never write a breakpoint literal.** Every cutoff lives in `core/layout/constants/LayoutBreakpoints.ts`
-(`COMPACT_CONTROLS_BREAKPOINT`, `DESKTOP_NAV_BREAKPOINT`, `TWO_PANE_BREAKPOINT`), and its sibling test pins
-them to the Mantine theme so a theme change fails loudly instead of drifting the shell apart.
+(`COMPACT_CONTROLS_BREAKPOINT`, `DESKTOP_NAV_BREAKPOINT`, `DESKTOP_NAV_MIN_HEIGHT`, `TWO_PANE_BREAKPOINT`), and its
+sibling test pins them to the Mantine theme so a theme change fails loudly instead of drifting the shell apart.
+The desktop shell (sidebar + desktop header) is one predicate, `isDesktopShell(width, height)`: theme `lg` wide AND
+tall enough, so a portrait tablet and a phone in landscape get the mobile shell. `isCompactViewport(width, height)`
+marks where a page must spend the least on chrome (chat composer overflow menu, node-settings section select). Branch
+on these, never on `DESKTOP_NAV_BREAKPOINT` alone; and remember a page beside the sidebar has ~250px less than the
+viewport, so a grid that adds columns at `md` usually wants `lg`.
 
 Three mechanisms cover the app; copy the one that matches what has to change:
 
@@ -742,10 +747,16 @@ Three mechanisms cover the app; copy the one that matches what has to change:
   exactly that, in `features/chat/components/ChatDisplayShell.tsx` (its message list, against
   `TWO_PANE_BREAKPOINT`) and `ChatInputArea.tsx` (its composer's context-usage readout).
 
-**Wide content owns its own horizontal scroller.** The shell clips both axes (`Layout`) and `FullHeightPage`
-deliberately clips X, so a table or diagram wider than its pane must carry its own `Table.ScrollContainer` or
-`ScrollArea` — otherwise it is silently cut off, not scrollable. Reference:
-`features/mcp/components/McpServerList.tsx`.
+**A list of records is a `ResponsiveTable`.** A page or section list with per-row actions uses
+`core/ui/components/ResponsiveTable/`: the striped table wherever it fits or the desktop shell is up, one card per row
+(primary column as title, actions as a wrapping button row) when its own container is narrower than `minWidth`, so
+no action hides behind a horizontal scroll on a tablet or phone. Reference: `features/mcp/components/McpServerList.tsx`.
+
+**Other wide content owns its own horizontal scroller.** The shell clips both axes (`Layout`) and `FullHeightPage`
+deliberately clips X, so an analysis grid, an inline table inside a form or detail view, or a diagram wider than its
+pane must carry its own `Table.ScrollContainer` or `ScrollArea` — otherwise it is silently cut off, not scrollable.
+Dialogs scroll vertically only (`DialogShell` holds its content to the dialog width), and every Popover, Menu and
+Combobox dropdown is capped to the viewport by a theme default, so neither needs per-site sizing.
 
 ### Tests: colocated, `renderWithProviders`, role queries in new tests
 

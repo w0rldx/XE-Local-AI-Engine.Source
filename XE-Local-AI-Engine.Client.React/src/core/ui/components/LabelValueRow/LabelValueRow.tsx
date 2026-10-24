@@ -17,7 +17,9 @@ interface LabelValueRowProps {
 }
 
 // Standard label/value row for read-only detail panels, dialogs and drawers. The label never shrinks, so a long
-// value wraps or truncates instead of squeezing the label out of alignment with the rows above it.
+// value wraps or truncates instead of squeezing the label out of alignment with the rows above it. The anywhere-break
+// on the row is what lets an unspaced value (a path, an id, a model name) wrap at all: without it that value sets the
+// row's min width and pushes a phone-width dialog sideways.
 export function LabelValueRow({
 	label,
 	children,
@@ -28,7 +30,7 @@ export function LabelValueRow({
 	gap = "sm",
 }: LabelValueRowProps) {
 	return (
-		<Group gap={gap} align={align} wrap="nowrap" justify={justify}>
+		<Group gap={gap} align={align} wrap="nowrap" justify={justify} style={{ overflowWrap: "anywhere" }}>
 			<Text size={size} c="dimmed" w={labelWidth} style={{ flexShrink: 0 }}>
 				{label}
 			</Text>

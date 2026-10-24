@@ -1,4 +1,4 @@
-import { Divider, Group, Select, Stack, Switch } from "@mantine/core";
+import { Divider, Select, SimpleGrid, Stack, Switch } from "@mantine/core";
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -80,7 +80,7 @@ export function AgentDefinitionModelFields({ values, modelOptions, onFieldChange
 
 	return (
 		<Stack gap="md">
-			<Group grow={true} align="flex-start">
+			<SimpleGrid cols={{ base: 1, sm: 3 }}>
 				<Select
 					label={t("pages.agents.form.kind.label", "Kind")}
 					data={kindData}
@@ -105,7 +105,7 @@ export function AgentDefinitionModelFields({ values, modelOptions, onFieldChange
 					onChange={handleReasoningEffortChange}
 					data-testid="agent-form-reasoning-effort"
 				/>
-			</Group>
+			</SimpleGrid>
 			<Switch
 				label={t("pages.agents.form.playbookEnabled.label", "Enable adaptive memory")}
 				description={t(

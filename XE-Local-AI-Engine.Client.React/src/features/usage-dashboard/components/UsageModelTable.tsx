@@ -1,7 +1,8 @@
-import { Badge, Card, Group, Stack, Table, Text, Title } from "@mantine/core";
+import { Badge, Card, Group, Stack, Text, Title } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { ResponsiveTable } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { useTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
 import type { UsageModelRow } from "@/features/usage-dashboard/models/UsageDashboardModel";
@@ -30,81 +31,91 @@ export function UsageModelTable({
 				<Title order={2} size="h3">
 					{t("pages.usage.models.title", "Usage by model")}
 				</Title>
-				<Table.ScrollContainer minWidth={720}>
-					<Table striped={true} highlightOnHover={true} verticalSpacing="sm">
-						<Table.Thead>
-							<Table.Tr>
-								<Table.Th>{t("pages.usage.models.columns.model", "Model")}</Table.Th>
-								<Table.Th>{t("pages.usage.models.columns.providers", "Provider(s)")}</Table.Th>
-								<Table.Th>{t("pages.usage.models.columns.runs", "Runs")}</Table.Th>
-								<Table.Th>{t("pages.usage.models.columns.prompt", "Prompt")}</Table.Th>
-								<Table.Th>{t("pages.usage.models.columns.completion", "Completion")}</Table.Th>
-								<Table.Th>{t("pages.usage.models.columns.total", "Total")}</Table.Th>
-								<Table.Th>{t("pages.usage.models.columns.estimatedCost", "Est. cost")}</Table.Th>
-							</Table.Tr>
-						</Table.Thead>
-						<Table.Tbody>
-							{pagination.pageItems.length === 0 ? (
-								<Table.Tr>
-									<Table.Td colSpan={7}>
-										<EmptyState message={t("pages.usage.models.empty", "No model usage recorded for this range.")} />
-									</Table.Td>
-								</Table.Tr>
-							) : (
-								pagination.pageItems.map((row) => (
-									<Table.Tr key={row.modelName} data-testid={`usage-model-row-${row.modelName}`}>
-										<Table.Td>
-											<Text fw={500} style={{ wordBreak: "break-all" }}>
-												{row.modelName}
+				<ResponsiveTable
+					rows={pagination.pageItems}
+					rowKey={(row) => row.modelName}
+					rowTestId={(row) => `usage-model-row-${row.modelName}`}
+					minWidth={720}
+					empty={<EmptyState message={t("pages.usage.models.empty", "No model usage recorded for this range.")} />}
+					columns={[
+						{
+							key: "model",
+							header: t("pages.usage.models.columns.model", "Model"),
+							primary: true,
+							cell: (row) => (
+								<Text fw={500} style={{ overflowWrap: "anywhere" }}>
+									{row.modelName}
+								</Text>
+							),
+						},
+						{
+							key: "providers",
+							header: t("pages.usage.models.columns.providers", "Provider(s)"),
+							cell: (row) => (
+								<Group gap={4} wrap="wrap">
+									{row.providers.map((provider) => (
+										// The max-content floor keeps a long label such as "Local (llama.cpp)" whole instead of ellipsized.
+										<Badge
+											key={provider}
+											color={providerColor(provider)}
+											variant="light"
+											size="sm"
+											style={{ minWidth: "max-content" }}
+										>
+											{providerLabel(provider, t, externalConnectionNames)}
+										</Badge>
+									))}
+								</Group>
+							),
+						},
+						{ key: "runs", header: t("pages.usage.models.columns.runs", "Runs"), cell: (row) => formatCount(row.runCount) },
+						// A row whose runs reported no tokens says so once, under Prompt, rather than as three zeros.
+						{
+							key: "prompt",
+							header: t("pages.usage.models.columns.prompt", "Prompt"),
+							cell: (row) =>
+								row.tokensReported === 0 ? (
+									<Text c="dimmed" data-testid={`usage-model-not-reported-${row.modelName}`}>
+										{t("pages.usage.models.notReported", "Not reported")}
+									</Text>
+								) : (
+									<Text aria-label={formatCount(row.promptTokens)}>{formatTokensCompact(row.promptTokens)}</Text>
+								),
+						},
+						{
+							key: "completion",
+							header: t("pages.usage.models.columns.completion", "Completion"),
+							cell: (row) =>
+								row.tokensReported === 0 ? null : (
+									<Text aria-label={formatCount(row.completionTokens)}>{formatTokensCompact(row.completionTokens)}</Text>
+								),
+						},
+						{
+							key: "total",
+							header: t("pages.usage.models.columns.total", "Total"),
+							cell: (row) =>
+								row.tokensReported === 0 ? null : (
+									<>
+										<Text fw={600} aria-label={formatCount(row.totalTokens)}>
+											{formatTokensCompact(row.totalTokens)}
+										</Text>
+										{row.tokensReported < row.runCount ? (
+											<Text size="xs" c="dimmed" data-testid={`usage-model-partly-reported-${row.modelName}`}>
+												{t("pages.usage.models.runsNotReported", "{{count}} runs not reported", {
+													count: row.runCount - row.tokensReported,
+												})}
 											</Text>
-										</Table.Td>
-										<Table.Td>
-											<Group gap={4} wrap="wrap">
-												{row.providers.map((provider) => (
-													<Badge key={provider} color={providerColor(provider)} variant="light" size="sm">
-														{providerLabel(provider, t, externalConnectionNames)}
-													</Badge>
-												))}
-											</Group>
-										</Table.Td>
-										<Table.Td>{formatCount(row.runCount)}</Table.Td>
-										{row.tokensReported === 0 ? (
-											<Table.Td colSpan={3}>
-												<Text c="dimmed" data-testid={`usage-model-not-reported-${row.modelName}`}>
-													{t("pages.usage.models.notReported", "Not reported")}
-												</Text>
-											</Table.Td>
-										) : (
-											<>
-												<Table.Td>
-													<Text aria-label={formatCount(row.promptTokens)}>{formatTokensCompact(row.promptTokens)}</Text>
-												</Table.Td>
-												<Table.Td>
-													<Text aria-label={formatCount(row.completionTokens)}>{formatTokensCompact(row.completionTokens)}</Text>
-												</Table.Td>
-												<Table.Td>
-													<Text fw={600} aria-label={formatCount(row.totalTokens)}>
-														{formatTokensCompact(row.totalTokens)}
-													</Text>
-													{row.tokensReported < row.runCount ? (
-														<Text size="xs" c="dimmed" data-testid={`usage-model-partly-reported-${row.modelName}`}>
-															{t("pages.usage.models.runsNotReported", "{{count}} runs not reported", {
-																count: row.runCount - row.tokensReported,
-															})}
-														</Text>
-													) : null}
-												</Table.Td>
-											</>
-										)}
-										<Table.Td>
-											<Text data-testid={`usage-model-cost-${row.modelName}`}>{formatCostUsd(row.estimatedCostUsd)}</Text>
-										</Table.Td>
-									</Table.Tr>
-								))
-							)}
-						</Table.Tbody>
-					</Table>
-				</Table.ScrollContainer>
+										) : null}
+									</>
+								),
+						},
+						{
+							key: "estimatedCost",
+							header: t("pages.usage.models.columns.estimatedCost", "Est. cost"),
+							cell: (row) => <Text data-testid={`usage-model-cost-${row.modelName}`}>{formatCostUsd(row.estimatedCostUsd)}</Text>,
+						},
+					]}
+				/>
 
 				{rows.length > 0 ? (
 					<TablePaginationFooter

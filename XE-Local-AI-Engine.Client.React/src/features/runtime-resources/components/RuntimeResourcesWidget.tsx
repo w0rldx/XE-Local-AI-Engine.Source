@@ -9,7 +9,7 @@ import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
-import { DESKTOP_NAV_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
+import { isDesktopShell } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { getRuntimeResidentsQueryKey, getRuntimeResourcesQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";
 import { toast } from "@/core/ui/notifications/Toast";
@@ -82,9 +82,9 @@ function UsageRow({ label, usage }: { label: string; usage: MemoryUsage }) {
 export function RuntimeResourcesWidget() {
 	const { t } = useTranslation();
 	const isAuthenticated = useNodeAuthStore((state) => Boolean(state.accessToken));
-	// Desktop only this round: below the breakpoint the header hides it, so it must not poll there either.
-	const { width } = useWindowDimensions();
-	const enabled = nodeCapabilities.modelFit && isAuthenticated && width >= DESKTOP_NAV_BREAKPOINT;
+	// Desktop shell only this round: the mobile header has no room for it, so it must not poll there either.
+	const { width, height } = useWindowDimensions();
+	const enabled = nodeCapabilities.modelFit && isAuthenticated && isDesktopShell(width, height);
 	// Sampled value with no event: the memory gauge keeps its own poll.
 	const resourcesQuery = useRuntimeResources(enabled);
 	// The two resident lists follow the residency hub's pushes and poll only while it is degraded.
