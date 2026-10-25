@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Auth;
 
 using System.Security.Claims;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Vault;
 
 public interface INodeAuthService
@@ -9,17 +10,34 @@ public interface INodeAuthService
 
     Task<NodeSetupResult> SetupAsync(string email, string password, CancellationToken cancellationToken);
 
-    Task<NodeAuthTokenResult> LoginAsync(string? email, string password, CancellationToken cancellationToken);
+    /// <summary>Signs in and starts a new session.</summary>
+    /// <param name="clientLabel">The request's User-Agent, stored truncated as the session's label; may be null.</param>
+    Task<NodeAuthTokenResult> LoginAsync(string? email, string password, string? clientLabel, CancellationToken cancellationToken);
 
-    Task<NodeAuthTokenResult> RefreshAsync(string? refreshToken, CancellationToken cancellationToken);
+    /// <summary>Rotates a refresh token inside its session; a token issued before sessions existed gets a new session.</summary>
+    /// <param name="clientLabel">The request's User-Agent, used only when a pre-session token gets its session.</param>
+    Task<NodeAuthTokenResult> RefreshAsync(string? refreshToken, string? clientLabel, CancellationToken cancellationToken);
 
     /// <summary>
     ///     Issues a new token chain for the single admin after the vault unlock proved the admin password (ADR 0018
     ///     decision 4). The caller has already consumed the one-time unlock ticket; fails when no admin exists.
     /// </summary>
-    Task<NodeAuthTokenResult> IssueSessionAfterVaultUnlockAsync(CancellationToken cancellationToken);
+    Task<NodeAuthTokenResult> IssueSessionAfterVaultUnlockAsync(string? clientLabel, CancellationToken cancellationToken);
 
-    Task RevokeRefreshTokensAsync(ClaimsPrincipal principal, CancellationToken cancellationToken);
+    /// <summary>
+    ///     Logout: ends the caller's session (the access token's <c>sid</c>, else the presented refresh token's session) and
+    ///     its refresh tokens. Other sessions stay signed in.
+    /// </summary>
+    Task EndCurrentSessionAsync(ClaimsPrincipal principal, string? refreshToken, CancellationToken cancellationToken);
+
+    /// <summary>The caller's live sessions, most recently used first.</summary>
+    Task<IReadOnlyList<NodeAuthSession>> ListSessionsAsync(ClaimsPrincipal principal, CancellationToken cancellationToken);
+
+    /// <summary>Ends one of the caller's own sessions; <see langword="false" /> when the caller owns no session with that id.</summary>
+    Task<bool> RevokeSessionAsync(ClaimsPrincipal principal, string sessionId, CancellationToken cancellationToken);
+
+    /// <summary>"Sign out everywhere": ends every session of the caller, the current one included, and rotates the security stamp.</summary>
+    Task RevokeAllSessionsAsync(ClaimsPrincipal principal, CancellationToken cancellationToken);
 
     Task<NodePasswordChangeResult> ChangePasswordAsync(ClaimsPrincipal principal, string currentPassword, string newPassword, CancellationToken cancellationToken);
 

@@ -87,7 +87,7 @@ public static class NodeChatMessagePartKinds
 
 /// <summary>
 ///     Represents the lifecycle state of a tool part. Mirrors the client tool-call state union; persisted tool parts
-///     carry the terminal state (<see cref="Received" /> or <see cref="Failed" />) once the tool has completed.
+///     carry the terminal state (<see cref="Received" />, <see cref="Failed" /> or <see cref="Denied" />) once the call is over.
 /// </summary>
 public static class NodeChatToolPartStates
 {
@@ -95,6 +95,9 @@ public static class NodeChatToolPartStates
     public const string Waiting = "waiting";
     public const string Received = "received";
     public const string Failed = "failed";
+
+    /// <summary>The person denied the call: the tool never ran, and the result is the denial text the model read.</summary>
+    public const string Denied = "denied";
 }
 
 /// <summary>

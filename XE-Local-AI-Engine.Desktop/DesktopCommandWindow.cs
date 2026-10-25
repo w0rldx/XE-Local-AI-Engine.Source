@@ -14,16 +14,27 @@ internal sealed class DesktopCommandWindow : IAsyncDisposable
     /// <summary>The SPA route the overlay opens; a protocol literal duplicated from the React route tree.</summary>
     internal const string Route = "/command";
 
+    /// <summary>The SPA's sign-in route; a protocol literal duplicated from the React route tree.</summary>
+    internal const string SignInRoute = "/login";
+
     private readonly DesktopWindow _window;
     private readonly Uri _start;
     private readonly Action<DesktopOverlayBounds> _hidden;
     private readonly Action _shown;
+    private readonly Func<Task<Uri?>> _mainLocation;
     private bool _visible;
     private bool _closing;
 
-    internal DesktopCommandWindow(DesktopLaunchOptions options, bool devTools, DesktopOverlayBounds? bounds, Action shown, Action<DesktopOverlayBounds> hidden)
+    /// <param name="mainLocation">Reads the main window's address; never throws, null when unknown.</param>
+    internal DesktopCommandWindow(DesktopLaunchOptions options,
+        bool devTools,
+        DesktopOverlayBounds? bounds,
+        Action shown,
+        Action<DesktopOverlayBounds> hidden,
+        Func<Task<Uri?>> mainLocation)
     {
         _shown = shown;
+        _mainLocation = mainLocation;
         _start = new Uri(options.Origin, Route);
         _hidden = hidden;
         // A borderless window has no title bar, so this strip is the only place to drag it from.
@@ -76,10 +87,12 @@ internal sealed class DesktopCommandWindow : IAsyncDisposable
     internal static bool ShouldShow(bool visible, bool toggle) =>
         !(visible && toggle);
 
-    /// <summary>Whether a shown overlay must load its route again: the page left it (a sign-in page opened before the
-    ///     main window signed in). Nothing known, or already on the route, keeps the page as it is.</summary>
-    internal static bool ShouldReloadOnShow(Uri? current, Uri start) =>
-        current is not null && !string.Equals(current.AbsolutePath, start.AbsolutePath, StringComparison.Ordinal);
+    /// <summary>Whether a shown overlay must load its route again: the page left it, or the main window is on sign-in.</summary>
+    /// <remarks>The page leaves the route when a sign-in page opened before the main window signed in. A main window on
+    ///     sign-in signed out, which ended the overlay's session too (the windows share one). Nothing known keeps the page.</remarks>
+    internal static bool ShouldReloadOnShow(Uri? current, Uri start, Uri? main) =>
+        (current is not null && !string.Equals(current.AbsolutePath, start.AbsolutePath, StringComparison.Ordinal))
+        || string.Equals(main?.AbsolutePath, SignInRoute, StringComparison.Ordinal);
 
     internal void Show(bool toggle)
     {
@@ -113,10 +126,11 @@ internal sealed class DesktopCommandWindow : IAsyncDisposable
         _window.Close();
     }
 
-    // Fire-and-forget from Show: the read never throws and Reload is a no-op once the window is disposed.
+    // Fire-and-forget from Show: the reads never throw and Reload is a no-op once the window is disposed.
     private async Task ReturnToRouteAsync()
     {
-        if (ShouldReloadOnShow(await _window.ReadLocationAsync(CancellationToken.None), _start)) { _window.Reload(); }
+        var main = await _mainLocation();
+        if (ShouldReloadOnShow(await _window.ReadLocationAsync(CancellationToken.None), _start, main)) { _window.Reload(); }
     }
 
     private async Task RecordLoadFailureAsync()

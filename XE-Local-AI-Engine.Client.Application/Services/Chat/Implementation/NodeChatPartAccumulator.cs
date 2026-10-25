@@ -112,16 +112,20 @@ public sealed class NodeChatPartAccumulator
     }
 
     /// <summary>
-    ///     Collapses a tool call's completed phase into its existing requested part (received / failed plus result).
+    ///     Collapses a tool call's completed phase into its existing requested part (received / failed / denied plus result).
     ///     When no requested part was seen (defensive: a result without a prior call), a completed tool part is added.
     /// </summary>
-    public void CompleteToolCall(string toolCallId, string toolName, string? result, bool isError, long sequence)
+    public void CompleteToolCall(string toolCallId, string toolName, string? result, bool isError, long sequence, bool isDenied = false)
     {
         ArgumentException.ThrowIfNullOrEmpty(toolCallId);
 
         lock (_syncRoot)
         {
             var terminalState = isError ? NodeChatToolPartStates.Failed : NodeChatToolPartStates.Received;
+            if (isDenied)
+            {
+                terminalState = NodeChatToolPartStates.Denied;
+            }
             if (_toolPartsByCallId.TryGetValue(toolCallId, out var existing))
             {
                 existing.State = terminalState;

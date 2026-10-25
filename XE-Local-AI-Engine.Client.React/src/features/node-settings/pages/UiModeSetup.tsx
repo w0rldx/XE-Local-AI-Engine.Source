@@ -14,22 +14,17 @@ import { StandaloneScreenControls } from "@/core/ui/components/StandaloneScreenC
 // control — the layout guard sends anyone with an unanswered mode straight back here, so a way out that did not save
 // would only produce a loop.
 //
-// NEITHER option is preselected: this is a deliberate first-run decision, so the operator has to make it rather than
-// confirm one the screen made for them. "Simple" carries the recommendation as a badge instead, which is how the
-// external-access screen marks its own favoured choice.
+// "Simple" is preselected and carries the recommendation badge (operator decision after the build-113 round): most
+// operators take it, and Continue still saves an explicit value, so the layout guard never asks twice.
 export function UiModeSetup() {
 	const { t } = useTranslation();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
-	const [choice, setChoice] = useState<UiMode | null>(null);
+	const [choice, setChoice] = useState<UiMode>("simple");
 
 	const saveMutation = useMutation(saveNodeSettingsMutation());
 
 	const submit = (): void => {
-		if (choice === null) {
-			return;
-		}
-
 		saveMutation.mutate(
 			{ body: { uiMode: choice } },
 			{
@@ -68,7 +63,7 @@ export function UiModeSetup() {
 					{/* Radio.Card rather than two buttons: the two options are one question with one answer, so a radio group
 					    is what a screen reader should announce, and it is arrow-key navigable with a visible focus ring. */}
 					<Radio.Group
-						value={choice ?? ""}
+						value={choice}
 						onChange={(value) => setChoice(value === "simple" ? "simple" : "advanced")}
 						aria-label={t("pages.uiMode.setupTitle", "How much of the engine do you want to see?")}
 					>
@@ -112,13 +107,7 @@ export function UiModeSetup() {
 						</Stack>
 					</Radio.Group>
 
-					<Button
-						fullWidth={true}
-						loading={isSaving}
-						disabled={choice === null || isSaving}
-						onClick={submit}
-						data-testid="ui-mode-continue"
-					>
+					<Button fullWidth={true} loading={isSaving} disabled={isSaving} onClick={submit} data-testid="ui-mode-continue">
 						{t("pages.uiMode.continue", "Continue")}
 					</Button>
 				</Stack>

@@ -1675,6 +1675,10 @@ public sealed class InvocationRunnerTests
         AssertEx.True(result.StartsWith(ToolInvocationObservabilityChatClient.RejectedApprovalResultPrefix, StringComparison.Ordinal),
             $"the framework prefix the observability client keys Outcome=denied on must lead the result: {result}");
         AssertEx.Contains(result, InvocationRunner.DeniedToolCallReason);
+        AssertEx.Contains(result, ToolFailureText.NotRunNotice);
+        // N-90: the chat card reads Denied because the completed phase says so, not because the client matches the text.
+        await dispatcher.Received().ReportToolCallLifecycleAsync(Arg.Is<ToolCallLifecyclePayload>(static payload =>
+            payload.Phase == ToolCallLifecyclePhase.Completed && payload.IsDenied && !payload.IsError));
 
         var secondTurn = RunAsync(runner, DenialPackage(conversationId));
         await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(10));

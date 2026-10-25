@@ -1,10 +1,10 @@
 import { AxiosError } from "axios";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 
 import { ApiError } from "@/core/api/errors/ApiError";
 import { NetworkError } from "@/core/api/errors/NetworkError";
-import { getErrorStatus, isTransientError, shouldRetryQuery } from "@/core/api/errors/RetryClassification";
+import { getErrorStatus, isTransientError, retryTransient, shouldRetryQuery } from "@/core/api/errors/RetryClassification";
 import type { ProblemDetails } from "@/core/api/models/ProblemDetails";
 
 // Builds an ApiError the way the ProblemDetails interceptor does for any non-2xx status except 401/429.
@@ -113,5 +113,51 @@ describe("shouldRetryQuery attempt counts", () => {
 	it("makes 4 attempts (3 retries) for a network error", () => {
 		expect(totalAttempts(networkError)).toBe(4);
 		expect(totalAttempts(axiosTransportError)).toBe(4);
+	});
+});
+
+// N-86: the vault pre-host frees the port ~2.6 s before the real host listens; a route guard's status read must ride
+// that gap out instead of landing on the error boundary.
+describe("retryTransient", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("resolves once a network error is followed by an answer", async () => {
+		const operation = vi.fn().mockRejectedValueOnce(axiosTransportError).mockResolvedValue("status");
+
+		const result = retryTransient(operation);
+		await vi.advanceTimersByTimeAsync(250);
+
+		await expect(result).resolves.toBe("status");
+		expect(operation).toHaveBeenCalledTimes(2);
+	});
+
+	it("rejects with the last error once a persistent network failure outlasts the budget", async () => {
+		const operation = vi.fn().mockRejectedValue(axiosTransportError);
+		let settled = false;
+
+		const result = retryTransient(operation).finally(() => {
+			settled = true;
+		});
+		const rejected = expect(result).rejects.toBe(axiosTransportError);
+		await vi.advanceTimersByTimeAsync(9_000);
+		expect(settled).toBe(false);
+
+		await vi.advanceTimersByTimeAsync(1_000);
+		await rejected;
+		// 250, 500, 1000, 2000, 2000, 2000, 2000 ms waits: eight attempts inside the 10 s budget.
+		expect(operation).toHaveBeenCalledTimes(8);
+	});
+
+	it("rethrows a deterministic 4xx at once", async () => {
+		const operation = vi.fn().mockRejectedValue(apiError(404));
+
+		await expect(retryTransient(operation)).rejects.toBeInstanceOf(ApiError);
+		expect(operation).toHaveBeenCalledTimes(1);
 	});
 });

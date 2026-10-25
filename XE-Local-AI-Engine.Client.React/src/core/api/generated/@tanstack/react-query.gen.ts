@@ -321,6 +321,7 @@ import {
 	listKnowledgeDocuments,
 	listLocalModels,
 	listMcpServers,
+	listNodeAuthSessions,
 	listNodeBackups,
 	listNodeChatConversations,
 	listNodeChatMessageRevisions,
@@ -402,9 +403,11 @@ import {
 	resumeWorkSession,
 	retrieveImage,
 	reviewTrainingSample,
+	revokeAllNodeAuthSessions,
 	revokeIntegrationApiKey,
 	revokeLocalModelProxyApiKey,
 	revokeMcpServerApiKey,
+	revokeNodeAuthSession,
 	runPlaybookActionEval,
 	runTrainingArtifactSmoke,
 	saveCloudSettings,
@@ -1237,6 +1240,8 @@ import type {
 	ListLocalModelsResponse,
 	ListMcpServersData,
 	ListMcpServersResponse,
+	ListNodeAuthSessionsData,
+	ListNodeAuthSessionsResponse,
 	ListNodeBackupsData,
 	ListNodeBackupsResponse,
 	ListNodeChatConversationsData,
@@ -1440,12 +1445,16 @@ import type {
 	RetrieveImageResponse,
 	ReviewTrainingSampleData,
 	ReviewTrainingSampleResponse,
+	RevokeAllNodeAuthSessionsData,
+	RevokeAllNodeAuthSessionsResponse,
 	RevokeIntegrationApiKeyData,
 	RevokeIntegrationApiKeyResponse,
 	RevokeLocalModelProxyApiKeyData,
 	RevokeLocalModelProxyApiKeyResponse,
 	RevokeMcpServerApiKeyData,
 	RevokeMcpServerApiKeyResponse,
+	RevokeNodeAuthSessionData,
+	RevokeNodeAuthSessionResponse,
 	RunPlaybookActionEvalData,
 	RunPlaybookActionEvalResponse,
 	RunTrainingArtifactSmokeData,
@@ -2712,6 +2721,11 @@ export const nodeLoginMutation = (
 	return mutationOptions;
 };
 
+/**
+ * Signs the current session out.
+ *
+ * Ends only the caller's session (the access token's session, else the refresh token's) and its refresh tokens; the session's access tokens are rejected at once. Other sessions stay signed in.
+ */
 export const nodeLogoutMutation = (
 	options?: Partial<Options<NodeLogoutData>>,
 ): UseMutationOptions<NodeLogoutResponse, AxiosError<DefaultError>, Options<NodeLogoutData>> => {
@@ -2739,6 +2753,81 @@ export const nodeRefreshMutation = (
 	const mutationOptions: UseMutationOptions<NodeRefreshResponse, AxiosError<DefaultError>, Options<NodeRefreshData>> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await nodeRefresh({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listNodeAuthSessionsQueryKey = (options?: Options<ListNodeAuthSessionsData>) =>
+	createQueryKey("listNodeAuthSessions", options, false, ["Auth"]);
+
+/**
+ * Lists the caller's live sign-in sessions; the current one is flagged.
+ */
+export const listNodeAuthSessionsOptions = (options?: Options<ListNodeAuthSessionsData>) =>
+	queryOptions<
+		ListNodeAuthSessionsResponse,
+		AxiosError<DefaultError>,
+		ListNodeAuthSessionsResponse,
+		ReturnType<typeof listNodeAuthSessionsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listNodeAuthSessions({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listNodeAuthSessionsQueryKey(options),
+	});
+
+/**
+ * Signs every session of the caller out, the current one included.
+ *
+ * Ends every session and refresh token of the caller and rotates the security stamp, so every access token already issued is rejected at once.
+ */
+export const revokeAllNodeAuthSessionsMutation = (
+	options?: Partial<Options<RevokeAllNodeAuthSessionsData>>,
+): UseMutationOptions<RevokeAllNodeAuthSessionsResponse, AxiosError<DefaultError>, Options<RevokeAllNodeAuthSessionsData>> => {
+	const mutationOptions: UseMutationOptions<
+		RevokeAllNodeAuthSessionsResponse,
+		AxiosError<DefaultError>,
+		Options<RevokeAllNodeAuthSessionsData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await revokeAllNodeAuthSessions({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+/**
+ * Signs one of the caller's sessions out.
+ *
+ * Ends the session and its refresh tokens; its access tokens are rejected at once. A session the caller does not own answers 404.
+ */
+export const revokeNodeAuthSessionMutation = (
+	options?: Partial<Options<RevokeNodeAuthSessionData>>,
+): UseMutationOptions<RevokeNodeAuthSessionResponse, AxiosError<DefaultError>, Options<RevokeNodeAuthSessionData>> => {
+	const mutationOptions: UseMutationOptions<
+		RevokeNodeAuthSessionResponse,
+		AxiosError<DefaultError>,
+		Options<RevokeNodeAuthSessionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await revokeNodeAuthSession({
 				...options,
 				...fnOptions,
 				throwOnError: true,

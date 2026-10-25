@@ -77,20 +77,79 @@ public sealed class NodeIdentityStore : INodeIdentityStore
 
     public async Task RevokeActiveTokensAsync(string userId, DateTime now, CancellationToken cancellationToken)
     {
-        var activeTokens = await _dbContext.RefreshTokens
-                                           .Where(token => token.UserId == userId && token.RevokedAtUtc == null)
-                                           .ToListAsync(cancellationToken);
+        // Set-based, never load-then-save: a refresh committing in between would leave its new token and session live.
+        // Tokens go first, so a refresh racing the second statement already finds its token revoked.
+        _ = await _dbContext.RefreshTokens
+                            .Where(token => token.UserId == userId && token.RevokedAtUtc == null)
+                            .ExecuteUpdateAsync(setters => setters.SetProperty(token => token.RevokedAtUtc, now), cancellationToken);
+        _ = await _dbContext.AuthSessions
+                            .Where(session => session.UserId == userId && session.RevokedAtUtc == null)
+                            .ExecuteUpdateAsync(setters => setters.SetProperty(session => session.RevokedAtUtc, now), cancellationToken);
+    }
 
-        foreach (var token in activeTokens)
+    public async Task RevokeRefreshTokenAsync(NodeRefreshToken token, DateTime now, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(token);
+
+        token.RevokedAtUtc ??= now;
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task AddSessionAsync(NodeAuthSession session, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+
+        _ = _dbContext.AuthSessions.Add(session);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public Task<NodeAuthSession?> FindSessionAsync(string id, CancellationToken cancellationToken)
+    {
+        return _dbContext.AuthSessions.SingleOrDefaultAsync(session => session.Id == id, cancellationToken);
+    }
+
+    public Task<bool> IsSessionLiveAsync(string sessionId, string userId, CancellationToken cancellationToken)
+    {
+        return _dbContext.AuthSessions
+                         .AsNoTracking()
+                         .AnyAsync(session => session.Id == sessionId && session.UserId == userId && session.RevokedAtUtc == null,
+                             cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<NodeAuthSession>> ListLiveSessionsAsync(string userId, DateTime now, CancellationToken cancellationToken)
+    {
+        return await _dbContext.AuthSessions
+                               .AsNoTracking()
+                               .Where(session => session.UserId == userId
+                                                 && session.RevokedAtUtc == null
+                                                 && _dbContext.RefreshTokens.Any(token => token.SessionId == session.Id
+                                                                                          && token.RevokedAtUtc == null
+                                                                                          && token.ExpiresAtUtc > now))
+                               .OrderByDescending(session => session.LastUsedAtUtc)
+                               .ToListAsync(cancellationToken);
+    }
+
+    public async Task<bool> RevokeSessionAsync(string userId, string sessionId, DateTime now, CancellationToken cancellationToken)
+    {
+        var session = await _dbContext.AuthSessions
+                                      .SingleOrDefaultAsync(candidate => candidate.Id == sessionId && candidate.UserId == userId,
+                                          cancellationToken);
+        if (session is null)
+        {
+            return false;
+        }
+
+        session.RevokedAtUtc ??= now;
+        var liveTokens = await _dbContext.RefreshTokens
+                                         .Where(token => token.SessionId == sessionId && token.RevokedAtUtc == null)
+                                         .ToListAsync(cancellationToken);
+        foreach (var token in liveTokens)
         {
             token.RevokedAtUtc = now;
         }
 
-        // Nothing live means nothing to write: a save here would be a round-trip per logout that changed no row.
-        if (activeTokens.Count > 0)
-        {
-            _ = await _dbContext.SaveChangesAsync(cancellationToken);
-        }
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     public Task MigrateAsync(CancellationToken cancellationToken)

@@ -207,6 +207,7 @@
 			"approve": "Approve",
 			"approveSession": "Approve for this session",
 			"argsLabel": "Arguments",
+			"denied": "Denied",
 			"deny": "Deny",
 			"done": "Done",
 			"errorLabel": "Error",
@@ -7577,6 +7578,22 @@
 				"usage": "Usage & limits",
 				"voice": "Voice & transcription",
 				"workspaces": "Agent workspaces"
+			},
+			"sessions": {
+				"description": "Each place you signed in to this node. Signing a session out ends it at once.",
+				"error": "Could not end the session.",
+				"loadError": "Could not load the sessions.",
+				"revoke": "Sign out",
+				"revokeAll": "Sign out everywhere",
+				"revokeAllConfirm": {
+					"confirm": "Sign out everywhere",
+					"description": "Every session ends at once, this one included. You will be sent to the sign-in page.",
+					"title": "Sign out everywhere?"
+				},
+				"thisDevice": "This device",
+				"times": "Signed in {{created}} · last used {{lastUsed}}",
+				"title": "Sign-in sessions",
+				"unknownClient": "Unknown client"
 			},
 			"subtitle": "Tune non-secret local runtime settings stored on this worker.",
 			"title": "Node settings",

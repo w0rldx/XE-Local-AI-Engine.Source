@@ -607,6 +607,14 @@ export const zXeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse = z.ob
 	refreshTokenExpiresAtUtc: z.iso.datetime({ offset: true }).nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsAuthV1NodeAuthSessionResponse = z.object({
+	id: z.string(),
+	clientLabel: z.string().nullish(),
+	createdAtUtc: z.iso.datetime({ offset: true }),
+	lastUsedAtUtc: z.iso.datetime({ offset: true }),
+	current: z.boolean(),
+});
+
 export const zXeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse = z.object({
 	setupRequired: z.boolean(),
 	authenticated: z.boolean(),
@@ -638,6 +646,8 @@ export const zXeLocalAiEngineClientEndpointsAuthV1NodeLoginRequest = z.object({
 	password: z.string().min(0).max(256),
 	returnRefreshToken: z.boolean().optional(),
 });
+
+export const zXeLocalAiEngineClientEndpointsAuthV1NodeRevokeSessionRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest = z.object({
 	email: z
@@ -10137,6 +10147,25 @@ export const zNodeLogoutResponse = z.void();
  * Success
  */
 export const zNodeRefreshResponse = zXeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse;
+
+/**
+ * Success
+ */
+export const zListNodeAuthSessionsResponse = z.array(zXeLocalAiEngineClientEndpointsAuthV1NodeAuthSessionResponse);
+
+/**
+ * No Content
+ */
+export const zRevokeAllNodeAuthSessionsResponse = z.void();
+
+export const zRevokeNodeAuthSessionPath = z.object({
+	sessionId: z.string(),
+});
+
+/**
+ * No Content
+ */
+export const zRevokeNodeAuthSessionResponse = z.void();
 
 export const zNodeSetupBody = zXeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest;
 

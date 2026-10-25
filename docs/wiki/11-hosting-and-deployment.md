@@ -329,7 +329,8 @@ An operator restart is the one engine exit that does not end the shell. `POST no
 desktop-mode only, 409 when no shell owns the engine) answers 202, then the host stops and `Program` returns **12**
 (`Program.RestartRequestedExitCode`). The shell (`DesktopApplication.RelaunchEngineAsync`) starts the engine again with
 the same options through `DesktopEngineSession.StartAsync`, so it waits for readiness the way the first start does, and
-reloads the main window. The engine re-binds its remembered port, so the origin stays the same. A relaunch that fails or
+reloads the main window on the route it showed (`DesktopWindow.ReloadCurrentAsync`; the start page when the page's
+address is unreadable or not on the engine origin). The engine re-binds its remembered port, so the origin stays the same. A relaunch that fails or
 comes back on another port is shown with the reason, and the shell quits with the failure's code. Every other exit code
 keeps its meaning.
 

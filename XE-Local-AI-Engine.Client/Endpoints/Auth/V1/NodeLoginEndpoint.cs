@@ -35,7 +35,7 @@ public sealed class NodeLoginEndpoint : Endpoint<NodeLoginRequest, NodeAccessTok
 
     public override async Task HandleAsync(NodeLoginRequest req, CancellationToken ct)
     {
-        var result = await _authService.LoginAsync(req.Email, req.Password, ct);
+        var result = await _authService.LoginAsync(req.Email, req.Password, HttpContext.Request.Headers.UserAgent.ToString(), ct);
         await NodeAuthEndpointSupport.SendTokenResultAsync(Send, result, req.ReturnRefreshToken, ct);
     }
 }

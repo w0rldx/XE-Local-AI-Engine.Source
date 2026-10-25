@@ -50,6 +50,25 @@ public sealed class ChatStreamEventMapperTests
         // The completed phase re-emits neither arguments nor the approval flag.
         AssertEx.Null(mapped.Arguments);
         AssertEx.Null(mapped.RequiresApproval);
+        AssertEx.Equal(expected: false, mapped.IsDenied);
+    }
+
+    [Test]
+    public void ToolCallEvent_DeniedCompletion_CarriesIsDeniedAndStoresADeniedPart()
+    {
+        // N-90: the live event and the stored part both say denied, so the card reads the same before and after a reload.
+        var payload = NewPayload("call-3", "run_python", ToolCallLifecyclePhase.Completed, result: "Tool call invocation was rejected.") with
+        {
+            IsDenied = true
+        };
+        var parts = new NodeChatPartAccumulator();
+
+        var mapped = ChatStreamEventMapper.ToolCallEvent(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), payload, Timestamp, sequence: 3);
+        ChatStreamEventMapper.AccumulateToolPart(parts, payload, sequence: 3);
+
+        AssertEx.Equal(expected: true, mapped.IsDenied);
+        AssertEx.Equal(expected: false, mapped.IsError);
+        AssertEx.Equal(NodeChatToolPartStates.Denied, parts.Snapshot().Single().State);
     }
 
     [Test]

@@ -940,6 +940,9 @@ import type {
 	ListMcpServersData,
 	ListMcpServersErrors,
 	ListMcpServersResponses,
+	ListNodeAuthSessionsData,
+	ListNodeAuthSessionsErrors,
+	ListNodeAuthSessionsResponses,
 	ListNodeBackupsData,
 	ListNodeBackupsErrors,
 	ListNodeBackupsResponses,
@@ -1180,6 +1183,9 @@ import type {
 	ReviewTrainingSampleData,
 	ReviewTrainingSampleErrors,
 	ReviewTrainingSampleResponses,
+	RevokeAllNodeAuthSessionsData,
+	RevokeAllNodeAuthSessionsErrors,
+	RevokeAllNodeAuthSessionsResponses,
 	RevokeIntegrationApiKeyData,
 	RevokeIntegrationApiKeyErrors,
 	RevokeIntegrationApiKeyResponses,
@@ -1189,6 +1195,9 @@ import type {
 	RevokeMcpServerApiKeyData,
 	RevokeMcpServerApiKeyErrors,
 	RevokeMcpServerApiKeyResponses,
+	RevokeNodeAuthSessionData,
+	RevokeNodeAuthSessionErrors,
+	RevokeNodeAuthSessionResponses,
 	RunPlaybookActionEvalData,
 	RunPlaybookActionEvalErrors,
 	RunPlaybookActionEvalResponses,
@@ -1736,6 +1745,7 @@ import {
 	zListKnowledgeDocumentsResponse,
 	zListLocalModelsResponse,
 	zListMcpServersResponse,
+	zListNodeAuthSessionsResponse,
 	zListNodeBackupsResponse,
 	zListNodeChatConversationsResponse,
 	zListNodeChatMessageRevisionsResponse,
@@ -1815,9 +1825,11 @@ import {
 	zResumeWorkSessionResponse,
 	zRetrieveImageResponse,
 	zReviewTrainingSampleResponse,
+	zRevokeAllNodeAuthSessionsResponse,
 	zRevokeIntegrationApiKeyResponse,
 	zRevokeLocalModelProxyApiKeyResponse,
 	zRevokeMcpServerApiKeyResponse,
+	zRevokeNodeAuthSessionResponse,
 	zRunPlaybookActionEvalResponse,
 	zRunTrainingArtifactSmokeResponse,
 	zSaveCloudSettingsResponse,
@@ -2837,6 +2849,11 @@ export const nodeLogin = <ThrowOnError extends boolean = true>(
 		},
 	});
 
+/**
+ * Signs the current session out.
+ *
+ * Ends only the caller's session (the access token's session, else the refresh token's) and its refresh tokens; the session's access tokens are rejected at once. Other sessions stay signed in.
+ */
 export const nodeLogout = <ThrowOnError extends boolean = true>(
 	options?: Options<NodeLogoutData, ThrowOnError>,
 ): RequestResult<NodeLogoutResponses, NodeLogoutErrors, ThrowOnError> =>
@@ -2870,6 +2887,83 @@ export const nodeRefresh = <ThrowOnError extends boolean = true>(
 		responseType: "json",
 		responseValidator: async (data) => await zNodeRefreshResponse.parseAsync(data),
 		url: "/api/local/v1/auth/refresh",
+		...options,
+	});
+
+/**
+ * Lists the caller's live sign-in sessions; the current one is flagged.
+ */
+export const listNodeAuthSessions = <ThrowOnError extends boolean = true>(
+	options?: Options<ListNodeAuthSessionsData, ThrowOnError>,
+): RequestResult<ListNodeAuthSessionsResponses, ListNodeAuthSessionsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListNodeAuthSessionsResponses, ListNodeAuthSessionsErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zListNodeAuthSessionsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/auth/sessions",
+		...options,
+	});
+
+/**
+ * Signs every session of the caller out, the current one included.
+ *
+ * Ends every session and refresh token of the caller and rotates the security stamp, so every access token already issued is rejected at once.
+ */
+export const revokeAllNodeAuthSessions = <ThrowOnError extends boolean = true>(
+	options?: Options<RevokeAllNodeAuthSessionsData, ThrowOnError>,
+): RequestResult<RevokeAllNodeAuthSessionsResponses, RevokeAllNodeAuthSessionsErrors, ThrowOnError> =>
+	(options?.client ?? client).post<RevokeAllNodeAuthSessionsResponses, RevokeAllNodeAuthSessionsErrors, ThrowOnError>({
+		responseValidator: async (data) => await zRevokeAllNodeAuthSessionsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/auth/sessions/revoke-all",
+		...options,
+	});
+
+/**
+ * Signs one of the caller's sessions out.
+ *
+ * Ends the session and its refresh tokens; its access tokens are rejected at once. A session the caller does not own answers 404.
+ */
+export const revokeNodeAuthSession = <ThrowOnError extends boolean = true>(
+	options: Options<RevokeNodeAuthSessionData, ThrowOnError>,
+): RequestResult<RevokeNodeAuthSessionResponses, RevokeNodeAuthSessionErrors, ThrowOnError> =>
+	(options.client ?? client).delete<RevokeNodeAuthSessionResponses, RevokeNodeAuthSessionErrors, ThrowOnError>({
+		responseValidator: async (data) => await zRevokeNodeAuthSessionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/auth/sessions/{sessionId}",
 		...options,
 	});
 

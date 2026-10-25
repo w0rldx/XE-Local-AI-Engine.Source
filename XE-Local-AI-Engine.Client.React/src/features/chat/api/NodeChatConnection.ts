@@ -1,6 +1,6 @@
 import { type HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from "@microsoft/signalr";
 
-import { resolveHubAccessToken } from "@/core/api/signalr/ResolveHubAccessToken";
+import { markHubConnectionLost, resolveHubAccessToken } from "@/core/api/signalr/ResolveHubAccessToken";
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import { diagnosticsSignalrHeaders } from "@/core/diagnostics/collectors/Network.signalr";
 
@@ -96,6 +96,7 @@ class NodeChatConnectionManager {
 			.build();
 
 		connection.onreconnecting((error) => {
+			markHubConnectionLost();
 			this.emitStatus("reconnecting");
 			for (const listener of this.listeners) {
 				listener.onReconnecting?.(error);
@@ -108,6 +109,7 @@ class NodeChatConnectionManager {
 			}
 		});
 		connection.onclose((error) => {
+			markHubConnectionLost();
 			this.emitStatus("disconnected");
 			for (const listener of this.listeners) {
 				listener.onClose?.(error);

@@ -1,4 +1,4 @@
-import { getErrorStatus } from "@/core/api/errors/RetryClassification";
+import { getErrorStatus, retryTransient } from "@/core/api/errors/RetryClassification";
 import { getNodeAuthStatus, refreshNodeAuthToken } from "@/core/auth/api/NodeAuthApi";
 import type { NodeAuthStatusResponse } from "@/core/auth/models/NodeAuthModels";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
@@ -52,7 +52,9 @@ export async function restoreNodeAuthSession(): Promise<NodeAuthRestoreResult> {
 	}
 
 	restoreSessionPromise = (async () => {
-		const status = await getNodeAuthStatus();
+		// The locked pre-host hands the port to the real host a few seconds after an unlock elsewhere; that gap is retried
+		// here instead of landing on the error boundary. A failure that outlasts the retry budget still propagates.
+		const status = await retryTransient(() => getNodeAuthStatus());
 		const step = vaultStep(status);
 		if (step === "vault-locked") {
 			useNodeAuthStore.getState().actions.clear();
@@ -71,7 +73,8 @@ export async function restoreNodeAuthSession(): Promise<NodeAuthRestoreResult> {
 		} catch (error) {
 			// Only a 401 means the refresh cookie is gone. A 429 that outlived the refresh's own Retry-After wait sends the
 			// operator to the login page, which says when to try again; the token is kept. A 5xx or network failure leaves a
-			// valid session behind, so it propagates to the route's error boundary (whose retry re-runs this).
+			// valid session behind, so it propagates to the route's error boundary (whose retry re-runs this). The status
+			// read above already rode out a transient gap, so a failure here is not the unlock hand-over.
 			const status = getErrorStatus(error);
 			if (status === 429) {
 				return "rate-limited";

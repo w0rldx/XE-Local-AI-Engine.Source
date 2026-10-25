@@ -536,6 +536,29 @@ describe("node chat tool-call event mapper", () => {
 		).toMatchObject({ id: "call-1", state: "failed", result: "boom" });
 	});
 
+	it("maps a denied tool-call-completed event into a denied tool call (N-90)", () => {
+		expect(
+			mapToolCallEvent(
+				streamEvent({
+					type: "tool-call-completed",
+					toolCallId: "call-1",
+					toolName: "run_python",
+					result: "Tool call invocation was rejected.",
+					isError: false,
+					isDenied: true,
+				}),
+			),
+		).toMatchObject({ id: "call-1", state: "denied" });
+	});
+
+	it("keeps a reloaded denied tool part denied (N-90)", () => {
+		const message = mapSingleMessage({
+			parts: [{ kind: "tool", sequence: 2, toolCallId: "call-1", name: "run_python", state: "denied", result: "rejected" }],
+		});
+
+		expect(message.parts?.[0]).toMatchObject({ kind: "tool", id: "call-1", state: "denied" });
+	});
+
 	it("falls back to messageId:sequence when no tool call id is present, keeping distinct calls separate", () => {
 		expect(
 			mapToolCallEvent(streamEvent({ type: "tool-call-requested", messageId: "message-9", sequence: 4, toolName: "noop" }))?.id,

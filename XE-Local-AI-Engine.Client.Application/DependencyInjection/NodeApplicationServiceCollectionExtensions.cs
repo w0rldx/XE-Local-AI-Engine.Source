@@ -33,7 +33,8 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.AddNodeCoreOptions(configuration);
         builder.AddNodeAuth(configuration);
         // The boot record comes from the pre-container read, so a save before the first settings load still counts as pending.
-        builder.Services.AddSingleton(new PendingRestartRegistry(startupSettings.StoredSettings));
+        builder.Services.AddSingleton(services => new PendingRestartRegistry(startupSettings.StoredSettings,
+            services.GetRequiredService<INodeRuntimeSettings>().ResolveEffectiveValues));
         builder.AddNodeInvocation(configuration);
         builder.AddNodeWorkspaceAndAgents(configuration);
         builder.AddNodeAnalysis(configuration);

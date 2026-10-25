@@ -7,6 +7,8 @@
 // So the router registers its navigation here when it is created (`Router.tsx`), and the interceptor calls it.
 // Before registration (no router yet, nothing to redirect) the call is a no-op.
 
+import { authPagePaths } from "@/core/auth/utils/RedirectPath";
+
 type LoginNavigator = (redirect: string) => Promise<unknown>;
 
 let navigator: LoginNavigator = async () => undefined;
@@ -15,8 +17,24 @@ export function registerLoginNavigator(next: LoginNavigator): void {
 	navigator = next;
 }
 
-export function navigateToLogin(redirect: string): Promise<unknown> {
+function navigateToLogin(redirect: string): Promise<unknown> {
 	return navigator(redirect);
+}
+
+let isRedirectingToLogin = false;
+
+/** Sends the page to sign-in, returning here afterwards; a no-op on an auth page or while a redirect is under way. */
+export function redirectToLoginOnce(): void {
+	if (authPagePaths.includes(globalThis.location.pathname) || isRedirectingToLogin) {
+		return;
+	}
+
+	isRedirectingToLogin = true;
+	Promise.resolve(navigateToLogin(globalThis.location.pathname + globalThis.location.search))
+		.finally(() => {
+			isRedirectingToLogin = false;
+		})
+		.catch(() => undefined);
 }
 
 // The vault-locked interceptor's way to the unlock page, registered alongside the login navigator for the same reason.

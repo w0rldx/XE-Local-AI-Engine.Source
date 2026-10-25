@@ -1192,6 +1192,45 @@ describe("node chat stream state", () => {
 		expect(toolPart && "pendingApprovalRequestId" in toolPart ? toolPart.pendingApprovalRequestId : undefined).toBeUndefined();
 	});
 
+	it("marks a denied call denied and clears its pending approval (N-90)", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"delete it",
+			"2026-05-24T00:00:01.000Z",
+		);
+		const approval = applyNodeChatStreamEvent(
+			optimistic,
+			streamEvent({
+				type: nodeChatStreamEventTypes.approvalRequested,
+				toolCallId: "call-1",
+				toolName: "delete_file",
+				approvalRequestId: "approval-42",
+				content: null,
+				delta: null,
+			}),
+		);
+		const completed = applyNodeChatStreamEvent(
+			approval.conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallCompleted,
+				toolCallId: "call-1",
+				toolName: "delete_file",
+				result: "Tool call invocation was rejected.",
+				isError: false,
+				isDenied: true,
+				content: null,
+				delta: null,
+			}),
+		);
+
+		const toolPart = completed.conversation.messages
+			.find((message) => message.id === "assistant-1")
+			?.parts?.find((part) => part.kind === "tool");
+		expect(toolPart).toMatchObject({ id: "call-1", state: "denied" });
+		expect(toolPart && "pendingApprovalRequestId" in toolPart ? toolPart.pendingApprovalRequestId : undefined).toBeUndefined();
+	});
+
 	it("clears a lingering pending-approval waiting card when the turn terminalizes via a stream failure", () => {
 		const optimistic = appendOptimisticNodeChatSend(
 			conversation,

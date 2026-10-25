@@ -56,9 +56,32 @@ The browser's session is a short-lived access token held **in memory only** plus
 SameSite=Strict refresh cookie, so every document load calls `auth/refresh`. **Sessions are independent**: each
 sign-in starts its own refresh-token chain and revokes nothing, so signing in on a second browser or client never
 signs the first one out. `NodeAuthService.RefreshAsync` rotates the presented token single-use — that token alone is
-revoked and linked to its successor inside one serializable transaction; other sessions are untouched. Logout
-(`RevokeRefreshTokensAsync`), `ChangePasswordAsync` and `ResetAdminPasswordAsync` still revoke **every** session of
-the user. A failed refresh (missing, expired or revoked cookie) answers a bodyless 401 and clears the cookie.
+revoked and linked to its successor inside one serializable transaction; other sessions are untouched. A failed
+refresh (missing, expired or revoked cookie) answers a bodyless 401 and clears the cookie.
+
+Each sign-in is a row in `node_auth_sessions` (`NodeAuthSession`: user, created, last used, a client label from the
+User-Agent truncated to 160 characters, revoked); every refresh token of its chain carries `session_id`, and every
+access token carries the session id as `sid`. Rotation and the grace keep the session and bump its last use; a
+refresh token issued before sessions existed gets a session on its next refresh. `NodeJwtBearerEvents.TokenValidated`
+rejects a token whose `sid` names a missing, revoked or foreign session (one indexed lookup beside the stamp check);
+a token without `sid` (minted before the upgrade) lives out its lifetime. **Logout ends only the caller's session**
+(`EndCurrentSessionAsync`: the access token's `sid`, else the session of the presented refresh token's rotation-chain
+head, so a pre-session cookie a concurrent refresh already rotated cannot be revived through the grace) and its refresh
+tokens, so its access tokens are rejected at once and other sessions keep working. `auth/sessions` lists the caller's
+live sessions (the current one flagged), `DELETE auth/sessions/{sessionId}` ends one of the caller's own (404 for any
+other id), and `auth/sessions/revoke-all` ("sign out everywhere") ends every session, the caller's included, and
+rotates the security stamp so pre-upgrade tokens die too. `ChangePasswordAsync` and `ResetAdminPasswordAsync` still
+revoke **every** session of the user. The desktop command overlay shares the main window's cookie, so its tokens
+carry the same `sid`; on show it reloads when the main window is on the sign-in page. `NodeAuthSessionTests` pins
+these paths.
+
+Open hub connections follow the same sign-outs. A WebSocket hub token is validated only at the handshake, so the
+global hub filter `NodeSignOutHubFilter` registers every connection (user, `sid`) in `NodeHubConnectionRegistry` and
+re-runs `NodeSecurityStampCheck.FindRevocationAsync` (the JWT events' own check) on every invocation, streaming ones
+included. After the revoking write commits, `NodeAuthService` aborts the ended session's connections (logout, session
+revoke) or all of the user's, sid-less ones included (sign out everywhere, password change, reset) through
+`INodeLiveConnectionRevoker`. Token expiry alone never closes a connection, so a long chat stream outlives its access
+token. `NodeHubSignOutTests` pins these paths over a real WebSocket.
 
 A non-browser loopback client (the `xe` terminal client) uses **body mode** instead of the cookie: `auth/login` with
 `returnRefreshToken: true` returns `refreshToken` and `refreshTokenExpiresAtUtc` in the body and writes no cookie, and
@@ -87,7 +110,8 @@ inside the window can mint pairs until it closes (bounded by `auth/refresh`'s ow
 `NodeAuthRateLimits.RefreshPolicy`: 60/min per client IP, apart from the 10/min the password endpoints share, because
 every SPA load spends a refresh). Each such pair is an
 independent session with the full refresh lifetime, so a cookie stolen inside the window is no longer revealed by
-the other client being signed out: only logout, a password change or a reset ends it.
+the other client being signed out: ending its session in the sessions list, signing out everywhere, a password
+change or a reset ends it.
 
 Authorization is **deny-by-default, in two layers**. At the FastEndpoints layer a global configurator applies
 the `NodeOperator` policy to every discovered endpoint whether or not that endpoint's own `Configure()` asked

@@ -201,6 +201,18 @@ public sealed class DesktopEngineExitTests
             "The shell's duplicate must stay the engine's route.");
 
     [Test]
+    [Arguments("http://127.0.0.1:5000/node-settings?tab=models#top", "http://127.0.0.1:5000/node-settings?tab=models#top")]
+    [Arguments("http://127.0.0.1:5000/vault?redirect=%2Fnode-settings", "http://127.0.0.1:5000/vault?redirect=%2Fnode-settings")]
+    [Arguments("http://127.0.0.1:5001/node-settings", "http://127.0.0.1:5000/")]
+    [Arguments("https://example.com/node-settings", "http://127.0.0.1:5000/")]
+    [Arguments("about:blank", "http://127.0.0.1:5000/")]
+    [Arguments("chrome-error://chromewebdata/", "http://127.0.0.1:5000/")]
+    [Arguments("http://user@127.0.0.1:5000/node-settings", "http://127.0.0.1:5000/")]
+    [Arguments(null, "http://127.0.0.1:5000/")]
+    public void ReloadTarget_KeepsASameOriginRouteAndFallsBackToTheStartPage(string? current, string expected) =>
+        AssertEx.Equal(expected, DesktopWindow.ReloadTarget(current is null ? null : new Uri(current), new Uri("http://127.0.0.1:5000/")).AbsoluteUri);
+
+    [Test]
     public void NavigationGate_IgnoresASupersededLoadAndRetriesUntilTheWindowEnds()
     {
         var clock = new ManualClock();

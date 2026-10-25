@@ -280,7 +280,8 @@ internal static class ConversationContextBuilder
         string.Equals(part.Kind, NodeChatMessagePartKinds.Tool, StringComparison.Ordinal)
         && !string.IsNullOrEmpty(part.ToolCallId)
         && (string.Equals(part.State, NodeChatToolPartStates.Received, StringComparison.Ordinal)
-            || string.Equals(part.State, NodeChatToolPartStates.Failed, StringComparison.Ordinal));
+            || string.Equals(part.State, NodeChatToolPartStates.Failed, StringComparison.Ordinal)
+            || string.Equals(part.State, NodeChatToolPartStates.Denied, StringComparison.Ordinal));
 
     private static string? ExcerptResult(string? result, int toolResultExcerptChars)
     {

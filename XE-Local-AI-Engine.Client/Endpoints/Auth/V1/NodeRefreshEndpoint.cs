@@ -47,7 +47,8 @@ public sealed class NodeRefreshEndpoint : EndpointWithoutRequest<NodeAccessToken
         var refreshToken = bodyMode
             ? HttpContext.Request.Headers[RefreshTokenHeaderName].ToString()
             : HttpContext.Request.Cookies[NodeAuthCookie.RefreshCookieName];
-        var result = await _authService.RefreshAsync(refreshToken, ct);
+        var clientLabel = HttpContext.Request.Headers.UserAgent.ToString();
+        var result = await _authService.RefreshAsync(refreshToken, clientLabel, ct);
 
         // A vault unlock's ticket (VaultUnlockHost) is spent by the first refresh that carries it, and trades for a
         // session only when the refresh cookie did not. The ticket is registered only after a pre-host password unlock.
@@ -57,7 +58,7 @@ public sealed class NodeRefreshEndpoint : EndpointWithoutRequest<NodeAccessToken
             var consumed = HttpContext.RequestServices.GetService<VaultUnlockTicket>()?.TryConsume(unlockTicket, _timeProvider.GetUtcNow()) == true;
             if (consumed && !result.Succeeded)
             {
-                result = await _authService.IssueSessionAfterVaultUnlockAsync(ct);
+                result = await _authService.IssueSessionAfterVaultUnlockAsync(clientLabel, ct);
             }
             else if (!result.Succeeded)
             {

@@ -26,6 +26,9 @@ public sealed record ToolCallLifecyclePayload
 
     public bool IsError { get; init; }
 
+    /// <summary>The person denied the call, so the tool never ran; the completed phase only.</summary>
+    public bool IsDenied { get; init; }
+
     /// <summary>
     ///     The streamed-content length when a <see cref="ToolCallLifecyclePhase.Requested" /> call was reported; the
     ///     chat stream splits the text before it off as an interim segment. Null for the completed phase.

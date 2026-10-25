@@ -1,5 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
+import { retryTransient } from "@/core/api/errors/RetryClassification";
 import { getNodeAuthStatus } from "@/core/auth/api/NodeAuthApi";
 import { VaultUnlock } from "@/core/auth/pages/VaultUnlock";
 import { getSafeRedirectPath } from "@/core/auth/utils/RedirectPath";
@@ -20,7 +21,7 @@ function validateSearch(search: Record<string, unknown>): VaultSearch {
 export const Route = createFileRoute("/vault")({
 	validateSearch,
 	beforeLoad: async ({ search }) => {
-		const status = await getNodeAuthStatus();
+		const status = await retryTransient(() => getNodeAuthStatus());
 		if (status.vault !== "locked") {
 			throw redirect({ to: getSafeRedirectPath(search.redirect) });
 		}

@@ -222,7 +222,8 @@ internal static class ChatStreamEventMapper
             // that text off the answer at the right character even when this event overtakes the trailing delta.
             ContentOffset = payload.Phase == ToolCallLifecyclePhase.Requested ? payload.ContentOffset : null,
             Result = payload.Phase == ToolCallLifecyclePhase.Completed ? payload.Result : null,
-            IsError = payload.Phase == ToolCallLifecyclePhase.Completed ? payload.IsError : null
+            IsError = payload.Phase == ToolCallLifecyclePhase.Completed ? payload.IsError : null,
+            IsDenied = payload.Phase == ToolCallLifecyclePhase.Completed ? payload.IsDenied : null
         };
     }
 
@@ -234,7 +235,7 @@ internal static class ChatStreamEventMapper
             return;
         }
 
-        parts.CompleteToolCall(payload.ToolCallId, payload.ToolName, payload.Result, payload.IsError, sequence);
+        parts.CompleteToolCall(payload.ToolCallId, payload.ToolName, payload.Result, payload.IsError, sequence, payload.IsDenied);
 
         // Only images render; other binary blocks keep just their placeholder in Result. Inline data URIs under a
         // fixed 1 MiB cap keep the metadata row bounded; store media as files if tools start returning larger ones.

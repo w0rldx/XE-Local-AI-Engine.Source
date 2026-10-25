@@ -73,7 +73,7 @@ internal sealed class ClientLocalToolRegistry : IClientLocalToolRegistry
         return new MetadataToolFunction(toolName,
             handler.Description,
             MetadataToolFunction.ParseSchema(handler.ParameterSchema),
-            async (_, cancellationToken) => ToolFailureText.Format(ToolFailureText.ToolReportedCode,
+            async (_, cancellationToken) => ToolFailureText.FormatNotRun(ToolFailureText.ToolReportedCode,
                 await preflight.PreflightAsync(cancellationToken).ConfigureAwait(false)
                 ?? $"{toolName} was not run: this node can run it now, which needs approval. Call it again in a new message."));
     }

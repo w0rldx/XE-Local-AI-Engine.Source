@@ -651,6 +651,14 @@ export type XeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse = {
 	refreshTokenExpiresAtUtc?: string | null;
 };
 
+export type XeLocalAiEngineClientEndpointsAuthV1NodeAuthSessionResponse = {
+	id: string;
+	clientLabel?: string | null;
+	createdAtUtc: string;
+	lastUsedAtUtc: string;
+	current: boolean;
+};
+
 export type XeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse = {
 	setupRequired: boolean;
 	authenticated: boolean;
@@ -673,6 +681,10 @@ export type XeLocalAiEngineClientEndpointsAuthV1NodeLoginRequest = {
 	email?: string | null;
 	password: string;
 	returnRefreshToken?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsAuthV1NodeRevokeSessionRequest = {
+	[key: string]: never;
 };
 
 export type XeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest = {
@@ -8575,6 +8587,93 @@ export type NodeRefreshResponses = {
 };
 
 export type NodeRefreshResponse = NodeRefreshResponses[keyof NodeRefreshResponses];
+
+export type ListNodeAuthSessionsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/auth/sessions";
+};
+
+export type ListNodeAuthSessionsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListNodeAuthSessionsResponses = {
+	/**
+	 * Success
+	 */
+	200: Array<XeLocalAiEngineClientEndpointsAuthV1NodeAuthSessionResponse>;
+};
+
+export type ListNodeAuthSessionsResponse = ListNodeAuthSessionsResponses[keyof ListNodeAuthSessionsResponses];
+
+export type RevokeAllNodeAuthSessionsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/auth/sessions/revoke-all";
+};
+
+export type RevokeAllNodeAuthSessionsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type RevokeAllNodeAuthSessionsResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type RevokeAllNodeAuthSessionsResponse = RevokeAllNodeAuthSessionsResponses[keyof RevokeAllNodeAuthSessionsResponses];
+
+export type RevokeNodeAuthSessionData = {
+	body?: never;
+	path: {
+		sessionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/auth/sessions/{sessionId}";
+};
+
+export type RevokeNodeAuthSessionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type RevokeNodeAuthSessionResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type RevokeNodeAuthSessionResponse = RevokeNodeAuthSessionResponses[keyof RevokeNodeAuthSessionResponses];
 
 export type NodeSetupData = {
 	body: XeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest;

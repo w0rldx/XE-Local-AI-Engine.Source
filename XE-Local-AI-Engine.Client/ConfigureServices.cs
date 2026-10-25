@@ -265,6 +265,8 @@ public static class ConfigureServices
                    options.HandshakeTimeout = TimeSpan.FromSeconds(15);
                    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
                    options.StreamBufferCapacity = 1;
+                   // A hub token is validated once, at the handshake: this filter ends a connection when its sign-in ends.
+                   options.AddFilter<NodeSignOutHubFilter>();
                })
                // Hub frames carry the SAME JSON policy as the REST surface. On SignalR's own defaults a CLR enum member reaches the browser as a NUMBER while
                // the generated TS type for that field is a string union, so a handler comparing names matches nothing, silently. See docs/wiki/09-api-and-hubs.md.
@@ -331,6 +333,9 @@ public static class ConfigureServices
                // above, so an integrator gains neither the operator's admin reach, the MCP client's tool reach, nor the proxy's raw model.
                .AddScheme<AuthenticationSchemeOptions, IntegrationApiKeyAuthenticationHandler>(IntegrationApiKeyAuthenticationHandler.SchemeName, configureOptions: null);
         builder.Services.AddSingleton<NodeJwtBearerEvents>();
+        builder.Services.AddSingleton<NodeHubConnectionRegistry>();
+        builder.Services.AddSingleton<INodeLiveConnectionRevoker>(static services => services.GetRequiredService<NodeHubConnectionRegistry>());
+        builder.Services.AddSingleton<NodeSignOutHubFilter>();
         builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
                .Configure<IOptions<NodeAuthOptions>, INodeJwtKeyProvider>((options, nodeAuthOptions, jwtKeyProvider) =>
                {

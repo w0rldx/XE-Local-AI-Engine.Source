@@ -313,6 +313,41 @@ public sealed class ConversationContextBuilderTests
     }
 
     [Test]
+    public void Build_WithToolHistoryOn_ReplaysADeniedPartWithItsDenialText()
+    {
+        // N-90: a denial is stored as its own state; dropping it from the replay would leave the model's call unanswered.
+        var conversationId = Guid.NewGuid();
+        var denied = new NodeChatMessagePart(NodeChatMessagePartKinds.Tool,
+            Sequence: 0,
+            Text: null,
+            "call-1",
+            "run_python",
+            NodeChatToolPartStates.Denied,
+            Args: "{}",
+            "Tool call invocation was rejected.");
+        var history = new[]
+        {
+            Message(conversationId, sequence: 0, "assistant", "I did not run it") with
+            {
+                Parts = [denied]
+            }
+        };
+
+        var context = ConversationContextBuilder.Build(Conversation(conversationId, history),
+            Message(conversationId, sequence: 1, "user", "now"),
+            selectedPath: null,
+            attachmentContext: null,
+            imageContext: null,
+            knowledgeContext: null,
+            includeToolHistory: true);
+
+        var exchange = AssertEx.NotNull(context[0].ToolExchanges).Single();
+        AssertEx.Equal("call-1", exchange.CallId);
+        AssertEx.Equal("Tool call invocation was rejected.", exchange.Result);
+        AssertEx.False(exchange.IsError, "a denial replays as the plain result the model read, as before");
+    }
+
+    [Test]
     public void Build_WithToolHistoryOn_ExcerptsAnOversizedResultToTheConfiguredCap()
     {
         var conversationId = Guid.NewGuid();

@@ -352,6 +352,7 @@ public sealed partial class InvocationRunner
             Phase = ToolCallLifecyclePhase.Completed,
             Result = toolResultText,
             IsError = functionResult.Exception is not null || ToolFailureText.TryGetCode(functionResult.Result) is not null,
+            IsDenied = ToolInvocationObservabilityChatClient.IsDeniedResult(functionResult.Result),
             Media = ToolResultMedia.Get(functionResult.Result),
             DurationMs = ToolExecutionTimingScope.TryGet(resultCallId)
         });

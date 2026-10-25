@@ -22,7 +22,7 @@ export type MessageStatus = "pending" | "queued" | "streaming" | "completed" | "
 
 export type ChatOrigin = "local" | "remote";
 
-export type ToolCallState = "requesting" | "waiting" | "received" | "failed";
+export type ToolCallState = "requesting" | "waiting" | "received" | "failed" | "denied";
 
 export type ChatMessagePartKind = "reasoning" | "tool" | "text" | "notice";
 

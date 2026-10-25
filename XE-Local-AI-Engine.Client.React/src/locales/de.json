@@ -207,6 +207,7 @@
 			"approve": "Freigeben",
 			"approveSession": "Für diese Sitzung freigeben",
 			"argsLabel": "Argumente",
+			"denied": "Abgelehnt",
 			"deny": "Ablehnen",
 			"done": "Fertig",
 			"errorLabel": "Fehler",
@@ -7577,6 +7578,22 @@
 				"usage": "Nutzung & Limits",
 				"voice": "Sprache & Transkription",
 				"workspaces": "Agent-Arbeitsbereiche"
+			},
+			"sessions": {
+				"description": "Jeder Ort, an dem Sie sich bei diesem Node angemeldet haben. Eine abgemeldete Sitzung endet sofort.",
+				"error": "Die Sitzung konnte nicht beendet werden.",
+				"loadError": "Die Sitzungen konnten nicht geladen werden.",
+				"revoke": "Abmelden",
+				"revokeAll": "Überall abmelden",
+				"revokeAllConfirm": {
+					"confirm": "Überall abmelden",
+					"description": "Alle Sitzungen enden sofort, auch diese. Sie werden zur Anmeldeseite weitergeleitet.",
+					"title": "Überall abmelden?"
+				},
+				"thisDevice": "Dieses Gerät",
+				"times": "Angemeldet {{created}} · zuletzt verwendet {{lastUsed}}",
+				"title": "Anmeldesitzungen",
+				"unknownClient": "Unbekannter Client"
 			},
 			"subtitle": "Nicht-geheime lokale Runtime-Einstellungen dieses Workers anpassen.",
 			"title": "Node-Einstellungen",

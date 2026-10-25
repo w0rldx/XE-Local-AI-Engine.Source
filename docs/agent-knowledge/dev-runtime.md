@@ -23,8 +23,8 @@ and `/api/local/v1` with it. **Authority:** `Program.cs` (`ServerUrlsKey` union)
 **Rule:** `NodeAuthService.RefreshAsync` honours a rotated-away token for ten seconds only by following
 `replaced_by_token_id` (written only by `INodeIdentityStore.RotateAsync`) to a live, unexpired chain head. Never key it on
 `revoked_at_utc` (every revoke path writes it) or a user + instant match (crosses sessions). The grace path never re-stamps
-`RevokedAtUtc` or re-links; the grace pair is a sibling of the head. Sessions are independent chains: only logout, password
-change and reset revoke all. **Prevents:** reviving a logged-out cookie, or a login signing other clients out.
+`RevokedAtUtc` or re-links; the grace pair is a sibling of the head. Sessions are independent chains: logout and a session revoke end
+one session; sign out everywhere, password change and reset revoke all. **Prevents:** reviving a logged-out cookie, or a login signing other clients out.
 **Authority:** `NodeAuthRefreshRotationGraceTests`; migration `AllowConcurrentRefreshSessions`.
 [evidence](../agent-knowledge-evidence.md#refresh-rotations-grace-window-is-discriminated-by-the-successor-link-never-by-revoked-recently-or-by-a-timestamp)
 

@@ -28,6 +28,9 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
     private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly DesktopNavigationGate _navigation = new(TimeProvider.System);
     private readonly Uri _start;
+
+    // The page the current load (and its retries) navigates: the start page, or the route a relaunch reload kept.
+    private Uri _target;
     private Task<GtkDesktopBridge>? _linuxInitialization;
     private GtkDesktopBridge? _linux;
     private bool _disposed;
@@ -87,6 +90,7 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
         }
 
         _start = new Uri(options.Origin, path);
+        _target = _start;
         _startGeneration++;
         _webView.Source = _start;
     }
@@ -140,15 +144,29 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
         if (linux is not null) { await linux.DisposeAsync(); }
     }
 
-    /// <summary>Loads the start page again, after the engine behind the same origin was relaunched. UI thread only.</summary>
-    internal void Reload()
+    /// <summary>Loads the start page again. UI thread only.</summary>
+    internal void Reload() =>
+        Load(_start);
+
+    /// <summary>Loads the page's current address again after the engine behind the same origin was relaunched, so the
+    ///     user stays on their route; see <see cref="ReloadTarget" />. UI thread only.</summary>
+    internal async Task ReloadCurrentAsync() =>
+        Load(ReloadTarget(await ReadLocationAsync(CancellationToken.None), _start));
+
+    /// <summary>The page's own address when it is on the engine origin, else <paramref name="start" />: an unreadable
+    ///     page, <c>about:blank</c>, the WebView's error page or a foreign origin.</summary>
+    internal static Uri ReloadTarget(Uri? current, Uri start) =>
+        current is not null && DesktopLaunchOptions.ClassifyNavigation(start, current) == NavigationDisposition.SameOrigin ? current : start;
+
+    private void Load(Uri target)
     {
         if (_disposed) { return; }
 
+        _target = target;
         _startLoading = true;
         _startGeneration++;
         _navigation.Restart();
-        try { _webView.Navigate(_start); }
+        try { _webView.Navigate(target); }
         catch (Exception)
         {
             // The caller (the engine relaunch) reports the failure; only the loading state is this window's to settle.
@@ -266,7 +284,7 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
         // The probe can take a second: a disposal or a Reload during it owns the window now.
         if (IsStale(generation)) { return; }
 
-        try { _webView.Navigate(_start); }
+        try { _webView.Navigate(_target); }
         catch (Exception exception) { FailStart(exception); }
     }
 

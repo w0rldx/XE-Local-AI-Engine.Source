@@ -3,16 +3,19 @@ import { IconCircleKey } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { isAxiosError } from "axios";
 import type { FormEvent } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { loginNodeAuth, setupNodeAuth } from "@/core/auth/api/NodeAuthApi";
+import { getNodeAuthStatus, loginNodeAuth, setupNodeAuth } from "@/core/auth/api/NodeAuthApi";
 import { RecoveryCodeReveal } from "@/core/auth/components/RecoveryCodeReveal";
 import type { NodeAuthErrorResponse } from "@/core/auth/models/NodeAuthModels";
 import { unmetPasswordRules } from "@/core/auth/models/PasswordPolicy";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { StandaloneScreenControls } from "@/core/ui/components/StandaloneScreenControls/StandaloneScreenControls";
+
+// Both the re-check interval and its request timeout.
+const statusPollMs = 5_000;
 
 interface SetupFormValues {
 	email: string;
@@ -91,6 +94,46 @@ export function Setup() {
 	const markTouched = (field: keyof SetupFormValues): void => {
 		setTouched((current) => (current[field] === true ? current : { ...current, [field]: true }));
 	};
+
+	// Setup finished by another client (REST, another window) moves this page on too: "/" runs the sign-in chain, which
+	// lands on login, the vault step or the app. Paused while this page's own setup runs or its recovery code is shown.
+	const idle = !submitting && recoveryCode === undefined;
+	useEffect(() => {
+		if (!idle) {
+			return;
+		}
+
+		let cancelled = false;
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const schedule = (): void => {
+			timer = setTimeout(() => {
+				getNodeAuthStatus({ timeout: statusPollMs })
+					.then((status) => {
+						if (cancelled) {
+							return;
+						}
+
+						if (!status.setupRequired) {
+							navigate({ to: "/" }).catch(() => undefined);
+							return;
+						}
+
+						schedule();
+					})
+					.catch(() => {
+						// The next tick decides.
+						if (!cancelled) {
+							schedule();
+						}
+					});
+			}, statusPollMs);
+		};
+		schedule();
+		return () => {
+			cancelled = true;
+			clearTimeout(timer);
+		};
+	}, [idle, navigate]);
 
 	// Mirrors the backend ASP.NET Identity password policy (ConfigureServices.cs) so the operator sees the rules up
 	// front and gets immediate client-side feedback instead of a server round-trip.

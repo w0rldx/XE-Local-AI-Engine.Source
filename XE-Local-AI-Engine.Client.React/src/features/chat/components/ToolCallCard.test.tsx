@@ -160,6 +160,15 @@ describe("ToolCallCard", () => {
 		expect(screen.getByTestId("chat-tool-call-result-get_time").textContent).toContain("boom");
 	});
 
+	it("labels a denied tool call Denied, not Done (N-90)", () => {
+		renderWithProviders(<ToolCallCard part={toolPart({ state: "denied", result: "rejected" })} />);
+
+		const card = screen.getByTestId("chat-tool-call-card-get_time");
+		expect(card.getAttribute("data-state")).toBe("denied");
+		expect(screen.getByText("Denied")).toBeTruthy();
+		expect(screen.queryByText("Done")).toBeNull();
+	});
+
 	it("surfaces an approval indicator when the tool requires approval", () => {
 		renderWithProviders(<ToolCallCard part={toolPart({ state: "waiting", requiresApproval: true })} />);
 

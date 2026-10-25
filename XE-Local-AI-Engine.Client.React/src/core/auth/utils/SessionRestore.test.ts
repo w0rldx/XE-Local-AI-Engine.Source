@@ -100,6 +100,26 @@ describe("restoreNodeAuthSession", () => {
 		await expect(restoreNodeAuthSession()).resolves.toBe("authenticated");
 		expect(authApiMock.refreshNodeAuthToken).toHaveBeenCalledTimes(2);
 	});
+
+	// N-86: the vault hand-over's port gap is a transport error on the status read; it is retried, not thrown to the
+	// route's error boundary.
+	it("rides out a network error on the status read during the vault hand-over", async () => {
+		vi.useFakeTimers();
+		try {
+			authApiMock.getNodeAuthStatus
+				.mockRejectedValueOnce(new AxiosError("Network Error", AxiosError.ERR_NETWORK))
+				.mockResolvedValue({ setupRequired: false, authenticated: false, vault: "unlocked" });
+			authApiMock.refreshNodeAuthToken.mockResolvedValue({ accessToken: "new-token", expiresAtUtc: "2026-05-25T12:15:00Z" });
+
+			const result = restoreNodeAuthSession();
+			await vi.advanceTimersByTimeAsync(250);
+
+			await expect(result).resolves.toBe("authenticated");
+			expect(authApiMock.getNodeAuthStatus).toHaveBeenCalledTimes(2);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
 });
 
 describe("restoreNodeAuthSession vault states", () => {

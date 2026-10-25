@@ -363,7 +363,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         try
         {
             _overlay ??= new DesktopCommandWindow(new DesktopLaunchOptions(_engine.Origin, _options.ProfileDirectory), _options.Debug,
-                _overlayBounds, OnOverlayShown, OnOverlayHidden);
+                _overlayBounds, OnOverlayShown, OnOverlayHidden, ReadMainLocationAsync);
             _overlay.Show(toggle);
         }
         catch (Exception exception)
@@ -371,6 +371,10 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             DesktopStartupDiagnostics.Record($"The command overlay could not open ({exception.GetType().Name}). {exception.Message}");
         }
     }
+
+    // The windows share only the refresh cookie, so the main window being on sign-in is the overlay's logout signal.
+    private Task<Uri?> ReadMainLocationAsync() =>
+        _window is DesktopWindow main ? main.ReadLocationAsync(_stopping.Token) : Task.FromResult<Uri?>(null);
 
     private void OnOverlayShown()
     {
@@ -579,7 +583,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             _engine = await DesktopEngineSession.StartAsync(_options, _stopping.Token);
             DesktopEngineSession.ValidateRequestedPort(_engine.Origin, origin.Port);
             _exitCode = 0;
-            (_window as DesktopWindow)?.Reload();
+            if (_window is DesktopWindow window) { await window.ReloadCurrentAsync(); }
             if (_engine.WaitForEngineExitAsync() is { } exit)
             {
                 _ = ExitWithEngineAsync(exit);

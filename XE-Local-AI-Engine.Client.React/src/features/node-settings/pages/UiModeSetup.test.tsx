@@ -65,22 +65,28 @@ describe("UiModeSetup", () => {
 
 	afterEach(() => cleanup());
 
-	it("preselects neither option and keeps the continue button disabled until one is chosen", () => {
+	it("preselects Simple so Continue is available at once", () => {
 		renderWithProviders(<UiModeSetup />);
 
-		for (const radio of screen.getAllByRole("radio")) {
-			expect(radio.getAttribute("aria-checked")).toBe("false");
-		}
-
-		expect((screen.getByTestId("ui-mode-continue") as HTMLButtonElement).disabled).toBe(true);
+		expect(screen.getByTestId("ui-mode-simple-card").getAttribute("aria-checked")).toBe("true");
+		expect(screen.getByTestId("ui-mode-advanced-card").getAttribute("aria-checked")).toBe("false");
+		expect((screen.getByTestId("ui-mode-continue") as HTMLButtonElement).disabled).toBe(false);
 	});
 
-	it("marks Simple as the recommendation without selecting it", () => {
+	it("saves the preselected Simple when the operator continues without changing it", async () => {
+		const save = captureSave("simple");
+		renderWithProviders(<UiModeSetup />);
+
+		fireEvent.click(screen.getByTestId("ui-mode-continue"));
+
+		await waitFor(() => expect(save.body()).toEqual({ uiMode: "simple" }));
+	});
+
+	it("marks Simple as the recommendation", () => {
 		renderWithProviders(<UiModeSetup />);
 
 		const simpleCard = screen.getByTestId("ui-mode-simple-card");
 		expect(simpleCard.textContent).toContain("Recommended for most people");
-		expect(simpleCard.getAttribute("aria-checked")).toBe("false");
 
 		// The badge is a recommendation, not a decision: the Advanced card carries no counter-badge either.
 		expect(screen.getByTestId("ui-mode-advanced-card").textContent).not.toContain("Recommended");

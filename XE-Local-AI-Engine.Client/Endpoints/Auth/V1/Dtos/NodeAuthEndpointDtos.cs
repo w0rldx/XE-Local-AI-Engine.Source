@@ -124,3 +124,25 @@ public sealed record NodeAuthErrorResponse
 
     public IReadOnlyList<string> Errors { get; init; } = [];
 }
+
+/// <summary>One live sign-in session of the caller, as <c>auth/sessions</c> lists it.</summary>
+public sealed record NodeAuthSessionResponse
+{
+    public required string Id { get; init; }
+
+    /// <summary>The signing-in client's User-Agent, truncated; <c>null</c> when it sent none.</summary>
+    public string? ClientLabel { get; init; }
+
+    public required DateTime CreatedAtUtc { get; init; }
+
+    public required DateTime LastUsedAtUtc { get; init; }
+
+    /// <summary>Whether this is the session of the access token that made the request.</summary>
+    public required bool Current { get; init; }
+}
+
+/// <summary>The <c>auth/sessions/{sessionId}</c> route.</summary>
+public sealed class NodeRevokeSessionRequest
+{
+    public string SessionId { get; init; } = string.Empty;
+}

@@ -4,7 +4,8 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 public interface INodeTokenService
 {
-    AccessTokenResult CreateAccessToken(NodeUser user, IEnumerable<string> roles);
+    /// <summary>Mints an access token; with <paramref name="sessionId" /> it carries a <c>sid</c> that dies with that session.</summary>
+    AccessTokenResult CreateAccessToken(NodeUser user, IEnumerable<string> roles, string? sessionId = null);
 
     string CreateRefreshTokenRaw();
 

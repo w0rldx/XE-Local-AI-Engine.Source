@@ -47,7 +47,7 @@ const knownStatuses = new Set<MessageStatus>([
 ]);
 const knownOrigins = new Set<ChatOrigin>(["local", "remote"]);
 const knownRatings = new Set<ChatFeedbackRating>(["up", "down"]);
-const knownToolStates = new Set<ToolCallState>(["requesting", "waiting", "received", "failed"]);
+const knownToolStates = new Set<ToolCallState>(["requesting", "waiting", "received", "failed", "denied"]);
 
 function toToolState(state: string | null | undefined): ToolCallState {
 	const normalized = (state ?? "").toLowerCase() as ToolCallState;
@@ -331,7 +331,7 @@ export function mapMessageRevisions(dto: NodeChatMessageRevisionsResponseDto): C
 /**
  * Maps a tool-lifecycle stream event into the `ChatToolCall` shape the stream reducer folds into ordered parts.
  * Returns null for non-tool events. `tool-call-requested` → `waiting` when the tool needs approval, else
- * `requesting`; `tool-call-completed` → `failed` when `isError` else `received`. The tool call id is the stable
+ * `requesting`; `tool-call-completed` → `denied` when `isDenied`, `failed` when `isError`, else `received`. The tool call id is the stable
  * key so a completed event can later collapse onto its requested entry.
  */
 export function mapToolCallEvent(event: NodeChatStreamEventDto): ChatToolCall | null {
@@ -352,7 +352,7 @@ export function mapToolCallEvent(event: NodeChatStreamEventDto): ChatToolCall | 
 		return {
 			id: event.toolCallId ?? `${event.messageId}:${event.sequence}`,
 			name: event.toolName ?? "tool",
-			state: event.isError ? "failed" : "received",
+			state: event.isDenied ? "denied" : event.isError ? "failed" : "received",
 			result: event.result ?? undefined,
 		};
 	}

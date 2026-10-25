@@ -27,6 +27,10 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
     // FrameworkApprovalGateTests pins the text against the framework, so a package bump that rewords it fails there.
     internal const string RejectedApprovalResultPrefix = "Tool call invocation was rejected";
 
+    /// <summary>Whether a tool result is the framework's text for a denied approval: the tool never ran.</summary>
+    internal static bool IsDeniedResult(object? result) =>
+        result is string text && text.StartsWith(RejectedApprovalResultPrefix, StringComparison.Ordinal);
+
     private readonly ILogger<ToolInvocationObservabilityChatClient> _logger;
 
     public ToolInvocationObservabilityChatClient(IChatClient innerClient, ILogger<ToolInvocationObservabilityChatClient> logger)
@@ -143,7 +147,7 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
         var outcome = functionResult switch
         {
             { Exception: not null } => "error",
-            { Result: string text } when text.StartsWith(RejectedApprovalResultPrefix, StringComparison.Ordinal) => "denied",
+            _ when IsDeniedResult(functionResult.Result) => "denied",
             _ => ToolFailureText.TryGetCode(functionResult.Result) switch
             {
                 null => "success",

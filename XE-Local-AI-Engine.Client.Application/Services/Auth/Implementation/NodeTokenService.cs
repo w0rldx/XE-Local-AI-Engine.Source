@@ -26,7 +26,7 @@ public sealed class NodeTokenService : INodeTokenService
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
-    public AccessTokenResult CreateAccessToken(NodeUser user, IEnumerable<string> roles)
+    public AccessTokenResult CreateAccessToken(NodeUser user, IEnumerable<string> roles, string? sessionId = null)
     {
         ArgumentNullException.ThrowIfNull(user);
         ArgumentNullException.ThrowIfNull(roles);
@@ -38,7 +38,7 @@ public sealed class NodeTokenService : INodeTokenService
 
         var issuedAt = _timeProvider.GetUtcNow();
         var expiresAt = issuedAt.AddMinutes(_options.Value.Jwt.AccessTokenMinutes);
-        var claims = CreateClaims(user, roles, issuedAt);
+        var claims = CreateClaims(user, roles, sessionId, issuedAt);
         var signingKey = _jwtKeyProvider.SigningKey.ToArray();
 
         try
@@ -82,7 +82,7 @@ public sealed class NodeTokenService : INodeTokenService
         return Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(raw)));
     }
 
-    private static Claim[] CreateClaims(NodeUser user, IEnumerable<string> roles, DateTimeOffset issuedAt)
+    private static Claim[] CreateClaims(NodeUser user, IEnumerable<string> roles, string? sessionId, DateTimeOffset issuedAt)
     {
         var userName = string.IsNullOrWhiteSpace(user.UserName) ? user.Email ?? user.Id : user.UserName;
         var claims = new List<Claim>
@@ -98,6 +98,12 @@ public sealed class NodeTokenService : INodeTokenService
         if (!string.IsNullOrEmpty(user.SecurityStamp))
         {
             claims.Add(new Claim(NodeAuthorizationPolicies.SecurityStampClaimType, user.SecurityStamp));
+        }
+
+        // Binds the token to one sign-in, so ending that session (logout, sessions list) rejects it at once.
+        if (!string.IsNullOrEmpty(sessionId))
+        {
+            claims.Add(new Claim(JwtRegisteredClaimNames.Sid, sessionId));
         }
 
         claims.AddRange(roles.Where(static role => !string.IsNullOrWhiteSpace(role))

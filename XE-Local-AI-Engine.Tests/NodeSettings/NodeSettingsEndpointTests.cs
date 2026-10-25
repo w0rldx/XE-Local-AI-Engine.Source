@@ -71,7 +71,8 @@ public sealed class NodeSettingsEndpointTests
                 services.RemoveAll<INodeSettingsStore>();
                 services.AddSingleton(nodeSettingsStore);
                 services.RemoveAll<PendingRestartRegistry>();
-                services.AddSingleton(new PendingRestartRegistry(new StoredNodeSettings()));
+                services.AddSingleton(provider => new PendingRestartRegistry(new StoredNodeSettings(),
+                    provider.GetRequiredService<INodeRuntimeSettings>().ResolveEffectiveValues));
             }
         };
         using var client = factory.CreateClient();

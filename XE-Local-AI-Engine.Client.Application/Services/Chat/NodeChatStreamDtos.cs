@@ -193,6 +193,9 @@ public sealed record ChatStreamEvent
 
     public bool? IsError { get; init; }
 
+    /// <summary>On <c>tool-call-completed</c>: the person denied the call and the tool never ran.</summary>
+    public bool? IsDenied { get; init; }
+
     public string? NoticeKind { get; init; }
 
     public string? NoticeMessage { get; init; }

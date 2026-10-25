@@ -507,6 +507,11 @@ The single-agent loop also withholds the denied tool from every later provider r
 (`InvocationRunner.WithholdDeniedTool`), so the model cannot request it again and then invent its result. The next turn
 offers the tool again. The three MAF skill tools are not withheld, because their approval is per skill. The
 orchestration path sends the same reason but cannot withhold, because the workflow owns each participant's offer.
+Its "nothing ran" sentence is `ToolFailureText.NotRunNotice`, which a refusal before the tool starts also carries
+(`ToolFailureText.FormatNotRun`: the `run_python` refusals in `ComputeToolGateway.ExecuteAsync` except an invalid
+request, and the per-turn preflight refusal in `ClientLocalToolRegistry`); a failure after the tool started never does.
+The completed tool event carries `isDenied` and the stored tool part the state `denied`, so the chat card reads
+"Denied", live and after a reload.
 
 ---
 

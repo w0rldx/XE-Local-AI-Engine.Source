@@ -11,6 +11,9 @@ public static partial class LocalApiRoutes
         public const string Logout = "auth/logout";
         public const string ChangePassword = "auth/change-password";
         public const string VaultConfirm = "auth/vault/confirm";
+        public const string Sessions = "auth/sessions";
+        public const string SessionById = "auth/sessions/{sessionId}";
+        public const string RevokeAllSessions = "auth/sessions/revoke-all";
 
         // Served only by the locked pre-host, before the real host exists.
         public const string VaultUnlock = "auth/vault/unlock";

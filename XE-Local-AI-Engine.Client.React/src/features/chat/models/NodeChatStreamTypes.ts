@@ -127,6 +127,8 @@ export interface NodeChatStreamEventDto {
 	requiresApproval?: boolean | null;
 	result?: string | null;
 	isError?: boolean | null;
+	// On `tool-call-completed`: the person denied the call, so the tool never ran.
+	isDenied?: boolean | null;
 	// Notice fields: present on the `assistant-notice` event only. `noticeKind` is one of "ModelSubstituted" |
 	// "ToolDisabled" | "HistoryTruncated" | "AttachmentsWithheld" | "AttachmentsNotSent" | "PlaybookWithheld" | "ToolsWithheld"
 	// (the client asked for tools on a model that does not declare tool support) | "CloudToolsWithheld" (switch codes in

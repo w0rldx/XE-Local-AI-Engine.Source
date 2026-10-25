@@ -252,6 +252,7 @@ public sealed class InvocationToolResolverTests
         }) as string);
         AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.TryGetCode(result), "the refusal is recorded as a failed call");
         AssertEx.Contains(result, "compute is off");
+        AssertEx.True(result.EndsWith(ToolFailureText.NotRunNotice, StringComparison.Ordinal), $"N-88: the refusal must say nothing ran (got: {result})");
         AssertEx.Equal(expected: 0, handler.Executions, "the approval-free variant never reaches the handler");
     }
 

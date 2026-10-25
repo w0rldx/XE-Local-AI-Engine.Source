@@ -5,37 +5,15 @@ import { toast } from "@/core/ui/notifications/Toast";
 import { ApiError } from "@/core/api/errors/ApiError";
 import { NetworkError } from "@/core/api/errors/NetworkError";
 import { getErrorStatus } from "@/core/api/errors/RetryClassification";
-import { navigateToLogin, navigateToVault } from "@/core/api/axios/LoginNavigation";
+import { navigateToVault, redirectToLoginOnce } from "@/core/api/axios/LoginNavigation";
 import type { ProblemDetails } from "@/core/api/models/ProblemDetails";
 import { refreshNodeAuthToken } from "@/core/auth/api/NodeAuthApi";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
-import { authPagePaths } from "@/core/auth/utils/RedirectPath";
 import { resetVaultSettled } from "@/core/auth/utils/SessionRestore";
 
 // A config field, not a WeakSet entry: axios merges a replayed config into a NEW object, so identity is lost on replay
 // and a persistent 401 would refresh again per round. mergeConfig copies unknown own keys, so this flag survives.
 type AuthRetryConfig = InternalAxiosRequestConfig & { authRetried?: boolean };
-let isRedirectingToLogin = false;
-
-function redirectToLoginOnce(): void {
-	if (authPagePaths.includes(globalThis.location.pathname)) {
-		return;
-	}
-
-	if (isRedirectingToLogin) {
-		return;
-	}
-
-	isRedirectingToLogin = true;
-
-	// Through the registered navigator, never a router import: see LoginNavigation.ts for the cycle that would close.
-	Promise.resolve(navigateToLogin(globalThis.location.pathname + globalThis.location.search))
-		.finally(() => {
-			isRedirectingToLogin = false;
-		})
-		.catch(() => undefined);
-}
-
 let isRedirectingToVault = false;
 
 function redirectToVaultOnce(): void {

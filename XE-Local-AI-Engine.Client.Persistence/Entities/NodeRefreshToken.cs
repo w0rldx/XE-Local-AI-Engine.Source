@@ -16,4 +16,7 @@ public sealed class NodeRefreshToken
 
     /// <summary>The <see cref="Id" /> of the token rotation issued in this one's place; null when logout, a password change or a reset revoked it.</summary>
     public string? ReplacedByTokenId { get; set; }
+
+    /// <summary>The <see cref="NodeAuthSession" /> this token's chain belongs to; null only for a token issued before sessions existed.</summary>
+    public string? SessionId { get; set; }
 }

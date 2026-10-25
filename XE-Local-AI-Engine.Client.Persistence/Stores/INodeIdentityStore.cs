@@ -57,8 +57,33 @@ public interface INodeIdentityStore
     /// <summary>Persists a newly issued refresh token that replaces nothing: a sign-in, or a grace refresh.</summary>
     Task AddRefreshTokenAsync(NodeRefreshToken token, CancellationToken cancellationToken);
 
-    /// <summary>Revokes every live refresh token of the user — every signed-in client — stamping <paramref name="now" /> on each.</summary>
+    /// <summary>Revokes every live session and refresh token of the user — every signed-in client — stamping <paramref name="now" /> on each.</summary>
+    /// <remarks>
+    ///     Two set-based updates (tokens, then sessions) that join an open transaction, so whatever a concurrent refresh
+    ///     committed earlier is caught and a later one finds its token revoked. They bypass the change tracker: an entity
+    ///     tracked here keeps a stale value, but EF saves only modified columns, so a later save never un-revokes a row.
+    /// </remarks>
     Task RevokeActiveTokensAsync(string userId, DateTime now, CancellationToken cancellationToken);
+
+    /// <summary>Revokes one refresh token that belongs to no session (issued before sessions existed).</summary>
+    Task RevokeRefreshTokenAsync(NodeRefreshToken token, DateTime now, CancellationToken cancellationToken);
+
+    /// <summary>Persists a new sign-in session.</summary>
+    Task AddSessionAsync(NodeAuthSession session, CancellationToken cancellationToken);
+
+    /// <summary>The session with this id, tracked, or <see langword="null" /> when none matches.</summary>
+    /// <remarks>Tracked so a <see cref="NodeAuthSession.LastUsedAtUtc" /> bump rides the next token save of this scope.</remarks>
+    Task<NodeAuthSession?> FindSessionAsync(string id, CancellationToken cancellationToken);
+
+    /// <summary>Whether session <paramref name="sessionId" /> exists, belongs to <paramref name="userId" /> and is not revoked.</summary>
+    Task<bool> IsSessionLiveAsync(string sessionId, string userId, CancellationToken cancellationToken);
+
+    /// <summary>The user's unrevoked sessions that still hold an unexpired, unrevoked refresh token, most recently used first.</summary>
+    Task<IReadOnlyList<NodeAuthSession>> ListLiveSessionsAsync(string userId, DateTime now, CancellationToken cancellationToken);
+
+    /// <summary>Revokes one of the user's sessions and its live refresh tokens.</summary>
+    /// <returns><see langword="false" /> when the user owns no session with that id.</returns>
+    Task<bool> RevokeSessionAsync(string userId, string sessionId, DateTime now, CancellationToken cancellationToken);
 
     /// <summary>Applies pending identity migrations. Startup bootstrap, before anything reads the schema.</summary>
     Task MigrateAsync(CancellationToken cancellationToken);

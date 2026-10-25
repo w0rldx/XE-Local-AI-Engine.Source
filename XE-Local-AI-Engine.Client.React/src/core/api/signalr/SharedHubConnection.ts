@@ -1,6 +1,6 @@
 import { type HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from "@microsoft/signalr";
 
-import { resolveHubAccessToken } from "@/core/api/signalr/ResolveHubAccessToken";
+import { markHubConnectionLost, resolveHubAccessToken } from "@/core/api/signalr/ResolveHubAccessToken";
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 
 // Refcounted, module-level SignalR connections — ONE shared HubConnection per hub path, reused across component mounts.
@@ -120,6 +120,7 @@ function buildEntry(hubPath: string): HubEntry {
 		}
 	});
 	connection.onreconnecting((error) => {
+		markHubConnectionLost();
 		for (const callback of reconnectingCallbacks) {
 			callback(error);
 		}
@@ -137,6 +138,7 @@ function buildEntry(hubPath: string): HubEntry {
 		restartAttempt: 0,
 	};
 	connection.onclose((error) => {
+		markHubConnectionLost();
 		for (const callback of closedCallbacks) {
 			callback(error);
 		}

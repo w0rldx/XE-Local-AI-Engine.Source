@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.JsonWebTokens;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -12,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Vault;
 public sealed class NodeAuthService : INodeAuthService
 {
     private const int MaxRotationChainHops = 16;
+    private const int MaxStampRotationAttempts = 3;
 
     /// <summary>Identity's own PasswordMismatch wording, so a vault refusal reads the same as an Identity one.</summary>
     private const string IncorrectPasswordError = "Incorrect password.";
@@ -36,6 +38,7 @@ public sealed class NodeAuthService : INodeAuthService
     private static readonly TimeSpan RotationGraceWindow = TimeSpan.FromSeconds(10);
 
     private readonly INodeIdentityStore _identity;
+    private readonly INodeLiveConnectionRevoker _liveConnections;
     private readonly ILogger<NodeAuthService> _logger;
     private readonly INodeSettingsStore _nodeSettingsStore;
     private readonly IOptions<NodeAuthOptions> _options;
@@ -53,6 +56,7 @@ public sealed class NodeAuthService : INodeAuthService
         INodeSettingsStore nodeSettingsStore,
         TimeProvider timeProvider,
         INodeVault vault,
+        INodeLiveConnectionRevoker liveConnections,
         ILogger<NodeAuthService> logger)
     {
         _identity = identity ?? throw new ArgumentNullException(nameof(identity));
@@ -63,6 +67,7 @@ public sealed class NodeAuthService : INodeAuthService
         _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _vault = vault ?? throw new ArgumentNullException(nameof(vault));
+        _liveConnections = liveConnections ?? throw new ArgumentNullException(nameof(liveConnections));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -189,7 +194,7 @@ public sealed class NodeAuthService : INodeAuthService
         }
     }
 
-    public async Task<NodeAuthTokenResult> LoginAsync(string? email, string password, CancellationToken cancellationToken)
+    public async Task<NodeAuthTokenResult> LoginAsync(string? email, string password, string? clientLabel, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(password);
 
@@ -212,11 +217,13 @@ public sealed class NodeAuthService : INodeAuthService
                 : FailedTokenResult();
         }
 
-        // A new, independent rotation chain: signing in on one client never signs another out.
-        return await CreateTokenResultAsync(user, _timeProvider.GetUtcNow().UtcDateTime, rotated: null, cancellationToken);
+        // A new, independent session and rotation chain: signing in on one client never signs another out.
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var session = await StartSessionAsync(user.Id, now, clientLabel, cancellationToken);
+        return await CreateTokenResultAsync(user, now, rotated: null, session, cancellationToken);
     }
 
-    public async Task<NodeAuthTokenResult> RefreshAsync(string? refreshToken, CancellationToken cancellationToken)
+    public async Task<NodeAuthTokenResult> RefreshAsync(string? refreshToken, string? clientLabel, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(refreshToken))
         {
@@ -236,8 +243,10 @@ public sealed class NodeAuthService : INodeAuthService
             return FailedTokenResult();
         }
 
-        var withinRotationGrace = storedToken.RevokedAtUtc is not null
-                                  && await IsWithinRotationGraceAsync(storedToken, now, cancellationToken);
+        var graceHead = storedToken.RevokedAtUtc is null
+            ? null
+            : await FindLiveGraceHeadAsync(storedToken, now, cancellationToken);
+        var withinRotationGrace = graceHead is not null;
 
         if (storedToken.RevokedAtUtc is not null && !withinRotationGrace)
         {
@@ -262,12 +271,22 @@ public sealed class NodeAuthService : INodeAuthService
                 storedToken.UserId);
         }
 
-        var result = await CreateTokenResultAsync(user, now, withinRotationGrace ? null : storedToken, cancellationToken);
+        // The grace pair joins the live head's session (a pre-session token's head may already have one). A token issued
+        // before sessions existed gets its session now; a session that ended fails even if a token row was left live.
+        var session = await ResolveRefreshSessionAsync((graceHead ?? storedToken).SessionId, user.Id, now, clientLabel, cancellationToken);
+        if (session is null)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            _logger.LogWarning("Node refresh failed: the token's session has ended for user {UserId}.", storedToken.UserId);
+            return FailedTokenResult();
+        }
+
+        var result = await CreateTokenResultAsync(user, now, withinRotationGrace ? null : storedToken, session, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return result;
     }
 
-    public async Task<NodeAuthTokenResult> IssueSessionAfterVaultUnlockAsync(CancellationToken cancellationToken)
+    public async Task<NodeAuthTokenResult> IssueSessionAfterVaultUnlockAsync(string? clientLabel, CancellationToken cancellationToken)
     {
         var user = await ResolveLoginUserAsync(email: null, cancellationToken);
         if (user is null)
@@ -277,11 +296,99 @@ public sealed class NodeAuthService : INodeAuthService
         }
 
         _logger.LogInformation("Node session issued for user {UserId} from the vault unlock ticket.", user.Id);
-        return await CreateTokenResultAsync(user, _timeProvider.GetUtcNow().UtcDateTime, rotated: null, cancellationToken);
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var session = await StartSessionAsync(user.Id, now, clientLabel, cancellationToken);
+        return await CreateTokenResultAsync(user, now, rotated: null, session, cancellationToken);
     }
 
-    public async Task RevokeRefreshTokensAsync(ClaimsPrincipal principal, CancellationToken cancellationToken)
+    public async Task EndCurrentSessionAsync(ClaimsPrincipal principal, string? refreshToken, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(principal);
+
+        if (_userManager.GetUserId(principal) is not { } userId)
+        {
+            return;
+        }
+
+        var sessionId = principal.FindFirst(JwtRegisteredClaimNames.Sid)?.Value;
+        if (!string.IsNullOrEmpty(sessionId))
+        {
+            if (await _identity.RevokeSessionAsync(userId, sessionId, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken))
+            {
+                _liveConnections.AbortSession(userId, sessionId);
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(refreshToken))
+        {
+            // An access token minted before sessions existed names none: the refresh cookie (or header) says which one is ours.
+            await EndRefreshTokenSessionAsync(userId, refreshToken, cancellationToken);
+        }
+    }
+
+    /// <summary>Ends the session of <paramref name="refreshToken" />'s rotation-chain head, or revokes the token and head when it has none.</summary>
+    /// <remarks>
+    ///     A concurrent refresh may already have rotated the token into a new session; ending only the token would let the
+    ///     grace window revive it. The read, the walk and the revoke share one serializable transaction, as
+    ///     <see cref="RefreshAsync" /> does, so that refresh cannot commit in between and leave this walk on a stale row.
+    /// </remarks>
+    private async Task EndRefreshTokenSessionAsync(string userId, string refreshToken, CancellationToken cancellationToken)
+    {
+        await using var transaction = await _identity.BeginSerializableTransactionAsync(cancellationToken);
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+
+        var stored = await _identity.FindRefreshTokenAsync(_tokenService.HashRefreshToken(refreshToken), cancellationToken);
+        if (stored is null || !string.Equals(stored.UserId, userId, StringComparison.Ordinal))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return;
+        }
+
+        var head = await FindChainHeadAsync(stored, cancellationToken) ?? stored;
+        if (head.SessionId is null)
+        {
+            await _identity.RevokeRefreshTokenAsync(stored, now, cancellationToken);
+            await _identity.RevokeRefreshTokenAsync(head, now, cancellationToken);
+        }
+        else
+        {
+            _ = await _identity.RevokeSessionAsync(userId, head.SessionId, now, cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        if (head.SessionId is not null)
+        {
+            _liveConnections.AbortSession(userId, head.SessionId);
+        }
+    }
+
+    public async Task<IReadOnlyList<NodeAuthSession>> ListSessionsAsync(ClaimsPrincipal principal, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(principal);
+
+        return _userManager.GetUserId(principal) is { } userId
+            ? await _identity.ListLiveSessionsAsync(userId, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken)
+            : [];
+    }
+
+    public async Task<bool> RevokeSessionAsync(ClaimsPrincipal principal, string sessionId, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(principal);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
+        if (_userManager.GetUserId(principal) is not { } userId
+            || !await _identity.RevokeSessionAsync(userId, sessionId, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken))
+        {
+            return false;
+        }
+
+        _liveConnections.AbortSession(userId, sessionId);
+        return true;
+    }
+
+    public async Task RevokeAllSessionsAsync(ClaimsPrincipal principal, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(principal);
+
         var user = await _userManager.GetUserAsync(principal);
         if (user is null)
         {
@@ -289,7 +396,41 @@ public sealed class NodeAuthService : INodeAuthService
         }
 
         await _identity.RevokeActiveTokensAsync(user.Id, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
+
+        // The stamp also ends access tokens minted before sessions existed, which carry no sid to revoke.
+        try
+        {
+            await RotateSecurityStampAsync(user, cancellationToken);
+        }
+        finally
+        {
+            // Every session is already revoked, so live connections close even when the stamp rotation failed.
+            _liveConnections.AbortUser(user.Id);
+        }
+
+        _logger.LogInformation("Every session of user {UserId} was signed out.", user.Id);
     }
+
+    /// <summary>Rotates the user's security stamp, reloading and retrying when a concurrent write to the user row wins.</summary>
+    /// <exception cref="InvalidOperationException">Any other failure, or the retries ran out.</exception>
+    private async Task RotateSecurityStampAsync(NodeUser user, CancellationToken cancellationToken)
+    {
+        var result = await _userManager.UpdateSecurityStampAsync(user);
+        for (var attempt = 1; attempt < MaxStampRotationAttempts && IsConcurrencyFailure(result); attempt++)
+        {
+            await _identity.ReloadAsync(user, cancellationToken);
+            result = await _userManager.UpdateSecurityStampAsync(user);
+        }
+
+        if (!result.Succeeded)
+        {
+            throw new InvalidOperationException($"Rotating the security stamp of user {user.Id} failed: "
+                                                + string.Join(", ", result.Errors.Select(error => error.Code)));
+        }
+    }
+
+    private static bool IsConcurrencyFailure(IdentityResult result) =>
+        result.Errors.Any(error => error.Code == nameof(IdentityErrorDescriber.ConcurrencyFailure));
 
     public Task<NodePasswordChangeResult> ChangePasswordAsync(ClaimsPrincipal principal, string currentPassword, string newPassword, CancellationToken cancellationToken) =>
         UnderPasswordLockAsync(() => ChangePasswordCoreAsync(principal, currentPassword, newPassword, cancellationToken), cancellationToken);
@@ -370,6 +511,7 @@ public sealed class NodeAuthService : INodeAuthService
         }
 
         await _identity.RevokeActiveTokensAsync(user.Id, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
+        _liveConnections.AbortUser(user.Id);
         return new NodePasswordChangeResult
         {
             Succeeded = true,
@@ -537,6 +679,7 @@ public sealed class NodeAuthService : INodeAuthService
 
         await _identity.RevokeActiveTokensAsync(user.Id, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+        _liveConnections.AbortUser(user.Id);
 
         _logger.LogWarning("Node admin password reset for user {UserId}; refresh tokens revoked and the rotated security "
                            + "stamp invalidates existing access tokens.", user.Id);
@@ -548,60 +691,118 @@ public sealed class NodeAuthService : INodeAuthService
     }
 
     /// <summary>
-    ///     Whether <paramref name="presented" /> was revoked by ROTATION inside the grace window and its own chain is
-    ///     still signed in — rather than revoked by logout, a password change or a reset.
+    ///     The live head of <paramref name="presented" />'s chain when ROTATION revoked it inside the grace window — rather
+    ///     than logout, a session revoke, a password change or a reset; otherwise <see langword="null" />.
     /// </summary>
     /// <remarks>
-    ///     Rotation links the revoked token to its successor; <see cref="RevokeRefreshTokensAsync" />,
+    ///     Rotation links the revoked token to its successor; <see cref="EndCurrentSessionAsync" />,
     ///     <see cref="ChangePasswordAsync" /> and <see cref="ResetAdminPasswordAsync" /> link nothing and revoke the
-    ///     chain's live head, so following the links to the head and requiring it live keeps a logged-out cookie from
-    ///     ever being resurrected. Another client's session is never consulted. A real walk is short (every hop is a
-    ///     rotation within one window); the hop cap and same-user check make a tampered cycle or cross-user link fail.
+    ///     chain's live head (logout follows the links from a pre-session cookie too), so requiring the head live keeps a
+    ///     logged-out cookie from ever being resurrected. Another client's session is never consulted.
     /// </remarks>
-    private async Task<bool> IsWithinRotationGraceAsync(NodeRefreshToken presented, DateTime now, CancellationToken cancellationToken)
+    private async Task<NodeRefreshToken?> FindLiveGraceHeadAsync(NodeRefreshToken presented, DateTime now, CancellationToken cancellationToken)
     {
         if (presented.RevokedAtUtc is not { } revokedAtUtc || revokedAtUtc > now || now - revokedAtUtc > RotationGraceWindow)
         {
-            return false;
+            return null;
         }
 
+        var head = await FindChainHeadAsync(presented, cancellationToken);
+        return head is { RevokedAtUtc: null } && head.ExpiresAtUtc > now ? head : null;
+    }
+
+    /// <summary>The last token on <paramref name="presented" />'s rotation chain (itself when never rotated); null for a broken link.</summary>
+    /// <remarks>
+    ///     A real walk is short (every hop is a rotation within one grace window); the hop cap and same-user check make a
+    ///     tampered cycle or cross-user link fail.
+    /// </remarks>
+    private async Task<NodeRefreshToken?> FindChainHeadAsync(NodeRefreshToken presented, CancellationToken cancellationToken)
+    {
         var head = presented;
         for (var hops = 0; hops <= MaxRotationChainHops; hops++)
         {
             if (head.ReplacedByTokenId is not { } successorId)
             {
-                return head.RevokedAtUtc is null && head.ExpiresAtUtc > now;
+                return head;
             }
 
             head = await _identity.FindRefreshTokenByIdAsync(successorId, cancellationToken);
             if (head is null || !string.Equals(head.UserId, presented.UserId, StringComparison.Ordinal))
             {
-                return false;
+                return null;
             }
         }
 
-        return false;
+        return null;
+    }
+
+    private async Task<NodeAuthSession> StartSessionAsync(string userId, DateTime now, string? clientLabel, CancellationToken cancellationToken)
+    {
+        var session = new NodeAuthSession
+        {
+            UserId = userId,
+            CreatedAtUtc = now,
+            LastUsedAtUtc = now,
+            ClientLabel = ToClientLabel(clientLabel)
+        };
+
+        await _identity.AddSessionAsync(session, cancellationToken);
+        return session;
+    }
+
+    /// <summary>The session a refresh continues: a new one for a pre-session token, null when the named one ended or is not the user's.</summary>
+    private async Task<NodeAuthSession?> ResolveRefreshSessionAsync(string? sessionId,
+        string userId,
+        DateTime now,
+        string? clientLabel,
+        CancellationToken cancellationToken)
+    {
+        if (sessionId is null)
+        {
+            return await StartSessionAsync(userId, now, clientLabel, cancellationToken);
+        }
+
+        var session = await _identity.FindSessionAsync(sessionId, cancellationToken);
+        return session is { RevokedAtUtc: null } && string.Equals(session.UserId, userId, StringComparison.Ordinal)
+            ? session
+            : null;
+    }
+
+    private static string? ToClientLabel(string? userAgent)
+    {
+        var trimmed = userAgent?.Trim();
+        if (string.IsNullOrEmpty(trimmed))
+        {
+            return null;
+        }
+
+        return trimmed.Length <= NodeAuthSession.ClientLabelMaxLength ? trimmed : trimmed[..NodeAuthSession.ClientLabelMaxLength];
     }
 
     /// <summary>
-    ///     Issues an access token and a refresh token; with <paramref name="rotated" /> the refresh token is that token's
-    ///     linked successor, otherwise it replaces nothing.
+    ///     Issues an access token bound to <paramref name="session" /> and a refresh token in it; with
+    ///     <paramref name="rotated" /> the refresh token is that token's linked successor, otherwise it replaces nothing.
     /// </summary>
     private async Task<NodeAuthTokenResult> CreateTokenResultAsync(NodeUser user,
         DateTime now,
         NodeRefreshToken? rotated,
+        NodeAuthSession session,
         CancellationToken cancellationToken)
     {
         var roles = await _userManager.GetRolesAsync(user);
-        var (accessToken, accessTokenExpiresAtUtc) = _tokenService.CreateAccessToken(user, roles);
+        var (accessToken, accessTokenExpiresAtUtc) = _tokenService.CreateAccessToken(user, roles, session.Id);
         var refreshToken = _tokenService.CreateRefreshTokenRaw();
         var refreshTokenExpiresAtUtc = now.AddDays(_options.Value.RefreshTokenDays);
+
+        // The session is tracked by this scope's context, so the bump is written by the token save below.
+        session.LastUsedAtUtc = now;
         var stored = new NodeRefreshToken
         {
             UserId = user.Id,
             TokenHash = _tokenService.HashRefreshToken(refreshToken),
             ExpiresAtUtc = refreshTokenExpiresAtUtc,
-            CreatedAtUtc = now
+            CreatedAtUtc = now,
+            SessionId = session.Id
         };
 
         if (rotated is null)

@@ -21,4 +21,7 @@ internal sealed class VaultUnlockHostOptions
 
     /// <summary>Completes when the owning desktop shell's pipe closes; the pre-host then stops without unlocking.</summary>
     public Task? ParentLost { get; init; }
+
+    /// <summary>Awaited after a credential is proven and before the single unlock is reserved; tests hold concurrent unlocks here.</summary>
+    public Func<Task>? CredentialProven { get; init; }
 }

@@ -44,7 +44,10 @@ internal static class VaultUnlockHost
 
         var keyPath = Path.Combine(options.DataDirectory, VaultFileCodec.KeyFileName);
         var file = VaultFileCodec.Read(await File.ReadAllBytesAsync(keyPath, cancellationToken));
-        var unlocked = new UnlockSlot();
+        var unlocked = new UnlockSlot
+        {
+            CredentialProven = options.CredentialProven
+        };
         await using var limiter = new FixedWindowRateLimiter(new FixedWindowRateLimiterOptions
         {
             PermitLimit = AttemptLimit,
@@ -171,7 +174,7 @@ internal static class VaultUnlockHost
         {
             var masterKey = VaultFileCodec.UnwrapWithPassword(file, request.Password);
             var ticketValue = VaultUnlockTicket.NewValue();
-            return Succeeded(context, unlocked, new VaultUnlockOutcome
+            return await SucceededAsync(context, unlocked, new VaultUnlockOutcome
             {
                 MasterKey = masterKey,
                 UnlockTicket = new VaultUnlockTicket(ticketValue, TimeProvider.System.GetUtcNow() + VaultUnlockTicket.Lifetime)
@@ -216,7 +219,7 @@ internal static class VaultUnlockHost
             var masterKey = VaultFileCodec.UnwrapWithRecovery(file, request.RecoveryCode);
             // The reset rotates the code. It is minted here so this response, the only one the operator sees, can show it.
             var newRecoveryCode = VaultFileCodec.NewRecoveryCode();
-            return Succeeded(context, unlocked, new VaultUnlockOutcome
+            return await SucceededAsync(context, unlocked, new VaultUnlockOutcome
             {
                 MasterKey = masterKey,
                 ResetPassword = request.NewPassword,
@@ -240,12 +243,17 @@ internal static class VaultUnlockHost
     /// </summary>
     /// <param name="body">The 200 body for a recovery unlock; <see langword="null" /> answers 204.</param>
     /// <param name="ticketValue">The password unlock's one-time ticket, set as the <c>node_ut</c> cookie once the unlock is reserved.</param>
-    private static IResult Succeeded(HttpContext context,
+    private static async Task<IResult> SucceededAsync(HttpContext context,
         UnlockSlot unlocked,
         VaultUnlockOutcome outcome,
         VaultRecoveryUnlockResponse? body = null,
         string? ticketValue = null)
     {
+        if (unlocked.CredentialProven is not null)
+        {
+            await unlocked.CredentialProven();
+        }
+
         if (!unlocked.TryReserve())
         {
             CryptographicOperations.ZeroMemory(outcome.MasterKey);
@@ -293,6 +301,8 @@ internal static class VaultUnlockHost
     private sealed class UnlockSlot
     {
         private int _reserved;
+
+        internal Func<Task>? CredentialProven { get; init; }
 
         internal TaskCompletionSource<VaultUnlockOutcome> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 

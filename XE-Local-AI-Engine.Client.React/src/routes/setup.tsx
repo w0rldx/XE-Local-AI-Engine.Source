@@ -1,12 +1,13 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
+import { retryTransient } from "@/core/api/errors/RetryClassification";
 import { getNodeAuthStatus } from "@/core/auth/api/NodeAuthApi";
 import { Setup } from "@/core/auth/pages/Setup";
 import { restoreNodeAuthSession } from "@/core/auth/utils/SessionRestore";
 
 export const Route = createFileRoute("/setup")({
 	beforeLoad: async () => {
-		const status = await getNodeAuthStatus();
+		const status = await retryTransient(() => getNodeAuthStatus());
 		if (status.vault === "locked") {
 			throw redirect({ to: "/vault" });
 		}

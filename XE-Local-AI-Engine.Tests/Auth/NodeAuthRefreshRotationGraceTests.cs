@@ -174,7 +174,7 @@ public sealed class NodeAuthRefreshRotationGraceTests
     }
 
     [Test]
-    public async Task Logout_WhenTwoSessionsAreSignedIn_RevokesBoth()
+    public async Task Logout_WhenTwoSessionsAreSignedIn_EndsOnlyTheCallersSession()
     {
         var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
         await using var factory = CreateHost(clock);
@@ -184,7 +184,7 @@ public sealed class NodeAuthRefreshRotationGraceTests
         await LogoutAsync(factory, first);
 
         AssertEx.False((await RefreshAsync(factory, first.RefreshToken)).Succeeded, "Logout ends the session it came from.");
-        AssertEx.False((await RefreshAsync(factory, second.RefreshToken)).Succeeded, "Logout still ends every session of the user.");
+        AssertEx.True((await RefreshAsync(factory, second.RefreshToken)).Succeeded, "Logout must leave the other session signed in.");
     }
 
     // The grace pair is a sibling of the chain's head, not its replacement: whichever Set-Cookie the browser keeps must
@@ -329,14 +329,14 @@ public sealed class NodeAuthRefreshRotationGraceTests
     {
         await using var scope = factory.Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<INodeAuthService>()
-                          .LoginAsync(Email, Password, CancellationToken.None);
+                          .LoginAsync(Email, Password, clientLabel: null, CancellationToken.None);
     }
 
     private static async Task<NodeAuthTokenResult> RefreshAsync(TestServerWebAppFactory factory, string? refreshToken)
     {
         await using var scope = factory.Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<INodeAuthService>()
-                          .RefreshAsync(refreshToken, CancellationToken.None);
+                          .RefreshAsync(refreshToken, clientLabel: null, CancellationToken.None);
     }
 
     /// <summary>

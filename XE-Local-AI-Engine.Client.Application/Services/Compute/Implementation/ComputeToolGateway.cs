@@ -136,7 +136,11 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         var outcome = await ExecuteDetailedAsync(request, requireResourceLimits: false, cancellationToken);
         if (outcome.Result is not { } result)
         {
-            return ToolFailureText.Format(ToolFailureText.ToolReportedCode, outcome.RefusalMessage ?? "run_python rejected.");
+            // Every refusal stops the call before the script starts; only an invalid request is the model's to fix and retry.
+            var refusal = outcome.RefusalMessage ?? "run_python rejected.";
+            return outcome.RefusalCode == ComputeRefusalCodes.InvalidRequest
+                ? ToolFailureText.Format(ToolFailureText.ToolReportedCode, refusal)
+                : ToolFailureText.FormatNotRun(ToolFailureText.ToolReportedCode, refusal);
         }
 
         if (ResourceLimitReason(result) is not null)

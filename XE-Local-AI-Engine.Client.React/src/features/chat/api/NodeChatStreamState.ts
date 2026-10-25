@@ -266,14 +266,14 @@ function mergeToolEntry(toolEntries: readonly ToolEntryInput[], toolCall: ChatTo
 	// Once a terminal tool event arrives, replace that fallback with the real call/result rather than leaving an empty
 	// generic card beside it. Request-id-keyed entries are distinguishable from correlated cards because their id is
 	// exactly their pending approval/question request id.
-	const entriesWithoutResolvedGenericPrompt =
-		toolCall.state === "received" || toolCall.state === "failed"
-			? toolEntries.filter((entry) => {
-					const promptRequestId = entry.pendingApprovalRequestId ?? entry.pendingQuestion?.requestId;
-					const isGenericPrompt = promptRequestId !== undefined && entry.id === promptRequestId;
-					return !isGenericPrompt || (entry.name !== "tool" && entry.name !== toolCall.name);
-				})
-			: toolEntries;
+	const resolved = toolCall.state === "received" || toolCall.state === "failed" || toolCall.state === "denied";
+	const entriesWithoutResolvedGenericPrompt = resolved
+		? toolEntries.filter((entry) => {
+				const promptRequestId = entry.pendingApprovalRequestId ?? entry.pendingQuestion?.requestId;
+				const isGenericPrompt = promptRequestId !== undefined && entry.id === promptRequestId;
+				return !isGenericPrompt || (entry.name !== "tool" && entry.name !== toolCall.name);
+			})
+		: toolEntries;
 	const existingIndex = entriesWithoutResolvedGenericPrompt.findIndex((entry) => entry.id === toolCall.id);
 	if (existingIndex < 0) {
 		return [
@@ -305,14 +305,12 @@ function mergeToolEntry(toolEntries: readonly ToolEntryInput[], toolCall: ChatTo
 					// The tool has resolved (approved → executed, or rejected → synthetic result) once it reaches a
 					// terminal state, so clear the pending-approval prompt; otherwise carry it forward (a plain
 					// requested/completed event never sets it — only the approval-requested event does).
-					pendingApprovalRequestId:
-						toolCall.state === "received" || toolCall.state === "failed" ? undefined : entry.pendingApprovalRequestId,
-					pendingApprovalSessionScopeEligible:
-						toolCall.state === "received" || toolCall.state === "failed" ? undefined : entry.pendingApprovalSessionScopeEligible,
-					pendingWebReview: toolCall.state === "received" || toolCall.state === "failed" ? undefined : entry.pendingWebReview,
+					pendingApprovalRequestId: resolved ? undefined : entry.pendingApprovalRequestId,
+					pendingApprovalSessionScopeEligible: resolved ? undefined : entry.pendingApprovalSessionScopeEligible,
+					pendingWebReview: resolved ? undefined : entry.pendingWebReview,
 					// Same rule for an `ask_user` question: once the tool call resolves, the answer has been consumed
 					// (or the wait timed out), so the inline question card must not survive on the resolved card.
-					pendingQuestion: toolCall.state === "received" || toolCall.state === "failed" ? undefined : entry.pendingQuestion,
+					pendingQuestion: resolved ? undefined : entry.pendingQuestion,
 				}
 			: entry,
 	);

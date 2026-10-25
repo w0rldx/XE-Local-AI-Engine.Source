@@ -1,13 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Security;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.JsonWebTokens;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
 ///     The JWT bearer events for the operator scheme, registered through <c>JwtBearerOptions.EventsType</c>: the SignalR
-///     query-string token and the per-request security-stamp revocation check.
+///     query-string token and the per-request security-stamp and session revocation checks.
 /// </summary>
 public sealed class NodeJwtBearerEvents : JwtBearerEvents
 {
@@ -41,27 +40,17 @@ public sealed class NodeJwtBearerEvents : JwtBearerEvents
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        var userId = context.Principal?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
-        if (string.IsNullOrEmpty(userId))
+        if (context.Principal is null)
         {
-            return;
-        }
-
-        // Fail CLOSED when the token carries no stamp: every token minted for a persisted user binds one, so an unstamped
-        // but validly-signed token is a legacy token that must not outlive a reset, or a forgery. Never a bypass.
-        var tokenStamp = context.Principal?.FindFirst(NodeAuthorizationPolicies.SecurityStampClaimType)?.Value;
-        if (string.IsNullOrEmpty(tokenStamp))
-        {
-            context.Fail("Access token is missing its security stamp.");
             return;
         }
 
         // Resolved per validated token rather than injected: this singleton is activated on every authenticate call,
         // anonymous and static-file requests included, and only a validated token needs the stamp check.
         var stampCheck = context.HttpContext.RequestServices.GetRequiredService<NodeSecurityStampCheck>();
-        if (!await stampCheck.IsCurrentAsync(userId, tokenStamp))
+        if (await stampCheck.FindRevocationAsync(context.Principal, context.HttpContext.RequestAborted) is { } failure)
         {
-            context.Fail("Access token security stamp is stale.");
+            context.Fail(failure);
         }
     }
 }

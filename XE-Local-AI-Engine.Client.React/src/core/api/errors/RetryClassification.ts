@@ -82,6 +82,24 @@ export function shouldRetryQuery(failureCount: number, error: unknown): boolean 
 	return failureCount < MAX_QUERY_RETRIES && isTransientError(error);
 }
 
+// Retries a one-shot call outside TanStack Query (a route guard's status read) while it fails transiently: backoff
+// 250 ms doubling to 2 s, then the last error once `budgetMs` would be overrun. A terminal error rethrows at once.
+export async function retryTransient<T>(operation: () => Promise<T>, budgetMs = 10_000): Promise<T> {
+	const deadline = Date.now() + budgetMs;
+	for (let delay = 250; ; delay = Math.min(delay * 2, 2_000)) {
+		try {
+			// biome-ignore lint/performance/noAwaitInLoops: a backoff retry is sequential by definition.
+			return await operation();
+		} catch (error) {
+			if (!isTransientError(error) || Date.now() + delay > deadline) {
+				throw error;
+			}
+		}
+
+		await new Promise((resolve) => setTimeout(resolve, delay));
+	}
+}
+
 // Bounded exponential backoff (1s, 2s, 4s, … capped at 30s) so retried transient failures don't hammer
 // the node. `attemptIndex` is 0-based on the first retry.
 export function queryRetryDelay(attemptIndex: number): number {

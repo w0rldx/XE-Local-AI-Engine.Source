@@ -227,7 +227,7 @@ public sealed class VaultUnlockHostTests : IDisposable
     [Test]
     public async Task ConcurrentRecoveryUnlocks_ExactlyOneAnswers200_WithTheCodeTheRealHostInstalls_TheOther409()
     {
-        var (run, url) = await StartAsync();
+        var (run, url) = await StartAsync(HoldUntilBothProven());
         using var first = await WarmClientAsync(url);
         using var second = await WarmClientAsync(url);
 
@@ -257,7 +257,7 @@ public sealed class VaultUnlockHostTests : IDisposable
     [Test]
     public async Task ConcurrentPasswordAndRecoveryUnlocks_ExactlyOneWins_TheOther409()
     {
-        var (run, url) = await StartAsync();
+        var (run, url) = await StartAsync(HoldUntilBothProven());
         using var passwordClient = await WarmClientAsync(url);
         using var recoveryClient = await WarmClientAsync(url);
 
@@ -331,7 +331,26 @@ public sealed class VaultUnlockHostTests : IDisposable
         AssertEx.Null(await DesktopPortStore.ReadReadyAsync(_dataDirectory));
     }
 
-    /// <summary>A client whose connection is already open, so a concurrent request is in flight before the pre-host stops.</summary>
+    /// <summary>
+    ///     Holds each proven credential before the unlock is reserved until both racers are there. Without it the winner can
+    ///     answer and stop the pre-host before the other request has even arrived, and that request then fails on the socket.
+    /// </summary>
+    private static Func<Task> HoldUntilBothProven()
+    {
+        var arrived = 0;
+        var bothProven = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        return () =>
+        {
+            if (Interlocked.Increment(ref arrived) == 2)
+            {
+                bothProven.TrySetResult();
+            }
+
+            return bothProven.Task.WaitAsync(Deadline);
+        };
+    }
+
+    /// <summary>A client on its own warm connection, so the two racing requests never share one.</summary>
     private static async Task<HttpClient> WarmClientAsync(string url)
     {
         var client = new HttpClient
@@ -358,7 +377,7 @@ public sealed class VaultUnlockHostTests : IDisposable
     private static Uri Route(string route) =>
         new($"/{LocalApiRoutes.Prefix}/{route}", UriKind.Relative);
 
-    private async Task<(Task<VaultUnlockOutcome?> Run, string Url)> StartAsync()
+    private async Task<(Task<VaultUnlockOutcome?> Run, string Url)> StartAsync(Func<Task>? credentialProven = null)
     {
         var run = VaultUnlockHost.RunAsync(new VaultUnlockHostOptions
         {
@@ -370,7 +389,8 @@ public sealed class VaultUnlockHostTests : IDisposable
             Version = "9.9.9",
             SuppressBrowser = true,
             StandardOutput = TextWriter.Null,
-            ParentLost = _parentLost.Task
+            ParentLost = _parentLost.Task,
+            CredentialProven = credentialProven
         }, CancellationToken.None);
 
         ReadyInfo? ready = null;

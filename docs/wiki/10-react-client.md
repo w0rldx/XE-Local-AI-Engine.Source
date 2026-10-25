@@ -166,7 +166,7 @@ alongside the external-access members. It **hides navigation entries and nothing
 its own address, no server gate reads it, and the compile-time capability flags above still decide what exists at all
 (see [Security & Privacy](12-security-and-privacy.md) §3.2). `UiModeBackfillService` stamps `advanced` at boot on any
 node whose operator is already past the external-access step, so an upgraded install keeps exactly the navigation it
-had and is never asked.
+had and is never asked. The chooser preselects Simple; Continue saves it explicitly.
 
 The filtering is two composed gates, not one. `NavigationMenuData.ts` still computes `navigationLinks` **once at
 module-eval time** from the compile-time capabilities; `filterNavigationLinksByUiMode(links, uiMode)` is a second pure
@@ -239,8 +239,8 @@ foot of the page reporting the unsaved-field count and, separately, how many are
 so, worded differently, instead of implying every saved change is already live) — and `NodeSettingsSectionNav`'s per-section unsaved badges, so an edit left behind in a
 section the operator has since navigated away from stays visible rather than silently riding along on the next Save.
 **Which fields need a restart is the node's answer, not the client's.** The settings GET and PUT carry
-`restartRequiredFields` (the backend `NodeSettingsRestartGate`) and `pendingRestartFields` (gated fields whose stored
-value differs from the boot value). The page passes the first to the field badges through
+`restartRequiredFields` (the backend `NodeSettingsRestartGate`) and `pendingRestartFields` (gated fields whose
+effective value, stored else seed, differs from the boot value). The page passes the first to the field badges through
 `RestartRequiredFieldsContext`, the save bar and the save toast. `PendingRestartBanner`, mounted in the layout beside
 `RuntimeAcquisitionBanner`, reads the second from the cached settings query and names the fields with the form's
 labels. It can be dismissed for the session. Inside the desktop app (`isDesktop` on the app-update status) it offers
@@ -371,7 +371,7 @@ no interceptors, so a failed login or refresh never enters the 401 path below.
 
 The 401 refresh/redirect path is deliberately isolated: it calls a dedicated `refreshNodeAuthToken()` (not a generic SDK call) and guards redirects with `isRedirectingToLogin` plus a `/login`/`/setup`/`/vault`/`/vault-setup` short-circuit, so it cannot recurse through the same interceptor.
 
-**Vault pages** ([ADR 0018](../adr/0018-local-vault-passphrase-wrapped-node-key.md)). Two file routes sit beside `/login` and `/setup`. `/vault` (`routes/vault.tsx`, `core/auth/pages/VaultUnlock.tsx`) opens only while `auth/status` reports the vault `locked`, which only the pre-host does; it unlocks with the admin password or with a recovery code plus a new password. `/vault-setup` (`routes/vault-setup.tsx`, `core/auth/pages/VaultSetup.tsx`) opens only for a signed-in operator whose vault is still `pending` and wraps the legacy key after the password is confirmed. First-run setup and vault setup both show the one-time recovery code through `core/auth/components/RecoveryCodeReveal.tsx`. The routes and the backend contract are in [API & Hubs](09-api-and-hubs.md) and [Security & Privacy](12-security-and-privacy.md). Response boundary parsing uses the generated Zod response validators; `isResponseValidationError` (`core/api/ResponseValidation.ts`) names the `ZodError` they throw — never trust raw server JSON shape.
+**Vault pages** ([ADR 0018](../adr/0018-local-vault-passphrase-wrapped-node-key.md)). Two file routes sit beside `/login` and `/setup`. `/vault` (`routes/vault.tsx`, `core/auth/pages/VaultUnlock.tsx`) opens only while `auth/status` reports the vault `locked`, which only the pre-host does; it unlocks with the admin password or with a recovery code plus a new password. `/vault-setup` (`routes/vault-setup.tsx`, `core/auth/pages/VaultSetup.tsx`) opens only for a signed-in operator whose vault is still `pending` and wraps the legacy key after the password is confirmed. First-run setup and vault setup both show the one-time recovery code through `core/auth/components/RecoveryCodeReveal.tsx`. An unlock or setup done by another client moves these pages on: `VaultUnlock` and `Setup` re-read `auth/status` on a timer (paused while their own submit or recovery-code reveal is on screen). The route guards' status read (`restoreNodeAuthSession` and the `/login`, `/setup`, `/vault` `beforeLoad`s) goes through `retryTransient` (`core/api/errors/RetryClassification.ts`, about 10 s of backoff on transient errors only), so the port gap while the pre-host hands over to the real host does not land on the error boundary. The routes and the backend contract are in [API & Hubs](09-api-and-hubs.md) and [Security & Privacy](12-security-and-privacy.md). Response boundary parsing uses the generated Zod response validators; `isResponseValidationError` (`core/api/ResponseValidation.ts`) names the `ZodError` they throw — never trust raw server JSON shape.
 
 ---
 

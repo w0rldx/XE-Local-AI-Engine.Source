@@ -47,6 +47,8 @@ function stateColor(state: ToolCallState): string {
 	switch (state) {
 		case "failed":
 			return "red";
+		case "denied":
+			return "gray";
 		case "waiting":
 			return "orange";
 		case "received":
@@ -152,7 +154,9 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 				? t("chat.toolCall.inFlight", "In flight")
 				: part.state === "received"
 					? t("chat.toolCall.done", "Done")
-					: t("chat.toolCall.failed", "Failed");
+					: part.state === "denied"
+						? t("chat.toolCall.denied", "Denied")
+						: t("chat.toolCall.failed", "Failed");
 	const toolName = part.name || t("chat.toolCall.name", "tool");
 
 	return (

@@ -21,10 +21,21 @@ internal static class ToolFailureText
     /// <summary>The sandbox stopped the tool for exceeding its memory or disk limit.</summary>
     public const string ResourceLimitCode = "resource_limit";
 
+    /// <summary>
+    ///     Appended to a refusal that stopped the call before the tool started, so a small model neither retries nor
+    ///     invents a result. Never on a failure after the tool started: that one may have done something.
+    /// </summary>
+    public const string NotRunNotice =
+        "Nothing ran and there is no result. Do not repeat this call in this turn; answer without it and say that the tool was not run.";
+
     private const string Prefix = "[tool error: ";
 
     public static string Format(string code, string message) =>
         $"{Prefix}{code}] {message}";
+
+    /// <summary><see cref="Format" /> for a refusal before the tool started, ending in <see cref="NotRunNotice" />.</summary>
+    public static string FormatNotRun(string code, string message) =>
+        Format(code, $"{message} {NotRunNotice}");
 
     /// <summary>The failure code of a result in this shape, or <see langword="null" /> for anything else.</summary>
     public static string? TryGetCode(object? result)

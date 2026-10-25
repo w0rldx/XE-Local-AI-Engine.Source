@@ -15,7 +15,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
                 {
@@ -145,6 +145,41 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.NodeAuthSession", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ClientLabel")
+                        .HasMaxLength(160)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("client_label");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<DateTime>("LastUsedAtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_used_at_utc");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("revoked_at_utc");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("node_auth_sessions", (string)null);
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.NodeRefreshToken", b =>
                 {
                     b.Property<string>("Id")
@@ -167,6 +202,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("revoked_at_utc");
 
+                    b.Property<string>("SessionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("session_id");
+
                     b.Property<string>("TokenHash")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -179,6 +218,8 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                         .HasColumnName("user_id");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SessionId");
 
                     b.HasIndex("TokenHash")
                         .IsUnique();
@@ -315,8 +356,22 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.NodeAuthSession", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.NodeUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.NodeRefreshToken", b =>
                 {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.NodeAuthSession", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
                     b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.NodeUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")

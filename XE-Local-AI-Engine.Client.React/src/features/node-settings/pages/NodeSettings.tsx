@@ -40,6 +40,7 @@ import { ImageRuntimeSourceBuildCard } from "@/features/node-settings/components
 import { LlamaCppUpdaterPanel } from "@/features/node-settings/components/LlamaCppUpdaterPanel";
 import { ManagedPythonCard } from "@/features/node-settings/components/ManagedPythonCard";
 import { NodeChangePasswordCard } from "@/features/node-settings/components/NodeChangePasswordCard";
+import { NodeSessionsCard } from "@/features/node-settings/components/NodeSessionsCard";
 import {
 	NodeSettingsBrowserPreferencesCard,
 	NodeSettingsIntegrationPanels,
@@ -430,6 +431,7 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 						{fields}
 						<NodeSettingsBrowserPreferencesCard developerMode={developerMode} onToggleDeveloperMode={toggleDeveloperMode} />
 						<NodeChangePasswordCard />
+						<NodeSessionsCard />
 					</>
 				);
 			case "chat":

@@ -36,6 +36,7 @@ vi.mock("react-i18next", () => ({
 
 const { authApiMock, navigateMock, searchState } = vi.hoisted(() => ({
 	authApiMock: {
+		getNodeAuthStatus: vi.fn(),
 		loginNodeAuth: vi.fn(),
 		setupNodeAuth: vi.fn(),
 		refreshRateLimitedForSeconds: vi.fn(() => 0),
@@ -88,6 +89,7 @@ describe("node auth pages", () => {
 		useNodeAuthStore.getState().actions.clear();
 		authApiMock.loginNodeAuth.mockResolvedValue({ accessToken: "access-token", expiresAtUtc: "2026-05-25T12:15:00Z" });
 		authApiMock.setupNodeAuth.mockResolvedValue({ recoveryCode: null });
+		authApiMock.getNodeAuthStatus.mockResolvedValue({ setupRequired: true, authenticated: false, vault: "pending" });
 	});
 
 	it("logs in with password only and navigates to the safe redirect", async () => {
@@ -266,5 +268,60 @@ describe("node auth pages", () => {
 		expect(screen.getByText(resolveKey("auth.setup.validationEmail"))).toBeTruthy();
 		// A field the operator has still not touched stays quiet.
 		expect(screen.queryByText(resolveKey("auth.setup.validationPasswordRequired"))).toBeNull();
+	});
+
+	describe("status re-check", () => {
+		beforeEach(() => {
+			vi.useFakeTimers();
+		});
+
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
+		// Setup done by another client left the desktop window on the form; "/" runs the sign-in chain from there.
+		it("leaves for the sign-in chain once setup was done elsewhere", async () => {
+			authApiMock.getNodeAuthStatus
+				.mockResolvedValueOnce({ setupRequired: true, authenticated: false, vault: "pending" })
+				.mockResolvedValue({ setupRequired: false, authenticated: false, vault: "unlocked" });
+			renderWithProviders(<Setup />);
+
+			await vi.advanceTimersByTimeAsync(5_000);
+			expect(navigateMock).not.toHaveBeenCalled();
+
+			await vi.advanceTimersByTimeAsync(5_000);
+			expect(authApiMock.getNodeAuthStatus).toHaveBeenCalledTimes(2);
+			expect(navigateMock).toHaveBeenCalledWith({ to: "/" });
+		});
+
+		it("stops re-checking once the page unmounts", async () => {
+			const { unmount } = renderWithProviders(<Setup />);
+			await vi.advanceTimersByTimeAsync(5_000);
+			expect(authApiMock.getNodeAuthStatus).toHaveBeenCalledTimes(1);
+
+			unmount();
+			await vi.advanceTimersByTimeAsync(20_000);
+
+			expect(authApiMock.getNodeAuthStatus).toHaveBeenCalledTimes(1);
+		});
+
+		// This page's own setup also flips setupRequired; the reveal must not be skipped by the re-check.
+		it("does not leave while its own recovery code is on screen", async () => {
+			authApiMock.setupNodeAuth.mockResolvedValue({ recoveryCode: "AAAAA-BBBBB-CCCCC" });
+			authApiMock.getNodeAuthStatus.mockResolvedValue({ setupRequired: false, authenticated: true, vault: "unlocked" });
+			renderWithProviders(<Setup />);
+
+			const password = "Long-Enough-Password1";
+			fireEvent.change(screen.getByLabelText(/^Email/), { target: { value: "admin@example.test" } });
+			fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: password } });
+			fireEvent.change(screen.getByLabelText(/^Confirm password/), { target: { value: password } });
+			fireEvent.click(screen.getByRole("button", { name: "Create admin" }));
+			await vi.waitFor(() => expect(screen.getByText("AAAAA-BBBBB-CCCCC")).toBeTruthy());
+
+			await vi.advanceTimersByTimeAsync(20_000);
+
+			expect(authApiMock.getNodeAuthStatus).not.toHaveBeenCalled();
+			expect(navigateMock).not.toHaveBeenCalled();
+		});
 	});
 });

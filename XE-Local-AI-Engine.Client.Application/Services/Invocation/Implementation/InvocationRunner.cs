@@ -42,7 +42,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private const string ApprovedToolCallReason = "Approved by user.";
 
     internal const string DeniedToolCallReason =
-        "The user denied this tool call. Nothing ran and there is no result. Do not repeat this call in this turn; answer without it and say that the tool was not run.";
+        "The user denied this tool call. " + ToolFailureText.NotRunNotice;
 
     // The effort a swapped turn falls back to when the fast model goes missing before its first token. It is the FAST
     // tier's own graded level, so the re-run keeps the tier the dispatcher chose and only gives up the model.
