@@ -22,11 +22,13 @@ public sealed class InvocationFailureClassifierTests
 
     private const string TokenRejectedMessage = "The provider rejected the token; it may have expired. Get a new token and replace it in the connection settings.";
 
+    private const string OperationUnsupportedMessage =
+        "The provider does not support this operation for the selected model. Try the other API surface (Chat Completions or Responses) on the connection, or another model.";
+
     private const string NoRouteMessage = "The gateway has no route for this request. Check the connection's base URL; it usually ends in /openai/v1.";
 
     private const string BackendNotPermittedMessage = "The gateway's backend is not permitted to use this model or operation. Contact the gateway admin.";
 
-    private const string ModelNotOfferedMessage = "The provider does not offer the selected model. Check the model id on the connection.";
 
     private const string UnsupportedOperationBody = """{"error":{"message":"The requested operation is unsupported."}}""";
 
@@ -260,7 +262,7 @@ public sealed class InvocationFailureClassifierTests
     }
 
     // The 2026-10-26 enterprise gateway samples: a wrong base path, the wrong API surface, backend RBAC, an expired token, and an
-    // "unsupported operation" body whose status is not known yet (shown under 400 and 404). Other apim_policy_error faults stay plain server errors.
+    // "unsupported operation" body read under any status (shown under 400, 404 and 500). Other apim_policy_error faults stay plain server errors.
     [Test]
     [Arguments(500, "APIM policy error", """{"error":{"code":"apim_policy_error","message":"Unable to match incoming request to an operation."}}""",
         FailureCategory.ProviderUnreachable, NoRouteMessage + " (apim_policy_error: Unable to match incoming request to an operation.)")]
@@ -276,9 +278,10 @@ public sealed class InvocationFailureClassifierTests
         FailureCategory.ModelUnavailable, BackendNotPermittedMessage + " (PermissionDenied)")]
     [Arguments(401, "Unauthorized", """{"error":{"code":"invalid_token","message":"Access token is expired or invalid."}}""",
         FailureCategory.ProviderAuthFailed, TokenRejectedMessage + " (invalid_token: Access token is expired or invalid.)")]
-    [Arguments(400, "Bad Request", UnsupportedOperationBody,
-        FailureCategory.Unexpected, "The provider rejected the request (HTTP 400). (The requested operation is unsupported.)")]
-    [Arguments(404, "Not Found", UnsupportedOperationBody, FailureCategory.ModelUnavailable, ModelNotOfferedMessage + " (The requested operation is unsupported.)")]
+    [Arguments(400, "Bad Request", UnsupportedOperationBody, FailureCategory.ModelUnavailable, OperationUnsupportedMessage + " (The requested operation is unsupported.)")]
+    [Arguments(404, "Not Found", UnsupportedOperationBody, FailureCategory.ModelUnavailable, OperationUnsupportedMessage + " (The requested operation is unsupported.)")]
+    [Arguments(500, "Internal Server Error", UnsupportedOperationBody, FailureCategory.ModelUnavailable,
+        OperationUnsupportedMessage + " (The requested operation is unsupported.)")]
     public void MapFailure_EnterpriseGatewaySamples_NameTheFixForEachShape(int status, string reasonPhrase, string body, FailureCategory expectedCategory, string expectedMessage)
     {
         var classification = InvocationFailureClassifier.MapFailure(new InvalidOperationException("agent run failed",

@@ -32,7 +32,8 @@ API keys and secrets are stored encrypted on this computer and are never shown a
    - **Display name:** what the model picker shows.
    - **Base URL:** the endpoint's OpenAI-compatible address, with or without the trailing `/v1`.
    - **API key or bearer token:** optional. Leave it blank for a server that needs no authentication.
-   - **Custom headers:** only if your gateway asks for extra headers, such as a project or tenant header. Mark a
+   - **Custom headers:** only if your gateway asks for extra headers, such as a project or tenant header. The
+     enterprise AI gateway template starts with a `project-id` row; enter its value, rename it, or remove it. Mark a
      value **secret** to store it write-only.
 3. Choose the **Trust** of the connection (see below).
 4. Click **Test connection**. The app asks the endpoint for its model list. If the endpoint lists models, pick one

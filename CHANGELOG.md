@@ -208,6 +208,9 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **A gateway's "The requested operation is unsupported." is answered once, with a fix**, whatever HTTP status it
+  arrives with: it is no longer retried or counted toward the circuit breaker as a 5xx, and the chat suggests the
+  other API surface or another model. The enterprise AI gateway template now starts its header row as `project-id`.
 - **The app opens on Chat** — `/` redirects to `/chat` and the Home page and its sidebar entry are gone. Chat's empty
   state takes over Home's two jobs: the first-run model download with its progress, and the "no chat model" hint with
   a link to Models.

@@ -84,6 +84,10 @@ internal static class InvocationFailureClassifier
     private const string ProviderApiSurfaceNotSupportedMessage =
         "The provider does not offer the selected model on this API. Switch the model's API surface (Chat Completions or Responses) on the connection.";
 
+    // A gateway that refuses the operation itself, whatever status it sends that with: the other API surface or another model may be served.
+    private const string GatewayOperationUnsupportedMessage =
+        "The provider does not support this operation for the selected model. Try the other API surface (Chat Completions or Responses) on the connection, or another model.";
+
     // A gateway answered a 5xx because no operation matches the request path: the base URL is wrong, so retrying cannot help.
     private const string GatewayNoRouteMessage = "The gateway has no route for this request. Check the connection's base URL; it usually ends in /openai/v1.";
 
@@ -158,6 +162,10 @@ internal static class InvocationFailureClassifier
             // ClientResultException arms below skip any chain that holds an AzureFoundryProviderException.
             _ when FindInChain<AzureFoundryProviderException>(exception) is { Kind: AzureFoundryProviderErrorKind.AuthFailed or AzureFoundryProviderErrorKind.AuthRequired } azureAuth =>
                 new FailureClassification(FailureCategory.ProviderAuthFailed, azureAuth.Message),
+            // A gateway's "requested operation is unsupported", read from the body under any error status, ahead of the status arms that would misread it
+            // as a bad credential, a missing model or an outage.
+            _ when FindProviderClientResult(exception) is { Status: >= 400 and <= 599 } unsupported && ReadBodyDetail(unsupported).ReportsUnsupportedOperation =>
+                new FailureClassification(FailureCategory.ModelUnavailable, AppendDetail(GatewayOperationUnsupportedMessage, unsupported)),
             // An OpenAI-compatible provider or gateway rejecting a call by status. 400 and 5xx fall through to the grammar, capability and model-load
             // arms, which read a wrapper's text; the 5xx arm follows them. A 403 refusing the model by name is not a bad credential.
             _ when FindProviderClientResult(exception) is { Status: 403 } forbidden

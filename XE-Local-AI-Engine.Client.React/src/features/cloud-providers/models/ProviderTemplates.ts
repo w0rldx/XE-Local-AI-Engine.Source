@@ -56,7 +56,7 @@ export const externalTemplateBaseUrlPlaceholder: Partial<Record<ExternalProvider
 
 /** The form a new connection opens with for a template. Every template starts declared Cloud, as the empty form does. */
 export function externalTemplateValues(id: ExternalProviderTemplateId): ExternalProviderFormValues {
-	// One non-secret header row with a blank name: gateways usually want a project or tenant header beside the bearer
-	// token, and only the operator knows its name.
-	return id === "gateway" ? { ...emptyFormValues, headers: [emptyCustomHeader] } : emptyFormValues;
+	// One non-secret project-id header row beside the bearer token, the name the known enterprise gateways use; the operator
+	// fills in the value, and can rename or remove the row for a gateway that wants another header.
+	return id === "gateway" ? { ...emptyFormValues, headers: [{ ...emptyCustomHeader, name: "project-id" }] } : emptyFormValues;
 }

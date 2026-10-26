@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 [Category(TestCategories.Unit)]
 public sealed class ProviderStreamResilienceTests
 {
+    private const string UnsupportedOperationBody = """{"error":{"message":"The requested operation is unsupported."}}""";
     private const string NoRouteBody = """{"error":{"code":"apim_policy_error","message":"Unable to match incoming request to an operation."}}""";
 
     private const string TpmBody = """{"error":"unsupported_tpm_configuration","message":"TokensPerMinute must be one of 10000, 30000."}""";
@@ -398,11 +399,13 @@ public sealed class ProviderStreamResilienceTests
         AssertEx.Equal(expected: 2, callCount.Value);
     }
 
-    // A gateway's no-route 500 (wrong base URL) fails on the first attempt; a TPM 500 from the same gateway is still retried.
+    // A gateway's no-route 500 (wrong base URL) or unsupported operation (500 or 429) fails on the first attempt; a TPM 500 is still retried.
     [Test]
-    [Arguments(NoRouteBody, 1)]
-    [Arguments(TpmBody, 3)]
-    public async Task ExecuteStreamingAsync_WhenGatewayServerError_RetriesUnlessItIsNoRoute(string body, int expectedAttempts)
+    [Arguments(500, NoRouteBody, 1)]
+    [Arguments(500, UnsupportedOperationBody, 1)]
+    [Arguments(429, UnsupportedOperationBody, 1)]
+    [Arguments(500, TpmBody, 3)]
+    public async Task ExecuteStreamingAsync_WhenGatewayError_RetriesUnlessItIsNoRouteOrUnsupported(int status, string body, int expectedAttempts)
     {
         var callCount = new StrongBox<int>(value: 0);
         var sut = CreateSut(new ProviderResilienceOptions
@@ -412,7 +415,7 @@ public sealed class ProviderStreamResilienceTests
         }, maxRetries: 2);
 
         await AssertEx.ThrowsAsync<ClientResultException>(() => CollectAsync(sut.ExecuteStreamingAsync("endpoint",
-            FactoryFailing(failures: int.MaxValue, callCount, () => Yield(1), () => ThrowStatus(500, body: body)),
+            FactoryFailing(failures: int.MaxValue, callCount, () => Yield(1), () => ThrowStatus(status, body: body)),
             CancellationToken.None)));
 
         AssertEx.Equal(expectedAttempts, callCount.Value);

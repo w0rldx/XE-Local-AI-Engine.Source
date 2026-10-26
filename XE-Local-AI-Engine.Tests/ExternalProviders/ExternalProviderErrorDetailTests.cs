@@ -51,4 +51,13 @@ public sealed class ExternalProviderErrorDetailTests
     {
         AssertEx.Equal(expected, ExternalProviderErrorDetail.Parse(Encoding.UTF8.GetBytes(body)).ReportsNoRoute);
     }
+
+    [Test]
+    [Arguments("""{"error":{"message":"The requested operation is unsupported."}}""", true)]
+    [Arguments("""{"message":"the requested operation is unsupported"}""", true)]
+    [Arguments("""{"error":{"code":"api_not_supported","message":"Requested API is currently not supported"}}""", false)]
+    public void ReportsUnsupportedOperation_MatchesOnlyTheUnsupportedOperationMessage(string body, bool expected)
+    {
+        AssertEx.Equal(expected, ExternalProviderErrorDetail.Parse(Encoding.UTF8.GetBytes(body)).ReportsUnsupportedOperation);
+    }
 }

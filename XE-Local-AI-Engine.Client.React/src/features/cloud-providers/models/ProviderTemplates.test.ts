@@ -46,11 +46,11 @@ describe("providerTemplateOptions", () => {
 });
 
 describe("externalTemplateValues", () => {
-	it("starts the gateway template declared Cloud with one blank, non-secret header row", () => {
+	it("starts the gateway template declared Cloud with one non-secret project-id header row", () => {
 		const values = externalTemplateValues("gateway");
 
 		expect(values.locality).toBe("Cloud");
-		expect(values.headers).toEqual([{ name: "", value: "", isSecret: false, hasStoredSecret: false }]);
+		expect(values.headers).toEqual([{ name: "project-id", value: "", isSecret: false, hasStoredSecret: false }]);
 		// The base URL is never guessed; the editor shows it as a placeholder only.
 		expect(values.baseUrl).toBe("");
 	});

@@ -163,9 +163,10 @@ describe("CloudProviders page", () => {
 		const baseUrl = screen.getByTestId("external-provider-base-url") as HTMLInputElement;
 		expect(baseUrl.value).toBe("");
 		expect(baseUrl.placeholder).toBe("https://<host>/…/openai/v1");
-		// One header row, its name left for the operator: the gateway's header name is never guessed.
+		// One header row named project-id, the header the known enterprise gateways use; its value is left for the operator.
 		const headerName = screen.getByTestId("external-provider-header-name-0") as HTMLInputElement;
-		expect(headerName.value).toBe("");
+		expect(headerName.value).toBe("project-id");
+		expect((screen.getByTestId("external-provider-header-value-0") as HTMLInputElement).value).toBe("");
 		expect(headerName.placeholder).toBe("Header name from your gateway");
 		expect((screen.getByTestId("external-provider-header-secret-0") as HTMLInputElement).checked).toBe(false);
 		expect(screen.getByTestId("external-provider-template-hint").textContent).toContain(

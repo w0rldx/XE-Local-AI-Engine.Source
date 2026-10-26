@@ -2614,7 +2614,7 @@
 				},
 				"gateway": {
 					"description": "A company gateway in front of hosted models, with a bearer token and often a project header.",
-					"editorHint": "Enter the gateway's OpenAI v1 address, which usually ends in /openai/v1. Put the bearer token in the API key field: it is sent as \"Authorization: Bearer\". If the gateway also needs a project or tenant header, enter its name and value in the header row below; otherwise remove the row.",
+					"editorHint": "Enter the gateway's OpenAI v1 address, which usually ends in /openai/v1. Put the bearer token in the API key field: it is sent as \"Authorization: Bearer\". The header row below starts as project-id: enter the project id as its value, rename the row if the gateway uses another header, or remove it if the gateway needs none.",
 					"headerNamePlaceholder": "Header name from your gateway",
 					"label": "Enterprise AI gateway"
 				},

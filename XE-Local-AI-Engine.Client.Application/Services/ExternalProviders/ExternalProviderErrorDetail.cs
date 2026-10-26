@@ -42,6 +42,12 @@ internal readonly record struct ExternalProviderErrorDetail(string? Code, string
     /// </summary>
     public bool ReportsNoRoute => Message?.Contains("Unable to match incoming request to an operation", StringComparison.OrdinalIgnoreCase) == true;
 
+    /// <summary>
+    ///     Whether a gateway said it does not support the requested operation. Matched on the message alone and under any
+    ///     status, as the status a gateway sends it with is not pinned down; the same request fails the same way on a retry.
+    /// </summary>
+    public bool ReportsUnsupportedOperation => Message?.Contains("The requested operation is unsupported", StringComparison.OrdinalIgnoreCase) == true;
+
     /// <param name="body">The raw error body.</param>
     /// <param name="forbidden">Values (sent credentials) that void the whole detail when any decoded candidate contains one, before sanitizing.</param>
     public static ExternalProviderErrorDetail Parse(ReadOnlyMemory<byte> body, IReadOnlyList<string>? forbidden = null)

@@ -175,7 +175,7 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
     }
 
     // Transient = a connection/transport failure or a server-side/overload status, where a retry to a possibly
-    // re-spawned endpoint may succeed. A 4xx other than 429 is not, nor a gateway's no-route 5xx, nor a cancellation on the caller's token.
+    // re-spawned endpoint may succeed. A 4xx other than 429 is not, nor a gateway's no-route or unsupported-operation 5xx, nor a caller cancellation.
     private static SendFailureKind ClassifyFailure(Exception exception, CancellationToken cancellationToken)
     {
         if (cancellationToken.IsCancellationRequested)
@@ -189,14 +189,16 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
         {
             switch (current)
             {
-                case ClientResultException { Status: 429 }:
-                    return SendFailureKind.RateLimited;
+                // A gateway's "operation unsupported" (any retried status) or 5xx "no operation matches this path" (a wrong base URL): a retry repeats
+                // it and must not trip the breaker.
+                case ClientResultException { Status: 429 or >= 500 } statusError:
+                    var detail = ExternalProviderErrorDetail.Parse(statusError.GetRawResponse()?.Content?.ToMemory() ?? default);
+                    if (detail.ReportsUnsupportedOperation || (statusError.Status >= 500 && detail.ReportsNoRoute))
+                    {
+                        return SendFailureKind.NotRetryable;
+                    }
 
-                // A gateway answering "no operation matches this path" with a 5xx means a wrong base URL: a retry repeats it and must not trip the breaker.
-                case ClientResultException { Status: >= 500 } serverError:
-                    return ExternalProviderErrorDetail.Parse(serverError.GetRawResponse()?.Content?.ToMemory() ?? default).ReportsNoRoute
-                        ? SendFailureKind.NotRetryable
-                        : SendFailureKind.Transient;
+                    return statusError.Status == 429 ? SendFailureKind.RateLimited : SendFailureKind.Transient;
             }
         }
 

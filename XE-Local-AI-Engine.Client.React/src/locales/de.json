@@ -2614,7 +2614,7 @@
 				},
 				"gateway": {
 					"description": "Ein Unternehmens-Gateway vor gehosteten Modellen, mit Bearer-Token und oft einem Projekt-Header.",
-					"editorHint": "Geben Sie die OpenAI-v1-Adresse des Gateways ein; sie endet meist auf /openai/v1. Tragen Sie das Bearer-Token in das Feld für den API-Schlüssel ein: Es wird als „Authorization: Bearer“ gesendet. Wenn das Gateway zusätzlich einen Projekt- oder Mandanten-Header verlangt, tragen Sie dessen Namen und Wert in die Header-Zeile unten ein; andernfalls entfernen Sie die Zeile.",
+					"editorHint": "Geben Sie die OpenAI-v1-Adresse des Gateways ein; sie endet meist auf /openai/v1. Tragen Sie das Bearer-Token in das Feld für den API-Schlüssel ein: Es wird als „Authorization: Bearer“ gesendet. Die Header-Zeile unten ist mit project-id vorbelegt: Tragen Sie die Projekt-ID als Wert ein, benennen Sie die Zeile um, wenn das Gateway einen anderen Header verwendet, oder entfernen Sie sie, wenn es keinen braucht.",
 					"headerNamePlaceholder": "Header-Name laut Ihrem Gateway",
 					"label": "KI-Gateway des Unternehmens"
 				},
