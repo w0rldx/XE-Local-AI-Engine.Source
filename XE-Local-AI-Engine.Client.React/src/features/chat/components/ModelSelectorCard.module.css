@@ -14,7 +14,10 @@
 	   Wider than the single-line trigger it replaced because it now carries the model name AND the line saying where
 	   it runs. */
 	width: clamp(8rem, 40vw, 17rem);
-	flex: 0 1 auto;
+
+	/* Gives up width before the agent and workflow pickers beside it: their short labels ("No workflow") are
+	   unreadable once ellipsized, while the model name stays readable down to the floor. */
+	flex: 0 4 auto;
 
 	/* The floor keeps the model readable; the composer folds its other controls (fitComposerToolbar budgets this
 	   width) instead of squeezing the trigger to nothing. */

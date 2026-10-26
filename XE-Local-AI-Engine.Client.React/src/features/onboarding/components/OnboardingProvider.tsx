@@ -1,10 +1,13 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouterState } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { EventData } from "react-joyride";
 import { ACTIONS, EVENTS, Joyride, STATUS } from "react-joyride";
 
+import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
+import { getAiAcknowledgementOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { router } from "@/core/integrations/tanstack-router/Router";
 import { WelcomeTourDialog } from "@/features/onboarding/components/WelcomeTourDialog";
@@ -142,11 +145,24 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 		[active, modelItems, navigateToStep, progress.refreshProgress, selectedModelName],
 	);
 
+	// The AI acknowledgement (mounted by the chat route only) opens on the same first visit; there the welcome dialog
+	// waits until it is accepted, so only one dialog is ever open. Elsewhere nothing would ask for the acknowledgement,
+	// and a failed read never holds the welcome back, as it never opens the acknowledgement.
+	const onChatRoute = useRouterState({ select: (state) => state.location.pathname === nodeRoutePaths.chat });
+	const acknowledgement = useQuery({ ...getAiAcknowledgementOptions(), enabled: isAuthenticated && onChatRoute });
+	const awaitingAcknowledgement = onChatRoute && (acknowledgement.isPending || acknowledgement.data?.acknowledged === false);
+
 	useEffect(() => {
-		if (progress.isSuccess && progress.isQuickStartUnseen && !welcomeHandledRef.current && active === null) {
+		if (
+			progress.isSuccess &&
+			progress.isQuickStartUnseen &&
+			!awaitingAcknowledgement &&
+			!welcomeHandledRef.current &&
+			active === null
+		) {
 			setWelcomeOpen(true);
 		}
-	}, [active, progress.isSuccess, progress.isQuickStartUnseen]);
+	}, [active, awaitingAcknowledgement, progress.isSuccess, progress.isQuickStartUnseen]);
 
 	const definition = active ? getTutorialDefinition(active.tutorialId) : null;
 	const steps = useMemo(

@@ -12,8 +12,8 @@ import { WorkflowSelectorCard } from "@/features/chat/workflow/WorkflowSelectorC
 import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
-// The composer toolbar is ONE row at every width: the fold itself is a container query jsdom cannot evaluate, so these
-// tests pin what the query relies on — a non-wrapping row that is the query's container and holds every control,
+// The composer toolbar is ONE row at every width: which pickers fold is fitComposerToolbar's call (unit-tested), so these
+// tests pin the row itself — a non-wrapping row that holds every control,
 // the context readout included — and leave the visual fold to the browser check.
 
 const longAgent: AgentOption = {

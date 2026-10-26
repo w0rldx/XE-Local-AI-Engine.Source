@@ -3,9 +3,11 @@
 // folded layout a phone gets, even though the viewport alone says "desktop". The widths are the rendered sizes of
 // the toolbar's controls; each is an upper bound, so the estimate errs towards folding early, never towards overlap.
 
-// Every toggle and icon button in the row is a 36px square, and so is the floor of the agent and workflow pickers
-// (folded below the toolbar's container-query width, and never shrunk below it above that).
+// Every toggle and icon button in the row is a 36px square, and so is a folded agent or workflow picker.
 const iconWidthPx = 36;
+// A labelled picker does not shrink; it caps at this width (ChatComposerToolbar.module.css `.select-trigger`
+// max-width), where a long agent name ellipsizes. Its tooltip carries the full choice either way.
+const labelledPickerWidthPx = 200;
 // Mantine `gap={4}` between the row's controls, plus the root row's `gap="xs"` before Send.
 const controlGapPx = 4;
 const sendGapPx = 10;
@@ -38,6 +40,8 @@ export interface ComposerToolbarControls {
 }
 
 export interface ComposerToolbarFit {
+	/** The agent and workflow pickers show their current choice; folded, they are icon-only squares. */
+	readonly labelledPickers: boolean;
 	/** Fold the reasoning, local-tools, knowledge-base and sampling toggles into the overflow menu. */
 	readonly compact: boolean;
 	/** Room for the context readout and its two buttons on the row. */
@@ -46,28 +50,31 @@ export interface ComposerToolbarFit {
 	readonly labelledSend: boolean;
 }
 
-// Cheapest loss first: the context readout goes (as it does on a narrow phone), then Send's label, and only then do
-// the toggles fold into the overflow menu, which is the one step that costs a click. Folding frees enough room to
-// bring the readout back, as the compact phone layout already does; without it the last layout is the floor.
-const floorLayout: ComposerToolbarFit = { compact: true, showContext: false, labelledSend: false };
+// Cheapest loss first: the context readout goes (as it does on a narrow phone), then the pickers' labels (their tooltip
+// still names the choice, and folding them brings the readout back), then Send's label, and only then do the toggles
+// fold into the overflow menu, which is the one step that costs a click. Folding frees enough room to bring the
+// readout back, as the compact phone layout already does; without it the last layout is the floor.
+const floorLayout: ComposerToolbarFit = { labelledPickers: false, compact: true, showContext: false, labelledSend: false };
 const layouts: readonly ComposerToolbarFit[] = [
-	{ compact: false, showContext: true, labelledSend: true },
-	{ compact: false, showContext: false, labelledSend: true },
-	{ compact: false, showContext: false, labelledSend: false },
-	{ compact: true, showContext: true, labelledSend: false },
+	{ labelledPickers: true, compact: false, showContext: true, labelledSend: true },
+	{ labelledPickers: true, compact: false, showContext: false, labelledSend: true },
+	{ labelledPickers: false, compact: false, showContext: true, labelledSend: true },
+	{ labelledPickers: false, compact: false, showContext: false, labelledSend: true },
+	{ labelledPickers: false, compact: false, showContext: false, labelledSend: false },
+	{ labelledPickers: false, compact: true, showContext: true, labelledSend: false },
 	floorLayout,
 ];
 
 function rowWidth(controls: ComposerToolbarControls, layout: ComposerToolbarFit): number {
 	const { compact } = layout;
+	const pickers = [controls.agentPicker, controls.workflowPicker].filter(Boolean).length;
+	const pickerWidth = (layout.labelledPickers ? labelledPickerWidthPx : iconWidthPx) + controlGapPx;
 	const icons = [
 		compact, // the overflow menu trigger
 		!compact, // reasoning
 		!compact && controls.localTools,
 		controls.webReview,
 		!compact && controls.knowledgeBase,
-		controls.agentPicker,
-		controls.workflowPicker,
 		controls.attachments,
 		!compact && controls.samplingOptions,
 		controls.voice,
@@ -79,7 +86,14 @@ function rowWidth(controls: ComposerToolbarControls, layout: ComposerToolbarFit)
 	const answerNow = controls.answerNow ? answerNowWidthPx + controlGapPx : 0;
 	const send = layout.labelledSend ? labelledSendWidthPx : iconWidthPx;
 	return (
-		composerChromePx + modelTriggerMinWidthPx + icons * (iconWidthPx + controlGapPx) + context + answerNow + sendGapPx + send
+		composerChromePx +
+		modelTriggerMinWidthPx +
+		icons * (iconWidthPx + controlGapPx) +
+		pickers * pickerWidth +
+		context +
+		answerNow +
+		sendGapPx +
+		send
 	);
 }
 

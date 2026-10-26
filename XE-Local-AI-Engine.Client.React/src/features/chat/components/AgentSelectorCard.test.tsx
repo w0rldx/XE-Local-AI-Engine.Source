@@ -92,7 +92,7 @@ describe("AgentSelectorCard", () => {
 		expect(screen.getByTestId("chat-agent-selector-trigger").textContent).toContain("Alpha Agent");
 	});
 
-	// On a narrow composer a container query hides the label and chevron, leaving the icon. The current choice then
+	// On a composer the row needs room on, the toolbar hides the label and chevron, leaving the icon. The current choice then
 	// lives only in the accessible name and the tooltip, and the same menu still has to open.
 	it("names the current agent in its accessible name and tooltip, so the folded icon-only trigger still says it", async () => {
 		const options = [makeOption({ id: "agent-1", name: "Alpha Agent" })];

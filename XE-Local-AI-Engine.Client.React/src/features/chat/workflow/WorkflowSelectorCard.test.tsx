@@ -42,7 +42,7 @@ describe("WorkflowSelectorCard", () => {
 		expect(onSelect).toHaveBeenLastCalledWith("");
 	});
 
-	// Folded to an icon on a narrow composer (a container query hides the label and chevron): the accessible name and
+	// Folded to an icon on a narrow composer (the toolbar hides the label and chevron): the accessible name and
 	// the tooltip carry the current choice, and the same menu opens.
 	it("names the current workflow in its accessible name and tooltip, so the folded icon-only trigger still says it", async () => {
 		renderWithProviders(<WorkflowSelectorCard options={options} selectedDefinitionId="def-1" onSelect={vi.fn()} />);

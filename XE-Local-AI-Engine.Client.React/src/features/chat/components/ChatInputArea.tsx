@@ -241,6 +241,7 @@ export function ChatInputArea({
 	const compactViewport = isCompactViewport(width, height);
 	const compact = compactViewport || toolbarFit?.compact === true;
 	const labelledSend = !compactViewport && toolbarFit?.labelledSend !== false;
+	const labelledPickers = !compactViewport && toolbarFit?.labelledPickers === true;
 	const autocomplete = useSlashCommandAutocomplete({
 		content,
 		selectionStart: selection.start,
@@ -354,6 +355,7 @@ export function ChatInputArea({
 			toolbarRef={toolbarRef}
 			compact={compact}
 			labelledSend={labelledSend}
+			labelledPickers={labelledPickers}
 			onWebReviewShownChange={setWebReviewShown}
 			disabled={disabled}
 			isSending={isSending}

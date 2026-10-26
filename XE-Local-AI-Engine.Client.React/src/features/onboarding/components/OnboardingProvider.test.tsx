@@ -4,7 +4,18 @@ import { MantineProvider } from "@mantine/core";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { joyrideProps, onEventRef, stateRef, markDoneMock, modelsRef, conversationsRef, toastErrorMock } = vi.hoisted(() => ({
+const {
+	joyrideProps,
+	onEventRef,
+	stateRef,
+	markDoneMock,
+	modelsRef,
+	conversationsRef,
+	toastErrorMock,
+	acknowledgementRef,
+	pathnameRef,
+} = vi.hoisted(() => ({
+	pathnameRef: { current: "/chat" },
 	joyrideProps: { current: null as null | { run: boolean; stepIndex: number; steps: { title?: string }[] } },
 	onEventRef: { current: null as null | ((data: Record<string, unknown>) => void) },
 	stateRef: {
@@ -25,6 +36,9 @@ const { joyrideProps, onEventRef, stateRef, markDoneMock, modelsRef, conversatio
 		current: [] as [readonly unknown[], { messages?: { role: string; content: string }[] }][],
 	},
 	toastErrorMock: vi.fn(),
+	acknowledgementRef: {
+		current: { data: { acknowledged: true }, isPending: false } as { data?: { acknowledged: boolean }; isPending: boolean },
+	},
 }));
 
 vi.mock("react-joyride", async (importOriginal) => {
@@ -50,14 +64,23 @@ vi.mock("@/features/onboarding/hooks/useTourState", async (importOriginal) => ({
 }));
 
 vi.mock("@tanstack/react-query", () => ({
-	useQuery: () => modelsRef.current,
+	useQuery: (options: { queryKey?: readonly unknown[] }) =>
+		options.queryKey?.[0] === "ai-acknowledgement" ? acknowledgementRef.current : modelsRef.current,
 	useQueryClient: () => ({
 		getQueriesData: () => conversationsRef.current,
 		getQueryCache: () => ({ subscribe: () => () => undefined }),
 	}),
 }));
-vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({ listLocalModelsOptions: () => ({}) }));
+vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
+	listLocalModelsOptions: () => ({}),
+	getAiAcknowledgementOptions: () => ({ queryKey: ["ai-acknowledgement"] }),
+}));
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: { error: toastErrorMock } }));
+vi.mock("@tanstack/react-router", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@tanstack/react-router")>()),
+	useRouterState: ({ select }: { select: (state: { location: { pathname: string } }) => unknown }) =>
+		select({ location: { pathname: pathnameRef.current } }),
+}));
 vi.mock("@/core/integrations/tanstack-router/Router", () => ({
 	router: { state: { location: { pathname: "/" } }, navigate: vi.fn().mockResolvedValue(undefined) },
 }));
@@ -69,6 +92,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 import { ACTIONS, EVENTS, STATUS } from "react-joyride";
+
 import { OnboardingProvider } from "@/features/onboarding/components/OnboardingProvider";
 import { type OnboardingContextValue, useOnboarding } from "@/features/onboarding/context/OnboardingContext";
 import { tutorialProgressStorageKey } from "@/features/onboarding/hooks/useTourState";
@@ -144,6 +168,8 @@ beforeEach(() => {
 	contextRef.current = null;
 	stateRef.current = { isResolved: true, isSuccess: true, statusByKey: {} };
 	modelsRef.current = { data: undefined, isSuccess: false };
+	acknowledgementRef.current = { data: { acknowledged: true }, isPending: false };
+	pathnameRef.current = "/chat";
 	conversationsRef.current = [];
 	markDoneMock.mockImplementation((_key: string, _status: string, callbacks?: { onSuccess?: () => void }) =>
 		callbacks?.onSuccess?.(),
@@ -153,6 +179,34 @@ beforeEach(() => {
 afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
+});
+
+// The AI acknowledgement opens on the same first visit; two dialogs at once would leave the welcome's buttons covered.
+describe("AI acknowledgement first", () => {
+	it("holds the welcome dialog until the acknowledgement is accepted", () => {
+		acknowledgementRef.current = { data: { acknowledged: false }, isPending: false };
+		const view = renderProvider();
+		expect(screen.queryByTestId("onboarding-welcome-start")).toBeNull();
+
+		acknowledgementRef.current = { data: { acknowledged: true }, isPending: false };
+		applyConversations(view, []);
+		expect(screen.getByTestId("onboarding-welcome-start")).toBeTruthy();
+	});
+
+	it("does not hold the welcome dialog back when the acknowledgement read failed", () => {
+		acknowledgementRef.current = { data: undefined, isPending: false };
+		renderProvider();
+		expect(screen.getByTestId("onboarding-welcome-start")).toBeTruthy();
+	});
+
+	// Only the chat route asks for the acknowledgement; a first visit that starts on a deep link would otherwise never
+	// see the welcome dialog.
+	it("does not hold the welcome dialog back on a route that does not ask for the acknowledgement", () => {
+		acknowledgementRef.current = { data: { acknowledged: false }, isPending: false };
+		pathnameRef.current = "/models";
+		renderProvider();
+		expect(screen.getByTestId("onboarding-welcome-start")).toBeTruthy();
+	});
 });
 
 describe("explicit opt-in", () => {

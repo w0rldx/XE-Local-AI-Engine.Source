@@ -34,6 +34,8 @@ interface ChatComposerToolbarProps {
 	compact: boolean;
 	/** Send shows its label; off on a phone, and on a composer that needs the room. */
 	labelledSend: boolean;
+	/** The agent and workflow pickers show their current choice; off on a phone, and on a composer that needs the room. */
+	labelledPickers: boolean;
 	/** Reports whether the web review switch is on screen (see WebContentAutoAcceptToggle). */
 	onWebReviewShownChange: (shown: boolean) => void;
 	disabled: boolean;
@@ -83,13 +85,14 @@ interface ChatComposerToolbarProps {
 
 // The toolbar is hosted in the Textarea's bottomSection (rendered inside the input border, pointer-events:all —
 // so the Stop button stays interactive even while the input element itself is disabled during a send). It is ONE
-// row at every width: instead of wrapping, the model trigger shrinks behind an ellipsis and the agent and workflow
-// pickers fold to icon-only squares through a container query on the toolbar (ChatComposerToolbar.module.css), so
-// the context readout and Send keep their place on the same line.
+// row at every width: instead of wrapping, the model trigger shrinks behind an ellipsis and, when fitComposerToolbar
+// says the row needs the room, the agent and workflow pickers fold to icon-only squares (ChatComposerToolbar.module.css),
+// so the context readout and Send keep their place on the same line.
 export function ChatComposerToolbar({
 	toolbarRef,
 	compact,
 	labelledSend,
+	labelledPickers,
 	onWebReviewShownChange,
 	disabled,
 	isSending,
@@ -255,7 +258,15 @@ export function ChatComposerToolbar({
 	) : null;
 
 	return (
-		<Group ref={toolbarRef} align="center" wrap="nowrap" gap="xs" preventGrowOverflow={false} className={classes["toolbar"]}>
+		<Group
+			ref={toolbarRef}
+			align="center"
+			wrap="nowrap"
+			gap="xs"
+			preventGrowOverflow={false}
+			className={classes["toolbar"]}
+			data-folded-pickers={labelledPickers ? undefined : "true"}
+		>
 			{/* preventGrowOverflow off (here and on the row above): Mantine otherwise caps every child at an equal share of the
 			    row, which squeezed the model trigger to a stub while the row still had room. */}
 			<Group gap={4} wrap="nowrap" preventGrowOverflow={false} className={classes["controls"]} style={{ flex: 1, minWidth: 0 }}>
