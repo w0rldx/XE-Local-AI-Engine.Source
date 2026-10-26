@@ -116,7 +116,7 @@ export function ConversationListItem({
 							style={{ flex: 1, minWidth: 0, textAlign: "inherit" }}
 							data-testid={`conversation-select-${conversation.id}`}
 						>
-							<Text fw={600} size="sm" lineClamp={1}>
+							<Text fw={600} size="sm" lineClamp={1} title={title}>
 								{title}
 							</Text>
 						</UnstyledButton>

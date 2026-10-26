@@ -25,6 +25,8 @@ export function StatusBadge({
 			variant="light"
 			leftSection={inProgress ? <Loader size={10} color={color} /> : undefined}
 			aria-label={ariaLabel}
+			// Badge labels clip with an ellipsis in a narrow cell; the title keeps the full text reachable on hover.
+			title={typeof label === "string" ? label : undefined}
 			data-testid={testId}
 		>
 			{label}

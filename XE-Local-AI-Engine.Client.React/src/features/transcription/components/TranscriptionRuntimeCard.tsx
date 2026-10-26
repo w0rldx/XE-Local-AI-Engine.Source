@@ -84,7 +84,8 @@ export function TranscriptionRuntimeCard() {
 				)}
 				{/* Every session resolves to this model, so a missing file fails each one; the list alert below only covers "nothing installed". */}
 				{modelsQuery.data?.models.some((model) => model.id === runtime.effectiveModelId && !model.installed) ? (
-					<Alert color="yellow" variant="light" data-testid="transcription-runtime-model-missing">
+					// The stack's 2px gap groups the helper lines; the alert needs its own room from them.
+					<Alert color="yellow" variant="light" my="xs" data-testid="transcription-runtime-model-missing">
 						{t("pages.transcription.runtime.modelNotInstalled", { model: runtime.effectiveModelId })}
 					</Alert>
 				) : null}

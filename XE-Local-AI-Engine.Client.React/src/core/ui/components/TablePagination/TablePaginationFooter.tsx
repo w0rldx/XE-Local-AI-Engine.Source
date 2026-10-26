@@ -58,7 +58,9 @@ export function TablePaginationFooter({
 					data={sizeData}
 					value={String(pageSize)}
 					onChange={handleSizeChange}
-					size="xs"
+					// "sm" (36px) rather than "xs" (30px): the smaller select was a fiddly touch target on phones and sat
+					// shorter than the 32px page buttons beside it.
+					size="sm"
 					w={80}
 					allowDeselect={false}
 					comboboxProps={{ withinPortal: true }}

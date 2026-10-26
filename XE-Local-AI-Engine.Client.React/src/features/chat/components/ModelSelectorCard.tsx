@@ -184,7 +184,14 @@ export function ModelSelectorCard({
 							<Group gap="xs" wrap="nowrap" align="center" style={{ width: "100%" }}>
 								<IconCpu size={16} color="var(--mantine-color-dimmed)" style={{ flexShrink: 0 }} />
 								<Stack gap={0} style={{ flex: 1, minWidth: 0 }}>
-									<Text lineClamp={1} className={classes["trigger-primary"]} data-testid="chat-model-selector-trigger-name">
+									{/* The tooltip only covers a name the display shortened; a narrow trigger also ellipsizes an
+									    unshortened one ("Local runtime default"), so the native title carries the full name. */}
+									<Text
+										lineClamp={1}
+										title={selectedDisplay.full === selectedDisplay.primary ? selectedDisplay.full : undefined}
+										className={classes["trigger-primary"]}
+										data-testid="chat-model-selector-trigger-name"
+									>
 										{selectedDisplay.primary}
 									</Text>
 									{!isCompactViewport && selectedDisplay.secondary !== undefined ? (

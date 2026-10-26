@@ -60,7 +60,9 @@ export function WelcomeTourDialog({ opened, hasProgress, onStart, onSkip }: Welc
 					<Button variant="default" onClick={onSkip} data-testid="onboarding-welcome-skip">
 						{t("onboarding.welcome.skip")}
 					</Button>
-					<Button onClick={onStart} data-testid="onboarding-welcome-start">
+					{/* Initial focus on the primary action: the modal otherwise focuses the title bar's close X, whose
+					    red focus ring read as an error state on open. */}
+					<Button onClick={onStart} data-autofocus={true} data-testid="onboarding-welcome-start">
 						{hasProgress ? t("onboarding.actions.resume") : t("onboarding.welcome.start")}
 					</Button>
 				</Group>

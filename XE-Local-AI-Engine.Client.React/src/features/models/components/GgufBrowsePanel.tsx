@@ -30,6 +30,23 @@ interface GgufBrowsePanelProps {
 	installedRepoIds: ReadonlySet<string>;
 }
 
+// A repo id wraps after the owner's slash (and at its own hyphens), never mid-token. `overflowWrap` rather than
+// `wordBreak: break-word`: the latter also shrinks the table column's min-content width, which split "unsloth/granit|e".
+const repoIdStyle = { overflowWrap: "break-word" } as const;
+
+function RepoIdText({ repoId }: { readonly repoId: string }) {
+	const slash = repoId.indexOf("/");
+	return slash < 0 ? (
+		repoId
+	) : (
+		<>
+			{repoId.slice(0, slash + 1)}
+			<wbr />
+			{repoId.slice(slash + 1)}
+		</>
+	);
+}
+
 // HF GGUF browse/select panel: a search box runs browseGgufRepositories, results list each candidate repo with its
 // metadata and a select-to-download action (startGgufDownload by the parent). The committed search term is lifted to
 // the page (it keys the browse query); the raw input box value is local component state until submitted. Until a
@@ -89,9 +106,9 @@ export function GgufBrowsePanel({
 						target="_blank"
 						rel="noopener noreferrer"
 						size="xs"
-						style={{ wordBreak: "break-word" }}
+						style={repoIdStyle}
 					>
-						{model.ggufRepo}
+						<RepoIdText repoId={model.ggufRepo} />
 						<IconExternalLink size={12} style={{ marginLeft: 4, verticalAlign: "middle" }} />
 					</Anchor>
 				</>
@@ -140,7 +157,16 @@ export function GgufBrowsePanel({
 				);
 			},
 		},
-		{ key: "license", header: t("pages.models.gguf.browse.columns.license", "License"), cell: (model) => model.license },
+		{
+			key: "license",
+			header: t("pages.models.gguf.browse.columns.license", "License"),
+			// A license id ("apache-2.0") is one token; split at its hyphen it reads as two.
+			cell: (model) => (
+				<Text size="sm" style={{ whiteSpace: "nowrap" }}>
+					{model.license}
+				</Text>
+			),
+		},
 		{ key: "notes", header: t("pages.models.gguf.browse.tested.columns.notes", "Notes"), cell: (model) => model.notes ?? "—" },
 	];
 
@@ -157,9 +183,9 @@ export function GgufBrowsePanel({
 						rel="noopener noreferrer"
 						size="sm"
 						fw={500}
-						style={{ wordBreak: "break-word" }}
+						style={repoIdStyle}
 					>
-						{repository.repoId}
+						<RepoIdText repoId={repository.repoId} />
 						<IconExternalLink size={12} style={{ marginLeft: 4, verticalAlign: "middle" }} />
 					</Anchor>
 					{repository.isGated ? (
@@ -208,7 +234,11 @@ export function GgufBrowsePanel({
 		{
 			key: "license",
 			header: t("pages.models.gguf.browse.columns.license", "License"),
-			cell: (repository) => repository.license ?? "—",
+			cell: (repository) => (
+				<Text size="sm" style={{ whiteSpace: "nowrap" }}>
+					{repository.license ?? "—"}
+				</Text>
+			),
 		},
 	];
 

@@ -10,6 +10,13 @@ import { getNodeSettingsQueryKey, saveNodeSettingsMutation } from "@/core/api/ge
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { StandaloneScreenControls } from "@/core/ui/components/StandaloneScreenControls/StandaloneScreenControls";
 
+// Each radio sits in a box one h3 line tall so it centres on the card title's line, not on the card's top edge.
+const titleLineStyle = {
+	display: "flex",
+	alignItems: "center",
+	height: "calc(var(--mantine-h3-font-size) * var(--mantine-h3-line-height))",
+} as const;
+
 // The first-run navigation-mode choice, shown once after the external-access step. Like that screen it has no skip
 // control — the layout guard sends anyone with an unanswered mode straight back here, so a way out that did not save
 // would only produce a loop.
@@ -70,7 +77,9 @@ export function UiModeSetup() {
 						<Stack gap="md">
 							<Radio.Card value="simple" radius="lg" p="xl" data-testid="ui-mode-simple-card">
 								<Group align="flex-start" wrap="nowrap" gap="md">
-									<Radio.Indicator />
+									<Box style={titleLineStyle}>
+										<Radio.Indicator />
+									</Box>
 									<Stack gap="xs">
 										<Group gap="sm" align="center">
 											<Title order={2} size="h3">
@@ -90,7 +99,9 @@ export function UiModeSetup() {
 
 							<Radio.Card value="advanced" radius="lg" p="xl" data-testid="ui-mode-advanced-card">
 								<Group align="flex-start" wrap="nowrap" gap="md">
-									<Radio.Indicator />
+									<Box style={titleLineStyle}>
+										<Radio.Indicator />
+									</Box>
 									<Stack gap="xs">
 										<Title order={2} size="h3">
 											{t("pages.uiMode.advanced.title", "Advanced")}

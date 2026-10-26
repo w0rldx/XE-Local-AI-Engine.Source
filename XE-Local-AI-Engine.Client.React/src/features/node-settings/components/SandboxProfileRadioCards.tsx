@@ -1,4 +1,4 @@
-import { Badge, Group, List, Radio, Stack, Text, Title } from "@mantine/core";
+import { Badge, Box, Group, List, Radio, Stack, Text, Title } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import { sandboxRoleLabel } from "@/core/models/SandboxRoles";
@@ -15,6 +15,13 @@ interface Props {
 	readonly highRefusals: readonly string[] | undefined;
 	readonly testIdPrefix: string;
 }
+
+// Each radio sits in a box one h3 line tall so it centres on the card title's line, not on the card's top edge.
+const titleLineStyle = {
+	display: "flex",
+	alignItems: "center",
+	height: "calc(var(--mantine-h3-font-size) * var(--mantine-h3-line-height))",
+} as const;
 
 // The two profiles as one radio question: the first-run chooser and the Node settings card both render this, so the
 // trade-off copy an operator decides on is the copy they later review.
@@ -35,7 +42,9 @@ export function SandboxProfileRadioCards({ value, onChange, recommended, highRef
 			<Stack gap="md">
 				<Radio.Card value="low" radius="lg" p="xl" data-testid={`${testIdPrefix}-low-card`}>
 					<Group align="flex-start" wrap="nowrap" gap="md">
-						<Radio.Indicator />
+						<Box style={titleLineStyle}>
+							<Radio.Indicator />
+						</Box>
 						<Stack gap="xs">
 							<Group gap="sm" align="center">
 								<Title order={2} size="h3">
@@ -55,7 +64,9 @@ export function SandboxProfileRadioCards({ value, onChange, recommended, highRef
 
 				<Radio.Card value="high" radius="lg" p="xl" data-testid={`${testIdPrefix}-high-card`}>
 					<Group align="flex-start" wrap="nowrap" gap="md">
-						<Radio.Indicator />
+						<Box style={titleLineStyle}>
+							<Radio.Indicator />
+						</Box>
 						<Stack gap="xs">
 							<Group gap="sm" align="center">
 								<Title order={2} size="h3">

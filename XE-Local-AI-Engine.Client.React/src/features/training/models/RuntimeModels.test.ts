@@ -1,3 +1,4 @@
+import i18n from "i18next";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -6,6 +7,7 @@ import {
 	isArtifactDownloading,
 	isRuntimeInstalling,
 	mergeTrainingLogs,
+	prerequisiteHeadline,
 	toBaseArtifactView,
 	toRuntimeStatusView,
 	trainingLogEntries,
@@ -110,6 +112,17 @@ describe("view mapping", () => {
 		expect(view.license?.isGated).toBe(true);
 		expect(view.progress?.fileCount).toBe(3);
 		expect(view.files).toEqual([]);
+	});
+});
+
+describe("prerequisiteHeadline", () => {
+	it("picks the localized sentence by key and satisfied state", () => {
+		expect(prerequisiteHeadline(i18n.t, i18n, { key: "platform", satisfied: true })).toBe("Running on Linux");
+		expect(prerequisiteHeadline(i18n.t, i18n, { key: "platform", satisfied: false })).toBe("Training is available on Linux only");
+	});
+
+	it("returns undefined for a key this client does not know, so the raw detail is shown alone", () => {
+		expect(prerequisiteHeadline(i18n.t, i18n, { key: "future-check", satisfied: true })).toBeUndefined();
 	});
 });
 

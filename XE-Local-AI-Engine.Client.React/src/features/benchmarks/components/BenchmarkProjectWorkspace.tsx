@@ -154,7 +154,8 @@ export function BenchmarkProjectWorkspace({ controller }: { readonly controller:
 					</SectionCard>
 				</Grid.Col>
 
-				<Grid.Col span={{ base: 12, lg: 8 }}>
+				{/* With no project at all there is nothing to select; the projects card's empty text says what to do. */}
+				<Grid.Col span={{ base: 12, lg: 8 }} display={projectsQuery.data?.length === 0 ? "none" : undefined}>
 					<SectionCard>
 						{projectQuery.isLoading ? (
 							<Group gap="sm">

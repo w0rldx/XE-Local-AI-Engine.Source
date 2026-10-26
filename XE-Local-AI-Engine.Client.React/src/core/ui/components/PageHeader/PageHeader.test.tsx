@@ -10,6 +10,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
+import classes from "@/core/ui/components/PageHeader/PageHeader.module.css";
 import { installJsdomEnvironmentMocks, renderWithMantine as renderWithProviders } from "@/test/MantineTestRender";
 
 describe("PageHeader", () => {
@@ -77,6 +78,25 @@ describe("PageHeader", () => {
 		expect(titleRow.style.getPropertyValue("--group-wrap")).toBe("nowrap");
 		expect(titleRow.contains(screen.getByTestId("page-icon"))).toBe(true);
 		expect(titleRow.contains(screen.getByRole("heading", { level: 1 }))).toBe(true);
+	});
+
+	// Centred against a wrapped two- or three-line title, the icon floated beside the middle line; top-aligned in a box
+	// one title line tall it stays on the first line.
+	it("aligns the icon with the first line of a wrapping title", () => {
+		renderWithProviders(<PageHeader title="Agents" icon={<svg />} />);
+
+		expect(screen.getByTestId("page-header-title-row").style.getPropertyValue("--group-align")).toBe("flex-start");
+		expect(screen.getByTestId("page-header-icon").style.height).toBe(
+			"calc(var(--mantine-h2-font-size) * var(--mantine-h2-line-height))",
+		);
+	});
+
+	// The class carries the rule that pulls a leading subtle button flush with the title's left edge.
+	it("marks the action slot for the flush leading subtle button", () => {
+		renderWithProviders(<PageHeader title="Agents" actions={<button type="button">Refresh</button>} />);
+
+		const actions = screen.getByRole("button", { name: "Refresh" }).parentElement;
+		expect(actions?.classList.contains(classes["actions"] ?? "missing")).toBe(true);
 	});
 
 	it("forwards data-testid and data-tour to the header root", () => {

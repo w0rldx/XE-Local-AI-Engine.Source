@@ -112,15 +112,16 @@ describe("ThemeProvider dimmed text contrast", () => {
 		expect(readColorSchemeVariables("light")).toContain("--mantine-color-dimmed: var(--mantine-color-gray-7)");
 	});
 
-	// Dark mode already passes (dark-2 on the dark surfaces) and darkening it there would make the text worse, so
-	// the override is light-only: the dark block must not carry a dimmed declaration of its own.
-	it("leaves the dark-mode dimmed colour to Mantine", () => {
+	// In dark mode Mantine's dimmed (dark-2) and disabled label (dark-3) read as faint; disabled buttons looked like
+	// plain text. Both move one step lighter, and the dimmed one stays short of dark-1 so it still differs from body text.
+	it("lightens the dark-mode dimmed and disabled label colours", () => {
 		render(<ThemeProvider>content</ThemeProvider>);
 
 		const darkVariables = readColorSchemeVariables("dark");
-		// An empty block would make the assertion below vacuous, so prove the dark rule was emitted at all first.
-		expect(darkVariables).toContain("--mantine-color-anchor");
-		expect(darkVariables).not.toContain("--mantine-color-dimmed");
+		expect(darkVariables).toContain(
+			"--mantine-color-dimmed: color-mix(in srgb, var(--mantine-color-dark-1), var(--mantine-color-dark-2))",
+		);
+		expect(darkVariables).toContain("--mantine-color-disabled-color: var(--mantine-color-dark-2)");
 	});
 });
 

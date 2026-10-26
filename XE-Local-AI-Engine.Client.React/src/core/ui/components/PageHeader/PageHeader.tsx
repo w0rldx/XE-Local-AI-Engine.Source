@@ -2,6 +2,8 @@ import { Box, Group, Stack, Text, Title } from "@mantine/core";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
+import classes from "@/core/ui/components/PageHeader/PageHeader.module.css";
+
 interface PageHeaderProps {
 	title: ReactNode;
 	/** Leading icon next to the title; by convention a Tabler icon with size={24}. */
@@ -38,10 +40,24 @@ export function PageHeader({
 				 * `wrap="nowrap"` keeps the icon on the title's line: with the default wrap a title too long for the
 				 * remaining width pushed the icon onto a line of its own ABOVE the heading (live-observed on
 				 * /benchmarks at 390px). The icon is held at its intrinsic size and the title is the part allowed to
-				 * shrink, so a long title wraps or truncates INSIDE the row instead of breaking it apart.
+				 * shrink, so a long title wraps or truncates INSIDE the row instead of breaking it apart. The icon box is
+				 * one title line tall and top-aligned, so a wrapped title keeps the icon on its first line rather than
+				 * centred against the whole block.
 				 */}
-				<Group gap="xs" align="center" wrap="nowrap" data-testid="page-header-title-row">
-					{icon ? <Box style={{ display: "flex", flex: "0 0 auto" }}>{icon}</Box> : null}
+				<Group gap="xs" align="flex-start" wrap="nowrap" data-testid="page-header-title-row">
+					{icon ? (
+						<Box
+							data-testid="page-header-icon"
+							style={{
+								display: "flex",
+								alignItems: "center",
+								flex: "0 0 auto",
+								height: "calc(var(--mantine-h2-font-size) * var(--mantine-h2-line-height))",
+							}}
+						>
+							{icon}
+						</Box>
+					) : null}
 					{/*
 					 * This IS the page's h1 — it is the only heading every routed page renders, so anything lower left
 					 * the page with no h1 at all and made every section heading below it a level-2 orphan. `size="h2"`
@@ -55,7 +71,11 @@ export function PageHeader({
 				</Group>
 				{subtitle ? <Text c="dimmed">{subtitle}</Text> : null}
 			</Stack>
-			{actions ? <Group gap="sm">{actions}</Group> : null}
+			{actions ? (
+				<Group gap="sm" className={classes["actions"]}>
+					{actions}
+				</Group>
+			) : null}
 		</Group>
 	);
 }

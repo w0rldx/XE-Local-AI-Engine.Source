@@ -224,8 +224,9 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 		/>
 	) : null;
 
+	// With no workflow at all the list's own empty text already says what to do; a second message here only repeats it.
 	const body =
-		definitionId === undefined ? (
+		definitionId === undefined && definitionsQuery.data?.definitions.length === 0 ? null : definitionId === undefined ? (
 			<EmptyState
 				icon={<IconSitemap size={32} opacity={0.5} />}
 				message={t("pages.graphWorkflows.empty.editor", "No workflow is open. Pick one from the list, or create a new one.")}

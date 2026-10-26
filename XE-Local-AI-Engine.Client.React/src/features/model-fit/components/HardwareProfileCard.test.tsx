@@ -106,7 +106,12 @@ describe("HardwareProfileCard CPU-fallback alert", () => {
 		);
 
 		const alert = screen.getByTestId("model-fit-hardware-cpu-fallback-alert");
-		expect(alert.textContent).toContain("The Vulkan build found no usable GPU device.");
+		expect(alert.textContent).toContain(
+			"The selected inference runtime could not use this machine's GPU, so inference is running on the CPU.",
+		);
+		expect(screen.getByTestId("model-fit-hardware-cpu-fallback-reason").textContent).toBe(
+			"The Vulkan build found no usable GPU device.",
+		);
 		expect(screen.getByTestId("model-fit-hardware-cpu-fallback-remediation").textContent).toContain(
 			"Install a CUDA runtime or build llama.cpp from source.",
 		);
@@ -278,7 +283,10 @@ describe("HardwareProfileCard undetermined backend", () => {
 		});
 
 		const alert = screen.getByTestId("model-fit-hardware-backend-undetermined-alert");
-		expect(alert.textContent).toContain("Listing GPU devices did not complete");
+		expect(alert.textContent).toContain("The GPU devices of the selected runtime have not been listed");
+		expect(screen.getByTestId("model-fit-hardware-backend-undetermined-detail").textContent).toContain(
+			"Listing GPU devices did not complete",
+		);
 		// It is not a fallback claim: nobody proved the GPU is unused.
 		expect(screen.queryByTestId("model-fit-hardware-cpu-fallback-alert")).toBeNull();
 	});

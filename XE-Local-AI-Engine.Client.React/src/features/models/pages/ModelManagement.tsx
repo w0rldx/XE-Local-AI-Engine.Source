@@ -16,7 +16,6 @@ import {
 	putModelKindMutation,
 	selectLocalModelMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
@@ -200,7 +199,6 @@ export function ModelManagement() {
 					onDelete={confirmDelete}
 					onResetKind={(modelName) => resetKindMutation.mutate({ path: { modelName } })}
 				/>
-				{modelViewModels.length === 0 ? <EmptyState message={t("pages.models.local.empty", "No local models found.")} /> : null}
 			</SectionCard>
 
 			<DownloadProgressPanel

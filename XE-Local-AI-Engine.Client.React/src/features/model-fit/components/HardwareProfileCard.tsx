@@ -102,14 +102,20 @@ export function HardwareProfileCard({ profile, isLoading, isFetching, error, onR
 						title={t("pages.modelFit.hardware.cpuFallbackAlert.title", "Running on CPU despite a detected GPU")}
 						data-testid="model-fit-hardware-cpu-fallback-alert"
 					>
+						{/* The localized sentence comes from the audit state; the server's English reason and remediation stay
+						    below it as detail, as the chat error headline does. */}
 						<Stack gap={4}>
 							<Text size="sm">
-								{profile.cpuFallbackReason ??
-									t(
-										"pages.modelFit.hardware.cpuFallbackAlert.reason",
-										"The selected inference runtime could not use this machine's GPU, so inference is running on the CPU.",
-									)}
+								{t(
+									"pages.modelFit.hardware.cpuFallbackAlert.reason",
+									"The selected inference runtime could not use this machine's GPU, so inference is running on the CPU.",
+								)}
 							</Text>
+							{profile.cpuFallbackReason ? (
+								<Text size="sm" c="dimmed" data-testid="model-fit-hardware-cpu-fallback-reason">
+									{profile.cpuFallbackReason}
+								</Text>
+							) : null}
 							{profile.cpuFallbackRemediation ? (
 								<Text size="sm" c="dimmed" data-testid="model-fit-hardware-cpu-fallback-remediation">
 									{profile.cpuFallbackRemediation}
@@ -127,7 +133,17 @@ export function HardwareProfileCard({ profile, isLoading, isFetching, error, onR
 						title={t("pages.modelFit.hardware.backendUndeterminedAlert.title", "Could not determine your GPU backend")}
 						data-testid="model-fit-hardware-backend-undetermined-alert"
 					>
-						<Text size="sm">{profile.backendUndeterminedReason}</Text>
+						<Stack gap={4}>
+							<Text size="sm">
+								{t(
+									"pages.modelFit.hardware.backendUndeterminedAlert.reason",
+									"The GPU devices of the selected runtime have not been listed, so whether inference will use the GPU is unknown. Model sizing on this page still assumes the GPU's VRAM is usable.",
+								)}
+							</Text>
+							<Text size="sm" c="dimmed" data-testid="model-fit-hardware-backend-undetermined-detail">
+								{profile.backendUndeterminedReason}
+							</Text>
+						</Stack>
 					</Alert>
 				) : null}
 

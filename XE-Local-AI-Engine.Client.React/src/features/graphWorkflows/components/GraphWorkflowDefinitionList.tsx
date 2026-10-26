@@ -116,7 +116,7 @@ export function GraphWorkflowDefinitionList({
 								data-testid={`gw-definition-row-${id}`}
 								data-selected={selected ? "true" : "false"}
 							>
-								<Group gap={4} wrap="nowrap" align="flex-start">
+								<Group gap="sm" wrap="nowrap" align="flex-start">
 									{/* The row's control is a real button so a definition is reachable from the keyboard; the delete
 									    icon sits beside it, not inside it, so it stays its own focus stop. */}
 									<UnstyledButton

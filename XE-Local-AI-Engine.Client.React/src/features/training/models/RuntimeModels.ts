@@ -1,3 +1,5 @@
+import type { i18n as I18n, TFunction } from "i18next";
+
 import type {
 	XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactResponse as BaseArtifactResponse,
 	XeLocalAiEngineClientEndpointsTrainingRuntimeV1TrainingRuntimePrerequisitesResponse as PrerequisitesResponse,
@@ -101,6 +103,20 @@ export function toPrerequisitesView(response: PrerequisitesResponse): TrainingRu
 			detail: item.detail,
 		})),
 	};
+}
+
+/**
+ * The localized sentence of one prerequisite, chosen by its stable server `key` and whether it is satisfied; the
+ * server's English `detail` stays below it. Undefined for a key this client does not know, so the row then shows the
+ * raw detail alone.
+ */
+export function prerequisiteHeadline(
+	t: TFunction,
+	i18n: Pick<I18n, "exists">,
+	item: Pick<TrainingRuntimePrerequisiteItemView, "key" | "satisfied">,
+): string | undefined {
+	const key = `pages.training.runtime.prerequisiteItems.${item.key}.${item.satisfied ? "satisfied" : "unsatisfied"}`;
+	return i18n.exists(key) ? t(key) : undefined;
 }
 
 export function toBaseArtifactView(response: BaseArtifactResponse): BaseArtifactView {

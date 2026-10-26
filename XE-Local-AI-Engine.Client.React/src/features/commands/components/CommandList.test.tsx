@@ -52,4 +52,27 @@ describe("CommandList", () => {
 		expect(screen.queryByText("Test the current chat agent.")).toBeNull();
 		expect(screen.getByText("Fasse den Verlauf zusammen.")).toBeTruthy();
 	});
+
+	it("drops the actions column when every command is a built-in", () => {
+		const builtIns = commands.filter((command) => command.source === "builtIn");
+		render(
+			<MantineProvider env="test" theme={testMantineTheme}>
+				<CommandList commands={builtIns} isMutating={false} onEdit={() => undefined} onDelete={() => undefined} />
+			</MantineProvider>,
+		);
+
+		expect(screen.queryByText("Actions")).toBeNull();
+		expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+	});
+
+	it("marks a built-in row with a dash beside editable custom rows", () => {
+		render(
+			<MantineProvider env="test" theme={testMantineTheme}>
+				<CommandList commands={commands} isMutating={false} onEdit={() => undefined} onDelete={() => undefined} />
+			</MantineProvider>,
+		);
+
+		expect(screen.getByTestId("command-row-ping").textContent).toContain("—");
+		expect(screen.getAllByRole("button", { name: "Edit" })).toHaveLength(1);
+	});
 });

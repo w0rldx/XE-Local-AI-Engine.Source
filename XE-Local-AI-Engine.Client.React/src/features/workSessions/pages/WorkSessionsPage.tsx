@@ -130,7 +130,7 @@ export function WorkSessionsPage() {
 							style={{ cursor: "pointer" }}
 						>
 							<Stack gap="xs">
-								<Text fw={600} lineClamp={2}>
+								<Text fw={600} lineClamp={2} title={session.title ?? undefined}>
 									{session.title}
 								</Text>
 								<Group gap="xs" wrap="wrap">

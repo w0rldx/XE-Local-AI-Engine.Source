@@ -46,7 +46,7 @@ export function McpServerList({ servers, isMutating, onEdit, onDelete, onToggleE
 						<>
 							<Text fw={600}>{server.name}</Text>
 							{server.description ? (
-								<Text size="xs" c="dimmed" lineClamp={1}>
+								<Text size="xs" c="dimmed" lineClamp={1} title={server.description}>
 									{server.description}
 								</Text>
 							) : null}

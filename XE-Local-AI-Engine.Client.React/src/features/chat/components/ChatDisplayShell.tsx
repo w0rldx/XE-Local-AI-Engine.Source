@@ -1,4 +1,4 @@
-import { ActionIcon, Alert, Box, Drawer, Group, Paper, Stack, Switch, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, Alert, Box, Drawer, Group, Paper, Stack, Switch, Text, Tooltip, VisuallyHidden } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { IconInfoCircle, IconLayoutSidebar, IconUpload } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
@@ -180,6 +180,7 @@ export function ChatDisplayShell({
 		/>
 	);
 
+	const windowTitle = conversation?.title?.trim() || t("pages.chat.windowTitle", "Chat window");
 	const chatPaneHeader = (
 		<Stack gap={4}>
 			<Group gap="xs" wrap="nowrap" align="center">
@@ -195,9 +196,15 @@ export function ChatDisplayShell({
 						</ActionIcon>
 					</Tooltip>
 				) : null}
-				<Text fw={700} data-testid="chat-window-title" style={{ flex: 1, minWidth: 0 }} lineClamp={1}>
-					{conversation?.title?.trim() || t("pages.chat.windowTitle", "Chat window")}
-				</Text>
+				{/* An owner page (a work session) already shows this title as its own heading right above the pane, so
+				    there it stays only for assistive technology instead of appearing twice. */}
+				{hideConversationList ? (
+					<VisuallyHidden data-testid="chat-window-title">{windowTitle}</VisuallyHidden>
+				) : (
+					<Text fw={700} data-testid="chat-window-title" style={{ flex: 1, minWidth: 0 }} lineClamp={1} title={windowTitle}>
+						{windowTitle}
+					</Text>
+				)}
 				{/* Temporary-chat toggle: shown only when the bound agent has adaptive memory enabled. A temporary chat
 				    still USES existing memory; it just won't teach the agent new memory from this thread. The toggle
 				    needs a persisted conversation to PATCH, so it is suppressed until one is selected. */}

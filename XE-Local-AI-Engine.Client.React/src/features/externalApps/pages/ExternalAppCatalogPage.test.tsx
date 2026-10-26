@@ -223,7 +223,9 @@ describe("ExternalAppCatalogPage", () => {
 		expect(card.getAttribute("data-state")).toBe("emptyAtStartup");
 		expect(card.textContent).toContain("External apps stay off until the catalog lists an application");
 		expect(card.textContent).toContain("no online catalog is set up");
-		expect(card.textContent).toContain("ExternalApps:Catalog:RefreshUrl");
+		expect(card.textContent).toContain("set up an online catalog in the node's configuration");
+		// The raw configuration key is operator documentation, not a sentence for the page.
+		expect(card.textContent).not.toContain("ExternalApps:Catalog:RefreshUrl");
 		expect(screen.queryByTestId("external-app-runtime-card")).toBeNull();
 		expect(screen.queryByTestId("external-app-catalog-empty")).toBeNull();
 		expect(screen.getByTestId("external-app-catalog-refresh")).toBeDefined();

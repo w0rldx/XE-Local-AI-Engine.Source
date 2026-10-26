@@ -303,10 +303,11 @@ describe("DevWorkflowsPage", () => {
 				return new HttpResponse(null, { status: 404 });
 			}),
 		);
-		renderWithProviders(<DevWorkflowsPage />);
+		renderWithProviders(<DevWorkflowsPage />, { withRouter: true });
 
 		const disabled = await screen.findByTestId("dev-workflows-disabled");
-		expect(disabled.textContent).toBe("Development workflows are disabled by this node's runtime configuration.");
+		expect(disabled.textContent).toContain("Development workflows are disabled by this node's runtime configuration.");
+		expect(screen.getByTestId("dev-workflows-open-node-settings").textContent).toBe("Open node settings");
 		expect(screen.queryByTestId("dev-workflows-error")).toBeNull();
 		// Every shelf is gone with the page body, Templates and Rule sets included — there is no tab left to open.
 		expect(screen.queryByTestId("dev-workflows-tabs")).toBeNull();

@@ -51,18 +51,29 @@ export function CommandList({ commands, isMutating, onEdit, onDelete }: CommandL
 				},
 			]}
 			actionsHeader={t("common.actions", "Actions")}
-			actions={(command) =>
-				command.source === "custom" && command.id ? (
-					<>
-						<Button size="xs" variant="subtle" disabled={isMutating} onClick={() => onEdit(command.id ?? "")}>
-							{t("common.edit")}
-						</Button>
-						<Button size="xs" color="red" variant="subtle" disabled={isMutating} onClick={() => onDelete(command)}>
-							{t("common.delete")}
-						</Button>
-					</>
-				) : null
+			// Built-ins cannot be edited: with no custom command there is no actions column at all, and a built-in row
+			// beside custom ones shows a dash rather than an empty cell.
+			actions={
+				commands.some(isEditable)
+					? (command) =>
+							isEditable(command) ? (
+								<>
+									<Button size="xs" variant="subtle" disabled={isMutating} onClick={() => onEdit(command.id ?? "")}>
+										{t("common.edit")}
+									</Button>
+									<Button size="xs" color="red" variant="subtle" disabled={isMutating} onClick={() => onDelete(command)}>
+										{t("common.delete")}
+									</Button>
+								</>
+							) : (
+								<Text c="dimmed">—</Text>
+							)
+					: undefined
 			}
 		/>
 	);
+}
+
+function isEditable(command: SlashCommand): boolean {
+	return command.source === "custom" && Boolean(command.id);
 }

@@ -568,13 +568,14 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 
 				<Grid gap="lg">
 					{/* xl, not md, for the narrow column: from lg the desktop sidebar takes 220px, so md's quarter left the
-					    labels ~100px. The sticky list caps at the viewport minus the header and the save bar and scrolls
-					    itself, so on a short window its last sections are not stranded under the save bar. */}
+					    labels ~100px. The sticky list caps at the viewport minus the app header, the page header above it
+					    (before the page scrolls) and the save bar, and scrolls itself, so on a short window (1280×720) its
+					    last sections are not stranded under the save bar. */}
 					<Grid.Col span={compactNav ? 12 : { base: 12, sm: 4, xl: 3 }}>
 						<Box
 							pos={compactNav ? "static" : "sticky"}
 							top={0}
-							mah={compactNav ? undefined : "calc(100dvh - 10rem)"}
+							mah={compactNav ? undefined : "calc(100dvh - 17rem)"}
 							style={compactNav ? undefined : { overflowY: "auto" }}
 						>
 							<NodeSettingsSectionNav

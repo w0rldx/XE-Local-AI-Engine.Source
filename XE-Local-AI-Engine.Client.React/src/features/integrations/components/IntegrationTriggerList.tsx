@@ -72,7 +72,7 @@ export function IntegrationTriggerList({
 						<>
 							<Text fw={600}>{trigger.displayName}</Text>
 							{trigger.description ? (
-								<Text size="xs" c="dimmed" lineClamp={1}>
+								<Text size="xs" c="dimmed" lineClamp={1} title={trigger.description}>
 									{trigger.description}
 								</Text>
 							) : null}
@@ -103,11 +103,18 @@ export function IntegrationTriggerList({
 				{
 					key: "sessionPolicy",
 					header: t("pages.integrations.triggers.list.columns.sessionPolicy", "Session policy"),
-					cell: (trigger) => (
-						<Badge variant="light" color="blue">
-							{t(`pages.integrations.triggers.form.sessionPolicy.options.${trigger.sessionPolicy}`, trigger.sessionPolicy)}
-						</Badge>
-					),
+					cell: (trigger) => {
+						// A badge ellipsizes a long label ("Neue Sitzung pro …"); the title keeps it readable.
+						const label = t(
+							`pages.integrations.triggers.form.sessionPolicy.options.${trigger.sessionPolicy}`,
+							trigger.sessionPolicy,
+						);
+						return (
+							<Badge variant="light" color="blue" title={label}>
+								{label}
+							</Badge>
+						);
+					},
 				},
 				{
 					key: "inputs",

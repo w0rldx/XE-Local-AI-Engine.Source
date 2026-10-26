@@ -1,8 +1,9 @@
-import { Alert } from "@mantine/core";
+import { Alert, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { ButtonLink } from "@/core/ui/components/ButtonLink/ButtonLink";
 
 export interface DevWorkflowsDisabledAlertProps {
 	/** The capability query's error, if it has one. Present means the check FAILED, which is not the same as "off". */
@@ -18,19 +19,35 @@ export interface DevWorkflowsDisabledAlertProps {
  * `<FeatureDisabled>` would have to take the strings as props, which is the same duplication with more indirection.
  *
  * A capability call that FAILED is rendered red with its own message rather than as "switched off": a check that did
- * not answer says nothing about the switch, and claiming otherwise would be a guess the operator cannot correct.
+ * not answer says nothing about the switch, and claiming otherwise would be a guess the operator cannot correct. Only
+ * the "switched off" state links to the Features switch in Node settings.
  */
 export function DevWorkflowsDisabledAlert({ error }: DevWorkflowsDisabledAlertProps) {
 	const { t } = useTranslation();
 
 	return (
 		<Alert color={error ? "red" : "yellow"} icon={<IconAlertTriangle size={16} />} data-testid="dev-workflows-disabled">
-			{error
-				? apiErrorMessage(
-						error,
-						t("pages.devWorkflows.capabilityFailed", "Could not check whether workflows are available on this node."),
-					)
-				: t("pages.devWorkflows.disabled", "Development workflows are disabled by this node's runtime configuration.")}
+			{error ? (
+				apiErrorMessage(
+					error,
+					t("pages.devWorkflows.capabilityFailed", "Could not check whether workflows are available on this node."),
+				)
+			) : (
+				<Stack gap="xs" align="flex-start">
+					<Text size="sm">
+						{t("pages.devWorkflows.disabled", "Development workflows are disabled by this node's runtime configuration.")}
+					</Text>
+					<ButtonLink
+						to="/node-settings"
+						search={{ section: "general" }}
+						variant="subtle"
+						size="xs"
+						data-testid="dev-workflows-open-node-settings"
+					>
+						{t("pages.devWorkflows.openNodeSettings", "Open node settings")}
+					</ButtonLink>
+				</Stack>
+			)}
 		</Alert>
 	);
 }

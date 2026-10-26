@@ -48,7 +48,15 @@ export function WorkSessionDetailLayout(props: WorkSessionDetailLayoutProps) {
 					) : null}
 					{/* The session's title IS the loaded page's heading. `size="md"` keeps the body-text scale it has always
 					    had — the h1 is about the document outline, not about growing the header. */}
-					<Title order={1} size="md" fw={700} lineClamp={1} style={{ flex: 1, minWidth: 0 }} data-testid="work-session-title">
+					<Title
+						order={1}
+						size="md"
+						fw={700}
+						lineClamp={1}
+						title={props.title}
+						style={{ flex: 1, minWidth: 0 }}
+						data-testid="work-session-title"
+					>
 						{props.title}
 					</Title>
 					<Badge size="sm" variant="light" color="gray">

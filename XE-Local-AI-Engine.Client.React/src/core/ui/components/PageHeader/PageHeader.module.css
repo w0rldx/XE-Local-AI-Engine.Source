@@ -1,0 +1,17 @@
+/*
+ * A subtle (background-less) button leading the action slot showed its label indented by the button's own padding,
+ * so on a phone, where the actions wrap under the title, "Refresh" sat visibly right of the title's left edge. The
+ * negative margin cancels exactly the start padding Mantine gives it (padding-x, or padding-x / 1.5 with a left
+ * section); beside the title it only eats into the gap, which the transparent background never shows. The second
+ * selector covers a call site that wraps its buttons in a Group of its own.
+ */
+
+.actions > [data-variant="subtle"]:first-child,
+.actions > :first-child > [data-variant="subtle"]:first-child {
+	margin-inline-start: calc(var(--button-padding-x) * -1);
+}
+
+.actions > [data-variant="subtle"][data-with-left-section]:first-child,
+.actions > :first-child > [data-variant="subtle"][data-with-left-section]:first-child {
+	margin-inline-start: calc(var(--button-padding-x) / -1.5);
+}

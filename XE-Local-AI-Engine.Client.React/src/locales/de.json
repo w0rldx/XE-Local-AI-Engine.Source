@@ -3382,6 +3382,7 @@
 				"took": "dauerte {{duration}}",
 				"waitingOn": "wartet auf {{nodes}}"
 			},
+			"openNodeSettings": "Node-Einstellungen öffnen",
 			"queueReason": {
 				"awaiting-agent-slot": "wartet auf den Agentenplatz",
 				"awaiting-dependency": "wartet auf einen vorgelagerten Knoten",
@@ -3888,7 +3889,7 @@
 				"bridgeOpenBody": "Dieser Node hat die Container-Bridge beim Start geöffnet, und eine Katalogaktualisierung kann sie nicht schließen. Starten Sie den Node neu, um die Bridge zu schließen, solange der Katalog leer bleibt.",
 				"bridgeOpenTitle": "Die Container-Bridge bleibt bis zum Neustart offen",
 				"details": "Details",
-				"disabledBody": "Anwendungen kommen nur aus dem App-Katalog, den das Projekt pflegt, und der Katalog dieses Nodes ist leer: Diese Version enthält keine Einträge, und es ist kein Online-Katalog eingerichtet. Ein Administrator kann den Node mit der Einstellung ExternalApps:Catalog:RefreshUrl auf einen Katalog verweisen. Sobald der Katalog eine Anwendung enthält, starten Sie den Node neu, um Externe Apps zu aktivieren.",
+				"disabledBody": "Anwendungen kommen nur aus dem App-Katalog, den das Projekt pflegt, und der Katalog dieses Nodes ist leer: Diese Version enthält keine Einträge, und es ist kein Online-Katalog eingerichtet. Ein Administrator kann in der Konfiguration des Nodes einen Online-Katalog einrichten. Sobald der Katalog eine Anwendung enthält, starten Sie den Node neu, um Externe Apps zu aktivieren.",
 				"disabledBodyConfigured": "Anwendungen kommen nur aus dem App-Katalog, und der Online-Katalog, mit dem dieser Node eingerichtet ist, enthielt beim Start keine. Sobald er eine Anwendung enthält, starten Sie den Node neu, um Externe Apps zu aktivieren.",
 				"disabledTitle": "Externe Apps bleiben aus, bis der Katalog eine Anwendung enthält",
 				"empty": "Es sind noch keine Anwendungen verfügbar.",
@@ -5935,6 +5936,7 @@
 			"hardware": {
 				"availableRam": "Verfügbarer RAM",
 				"backendUndeterminedAlert": {
+					"reason": "Die GPU-Geräte der ausgewählten Laufzeit wurden noch nicht ermittelt, daher ist unbekannt, ob die Inferenz die GPU nutzt. Die Modellgrößen auf dieser Seite gehen weiterhin davon aus, dass der VRAM der GPU nutzbar ist.",
 					"title": "GPU-Backend konnte nicht ermittelt werden"
 				},
 				"cpuCores": "CPU-Kerne",
@@ -8150,6 +8152,28 @@
 					"Ready": "Bereit",
 					"Removing": "Wird entfernt",
 					"Verifying": "Wird überprüft"
+				},
+				"prerequisiteItems": {
+					"free-disk": {
+						"satisfied": "Genügend freier Speicherplatz",
+						"unsatisfied": "Nicht genügend freier Speicherplatz, oder er konnte nicht ermittelt werden"
+					},
+					"lockfile": {
+						"satisfied": "Die festgelegte Lockdatei der Laufzeit ist vorhanden",
+						"unsatisfied": "Die festgelegte Lockdatei der Laufzeit fehlt in dieser Installation"
+					},
+					"nvidia-driver": {
+						"satisfied": "NVIDIA-Treiber erkannt",
+						"unsatisfied": "Kein NVIDIA-Treiber erkannt; das Training benötigt eine CUDA-fähige GPU"
+					},
+					"platform": {
+						"satisfied": "Läuft unter Linux",
+						"unsatisfied": "Training ist nur unter Linux verfügbar"
+					},
+					"system-memory": {
+						"satisfied": "Genügend Arbeitsspeicher",
+						"unsatisfied": "Nicht genügend Arbeitsspeicher, oder er konnte nicht ermittelt werden"
+					}
 				},
 				"prerequisites": "Voraussetzungen",
 				"reinstall": "Umgebung neu installieren",

@@ -3382,6 +3382,7 @@
 				"took": "took {{duration}}",
 				"waitingOn": "waiting on {{nodes}}"
 			},
+			"openNodeSettings": "Open node settings",
 			"queueReason": {
 				"awaiting-agent-slot": "waiting for the agent slot",
 				"awaiting-dependency": "waiting on an upstream node",
@@ -3888,7 +3889,7 @@
 				"bridgeOpenBody": "This node opened the container bridge when it started, and a catalog refresh cannot close it. Restart the node to close the bridge while the catalog stays empty.",
 				"bridgeOpenTitle": "The container bridge stays open until a restart",
 				"details": "Details",
-				"disabledBody": "Applications come only from the app catalog the project maintains, and this node's catalog is empty: this version ships without entries and no online catalog is set up. An administrator can point the node at a catalog with the ExternalApps:Catalog:RefreshUrl setting. Once the catalog lists an application, restart the node to enable External Apps.",
+				"disabledBody": "Applications come only from the app catalog the project maintains, and this node's catalog is empty: this version ships without entries and no online catalog is set up. An administrator can set up an online catalog in the node's configuration. Once the catalog lists an application, restart the node to enable External Apps.",
 				"disabledBodyConfigured": "Applications come only from the app catalog, and the online catalog this node is set up with listed none when the node started. Once it lists an application, restart the node to enable External Apps.",
 				"disabledTitle": "External apps stay off until the catalog lists an application",
 				"empty": "No applications are available yet.",
@@ -5935,6 +5936,7 @@
 			"hardware": {
 				"availableRam": "Available RAM",
 				"backendUndeterminedAlert": {
+					"reason": "The GPU devices of the selected runtime have not been listed, so whether inference will use the GPU is unknown. Model sizing on this page still assumes the GPU's VRAM is usable.",
 					"title": "Could not determine your GPU backend"
 				},
 				"cpuCores": "CPU cores",
@@ -8150,6 +8152,28 @@
 					"Ready": "Ready",
 					"Removing": "Removing",
 					"Verifying": "Verifying"
+				},
+				"prerequisiteItems": {
+					"free-disk": {
+						"satisfied": "Enough free disk space",
+						"unsatisfied": "Not enough free disk space, or it could not be determined"
+					},
+					"lockfile": {
+						"satisfied": "The pinned runtime lockfile is present",
+						"unsatisfied": "The pinned runtime lockfile is missing from this installation"
+					},
+					"nvidia-driver": {
+						"satisfied": "NVIDIA driver detected",
+						"unsatisfied": "No NVIDIA driver detected; training needs a CUDA-capable GPU"
+					},
+					"platform": {
+						"satisfied": "Running on Linux",
+						"unsatisfied": "Training is available on Linux only"
+					},
+					"system-memory": {
+						"satisfied": "Enough system memory",
+						"unsatisfied": "Not enough system memory, or it could not be determined"
+					}
 				},
 				"prerequisites": "Prerequisites",
 				"reinstall": "Reinstall runtime",

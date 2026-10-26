@@ -7,7 +7,12 @@ import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineEr
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useTrainingRuntimeHub } from "@/features/training/hooks/useTrainingRuntimeHub";
-import { isRuntimeInstalling, mergeTrainingLogs, trainingLogEntries } from "@/features/training/models/TrainingModels";
+import {
+	isRuntimeInstalling,
+	mergeTrainingLogs,
+	prerequisiteHeadline,
+	trainingLogEntries,
+} from "@/features/training/models/TrainingModels";
 import {
 	useRemoveTrainingRuntime,
 	useStartTrainingRuntimeInstall,
@@ -22,7 +27,7 @@ import {
  * a silent wait of that length is indistinguishable from a hang.
  */
 export function TrainingRuntimeCard() {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
 	const { confirm } = useConfirm();
 
 	const statusQuery = useTrainingRuntimeStatus();
@@ -132,7 +137,7 @@ export function TrainingRuntimeCard() {
 										)
 									}
 								>
-									{item.detail}
+									<PrerequisiteText detail={item.detail} headline={prerequisiteHeadline(t, i18n, item)} />
 								</List.Item>
 							))}
 						</List>
@@ -169,5 +174,20 @@ export function TrainingRuntimeCard() {
 				</Group>
 			</Stack>
 		</SectionCard>
+	);
+}
+
+/** The localized sentence with the server's English detail dimmed below it; the raw detail alone for an unknown key. */
+function PrerequisiteText({ headline, detail }: { readonly headline: string | undefined; readonly detail: string }) {
+	if (headline == null) {
+		return detail;
+	}
+	return (
+		<>
+			<Text size="sm">{headline}</Text>
+			<Text c="dimmed" size="xs">
+				{detail}
+			</Text>
+		</>
 	);
 }

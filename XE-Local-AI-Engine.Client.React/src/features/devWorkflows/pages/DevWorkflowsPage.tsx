@@ -114,8 +114,16 @@ export function DevWorkflowsPage() {
 		navigate({ to: "/development-workflows/$workItemId", params: { workItemId } });
 	};
 
-	// The capability branches render no PageHeader, so they carry the page's h1 themselves.
+	// The loading branch renders no PageHeader, so it carries the page's h1 itself.
 	const fallbackHeading = <VisuallyHidden component="h1">{t("pages.devWorkflows.title", "Workflow Runs")}</VisuallyHidden>;
+	const headerProps = {
+		title: t("pages.devWorkflows.title", "Workflow Runs"),
+		icon: <IconSitemap size={24} />,
+		subtitle: t(
+			"pages.devWorkflows.subtitle",
+			"Durable development workflows: each work item runs a graph of agent, tool and approval nodes that survives a restart.",
+		),
+	};
 
 	if (capabilityQuery.isLoading) {
 		return (
@@ -134,7 +142,7 @@ export function DevWorkflowsPage() {
 	if (capabilityQuery.error || !devWorkflowsEnabled) {
 		return (
 			<PageShell>
-				{fallbackHeading}
+				<PageHeader {...headerProps} />
 				<DevWorkflowsDisabledAlert error={capabilityQuery.error} />
 			</PageShell>
 		);
@@ -143,12 +151,7 @@ export function DevWorkflowsPage() {
 	return (
 		<PageShell data-testid="dev-workflows-page">
 			<PageHeader
-				title={t("pages.devWorkflows.title", "Workflow Runs")}
-				icon={<IconSitemap size={24} />}
-				subtitle={t(
-					"pages.devWorkflows.subtitle",
-					"Durable development workflows: each work item runs a graph of agent, tool and approval nodes that survives a restart.",
-				)}
+				{...headerProps}
 				actions={
 					<Button leftSection={<IconPlus size={16} />} onClick={() => setDialogOpened(true)} data-testid="dev-workflows-create">
 						{t("pages.devWorkflows.create.open", "New work item")}

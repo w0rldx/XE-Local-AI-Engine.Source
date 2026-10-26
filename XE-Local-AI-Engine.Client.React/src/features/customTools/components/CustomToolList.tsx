@@ -74,7 +74,7 @@ export function CustomToolList({ tools, isMutating, onEdit, onDelete }: CustomTo
 								) : null}
 							</Group>
 							{tool.description ? (
-								<Text size="xs" c="dimmed" lineClamp={1}>
+								<Text size="xs" c="dimmed" lineClamp={1} title={tool.description}>
 									{tool.description}
 								</Text>
 							) : null}

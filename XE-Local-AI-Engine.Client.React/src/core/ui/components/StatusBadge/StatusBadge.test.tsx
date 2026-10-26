@@ -33,6 +33,13 @@ describe("StatusBadge", () => {
 		expect(screen.getByTestId("status").getAttribute("aria-label")).toBe("Queued");
 	});
 
+	// A narrow cell clips the label with an ellipsis; the title is how the full text stays readable.
+	it("carries a string label as its title so a clipped label stays readable", () => {
+		renderWithProviders(<StatusBadge label="Greetings & congratulations" color="blue" data-testid="status" />);
+
+		expect(screen.getByTestId("status").getAttribute("title")).toBe("Greetings & congratulations");
+	});
+
 	it("renders no spinner for a terminal status", () => {
 		renderWithProviders(<StatusBadge label="Failed" color="red" data-testid="status" />);
 

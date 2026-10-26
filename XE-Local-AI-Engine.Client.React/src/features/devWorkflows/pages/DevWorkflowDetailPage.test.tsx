@@ -91,12 +91,13 @@ function stubContainerWidth(width: number): void {
 	Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => width });
 }
 
-function renderPage(selection: DevWorkflowDetailSelection = {}) {
+function renderPage(selection: DevWorkflowDetailSelection = {}, withRouter = false) {
 	const onSelectionChange = vi.fn();
 	renderWithProviders(
 		<ConfirmProvider>
 			<DevWorkflowDetailPage workItemId={workItemId} selection={selection} onSelectionChange={onSelectionChange} />
 		</ConfirmProvider>,
+		{ withRouter },
 	);
 	return { onSelectionChange };
 }
@@ -467,10 +468,10 @@ describe("DevWorkflowDetailPage", () => {
 				return new HttpResponse(null, { status: 404 });
 			}),
 		);
-		renderPage();
+		renderPage({}, true);
 
 		const disabled = await screen.findByTestId("dev-workflows-disabled");
-		expect(disabled.textContent).toBe("Development workflows are disabled by this node's runtime configuration.");
+		expect(disabled.textContent).toContain("Development workflows are disabled by this node's runtime configuration.");
 		expect(screen.queryByTestId("dev-workflow-detail-error")).toBeNull();
 		// Gated, not merely hidden: a disabled node must not be asked for data it will refuse.
 		await waitFor(() => expect(workItemReads).toBe(0));
@@ -480,7 +481,7 @@ describe("DevWorkflowDetailPage", () => {
 	// onto a disabled node. It must stay idle too.
 	it("does not subscribe the run hub while the feature is switched off", async () => {
 		server.use(capabilityRoute(false));
-		renderPage({ run: runId });
+		renderPage({ run: runId }, true);
 
 		await screen.findByTestId("dev-workflows-disabled");
 		expect(hubMock.acquire).not.toHaveBeenCalled();

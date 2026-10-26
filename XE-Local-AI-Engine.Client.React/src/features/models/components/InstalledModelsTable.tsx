@@ -2,6 +2,7 @@ import { ActionIcon, Badge, Group, Stack, Text, Tooltip } from "@mantine/core";
 import { IconArrowBackUp, IconCheck, IconEye, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { ResponsiveTable, type ResponsiveTableColumn } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
 import type { LocalModelViewModel } from "@/features/models/models/LocalModelModel";
 import { capabilityBadgeColor, capabilityLabel, kindBadgeColor, kindLabel } from "@/features/models/models/ModelKindFormatters";
@@ -101,6 +102,7 @@ export function InstalledModelsTable({
 			columns={columns}
 			rowKey={(model) => model.modelName}
 			minWidth={820}
+			empty={<EmptyState message={t("pages.models.local.empty", "No local models found.")} />}
 			data-testid="installed-models-table"
 			data-tour="set-default-model"
 			actionsHeader={t("pages.models.local.columns.actions", "Actions")}
