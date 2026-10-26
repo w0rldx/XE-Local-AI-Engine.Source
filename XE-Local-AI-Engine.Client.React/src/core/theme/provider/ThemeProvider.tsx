@@ -1,7 +1,10 @@
 import { generateColors } from "@mantine/colors-generator";
 import {
+	ActionIcon,
 	Alert,
 	alpha,
+	Badge,
+	Button,
 	Card,
 	type CSSVariablesResolver,
 	createTheme,
@@ -11,6 +14,8 @@ import {
 	PasswordInput,
 	Popover,
 	parseThemeColor,
+	Radio,
+	RadioIndicator,
 	ScrollArea,
 	ScrollAreaAutosize,
 	TableScrollContainer,
@@ -21,6 +26,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { sourceThemeConfiguration } from "@/core/theme/config/ThemeConfiguration";
+import classes from "@/core/theme/provider/ThemeProvider.module.css";
 import type { ThemeProviderProperties } from "@/core/theme/provider/ThemeProvider.types";
 import { colorSchemeStorageKey, useThemeStore } from "@/core/theme/stores/ThemeStore";
 
@@ -155,6 +161,13 @@ export function ThemeProvider({ children }: ThemeProviderProperties) {
 					middlewares: { flip: true, shift: true, size: { padding: 8, apply: capFloatingToViewport } },
 				},
 			}),
+			// Trailing controls never shrink; the reasoning lives beside the class in ThemeProvider.module.css.
+			Button: Button.extend({ classNames: { root: classes["trailing-control"] } }),
+			Badge: Badge.extend({ classNames: { root: classes["trailing-control"] } }),
+			ActionIcon: ActionIcon.extend({ classNames: { root: classes["trailing-control"] } }),
+			// A visible unchecked circle in dark mode, for the plain radio and the one inside a Radio.Card.
+			Radio: Radio.extend({ classNames: { radio: classes["radio"] } }),
+			RadioIndicator: RadioIndicator.extend({ classNames: { indicator: classes["radio-indicator"] } }),
 			// Mantine's Alert close button is an icon-only button with no text, and `closeButtonLabel` is what gives
 			// it an accessible name. Almost every `withCloseButton` call site omitted it, so a screen reader read a
 			// nameless "button". Defaulting it here fixes all of them at once; a call site can still pass its own.

@@ -90,7 +90,11 @@ export function IntegrationTriggerList({
 									trigger.targetKind === "Graph" ? "Graph workflow" : "Agent",
 								)}
 							</Badge>
-							<Text size="sm" data-testid={`integration-trigger-target-${trigger.id}`}>
+							<Text
+								size="sm"
+								style={{ minWidth: 0, overflowWrap: "anywhere" }}
+								data-testid={`integration-trigger-target-${trigger.id}`}
+							>
 								{targetName(trigger)}
 							</Text>
 						</Group>

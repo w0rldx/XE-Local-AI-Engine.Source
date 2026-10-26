@@ -33,7 +33,7 @@ export function TaskItemCards({ groups, expanded, isBusy, onToggleExpanded, onMo
 									<Text size="sm" truncate="end" data-testid={`benchmark-item-prompt-${parent.id}`}>
 										{parent.prompt}
 									</Text>
-									<Group gap={4} wrap="nowrap">
+									<Group gap={4} wrap="wrap">
 										{parent.kind === "niah" ? (
 											<StatusBadge
 												color="grape"

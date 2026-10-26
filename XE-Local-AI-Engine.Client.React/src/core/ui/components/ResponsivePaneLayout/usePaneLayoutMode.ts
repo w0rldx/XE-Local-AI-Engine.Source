@@ -2,7 +2,7 @@ import { type Ref, useLayoutEffect, useState } from "react";
 
 import { TWO_PANE_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
-import { WIDE_PANE_MIN_WIDTH } from "@/core/ui/components/ResponsivePaneLayout/PaneLayoutTracks";
+import { widePaneMinWidth } from "@/core/ui/components/ResponsivePaneLayout/PaneLayoutTracks";
 
 export interface PaneLayoutMode {
 	/**
@@ -35,8 +35,11 @@ export interface PaneLayoutMode {
  * where every element measures 0. The first measurement is taken synchronously in a layout effect so the first paint
  * is already correct; `@mantine/hooks`'s `useElementSize` reports 0 until a debounced animation frame and would
  * reintroduce the narrow→wide flash this page family was built to avoid.
+ *
+ * `mainMinWidth` raises the centre pane's floor for a page whose centre needs more than the shared one; the viewport
+ * fallback is unchanged.
  */
-export function usePaneLayoutMode(): PaneLayoutMode {
+export function usePaneLayoutMode({ mainMinWidth }: { readonly mainMinWidth?: number } = {}): PaneLayoutMode {
 	const [container, setContainer] = useState<HTMLDivElement | null>(null);
 	const [containerWidth, setContainerWidth] = useState(0);
 	// Only consulted while the container is unmeasured, but the subscription has to exist unconditionally so a resize
@@ -49,7 +52,7 @@ export function usePaneLayoutMode(): PaneLayoutMode {
 			return;
 		}
 
-		// The CONTENT box, because `WIDE_PANE_MIN_WIDTH` is the width of the tracks themselves: `clientWidth` is the
+		// The CONTENT box, because `widePaneMinWidth` is the width of the tracks themselves: `clientWidth` is the
 		// padding box, so the moment any of these frames gains horizontal padding a padding-box reading would claim
 		// room the grid never gets and let it overflow again — the exact defect `PaneLayoutTracks` exists to prevent.
 		// Erring narrow is safe, erring wide is not. One `measure()` for the first reading and the observer so the two
@@ -68,6 +71,6 @@ export function usePaneLayoutMode(): PaneLayoutMode {
 
 	return {
 		ref: setContainer,
-		isNarrow: containerWidth > 0 ? containerWidth < WIDE_PANE_MIN_WIDTH : viewportWidth < TWO_PANE_BREAKPOINT,
+		isNarrow: containerWidth > 0 ? containerWidth < widePaneMinWidth(mainMinWidth ?? 0) : viewportWidth < TWO_PANE_BREAKPOINT,
 	};
 }

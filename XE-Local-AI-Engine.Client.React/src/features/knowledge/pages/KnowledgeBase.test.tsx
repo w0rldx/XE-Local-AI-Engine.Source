@@ -88,6 +88,16 @@ describe("KnowledgeBase embedding-model precondition", () => {
 		expect(screen.queryByTestId("knowledge-upload-progress")).toBeNull();
 	});
 
+	it("puts the warning before the page header, so a phone's first screen shows it", async () => {
+		embeddingAvailable(false);
+
+		renderPage();
+
+		const alert = await screen.findByTestId("knowledge-embedding-missing-alert");
+		const heading = screen.getByRole("heading", { name: en.pages.knowledgeBase.title });
+		expect(alert.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+	});
+
 	it("shows no warning and leaves the dropzone open once the server resolves an embedding model", async () => {
 		embeddingAvailable(true);
 

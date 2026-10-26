@@ -24,8 +24,8 @@ function setViewportWidth(width: number): void {
 }
 
 /** The whole surface under test: what the hook decided, and the element it measured to decide it. */
-function Probe({ padding }: { readonly padding?: string }) {
-	const { ref, isNarrow } = usePaneLayoutMode();
+function Probe({ padding, mainMinWidth }: { readonly padding?: string; readonly mainMinWidth?: number }) {
+	const { ref, isNarrow } = usePaneLayoutMode({ mainMinWidth });
 	return (
 		<div ref={ref} data-testid="container" style={padding === undefined ? undefined : { padding }}>
 			<span data-testid="mode">{isNarrow ? "narrow" : "wide"}</span>
@@ -127,7 +127,21 @@ describe("usePaneLayoutMode", () => {
 		expect(mode()).toBe("wide");
 	});
 
-	// `WIDE_PANE_MIN_WIDTH` is the width of the tracks themselves, so the hook has to hand the grid the CONTENT box.
+	// A page whose centre pane needs more than the shared 240px floor (the work-session chat) raises the threshold by
+	// the difference: 320 + 440 + 380 + 32 = 1172.
+	it("switches at the raised minimum when the page asks for a wider centre pane", () => {
+		setViewportWidth(2000);
+		stubbedClientWidth = 1171;
+		const { unmount } = render(<Probe mainMinWidth={440} />);
+		expect(mode()).toBe("narrow");
+		unmount();
+
+		stubbedClientWidth = 1172;
+		render(<Probe mainMinWidth={440} />);
+		expect(mode()).toBe("wide");
+	});
+
+	// `widePaneMinWidth` is the width of the tracks themselves, so the hook has to hand the grid the CONTENT box.
 	// Reading the padding box would promise room the grid never gets and let it overflow — the defect the floors and
 	// this threshold exist to prevent. jsdom reports no layout, so the padding is what `getComputedStyle` reflects
 	// from the inline style while `clientWidth` stays stubbed.

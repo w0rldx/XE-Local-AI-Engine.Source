@@ -41,6 +41,7 @@ export function McpServerList({ servers, isMutating, onEdit, onDelete, onToggleE
 					key: "name",
 					header: t("pages.mcp.list.columns.name", "Name"),
 					primary: true,
+					wrap: true,
 					cell: (server) => (
 						<>
 							<Text fw={600}>{server.name}</Text>
@@ -64,8 +65,9 @@ export function McpServerList({ servers, isMutating, onEdit, onDelete, onToggleE
 				{
 					key: "target",
 					header: t("pages.mcp.list.columns.target", "Target"),
+					wrap: true,
 					cell: (server) => (
-						<Text size="sm" ff="monospace" lineClamp={1}>
+						<Text size="sm" ff="monospace">
 							{server.transportKind === "Http" ? (server.url ?? "") : (server.command ?? "")}
 						</Text>
 					),

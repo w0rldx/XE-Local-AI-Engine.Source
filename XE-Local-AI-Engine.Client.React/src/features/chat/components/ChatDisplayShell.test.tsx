@@ -402,6 +402,29 @@ describe("ChatDisplayShell mobile layout", () => {
 		expect(onSelectConversation).toHaveBeenCalledWith("conversation-1");
 	});
 
+	// Phone landscape: the page frame is ~330px tall, so a notice above the pane squeezed the message list to nothing
+	// and pushed the composer past the card. The pane keeps a floor and the page scrolls instead.
+	it("gives the chat pane a height floor on a phone in landscape", () => {
+		const originalHeight = window.innerHeight;
+		setViewportWidth(844);
+		Object.defineProperty(window, "innerHeight", { writable: true, configurable: true, value: 390 });
+		try {
+			renderWithProviders(<ChatDisplayShell {...shellProps()} />);
+
+			expect(screen.getByTestId("chat-pane").parentElement?.style.minHeight).toBe("280px");
+		} finally {
+			Object.defineProperty(window, "innerHeight", { writable: true, configurable: true, value: originalHeight });
+		}
+	});
+
+	it("keeps no floor on a tablet, where the pane has the height it needs", () => {
+		setViewportWidth(800);
+
+		renderWithProviders(<ChatDisplayShell {...shellProps()} />);
+
+		expect(screen.getByTestId("chat-pane").parentElement?.style.minHeight).toBe("0px");
+	});
+
 	it("offers no conversation toggle when the caller hides the conversation list", () => {
 		renderWithProviders(<ChatDisplayShell {...shellProps({ hideConversationList: true })} />);
 

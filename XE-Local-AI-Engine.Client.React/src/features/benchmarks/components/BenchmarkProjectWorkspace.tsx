@@ -1,4 +1,18 @@
-import { Alert, Badge, Button, Card, Grid, Group, Loader, Select, Stack, Text, Title, UnstyledButton } from "@mantine/core";
+import {
+	Alert,
+	Badge,
+	Button,
+	Card,
+	Grid,
+	Group,
+	Loader,
+	Select,
+	SimpleGrid,
+	Stack,
+	Text,
+	Title,
+	UnstyledButton,
+} from "@mantine/core";
 import {
 	IconAlertTriangle,
 	IconFlask,
@@ -119,7 +133,9 @@ export function BenchmarkProjectWorkspace({ controller }: { readonly controller:
 									padding="sm"
 								>
 									<Group justify="space-between">
-										<Text fw={700}>{project.name}</Text>
+										<Text fw={700} style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+											{project.name}
+										</Text>
 										{project.isFrozen ? (
 											<Badge leftSection={<IconLock size={11} />}>{t("pages.benchmarks.project.frozen", "Frozen")}</Badge>
 										) : null}
@@ -150,7 +166,7 @@ export function BenchmarkProjectWorkspace({ controller }: { readonly controller:
 							<Stack gap="md">
 								<Group justify="space-between" align="flex-start">
 									<Stack gap={2}>
-										<Title order={2} size="h3">
+										<Title order={2} size="h3" style={{ overflowWrap: "anywhere" }}>
 											{detail.name}
 										</Title>
 										<Text c="dimmed">{detail.coreTask}</Text>
@@ -235,7 +251,9 @@ export function BenchmarkProjectWorkspace({ controller }: { readonly controller:
 										isVerifiableCriterionKind(toBenchmarkCriterionKind(criterion.kind)),
 									)}
 								/>
-								<Group grow={true} align="flex-end">
+								{/* Four across only where each control keeps a usable width; a phone stacks them, so the selects and
+								    buttons stay readable and the KV help text sits under its own label. */}
+								<SimpleGrid cols={{ base: 1, sm: 2, xl: 4 }} verticalSpacing="sm" style={{ alignItems: "end" }}>
 									<Select
 										label={t("pages.benchmarks.run.model", "Primary model")}
 										searchable={true}
@@ -298,7 +316,7 @@ export function BenchmarkProjectWorkspace({ controller }: { readonly controller:
 									>
 										{t("pages.benchmarks.matrix.open", "Batch runs…")}
 									</Button>
-								</Group>
+								</SimpleGrid>
 								<Text size="xs" c="dimmed" data-testid="benchmark-single-run-estimate">
 									{t("pages.benchmarks.run.estimate", "One start = {{count}} runs, one per task item", {
 										count: singleRunEstimate.totalRuns,

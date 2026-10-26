@@ -62,6 +62,7 @@ export function IntegrationKeyList({ keys, triggers, isMutating, onRevoke }: Int
 					key: "label",
 					header: t("pages.integrations.keys.list.columns.label", "Label"),
 					primary: true,
+					wrap: true,
 					cell: (key) => <Text fw={600}>{key.label}</Text>,
 				},
 				{

@@ -64,8 +64,10 @@ export function ScheduledJobList({ jobs, isMutating, onEdit, onDelete, onTrigger
 		{
 			key: "schedule",
 			header: t("pages.scheduler.list.columns.schedule", "Schedule"),
+			// Wraps rather than ellipsizing: a cut cron expression ("0 0 3 1 1…") cannot be read at all.
+			wrap: true,
 			cell: (job) => (
-				<Text size="sm" ff="monospace" lineClamp={1}>
+				<Text size="sm" ff="monospace" data-testid={`scheduler-job-schedule-${job.id}`}>
 					{scheduleSummary(job)}
 				</Text>
 			),

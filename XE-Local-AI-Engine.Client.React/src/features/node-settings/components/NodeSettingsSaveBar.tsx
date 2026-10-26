@@ -1,4 +1,4 @@
-import { Button, Group, Paper, Text } from "@mantine/core";
+import { Button, Group, Paper, Stack, Text } from "@mantine/core";
 import { IconDeviceFloppy, IconRestore } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
@@ -36,6 +36,43 @@ export function NodeSettingsSaveBar({
 					.filter((part) => part !== null)
 					.join(" · ");
 
+	const statusText = (
+		<Text
+			size={compact ? "xs" : "sm"}
+			lineClamp={2}
+			style={{ minWidth: 0 }}
+			role="status"
+			aria-live="polite"
+			data-testid="node-settings-save-bar-status"
+		>
+			{status}
+		</Text>
+	);
+	const buttons = (
+		<>
+			<Button
+				variant="default"
+				size={compact ? "xs" : "sm"}
+				leftSection={compact ? undefined : <IconRestore size={16} />}
+				onClick={onReset}
+				disabled={!canReset}
+				data-testid="node-settings-reset-button"
+			>
+				{t("pages.nodeSettings.saveBar.reset", "Reset")}
+			</Button>
+			<Button
+				size={compact ? "xs" : "sm"}
+				leftSection={compact ? undefined : <IconDeviceFloppy size={16} />}
+				onClick={onSave}
+				loading={isSaving}
+				disabled={!canSave}
+				data-testid="node-settings-save-button"
+			>
+				{t("pages.nodeSettings.saveBar.save", "Save changes")}
+			</Button>
+		</>
+	);
+
 	return (
 		<Paper
 			withBorder={true}
@@ -47,42 +84,24 @@ export function NodeSettingsSaveBar({
 			style={{ zIndex: 2 }}
 			data-testid="node-settings-save-bar"
 		>
-			{/* One row on every width: the status text gives way (two lines at most) and, when compact, the buttons drop
-			    their icons and shrink, so a phone does not lose a sixth of its height to the bar. */}
-			<Group justify="space-between" gap="sm" wrap="nowrap">
-				<Text
-					size={compact ? "xs" : "sm"}
-					lineClamp={2}
-					style={{ minWidth: 0 }}
-					role="status"
-					aria-live="polite"
-					data-testid="node-settings-save-bar-status"
-				>
-					{status}
-				</Text>
-				<Group gap={compact ? "xs" : "sm"} wrap="nowrap" style={{ flexShrink: 0 }}>
-					<Button
-						variant="default"
-						size={compact ? "xs" : "sm"}
-						leftSection={compact ? undefined : <IconRestore size={16} />}
-						onClick={onReset}
-						disabled={!canReset}
-						data-testid="node-settings-reset-button"
-					>
-						{t("pages.nodeSettings.saveBar.reset", "Reset")}
-					</Button>
-					<Button
-						size={compact ? "xs" : "sm"}
-						leftSection={compact ? undefined : <IconDeviceFloppy size={16} />}
-						onClick={onSave}
-						loading={isSaving}
-						disabled={!canSave}
-						data-testid="node-settings-save-button"
-					>
-						{t("pages.nodeSettings.saveBar.save", "Save changes")}
-					</Button>
+			{/* Wide: one row, the status text gives way (two lines at most). Compact: the status line sits above the
+			    buttons, because one row squeezed a long German status to a few letters; the buttons drop their icons and
+			    shrink so the two rows stay short. */}
+			{compact ? (
+				<Stack gap={4}>
+					{statusText}
+					<Group justify="flex-end" gap="xs" wrap="nowrap">
+						{buttons}
+					</Group>
+				</Stack>
+			) : (
+				<Group justify="space-between" gap="sm" wrap="nowrap">
+					{statusText}
+					<Group gap="sm" wrap="nowrap" style={{ flexShrink: 0 }}>
+						{buttons}
+					</Group>
 				</Group>
-			</Group>
+			)}
 		</Paper>
 	);
 }

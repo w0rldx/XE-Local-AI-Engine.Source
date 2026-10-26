@@ -18,6 +18,14 @@ vi.mock("@/features/chat/components/ChatInputArea/WebContentAutoAcceptToggle", (
 	),
 }));
 
+// The context-usage controls fetch an estimate and the context state through TanStack Query; their own files cover
+// that. Here they are markers, so these tests can assert WHEN the composer shows them.
+vi.mock("@/features/chat/components/ContextUsagePopover/ContextUsagePopover", () => ({
+	ContextUsagePopover: () => <span data-testid="context-usage-trigger" />,
+}));
+vi.mock("@/features/chat/components/CompactButton", () => ({ CompactButton: () => null }));
+vi.mock("@/features/chat/components/ContextStatePanel", () => ({ ContextStateButton: () => null }));
+
 function renderWithProviders(ui: ReactElement) {
 	return render(
 		<MantineProvider env="test" theme={testMantineTheme}>
@@ -637,6 +645,22 @@ describe("ChatInputArea compact viewport", () => {
 
 		renderWithProviders(<ChatInputArea {...baseProps()} reasoningEffort="medium" />);
 		expect(screen.getByTestId("chat-composer-overflow-trigger").getAttribute("data-active")).toBe("true");
+	});
+
+	// Phone landscape is wide enough for the badge but too short for the extra toolbar row it caused.
+	it.each([
+		[844, 390, false],
+		[1280, 800, true],
+	])("shows the context-usage trigger at %i×%i: %s", (width, height, shown) => {
+		setViewport(width, height);
+		renderWithProviders(
+			<ChatInputArea
+				{...baseProps()}
+				contextUsage={{ usedTokens: 100, maxTokens: 4096, isAuthoritative: true, modelLabel: "model", nodeLabel: "node" }}
+			/>,
+		);
+
+		expect(screen.queryByTestId("context-usage-trigger") !== null).toBe(shown);
 	});
 
 	it("keeps the toggles inline on a desktop viewport", () => {

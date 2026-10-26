@@ -64,7 +64,7 @@ export function TranscriptionSessionList({ sessions, deletingSessionId, onOpen, 
 									})}
 								</Text>
 							</Stack>
-							<Group gap="xs" wrap="nowrap">
+							<Group gap="xs" wrap="nowrap" style={{ flexShrink: 0 }}>
 								<Badge
 									color={statusColors[session.status]}
 									variant="light"

@@ -1,12 +1,23 @@
 // @vitest-environment jsdom
 
-import { Alert, PasswordInput, Table, useMantineColorScheme, useMantineTheme } from "@mantine/core";
+import {
+	ActionIcon,
+	Alert,
+	Badge,
+	Button,
+	PasswordInput,
+	Radio,
+	Table,
+	useMantineColorScheme,
+	useMantineTheme,
+} from "@mantine/core";
 import { cleanup, render, renderHook, screen } from "@testing-library/react";
 import i18next from "i18next";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { sourceThemeConfiguration } from "@/core/theme/config/ThemeConfiguration";
 import { ThemeProvider } from "@/core/theme/provider/ThemeProvider";
+import classes from "@/core/theme/provider/ThemeProvider.module.css";
 import { useThemeStore } from "@/core/theme/stores/ThemeStore";
 import de from "@/locales/de.json";
 import { installJsdomEnvironmentMocks } from "@/test/MantineTestRender";
@@ -207,6 +218,51 @@ describe("ThemeProvider accent colour", () => {
 
 		expect(primary).toHaveLength(10);
 		expect(primary?.[6]).not.toBe(sourceThemeConfiguration.palette.primary.scale[6]);
+	});
+});
+
+describe("ThemeProvider trailing controls and dark radios", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+	});
+
+	afterEach(() => {
+		cleanup();
+	});
+
+	// A long label beside a button or badge squeezed it to a sliver ("Abmelden" -> "Ab"); the theme class keeps every
+	// one at its size, so it is asserted on rendered components rather than on one call site.
+	it("gives every Button, Badge and ActionIcon the non-shrinking class", () => {
+		render(
+			<ThemeProvider>
+				<Button>Sign out</Button>
+				<Badge data-testid="badge">Agent</Badge>
+				<ActionIcon aria-label="Delete">x</ActionIcon>
+			</ThemeProvider>,
+		);
+
+		const trailing = classes["trailing-control"] ?? "missing";
+		expect(screen.getByRole("button", { name: "Sign out" }).classList.contains(trailing)).toBe(true);
+		expect(screen.getByTestId("badge").classList.contains(trailing)).toBe(true);
+		expect(screen.getByRole("button", { name: "Delete" }).classList.contains(trailing)).toBe(true);
+	});
+
+	// The unchecked circle was near invisible on a dark card; both the plain radio and the Radio.Card indicator carry
+	// the class that draws a visible border in dark mode.
+	it("marks the plain radio and the Radio.Card indicator for the dark-mode border", () => {
+		render(
+			<ThemeProvider>
+				<Radio label="Plain" value="plain" />
+				<Radio.Group value="a">
+					<Radio.Card value="b">
+						<Radio.Indicator data-testid="indicator" />
+					</Radio.Card>
+				</Radio.Group>
+			</ThemeProvider>,
+		);
+
+		expect(screen.getByRole("radio", { name: "Plain" }).classList.contains(classes["radio"] ?? "missing")).toBe(true);
+		expect(screen.getByTestId("indicator").classList.contains(classes["radio-indicator"] ?? "missing")).toBe(true);
 	});
 });
 

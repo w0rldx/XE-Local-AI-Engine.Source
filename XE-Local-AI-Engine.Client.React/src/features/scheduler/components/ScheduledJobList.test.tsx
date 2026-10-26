@@ -4,6 +4,7 @@ import { MantineProvider } from "@mantine/core";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import responsiveTableClasses from "@/core/ui/components/ResponsiveTable/ResponsiveTable.module.css";
 import { ScheduledJobList } from "@/features/scheduler/components/ScheduledJobList";
 import type { ScheduledJob } from "@/features/scheduler/models/SchedulerModels";
 import { testMantineTheme } from "@/test/MantineTestRender";
@@ -100,6 +101,15 @@ describe("ScheduledJobList", () => {
 
 		expect(screen.getByTestId("scheduler-jobs-table")).toBeTruthy();
 		expect(screen.getByText("0 0 3 * * ?")).toBeTruthy();
+	});
+
+	// A one-line clamp cut a cron expression to "0 0 3 1 1…", which cannot be read at all: the cell wraps instead.
+	it("wraps the schedule instead of ellipsizing it (P-6)", () => {
+		renderList();
+
+		const schedule = screen.getByTestId("scheduler-job-schedule-job-1");
+		expect(schedule.hasAttribute("data-line-clamp")).toBe(false);
+		expect(schedule.closest("td")?.classList.contains(responsiveTableClasses["wrap"] ?? "missing")).toBe(true);
 	});
 
 	it("shows a has-parameters badge instead of the raw parameter value", () => {

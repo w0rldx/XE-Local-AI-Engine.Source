@@ -52,7 +52,9 @@ export function ExternalProviderConnectionList({ connections, disabled, onEdit, 
 							>
 								<Stack gap={2} style={{ minWidth: 0 }}>
 									<Group gap="xs" wrap="wrap">
-										<Text fw={600}>{connection.displayName}</Text>
+										<Text fw={600} style={{ overflowWrap: "anywhere" }}>
+											{connection.displayName}
+										</Text>
 										<Badge size="sm" variant="light" color={locality === "Local" ? "teal" : "orange"}>
 											{locality === "Local"
 												? t("pages.externalProviders.locality.localBadge", "Declared local")

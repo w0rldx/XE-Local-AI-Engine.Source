@@ -1,4 +1,4 @@
-import { Alert, Button, Checkbox, Group, NumberInput, ScrollArea, Stack, Switch, Text } from "@mantine/core";
+import { Alert, Button, Checkbox, Group, NumberInput, ScrollArea, SimpleGrid, Stack, Switch, Text } from "@mantine/core";
 import { IconAlertTriangle, IconRocket } from "@tabler/icons-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -214,7 +214,8 @@ export function BenchmarkLaunchMatrix({
 				}}
 			/>
 
-			<Group grow={true} align="flex-start">
+			{/* One column on a phone: side by side, each long help text was squeezed into a column a few words wide. */}
+			<SimpleGrid cols={{ base: 1, sm: 2 }}>
 				<NumberInput
 					label={t("pages.benchmarks.matrix.repeatCount", "Repeats per combination")}
 					description={
@@ -237,7 +238,7 @@ export function BenchmarkLaunchMatrix({
 					data-testid="benchmark-matrix-repeat-count"
 				/>
 				<Switch
-					mt="xl"
+					mt={{ base: 0, sm: "xl" }}
 					checked={warmup}
 					onChange={(event) => setWarmup(event.currentTarget.checked)}
 					label={t("pages.benchmarks.matrix.warmup", "Warm-up run first")}
@@ -247,7 +248,7 @@ export function BenchmarkLaunchMatrix({
 					)}
 					data-testid="benchmark-matrix-warmup"
 				/>
-			</Group>
+			</SimpleGrid>
 
 			<Stack gap={2}>
 				<Text size="sm" c="dimmed" data-testid="benchmark-matrix-summary">

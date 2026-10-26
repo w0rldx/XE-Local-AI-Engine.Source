@@ -1,0 +1,23 @@
+/*
+ * Buttons, badges and action icons sit at the end of flex rows beside text. Left shrinkable, a long label squeezed
+ * them to a sliver ("Abmelden" -> "Ab", a status badge -> a dot), so they keep their size and the text beside them
+ * is the part that gives way. No max-width: in a table cell that would cap a badge at the cell's width and truncate
+ * it ("DISABLED" -> "DI…") instead of letting the table widen. Wrapped in :where() so any call-site class or style,
+ * and Mantine's own Group `grow` cap, still wins.
+ */
+
+:where(.trailing-control) {
+	flex-shrink: 0;
+}
+
+/*
+ * Mantine draws an unchecked radio with a dark-4 border on a dark-6 fill, which on a dark-6 card is close to
+ * invisible. dark-2 is the dimmed text colour, so the circle reads as a control without looking selected.
+ */
+
+.radio:not(:checked, :disabled, [data-error]),
+.radio-indicator:not([data-checked], [data-disabled]) {
+	@mixin dark {
+		border-color: var(--mantine-color-dark-2);
+	}
+}

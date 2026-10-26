@@ -3,7 +3,7 @@ import { type DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
-import { isCompactViewport } from "@/core/layout/constants/LayoutBreakpoints";
+import { DESKTOP_NAV_MIN_HEIGHT, isCompactViewport } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { usePendingComposerTextStore } from "@/core/ui/stores/PendingComposerTextStore";
 import { ChatAttachmentChips } from "@/features/chat/components/ChatAttachmentChips";
@@ -27,7 +27,9 @@ import type { ChatCommandOption } from "@/features/chat/models/SlashCommandModel
 import { resolveSlashCommand } from "@/features/chat/models/SlashCommandResolver";
 
 // Below this window width the context-usage badge is dropped from the toolbar entirely rather than adding yet
-// another row — it's the least essential control and the composer needs the space more on very narrow phones.
+// another row — it's the least essential control and the composer needs the space more on very narrow phones. A
+// window too short for the desktop shell (phone landscape) drops it too: there its extra toolbar row cost the message
+// list most of the little height it had.
 const CONTEXT_USAGE_HIDE_WIDTH = 480;
 
 // Stable empty default for the optional agentOptions prop. A fresh `[]` in the destructuring default allocates a
@@ -203,7 +205,7 @@ export function ChatInputArea({
 	// manifest.Enabled). The leaf components additionally self-gate on the runtime context.
 	const showVoiceControls = capabilities.showVoiceControls;
 	const { width, height } = useWindowDimensions();
-	const showContextUsage = Boolean(contextUsage) && width >= CONTEXT_USAGE_HIDE_WIDTH;
+	const showContextUsage = Boolean(contextUsage) && width >= CONTEXT_USAGE_HIDE_WIDTH && height >= DESKTOP_NAV_MIN_HEIGHT;
 	// A phone (or a phone in landscape) folds the secondary toolbar controls and starts the input at one row, so the
 	// message list keeps the height.
 	const compact = isCompactViewport(width, height);

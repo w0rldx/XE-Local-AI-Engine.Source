@@ -41,13 +41,17 @@ import {
 	workSessionEventsPageSize,
 } from "@/features/workSessions/queries/useWorkSessions";
 
+const WORK_SESSION_CHAT_MIN_WIDTH = 440;
+
 export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 	const { t } = useTranslation();
 	const { confirm } = useConfirm();
 	const navigate = useNavigate();
 	// One decision for the whole page: the header toggles, the two Drawers and the pane grid all read this. The ref
-	// goes on the layout's frame, because that is the element the panes are actually laid out inside.
-	const { ref: paneContainerRef, isNarrow: isMobile } = usePaneLayoutMode();
+	// goes on the layout's frame, because that is the element the panes are actually laid out inside. The centre pane
+	// is a whole chat: below WORK_SESSION_CHAT_MIN_WIDTH its composer stacked four rows deep, so the page stays on the
+	// single-pane layout until the chat gets that much.
+	const { ref: paneContainerRef, isNarrow: isMobile } = usePaneLayoutMode({ mainMinWidth: WORK_SESSION_CHAT_MIN_WIDTH });
 	const [planDrawerOpened, planDrawer] = useDisclosure(false);
 	const [sideDrawerOpened, sideDrawer] = useDisclosure(false);
 	const [eventsLimit, setEventsLimit] = useState(workSessionEventsPageSize);

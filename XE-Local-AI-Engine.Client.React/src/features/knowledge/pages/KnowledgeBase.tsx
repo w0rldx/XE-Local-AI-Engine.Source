@@ -189,6 +189,8 @@ export function KnowledgeBase() {
 
 	return (
 		<PageShell>
+			{/* The blocking precondition comes first: below the tutorial banner it fell off a phone's first screen. */}
+			{embeddingModelMissing ? <KnowledgeEmbeddingModelAlert /> : null}
 			<TutorialInvitation tutorialId="knowledge-base-basics" />
 			<PageHeader
 				icon={<IconDatabase size={24} />}
@@ -256,7 +258,6 @@ export function KnowledgeBase() {
 			</SectionCard>
 
 			<SectionCard title={t("pages.knowledgeBase.upload.heading", "Add documents")} data-tour="knowledge-upload">
-				{embeddingModelMissing ? <KnowledgeEmbeddingModelAlert /> : null}
 				<KnowledgeUploadPanel
 					pendingUploads={upload.pendingUploads}
 					disabled={embeddingModelMissing}

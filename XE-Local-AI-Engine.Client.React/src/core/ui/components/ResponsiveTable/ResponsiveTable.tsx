@@ -4,6 +4,7 @@ import { type CSSProperties, Fragment, type ReactNode } from "react";
 
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { LabelValueRow } from "@/core/ui/components/LabelValueRow/LabelValueRow";
+import classes from "@/core/ui/components/ResponsiveTable/ResponsiveTable.module.css";
 import { shouldRenderCards } from "@/core/ui/components/ResponsiveTable/ResponsiveTableLayout";
 
 export interface ResponsiveTableColumn<T> {
@@ -16,6 +17,8 @@ export interface ResponsiveTableColumn<T> {
 	hideOnCard?: boolean;
 	/** Applied to the column's header and body cells in the table (e.g. `nowrap`). */
 	style?: CSSProperties;
+	/** Long free text (a URL, a schedule): wraps anywhere in the table instead of widening it. */
+	wrap?: boolean;
 }
 
 interface ResponsiveTableProps<T> {
@@ -44,7 +47,8 @@ interface ResponsiveTableProps<T> {
 // where it would scroll sideways below `lg`, each row becomes a card (primary column as the title, the rest as
 // label/value rows, the actions as a wrapping button row), so no column or action hides behind a horizontal scroll.
 // The switch follows the table's own container rather than the viewport, so a table beside a chart or inside a
-// narrow card switches when IT runs out of room.
+// narrow card switches when IT runs out of room. Where the table does scroll (the desktop shell), the actions column
+// is pinned to the right edge so a row's buttons stay on screen.
 export function ResponsiveTable<T>({
 	rows,
 	columns,
@@ -106,15 +110,15 @@ export function ResponsiveTable<T>({
 	return (
 		<div ref={ref} data-tour={tourId}>
 			<Table.ScrollContainer minWidth={minWidth}>
-				<Table striped={striped} highlightOnHover={true} verticalSpacing="sm" data-testid={testId}>
+				<Table striped={striped} highlightOnHover={true} verticalSpacing="sm" className={classes["table"]} data-testid={testId}>
 					<Table.Thead>
 						<Table.Tr>
 							{columns.map((column) => (
-								<Table.Th key={column.key} style={column.style}>
+								<Table.Th key={column.key} style={column.style} className={column.wrap ? classes["wrap"] : undefined}>
 									{column.header}
 								</Table.Th>
 							))}
-							{actions === undefined ? null : <Table.Th>{actionsHeader}</Table.Th>}
+							{actions === undefined ? null : <Table.Th className={classes["actions"]}>{actionsHeader}</Table.Th>}
 						</Table.Tr>
 					</Table.Thead>
 					<Table.Tbody>
@@ -124,12 +128,12 @@ export function ResponsiveTable<T>({
 								<Fragment key={rowKey(row)}>
 									<Table.Tr style={rowStyle?.(row)} data-testid={rowTestId?.(row)}>
 										{columns.map((column) => (
-											<Table.Td key={column.key} style={column.style}>
+											<Table.Td key={column.key} style={column.style} className={column.wrap ? classes["wrap"] : undefined}>
 												{column.cell(row)}
 											</Table.Td>
 										))}
 										{actions === undefined ? null : (
-											<Table.Td>
+											<Table.Td className={classes["actions"]}>
 												<Group gap="xs" wrap="nowrap">
 													{actions(row)}
 												</Group>

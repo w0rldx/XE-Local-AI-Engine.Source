@@ -22,6 +22,11 @@ const EMPTY_TIMELINE_ENTRIES: ChatDisplayShellProps["timelineEntries"] = [];
 const EMPTY_AGENT_OPTIONS: ChatDisplayShellProps["agentOptions"] = [];
 const EMPTY_COMMAND_OPTIONS: ChatDisplayShellProps["commandOptions"] = [];
 
+// The single-column pane's floor on a compact viewport: the header, the one-row composer and a few lines of messages.
+// Without it a phone in landscape squeezed the message list to zero and the composer ran past the card; with it the
+// page scrolls instead.
+const COMPACT_CHAT_PANE_MIN_HEIGHT = 280;
+
 /* eslint-disable react-doctor/no-inline-exhaustive-style -- A few responsive Mantine styles depend on live pane state; extracting them would not make them static. */
 
 export function ChatDisplayShell({
@@ -339,7 +344,7 @@ export function ChatDisplayShell({
 		return (
 			<Stack gap="md" h="100%">
 				{notice}
-				<div style={{ flex: 1, minHeight: 0 }}>{chatPane}</div>
+				<div style={{ flex: 1, minHeight: isCompact ? COMPACT_CHAT_PANE_MIN_HEIGHT : 0 }}>{chatPane}</div>
 				{hideConversationList ? null : (
 					<Drawer
 						opened={conversationDrawerOpened}

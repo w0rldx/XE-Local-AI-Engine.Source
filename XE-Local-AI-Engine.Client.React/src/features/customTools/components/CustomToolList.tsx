@@ -40,6 +40,7 @@ export function CustomToolList({ tools, isMutating, onEdit, onDelete }: CustomTo
 					key: "name",
 					header: t("pages.customTools.list.columns.name", "Name"),
 					primary: true,
+					wrap: true,
 					cell: (tool) => (
 						<>
 							<Group gap="xs">

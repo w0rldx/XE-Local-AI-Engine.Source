@@ -46,8 +46,10 @@ export function PageHeader({
 					 * This IS the page's h1 — it is the only heading every routed page renders, so anything lower left
 					 * the page with no h1 at all and made every section heading below it a level-2 orphan. `size="h2"`
 					 * keeps the type scale the pages were built against; only the outline level changes.
+					 * `overflowWrap: "anywhere"` breaks an unbroken title (a transcribed file name) instead of running it
+					 * off-screen.
 					 */}
-					<Title order={1} size="h2" style={{ minWidth: 0 }}>
+					<Title order={1} size="h2" style={{ minWidth: 0, overflowWrap: "anywhere" }}>
 						{title}
 					</Title>
 				</Group>

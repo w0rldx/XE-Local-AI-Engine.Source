@@ -9,6 +9,7 @@ import {
 	DESKTOP_NAV_MIN_HEIGHT,
 } from "@/core/layout/constants/LayoutBreakpoints";
 import { ResponsiveTable, type ResponsiveTableColumn } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
+import classes from "@/core/ui/components/ResponsiveTable/ResponsiveTable.module.css";
 import { shouldRenderCards } from "@/core/ui/components/ResponsiveTable/ResponsiveTableLayout";
 import { installJsdomEnvironmentMocks, renderWithMantine } from "@/test/MantineTestRender";
 
@@ -122,6 +123,30 @@ describe("ResponsiveTable", () => {
 
 		const group = screen.getByRole("button", { name: "Delete Nightly cleanup" }).parentElement as HTMLElement;
 		expect(group.style.getPropertyValue("--group-wrap")).toBe("nowrap");
+	});
+
+	// In the desktop shell a wide table scrolls; the actions header and cells are pinned to the right edge so a row's
+	// buttons never sit behind the scroll, and a column flagged `wrap` breaks its text instead of widening the table.
+	it("pins the actions column and wraps flagged columns in the table", () => {
+		setViewportWidth(1440);
+		renderWithMantine(
+			<ResponsiveTable
+				rows={jobs}
+				columns={[...columns, { key: "url", header: "URL", cell: (job) => `https://example.test/${job.id}`, wrap: true }]}
+				rowKey={(job) => job.id}
+				actions={(job) => <button type="button">{`Delete ${job.name}`}</button>}
+				actionsHeader="Actions"
+				minWidth={600}
+			/>,
+		);
+
+		const pinned = classes["actions"] ?? "missing";
+		const wrapping = classes["wrap"] ?? "missing";
+		expect(screen.getByRole("columnheader", { name: "Actions" }).classList.contains(pinned)).toBe(true);
+		expect(screen.getByRole("button", { name: "Delete Model refresh" }).closest("td")?.classList.contains(pinned)).toBe(true);
+		expect(screen.getByRole("columnheader", { name: "URL" }).classList.contains(wrapping)).toBe(true);
+		expect(screen.getByText("https://example.test/a").closest("td")?.classList.contains(wrapping)).toBe(true);
+		expect(screen.getByText("Nightly cleanup").closest("td")?.classList.contains(wrapping)).toBe(false);
 	});
 
 	it("renders one list item per row below sm, titled by the primary column and without hidden columns", () => {

@@ -1,0 +1,48 @@
+/*
+ * The actions column stays pinned to the right edge while a wide table scrolls under it, so a row's buttons are never
+ * behind the horizontal scroll. A sticky cell paints over the cells passing beneath it, so it needs an opaque
+ * background that follows the row: the surface it sits on, a striped row, a hovered row.
+ */
+
+.actions {
+	position: sticky;
+	right: 0;
+	z-index: 1;
+	background-color: var(--mantine-color-body);
+	box-shadow: inset 1px 0 0 var(--table-border-color);
+}
+
+/* In dark mode a Card is dark-6, not the body's dark-7. */
+
+:where([data-mantine-color-scheme="dark"]) :where([class~="mantine-Card-root"]) .actions {
+	background-color: var(--mantine-color-dark-6);
+}
+
+tr[data-striped="odd"]:nth-of-type(odd) > .actions,
+tr[data-striped="even"]:nth-of-type(even) > .actions {
+	background-color: var(--table-striped-color);
+}
+
+@media (hover: hover) {
+
+	tr[data-hover]:hover > .actions {
+		background-color: var(--tr-hover-bg);
+	}
+}
+
+/*
+ * A badge's label clips with an ellipsis, so its min-content width is a sliver; once wrapping columns let the table
+ * fit its container, auto layout shrank badge cells to that sliver ("DISABLED" -> "DI…"). A badge keeps its full width.
+ */
+
+.table td :where([class~="mantine-Badge-root"]) {
+	min-width: max-content;
+}
+
+/* Long free text (a URL, a schedule) wraps inside the column instead of widening the table. */
+
+.wrap {
+	overflow-wrap: anywhere;
+	min-width: 8rem;
+	max-width: 24rem;
+}
