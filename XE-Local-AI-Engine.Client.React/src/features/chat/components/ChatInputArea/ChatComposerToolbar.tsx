@@ -25,10 +25,17 @@ import type { AgentOption, ContextUsageModel, ModelOption, ReasoningEffort } fro
 import { toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
 import { VoiceComposerControls } from "@/features/voice/components/VoiceComposerControls";
 
+import classes from "./ChatComposerToolbar.module.css";
+
 interface ChatComposerToolbarProps {
 	toolbarRef: RefObject<HTMLDivElement | null>;
-	/** Phone or phone-landscape viewport: secondary toggles fold into an overflow menu and Send drops its label. */
+	/** Phone viewport or a composer too narrow even without the context readout and Send's label: the secondary
+	 * toggles fold into an overflow menu. */
 	compact: boolean;
+	/** Send shows its label; off on a phone, and on a composer that needs the room. */
+	labelledSend: boolean;
+	/** Reports whether the web review switch is on screen (see WebContentAutoAcceptToggle). */
+	onWebReviewShownChange: (shown: boolean) => void;
 	disabled: boolean;
 	isSending: boolean;
 	modelOptions: ModelOption[];
@@ -75,13 +82,15 @@ interface ChatComposerToolbarProps {
 }
 
 // The toolbar is hosted in the Textarea's bottomSection (rendered inside the input border, pointer-events:all —
-// so the Stop button stays interactive even while the input element itself is disabled during a send). A
-// single wrap="wrap" Group (rather than nowrap) lets the controls reflow onto extra rows instead of
-// overlapping on narrow panes; the Send button carries its own auto left-margin so it always lands at the
-// right edge of whichever row it ends up on, including a row of its own.
+// so the Stop button stays interactive even while the input element itself is disabled during a send). It is ONE
+// row at every width: instead of wrapping, the model trigger shrinks behind an ellipsis and the agent and workflow
+// pickers fold to icon-only squares through a container query on the toolbar (ChatComposerToolbar.module.css), so
+// the context readout and Send keep their place on the same line.
 export function ChatComposerToolbar({
 	toolbarRef,
 	compact,
+	labelledSend,
+	onWebReviewShownChange,
 	disabled,
 	isSending,
 	modelOptions,
@@ -157,12 +166,12 @@ export function ChatComposerToolbar({
 				disabled={sendDisabled}
 				color={isSending ? "red" : "dark"}
 				size="sm"
-				px={compact ? "xs" : undefined}
+				px={labelledSend ? undefined : "xs"}
 				style={{ flexShrink: 0 }}
-				leftSection={compact ? undefined : isSending ? <IconPlayerStopFilled size={13} /> : <IconSend size={13} />}
+				leftSection={labelledSend ? isSending ? <IconPlayerStopFilled size={13} /> : <IconSend size={13} /> : undefined}
 				aria-label={isSending ? t("pages.chat.stop", "Stop") : t("pages.chat.send", "Send")}
 			>
-				{compact ? (
+				{!labelledSend ? (
 					isSending ? (
 						<IconPlayerStopFilled size={15} />
 					) : (
@@ -178,7 +187,7 @@ export function ChatComposerToolbar({
 	);
 
 	// Compact: the reasoning, local-tools, knowledge-base and sampling toggles fold into one overflow menu, and Send joins
-	// the wrapping row instead of reserving a column of its own, so a phone keeps the composer to about two rows.
+	// the row instead of reserving a column of its own, so a phone keeps the composer to one row.
 	// The folded toggles are out of sight, so the trigger carries the same active look the desktop toggles have whenever
 	// any of them is on — otherwise a phone sends with reasoning, local tools or the knowledge base enabled unannounced.
 	const overflowActive =
@@ -246,8 +255,10 @@ export function ChatComposerToolbar({
 	) : null;
 
 	return (
-		<Group ref={toolbarRef} align="center" wrap="wrap" gap="xs" style={{ width: "100%" }}>
-			<Group gap={4} wrap="wrap" style={{ flex: 1, minWidth: 0 }}>
+		<Group ref={toolbarRef} align="center" wrap="nowrap" gap="xs" preventGrowOverflow={false} className={classes["toolbar"]}>
+			{/* preventGrowOverflow off (here and on the row above): Mantine otherwise caps every child at an equal share of the
+			    row, which squeezed the model trigger to a stub while the row still had room. */}
+			<Group gap={4} wrap="nowrap" preventGrowOverflow={false} className={classes["controls"]} style={{ flex: 1, minWidth: 0 }}>
 				<ModelSelectorCard
 					modelOptions={modelOptions}
 					cloudModelOptions={cloudModelOptions}
@@ -298,7 +309,11 @@ export function ChatComposerToolbar({
 				) : null}
 				{/* The web tools are local tools, so their review mode is only meaningful while those are on. */}
 				{showLocalToolControls && toolsEnabled ? (
-					<WebContentAutoAcceptToggle conversationId={conversationId} disabled={disabled || isSending} />
+					<WebContentAutoAcceptToggle
+						conversationId={conversationId}
+						disabled={disabled || isSending}
+						onShownChange={onWebReviewShownChange}
+					/>
 				) : null}
 				{showKnowledgeBaseControls && !compact ? (
 					<DisabledReasonTooltip

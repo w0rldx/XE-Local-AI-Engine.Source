@@ -14,13 +14,15 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         <item>PUT then GET round-trips an upserted entry, and a second key is preserved on merge (upsert one key
 ///         does not drop others);</item>
 ///         <item>completed is monotonic, and concurrent tutorial writes preserve every distinct key;</item>
-///         <item>PUT is Operator-gated — an unauthenticated request is rejected.</item>
+///         <item>PUT is Operator-gated — an unauthenticated request is rejected;</item>
+///         <item>the AI acknowledgement reads false until POSTed, and a repeated POST keeps the first timestamp.</item>
 ///     </list>
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class TutorialStateEndpointTests
 {
     private const string Route = "/api/local/v1/tutorial-state";
+    private const string AiAcknowledgementRoute = "/api/local/v1/tutorial-state/ai-acknowledgement";
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -168,6 +170,48 @@ public sealed class TutorialStateEndpointTests
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    [Test]
+    public async Task AiAcknowledgement_WhenUnauthenticated_IsRejected()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+
+        foreach (var method in new[] { HttpMethod.Get, HttpMethod.Post })
+        {
+            using var request = new HttpRequestMessage(method, AiAcknowledgementRoute);
+            request.Headers.Add("Origin", "http://localhost");
+
+            using var response = await client.SendAsync(request);
+
+            AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode, $"{method} must require a signed-in user.");
+        }
+    }
+
+    [Test]
+    public async Task AiAcknowledgement_ReadsFalseUntilPosted_AndARepeatKeepsTheFirstTimestamp()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+
+        await SeedAdminUserAsync(factory);
+
+        var before = await SendAiAcknowledgementAsync(factory, client, HttpMethod.Get);
+        AssertEx.False(before.GetProperty("acknowledged").GetBoolean(), "A user who never acknowledged must see the notice.");
+        AssertEx.Null(AcknowledgedAt(before));
+
+        var first = await SendAiAcknowledgementAsync(factory, client, HttpMethod.Post);
+        AssertEx.True(first.GetProperty("acknowledged").GetBoolean());
+        var firstAt = AcknowledgedAt(first) ?? string.Empty;
+        AssertEx.NotNullOrEmpty(firstAt, "An acknowledgement must carry its timestamp.");
+
+        var repeat = await SendAiAcknowledgementAsync(factory, client, HttpMethod.Post);
+        AssertEx.Equal(firstAt, AcknowledgedAt(repeat), "A repeated acknowledgement must keep the first record.");
+
+        var after = await SendAiAcknowledgementAsync(factory, client, HttpMethod.Get);
+        AssertEx.True(after.GetProperty("acknowledged").GetBoolean());
+        AssertEx.Equal(firstAt, AcknowledgedAt(after));
+    }
+
     // The node bearer token is minted for the single-admin user id "node-admin-test" (see
     // TestServerWebAppFactory.CreateNodeAccessToken). The tutorial-state service resolves that user via UserManager, so the
     // Identity row must exist for an authenticated write to persist — seed it to match the token exactly.
@@ -252,6 +296,26 @@ public sealed class TutorialStateEndpointTests
 
         await using var stream = await response.Content.ReadAsStreamAsync();
         return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<TutorialStateResponseDto>(stream, JsonOptions));
+    }
+
+    private static async Task<JsonElement> SendAiAcknowledgementAsync(TestServerWebAppFactory factory,
+        HttpClient client,
+        HttpMethod method)
+    {
+        using var request = new HttpRequestMessage(method, AiAcknowledgementRoute);
+        factory.AddNodeBearerToken(request);
+        request.Headers.Add("Origin", "http://localhost");
+
+        using var response = await client.SendAsync(request);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return document.RootElement.Clone();
+    }
+
+    private static string? AcknowledgedAt(JsonElement acknowledgement)
+    {
+        return acknowledgement.TryGetProperty("acknowledgedAtUtc", out var value) ? value.GetString() : null;
     }
 
     // Local wire shapes for deserialization — the endpoint DTOs are internal to the Client project's V1 namespace, so

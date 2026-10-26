@@ -29,3 +29,13 @@ public sealed record SaveTutorialStateRequest
 
     public string Status { get; init; } = string.Empty;
 }
+
+/// <summary>
+///     Whether the current user acknowledged the AI responsibility notice, and when (null until they do).
+/// </summary>
+public sealed record AiAcknowledgementResponse
+{
+    public required bool Acknowledged { get; init; }
+
+    public DateTime? AcknowledgedAtUtc { get; init; }
+}

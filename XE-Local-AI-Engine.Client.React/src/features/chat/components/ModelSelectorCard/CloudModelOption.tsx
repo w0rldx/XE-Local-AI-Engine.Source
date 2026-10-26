@@ -31,7 +31,7 @@ export function CloudModelOption({ option, selected, egressCue, egressCueColor, 
 				<Box className={cx(classes["status-accent"], classes["status-accent-available"])} />
 				<Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
 					<ModelNameTooltip display={display}>
-						<Text size="sm" fw={600} lineClamp={1}>
+						<Text size="sm" fw={600} style={{ minWidth: 0, overflowWrap: "anywhere" }}>
 							{display.primary}
 						</Text>
 					</ModelNameTooltip>

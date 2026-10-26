@@ -1,0 +1,79 @@
+.toolbar {
+	/* The composer's width, not the window's, decides when the pickers fold: the conversation list and the
+	   sidebar take a varying share of the window, so a viewport media query would fold too early or too late. */
+	container: composer-toolbar / inline-size;
+	width: 100%;
+}
+
+.controls {
+	/* Last resort when even the folded row is wider than the composer (a phone with every toggle on): the row
+	   scrolls sideways inside the composer instead of letting controls overlap. The block padding keeps focus rings
+	   clear of the scroll clip. */
+	overflow-x: auto;
+	scrollbar-width: none;
+	padding-block: 2px;
+	margin-block: -2px;
+}
+
+.select-trigger {
+	/* The agent and workflow pickers' trigger: 36px tall like the composer's action icons and send button, so the
+	   control row is one even height. Shrinks with an ellipsis before the container query below folds it. */
+	display: inline-flex;
+	align-items: center;
+	flex: 0 1 auto;
+	height: 36px;
+
+	/* Never narrower than the folded square, which is what fitComposerToolbar budgets for a picker. */
+	min-width: 36px;
+	max-width: 200px;
+	overflow: hidden;
+	box-sizing: border-box;
+	gap: 4px;
+	padding: 0 8px;
+	border-radius: var(--mantine-radius-md);
+	border: 1px solid var(--mantine-color-default-border);
+	background: var(--mantine-color-body);
+	cursor: pointer;
+}
+
+.select-trigger[data-active="true"] {
+	background: var(--mantine-primary-color-light);
+}
+
+.select-content {
+	flex: 1;
+	min-width: 0;
+}
+
+.select-label {
+	flex: 1;
+	min-width: 0;
+}
+
+.select-chevron {
+	flex-shrink: 0;
+}
+
+/* Below this composer width the full row (model, toggles, both pickers, context readout, send) no longer fits on one
+   line: the pickers fold to icon-only squares. Their tooltip and accessible name still carry the current choice, and
+   the same menu opens. Outside the composer (no composer-toolbar container) the trigger never folds. */
+@container composer-toolbar (width <= 760px) {
+
+	.select-trigger {
+		flex: none;
+		width: 36px;
+		padding: 0;
+		justify-content: center;
+	}
+
+	.select-content {
+		/* Auto margins centre the lone icon; Mantine sets the Group's justify inline, so a class cannot. */
+		flex: none;
+		margin-inline: auto;
+	}
+
+	.select-label,
+	.select-chevron {
+		display: none;
+	}
+}

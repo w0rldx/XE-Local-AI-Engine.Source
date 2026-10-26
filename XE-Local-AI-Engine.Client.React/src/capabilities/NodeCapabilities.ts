@@ -24,13 +24,13 @@ export interface ChatCapabilities {
 export interface NodeCapabilityConfig {
 	readonly chat: ChatCapabilities;
 	readonly nodeSettings: boolean;
-	// When false the Cloud Settings nav entry is hidden and the /cloud-settings route is inaccessible.
-	// Cloud Settings is a LOCAL cloud-provider surface (Codex OAuth + Azure Foundry credentials, stored
-	// encrypted on this node), so it is on by default.
+	// Offers the Azure Foundry and Codex templates on the Cloud Providers page; with this and externalProviders both
+	// off, the nav entry is hidden and the /cloud-providers route is inaccessible. It is a LOCAL cloud-provider surface
+	// (Codex OAuth + Azure Foundry credentials, stored encrypted on this node), so it is on by default.
 	readonly cloudSettings: boolean;
-	// When false the External Providers nav entry is hidden and the /external-providers route is inaccessible.
-	// Like Cloud Settings this is a LOCAL surface — operator-declared OpenAI-compatible endpoints and their models,
-	// stored encrypted on this node — so it is on by default.
+	// Offers the OpenAI-compatible templates and lists the `ext:` connections on the Cloud Providers page. Like
+	// cloudSettings this is a LOCAL surface — operator-declared OpenAI-compatible endpoints and their models, stored
+	// encrypted on this node — so it is on by default.
 	readonly externalProviders: boolean;
 	readonly modelManagement: boolean;
 	// Invocation monitor: the node's record of agent and tool invocations. This flag alone gates both the nav entry
@@ -182,8 +182,9 @@ export const nodeRoutePaths = {
 	home: "/",
 	chat: "/chat",
 	nodeSettings: "/node-settings",
-	cloudSettings: "/cloud-settings",
-	externalProviders: "/external-providers",
+	// One page for every cloud or remote provider. The former /cloud-settings and /external-providers routes only
+	// redirect here.
+	cloudProviders: "/cloud-providers",
 	models: "/models",
 	invocations: "/invocations",
 	benchmarks: "/benchmarks",

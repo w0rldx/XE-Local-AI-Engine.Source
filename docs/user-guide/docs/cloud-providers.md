@@ -4,13 +4,20 @@ The app works without any outside service. If you want to, you can also chat wit
 a hosted API, a model server on another machine, or a company AI gateway. This page shows how to connect one, what
 the app lets such a model do, and what leaves your computer when you use it.
 
-There are two places to do it, both under **Settings** in the navigation:
+Everything is on one page: **Settings → Cloud Providers**. It lists every provider you have set up, with an
+**Edit** button for each. To connect a new one, click **Add provider** and pick a template:
 
-| You want to use | Go to |
+| You want to use | Template |
 |---|---|
-| Any **OpenAI-compatible** endpoint: a hosted API, LM Studio, vLLM or llama-server on another machine, a private gateway | **External Providers** |
-| **Azure OpenAI / Azure AI Foundry**, including sign-in with **Entra ID** | **Cloud Settings** |
-| **ChatGPT / Codex** with your ChatGPT subscription | **Cloud Settings** |
+| A hosted API, LM Studio, vLLM or llama-server on another machine | **OpenAI-compatible endpoint** |
+| Your company's AI gateway in front of hosted models | **Enterprise AI gateway** |
+| An Azure OpenAI resource with one of its API keys | **Azure OpenAI v1 (API key)** |
+| **Azure AI Foundry**, including sign-in with **Entra ID** or a managed identity | **Azure AI Foundry** |
+| **ChatGPT / Codex** with your ChatGPT subscription | **ChatGPT (Codex)** |
+
+The first three are all OpenAI-compatible connections: the template only fills in a starting point. This computer
+holds one Azure AI Foundry connection and one ChatGPT sign-in, so their templates are greyed out while one is set up;
+edit or sign out from the list instead.
 
 API keys and secrets are stored encrypted on this computer and are never shown again, not even to this page.
 
@@ -18,7 +25,7 @@ API keys and secrets are stored encrypted on this computer and are never shown a
 
 ## An OpenAI-compatible connection
 
-1. Open **Settings → External Providers** and click **Add connection**.
+1. Open **Settings → Cloud Providers**, click **Add provider** and pick one of the OpenAI-compatible templates.
 2. Fill in:
    - **Connection id:** a short name such as `office-gateway`. It becomes part of every model id from this
      connection and cannot be changed later.
@@ -33,6 +40,21 @@ API keys and secrets are stored encrypted on this computer and are never shown a
 5. For each model, say whether it supports **Tools**, **Vision** and **Reasoning**. The app does not detect this:
    only **Yes** counts, and **Unknown** is treated like **No**.
 6. Click **Save connection**. The models now appear in the model picker under the connection's name.
+
+### A company AI gateway
+
+Pick **Enterprise AI gateway**. Enter the gateway's OpenAI address, which usually ends in `/openai/v1`, for example
+`https://<gateway host>/<path>/openai/v1`. If your requests get no answer, check this address first: a gateway answers
+only on the exact path it publishes. Put your gateway token in **API key or bearer token**; the app sends it as
+`Authorization: Bearer`. The template adds one empty header row: if the gateway also wants a project or tenant
+header, enter the name and value your gateway team gives you; otherwise remove the row. Gateways usually run hosted
+models, so leave **Trust** on **Cloud**.
+
+### Azure OpenAI with an API key
+
+Pick **Azure OpenAI v1 (API key)**, enter `https://<resource>.openai.azure.com/openai/v1` with your resource's name,
+and paste one of the resource's keys as the API key. For Entra ID or a managed identity, use the **Azure AI Foundry**
+template below instead.
 
 **Plain `http` to another machine is refused** unless you tick **Allow insecure HTTP**, because the key and your
 prompts would travel unencrypted. Prefer `https`. `http` to this computer itself is always fine.
@@ -59,7 +81,8 @@ Mode, training and benchmarks stay closed to cloud models whatever you switch on
 
 ## Azure OpenAI / Azure AI Foundry
 
-1. Open **Settings → Cloud Settings**.
+1. Open **Settings → Cloud Providers**, click **Add provider** and pick **Azure AI Foundry**, or click **Edit** on
+   its entry if it is already set up.
 2. Enter the **Azure OpenAI endpoint** and pick an **Authentication** mode:
    - **API key:** paste the key.
    - **Managed identity:** uses the Azure identity already signed in on this computer; no key needed.
@@ -76,7 +99,7 @@ models may do.
 
 ## ChatGPT / Codex
 
-In **Settings → Cloud Settings**, click **Sign in with ChatGPT** and finish the sign-in in the browser window that
+In **Settings → Cloud Providers**, click **Add provider**, pick **ChatGPT (Codex)**, then click **Sign in with ChatGPT** and finish the sign-in in the browser window that
 opens. **Sign out** returns you to local models. The app asks the service not to store responses on every call.
 
 ---

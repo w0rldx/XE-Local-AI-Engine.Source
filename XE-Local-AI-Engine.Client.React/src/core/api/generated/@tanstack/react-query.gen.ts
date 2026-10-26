@@ -11,6 +11,7 @@ import type { AxiosError } from "axios";
 
 import { client } from "../client.gen";
 import {
+	acknowledgeAi,
 	analyzePlaybook,
 	answerNowNodeChatMessage,
 	applyAgentHomePatch,
@@ -158,6 +159,7 @@ import {
 	getAgentHomeRunPatch,
 	getAgentPlaybookMonitor,
 	getAgentUsageSummary,
+	getAiAcknowledgement,
 	getAppUpdateStatus,
 	getBaseArtifact,
 	getBaseArtifactLicense,
@@ -489,6 +491,8 @@ import {
 	verifyToolMock,
 } from "../sdk.gen";
 import type {
+	AcknowledgeAiData,
+	AcknowledgeAiResponse,
 	AnalyzePlaybookData,
 	AnalyzePlaybookResponse,
 	AnswerNowNodeChatMessageData,
@@ -869,6 +873,8 @@ import type {
 	GetAgentPlaybookMonitorResponse,
 	GetAgentUsageSummaryData,
 	GetAgentUsageSummaryResponse,
+	GetAiAcknowledgementData,
+	GetAiAcknowledgementResponse,
 	GetAppUpdateStatusData,
 	GetAppUpdateStatusResponse,
 	GetBaseArtifactData,
@@ -12230,6 +12236,52 @@ export const saveTutorialStateMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await saveTutorialState({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getAiAcknowledgementQueryKey = (options?: Options<GetAiAcknowledgementData>) =>
+	createQueryKey("getAiAcknowledgement", options, false, ["Tutorial"]);
+
+/**
+ * Reads whether the caller acknowledged the AI responsibility notice.
+ */
+export const getAiAcknowledgementOptions = (options?: Options<GetAiAcknowledgementData>) =>
+	queryOptions<
+		GetAiAcknowledgementResponse,
+		AxiosError<DefaultError>,
+		GetAiAcknowledgementResponse,
+		ReturnType<typeof getAiAcknowledgementQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getAiAcknowledgement({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getAiAcknowledgementQueryKey(options),
+	});
+
+/**
+ * Records that the caller acknowledged the AI responsibility notice.
+ *
+ * Idempotent: a repeat keeps the first acknowledgement's timestamp.
+ */
+export const acknowledgeAiMutation = (
+	options?: Partial<Options<AcknowledgeAiData>>,
+): UseMutationOptions<AcknowledgeAiResponse, AxiosError<DefaultError>, Options<AcknowledgeAiData>> => {
+	const mutationOptions: UseMutationOptions<AcknowledgeAiResponse, AxiosError<DefaultError>, Options<AcknowledgeAiData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await acknowledgeAi({
 				...options,
 				...fnOptions,
 				throwOnError: true,

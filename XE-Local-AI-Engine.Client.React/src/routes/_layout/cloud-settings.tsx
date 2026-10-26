@@ -1,7 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-import { CloudSettings } from "@/features/cloud-settings/pages/CloudSettings";
+import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 
 export const Route = createFileRoute("/_layout/cloud-settings")({
-	component: CloudSettings,
+	// The former Azure Foundry and Codex page, kept so old links land on the page that now holds both.
+	beforeLoad: () => {
+		throw redirect({ to: nodeRoutePaths.cloudProviders });
+	},
 });

@@ -1,33 +1,23 @@
-import { Badge, Box, Divider, Group, Paper, Popover, ScrollArea, Stack, Text, TextInput, UnstyledButton } from "@mantine/core";
+import {
+	Badge,
+	Box,
+	Divider,
+	Group,
+	Paper,
+	Popover,
+	ScrollArea,
+	Stack,
+	Text,
+	TextInput,
+	Tooltip,
+	UnstyledButton,
+} from "@mantine/core";
 import { IconCheck, IconChevronDown, IconChevronRight, IconSearch, IconUsers } from "@tabler/icons-react";
 import { type KeyboardEvent, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import classes from "@/features/chat/components/ChatInputArea/ChatComposerToolbar.module.css";
 import type { AgentOption } from "@/features/chat/models/ChatModels";
-
-// Compact trigger styling mirrors ModelSelectorCard's compact-trigger pattern. The fixed 36px height matches the
-// composer's action icons + send button so the whole control row is one even height (the previous inline style had
-// no height and rendered shorter than its neighbours).
-const triggerStyle = {
-	display: "inline-flex",
-	alignItems: "center",
-	height: 36,
-	boxSizing: "border-box",
-	gap: 4,
-	padding: "0 8px",
-	borderRadius: "var(--mantine-radius-md)",
-	border: "1px solid var(--mantine-color-default-border)",
-	background: "var(--mantine-color-body)",
-	cursor: "pointer",
-	maxWidth: 180,
-} as const;
-
-// Active state keeps the same neutral border as the off-state (and the model selector) so the control row
-// reads as one consistent line; agent-mode-ON is signalled by the light-primary fill + the colored users icon.
-const triggerActiveStyle = {
-	...triggerStyle,
-	background: "var(--mantine-primary-color-light)",
-} as const;
 
 // Show a search box once the agent list exceeds this many items.
 const AGENT_SEARCH_THRESHOLD = 5;
@@ -83,11 +73,12 @@ function AgentOptionItem({ agent, selected, onSelect }: AgentOptionItemProps) {
 			<Group gap={6} wrap="nowrap" align="flex-start">
 				<Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
 					<Group gap={6} wrap="nowrap">
-						<Text size="sm" fw={600} lineClamp={1}>
+						{/* Wraps rather than clamps: the menu keeps its own width, so a long name stays readable in full. */}
+						<Text size="sm" fw={600} style={{ minWidth: 0, overflowWrap: "anywhere" }}>
 							{agent.name}
 						</Text>
 						{isOrchestrator ? (
-							<Badge size="xs" variant="light" color="orange">
+							<Badge size="xs" variant="light" color="orange" style={{ flexShrink: 0 }}>
 								{t("pages.chat.agentSelector.orchestratorBadge", "Orchestrator")}
 							</Badge>
 						) : null}
@@ -149,6 +140,7 @@ export function AgentSelectorCard({
 
 	const defaultAgentLabel = t("pages.chat.defaultAgentName", "Default Assistant");
 	const triggerLabel = selectedAgent?.name ?? defaultAgentLabel;
+	const currentLabel = t("pages.chat.agentSelector.triggerCurrent", "Agent: {{name}}", { name: triggerLabel });
 	const hasOptions = agentOptions.length > 0;
 	const isDisabled = disabled || !hasOptions;
 	const showSearch = agentOptions.length > AGENT_SEARCH_THRESHOLD;
@@ -194,35 +186,51 @@ export function AgentSelectorCard({
 			width={260}
 		>
 			<Popover.Target>
-				<Paper radius="md" data-testid="chat-agent-selector-selected" style={isOff ? triggerStyle : triggerActiveStyle}>
-					<UnstyledButton
-						type="button"
-						data-testid="chat-agent-selector-trigger"
-						disabled={isDisabled}
-						onClick={() => {
-							if (!isDisabled) {
-								setPickerOpened((previous) => !previous);
-							}
-						}}
-						aria-disabled={isDisabled}
-						aria-expanded={pickerOpened}
-						aria-haspopup="menu"
-						aria-label={t("pages.chat.agentSelector.triggerLabel", "Agent")}
-						// Stretched to the paper's full height so the whole 36px control is the hit area, not just the label.
-						style={{ width: "100%", alignSelf: "stretch", display: "flex", alignItems: "center" }}
+				{/* The Paper stays Popover.Target's DIRECT child (a Tooltip in between swallows the anchor ref), so the
+				    tooltip wraps the button inside. It carries the current choice, which is all a folded trigger shows. */}
+				<Paper
+					radius="md"
+					data-testid="chat-agent-selector-selected"
+					data-active={isOff ? undefined : "true"}
+					className={classes["select-trigger"]}
+				>
+					<Tooltip
+						label={currentLabel}
+						withinPortal={true}
+						openDelay={350}
+						multiline={true}
+						maw={300}
+						events={{ hover: true, focus: true, touch: false }}
 					>
-						<Group gap="xs" wrap="nowrap" align="center" style={{ flex: 1, minWidth: 0 }}>
-							<IconUsers
-								size={16}
-								color={isOff ? "var(--mantine-color-dimmed)" : "var(--mantine-primary-color-filled)"}
-								style={{ flexShrink: 0 }}
-							/>
-							<Text size="xs" fw={600} lineClamp={1} style={{ flex: 1, minWidth: 0 }}>
-								{triggerLabel}
-							</Text>
-							<IconChevronDown size={12} color="var(--mantine-color-dimmed)" />
-						</Group>
-					</UnstyledButton>
+						<UnstyledButton
+							type="button"
+							data-testid="chat-agent-selector-trigger"
+							disabled={isDisabled}
+							onClick={() => {
+								if (!isDisabled) {
+									setPickerOpened((previous) => !previous);
+								}
+							}}
+							aria-disabled={isDisabled}
+							aria-expanded={pickerOpened}
+							aria-haspopup="menu"
+							aria-label={currentLabel}
+							// Stretched to the paper's full height so the whole 36px control is the hit area, not just the label.
+							style={{ width: "100%", alignSelf: "stretch", display: "flex", alignItems: "center" }}
+						>
+							<Group gap="xs" wrap="nowrap" align="center" className={classes["select-content"]}>
+								<IconUsers
+									size={16}
+									color={isOff ? "var(--mantine-color-dimmed)" : "var(--mantine-primary-color-filled)"}
+									style={{ flexShrink: 0 }}
+								/>
+								<Text size="xs" fw={600} truncate="end" className={classes["select-label"]}>
+									{triggerLabel}
+								</Text>
+								<IconChevronDown size={12} color="var(--mantine-color-dimmed)" className={classes["select-chevron"]} />
+							</Group>
+						</UnstyledButton>
+					</Tooltip>
 				</Paper>
 			</Popover.Target>
 			<Popover.Dropdown p={6} onKeyDown={moveOptionFocus}>

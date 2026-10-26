@@ -18,6 +18,10 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 [Category(TestCategories.Unit)]
 public sealed class ProviderStreamResilienceTests
 {
+    private const string NoRouteBody = """{"error":{"code":"apim_policy_error","message":"Unable to match incoming request to an operation."}}""";
+
+    private const string TpmBody = """{"error":"unsupported_tpm_configuration","message":"TokensPerMinute must be one of 10000, 30000."}""";
+
     [Test]
     public async Task ExecuteStreamingAsync_WhenTransientThenSuccess_RetriesAndYieldsFullStream()
     {
@@ -394,6 +398,42 @@ public sealed class ProviderStreamResilienceTests
         AssertEx.Equal(expected: 2, callCount.Value);
     }
 
+    // A gateway's no-route 500 (wrong base URL) fails on the first attempt; a TPM 500 from the same gateway is still retried.
+    [Test]
+    [Arguments(NoRouteBody, 1)]
+    [Arguments(TpmBody, 3)]
+    public async Task ExecuteStreamingAsync_WhenGatewayServerError_RetriesUnlessItIsNoRoute(string body, int expectedAttempts)
+    {
+        var callCount = new StrongBox<int>(value: 0);
+        var sut = CreateSut(new ProviderResilienceOptions
+        {
+            BaseDelayMilliseconds = 0,
+            CircuitBreakerEnabled = false
+        }, maxRetries: 2);
+
+        await AssertEx.ThrowsAsync<ClientResultException>(() => CollectAsync(sut.ExecuteStreamingAsync("endpoint",
+            FactoryFailing(failures: int.MaxValue, callCount, () => Yield(1), () => ThrowStatus(500, body: body)),
+            CancellationToken.None)));
+
+        AssertEx.Equal(expectedAttempts, callCount.Value);
+    }
+
+    // Repeated no-route sends never open the breaker, so fixing the base URL is not followed by a "temporarily unavailable" send.
+    [Test]
+    public async Task ExecuteStreamingAsync_WhenRepeatedlyNoRoute_KeepsTheBreakerClosed()
+    {
+        var callCount = new StrongBox<int>(value: 0);
+        var sut = CreateSut(BreakerAtTwo(), new MutableTimeProvider(DateTimeOffset.UnixEpoch), maxRetries: 0);
+        var factory = FactoryFailing(failures: int.MaxValue, callCount, () => Yield(1), () => ThrowStatus(500, body: NoRouteBody));
+
+        for (var send = 0; send < 3; send++)
+        {
+            await AssertEx.ThrowsAsync<ClientResultException>(() => CollectAsync(sut.ExecuteStreamingAsync("endpoint", factory, CancellationToken.None)));
+        }
+
+        AssertEx.Equal(expected: 3, callCount.Value, "every no-route send reached the provider; none was fast-failed");
+    }
+
     [Test]
     [Arguments("Thu, 22 Oct 2026 11:59:00 GMT", 0)]
     [Arguments("0", 0)]
@@ -480,10 +520,12 @@ public sealed class ProviderStreamResilienceTests
         yield return await Task.FromException<int>(new HttpRequestException("provider send failed", inner: null, statusCode));
     }
 
-    private static async IAsyncEnumerable<int> ThrowStatus(int status, string? retryAfter = null)
+    private static async IAsyncEnumerable<int> ThrowStatus(int status, string? retryAfter = null, string? body = null)
     {
         await Task.Yield();
-        yield return await Task.FromException<int>(FakeClientResultException.Create(status, retryAfter));
+        yield return await Task.FromException<int>(body is null
+            ? FakeClientResultException.Create(status, retryAfter)
+            : FakeClientResultException.Create(status, retryAfter, "Internal Server Error", body));
     }
 
     // Records every timer's due time and fires it at once, so a backoff is asserted on the clock, never waited out.

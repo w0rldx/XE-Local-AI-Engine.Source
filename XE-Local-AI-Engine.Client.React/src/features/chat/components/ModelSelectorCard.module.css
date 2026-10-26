@@ -9,12 +9,16 @@
 }
 
 .compact-trigger {
-	/* Flex-basis only: in the composer's control row the trigger shrinks below this floor (min-width:0 + flex-shrink)
-	   so the row never wraps the send button to a second line; caps at 272px on roomy layouts. Wider than the
-	   single-line trigger it replaced because it now carries the model name AND the line saying where it runs. */
+	/* Flex-basis only: in the composer's control row the trigger shrinks below this basis (flex-shrink) down to the
+	   min-width floor, so the row never wraps the send button to a second line; caps at 272px on roomy layouts.
+	   Wider than the single-line trigger it replaced because it now carries the model name AND the line saying where
+	   it runs. */
 	width: clamp(8rem, 40vw, 17rem);
 	flex: 0 1 auto;
-	min-width: 0;
+
+	/* The floor keeps the model readable; the composer folds its other controls (fitComposerToolbar budgets this
+	   width) instead of squeezing the trigger to nothing. */
+	min-width: 7.5rem;
 }
 
 .compact-trigger-narrow {
@@ -22,6 +26,7 @@
 	   there): narrow enough to leave the neighbouring action icons and the send button on one row, wide enough that
 	   the model name is still readable rather than a two-character stub. */
 	width: clamp(5.5rem, 34vw, 9rem);
+	min-width: 5.5rem;
 }
 
 .compact-paper {

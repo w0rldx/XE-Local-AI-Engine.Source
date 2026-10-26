@@ -14,4 +14,10 @@ public sealed class NodeUser : IdentityUser
     ///     additional keys without another migration.
     /// </summary>
     public string? TutorialState { get; set; }
+
+    /// <summary>
+    ///     When the user acknowledged the AI responsibility notice shown on first entry to Chat. Null means not yet
+    ///     acknowledged; the first acknowledgement is kept and never overwritten.
+    /// </summary>
+    public DateTime? AiAcknowledgedAtUtc { get; set; }
 }

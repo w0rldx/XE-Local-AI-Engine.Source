@@ -13,14 +13,13 @@ click the item inside. Written here as `Group → Item`.
 
 | Sidebar entry | What's there |
 |---|---|
-| **Home** | Landing page |
-| **Chat** | Talk to a model |
+| **Chat** | Talk to a model; the app opens here |
 | **Knowledge Base** | Your own documents |
 | **Models → Installed** | Models you already have, and importing a `.gguf` you already own |
 | **Models → Recommendations** | **The advisor** — what fits your hardware |
 | **Models → Loaded** | What's in memory now, and eject |
 | **Settings → Node Settings** | Most settings, including voice and the local model proxy |
-| **Settings → Cloud Settings** | Optional external providers |
+| **Settings → Cloud Providers** | Optional cloud and remote providers: OpenAI-compatible endpoints, gateways, Azure, ChatGPT |
 | **Settings → Diagnostics** | Export a bug report |
 | **Automation → Commands** | Your own slash commands — a saved prompt you send in chat with one word |
 | **Automation → Agents** | Configurable assistants |

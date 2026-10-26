@@ -71,6 +71,18 @@ public sealed record ExternalProviderProbeResult
 
     /// <summary>The model ids the endpoint listed, in the order it listed them. Empty when it serves no usable listing.</summary>
     public IReadOnlyList<ExternalProviderProbeModel> Models { get; init; } = [];
+
+    /// <summary>
+    ///     The exact address the probe requested (the normalized base plus <c>models</c>; no query, no credentials), or
+    ///     <see langword="null" /> when nothing was sent.
+    /// </summary>
+    public string? RequestedUrl { get; init; }
+
+    /// <summary>
+    ///     True when the endpoint answered that nothing is routed at that address (a 404, or a gateway's no-route 5xx): the
+    ///     usual sign of a wrong base URL path rather than a wrong credential.
+    /// </summary>
+    public bool NoRoute { get; init; }
 }
 
 /// <summary>

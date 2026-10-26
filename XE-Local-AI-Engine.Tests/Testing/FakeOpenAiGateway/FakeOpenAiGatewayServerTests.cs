@@ -289,6 +289,10 @@ public sealed class FakeOpenAiGatewayServerTests
     [Arguments(FakeOpenAiGatewayFailure.UnknownModel, HttpStatusCode.NotFound, "model_not_found")]
     [Arguments(FakeOpenAiGatewayFailure.RateLimited, HttpStatusCode.TooManyRequests, "rate_limit_exceeded")]
     [Arguments(FakeOpenAiGatewayFailure.Http500, HttpStatusCode.InternalServerError, null)]
+    [Arguments(FakeOpenAiGatewayFailure.NoRoute, HttpStatusCode.InternalServerError, "apim_policy_error")]
+    [Arguments(FakeOpenAiGatewayFailure.ApiNotSupported, HttpStatusCode.NotFound, "api_not_supported")]
+    [Arguments(FakeOpenAiGatewayFailure.PermissionDenied, HttpStatusCode.Unauthorized, "PermissionDenied")]
+    [Arguments(FakeOpenAiGatewayFailure.InvalidToken, HttpStatusCode.Unauthorized, "invalid_token")]
     public async Task StatusFault_AnswersOnceInOpenAiShape_ThenTheNextRequestSucceeds(FakeOpenAiGatewayFailure failure, HttpStatusCode status, string? code)
     {
         await using var gateway = await FakeOpenAiGatewayServer.StartAsync();

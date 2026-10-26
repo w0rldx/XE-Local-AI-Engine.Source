@@ -25008,6 +25008,75 @@
         ]
       }
     },
+    "/api/local/v1/tutorial-state/ai-acknowledgement": {
+      "get": {
+        "tags": [
+          "Tutorial"
+        ],
+        "summary": "Reads whether the caller acknowledged the AI responsibility notice.",
+        "operationId": "getAiAcknowledgement",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTutorialStateV1AiAcknowledgementResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Tutorial"
+        ],
+        "summary": "Records that the caller acknowledged the AI responsibility notice.",
+        "description": "Idempotent: a repeat keeps the first acknowledgement's timestamp.",
+        "operationId": "acknowledgeAi",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTutorialStateV1AiAcknowledgementResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/work-sessions": {
       "get": {
         "tags": [
@@ -36597,6 +36666,13 @@
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderProbeModelResponse"
             }
+          },
+          "requestedUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "noRoute": {
+            "type": "boolean"
           }
         }
       },
@@ -50682,6 +50758,23 @@
           },
           "invalidReason": {
             "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTutorialStateV1AiAcknowledgementResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "acknowledged"
+        ],
+        "properties": {
+          "acknowledged": {
+            "type": "boolean"
+          },
+          "acknowledgedAtUtc": {
+            "type": "string",
+            "format": "date-time",
             "nullable": true
           }
         }

@@ -77,9 +77,9 @@ export const MessageParts = memo(function MessageParts({
 					return <ChatNoticeRow key={part.id} part={part} />;
 				}
 
-				// Interim narration before a tool call ("Let me search for …"): muted, so the answer below stands out.
+				// Interim narration before a tool call ("Let me search for …") renders like answer text.
 				return (
-					<Box key={part.id} c="dimmed" data-part-kind="text">
+					<Box key={part.id} data-part-kind="text">
 						<ChatMarkdown content={part.text} />
 					</Box>
 				);

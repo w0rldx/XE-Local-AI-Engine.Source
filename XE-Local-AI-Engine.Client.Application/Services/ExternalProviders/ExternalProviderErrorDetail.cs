@@ -10,19 +10,37 @@ using System.Text.RegularExpressions;
 /// <remarks>
 ///     Only a JSON object is read: message from <c>error.message</c>, <c>message</c> or <c>reason</c>; code from
 ///     <c>error.code</c>, a string <c>error</c> or <c>code</c>. A message survives only as plain words (letters with inner
-///     hyphens, or digits, edged by <c>.,;:()'</c>) and a code only as a lowercase identifier, so a key, token, URL or path
-///     is dropped whole. A secret of letters alone still passes; only a caller knowing the credential can drop it.
+///     hyphens, or digits, edged by <c>.,;:()'</c>) and a code only as a lowercase identifier or one of
+///     <see cref="KnownMixedCaseCodes" />, so a key, token, URL or path is dropped whole. A secret of letters alone still passes; only a caller knowing the credential can drop it.
 /// </remarks>
 internal readonly record struct ExternalProviderErrorDetail(string? Code, string? Message)
 {
     internal const int MaxLength = 300;
 
+    /// <summary>The gateway's backend (not the caller's credential) lacks the role for this model or operation.</summary>
+    internal const string PermissionDeniedCode = "PermissionDenied";
+
+    /// <summary>The model exists, but not on the API surface (Chat Completions or Responses) the request used.</summary>
+    internal const string ApiNotSupportedCode = "api_not_supported";
+
+    /// <summary>The bearer token was refused, typically because it expired.</summary>
+    internal const string InvalidTokenCode = "invalid_token";
+
     private static readonly Regex Word = new("^(?:[A-Za-z]+(?:-[A-Za-z]+)*|[0-9]+)$", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
     private static readonly Regex CodeIdentifier = new("^[a-z][a-z0-9_]{0,39}$", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
+    // Mixed-case codes a real gateway sends, kept by exact match because the lowercase rule would drop them.
+    private static readonly string[] KnownMixedCaseCodes = [PermissionDeniedCode];
+
     /// <summary>"code: message", the message alone, the code alone, or <see langword="null" /> when the body carried neither; capped at <see cref="MaxLength" />.</summary>
     public string? Text => Cap(Code is null || Message is null ? Message ?? Code : $"{Code}: {Message}");
+
+    /// <summary>
+    ///     Whether an API gateway said no operation matches the request path: a wrong base URL, which no retry can fix.
+    ///     Matched on the message alone, as the code a gateway pairs it with (<c>apim_policy_error</c>) also covers other policy faults.
+    /// </summary>
+    public bool ReportsNoRoute => Message?.Contains("Unable to match incoming request to an operation", StringComparison.OrdinalIgnoreCase) == true;
 
     /// <param name="body">The raw error body.</param>
     /// <param name="forbidden">Values (sent credentials) that void the whole detail when any decoded candidate contains one, before sanitizing.</param>
@@ -92,7 +110,7 @@ internal readonly record struct ExternalProviderErrorDetail(string? Code, string
 
     private static string? SanitizeCode(string? value)
     {
-        return value is not null && CodeIdentifier.IsMatch(value) ? value : null;
+        return value is not null && (CodeIdentifier.IsMatch(value) || KnownMixedCaseCodes.Contains(value, StringComparer.Ordinal)) ? value : null;
     }
 
     // Cut on the last word boundary inside the cap, so a capped detail never ends in half a word.

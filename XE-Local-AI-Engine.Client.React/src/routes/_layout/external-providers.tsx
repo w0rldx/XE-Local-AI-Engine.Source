@@ -1,15 +1,10 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
-import { nodeCapabilities, nodeRoutePaths } from "@/capabilities/NodeCapabilities";
-import { ExternalProviders } from "@/features/external-providers/pages/ExternalProviders";
+import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 
 export const Route = createFileRoute("/_layout/external-providers")({
-	// Capability gate: with externalProviders off the route is unreachable, matching the nav link being filtered out
-	// of NavigationMenuData.
+	// The former OpenAI-compatible connections page, kept so old links land on the page that now holds them.
 	beforeLoad: () => {
-		if (!nodeCapabilities.externalProviders) {
-			throw redirect({ to: nodeRoutePaths.home });
-		}
+		throw redirect({ to: nodeRoutePaths.cloudProviders });
 	},
-	component: ExternalProviders,
 });

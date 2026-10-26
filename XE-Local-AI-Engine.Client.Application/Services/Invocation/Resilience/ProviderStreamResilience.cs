@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <inheritdoc cref="IProviderStreamResilience" />
@@ -174,7 +175,7 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
     }
 
     // Transient = a connection/transport failure or a server-side/overload status, where a retry to a possibly
-    // re-spawned endpoint may succeed. A 4xx other than 429 is not, nor is a cancellation on the caller's token.
+    // re-spawned endpoint may succeed. A 4xx other than 429 is not, nor a gateway's no-route 5xx, nor a cancellation on the caller's token.
     private static SendFailureKind ClassifyFailure(Exception exception, CancellationToken cancellationToken)
     {
         if (cancellationToken.IsCancellationRequested)
@@ -191,8 +192,11 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
                 case ClientResultException { Status: 429 }:
                     return SendFailureKind.RateLimited;
 
-                case ClientResultException { Status: >= 500 }:
-                    return SendFailureKind.Transient;
+                // A gateway answering "no operation matches this path" with a 5xx means a wrong base URL: a retry repeats it and must not trip the breaker.
+                case ClientResultException { Status: >= 500 } serverError:
+                    return ExternalProviderErrorDetail.Parse(serverError.GetRawResponse()?.Content?.ToMemory() ?? default).ReportsNoRoute
+                        ? SendFailureKind.NotRetryable
+                        : SendFailureKind.Transient;
             }
         }
 

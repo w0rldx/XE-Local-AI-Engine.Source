@@ -23,6 +23,7 @@ import { Route as LayoutAgentRunsRouteImport } from './routes/_layout/agent-runs
 import { Route as LayoutAgentsRouteImport } from './routes/_layout/agents'
 import { Route as LayoutBenchmarksRouteImport } from './routes/_layout/benchmarks'
 import { Route as LayoutChatRouteImport } from './routes/_layout/chat'
+import { Route as LayoutCloudProvidersRouteImport } from './routes/_layout/cloud-providers'
 import { Route as LayoutCloudSettingsRouteImport } from './routes/_layout/cloud-settings'
 import { Route as LayoutCommandsRouteImport } from './routes/_layout/commands'
 import { Route as LayoutCustomToolsRouteImport } from './routes/_layout/custom-tools'
@@ -128,6 +129,11 @@ const LayoutBenchmarksRoute = LayoutBenchmarksRouteImport.update({
 const LayoutChatRoute = LayoutChatRouteImport.update({
   id: '/chat',
   path: '/chat',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutCloudProvidersRoute = LayoutCloudProvidersRouteImport.update({
+  id: '/cloud-providers',
+  path: '/cloud-providers',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutCloudSettingsRoute = LayoutCloudSettingsRouteImport.update({
@@ -343,6 +349,7 @@ export interface FileRoutesByFullPath {
   '/agents': typeof LayoutAgentsRoute
   '/benchmarks': typeof LayoutBenchmarksRoute
   '/chat': typeof LayoutChatRoute
+  '/cloud-providers': typeof LayoutCloudProvidersRoute
   '/cloud-settings': typeof LayoutCloudSettingsRoute
   '/commands': typeof LayoutCommandsRoute
   '/custom-tools': typeof LayoutCustomToolsRoute
@@ -394,6 +401,7 @@ export interface FileRoutesByTo {
   '/agents': typeof LayoutAgentsRoute
   '/benchmarks': typeof LayoutBenchmarksRoute
   '/chat': typeof LayoutChatRoute
+  '/cloud-providers': typeof LayoutCloudProvidersRoute
   '/cloud-settings': typeof LayoutCloudSettingsRoute
   '/commands': typeof LayoutCommandsRoute
   '/custom-tools': typeof LayoutCustomToolsRoute
@@ -448,6 +456,7 @@ export interface FileRoutesById {
   '/_layout/agents': typeof LayoutAgentsRoute
   '/_layout/benchmarks': typeof LayoutBenchmarksRoute
   '/_layout/chat': typeof LayoutChatRoute
+  '/_layout/cloud-providers': typeof LayoutCloudProvidersRoute
   '/_layout/cloud-settings': typeof LayoutCloudSettingsRoute
   '/_layout/commands': typeof LayoutCommandsRoute
   '/_layout/custom-tools': typeof LayoutCustomToolsRoute
@@ -503,6 +512,7 @@ export interface FileRouteTypes {
     | '/agents'
     | '/benchmarks'
     | '/chat'
+    | '/cloud-providers'
     | '/cloud-settings'
     | '/commands'
     | '/custom-tools'
@@ -554,6 +564,7 @@ export interface FileRouteTypes {
     | '/agents'
     | '/benchmarks'
     | '/chat'
+    | '/cloud-providers'
     | '/cloud-settings'
     | '/commands'
     | '/custom-tools'
@@ -607,6 +618,7 @@ export interface FileRouteTypes {
     | '/_layout/agents'
     | '/_layout/benchmarks'
     | '/_layout/chat'
+    | '/_layout/cloud-providers'
     | '/_layout/cloud-settings'
     | '/_layout/commands'
     | '/_layout/custom-tools'
@@ -757,6 +769,13 @@ declare module '@tanstack/react-router' {
       path: '/chat'
       fullPath: '/chat'
       preLoaderRoute: typeof LayoutChatRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/cloud-providers': {
+      id: '/_layout/cloud-providers'
+      path: '/cloud-providers'
+      fullPath: '/cloud-providers'
+      preLoaderRoute: typeof LayoutCloudProvidersRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/cloud-settings': {
@@ -1026,6 +1045,7 @@ interface LayoutRouteChildren {
   LayoutAgentsRoute: typeof LayoutAgentsRoute
   LayoutBenchmarksRoute: typeof LayoutBenchmarksRoute
   LayoutChatRoute: typeof LayoutChatRoute
+  LayoutCloudProvidersRoute: typeof LayoutCloudProvidersRoute
   LayoutCloudSettingsRoute: typeof LayoutCloudSettingsRoute
   LayoutCommandsRoute: typeof LayoutCommandsRoute
   LayoutCustomToolsRoute: typeof LayoutCustomToolsRoute
@@ -1071,6 +1091,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutAgentsRoute: LayoutAgentsRoute,
   LayoutBenchmarksRoute: LayoutBenchmarksRoute,
   LayoutChatRoute: LayoutChatRoute,
+  LayoutCloudProvidersRoute: LayoutCloudProvidersRoute,
   LayoutCloudSettingsRoute: LayoutCloudSettingsRoute,
   LayoutCommandsRoute: LayoutCommandsRoute,
   LayoutCustomToolsRoute: LayoutCustomToolsRoute,

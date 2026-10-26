@@ -30,7 +30,6 @@ describe("navigationLinks", () => {
 
 	it("groups the related node pages under Models / Settings / Automation with flat entries around them", () => {
 		expect(navigationLinks.map((link) => link.id)).toEqual([
-			"home",
 			"chat",
 			"knowledgeBase",
 			"models",
@@ -125,11 +124,10 @@ describe("navigationLinks", () => {
 			nodeRoutePaths.loadedModels,
 		]);
 		// cloudSettings and externalProviders are both on by default (each is a node-local provider-credential
-		// surface needing no Central Platform), so the settings group shows all four children.
+		// surface needing no Central Platform); they share the one Cloud Providers entry.
 		expect(settings?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.nodeSettings,
-			nodeRoutePaths.cloudSettings,
-			nodeRoutePaths.externalProviders,
+			nodeRoutePaths.cloudProviders,
 			nodeRoutePaths.diagnostics,
 		]);
 		expect(automation?.links?.map((nestedLink) => nestedLink.to)).toEqual([
@@ -188,39 +186,26 @@ describe("navigationLinks", () => {
 		expect(automation?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.mcp)).toBe(false);
 	});
 
-	it("shows Cloud Settings in the settings group when cloudSettings capability is on", async () => {
-		const { navigationLinks: gatedLinks } = await mockCapabilities({ cloudSettings: true });
+	it.each([
+		{ cloudSettings: true, externalProviders: false },
+		{ cloudSettings: false, externalProviders: true },
+	])("shows Cloud Providers while either of its capabilities is on (%o)", async (overrides) => {
+		const { navigationLinks: gatedLinks } = await mockCapabilities(overrides);
 		const settings = gatedLinks.find((link) => link.id === "settings");
 
 		expect(settings?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.nodeSettings,
-			nodeRoutePaths.cloudSettings,
-			nodeRoutePaths.externalProviders,
+			nodeRoutePaths.cloudProviders,
 			nodeRoutePaths.diagnostics,
 		]);
 	});
 
-	it("hides Cloud Settings and keeps Node Settings when cloudSettings capability is off", async () => {
-		const { navigationLinks: gatedLinks } = await mockCapabilities({ cloudSettings: false });
-		const settings = gatedLinks.find((link) => link.id === "settings");
-
-		// Settings group still renders (nodeSettings + External Providers + ungated Diagnostics); only the cloud
-		// settings child is dropped — External Providers carries its own capability.
-		expect(settings?.links?.map((nestedLink) => nestedLink.to)).toEqual([
-			nodeRoutePaths.nodeSettings,
-			nodeRoutePaths.externalProviders,
-			nodeRoutePaths.diagnostics,
-		]);
-		expect(settings?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.cloudSettings)).toBe(false);
-	});
-
-	it("hides External Providers and keeps the rest of the settings group when externalProviders is off", async () => {
-		const { navigationLinks: gatedLinks } = await mockCapabilities({ externalProviders: false });
+	it("hides Cloud Providers and keeps the rest of the settings group when both capabilities are off", async () => {
+		const { navigationLinks: gatedLinks } = await mockCapabilities({ cloudSettings: false, externalProviders: false });
 		const settings = gatedLinks.find((link) => link.id === "settings");
 
 		expect(settings?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.nodeSettings,
-			nodeRoutePaths.cloudSettings,
 			nodeRoutePaths.diagnostics,
 		]);
 	});
@@ -282,6 +267,16 @@ describe("navigationLinks", () => {
 			navigationLinks.filter((link) => link.id !== "graphWorkflows").map((link) => link.id),
 		);
 		expect(filterNavigationLinksByDisabledCapabilities(navigationLinks, new Set())).toEqual(navigationLinks);
+	});
+
+	it("keeps a link with several capabilities until every one of them is switched off", () => {
+		const settingsTargets = (disabled: string[]) =>
+			filterNavigationLinksByDisabledCapabilities(navigationLinks, new Set(disabled))
+				.find((link) => link.id === "settings")
+				?.links?.map((nestedLink) => nestedLink.to);
+
+		expect(settingsTargets(["cloudSettings"])).toContain(nodeRoutePaths.cloudProviders);
+		expect(settingsTargets(["cloudSettings", "externalProviders"])).not.toContain(nodeRoutePaths.cloudProviders);
 	});
 
 	it("drops the Agent runs child from Automation when the server reports AgentHome switched off", () => {
@@ -379,7 +374,6 @@ describe("filterNavigationLinksByUiMode", () => {
 		// child, and a collapsible with one item inside — under an "Automation"/"Preview" heading that is itself an
 		// Advanced idea — defeats the point of the mode.
 		expect(filterNavigationLinksByUiMode(navigationLinks, "simple").map((link) => link.id)).toEqual([
-			"home",
 			"chat",
 			"knowledgeBase",
 			"models",
@@ -435,8 +429,7 @@ describe("filterNavigationLinksByUiMode", () => {
 		// Diagnostics is Advanced-only in the nav; the header "Report Problem" button is its Simple-mode entry point.
 		expect(settings?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.nodeSettings,
-			nodeRoutePaths.cloudSettings,
-			nodeRoutePaths.externalProviders,
+			nodeRoutePaths.cloudProviders,
 		]);
 	});
 
@@ -536,11 +529,6 @@ describe("matchesNavRoute", () => {
 		expect(matchesNavRoute("/training/datasets", "/training")).toBe(false);
 		// A detail route no entry claims still highlights its parent.
 		expect(matchesNavRoute("/training/run-1", "/training")).toBe(true);
-	});
-
-	it("matches the home route only exactly", () => {
-		expect(matchesNavRoute("/", "/")).toBe(true);
-		expect(matchesNavRoute("/models", "/")).toBe(false);
 	});
 
 	it("never matches an undefined target (a group toggle has no route)", () => {

@@ -10,6 +10,9 @@ import {
 } from "./client";
 import { client } from "./client.gen";
 import type {
+	AcknowledgeAiData,
+	AcknowledgeAiErrors,
+	AcknowledgeAiResponses,
 	AnalyzePlaybookData,
 	AnalyzePlaybookErrors,
 	AnalyzePlaybookResponses,
@@ -451,6 +454,9 @@ import type {
 	GetAgentUsageSummaryData,
 	GetAgentUsageSummaryErrors,
 	GetAgentUsageSummaryResponses,
+	GetAiAcknowledgementData,
+	GetAiAcknowledgementErrors,
+	GetAiAcknowledgementResponses,
 	GetAppUpdateStatusData,
 	GetAppUpdateStatusErrors,
 	GetAppUpdateStatusResponses,
@@ -1437,6 +1443,7 @@ import type {
 	VerifyToolMockResponses,
 } from "./types.gen";
 import {
+	zAcknowledgeAiResponse,
 	zAnalyzePlaybookResponse,
 	zAnswerNowNodeChatMessageResponse,
 	zApplyAgentHomePatchResponse,
@@ -1582,6 +1589,7 @@ import {
 	zGetAgentHomeRunPatchResponse,
 	zGetAgentPlaybookMonitorResponse,
 	zGetAgentUsageSummaryResponse,
+	zGetAiAcknowledgementResponse,
 	zGetAppUpdateStatusResponse,
 	zGetBaseArtifactLicenseResponse,
 	zGetBaseArtifactResponse,
@@ -12621,6 +12629,58 @@ export const saveTutorialState = <ThrowOnError extends boolean = true>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+/**
+ * Reads whether the caller acknowledged the AI responsibility notice.
+ */
+export const getAiAcknowledgement = <ThrowOnError extends boolean = true>(
+	options?: Options<GetAiAcknowledgementData, ThrowOnError>,
+): RequestResult<GetAiAcknowledgementResponses, GetAiAcknowledgementErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetAiAcknowledgementResponses, GetAiAcknowledgementErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zGetAiAcknowledgementResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/tutorial-state/ai-acknowledgement",
+		...options,
+	});
+
+/**
+ * Records that the caller acknowledged the AI responsibility notice.
+ *
+ * Idempotent: a repeat keeps the first acknowledgement's timestamp.
+ */
+export const acknowledgeAi = <ThrowOnError extends boolean = true>(
+	options?: Options<AcknowledgeAiData, ThrowOnError>,
+): RequestResult<AcknowledgeAiResponses, AcknowledgeAiErrors, ThrowOnError> =>
+	(options?.client ?? client).post<AcknowledgeAiResponses, AcknowledgeAiErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zAcknowledgeAiResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/tutorial-state/ai-acknowledgement",
+		...options,
 	});
 
 export const listWorkSessions = <ThrowOnError extends boolean = true>(

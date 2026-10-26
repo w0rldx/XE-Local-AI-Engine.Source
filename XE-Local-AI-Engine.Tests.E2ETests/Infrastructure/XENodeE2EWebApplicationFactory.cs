@@ -362,6 +362,9 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             // Deterministic default: a returning user who has already answered the onboarding tour.
             // See CompletedMainAppTourState for why the first-run prompt must not be the E2E baseline.
             TutorialState = CompletedMainAppTourState,
+            // The same returning user has also accepted the one-time AI responsibility notice, whose modal would
+            // otherwise cover every chat control; its unacknowledged path is covered by the gate's component tests.
+            AiAcknowledgedAtUtc = DateTime.UtcNow,
             CreatedAtUtc = DateTime.UtcNow
         };
 

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConfirmContext } from "@/core/ui/context/ConfirmContext";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
-import { Chat } from "@/features/chat/pages/Chat";
+import { Chat, type ChatSetupDownload } from "@/features/chat/pages/Chat";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
@@ -79,12 +79,12 @@ vi.mock("@/features/chat/api/NodeChatConnection", () => ({
 
 const adapter = vi.mocked(nodeChatAdapter);
 
-function renderChat(): void {
+function renderChat(setupDownload?: ChatSetupDownload): void {
 	const confirmValue = { confirm: vi.fn().mockResolvedValue(true) };
 
 	renderWithProviders(
 		<ConfirmContext.Provider value={confirmValue}>
-			<Chat />
+			<Chat setupDownload={setupDownload} />
 		</ConfirmContext.Provider>,
 	);
 }
@@ -117,6 +117,23 @@ describe("Chat no-installed-model guidance", () => {
 		expect(screen.getByText("Install a GGUF model to start chatting locally.")).toBeTruthy();
 	});
 
+	it("shows the first-run download progress instead of the install hint while the default model downloads", async () => {
+		listLocalModelsQueryFn.mockResolvedValue({
+			items: [],
+			isAvailable: true,
+			selectedModelName: null,
+			configuredDefaultModelName: null,
+			error: null,
+		});
+
+		renderChat({ modelName: "qwen3.5-9b-q4_k_m", pct: 42 });
+
+		expect((await screen.findByTestId("chat-first-model-setup-model")).textContent).toBe("qwen3.5-9b-q4_k_m · 42%");
+		expect(screen.getByText("Setting up your first model…")).toBeTruthy();
+		expect(screen.getByTestId("chat-no-model-guidance-models-link")).toBeTruthy();
+		expect(screen.queryByText("No chat model installed yet")).toBeNull();
+	});
+
 	it("hides the guidance once a local chat-capable model is installed", async () => {
 		listLocalModelsQueryFn.mockResolvedValue({
 			items: [
@@ -137,10 +154,12 @@ describe("Chat no-installed-model guidance", () => {
 			error: null,
 		});
 
-		renderChat();
+		// A second download running beside an installed model is not first-run setup.
+		renderChat({ modelName: "qwen3.5-9b-q4_k_m", pct: 42 });
 
 		await waitFor(() => expect(screen.queryByTestId("chat-model-selector-trigger")).toBeTruthy());
 		expect(screen.queryByTestId("chat-no-model-guidance-models-link")).toBeNull();
+		expect(screen.queryByTestId("chat-first-model-setup")).toBeNull();
 	});
 
 	it("hides the guidance when a cloud provider is signed in even without a local chat model", async () => {

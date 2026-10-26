@@ -100,6 +100,52 @@ public sealed class NodeTutorialStateService : INodeTutorialStateService
         }
     }
 
+    public async Task<DateTime?> GetAiAcknowledgedAtAsync(ClaimsPrincipal principal, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(principal);
+
+        var user = await _userManager.GetUserAsync(principal);
+        return user?.AiAcknowledgedAtUtc is { } acknowledgedAt ? DateTime.SpecifyKind(acknowledgedAt, DateTimeKind.Utc) : null;
+    }
+
+    public async Task<DateTime?> AcknowledgeAiAsync(ClaimsPrincipal principal, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(principal);
+
+        await PersistenceLock.WaitAsync(cancellationToken);
+        try
+        {
+            var user = await _userManager.GetUserAsync(principal);
+            if (user is null)
+            {
+                _logger.LogWarning("AI acknowledgement for an authenticated principal that did not resolve to a node user.");
+                return null;
+            }
+
+            // Same reload as SaveEntryAsync: a parallel acknowledgement must see the first one's timestamp and keep it.
+            await _identityStore.ReloadAsync(user, cancellationToken);
+            if (user.AiAcknowledgedAtUtc is { } existing)
+            {
+                return DateTime.SpecifyKind(existing, DateTimeKind.Utc);
+            }
+
+            user.AiAcknowledgedAtUtc = _timeProvider.GetUtcNow().UtcDateTime;
+            var updateResult = await _userManager.UpdateAsync(user);
+            if (!updateResult.Succeeded)
+            {
+                _logger.LogWarning("Failed to persist the AI acknowledgement for the current user: {Errors}.",
+                    string.Join("; ", updateResult.Errors.Select(static error => error.Description)));
+                return null;
+            }
+
+            return user.AiAcknowledgedAtUtc;
+        }
+        finally
+        {
+            PersistenceLock.Release();
+        }
+    }
+
     private static IReadOnlyList<TutorialStateEntry> Deserialize(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))

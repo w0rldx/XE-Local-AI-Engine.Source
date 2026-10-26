@@ -20,6 +20,16 @@ public sealed class InvocationFailureClassifierTests
 
     private const string ServerErrorMessage = "The provider returned a server error (HTTP 500 Internal Server Error). Retry, or check the connection's gateway.";
 
+    private const string TokenRejectedMessage = "The provider rejected the token; it may have expired. Get a new token and replace it in the connection settings.";
+
+    private const string NoRouteMessage = "The gateway has no route for this request. Check the connection's base URL; it usually ends in /openai/v1.";
+
+    private const string BackendNotPermittedMessage = "The gateway's backend is not permitted to use this model or operation. Contact the gateway admin.";
+
+    private const string ModelNotOfferedMessage = "The provider does not offer the selected model. Check the model id on the connection.";
+
+    private const string UnsupportedOperationBody = """{"error":{"message":"The requested operation is unsupported."}}""";
+
     private const string TenantId = "tenant-0f3c9a";
     private const string UserId = "user-7b21de";
     private const string ProjectId = "project-44aa10";
@@ -225,7 +235,7 @@ public sealed class InvocationFailureClassifierTests
         FailureCategory.ProviderUnreachable,
         ServerErrorMessage + " (unsupported_tpm_configuration: TokensPerMinute must be one of 10000, 30000, 60000, 100000, 200000, 500000, 1000000.)")]
     [Arguments(401, """{"error":"invalid_token","message":"Access token is expired or invalid."}""", FailureCategory.ProviderAuthFailed,
-        AuthFailedMessage + " (invalid_token: Access token is expired or invalid.)")]
+        TokenRejectedMessage + " (invalid_token: Access token is expired or invalid.)")]
     [Arguments(401, """{"error":{"message":"Incorrect API key provided.","type":"invalid_request_error","code":"invalid_api_key"}}""", FailureCategory.ProviderAuthFailed,
         AuthFailedMessage + " (invalid_api_key: Incorrect API key provided.)")]
     [Arguments(403, """{"code":"denied","message":"Denied by policy."}""", FailureCategory.ProviderAuthFailed, AuthFailedMessage + " (denied: Denied by policy.)")]
@@ -244,6 +254,35 @@ public sealed class InvocationFailureClassifierTests
     public void MapFailure_ProviderBody_AppendsOnlyTheSanitizedDetail(int status, string body, FailureCategory expectedCategory, string expectedMessage)
     {
         var classification = InvocationFailureClassifier.MapFailure(FakeClientResultException.Create(status, retryAfter: null, "Internal Server Error", body));
+
+        AssertEx.Equal(expectedCategory, classification.Category);
+        AssertEx.Equal(expectedMessage, classification.Message);
+    }
+
+    // The 2026-10-26 enterprise gateway samples: a wrong base path, the wrong API surface, backend RBAC, an expired token, and an
+    // "unsupported operation" body whose status is not known yet (shown under 400 and 404). Other apim_policy_error faults stay plain server errors.
+    [Test]
+    [Arguments(500, "APIM policy error", """{"error":{"code":"apim_policy_error","message":"Unable to match incoming request to an operation."}}""",
+        FailureCategory.ProviderUnreachable, NoRouteMessage + " (apim_policy_error: Unable to match incoming request to an operation.)")]
+    [Arguments(500, "Internal Server Error", """{"error":{"code":"apim_policy_error","message":"Policy expression evaluation failed."}}""",
+        FailureCategory.ProviderUnreachable, ServerErrorMessage + " (apim_policy_error: Policy expression evaluation failed.)")]
+    [Arguments(404, "Not Found", """{"error":{"code":"api_not_supported","message":"Requested API is currently not supported","details":"See the gateway docs."}}""",
+        FailureCategory.ModelUnavailable,
+        "The provider does not offer the selected model on this API. Switch the model's API surface (Chat Completions or Responses) on the connection. (api_not_supported: Requested API is currently not supported)")]
+    [Arguments(401, "Unauthorized", """{"error":{"code":"PermissionDenied","message":"Principal does not have access to API/Operation."}}""",
+        FailureCategory.ModelUnavailable, BackendNotPermittedMessage + " (PermissionDenied)")]
+    [Arguments(401, "Unauthorized",
+        """{"error":{"code":"PermissionDenied","message":"The principal `00000000-1111-2222-3333-444444444444` lacks the required data action `Microsoft.CognitiveServices/accounts/OpenAI/responses/write` to perform `POST /openai/v1/responses` operation."}}""",
+        FailureCategory.ModelUnavailable, BackendNotPermittedMessage + " (PermissionDenied)")]
+    [Arguments(401, "Unauthorized", """{"error":{"code":"invalid_token","message":"Access token is expired or invalid."}}""",
+        FailureCategory.ProviderAuthFailed, TokenRejectedMessage + " (invalid_token: Access token is expired or invalid.)")]
+    [Arguments(400, "Bad Request", UnsupportedOperationBody,
+        FailureCategory.Unexpected, "The provider rejected the request (HTTP 400). (The requested operation is unsupported.)")]
+    [Arguments(404, "Not Found", UnsupportedOperationBody, FailureCategory.ModelUnavailable, ModelNotOfferedMessage + " (The requested operation is unsupported.)")]
+    public void MapFailure_EnterpriseGatewaySamples_NameTheFixForEachShape(int status, string reasonPhrase, string body, FailureCategory expectedCategory, string expectedMessage)
+    {
+        var classification = InvocationFailureClassifier.MapFailure(new InvalidOperationException("agent run failed",
+            FakeClientResultException.Create(status, retryAfter: null, reasonPhrase, body)));
 
         AssertEx.Equal(expectedCategory, classification.Category);
         AssertEx.Equal(expectedMessage, classification.Message);

@@ -49,9 +49,14 @@ export function ContextUsageBadge(props: ContextUsageModel) {
 			<output
 				aria-live="polite"
 				data-testid="context-usage-badge"
-				style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 96 }}
+				// The 96px floor is room for the progress bar; without a percentage there is no bar, and the floor would only
+				// take width from the composer's one-row toolbar.
+				style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: percent === undefined ? undefined : 96 }}
 			>
-				<span data-testid="context-usage-badge-label" style={{ fontSize: 12, fontVariantNumeric: "tabular-nums" }}>
+				<span
+					data-testid="context-usage-badge-label"
+					style={{ fontSize: 12, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}
+				>
 					{label}
 				</span>
 				{percent !== undefined ? (

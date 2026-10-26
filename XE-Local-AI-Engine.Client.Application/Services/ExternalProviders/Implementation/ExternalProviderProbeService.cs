@@ -36,6 +36,9 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
     /// </summary>
     private const int MaxResponseBytes = 1024 * 1024;
 
+    /// <summary>The fixed hint for a routing failure. It names no path from the response, so it cannot echo anything the server sent.</summary>
+    internal const string NoRouteError = "No route at this address. Check the base URL; gateways often need …/openai/v1.";
+
     private readonly ILogger<ExternalProviderProbeService> _logger;
     private readonly IExternalProviderStore _store;
     private readonly Func<HttpMessageHandler>? _transportHandlerFactory;
@@ -134,6 +137,8 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
         IReadOnlyList<string> sentSecrets,
         CancellationToken cancellationToken)
     {
+        var requestUri = new Uri(baseAddress, "models");
+
         // The probe's own deadline must not be indistinguishable from the caller cancelling: a linked source lets the
         // catch below tell "the operator navigated away" (rethrow) from "the endpoint did not answer" (a verdict).
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -161,14 +166,15 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
             };
 #pragma warning restore CA2000
 
-            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(baseAddress, "models"));
+            using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
             if (!string.IsNullOrWhiteSpace(apiKey))
             {
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
             }
 
             using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
-            return await ReadProbeResponseAsync(response, sentSecrets, timeout.Token, cancellationToken);
+            var result = await ReadProbeResponseAsync(response, sentSecrets, timeout.Token, cancellationToken);
+            return result with { RequestedUrl = requestUri.AbsoluteUri };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -182,7 +188,8 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
             return new ExternalProviderProbeResult
             {
                 Outcome = ExternalProviderProbeOutcome.Unreachable,
-                Error = "The endpoint could not be reached. Check the address, the port, and that the server is running."
+                Error = "The endpoint could not be reached. Check the address, the port, and that the server is running.",
+                RequestedUrl = requestUri.AbsoluteUri
             };
         }
     }
@@ -201,7 +208,19 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
         {
             var rejected = $"The endpoint rejected the model listing with HTTP {status}. Check the API key or the connection's custom headers.";
-            return Answered(await ReadRejectionDetailAsync(response, sentSecrets, cancellationToken, callerToken) is { } detail ? $"{rejected} ({detail})" : rejected);
+            return Answered((await ReadErrorDetailAsync(response, sentSecrets, cancellationToken, callerToken)).Text is { } detail ? $"{rejected} ({detail})" : rejected);
+        }
+
+        // A wrong base URL path: nothing is routed there. Some servers also 404 a missing listing, which is why the save stays allowed.
+        if (response.StatusCode == HttpStatusCode.NotFound
+            || (status >= 500 && (await ReadErrorDetailAsync(response, sentSecrets, cancellationToken, callerToken)).ReportsNoRoute))
+        {
+            return new ExternalProviderProbeResult
+            {
+                Outcome = ExternalProviderProbeOutcome.Answered,
+                Error = NoRouteError,
+                NoRoute = true
+            };
         }
 
         if (!response.IsSuccessStatusCode)
@@ -224,24 +243,24 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
             : Answered("The endpoint answered, but its model listing could not be understood. Add model ids by hand.");
     }
 
-    /// <summary>The sanitized code and message of a 401/403 body, or <see langword="null" /> when there is none to quote.</summary>
+    /// <summary>The sanitized code and message of an error body, or an empty detail when there is none to quote.</summary>
     /// <remarks>
     ///     A body carrying any credential the probe sent, checked on the decoded values before sanitizing reshapes them, yields nothing. The
     ///     detail is optional: a failed read keeps the rejection verdict, and only the caller's own cancellation propagates.
     /// </remarks>
-    private async Task<string?> ReadRejectionDetailAsync(HttpResponseMessage response,
+    private async Task<ExternalProviderErrorDetail> ReadErrorDetailAsync(HttpResponseMessage response,
         IReadOnlyList<string> sentSecrets,
         CancellationToken cancellationToken,
         CancellationToken callerToken)
     {
         try
         {
-            return await ReadBoundedAsync(response, cancellationToken) is { } body ? ExternalProviderErrorDetail.Parse(body, sentSecrets).Text : null;
+            return await ReadBoundedAsync(response, cancellationToken) is { } body ? ExternalProviderErrorDetail.Parse(body, sentSecrets) : default;
         }
         catch (Exception exception) when (!callerToken.IsCancellationRequested)
         {
-            _logger.LogDebug(exception, "External provider probe could not read the rejection body.");
-            return null;
+            _logger.LogDebug(exception, "External provider probe could not read the error body.");
+            return default;
         }
     }
 

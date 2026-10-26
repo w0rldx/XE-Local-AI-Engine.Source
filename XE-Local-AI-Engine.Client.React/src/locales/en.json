@@ -561,7 +561,7 @@
 		"automationGroup": "Automation",
 		"benchmarks": "Benchmarks",
 		"chat": "Chat",
-		"cloudSettings": "Cloud Settings",
+		"cloudProviders": "Cloud Providers",
 		"command": "Command",
 		"commands": "Commands",
 		"customTools": "Custom Tools",
@@ -571,9 +571,7 @@
 		"externalAppsCatalog": "Catalog",
 		"externalAppsGroup": "External Apps",
 		"externalAppsInstalled": "Installed",
-		"externalProviders": "External Providers",
 		"graphWorkflows": "Graph Workflows",
-		"home": "Home",
 		"images": "Image Generation",
 		"integrationExecutions": "Executions",
 		"integrationKeys": "API Keys",
@@ -614,6 +612,15 @@
 			"restart": "Restart",
 			"resume": "Resume",
 			"start": "Start"
+		},
+		"aiAcknowledgement": {
+			"accept": "I understand and accept",
+			"agentChanges": "You are responsible for anything an agent changes or breaks on your system or in your data. Review what an agent is allowed to do before you let it act.",
+			"checkResults": "You are responsible for checking every result before you rely on it or pass it on.",
+			"intro": "Before you start chatting, please confirm that you understand the following:",
+			"mistakes": "AI models can make mistakes. Answers can be wrong, incomplete or made up, even when they sound confident.",
+			"saveFailed": "Your acknowledgement could not be saved. Please try again.",
+			"title": "Using AI responsibly"
 		},
 		"catalog": {
 			"intro": "Choose a short tutorial whenever it is useful. Tutorials are optional and never start automatically.",
@@ -2036,6 +2043,7 @@
 				"orchestratorBadge": "Orchestrator",
 				"pinnedModelHint": "Uses model: {{model}}",
 				"search": "Search agents...",
+				"triggerCurrent": "Agent: {{name}}",
 				"triggerLabel": "Agent"
 			},
 			"answerNow": "Answer now",
@@ -2336,6 +2344,8 @@
 			"noModelGuidance": {
 				"body": "Install a GGUF model to start chatting locally.",
 				"goToModels": "Go to Models",
+				"setupProgress": "{{model}} · {{pct}}%",
+				"setupTitle": "Setting up your first model…",
 				"title": "No chat model installed yet"
 			},
 			"noOnlineClientNodes": "No online client nodes are available. Pair and connect a worker node before creating conversations.",
@@ -2546,6 +2556,7 @@
 					"empty": "No chat workflows yet. Create one on the Graph Workflows page.",
 					"none": "No workflow",
 					"noneHint": "Messages go to the model or agent as usual",
+					"triggerCurrent": "Workflow: {{name}}",
 					"triggerLabel": "Workflow"
 				},
 				"showActivity": "Show workflow activity",
@@ -2570,6 +2581,50 @@
 				}
 			},
 			"workflowRunLive": "This conversation is running a workflow; answer through it or stop it first."
+		},
+		"cloudProviders": {
+			"add": "Add provider",
+			"close": "Close",
+			"kind": {
+				"azureFoundry": "Azure AI Foundry",
+				"codex": "ChatGPT (Codex)",
+				"external": "OpenAI-compatible"
+			},
+			"list": {
+				"empty": "No cloud or remote provider is set up on this node yet. Use Add provider to connect one.",
+				"title": "Configured providers"
+			},
+			"loading": "Loading providers…",
+			"subtitle": "Connect hosted APIs, company AI gateways, Azure AI Foundry or ChatGPT. Keys and secrets are stored encrypted on this computer and are never returned to this page.",
+			"templates": {
+				"azureFoundry": {
+					"configured": "Already set up. This node holds one Azure AI Foundry connection: edit it in the list.",
+					"description": "Entra ID, managed identity or API key, with Azure deployments or the OpenAI v1 surface.",
+					"label": "Azure AI Foundry"
+				},
+				"azureOpenAi": {
+					"description": "An Azure OpenAI resource's OpenAI v1 endpoint, with one of its API keys.",
+					"editorHint": "Enter the resource's OpenAI v1 address and paste one of its keys in the API key field. For Entra ID or managed identity, use the Azure AI Foundry template instead.",
+					"label": "Azure OpenAI v1 (API key)"
+				},
+				"codex": {
+					"description": "Sign in with your ChatGPT subscription.",
+					"label": "ChatGPT (Codex)",
+					"signedIn": "Already signed in. Open it in the list to sign out first."
+				},
+				"gateway": {
+					"description": "A company gateway in front of hosted models, with a bearer token and often a project header.",
+					"editorHint": "Enter the gateway's OpenAI v1 address, which usually ends in /openai/v1. Put the bearer token in the API key field: it is sent as \"Authorization: Bearer\". If the gateway also needs a project or tenant header, enter its name and value in the header row below; otherwise remove the row.",
+					"headerNamePlaceholder": "Header name from your gateway",
+					"label": "Enterprise AI gateway"
+				},
+				"generic": {
+					"description": "A hosted API, LM Studio, vLLM or llama-server on another machine.",
+					"label": "OpenAI-compatible endpoint"
+				},
+				"openAiCompatibleGroup": "OpenAI-compatible / gateway"
+			},
+			"title": "Cloud providers"
 		},
 		"cloudSettings": {
 			"azure": {
@@ -2710,16 +2765,9 @@
 				"title": "Cloud settings"
 			},
 			"provider": {
-				"activeEgressBanner": "Cloud (OpenAI) active — your messages leave your device. Use the sign-out button to return to local.",
-				"azureFoundry": "Azure OpenAI (Foundry)",
-				"codexOAuth": "ChatGPT / Codex (OAuth)",
-				"egressNotice": "Messages sent with this provider leave your device to OpenAI.",
-				"label": "Active cloud provider",
-				"none": "None"
+				"activeEgressBanner": "Cloud (OpenAI) active — your messages leave your device. Use the sign-out button to return to local."
 			},
 			"saved": "Cloud settings saved. Capability reporting was requested.",
-			"subtitle": "Store Azure OpenAI credentials locally for cloud-backed runtime mode. Saved API keys are never returned to this page.",
-			"title": "Cloud settings",
 			"unexpectedError": "Unexpected cloud settings error"
 		},
 		"command": {
@@ -4211,7 +4259,7 @@
 				"apiKeyLabel": "API key or bearer token (optional)",
 				"apiKeyRemovalPending": "The stored key will be removed when you save, and this connection will send no Authorization header.",
 				"apiKeyStoredHint": "A key is stored. Leave this blank to keep it, type a new one to replace it, or use Remove key to go keyless.",
-				"baseUrlHint": "The OpenAI-compatible base, with or without the trailing /v1. Chat and the connection test both use the normalized address.",
+				"baseUrlHint": "Enter everything before /chat/completions; /v1 is added automatically.",
 				"baseUrlLabel": "Base URL",
 				"baseUrlPlaceholder": "http://127.0.0.1:8080/v1",
 				"cancel": "Cancel",
@@ -4235,18 +4283,14 @@
 				"timeoutLabel": "Timeout (seconds)"
 			},
 			"list": {
-				"add": "Add connection",
 				"cloudGrantCount_one": "{{count}} grant",
 				"cloudGrantCount_other": "{{count}} grants",
 				"edit": "Edit",
-				"empty": "No external providers are registered on this node yet.",
 				"insecureTransport": "Unencrypted HTTP",
 				"keyStored": "Key stored",
 				"modelCount_one": "{{count}} registered model",
-				"modelCount_other": "{{count}} registered models",
-				"title": "Connections"
+				"modelCount_other": "{{count}} registered models"
 			},
-			"loading": "Loading connections…",
 			"locality": {
 				"cloud": "Cloud (hosted)",
 				"cloudBadge": "Declared cloud",
@@ -4296,15 +4340,15 @@
 			},
 			"probe": {
 				"noModels": "The endpoint answered but listed no models. Plenty of gateways serve chat completions without a model list — add the model ids by hand below.",
+				"noRoute": "{{url}}: no route at this address. Check the base URL; gateways often need …/openai/v1. You can still save the connection.",
 				"pickHint": "Pick a model to add it as a row below.",
 				"reachable": "Reachable",
 				"test": "Test connection",
+				"triedUrl": "Tried {{url}}",
 				"unreachable": "Not reachable"
 			},
 			"saveConflict": "Someone else changed the external-provider configuration while you were editing. The stored state is shown below — review it and save again.",
 			"saved": "Connection saved.",
-			"subtitle": "Register OpenAI-compatible endpoints this node may chat with — a self-hosted llama-server or vLLM, LM Studio, or a hosted API. Saved API keys are never returned to this page.",
-			"title": "External providers",
 			"unexpectedError": "Unexpected external provider error"
 		},
 		"graphWorkflows": {
@@ -4905,24 +4949,6 @@
 				"Intent": "Command",
 				"Manual": "Manual",
 				"Schedule": "Schedule"
-			}
-		},
-		"home": {
-			"goToChat": "Start chatting",
-			"goToModels": "Install a model",
-			"loading": "Checking installed models",
-			"setup": {
-				"progress": "{{model}} · {{pct}}%",
-				"title": "Setting up your first model…",
-				"viewModels": "View on the Models page"
-			},
-			"status": {
-				"empty": "No local models are installed yet, so this node cannot answer anything. Install one to get started.",
-				"externalOnly": "No local models are installed, but this node can chat through a registered external provider.",
-				"ready": "{{installed}} local model(s) installed on this node."
-			},
-			"title": {
-				"welcome": "Welcome!"
 			}
 		},
 		"images": {
@@ -7237,9 +7263,8 @@
 				}
 			},
 			"integrationLinks": {
-				"cloudSettings": "Cloud settings",
+				"cloudProviders": "Cloud providers",
 				"description": "MCP servers, external model providers and cloud accounts have their own pages.",
-				"externalProviders": "External providers",
 				"mcp": "MCP servers",
 				"title": "Related settings"
 			},

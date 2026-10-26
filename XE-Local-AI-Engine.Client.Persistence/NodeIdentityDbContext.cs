@@ -70,6 +70,9 @@ public sealed class NodeIdentityDbContext : IdentityDbContext<NodeUser>
 
         builder.Property(entity => entity.TutorialState)
                .HasColumnName("tutorial_state");
+
+        builder.Property(entity => entity.AiAcknowledgedAtUtc)
+               .HasColumnName("ai_acknowledged_at_utc");
     }
 
     private static void ConfigureRefreshToken(EntityTypeBuilder<NodeRefreshToken> builder)

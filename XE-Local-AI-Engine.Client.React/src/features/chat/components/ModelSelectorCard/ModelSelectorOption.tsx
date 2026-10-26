@@ -48,7 +48,7 @@ export function ModelSelectorOption({
 				<Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
 					<Group gap={6} wrap="nowrap">
 						<ModelNameTooltip display={display}>
-							<Text size="sm" fw={600} lineClamp={1}>
+							<Text size="sm" fw={600} style={{ minWidth: 0, overflowWrap: "anywhere" }}>
 								{display.primary}
 							</Text>
 						</ModelNameTooltip>

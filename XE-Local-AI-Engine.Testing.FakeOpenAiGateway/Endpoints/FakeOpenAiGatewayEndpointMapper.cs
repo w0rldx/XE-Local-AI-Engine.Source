@@ -180,6 +180,22 @@ internal static class FakeOpenAiGatewayEndpointMapper
                     ["modelId"] = model
                 });
                 break;
+            case FakeOpenAiGatewayFailure.NoRoute:
+                await WriteErrorAsync(context, StatusCodes.Status500InternalServerError,
+                    "Unable to match incoming request to an operation.", "server_error", "apim_policy_error");
+                break;
+            case FakeOpenAiGatewayFailure.ApiNotSupported:
+                await WriteErrorAsync(context, StatusCodes.Status404NotFound,
+                    "Requested API is currently not supported", "invalid_request_error", "api_not_supported");
+                break;
+            case FakeOpenAiGatewayFailure.PermissionDenied:
+                await WriteErrorAsync(context, StatusCodes.Status401Unauthorized,
+                    "Principal does not have access to API/Operation.", "permission_error", "PermissionDenied");
+                break;
+            case FakeOpenAiGatewayFailure.InvalidToken:
+                await WriteErrorAsync(context, StatusCodes.Status401Unauthorized,
+                    "Access token is expired or invalid.", "invalid_request_error", "invalid_token");
+                break;
             case FakeOpenAiGatewayFailure.Hang:
                 await HangAsync(context);
                 break;

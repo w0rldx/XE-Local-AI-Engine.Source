@@ -10,11 +10,22 @@ import type { ModelDisplay } from "@/features/chat/models/ModelDisplay";
 // covers): the trigger sits inside `Popover.Target`, which clones its single child, and swapping that child between
 // `<Tooltip><Paper/></Tooltip>` and a bare `<Paper/>` as the selection changes remounts the target out from under the
 // popover — which left the trigger showing the model it had before.
-export function ModelNameTooltip({ display, children }: { display: ModelDisplay; children: ReactElement }): ReactElement {
+//
+// `always` keeps it on even then: the composer trigger can be cut short by an ellipsis on a narrow row, which only
+// the browser knows about, so there the full name is offered unconditionally.
+export function ModelNameTooltip({
+	display,
+	always = false,
+	children,
+}: {
+	display: ModelDisplay;
+	always?: boolean;
+	children: ReactElement;
+}): ReactElement {
 	return (
 		<Tooltip
 			label={display.full}
-			disabled={display.full === display.primary}
+			disabled={!always && display.full === display.primary}
 			withinPortal={true}
 			openDelay={350}
 			multiline={true}

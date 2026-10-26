@@ -3,6 +3,7 @@
 import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import classes from "@/features/chat/components/ChatInputArea/ChatComposerToolbar.module.css";
 import { WorkflowSelectorCard } from "@/features/chat/workflow/WorkflowSelectorCard";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
@@ -39,6 +40,22 @@ describe("WorkflowSelectorCard", () => {
 		fireEvent.click(screen.getByTestId("chat-workflow-selector-trigger"));
 		fireEvent.click(screen.getByTestId("chat-workflow-selector-option-none"));
 		expect(onSelect).toHaveBeenLastCalledWith("");
+	});
+
+	// Folded to an icon on a narrow composer (a container query hides the label and chevron): the accessible name and
+	// the tooltip carry the current choice, and the same menu opens.
+	it("names the current workflow in its accessible name and tooltip, so the folded icon-only trigger still says it", async () => {
+		renderWithProviders(<WorkflowSelectorCard options={options} selectedDefinitionId="def-1" onSelect={vi.fn()} />);
+
+		const trigger = screen.getByRole("button", { name: "Workflow: Support triage" });
+		expect(trigger.classList.contains(classes["select-trigger"] ?? "")).toBe(true);
+		expect(trigger.querySelector(`.${classes["select-label"]}`)?.textContent).toBe("Support triage");
+
+		fireEvent.focus(trigger);
+		expect((await screen.findByRole("tooltip")).textContent).toBe("Workflow: Support triage");
+
+		fireEvent.click(trigger);
+		expect(screen.getByTestId("chat-workflow-selector-option-def-2").textContent).toContain("Code review");
 	});
 
 	it("says where to create one when there are no chat workflows", () => {

@@ -68,7 +68,9 @@ public sealed class ExternalProviderProbeEndpointTests
                     .Returns(new ExternalProviderProbeResult
                     {
                         Outcome = ExternalProviderProbeOutcome.Answered,
-                        Error = "The endpoint answered with HTTP 404 and served no model listing. Add model ids by hand."
+                        Error = "No route at this address. Check the base URL; gateways often need …/openai/v1.",
+                        RequestedUrl = "http://127.0.0.1:18099/v1/models",
+                        NoRoute = true
                     });
         await using var factory = CreateFactory(probeService);
         using var client = factory.CreateClient();
@@ -85,6 +87,8 @@ public sealed class ExternalProviderProbeEndpointTests
         AssertEx.True(probe.Reachable);
         AssertEx.Empty(probe.Models);
         AssertEx.NotNull(probe.Error);
+        AssertEx.True(probe.NoRoute);
+        AssertEx.Equal("http://127.0.0.1:18099/v1/models", probe.RequestedUrl);
     }
 
     [Test]

@@ -2869,6 +2869,8 @@ export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderPro
 	reachable: boolean;
 	error?: string | null;
 	models?: Array<XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeModelResponse>;
+	requestedUrl?: string | null;
+	noRoute?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalProvidersV1GetExternalProviderConnectionRequest = {
@@ -6727,6 +6729,11 @@ export type XeLocalAiEngineClientEndpointsTranscriptionV1WhisperInstalledRuntime
 	sourceRequestedCommit?: string | null;
 	installedAtUtc: number;
 	invalidReason?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsTutorialStateV1AiAcknowledgementResponse = {
+	acknowledged: boolean;
+	acknowledgedAtUtc?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsTutorialStateV1SaveTutorialStateRequest = {
@@ -22108,6 +22115,60 @@ export type SaveTutorialStateResponses = {
 };
 
 export type SaveTutorialStateResponse = SaveTutorialStateResponses[keyof SaveTutorialStateResponses];
+
+export type GetAiAcknowledgementData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/tutorial-state/ai-acknowledgement";
+};
+
+export type GetAiAcknowledgementErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetAiAcknowledgementResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTutorialStateV1AiAcknowledgementResponse;
+};
+
+export type GetAiAcknowledgementResponse = GetAiAcknowledgementResponses[keyof GetAiAcknowledgementResponses];
+
+export type AcknowledgeAiData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/tutorial-state/ai-acknowledgement";
+};
+
+export type AcknowledgeAiErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type AcknowledgeAiResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTutorialStateV1AiAcknowledgementResponse;
+};
+
+export type AcknowledgeAiResponse = AcknowledgeAiResponses[keyof AcknowledgeAiResponses];
 
 export type ListWorkSessionsData = {
 	body?: never;

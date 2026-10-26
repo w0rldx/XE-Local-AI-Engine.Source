@@ -72,6 +72,21 @@ internal static class InvocationFailureClassifier
     private const string ProviderAuthFailedMessage =
         "The provider rejected the credentials. Replace the API key, bearer token or secret headers in the connection settings.";
 
+    // A gateway 401 for an expired or refused bearer token: the token, not the whole connection, needs replacing.
+    private const string ProviderTokenRejectedMessage =
+        "The provider rejected the token; it may have expired. Get a new token and replace it in the connection settings.";
+
+    // A gateway's own backend lacks the role for this model or operation (RBAC behind the gateway). The operator's credential is fine, so never "replace the key".
+    private const string GatewayBackendNotPermittedMessage =
+        "The gateway's backend is not permitted to use this model or operation. Contact the gateway admin.";
+
+    // A gateway that offers the model on the other API surface only (Chat Completions vs Responses).
+    private const string ProviderApiSurfaceNotSupportedMessage =
+        "The provider does not offer the selected model on this API. Switch the model's API surface (Chat Completions or Responses) on the connection.";
+
+    // A gateway answered a 5xx because no operation matches the request path: the base URL is wrong, so retrying cannot help.
+    private const string GatewayNoRouteMessage = "The gateway has no route for this request. Check the connection's base URL; it usually ends in /openai/v1.";
+
     private const string ProviderRateLimitedMessage = "The provider rate-limited this request";
 
     // Longer Retry-After values are dropped rather than cut: an HTTP-date is 29 characters, delta-seconds far fewer.
@@ -150,10 +165,20 @@ internal static class InvocationFailureClassifier
                    && RefusesTheModel(forbiddenMessage) =>
                 new FailureClassification(FailureCategory.ModelUnavailable,
                     $"The provider does not offer the selected model to this connection ({forbiddenDetail.Text}). Check the model id on the connection."),
+            // A gateway backend's RBAC refusing this model or operation: the model is out of reach for this connection, the credential is not at fault.
+            _ when FindProviderClientResult(exception) is { Status: 401 or 403 } permissionDenied
+                   && ReadBodyDetail(permissionDenied).Code == ExternalProviderErrorDetail.PermissionDeniedCode =>
+                new FailureClassification(FailureCategory.ModelUnavailable, AppendDetail(GatewayBackendNotPermittedMessage, permissionDenied)),
+            _ when FindProviderClientResult(exception) is { Status: 401 } tokenRejected
+                   && ReadBodyDetail(tokenRejected).Code == ExternalProviderErrorDetail.InvalidTokenCode =>
+                new FailureClassification(FailureCategory.ProviderAuthFailed, AppendDetail(ProviderTokenRejectedMessage, tokenRejected)),
             _ when FindProviderClientResult(exception) is { Status: 401 or 403 } authFailed =>
                 new FailureClassification(FailureCategory.ProviderAuthFailed, AppendDetail(ProviderAuthFailedMessage, authFailed)),
-            _ when FindProviderClientResult(exception) is { Status: 404 } =>
-                new FailureClassification(FailureCategory.ModelUnavailable, ProviderModelNotOfferedMessage),
+            _ when FindProviderClientResult(exception) is { Status: 404 } wrongSurface
+                   && ReadBodyDetail(wrongSurface).Code == ExternalProviderErrorDetail.ApiNotSupportedCode =>
+                new FailureClassification(FailureCategory.ModelUnavailable, AppendDetail(ProviderApiSurfaceNotSupportedMessage, wrongSurface)),
+            _ when FindProviderClientResult(exception) is { Status: 404 } notFound =>
+                new FailureClassification(FailureCategory.ModelUnavailable, AppendDetail(ProviderModelNotOfferedMessage, notFound)),
             _ when FindProviderClientResult(exception) is { Status: 429 } rateLimited =>
                 new FailureClassification(FailureCategory.ProviderRateLimited, BuildRateLimitedMessage(rateLimited)),
             // A provider HTTP 400 rejecting the request for its context size, read from the body ahead of the 400 text arms below.
@@ -174,6 +199,12 @@ internal static class InvocationFailureClassifier
                 new FailureClassification(FailureCategory.ModelCapabilityUnsupported, capabilityMessage),
             _ when ReportsModelLoadFailure(exception) =>
                 new FailureClassification(FailureCategory.ModelLoadFailed, ModelLoadFailedMessage),
+            // Any other 4xx carrying a readable body detail: the detail is the only useful text, so it replaces the SDK's raw message.
+            _ when FindProviderClientResult(exception) is { Status: >= 400 and <= 499 } clientError && ReadBodyDetail(clientError).Text is not null =>
+                new FailureClassification(FailureCategory.Unexpected, AppendDetail($"The provider rejected the request (HTTP {clientError.Status}).", clientError)),
+            // The provider-side no-route 5xx is not retried (ProviderStreamResilience), so it lands here with the base-URL hint instead of "Retry".
+            _ when FindProviderClientResult(exception) is { Status: >= 500 and <= 599 } noRoute && ReadBodyDetail(noRoute).ReportsNoRoute =>
+                new FailureClassification(FailureCategory.ProviderUnreachable, AppendDetail(GatewayNoRouteMessage, noRoute)),
             // The provider answered with a 5xx, so "unreachable" would mislead: name the status. The category stays ProviderUnreachable for the UI contract.
             _ when FindProviderClientResult(exception) is { Status: >= 500 and <= 599 } serverError =>
                 new FailureClassification(FailureCategory.ProviderUnreachable, BuildServerErrorMessage(serverError)),

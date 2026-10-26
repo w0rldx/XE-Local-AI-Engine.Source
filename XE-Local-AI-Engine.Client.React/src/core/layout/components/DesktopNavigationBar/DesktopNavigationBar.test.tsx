@@ -95,11 +95,12 @@ describe("DesktopNavigationBar", () => {
 	// The active item keeps its aria-current from the rail's own matchesNavRoute, not from Link's active props:
 	// one notion of "active" for the highlight and the announcement, seeded by the route the test rendered at.
 	it("marks the link on the current route as the current page", async () => {
-		renderNavigationBar();
+		renderNavigationBar(false, "/chat");
 
-		const home = await screen.findByRole("link", { name: "Home" });
-		expect(home.getAttribute("aria-current")).toBe("page");
-		expect((await screen.findByRole("link", { name: "Chat" })).getAttribute("aria-current")).toBeNull();
+		const chat = await screen.findByRole("link", { name: "Chat" });
+		expect(chat.getAttribute("aria-current")).toBe("page");
+		const current = screen.getAllByRole("link").filter((link) => link.getAttribute("aria-current") !== null);
+		expect(current.map((link) => link.getAttribute("href"))).toEqual(["/chat"]);
 	});
 
 	// TanStack's Link stamps aria-current on itself from its own prefix match, which the caller's props cannot

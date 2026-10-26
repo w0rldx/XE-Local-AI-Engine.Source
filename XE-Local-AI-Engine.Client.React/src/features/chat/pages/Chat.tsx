@@ -1,4 +1,4 @@
-import { Alert, Anchor, Button, Center, Loader, Stack, Text, VisuallyHidden } from "@mantine/core";
+import { Alert, Anchor, Button, Center, Loader, Progress, Stack, Text, VisuallyHidden } from "@mantine/core";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
@@ -50,7 +50,13 @@ const emptyConversationList: ChatConversationListModel = { conversations: [] };
 
 const orphanedLiveTurnPollIntervalMs = 3_000;
 
-export function Chat({ scope }: { scope?: ChatScope } = {}) {
+/** The first-run model download the route feeds in; the download feed itself belongs to the models feature. */
+export interface ChatSetupDownload {
+	readonly modelName: string;
+	readonly pct: number | undefined;
+}
+
+export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownload?: ChatSetupDownload } = {}) {
 	const { t } = useTranslation();
 	// Owner-embedded mode (a work session pinning its own conversation). `/chat` passes no scope and every branch
 	// below falls back to the exact behaviour it had before the prop existed.
@@ -646,6 +652,27 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 			<Text size="sm">
 				{t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node.")}
 			</Text>
+		</Stack>
+	) : showNoModelGuidance && setupDownload !== undefined ? (
+		// First-run provisioning is downloading the default model: say so instead of "install one".
+		<Stack gap={4} data-testid="chat-first-model-setup">
+			<Text fw={700}>{t("pages.chat.noModelGuidance.setupTitle", "Setting up your first model…")}</Text>
+			<Text size="sm" data-testid="chat-first-model-setup-model">
+				{setupDownload.pct === undefined
+					? setupDownload.modelName
+					: t("pages.chat.noModelGuidance.setupProgress", "{{model}} · {{pct}}%", {
+							model: setupDownload.modelName,
+							pct: setupDownload.pct,
+						})}
+			</Text>
+			<Progress
+				value={setupDownload.pct ?? 100}
+				animated={setupDownload.pct === undefined}
+				aria-label={t("pages.chat.noModelGuidance.setupTitle", "Setting up your first model…")}
+			/>
+			<Anchor component={Link} to="/models" size="sm" data-testid="chat-no-model-guidance-models-link">
+				{t("pages.chat.noModelGuidance.goToModels", "Go to Models")}
+			</Anchor>
 		</Stack>
 	) : showNoModelGuidance ? (
 		// Advisory, not blocking — a Codex/Azure sign-in later still routes around this via the picker's

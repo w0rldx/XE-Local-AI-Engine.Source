@@ -3220,6 +3220,8 @@ export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderP
 	reachable: z.boolean(),
 	error: z.string().nullish(),
 	models: z.array(zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeModelResponse).optional(),
+	requestedUrl: z.string().nullish(),
+	noRoute: z.boolean().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsExternalProvidersV1GetExternalProviderConnectionRequest = z.record(
@@ -6372,6 +6374,11 @@ export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeS
 	processCaptureSupported: z.boolean(),
 	managedRuntime: zXeLocalAiEngineClientEndpointsTranscriptionV1WhisperInstalledRuntimeResponse.nullish(),
 	activity: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeActivityResponse,
+});
+
+export const zXeLocalAiEngineClientEndpointsTutorialStateV1AiAcknowledgementResponse = z.object({
+	acknowledged: z.boolean(),
+	acknowledgedAtUtc: z.iso.datetime({ offset: true }).nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsTutorialStateV1SaveTutorialStateRequest = z.object({
@@ -13801,6 +13808,16 @@ export const zSaveTutorialStateBody = zXeLocalAiEngineClientEndpointsTutorialSta
  * No Content
  */
 export const zSaveTutorialStateResponse = z.void();
+
+/**
+ * Success
+ */
+export const zGetAiAcknowledgementResponse = zXeLocalAiEngineClientEndpointsTutorialStateV1AiAcknowledgementResponse;
+
+/**
+ * Success
+ */
+export const zAcknowledgeAiResponse = zXeLocalAiEngineClientEndpointsTutorialStateV1AiAcknowledgementResponse;
 
 /**
  * Success

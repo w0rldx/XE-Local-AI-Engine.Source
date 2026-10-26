@@ -33,7 +33,7 @@ public sealed class ViewportLayoutE2ETests : XEPooledE2ETestBase
     // Container fluid={true} page and, like the old target, renders its heading unconditionally.
     private const string ModelsRoute = "/models";
     private const string ModelsHeading = "Model management";
-    private const string CloudSettingsRoute = "/cloud-settings";
+    private const string CloudProvidersRoute = "/cloud-providers";
     private const string NodeSettingsRoute = "/node-settings";
 
     // Wide desktop viewport — at this width the desktop nav is active (768px breakpoint) and
@@ -113,23 +113,23 @@ public sealed class ViewportLayoutE2ETests : XEPooledE2ETestBase
     }
 
     /// <summary>
-    ///     At a wide desktop viewport, the Cloud Settings page (Container fluid) must not
-    ///     overflow horizontally — guards the CloudSettings.tsx Container fluid regression.
+    ///     At a wide desktop viewport, the Cloud Providers page (Container fluid) must not
+    ///     overflow horizontally — guards the Container fluid regression first seen on the cloud settings page.
     /// </summary>
     [Test]
     [Category("Layout")]
-    public async Task WideViewport_CloudSettings_Has_No_Horizontal_Overflow()
+    public async Task WideViewport_CloudProviders_Has_No_Horizontal_Overflow()
     {
         await Page.SetViewportSizeAsync(WideViewportWidth, WideViewportHeight);
 
-        await Page.GotoAsync($"{NodeAppUrl}{CloudSettingsRoute}", new PageGotoOptions
+        await Page.GotoAsync($"{NodeAppUrl}{CloudProvidersRoute}", new PageGotoOptions
         {
             WaitUntil = WaitUntilState.NetworkIdle
         });
 
         await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
             {
-                Name = "Cloud settings"
+                Name = "Cloud providers"
             }))
             .ToBeVisibleAsync();
 
@@ -200,23 +200,23 @@ public sealed class ViewportLayoutE2ETests : XEPooledE2ETestBase
     }
 
     /// <summary>
-    ///     At a mobile viewport, the Cloud Settings page must render its heading without horizontal
-    ///     overflow. Covers the PasswordInput / TextInput form layout on narrow screens.
+    ///     At a mobile viewport, the Cloud Providers page must render its heading without horizontal
+    ///     overflow. Covers the provider list and its header actions on narrow screens.
     /// </summary>
     [Test]
     [Category("Layout")]
-    public async Task MobileViewport_CloudSettings_Renders_Heading_Without_Horizontal_Overflow()
+    public async Task MobileViewport_CloudProviders_Renders_Heading_Without_Horizontal_Overflow()
     {
         await Page.SetViewportSizeAsync(MobileViewportWidth, MobileViewportHeight);
 
-        await Page.GotoAsync($"{NodeAppUrl}{CloudSettingsRoute}", new PageGotoOptions
+        await Page.GotoAsync($"{NodeAppUrl}{CloudProvidersRoute}", new PageGotoOptions
         {
             WaitUntil = WaitUntilState.NetworkIdle
         });
 
         await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
             {
-                Name = "Cloud settings"
+                Name = "Cloud providers"
             }))
             .ToBeVisibleAsync();
 

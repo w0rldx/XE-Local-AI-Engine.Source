@@ -166,7 +166,7 @@ export function ModelSelectorCard({
 						classes["compact-paper"],
 					)}
 				>
-					<ModelNameTooltip display={selectedDisplay}>
+					<ModelNameTooltip display={selectedDisplay} always={true}>
 						<UnstyledButton
 							type="button"
 							data-testid="chat-model-selector-trigger"

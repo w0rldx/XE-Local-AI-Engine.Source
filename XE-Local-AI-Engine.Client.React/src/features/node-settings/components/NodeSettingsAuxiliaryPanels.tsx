@@ -50,17 +50,8 @@ export function NodeSettingsIntegrationPanels() {
 					<Button component={Link} to="/mcp" variant="light" size="xs" rightSection={<IconExternalLink size={14} />}>
 						{t("pages.nodeSettings.integrationLinks.mcp", "MCP servers")}
 					</Button>
-					<Button
-						component={Link}
-						to="/external-providers"
-						variant="light"
-						size="xs"
-						rightSection={<IconExternalLink size={14} />}
-					>
-						{t("pages.nodeSettings.integrationLinks.externalProviders", "External providers")}
-					</Button>
-					<Button component={Link} to="/cloud-settings" variant="light" size="xs" rightSection={<IconExternalLink size={14} />}>
-						{t("pages.nodeSettings.integrationLinks.cloudSettings", "Cloud settings")}
+					<Button component={Link} to="/cloud-providers" variant="light" size="xs" rightSection={<IconExternalLink size={14} />}>
+						{t("pages.nodeSettings.integrationLinks.cloudProviders", "Cloud providers")}
 					</Button>
 				</Group>
 			</SectionCard>

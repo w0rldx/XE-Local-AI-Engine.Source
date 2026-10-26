@@ -1,4 +1,5 @@
 import { Box, Text, Textarea } from "@mantine/core";
+import { useElementSize } from "@mantine/hooks";
 import { type DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -23,13 +24,14 @@ import type {
 	ReasoningEffort,
 } from "@/features/chat/models/ChatModels";
 import { evaluateComposerSize, toDisplayKb } from "@/features/chat/models/ComposerSizeLimit";
+import { fitComposerToolbar } from "@/features/chat/models/ComposerToolbarFit";
 import type { ChatCommandOption } from "@/features/chat/models/SlashCommandModels";
 import { resolveSlashCommand } from "@/features/chat/models/SlashCommandResolver";
 
-// Below this window width the context-usage badge is dropped from the toolbar entirely rather than adding yet
-// another row — it's the least essential control and the composer needs the space more on very narrow phones. A
-// window too short for the desktop shell (phone landscape) drops it too: there its extra toolbar row cost the message
-// list most of the little height it had.
+// Before the composer has been measured (the first frame), the context-usage badge is dropped below this window
+// width: it is the least essential control and the composer needs the space more on very narrow phones. Once
+// measured, fitComposerToolbar decides from the composer's own width. A window too short for the desktop shell (phone
+// landscape) drops it too: there its extra toolbar row cost the message list most of the little height it had.
 const CONTEXT_USAGE_HIDE_WIDTH = 480;
 
 // Stable empty default for the optional agentOptions prop. A fresh `[]` in the destructuring default allocates a
@@ -205,10 +207,40 @@ export function ChatInputArea({
 	// manifest.Enabled). The leaf components additionally self-gate on the runtime context.
 	const showVoiceControls = capabilities.showVoiceControls;
 	const { width, height } = useWindowDimensions();
-	const showContextUsage = Boolean(contextUsage) && width >= CONTEXT_USAGE_HIDE_WIDTH && height >= DESKTOP_NAV_MIN_HEIGHT;
+	// The composer's own width, not the toolbar's: the toolbar's contents change with the layout picked here, the
+	// composer's width does not, so the choice cannot oscillate. 0 until the first measurement.
+	const { ref: composerRef, width: composerWidth } = useElementSize();
+	// Whether the web review switch is really on screen: it renders only while the node allows web access, which the
+	// switch itself reads, so it reports back rather than the composer budgeting for a switch that is not there.
+	const [webReviewShown, setWebReviewShown] = useState(false);
+	const contextPercentKnown =
+		contextUsage?.usedTokens !== undefined && contextUsage.maxTokens !== undefined && contextUsage.maxTokens > 0;
+	const toolbarFit =
+		composerWidth > 0
+			? fitComposerToolbar(composerWidth, {
+					localTools: showLocalToolControls,
+					webReview: showLocalToolControls && toolsEnabled && webReviewShown,
+					knowledgeBase: showKnowledgeBaseControls,
+					agentPicker: agentControlsAvailable,
+					workflowPicker: workflow?.selector !== undefined,
+					attachments: attachmentControlsAvailable,
+					samplingOptions: developerMode,
+					voice: showVoiceControls,
+					answerNow: isSending && answerNowMessageId !== undefined,
+					contextProgress: contextUsage ? contextPercentKnown : undefined,
+				})
+			: undefined;
+	const showContextUsage =
+		Boolean(contextUsage) &&
+		height >= DESKTOP_NAV_MIN_HEIGHT &&
+		(toolbarFit ? toolbarFit.showContext : width >= CONTEXT_USAGE_HIDE_WIDTH);
 	// A phone (or a phone in landscape) folds the secondary toolbar controls and starts the input at one row, so the
-	// message list keeps the height.
-	const compact = isCompactViewport(width, height);
+	// message list keeps the height. A composer too narrow for the full row (a desktop window with both side panes
+	// open) gives up the context readout, then Send's label, and only then folds the same controls, keeping its input
+	// height throughout.
+	const compactViewport = isCompactViewport(width, height);
+	const compact = compactViewport || toolbarFit?.compact === true;
+	const labelledSend = !compactViewport && toolbarFit?.labelledSend !== false;
 	const autocomplete = useSlashCommandAutocomplete({
 		content,
 		selectionStart: selection.start,
@@ -321,6 +353,8 @@ export function ChatInputArea({
 		<ChatComposerToolbar
 			toolbarRef={toolbarRef}
 			compact={compact}
+			labelledSend={labelledSend}
+			onWebReviewShownChange={setWebReviewShown}
 			disabled={disabled}
 			isSending={isSending}
 			modelOptions={modelOptions}
@@ -367,6 +401,7 @@ export function ChatInputArea({
 
 	return (
 		<Box
+			ref={composerRef}
 			data-testid="chat-input-area"
 			onDragOver={attachmentControlsAvailable ? handleDragOver : undefined}
 			onDragLeave={attachmentControlsAvailable ? handleDragLeave : undefined}
@@ -402,7 +437,7 @@ export function ChatInputArea({
 			) : null}
 			{/* Size pre-check notice. One row covers both states: a dimmed readout once the draft passes 80% of the cap,
 			    turning into the red over-limit sentence past it. It sits above the input (beside the attachment chips)
-			    rather than in the bottomSection toolbar — that toolbar is already fighting for width and wraps, and the
+			    rather than in the bottomSection toolbar — that one-row toolbar has no width to spare, and the
 			    over-limit sentence needs a full line to stay legible. Same tabular-nums readout style as the
 			    context-usage badge, and the same <output aria-live> so a screen reader hears the state change. */}
 			{sizeState ? (
@@ -471,8 +506,8 @@ export function ChatInputArea({
 							}
 						}}
 						autosize={true}
-						minRows={compact ? 1 : 2}
-						maxRows={compact ? 4 : 8}
+						minRows={compactViewport ? 1 : 2}
+						maxRows={compactViewport ? 4 : 8}
 						radius="md"
 						disabled={disabled || isSending}
 						bottomSection={toolbar}

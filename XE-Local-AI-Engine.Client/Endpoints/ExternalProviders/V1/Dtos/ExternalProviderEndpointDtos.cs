@@ -318,6 +318,12 @@ public sealed record ExternalProviderProbeResponse
 
     /// <summary>The model ids the endpoint listed, for pick-to-add. Empty when it serves no usable listing.</summary>
     public IReadOnlyList<ExternalProviderProbeModelResponse> Models { get; init; } = [];
+
+    /// <summary>The exact address the probe requested (normalized base plus <c>models</c>, no query or credentials), or null when nothing was sent.</summary>
+    public string? RequestedUrl { get; init; }
+
+    /// <summary>True when nothing is routed at that address (a 404, or a gateway's no-route 5xx): usually a wrong base URL path. The save stays allowed.</summary>
+    public bool NoRoute { get; init; }
 }
 
 /// <summary>One probed model id, with the context window when the server volunteered one.</summary>

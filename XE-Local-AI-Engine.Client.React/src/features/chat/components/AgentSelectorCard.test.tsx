@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // It is the single merged agent control: picking an agent calls onSelectAgent(id) (which enables agent mode at
 // the call site); picking the Default Assistant row calls onSelectAgent("") (which disables it).
 import { AgentSelectorCard } from "@/features/chat/components/AgentSelectorCard";
+import classes from "@/features/chat/components/ChatInputArea/ChatComposerToolbar.module.css";
 import type { AgentOption } from "@/features/chat/models/ChatModels";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
@@ -89,6 +90,27 @@ describe("AgentSelectorCard", () => {
 		);
 
 		expect(screen.getByTestId("chat-agent-selector-trigger").textContent).toContain("Alpha Agent");
+	});
+
+	// On a narrow composer a container query hides the label and chevron, leaving the icon. The current choice then
+	// lives only in the accessible name and the tooltip, and the same menu still has to open.
+	it("names the current agent in its accessible name and tooltip, so the folded icon-only trigger still says it", async () => {
+		const options = [makeOption({ id: "agent-1", name: "Alpha Agent" })];
+		renderWithProviders(
+			<AgentSelectorCard agentOptions={options} agentModeEnabled={true} selectedAgentId="agent-1" onSelectAgent={vi.fn()} />,
+		);
+
+		const trigger = screen.getByRole("button", { name: "Agent: Alpha Agent" });
+		// The parts the fold hides carry its hooks; the icon does not.
+		expect(trigger.querySelector(`.${classes["select-label"]}`)?.textContent).toBe("Alpha Agent");
+		expect(trigger.querySelector(`.${classes["select-chevron"]}`)).not.toBeNull();
+		expect(screen.getByTestId("chat-agent-selector-selected").classList.contains(classes["select-trigger"] ?? "")).toBe(true);
+
+		fireEvent.focus(trigger);
+		expect((await screen.findByRole("tooltip")).textContent).toBe("Agent: Alpha Agent");
+
+		fireEvent.click(trigger);
+		expect((await screen.findByTestId("chat-agent-selector-option-agent-1")).textContent).toContain("Alpha Agent");
 	});
 
 	it("lists the Default Assistant row and agents in the dropdown when opened", async () => {

@@ -18,6 +18,18 @@ public interface INodeTutorialStateService
     ///     Returns false when the current user cannot be resolved.
     /// </summary>
     Task<bool> SaveEntryAsync(ClaimsPrincipal principal, string key, TutorialStatus status, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Returns when the current user acknowledged the AI responsibility notice, or null when they have not (or cannot
+    ///     be resolved).
+    /// </summary>
+    Task<DateTime?> GetAiAcknowledgedAtAsync(ClaimsPrincipal principal, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Records the AI responsibility acknowledgement now, keeping the first timestamp on a repeat. Returns the stored
+    ///     timestamp, or null when the current user cannot be resolved or the write failed.
+    /// </summary>
+    Task<DateTime?> AcknowledgeAiAsync(ClaimsPrincipal principal, CancellationToken cancellationToken);
 }
 
 /// <summary>

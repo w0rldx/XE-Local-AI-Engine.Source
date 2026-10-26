@@ -323,6 +323,52 @@ public sealed class ExternalGatewayIntegrationTests
         }
     }
 
+    // The enterprise gateway's error shapes keep their body detail through the real SDK's streaming send on both API surfaces,
+    // so each one reaches the operator with its own fix rather than "Retry" or "replace the key".
+    [Test]
+    [Arguments(FakeOpenAiGatewayFailure.NoRoute, ExternalProviderApiSurface.ChatCompletions, FailureCategory.ProviderUnreachable,
+        "The gateway has no route for this request. Check the connection's base URL; it usually ends in /openai/v1. (apim_policy_error: Unable to match incoming request to an operation.)")]
+    [Arguments(FakeOpenAiGatewayFailure.NoRoute, ExternalProviderApiSurface.Responses, FailureCategory.ProviderUnreachable,
+        "The gateway has no route for this request. Check the connection's base URL; it usually ends in /openai/v1. (apim_policy_error: Unable to match incoming request to an operation.)")]
+    [Arguments(FakeOpenAiGatewayFailure.ApiNotSupported, ExternalProviderApiSurface.ChatCompletions, FailureCategory.ModelUnavailable,
+        "The provider does not offer the selected model on this API. Switch the model's API surface (Chat Completions or Responses) on the connection. (api_not_supported: Requested API is currently not supported)")]
+    [Arguments(FakeOpenAiGatewayFailure.PermissionDenied, ExternalProviderApiSurface.Responses, FailureCategory.ModelUnavailable,
+        "The gateway's backend is not permitted to use this model or operation. Contact the gateway admin. (PermissionDenied)")]
+    [Arguments(FakeOpenAiGatewayFailure.InvalidToken, ExternalProviderApiSurface.ChatCompletions, FailureCategory.ProviderAuthFailed,
+        "The provider rejected the token; it may have expired. Get a new token and replace it in the connection settings. (invalid_token: Access token is expired or invalid.)")]
+    public async Task GatewayErrorShape_StreamingSend_IsClassifiedWithItsFix(FakeOpenAiGatewayFailure failure, ExternalProviderApiSurface surface,
+        FailureCategory expectedCategory, string expectedMessage)
+    {
+        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions
+        {
+            RequiredBearerToken = Token,
+            Models =
+            [
+                new FakeOpenAiGatewayModel
+                {
+                    Id = WireId,
+                    ContextLength = 32768
+                },
+                new FakeOpenAiGatewayModel
+                {
+                    Id = ResponsesWireId,
+                    ContextLength = 32768
+                }
+            ]
+        }, Token, [Secret(SecretValue)], TwoModels(surface));
+        using var deadline = new CancellationTokenSource(TestBudgets.Contended);
+        using var client = new ExternalOpenAiChatClient(rig.Registry, ResponsesModelId);
+        rig.Gateway.State.EnqueueFailure(failure);
+
+        var thrown = await AssertEx.ThrowsAsync<Exception>(async () =>
+            await client.GetStreamingResponseAsync("hello", cancellationToken: deadline.Token).ToChatResponseAsync(deadline.Token));
+        var classification = InvocationFailureClassifier.MapFailure(thrown);
+
+        AssertEx.Equal(surface == ExternalProviderApiSurface.Responses ? "/v1/responses" : "/v1/chat/completions", rig.Gateway.RecordedRequests[^1].Path);
+        AssertEx.Equal(expectedCategory, classification.Category);
+        AssertEx.Equal(expectedMessage, classification.Message);
+    }
+
     // A required-header refusal whose header name contains "Model" is still a credential failure, not a model refusal.
     [Test]
     public async Task GatewayMissingModelNamedHeader_IsProviderAuthFailed()

@@ -119,6 +119,8 @@ internal static class ExternalProviderEndpointDtoMapper
         {
             Reachable = result.Outcome == ExternalProviderProbeOutcome.Answered,
             Error = result.Error,
+            RequestedUrl = result.RequestedUrl,
+            NoRoute = result.NoRoute,
             Models =
             [
                 .. result.Models.Select(static model => new ExternalProviderProbeModelResponse

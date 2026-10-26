@@ -6,7 +6,6 @@ import {
 	IconCpu,
 	IconDatabase,
 	IconFlask,
-	IconHome,
 	IconListDetails,
 	IconMessageCircle,
 	IconMicrophone,
@@ -50,13 +49,16 @@ type NavigationCapabilityKey =
 	| "agentHome"
 	| "invocationMonitor";
 
+// One capability, or several of which ANY being on shows the link (Cloud Providers holds two capabilities' surfaces).
+type NavigationCapability = NavigationCapabilityKey | readonly NavigationCapabilityKey[];
+
 type NavigationIcon = ForwardRefExoticComponent<IconProps & RefAttributes<SVGSVGElement>>;
 
 interface INavigationNestedLink {
 	translationKey: string;
 	to: string;
 	onClick?: () => void;
-	capability?: NavigationCapabilityKey;
+	capability?: NavigationCapability;
 	// Whether this leaf is part of the Simple navigation. Explicit on EVERY leaf, never inferred: an omitted flag is a
 	// forgotten classification, which NavigationMenuData.test.ts fails on rather than letting it default silently.
 	simple: boolean;
@@ -73,7 +75,7 @@ export interface INavigationLink {
 	to?: string;
 	links?: INavigationNestedLink[];
 	onClick?: () => void;
-	capability?: NavigationCapabilityKey;
+	capability?: NavigationCapability;
 	// Only a top-level LEAF carries this; a group's visibility in Simple mode is decided by its surviving children, so
 	// setting it on a group would be a second, contradictable authority. The test enforces both halves of that rule.
 	simple?: boolean;
@@ -86,7 +88,6 @@ export interface INavigationLink {
 // Exported for the classification guard in NavigationMenuData.test.ts, which has to see EVERY leaf — including the
 // ones the capability filter below removes from the default build — to prove none of them is missing its `simple` flag.
 export const allNavigationLinks: INavigationLink[] = [
-	{ id: "home", icon: IconHome, translationKey: "navigation.home", to: nodeRoutePaths.home, simple: true },
 	{
 		id: "chat",
 		icon: IconMessageCircle,
@@ -119,9 +120,9 @@ export const allNavigationLinks: INavigationLink[] = [
 			{ translationKey: "navigation.loadedModels", to: nodeRoutePaths.loadedModels, capability: "loadedModels", simple: true },
 		],
 	},
-	// Settings group: node settings (always) + cloud settings + external providers (each gated on its own capability,
-	// both on by default — Cloud Settings hosts the local cloud-provider credentials (Codex OAuth + Azure Foundry) and
-	// External Providers the operator's own OpenAI-compatible endpoints; neither needs a Central Platform pairing).
+	// Settings group: node settings (always) + cloud providers, shown while either of its capabilities is on (both are
+	// on by default): the local cloud-provider credentials (Codex OAuth + Azure Foundry) and the operator's own
+	// OpenAI-compatible endpoints share one page; neither needs a Central Platform pairing.
 	// The group always renders (Node Settings + Diagnostics are ungated).
 	{
 		id: "settings",
@@ -129,11 +130,10 @@ export const allNavigationLinks: INavigationLink[] = [
 		translationKey: "navigation.settingsGroup",
 		links: [
 			{ translationKey: "navigation.nodeSettings", to: nodeRoutePaths.nodeSettings, simple: true },
-			{ translationKey: "navigation.cloudSettings", to: nodeRoutePaths.cloudSettings, capability: "cloudSettings", simple: true },
 			{
-				translationKey: "navigation.externalProviders",
-				to: nodeRoutePaths.externalProviders,
-				capability: "externalProviders",
+				translationKey: "navigation.cloudProviders",
+				to: nodeRoutePaths.cloudProviders,
+				capability: ["cloudSettings", "externalProviders"],
 				simple: true,
 			},
 			// Advanced-only in the nav, but NOT removed: the header's "Report Problem" button opens the same capture in
@@ -337,15 +337,10 @@ export const allNavigationLinks: INavigationLink[] = [
 export const navLinkActiveOptions = { exact: true } as const;
 
 // A nav target is active when the current path equals it, or is a sub-path of it (so /models/123 still
-// highlights the Models → Installed entry). The home route ("/") only matches exactly. Shared by both nav
-// bars so the active-route rule stays in one place.
+// highlights the Models → Installed entry). Shared by both nav bars so the active-route rule stays in one place.
 export function matchesNavRoute(pathname: string, to: string | undefined): boolean {
 	if (!to) {
 		return false;
-	}
-
-	if (to === "/") {
-		return pathname === "/";
 	}
 
 	if (pathname === to) {
@@ -362,7 +357,11 @@ export function matchesNavRoute(pathname: string, to: string | undefined): boole
 
 const matchesPrefix = (pathname: string, to: string): boolean => pathname === to || pathname.startsWith(`${to}/`);
 
-const isCapabilityEnabled = (capability?: NavigationCapabilityKey): boolean => (capability ? nodeCapabilities[capability] : true);
+const capabilityKeys = (capability: NavigationCapability): readonly NavigationCapabilityKey[] =>
+	typeof capability === "string" ? [capability] : capability;
+
+const isCapabilityEnabled = (capability?: NavigationCapability): boolean =>
+	capability === undefined || capabilityKeys(capability).some((key) => nodeCapabilities[key]);
 
 // Capability-gated navigation links: drop any top-level entry whose capability is off, filter each group's
 // children by their capability, then drop a group that ends up with no children. The nav bars render this
@@ -381,8 +380,8 @@ export function filterNavigationLinksByDisabledCapabilities(
 	links: readonly INavigationLink[],
 	disabled: ReadonlySet<string>,
 ): INavigationLink[] {
-	const isShown = (link: { readonly capability?: NavigationCapabilityKey }): boolean =>
-		link.capability === undefined || !disabled.has(link.capability);
+	const isShown = (link: { readonly capability?: NavigationCapability }): boolean =>
+		link.capability === undefined || capabilityKeys(link.capability).some((key) => !disabled.has(key));
 	return links
 		.filter(isShown)
 		.map((link) => (link.links ? { ...link, links: link.links.filter(isShown) } : link))

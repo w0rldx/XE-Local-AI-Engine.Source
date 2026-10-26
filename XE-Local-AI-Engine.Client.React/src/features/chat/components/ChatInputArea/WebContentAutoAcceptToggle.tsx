@@ -1,7 +1,7 @@
 import { ActionIcon, Button, Stack, Text, Tooltip } from "@mantine/core";
 import { IconWorldCheck } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -20,6 +20,8 @@ const autoAcceptNoticeKey = "web-content-auto-accept-notice";
 interface WebContentAutoAcceptToggleProps {
 	conversationId: string;
 	disabled: boolean;
+	/** Told whether the switch is on screen, so the composer budgets its toolbar row for what really renders. */
+	onShownChange?: (shown: boolean) => void;
 }
 
 /**
@@ -27,7 +29,7 @@ interface WebContentAutoAcceptToggleProps {
  * caller shows it only while local tools are on. A draft without an id yet holds its choice in memory, and Chat carries
  * it onto the conversation created at the first send (adoptWebContentAutoAcceptDraft).
  */
-export function WebContentAutoAcceptToggle({ conversationId, disabled }: WebContentAutoAcceptToggleProps) {
+export function WebContentAutoAcceptToggle({ conversationId, disabled, onShownChange }: WebContentAutoAcceptToggleProps) {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
 	const settings = useQuery(getNodeSettingsOptions());
@@ -38,6 +40,11 @@ export function WebContentAutoAcceptToggle({ conversationId, disabled }: WebCont
 	const setAutoAccept = useSetWebContentAutoAccept();
 	const [noticeOpen, setNoticeOpen] = useState(false);
 	const [acknowledgedHere, setAcknowledgedHere] = useState(false);
+
+	useEffect(() => {
+		onShownChange?.(webAccessEnabled);
+		return () => onShownChange?.(false);
+	}, [onShownChange, webAccessEnabled]);
 
 	if (!webAccessEnabled) {
 		return null;

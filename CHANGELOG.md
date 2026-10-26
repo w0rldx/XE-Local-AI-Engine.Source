@@ -208,6 +208,15 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **The app opens on Chat** — `/` redirects to `/chat` and the Home page and its sidebar entry are gone. Chat's empty
+  state takes over Home's two jobs: the first-run model download with its progress, and the "no chat model" hint with
+  a link to Models.
+- **Text a model writes before a tool call looks like the rest of the answer** instead of being greyed out.
+- **One Cloud Providers page** replaces Cloud Settings and External Providers under Settings. It lists every
+  OpenAI-compatible connection, the Azure AI Foundry connection and the ChatGPT (Codex) sign-in, and "Add provider"
+  starts a new one from a template: OpenAI-compatible endpoint, enterprise AI gateway, Azure OpenAI v1 with an API
+  key, Azure AI Foundry or ChatGPT. The old addresses redirect to the new page; stored connections and model ids are
+  unchanged.
 - **Dev Workflows verification reads the patches it signs off** — each validation node now publishes the patch it
   tested as `<node key>.patch` beside its report, on a pass and on a failure; small diffs reach `verify` inline and
   larger ones through a new read-only, paged `read_upstream_artifact` tool limited to what the node consumed. The

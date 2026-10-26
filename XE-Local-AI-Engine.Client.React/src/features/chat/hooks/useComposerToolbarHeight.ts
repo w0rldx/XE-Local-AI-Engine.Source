@@ -2,11 +2,11 @@ import type { CSSProperties, RefObject } from "react";
 import { useEffect, useRef, useState } from "react";
 
 // The composer toolbar lives inside the Textarea's native bottomSection (Mantine 9.3+), which is absolutely
-// positioned at a fixed height — it does not grow to fit its content. On wide viewports the toolbar is one
-// 36px row and a static height works, but on narrow panes the controls wrap to two or three rows (see the
-// toolbar's `wrap="wrap"`), so the height is measured live via ResizeObserver and both the section height and
-// the input's reserved bottom padding are driven from that measurement — otherwise a wrapped toolbar either
-// gets clipped or the typed text renders underneath it.
+// positioned at a fixed height — it does not grow to fit its content. The toolbar is one row at every width, but
+// that row's height still follows its contents (a fallback font, a zoomed page, a control taller than 36px), so the
+// height is measured live via ResizeObserver and both the section height and the input's reserved bottom padding
+// are driven from that measurement — otherwise a taller toolbar either gets clipped or the typed text renders
+// underneath it.
 const DEFAULT_TOOLBAR_HEIGHT_PX = 48;
 
 interface ComposerToolbarHeight {
@@ -15,9 +15,8 @@ interface ComposerToolbarHeight {
 }
 
 export function useComposerToolbarHeight(): ComposerToolbarHeight {
-	// Measures the toolbar's actual rendered height (it wraps to 2-3 rows on narrow panes) so the Textarea's
-	// fixed-height bottomSection and its own bottom padding can be kept in sync with however tall the toolbar
-	// really is — a static height either clips a wrapped toolbar or lets typed text render underneath it.
+	// Measures the toolbar's actual rendered height so the Textarea's fixed-height bottomSection and its own bottom
+	// padding stay in sync with however tall the toolbar really is.
 	const toolbarRef = useRef<HTMLDivElement>(null);
 	const [toolbarHeight, setToolbarHeight] = useState(DEFAULT_TOOLBAR_HEIGHT_PX);
 
@@ -38,7 +37,7 @@ export function useComposerToolbarHeight(): ComposerToolbarHeight {
 	}, []);
 
 	// bottomSection is border-box: its fixed height must include its own paddingBlock (2 × xs) on top of the
-	// measured toolbar height, otherwise the last wrapped toolbar row clips past the composer's bottom edge.
+	// measured toolbar height, otherwise the toolbar row clips past the composer's bottom edge.
 	const composerStyles = {
 		input: { paddingBottom: `calc(${toolbarHeight}px + 3 * var(--mantine-spacing-xs))` },
 		bottomSection: {

@@ -237,6 +237,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                     b.Property<int>("AccessFailedCount")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTime?>("AiAcknowledgedAtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("ai_acknowledged_at_utc");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .HasColumnType("TEXT");

@@ -48,6 +48,8 @@ public sealed class ExternalProviderProbeServiceTests
         // Normalized exactly once, by the same normalizer the save path and the outbound chat guard use — a probe that
         // spelled the address differently would be validating something the transport never sends to.
         AssertEx.Equal("http://127.0.0.1:18099/v1/models", transport.LastRequestUri?.ToString());
+        AssertEx.Equal("http://127.0.0.1:18099/v1/models", result.RequestedUrl);
+        AssertEx.False(result.NoRoute);
     }
 
     [Test]
@@ -64,17 +66,43 @@ public sealed class ExternalProviderProbeServiceTests
         AssertEx.Equal("good-model", result.Models.Single().Id);
     }
 
+    // A wrong base URL path answers 404, or a gateway's 500 that names no matching operation. Either is still reachable (some servers
+    // 404 a missing listing), flagged as no route with the fixed hint and the exact URL tried.
     [Test]
-    public async Task Probe_WhenTheEndpointServesNoListing_IsStillReachableWithAnExplanation()
+    [Arguments(HttpStatusCode.NotFound, "")]
+    [Arguments(HttpStatusCode.InternalServerError, """{"error":{"code":"apim_policy_error","message":"Unable to match incoming request to an operation."}}""")]
+    public async Task Probe_WhenNothingIsRoutedAtTheAddress_FlagsNoRouteAndNamesTheUrl(HttpStatusCode status, string body)
     {
-        var transport = new ProbeTransport(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
+        var transport = new ProbeTransport(_ => new HttpResponseMessage(status)
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json")
+        });
+        var service = CreateService(transport);
+
+        var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "https://gateway.example/foundry/v1/", ApiKey: null));
+
+        AssertEx.Equal(ExternalProviderProbeOutcome.Answered, result.Outcome);
+        AssertEx.Empty(result.Models);
+        AssertEx.True(result.NoRoute);
+        AssertEx.Equal(ExternalProviderProbeService.NoRouteError, result.Error);
+        AssertEx.Equal("https://gateway.example/foundry/v1/models", result.RequestedUrl);
+    }
+
+    // A capacity 500 or an outage is not a routing problem: no flag, no base-URL hint.
+    [Test]
+    public async Task Probe_WhenTheServerFailsForAnotherReason_DoesNotFlagNoRoute()
+    {
+        var transport = new ProbeTransport(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError)
+        {
+            Content = new StringContent("""{"error":{"code":"apim_policy_error","message":"Token limit exceeded."}}""", Encoding.UTF8, "application/json")
+        });
         var service = CreateService(transport);
 
         var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://127.0.0.1:18099", ApiKey: null));
 
-        AssertEx.Equal(ExternalProviderProbeOutcome.Answered, result.Outcome);
-        AssertEx.Empty(result.Models);
-        AssertEx.NotNull(result.Error);
+        AssertEx.False(result.NoRoute);
+        AssertEx.Equal("The endpoint answered with HTTP 500 and served no model listing. Add model ids by hand.", result.Error);
+        AssertEx.Equal("http://127.0.0.1:18099/v1/models", result.RequestedUrl);
     }
 
     [Test]
@@ -136,6 +164,8 @@ public sealed class ExternalProviderProbeServiceTests
         AssertEx.Equal($"Bearer {StoredKey}", transport.LastAuthorization);
         AssertEx.Equal(ExternalProviderProbeOutcome.Answered, result.Outcome);
         AssertEx.Equal(expected, result.Error);
+        AssertEx.False(result.NoRoute);
+        AssertEx.Equal("http://127.0.0.1:18099/v1/models", result.RequestedUrl);
         AssertEx.Equal(StoredHeaderValue, transport.LastHeaders.GetValueOrDefault("X-Stored-Token"));
         var error = AssertEx.NotNull(result.Error);
         AssertEx.False(error.Contains(StoredKey, StringComparison.OrdinalIgnoreCase));
@@ -227,6 +257,7 @@ public sealed class ExternalProviderProbeServiceTests
 
         AssertEx.Equal(ExternalProviderProbeOutcome.Unreachable, result.Outcome);
         AssertEx.False(AssertEx.NotNull(result.Error).Contains("connection refused", StringComparison.Ordinal));
+        AssertEx.Equal("http://127.0.0.1:18099/v1/models", result.RequestedUrl);
     }
 
     [Test]
