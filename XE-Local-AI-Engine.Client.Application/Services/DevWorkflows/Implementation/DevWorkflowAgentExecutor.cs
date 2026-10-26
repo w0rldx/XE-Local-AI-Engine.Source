@@ -834,18 +834,77 @@ internal sealed class DevWorkflowAgentExecutor
     {
         var completion = await ReadCompletionAsync(session.Id, cancellationToken);
         var outputSchema = graph.Nodes.GetValueOrDefault(nodeRun.NodeKey)?.OutputSchema;
-        var unmet = await UnmetObjectiveAsync(session.Id, completion, cancellationToken) ?? OutputViolation(outputSchema, completion);
+        var coverage = await ReadCoverageAsync(store, run, nodeRun, session.Id, cancellationToken);
+        // An unmetOn answer first: it names what was refused, which a bare objectiveMet:false declared beside it does not.
+        var unmet = UnmetOutput(outputSchema, completion)
+                    ?? await UnmetObjectiveAsync(session.Id, completion, cancellationToken)
+                    ?? OutputViolation(outputSchema, completion)
+                    ?? UnreadPatch(coverage);
         if (unmet is null)
         {
-            return await SucceedAsync(store, graph, run, nodeRun, nodeRuns, session, outputSchema is null ? null : completion?.Output, cancellationToken);
+            return await SucceedAsync(store, graph, run, nodeRun, nodeRuns, session, outputSchema is null ? null : completion?.Output, coverage, cancellationToken);
         }
 
         // Promoted exactly as a success would be, because the STATUS carries the honesty and nothing downstream reads a Blocked row as a deliverable. Otherwise the operator choosing
         // Retry, Skip or Abandon decides on the terminal reason alone — and a Retry clears the session pointer, so the run's artifact table is the only place these survive the decision.
         var declaredKind = graph.Nodes.GetValueOrDefault(nodeRun.NodeKey)?.Materialization?.ArtifactKind;
         _ = await _promotion.PromoteAsync(run, nodeRun, session.Id, declaredKind, cancellationToken);
-        return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.ObjectiveNotMet, unmet, cancellationToken);
+        // The coverage is bounded first and the rest gets what is left, so a long model-authored reason cannot push the Read lines out.
+        var reads = coverage.Count == 0 ? string.Empty : Clipped($" Read: {string.Join("; ", coverage.Select(static entry => entry.Line))}.", DevWorkflowStateMachine.MaxNodeTerminalReason / 2);
+        var reason = DevWorkflowStateMachine.Bounded(unmet, DevWorkflowStateMachine.MaxNodeTerminalReason - reads.Length) + reads;
+        return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.ObjectiveNotMet, reason, cancellationToken);
     }
+
+    /// <summary>How much of each readable text artifact the session read through <c>read_upstream_artifact</c>, off its own <c>ArtifactRead</c> events.</summary>
+    /// <remarks>
+    ///     The events, not the model's account: a verify that wrote "read in full" in its report is held to the pages it was served. A Retry
+    ///     drives a new session, so its coverage starts from zero and the new attempt has to read again.
+    /// </remarks>
+    private async Task<IReadOnlyList<ArtifactCoverage>> ReadCoverageAsync(IDevWorkflowStore store,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        Guid sessionId,
+        CancellationToken cancellationToken)
+    {
+        var readable = (await ReadableArtifactsAsync(store, run, nodeRun, cancellationToken)).Where(static artifact => ArtifactMediaTypes.IsText(artifact.MediaType)).ToList();
+        if (readable.Count == 0)
+        {
+            return [];
+        }
+
+        var pages = (await _sessionStore.ListEventsAsync(sessionId, sinceSequence: 0, cancellationToken))
+                    .Where(static entry => string.Equals(entry.EventType, WorkSessionEventTypes.ArtifactRead, StringComparison.Ordinal))
+                    .Select(entry => ReadPage(sessionId, entry.DetailJson))
+                    .OfType<WorkSessionArtifactReadDetail>()
+                    .ToList();
+        return [.. readable.Select(artifact => ArtifactCoverage.Of(artifact, pages.Where(page => page.ArtifactId == artifact.ArtifactId)))];
+    }
+
+    private WorkSessionArtifactReadDetail? ReadPage(Guid sessionId, string? detailJson)
+    {
+        try
+        {
+            return detailJson is null ? null : JsonSerializer.Deserialize<WorkSessionArtifactReadDetail>(detailJson, CompletionDetailOptions);
+        }
+        catch (JsonException exception)
+        {
+            // A page nobody can read counts as unread: the safe direction, since it can only make a patch read as not covered.
+            _logger.LogWarning(exception, "Work session {SessionId} recorded an unreadable artifact-read detail.", sessionId);
+            return null;
+        }
+    }
+
+    /// <summary>Why a completion is not a success because a patch it was handed was not read to its end, or null when every one was.</summary>
+    /// <remarks>
+    ///     An Agent node handed a patch must read all of it: generic, and today only verify is handed patches. Engine-checked because a model
+    ///     judging the header of a diff and calling it reviewed is exactly what the objective text alone failed to prevent.
+    /// </remarks>
+    private static string? UnreadPatch(IReadOnlyList<ArtifactCoverage> coverage) =>
+        coverage.FirstOrDefault(static entry => string.Equals(entry.Artifact.Kind, nameof(DevWorkflowArtifactKind.Patch), StringComparison.Ordinal) && !entry.Complete) is { } gap
+            ? DevWorkflowStateMachine.Bounded($"The agent's work session completed without reading the whole of the patch '{gap.Artifact.Name}' from '{gap.Artifact.Producer}': "
+                                              + $"{gap.Line}. An Agent node handed a patch must read all of it with read_upstream_artifact.",
+                DevWorkflowStateMachine.MaxNodeTerminalReason)
+            : null;
 
     /// <summary>
     ///     Why this completion is not a success, or <see langword="null" /> when it is one.
@@ -917,6 +976,42 @@ internal sealed class DevWorkflowAgentExecutor
             ? DevWorkflowStateMachine.Bounded($"The agent's work session completed without the output its node routes on: {violation}", DevWorkflowStateMachine.MaxNodeTerminalReason)
             : null;
 
+    /// <summary>Why a met completion is not one after all: its output answered a value its node's contract lists in <c>unmetOn</c>.</summary>
+    /// <remarks>
+    ///     The model said "met" and "refused" in one call, and the answer is the more specific of the two. Every other string member rides
+    ///     along, since a template that declares <c>unmetOn</c> pairs it with a member naming what was refused.
+    /// </remarks>
+    private static string? UnmetOutput(WorkSessionOutputSchema? schema, WorkSessionCompletionDetail? completion)
+    {
+        if (schema is null || completion?.Output is not { ValueKind: JsonValueKind.Object } output)
+        {
+            return null;
+        }
+
+        var unmet = schema.Properties.FirstOrDefault(property => property.UnmetOn is { } values
+                                                                 && output.TryGetProperty(property.Name, out var value)
+                                                                 && value.ValueKind == JsonValueKind.String
+                                                                 && values.Contains(value.GetString(), StringComparer.Ordinal));
+        if (unmet is null)
+        {
+            return null;
+        }
+
+        var companions = string.Concat(schema.Properties
+                                             .Where(property => property != unmet && property.Type == WorkSessionOutputType.String)
+                                             .Select(property => output.TryGetProperty(property.Name, out var value) && value.ValueKind == JsonValueKind.String
+                                                 ? $" {property.Name}: {value.GetString()}"
+                                                 : null));
+        // The verdict sentence is short and fixed; the companions are model-authored, so they are the part that gets clipped.
+        var verdict = $"The agent's work session answered output.{unmet.Name} {output.GetProperty(unmet.Name).GetRawText()}, which this node's output contract treats as "
+                      + "the objective NOT met.";
+        return verdict + Clipped(companions, DevWorkflowStateMachine.MaxNodeTerminalReason / 2 - verdict.Length);
+    }
+
+    /// <summary>At most <paramref name="max" /> characters of <paramref name="text" />, ending in an ellipsis when it was cut.</summary>
+    private static string Clipped(string text, int max) =>
+        text.Length <= max ? text : DevWorkflowStateMachine.Bounded(text, Math.Max(0, max - 1)) + "…";
+
     private async Task<int> SucceedAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
@@ -924,6 +1019,7 @@ internal sealed class DevWorkflowAgentExecutor
         IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
         WorkSessionDetail session,
         JsonElement? sessionOutput,
+        IReadOnlyList<ArtifactCoverage> coverage,
         CancellationToken cancellationToken)
     {
         // Evidence first, status last — the order the work-session loop uses one level down; a crash in that window re-derives the same answer, the promotion being keyed. A decomposing
@@ -942,7 +1038,8 @@ internal sealed class DevWorkflowAgentExecutor
                 Findings = findings.Where(static finding => !finding.Superseded)
                                    .GroupBy(static finding => finding.Kind)
                                    .ToDictionary(static group => JsonNamingPolicy.CamelCase.ConvertName(group.Key.ToString()), static group => group.Count(), StringComparer.Ordinal),
-                Output = sessionOutput
+                Output = sessionOutput,
+                Reads = coverage.Count == 0 ? null : [.. coverage.Select(static entry => entry.Line)]
             },
             JsonOptions);
 
@@ -1133,5 +1230,52 @@ internal sealed class DevWorkflowAgentExecutor
         /// <summary>What the session handed in under its node's output contract, where an <c>output.*</c> edge reads it; absent without one.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public JsonElement? Output { get; init; }
+
+        /// <summary>One coverage line per readable text artifact, off the session's <c>ArtifactRead</c> events; absent when it was handed none.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public IReadOnlyList<string>? Reads { get; init; }
+    }
+
+    /// <summary>How much of one readable artifact a session read: the union of the pages it was served, in characters.</summary>
+    private sealed class ArtifactCoverage
+    {
+        public required WorkSessionReadableArtifact Artifact { get; init; }
+
+        public required int Read { get; init; }
+
+        /// <summary>The artifact's length in characters as a served page reported it, or null when no page was served.</summary>
+        public required int? Total { get; init; }
+
+        public bool Complete => Read == Total;
+
+        public string Line =>
+            Total is { } total
+                ? string.Create(CultureInfo.InvariantCulture, $"{Artifact.Name} ({Artifact.Producer}) read {Read} of {total} characters")
+                : $"{Artifact.Name} ({Artifact.Producer}) not read";
+
+        public static ArtifactCoverage Of(WorkSessionReadableArtifact artifact, IEnumerable<WorkSessionArtifactReadDetail> pages)
+        {
+            var read = 0;
+            var end = 0;
+            int? total = artifact.SizeBytes == 0 ? 0 : null;
+            foreach (var page in pages.OrderBy(static page => page.Offset))
+            {
+                total = page.Total;
+                var from = Math.Max(page.Offset, end);
+                var to = page.Offset + page.Length;
+                if (to > from)
+                {
+                    read += to - from;
+                    end = to;
+                }
+            }
+
+            return new ArtifactCoverage
+            {
+                Artifact = artifact,
+                Read = read,
+                Total = total
+            };
+        }
     }
 }

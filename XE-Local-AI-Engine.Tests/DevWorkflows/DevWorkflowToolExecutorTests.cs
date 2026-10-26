@@ -205,10 +205,12 @@ public sealed class DevWorkflowToolExecutorTests
         AssertEx.Equal("diff --git a/one b/one\n", await harness.ReadArtifactTextAsync(runId, first), "the published bytes are the ones the pass judged.");
         AssertEx.Contains(await harness.ReadConsumedArtifactIdsAsync(runId, "summarize"), first.Id);
         _ = await harness.SaveAgentArtifactAsync(runId, "summarize", "summary.md", "The diff looks right.");
+        await ReadTheLatestPatchAsync(harness, runId, "summarize");
         await harness.SettleAgentAsync(runId, "summarize");
         await harness.AdvanceThroughToolLaneAsync(runId);
 
         // Round two: validate re-runs and its new patch supersedes the one the summary was written from.
+        await ReadTheLatestPatchAsync(harness, runId, "summarize");
         await harness.SettleAgentAsync(runId, "summarize");
         await harness.AdvanceThroughToolLaneAsync(runId);
 
@@ -221,6 +223,14 @@ public sealed class DevWorkflowToolExecutorTests
         AssertEx.Equal(expected: 1,
             marked.Count(entry => entry.DetailJson?.Contains(patches[0].Id.ToString(), StringComparison.OrdinalIgnoreCase) == true),
             "what consumed the first patch is flagged once, through the same mark-only path the report takes.");
+    }
+
+    /// <summary>Records <paramref name="nodeKey" /> reading the run's latest patch to its end, which an Agent node handed one owes before it may succeed.</summary>
+    private static async Task ReadTheLatestPatchAsync(DevWorkflowHarness harness, Guid runId, string nodeKey)
+    {
+        var patch = (await harness.ReadArtifactsAsync(runId)).Single(static artifact => artifact.Kind == DevWorkflowArtifactKind.Patch && artifact.IsLatest);
+        var length = (await harness.ReadArtifactTextAsync(runId, patch)).Length;
+        await harness.RecordAgentArtifactReadAsync(runId, nodeKey, patch, offset: 0, length, length);
     }
 
     /// <summary>A failing pass publishes its patch too: the diff that failed is what the fix loop and a reader need to see.</summary>

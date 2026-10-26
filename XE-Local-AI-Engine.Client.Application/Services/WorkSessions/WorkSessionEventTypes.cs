@@ -41,6 +41,12 @@ internal static class WorkSessionEventTypes
     /// </summary>
     public const string CompletionRequested = "CompletionRequested";
 
+    /// <summary>
+    ///     <c>read_upstream_artifact</c> served one page; the detail is a <c>WorkSessionArtifactReadDetail</c>. The workflow lane
+    ///     unions these at completion into what the session actually read, which a model's own account of its reading is not.
+    /// </summary>
+    public const string ArtifactRead = "ArtifactRead";
+
     /// <summary>Written by the store when a step advances; the boundary between one step number and the next.</summary>
     public const string StepAdvanced = "StepAdvanced";
 

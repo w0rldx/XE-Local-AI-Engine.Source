@@ -23,6 +23,9 @@ public sealed partial class DevWorkflowIntakeTemplateTests
 {
     private const string BoundAgentId = "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b";
 
+    /// <summary>The completion a verify signing every task off hands in under the shipped contract.</summary>
+    private const string Approved = """{"Summary":"Verified.","ObjectiveMet":true,"Output":{"verdict":"approved"}}""";
+
     private static readonly string[] FeaturePath = ["research", "plan", "planapproval"];
 
     private static readonly string[] BugPath = ["triage", "rootcause", "fixplan", "fixapproval"];
@@ -102,6 +105,7 @@ public sealed partial class DevWorkflowIntakeTemplateTests
         await harness.AdvanceThroughToolLaneAsync(runId);
 
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "verify")).Status, "verify is reached on whichever plan was approved.");
+        await harness.RequestAgentCompletionAsync(runId, "verify", Approved);
         await harness.SettleAgentAsync(runId, "verify");
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
@@ -143,6 +147,7 @@ public sealed partial class DevWorkflowIntakeTemplateTests
         _ = await harness.SaveAgentArtifactAsync(runId, "decompose", "tasks.json", "[]");
         await harness.SettleAgentAsync(runId, "decompose");
         await harness.AdvanceThroughToolLaneAsync(runId);
+        await harness.RequestAgentCompletionAsync(runId, "verify", Approved);
         await harness.SettleAgentAsync(runId, "verify");
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
         AssertEx.Equal(DevWorkflowNodeRunStatus.WaitingForApproval, (await harness.ReadNodeRunAsync(runId, "integrationapproval")).Status);
@@ -153,6 +158,29 @@ public sealed partial class DevWorkflowIntakeTemplateTests
         AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId)).Status, "a rejected integration ends the run.");
         await AssertNeverRanAsync(harness, runId, "integrate", "nothing is applied once the integration is rejected");
         await AssertNeverRanAsync(harness, runId, "fullvalidate", "it follows the apply that never ran");
+    }
+
+    /// <summary>A verify that refuses a task stops the shared tail itself: the node blocks and the integration gate is never asked.</summary>
+    [Test]
+    public async Task ARefusedVerdict_StopsTheTailBeforeTheIntegrationGate()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await ReachPlanApprovalAsync(harness, "feature");
+        await harness.DecideAsync(runId, "planapproval", DevWorkflowDecisionKind.Approve);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        _ = await harness.SaveAgentArtifactAsync(runId, "decompose", "tasks.json", "[]");
+        await harness.SettleAgentAsync(runId, "decompose");
+        await harness.AdvanceThroughToolLaneAsync(runId);
+
+        await harness.RequestAgentCompletionAsync(runId, "verify", """{"Summary":"Verified.","ObjectiveMet":true,"Output":{"verdict":"refused","refusedTasks":"export-folder"}}""");
+        await harness.SettleAgentAsync(runId, "verify");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        var verify = await harness.ReadNodeRunAsync(runId, "verify");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, verify.Status);
+        AssertEx.Equal(DevWorkflowFailureClasses.ObjectiveNotMet, verify.FailureClass);
+        AssertEx.Contains(AssertEx.NotNull(verify.TerminalReason), "refusedTasks: export-folder");
+        await AssertNeverRanAsync(harness, runId, "integrationapproval", "a refused verify blocks before the gate is asked");
     }
 
     /// <summary>A node run that never started: no start time, and so no status a started run could reach.</summary>

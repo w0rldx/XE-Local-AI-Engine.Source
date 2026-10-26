@@ -331,3 +331,21 @@ public sealed class UpdateWorkSessionRequestModel
 ///     is recorded only under an output contract, so an event without one, older ones included, reads as null.
 /// </remarks>
 internal sealed record WorkSessionCompletionDetail(string Summary, bool? ObjectiveMet = null, JsonElement? Output = null);
+
+/// <summary>One page <c>read_upstream_artifact</c> served, as its <see cref="WorkSessionEventTypes.ArtifactRead" /> event records it, in characters.</summary>
+internal sealed class WorkSessionArtifactReadDetail
+{
+    public required Guid ArtifactId { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string Producer { get; init; }
+
+    public required int Version { get; init; }
+
+    public required int Offset { get; init; }
+
+    public required int Length { get; init; }
+
+    public required int Total { get; init; }
+}

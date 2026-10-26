@@ -527,7 +527,29 @@ public sealed class WorkSessionToolHandlerTests
         AssertEx.Equal(false, AssertEx.NotNull(ReadCompletionDetail(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId))).ObjectiveMet);
     }
 
-    /// <summary>An unmet close skips the output check, so whatever output it carries is unchecked and is not recorded as routing data.</summary>
+    /// <summary>An unmet close carrying a VALID output keeps it: a refused verdict handed in beside objectiveMet false is the reason the node blocks on.</summary>
+    [Test]
+    public async Task CompleteWorkSession_UnderAnOutputContract_KeepsTheValidOutputOfAnUnmetClose()
+    {
+        var factory = Host.Factory;
+        var sessionId = Guid.NewGuid();
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var handler = Handler(factory, WorkSessionToolDefinitions.CompleteWorkSession.ToolName);
+
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        using (WorkSessionTurnScope.Begin(KindContract))
+        {
+            AssertEx.Contains(await handler.ExecuteAsync("""{"summary":"Not a bug I can stand behind.","objectiveMet":false,"output":{"kind":"unclear"}}"""),
+                "close at the end of this turn");
+        }
+
+        var detail = AssertEx.NotNull(ReadCompletionDetail(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId)));
+        AssertEx.Equal(false, detail.ObjectiveMet);
+        AssertEx.True(detail.Output.HasValue, "a valid output on an unmet close is recorded.");
+        AssertEx.Equal("unclear", detail.Output!.Value.GetProperty("kind").GetString());
+    }
+
+    /// <summary>An unmet close is never refused over its output, but one that does not match the contract is not recorded as routing data.</summary>
     [Test]
     public async Task CompleteWorkSession_UnderAnOutputContract_DropsTheOutputOfAnUnmetClose()
     {
@@ -621,6 +643,39 @@ public sealed class WorkSessionToolHandlerTests
         AssertEx.Contains(last, "length=4 total=");
         AssertEx.Contains(last, "nextOffset=null (end of artifact)");
         AssertEx.True(last.EndsWith("tail", StringComparison.Ordinal), "the last page ends where the artifact does.");
+    }
+
+    /// <summary>
+    ///     Every page served is recorded as an <c>ArtifactRead</c> event the workflow lane counts coverage from, and the same page asked
+    ///     twice in one step is recorded once, so a replayed step cannot inflate what was read.
+    /// </summary>
+    [Test]
+    public async Task ReadUpstreamArtifact_RecordsEachServedPageOnceAsAnArtifactReadEvent()
+    {
+        var factory = Host.Factory;
+        var sessionId = Guid.NewGuid();
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var page = WorkSessionToolDefinitions.ReadUpstreamArtifact.PageCharacters;
+        var artifact = await ReadableAsync(factory, "validate.patch", "validate", new string('a', page) + "tail");
+        var handler = Handler(factory, WorkSessionToolDefinitions.ReadUpstreamArtifact.ToolName);
+
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        using (WorkSessionTurnScope.Begin(readableArtifacts: [artifact]))
+        {
+            _ = await handler.ExecuteAsync("""{"name":"validate.patch"}""");
+            _ = await handler.ExecuteAsync("""{"name":"validate.patch","offset":0}""");
+            _ = await handler.ExecuteAsync($$"""{"name":"validate.patch","offset":{{page}}}""");
+            _ = await handler.ExecuteAsync("""{"name":"secrets.env"}""");
+        }
+
+        var reads = (await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId))
+                    .Where(static entry => entry.EventType == WorkSessionEventTypes.ArtifactRead)
+                    .Select(static entry => AssertEx.NotNull(JsonSerializer.Deserialize<WorkSessionArtifactReadDetail>(AssertEx.NotNull(entry.DetailJson))))
+                    .ToList();
+        AssertEx.Equal($"0+{page}, {page}+4", string.Join(", ", reads.Select(static read => $"{read.Offset}+{read.Length}")),
+            "one event per distinct page served, and none for a refused read.");
+        AssertEx.True(reads.TrueForAll(read => read.ArtifactId == artifact.ArtifactId && read.Total == page + 4 && read.Producer == "validate"),
+            "each event names the artifact and its whole length, so coverage can be judged without the bytes.");
     }
 
     /// <summary>Under a result budget below the page size each page fits it, so the wrapper never cuts a page nextOffset moved past.</summary>

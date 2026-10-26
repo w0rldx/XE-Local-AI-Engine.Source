@@ -83,6 +83,12 @@ public sealed class DevWorkflowAgentExecutorTests
                                             provider streams the answer back through the same hub the UI subscribes to.
                                             """;
 
+    /// <summary>The patch every coverage test hands the plan node: long enough that a 10-character page is visibly a part.</summary>
+    private const string PatchText = """
+                                     diff --git a/src/Retry.cs b/src/Retry.cs
+                                     +    public static int Attempts => 3;
+                                     """;
+
     /// <summary>The agent every graph here binds, so a test is about the lane rather than about routing.</summary>
     private const string SeededAgentId = "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b";
 
@@ -134,6 +140,21 @@ public sealed class DevWorkflowAgentExecutorTests
                                          ]
                                        }
                                        """;
+
+    /// <summary>A verify-shaped node: an overall verdict whose <c>refused</c> means not met, and the refused task ids beside it.</summary>
+    private const string Verifying = $$$"""
+                                      {
+                                        "schemaVersion": 1,
+                                        "nodes": [
+                                          { "nodeKey": "verify", "nodeType": "Agent", "label": "Verify", "agentDefinitionId": "{{{SeededAgentId}}}",
+                                            "outputSchema": { "type": "object", "required": ["verdict"],
+                                                              "properties": { "verdict": { "type": "string", "enum": ["approved", "refused"], "unmetOn": ["refused"] },
+                                                                              "refusedTasks": { "type": "string", "maxLength": 1000 } } } },
+                                          { "nodeKey": "approve", "nodeType": "HumanGate", "label": "Approve" }
+                                        ],
+                                        "edges": [{ "from": "verify", "to": "approve" }]
+                                      }
+                                      """;
 
     [ClassDataSource<DevWorkflowHostFixture>(Shared = SharedType.PerClass)]
     public required DevWorkflowHostFixture Host { get; init; }
@@ -835,6 +856,201 @@ public sealed class DevWorkflowAgentExecutorTests
         AssertEx.Contains(AssertEx.NotNull(blocked.TerminalReason), "without the output its node routes on");
         AssertEx.False((await harness.ReadNodeRunsAsync(runId)).Any(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Running),
             "no branch may run on an unchecked answer.");
+    }
+
+    /// <summary>
+    ///     A verify that said "met" while answering an <c>unmetOn</c> verdict is held to the verdict: the node blocks for a person
+    ///     and the reason names what was refused, so the gate behind it is never asked.
+    /// </summary>
+    [Test]
+    public async Task ACompletedAgent_AnsweringAnUnmetOnValue_StandsDownAsObjectiveNotMetNamingWhatItRefused()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(Verifying);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        await harness.RequestAgentCompletionAsync(runId, "verify",
+            """{"Summary":"Verified.","ObjectiveMet":true,"Output":{"verdict":"refused","refusedTasks":"add-retry"}}""");
+        await harness.SettleAgentAsync(runId, "verify");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        var blocked = await harness.ReadNodeRunAsync(runId, "verify");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
+        AssertEx.Equal(DevWorkflowFailureClasses.ObjectiveNotMet, blocked.FailureClass);
+        var reason = AssertEx.NotNull(blocked.TerminalReason);
+        AssertEx.Contains(reason, "output.verdict \"refused\"");
+        AssertEx.Contains(reason, "refusedTasks: add-retry");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, (await harness.ReadNodeRunAsync(runId, "approve")).Status, "the gate behind a refused verify is never asked.");
+    }
+
+    /// <summary>
+    ///     The live combination: a refused verdict handed in WITH objectiveMet false, under a summary long enough to fill the reason column.
+    ///     The verdict and its refused tasks are the reason, not the bare declaration.
+    /// </summary>
+    [Test]
+    public async Task ACompletedAgent_DeclaringUnmetWithARefusedVerdict_StandsDownNamingTheVerdict()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(Verifying);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        await harness.RequestAgentCompletionAsync(runId, "verify", JsonSerializer.Serialize(new WorkSessionCompletionDetail(new string('s', 1800), ObjectiveMet: false,
+            JsonSerializer.SerializeToElement(new { verdict = "refused", refusedTasks = "sales-report" }))));
+        await harness.SettleAgentAsync(runId, "verify");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        var blocked = await harness.ReadNodeRunAsync(runId, "verify");
+        AssertEx.Equal(DevWorkflowFailureClasses.ObjectiveNotMet, blocked.FailureClass);
+        var reason = AssertEx.NotNull(blocked.TerminalReason);
+        AssertEx.Contains(reason, "output.verdict \"refused\"");
+        AssertEx.Contains(reason, "refusedTasks: sales-report");
+    }
+
+    /// <summary>A long refusedTasks companion is clipped, never the verdict sentence before it.</summary>
+    [Test]
+    public async Task ACompletedAgent_WithALongRefusedTasksList_KeepsTheVerdictSentence()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(Verifying);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        await harness.RequestAgentCompletionAsync(runId, "verify", JsonSerializer.Serialize(new WorkSessionCompletionDetail("Verified.", ObjectiveMet: true,
+            JsonSerializer.SerializeToElement(new { verdict = "refused", refusedTasks = new string('t', 1000) }))));
+        await harness.SettleAgentAsync(runId, "verify");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        var reason = AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "verify")).TerminalReason);
+        AssertEx.Contains(reason, "treats as the objective NOT met. refusedTasks: ttt");
+        AssertEx.True(reason.EndsWith('…'), "the clipped companion says it was clipped.");
+        AssertEx.True(reason.Length <= DevWorkflowStateMachine.MaxNodeTerminalReason);
+    }
+
+    /// <summary>The same contract answered with a value outside <c>unmetOn</c> is an ordinary success carrying its output.</summary>
+    [Test]
+    public async Task ACompletedAgent_AnsweringAValueOutsideUnmetOn_Succeeds()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(Verifying);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        await harness.RequestAgentCompletionAsync(runId, "verify", """{"Summary":"Verified.","ObjectiveMet":true,"Output":{"verdict":"approved"}}""");
+        await harness.SettleAgentAsync(runId, "verify");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        var succeeded = await harness.ReadNodeRunAsync(runId, "verify");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, succeeded.Status);
+        using var document = JsonDocument.Parse(AssertEx.NotNull(succeeded.OutputJson));
+        AssertEx.Equal("approved", document.RootElement.GetProperty("output").GetProperty("verdict").GetString());
+    }
+
+    /// <summary>
+    ///     The live finding: a verify claimed a patch "read in full" off its header. The engine holds it to the pages it was served, so a
+    ///     patch it was handed and never read to the end blocks the node, and the reason says how much it did read.
+    /// </summary>
+    [Test]
+    public async Task ACompletedAgent_HandedAPatchItDidNotReadToTheEnd_StandsDownNamingTheGap()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await HandAPatchToThePlanAsync(harness);
+        var patch = (await harness.ReadArtifactsAsync(runId)).Single();
+        await harness.RecordAgentArtifactReadAsync(runId, "plan", patch, offset: 0, length: 10, total: PatchText.Length);
+
+        await harness.RequestAgentCompletionAsync(runId, "plan", """{"Summary":"Read the patch in full.","ObjectiveMet":true}""");
+        await harness.SettleAgentAsync(runId, "plan");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        var blocked = await harness.ReadNodeRunAsync(runId, "plan");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
+        AssertEx.Equal(DevWorkflowFailureClasses.ObjectiveNotMet, blocked.FailureClass);
+        var reason = AssertEx.NotNull(blocked.TerminalReason);
+        AssertEx.Contains(reason, "without reading the whole of the patch 'validate.patch' from 'research'");
+        AssertEx.Contains(reason, $"validate.patch (research) read 10 of {PatchText.Length} characters");
+    }
+
+    /// <summary>A model-authored reason that fills the column on its own still leaves the coverage lines whole at its end.</summary>
+    [Test]
+    public async Task ACompletedAgent_WithALongUnmetSummary_KeepsItsReadLines()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await HandAPatchToThePlanAsync(harness);
+        var patch = (await harness.ReadArtifactsAsync(runId)).Single();
+        await harness.RecordAgentArtifactReadAsync(runId, "plan", patch, offset: 0, length: PatchText.Length, total: PatchText.Length);
+
+        await harness.RequestAgentCompletionAsync(runId, "plan", JsonSerializer.Serialize(new WorkSessionCompletionDetail(new string('s', 1800), ObjectiveMet: false)));
+        await harness.SettleAgentAsync(runId, "plan");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        var reason = AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "plan")).TerminalReason);
+        AssertEx.True(reason.Length <= DevWorkflowStateMachine.MaxNodeTerminalReason);
+        AssertEx.True(reason.EndsWith($" Read: validate.patch (research) read {PatchText.Length} of {PatchText.Length} characters.", StringComparison.Ordinal),
+            $"the coverage is reserved its room, so a long summary cannot push it out: {reason}");
+    }
+
+    /// <summary>A patch never read at all blocks the same way, and its line says so rather than inventing a length.</summary>
+    [Test]
+    public async Task ACompletedAgent_HandedAPatchItNeverRead_StandsDownSayingItWasNotRead()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await HandAPatchToThePlanAsync(harness);
+
+        await harness.SettleAgentAsync(runId, "plan");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        var blocked = await harness.ReadNodeRunAsync(runId, "plan");
+        AssertEx.Equal(DevWorkflowFailureClasses.ObjectiveNotMet, blocked.FailureClass);
+        AssertEx.Contains(AssertEx.NotNull(blocked.TerminalReason), "validate.patch (research) not read");
+    }
+
+    /// <summary>Overlapping pages that together reach the end cover the patch, and the success records the coverage line in <c>reads</c>.</summary>
+    [Test]
+    public async Task ACompletedAgent_ThatReadTheWholePatch_SucceedsWithItsCoverage()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await HandAPatchToThePlanAsync(harness);
+        var patch = (await harness.ReadArtifactsAsync(runId)).Single();
+        await harness.RecordAgentArtifactReadAsync(runId, "plan", patch, offset: 0, length: 20, total: PatchText.Length);
+        await harness.RecordAgentArtifactReadAsync(runId, "plan", patch, offset: 10, length: PatchText.Length - 10, total: PatchText.Length);
+
+        await harness.SettleAgentAsync(runId, "plan");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        var succeeded = await harness.ReadNodeRunAsync(runId, "plan");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, succeeded.Status);
+        using var document = JsonDocument.Parse(AssertEx.NotNull(succeeded.OutputJson));
+        AssertEx.Equal($"validate.patch (research) read {PatchText.Length} of {PatchText.Length} characters",
+            document.RootElement.GetProperty("reads").EnumerateArray().Single().GetString());
+    }
+
+    /// <summary>Only a patch has to be read to the end: a report read in part still succeeds, and its line records how much.</summary>
+    [Test]
+    public async Task ACompletedAgent_ThatReadAReportInPart_SucceedsWithItsPartialCoverage()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(ResearchThenPlan);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", ResearchMarkdown);
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await harness.RecordAgentArtifactReadAsync(runId, "plan", (await harness.ReadArtifactsAsync(runId)).Single(), offset: 0, length: 10, total: ResearchMarkdown.Length);
+
+        await harness.SettleAgentAsync(runId, "plan");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        var succeeded = await harness.ReadNodeRunAsync(runId, "plan");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, succeeded.Status);
+        AssertEx.Contains(AssertEx.NotNull(succeeded.OutputJson), $"research.md (research) read 10 of {ResearchMarkdown.Length} characters");
+    }
+
+    /// <summary>Research saves <see cref="PatchText" /> as a Patch, settles, and the plan node is running, handed it.</summary>
+    private static async Task<Guid> HandAPatchToThePlanAsync(DevWorkflowHarness harness)
+    {
+        var runId = await harness.StartRunAsync(ResearchThenPlan);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "validate.patch", PatchText, AgentWorkSessionArtifactKind.Patch, "text/x-diff");
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        AssertEx.Equal(DevWorkflowArtifactKind.Patch, (await harness.ReadArtifactsAsync(runId)).Single().Kind);
+        return runId;
     }
 
     /// <summary>A node without a contract writes no <c>output</c> member, even when its completion event carries one.</summary>

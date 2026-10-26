@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -719,7 +720,12 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     }
 
     /// <summary>Saves an artifact on the node run's session, the way its <c>save_artifact</c> tool would.</summary>
-    public async Task<Guid> SaveAgentArtifactAsync(Guid runId, string nodeKey, string name, string content)
+    public async Task<Guid> SaveAgentArtifactAsync(Guid runId,
+        string nodeKey,
+        string name,
+        string content,
+        AgentWorkSessionArtifactKind kind = AgentWorkSessionArtifactKind.Report,
+        string mediaType = "text/markdown")
     {
         var sessionId = await ReadSessionIdAsync(runId, nodeKey);
         var artifactId = Guid.NewGuid();
@@ -733,14 +739,40 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
                            ArtifactId = artifactId,
                            ExpectedVersion = WorkSessionVersions.Any,
                            OperationId = Guid.NewGuid(),
-                           Kind = AgentWorkSessionArtifactKind.Report,
+                           Kind = kind,
                            Name = name,
-                           MediaType = "text/markdown",
+                           MediaType = mediaType,
                            ContentSha256 = written.ContentHash,
                            SizeBytes = written.ByteCount,
                            ManagedReference = written.OpaqueReference
                        });
         return artifactId;
+    }
+
+    /// <summary>Records one page served of a run artifact on the node run's session, the event <c>read_upstream_artifact</c> would write.</summary>
+    public async Task RecordAgentArtifactReadAsync(Guid runId, string nodeKey, DevWorkflowArtifactSnapshot artifact, int offset, int length, int total)
+    {
+        var sessionId = await ReadSessionIdAsync(runId, nodeKey);
+        await using var scope = Services.CreateAsyncScope();
+        _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
+                       .AppendEventAsync(new AppendWorkSessionEventCommand
+                       {
+                           SessionId = sessionId,
+                           ExpectedVersion = WorkSessionVersions.Any,
+                           EventType = WorkSessionEventTypes.ArtifactRead,
+                           OperationId = Guid.NewGuid(),
+                           Outcome = null,
+                           DetailJson = JsonSerializer.Serialize(new WorkSessionArtifactReadDetail
+                           {
+                               ArtifactId = artifact.Id,
+                               Name = artifact.Name,
+                               Producer = artifact.ProducingNodeKey,
+                               Version = artifact.Version,
+                               Offset = offset,
+                               Length = length,
+                               Total = total
+                           })
+                       });
     }
 
     /// <summary>Adds one task to the node run's session in the state given, the way its <c>update_work_plan</c> would.</summary>

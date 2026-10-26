@@ -1329,6 +1329,11 @@ public sealed class DevWorkflowGraphTests
     [Arguments("""{"type":"object","properties":{"kind":{"type":"string"}},"required":"kind"}""", "Agent", "array of distinct member names")]
     [Arguments("""{"type":"object","properties":{"a.b":{"type":"string"}}}""", "Agent", "not a name a condition path can read")]
     [Arguments("""{"type":"object","properties":{"kind":{"type":"string"},"kind":{"type":"boolean"}}}""", "Agent", "declares the member 'kind' more than once")]
+    [Arguments("""{"type":"object","properties":{"kind":{"type":"string","unmetOn":["a"]}}}""", "Agent", "'unmetOn' only beside an 'enum'")]
+    [Arguments("""{"type":"object","properties":{"kind":{"type":"string","enum":["a","b"],"unmetOn":[]}}}""", "Agent", "'unmetOn' only beside an 'enum'")]
+    [Arguments("""{"type":"object","properties":{"kind":{"type":"string","enum":["a","b"],"unmetOn":["c"]}}}""", "Agent", "'unmetOn' only beside an 'enum'")]
+    [Arguments("""{"type":"object","properties":{"kind":{"type":"string","enum":["a","b"],"unmetOn":["a","a"]}}}""", "Agent", "'unmetOn' only beside an 'enum'")]
+    [Arguments("""{"type":"object","properties":{"kind":{"type":"string","enum":["a","b"],"unmetOn":"a"}}}""", "Agent", "'unmetOn' only beside an 'enum'")]
     public void Parse_RefusesAnOutputSchemaOutsideTheSubset(string schema, string nodeType, string expectedMessage)
     {
         var json = $$"""{"nodes":[{"nodeKey":"a","nodeType":"{{nodeType}}","outputSchema":{{schema}}}],"edges":[]}""";
@@ -1478,6 +1483,42 @@ public sealed class DevWorkflowGraphTests
 
         AssertEx.NotNull(DevWorkflowGraph.Parse(json).Nodes["classify"].OutputSchema);
     }
+
+    /// <summary>An <c>unmetOn</c> value is read, and the rendered contract tells the model that answer stops the run.</summary>
+    [Test]
+    public void Parse_ReadsAnUnmetOnSubsetAndRendersWhatItMeans()
+    {
+        var schema = AssertEx.NotNull(DevWorkflowGraph.Parse(UnmetOnVerdict("""{"from":"verify","to":"next"}""")).Nodes["verify"].OutputSchema);
+
+        AssertEx.Equal("refused", string.Join(", ", AssertEx.NotNull(AssertEx.NotNull(schema.Find("verdict")).UnmetOn)));
+        AssertEx.Null(AssertEx.NotNull(schema.Find("refusedTasks")).UnmetOn, "a member that declares none carries none.");
+        AssertEx.Contains(schema.Render(), "- verdict (required): one of \"approved\", \"refused\"; \"refused\" means the objective is NOT met");
+    }
+
+    /// <summary>
+    ///     <c>GRAPH-C4-5</c>: an <c>unmetOn</c> answer blocks the node, so a classifier owes it no edge, and an eq edge naming it is
+    ///     refused as one that never fires.
+    /// </summary>
+    [Test]
+    public void Parse_AClassifierOwesAnUnmetOnValueNoEdgeAndRefusesOneNamingIt()
+    {
+        AssertEx.NotNull(DevWorkflowGraph.Parse(UnmetOnVerdict("""{"from":"verify","to":"next","condition":{"path":"output.verdict","op":"eq","value":"approved"}}""")).Nodes["verify"].OutputSchema);
+
+        var message = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(
+            UnmetOnVerdict("""{"from":"verify","to":"next","condition":{"path":"output.verdict","op":"eq","value":"refused"}}"""))).Message;
+
+        AssertEx.Contains(message, "GRAPH-C4-5", StringComparison.Ordinal);
+        AssertEx.Contains(message, "'unmetOn'", StringComparison.Ordinal);
+    }
+
+    /// <summary>A verify-shaped Agent node whose <c>verdict</c> lists <c>refused</c> in <c>unmetOn</c>, leaving by <paramref name="edge" />.</summary>
+    private static string UnmetOnVerdict(string edge) =>
+        """
+        {"schemaVersion":1,"nodes":[{"nodeKey":"verify","nodeType":"Agent","outputSchema":{"type":"object","required":["verdict"],"properties":{
+          "verdict":{"type":"string","enum":["approved","refused"],"unmetOn":["refused"]},"refusedTasks":{"type":"string","maxLength":1000}}}},
+          {"nodeKey":"next","nodeType":"Agent"}],
+         "edges":[
+        """ + edge + "]}";
 
     /// <summary>
     ///     <c>classify</c> with the classifier schema and one Agent leaf per class, one <c>output.kind</c> eq edge to each

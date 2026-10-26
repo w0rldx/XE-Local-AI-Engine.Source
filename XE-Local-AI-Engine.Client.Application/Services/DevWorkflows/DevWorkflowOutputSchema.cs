@@ -8,8 +8,8 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 
 /// <summary>Reads an Agent node's <c>outputSchema</c>: the small, flat JSON-Schema subset its session must answer in.</summary>
 /// <remarks>
-///     A flat object of <c>string | number | integer | boolean</c> members, with <c>enum</c> and <c>maxLength</c> on strings and
-///     nothing else. Small on purpose: conditions read scalars by dot path, a flat enum is what makes <c>GRAPH-C4-5</c>
+///     A flat object of <c>string | number | integer | boolean</c> members, with <c>enum</c>, <c>unmetOn</c> and <c>maxLength</c> on
+///     strings and nothing else. Small on purpose: conditions read scalars by dot path, a flat enum is what makes <c>GRAPH-C4-5</c>
 ///     decidable at save, and anything outside the subset is refused rather than ignored. See docs/wiki/25-dev-workflows.md.
 /// </remarks>
 internal static class DevWorkflowOutputSchema
@@ -33,7 +33,7 @@ internal static class DevWorkflowOutputSchema
     internal const int MaxRenderedLength = 2000;
 
     private static readonly string[] SchemaKeys = ["type", "properties", "required", "additionalProperties"];
-    private static readonly string[] PropertyKeys = ["type", "enum", "maxLength"];
+    private static readonly string[] PropertyKeys = ["type", "enum", "unmetOn", "maxLength"];
 
     /// <summary>The node's output contract, or null when it declares none. Refused on any node type but <c>Agent</c>.</summary>
     public static WorkSessionOutputSchema? Parse(JsonElement node, string nodeKey, DevWorkflowNodeType nodeType)
@@ -161,8 +161,36 @@ internal static class DevWorkflowOutputSchema
             Type = type,
             Required = required,
             Enum = values,
-            MaxLength = maxLength
+            MaxLength = maxLength,
+            UnmetOn = ParseUnmetOn(schema, values, member)
         };
+    }
+
+    /// <summary>The enum values that block the node run as "objective not met" instead of routing: a non-empty subset of the member's own enum.</summary>
+    private static List<string>? ParseUnmetOn(JsonElement schema, List<string>? values, string member)
+    {
+        if (!schema.TryGetProperty("unmetOn", out var declared))
+        {
+            return null;
+        }
+
+        if (values is null || declared.ValueKind != JsonValueKind.Array || declared.GetArrayLength() == 0)
+        {
+            throw UnmetOnRefusal(member);
+        }
+
+        var unmet = new List<string>();
+        foreach (var entry in declared.EnumerateArray())
+        {
+            if (entry.ValueKind != JsonValueKind.String || entry.GetString() is not { } value || !values.Contains(value, StringComparer.Ordinal) || unmet.Contains(value, StringComparer.Ordinal))
+            {
+                throw UnmetOnRefusal(member);
+            }
+
+            unmet.Add(value);
+        }
+
+        return unmet;
     }
 
     private static List<string>? ParseEnum(JsonElement schema, WorkSessionOutputType type, string member)
@@ -206,6 +234,9 @@ internal static class DevWorkflowOutputSchema
 
     private static DevWorkflowValidationException EnumRefusal(string member) =>
         new($"{member} may carry an 'enum' only as a string member, listing 1 to {MaxEnumValues} distinct, non-empty strings of at most {MaxTokenLength} characters.");
+
+    private static DevWorkflowValidationException UnmetOnRefusal(string member) =>
+        new($"{member} may carry an 'unmetOn' only beside an 'enum', listing at least one distinct value of that enum.");
 
     private static void EnsureOnly(JsonElement schema, string[] allowed, string owner)
     {

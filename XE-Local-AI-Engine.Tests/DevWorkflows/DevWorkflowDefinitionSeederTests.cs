@@ -100,28 +100,54 @@ public sealed class DevWorkflowDefinitionSeederTests
         }
     }
 
-    /// <summary>Each template's newest kept revision is the shipped graph with only the verification node's instructions changed.</summary>
+    /// <summary>Each template's newest kept revision is the shipped graph with only the verification node's instructions and output contract changed.</summary>
     /// <remarks>
-    ///     Every node compared whole on every field but those instructions, and every edge with its condition, so a kept copy
-    ///     that drifted anywhere else, or a verify edit that leaked into another node, fails here.
+    ///     Every node compared whole on every field but those, and every edge with its condition, so a kept copy that drifted anywhere
+    ///     else, or a verify edit that leaked into another node, fails here.
     /// </remarks>
     [Test]
     [Arguments(DevWorkflowDefinitionSeeder.FeatureDevelopmentSlug)]
     [Arguments(DevWorkflowDefinitionSeeder.DevIntakeSlug)]
-    public void TheNewestKeptRevisionDiffersFromTheShippedTemplateOnlyInWhatVerifyIsTold(string slug)
+    public void TheNewestKeptRevisionDiffersFromTheShippedTemplateOnlyInWhatVerifyIsToldAndAnswers(string slug)
     {
         var template = TemplateFor(slug);
-        var shipped = DevWorkflowGraph.Parse(template.Graph);
-        var kept = DevWorkflowGraph.Parse(template.NewestRevision);
+        var kept = AssertOnlyVerifyDiffers(DevWorkflowGraph.Parse(template.Graph), DevWorkflowGraph.Parse(template.NewestRevision));
 
+        AssertEx.Null(kept.Nodes["verify"].OutputSchema, "the kept copy is the one an installation seeded before verify had a verdict to hand in.");
+        AssertEx.False(AssertEx.NotNull(kept.Nodes["verify"].Instructions).Contains("refusedTasks", StringComparison.Ordinal),
+            "and its text is the OLD one, which never named the verdict.");
+    }
+
+    /// <summary>The revision before it is the newest kept one with only the verification node's instructions changed.</summary>
+    [Test]
+    [Arguments(DevWorkflowDefinitionSeeder.FeatureDevelopmentSlug)]
+    [Arguments(DevWorkflowDefinitionSeeder.DevIntakeSlug)]
+    public void ThePreviousKeptRevisionDiffersFromTheNewestOnlyInWhatVerifyIsTold(string slug)
+    {
+        var template = TemplateFor(slug);
+        var newer = DevWorkflowGraph.Parse(template.NewestRevision);
+        var kept = AssertOnlyVerifyDiffers(newer, DevWorkflowGraph.Parse(template.PreviousRevision));
+
+        AssertEx.Equal(ShapeWithoutInstructions(kept.Nodes["verify"]), ShapeWithoutInstructions(newer.Nodes["verify"]), "only the verify text changed between these two.");
+        AssertEx.False(AssertEx.NotNull(kept.Nodes["verify"].Instructions).Contains("read_upstream_artifact", StringComparison.Ordinal),
+            "and the older copy is the text from before verify was handed the patch.");
+    }
+
+    /// <summary>
+    ///     Asserts <paramref name="kept" /> is <paramref name="shipped" /> with only the verify node's instructions and output contract
+    ///     changed, and that its instructions did change; answers <paramref name="kept" />.
+    /// </summary>
+    private static DevWorkflowGraph AssertOnlyVerifyDiffers(DevWorkflowGraph shipped, DevWorkflowGraph kept)
+    {
         AssertEx.Equal(string.Join(",", shipped.Nodes.Keys.Order(StringComparer.Ordinal)), string.Join(",", kept.Nodes.Keys.Order(StringComparer.Ordinal)));
         AssertEx.Equal(string.Join("\n", shipped.Edges.Select(static edge => JsonSerializer.Serialize(edge)).Order(StringComparer.Ordinal)),
             string.Join("\n", kept.Edges.Select(static edge => JsonSerializer.Serialize(edge)).Order(StringComparer.Ordinal)),
             "edges and their conditions are untouched.");
         foreach (var (key, node) in shipped.Nodes)
         {
-            AssertEx.Equal(ShapeWithoutInstructions(kept.Nodes[key]), ShapeWithoutInstructions(node), $"node '{key}' keeps every field but its instructions.");
-            if (key != "verify")
+            var verify = key == "verify";
+            AssertEx.Equal(ShapeWithoutInstructions(kept.Nodes[key], verify), ShapeWithoutInstructions(node, verify), $"node '{key}' keeps every field but what this change was about.");
+            if (!verify)
             {
                 AssertEx.Equal(kept.Nodes[key].Instructions ?? string.Empty, node.Instructions ?? string.Empty, $"node '{key}' was not the one this change was about.");
             }
@@ -129,8 +155,7 @@ public sealed class DevWorkflowDefinitionSeederTests
 
         AssertEx.False(string.Equals(kept.Nodes["verify"].Instructions, shipped.Nodes["verify"].Instructions, StringComparison.Ordinal),
             "the verification instructions ARE what changed.");
-        AssertEx.False(AssertEx.NotNull(kept.Nodes["verify"].Instructions).Contains("read_upstream_artifact", StringComparison.Ordinal),
-            "and the kept copy is the OLD text, the one an installation seeded before this change still holds.");
+        return kept;
     }
 
     /// <summary>Both verification nodes are told the patch reaches them, how to read past the inlined part, and what to do when it never arrived.</summary>
@@ -148,9 +173,9 @@ public sealed class DevWorkflowDefinitionSeederTests
         AssertEx.Contains(instructions, "validate#<task id>.patch", message: "the artifact a materialized validation clone publishes is named by its clone key.");
         AssertEx.Contains(instructions, "read_upstream_artifact", message: "a patch past the inline share is read with the tool, not guessed at.");
         AssertEx.Contains(instructions, "nextOffset", message: "the tool pages, so the instruction names the cursor it hands back.");
-        AssertEx.Contains(instructions, "sign off only on what you actually read");
+        AssertEx.Contains(instructions, "until it answers the end of the artifact", message: "the engine blocks a patch not read to its end, so the model is told so.");
         AssertEx.Contains(instructions, "was not published", message: "a patch over the artifact cap never arrives, and the report says why.");
-        AssertEx.Contains(instructions, "objectiveMet false", message: "an unread patch stands the verification down instead of being signed blind.");
+        AssertEx.Contains(instructions, "verdict \"refused\" with refusedTasks", message: "a refused task is handed in as the verdict the engine blocks on.");
         AssertEx.Contains(instructions, "plan.md");
         AssertEx.Contains(instructions, "name \"verification.md\"", message: "the save_artifact contract is unchanged.");
         if (slug == DevWorkflowDefinitionSeeder.DevIntakeSlug)
@@ -325,6 +350,9 @@ public sealed class DevWorkflowDefinitionSeederTests
 
         public required string NewestRevision { get; init; }
 
+        /// <summary>The revision <see cref="NewestRevision" /> replaced.</summary>
+        public required string PreviousRevision { get; init; }
+
         public required string[] PriorRevisions { get; init; }
     }
 
@@ -333,22 +361,48 @@ public sealed class DevWorkflowDefinitionSeederTests
             ? new ShippedTemplate
             {
                 Graph = DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph,
-                NewestRevision = DevWorkflowDefinitionSeeder.FeatureDevelopmentGraphRevision4,
+                NewestRevision = DevWorkflowDefinitionSeeder.FeatureDevelopmentGraphRevision5,
+                PreviousRevision = DevWorkflowDefinitionSeeder.FeatureDevelopmentGraphRevision4,
                 PriorRevisions = DevWorkflowDefinitionSeeder.FeatureDevelopmentPriorRevisions
             }
             : new ShippedTemplate
             {
                 Graph = DevWorkflowDefinitionSeeder.DevIntakeGraph,
-                NewestRevision = DevWorkflowDefinitionSeeder.DevIntakeGraphRevision1,
+                NewestRevision = DevWorkflowDefinitionSeeder.DevIntakeGraphRevision2,
+                PreviousRevision = DevWorkflowDefinitionSeeder.DevIntakeGraphRevision1,
                 PriorRevisions = DevWorkflowDefinitionSeeder.DevIntakePriorRevisions
             };
 
-    /// <summary>A node's every field but its instructions, as JSON, so two nodes compare whole rather than field by field.</summary>
-    private static string ShapeWithoutInstructions(DevWorkflowGraphNode node)
+    /// <summary>A node's every field but its instructions (and its output contract when asked), as JSON, so two nodes compare whole.</summary>
+    private static string ShapeWithoutInstructions(DevWorkflowGraphNode node, bool withoutOutputSchema = false)
     {
         var shape = AssertEx.NotNull(JsonSerializer.SerializeToNode(node)).AsObject();
         _ = shape.Remove(nameof(DevWorkflowGraphNode.Instructions));
+        if (withoutOutputSchema)
+        {
+            _ = shape.Remove(nameof(DevWorkflowGraphNode.OutputSchema));
+        }
+
         return shape.ToJsonString();
+    }
+
+    /// <summary>
+    ///     Both verification nodes hand in a verdict whose <c>refused</c> blocks the run and the refused task ids beside it; the
+    ///     template parsing at all is <c>GRAPH-C4-5</c> accepting that contract on the unconditional edge into the integration gate.
+    /// </summary>
+    [Test]
+    [Arguments(DevWorkflowDefinitionSeeder.FeatureDevelopmentSlug)]
+    [Arguments(DevWorkflowDefinitionSeeder.DevIntakeSlug)]
+    public void TheShippedVerificationHandsInAVerdictWhoseRefusalBlocks(string slug)
+    {
+        var schema = AssertEx.NotNull(DevWorkflowGraph.Parse(TemplateFor(slug).Graph).Nodes["verify"].OutputSchema);
+
+        var verdict = AssertEx.NotNull(schema.Find("verdict"));
+        AssertEx.True(verdict.Required, "an answer left out would read as met.");
+        AssertEx.Equal("approved, refused", string.Join(", ", AssertEx.NotNull(verdict.Enum)));
+        AssertEx.Equal("refused", string.Join(", ", AssertEx.NotNull(verdict.UnmetOn)));
+        AssertEx.Equal(expected: 1000, AssertEx.NotNull(schema.Find("refusedTasks")).MaxLength);
+        AssertEx.Equal(expected: 2, schema.Properties.Count);
     }
 
     /// <summary>

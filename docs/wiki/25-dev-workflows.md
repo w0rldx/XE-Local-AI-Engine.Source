@@ -90,12 +90,19 @@ and on what", otherwise reconstructible only by re-evaluating conditions against
 been superseded.
 
 **An `Agent` node may declare `outputSchema`**: a flat object of `string`, `number`, `integer` and `boolean` members,
-with `enum` and `maxLength` on strings, parsed and bounded by `DevWorkflowOutputSchema` and refused at save on any
+with `enum`, `unmetOn` and `maxLength` on strings, parsed and bounded by `DevWorkflowOutputSchema` and refused at save on any
 other node type or outside that subset. The node's session must then finish `complete_work_session` with an `output`
 object that matches it. A missing or invalid `output` is a tool error naming the violation and the session stays
-open, so the model corrects itself in-session; an honest `objectiveMet: false` close owes none. The answer lands at
+open, so the model corrects itself in-session; an honest `objectiveMet: false` close owes none, and keeps one only
+when it matches the contract. The answer lands at
 `output` in the node's output document, where an ordinary condition routes on it
 (`{"path":"output.kind","op":"eq","value":"bug"}`). The check is the shape, never the truth of the answer. A schema whose rendered contract (`WorkSessionOutputSchema.Render`) is longer than `DevWorkflowOutputSchema.MaxRenderedLength` is refused too, since that text rides uncapped in the objective; so is a member declared twice.
+
+**`unmetOn`** lists, on a string `enum` member, the values that mean the objective was **not** met: a non-empty set of
+distinct values of that same enum, refused at save otherwise. An answer carrying one stands the node run down as
+`ObjectiveNotMet` (§5.3) even when the session closed with `objectiveMet` true, so it never routes, and the rendered
+contract tells the model so. The seeded `verify` nodes use it for `{"verdict": "approved" | "refused"}` with
+`refused` in `unmetOn`, beside a `refusedTasks` string (§2.3).
 
 ### 2.2 Edges, joins and the pinned graph
 
@@ -235,7 +242,9 @@ nested path included, since the schema is flat. An `eq` or `ne` on an enum membe
 values, for the same reason. And when **every** out-edge of the node is an `eq` on the same enum member, every value
 must have an edge: a classifier that leaves one unrouted strands each run that answers it, so the refusal names the
 values left out. That member must also be listed in the schema's `required`: an optional member the agent leaves out
-fires none of the node's edges, which is the same dead end as an unrouted value. Any comparison but `exists`/`notExists` must also carry a value of the member's own kind (a string for a string, a number for a number or integer, a boolean for a boolean), because `DevWorkflowCondition` compares only like kinds; strings still order, so `gt` on a string member stays legal. Edges of any other shape — mixed members, other operators — skip the third clause and keep the
+fires none of the node's edges, which is the same dead end as an unrouted value. An `unmetOn` value is the exception
+both ways: it blocks the node before any edge is read, so a classifier owes it no edge, and an `eq` edge naming it is
+refused as one that can never fire. Any comparison but `exists`/`notExists` must also carry a value of the member's own kind (a string for a string, a number for a number or integer, a boolean for a boolean), because `DevWorkflowCondition` compares only like kinds; strings still order, so `gt` on a string member stays legal. Edges of any other shape — mixed members, other operators — skip the third clause and keep the
 first two.
 
 **An apply node is reached from a human gate and from nothing else** — `Y3`, the name the React development pages
@@ -340,8 +349,12 @@ workflow artifact and `validate` still records consuming nothing. The producer i
 — for a clone that is the clone key, `validate#<task id>.patch` — and the walk carries it along
 `validate → join → verify` beside the report. Both templates' `verify` instructions judge each task's patch against
 the approved plan (`plan.md`, or `fix-plan.md` on the intake's bug path) and that task's report, read past the
-inlined part with `read_upstream_artifact` (§5.6) until the whole patch is read, sign off only on what was read, and
-close with `objectiveMet: false` naming any task whose report says its patch was not published.
+inlined part with `read_upstream_artifact` (§5.6) until the tool answers the end of the artifact, and say so for any
+task whose report says its patch was not published. Both are engine-checked rather than left to the model's report.
+`verify` declares an `outputSchema` of `verdict` (`approved` or `refused`, with `refused` in `unmetOn`, required) and
+`refusedTasks` (the refused task ids, at most 1000 characters): a refused verdict blocks the node as `ObjectiveNotMet`
+before `integrationapproval` is ever asked, with the refused ids in its reason. And a patch the node was handed but did
+not read to its end blocks it the same way (§5.3), whatever its `verification.md` claims.
 
 A re-attempt of `validate` writes a new version of its own report and patch, superseding the previous ones, so a
 `verify` that already consumed them has its verification flagged stale (§3.7). What still flags nothing is an
@@ -731,6 +744,19 @@ place these survive the decision. Evidence is written first and status last, the
 loop uses one level down: a crash in that window re-derives the same answer, because the promotion is keyed and
 the poll runs again.
 
+Two more sources of "not met" are read. An `output` answering a value its contract lists in `unmetOn` (§2.1) is read
+**first**, whatever `objectiveMet` said, because it names what was refused: the reason carries it and every other
+string member's value, clipped so the verdict sentence survives. **Read coverage** is read last:
+`read_upstream_artifact` appends one `ArtifactRead` event per page it serves (artifact, producer, version, offset,
+length and total, in characters), with an operation id keyed by step, artifact and offset so a replayed step records
+it once. At completion the lane unions those pages per readable text artifact, and a `Patch` the node was handed and
+not read from 0 to its end blocks it: an Agent node handed a patch must read all of it, which is generic, and today
+only `verify` is handed patches. Inlined content does not count; a model judging an inlined patch still calls the tool
+once, which is cheap and keeps the record honest. Every outcome carries one coverage line per readable text artifact
+(`name (producer) read N of M characters`, or `not read`): on success in the output document's `reads` member, on a
+block appended to the reason, with up to half the reason column reserved for it so a long model summary cannot push it out. Coverage belongs to the session, so a `Retry`, which drives a new session, starts from
+zero and the new attempt has to read again.
+
 The lane is not filtered by session kind: every session it drives was created through the workflow-owned
 lifecycle and is of the workflow kind by construction, so a kind check would be a condition that cannot be false.
 
@@ -843,7 +869,8 @@ recorded consuming (§3.7) — never another run's, an id or a path — through 
 section uses, so a digest mismatch is a refusal, never content. A non-text artifact answers with its header facts
 and an unknown name with the names that can be read. The tool is read-only and offered only on a workflow-owned
 work session, whose runtime override carries the readable set on every start and resume. This is how `verify` reads
-a patch longer than its share of the objective (§2.3).
+a patch longer than its share of the objective (§2.3). Every page served is recorded as an `ArtifactRead` session event,
+which is what the lane judges read coverage on (§5.3).
 
 ## 6. The implementation lane
 

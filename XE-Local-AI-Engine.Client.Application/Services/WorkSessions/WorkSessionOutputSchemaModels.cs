@@ -23,4 +23,7 @@ internal sealed class WorkSessionOutputProperty
 
     /// <summary>The longest a string member may be, or null for the tool's own text bound.</summary>
     public required int? MaxLength { get; init; }
+
+    /// <summary>The <see cref="Enum" /> values that mean the objective was NOT met, which block the node run instead of routing; null for none.</summary>
+    public IReadOnlyList<string>? UnmetOn { get; init; }
 }

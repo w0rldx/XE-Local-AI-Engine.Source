@@ -65,9 +65,9 @@ internal sealed class CompleteWorkSessionToolHandler : WorkSessionToolHandler<Co
                 Outcome = null,
                 DetailJson = JsonSerializer.Serialize(new WorkSessionCompletionDetail(request.Summary!,
                     request.ObjectiveMet,
-                    // Kept only under a contract and only when Validate checked it: without one the member is ignored, so a session outside a
-                    // workflow records what it always did, and an unmet close skips validation, so what it carries is not routing data.
-                    WorkSessionTurnScope.OutputSchema is null || request.ObjectiveMet == false ? null : request.Output))
+                    // Kept only under a contract and only when it matches it: without one the member is ignored, so a session outside a workflow
+                    // records what it always did. An unmet close is never refused over its output, but a valid one is kept: a refused verdict is the reason.
+                    WorkSessionTurnScope.OutputSchema is { } schema && schema.Violation(request.Output) is null ? request.Output : null))
             },
             cancellationToken);
 

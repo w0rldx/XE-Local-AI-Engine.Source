@@ -226,6 +226,13 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
   seeded `feature-development-v1` and `dev-intake-v1` templates tell `verify` to read every patch in full against the
   approved plan and to refuse sign-off on one that was not published (over the artifact size cap). Untouched seeded
   rows upgrade at startup; edited ones are left alone.
+- **Dev Workflows enforces what verification says** — an Agent node's `outputSchema` may mark enum values as
+  `unmetOn`: an answer carrying one blocks the node for a person as "objective not met" even when the session said it
+  was met. Both seeded templates' `verify` now hands in a `verdict` (`approved` or `refused`, the latter blocking) and
+  the ids of the refused tasks, so a refused task stops the run before the integration gate. The engine also records
+  every page `read_upstream_artifact` serves: a node handed a patch it did not read to the end blocks with how much it
+  read, and every finished node records one "read N of M characters" line per upstream text artifact. Untouched seeded
+  rows upgrade at startup; edited ones are left alone.
 - **Conversation list requests the 100 most recent conversations** and offers "Show all"; before, every list load read
   and decrypted every conversation's last message.
 - **Idle queue polling** for training runs, dataset generation and benchmarks falls back to 30 s instead of 1 s (every

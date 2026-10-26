@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -124,6 +125,28 @@ internal sealed class ReadUpstreamArtifactToolHandler : WorkSessionToolHandler<R
             // Never split a surrogate pair across two pages.
             length--;
         }
+
+        // Recorded before the page is handed back, so a page the model saw is always a page the lane counts. Keyed by step, artifact and
+        // offset: a replayed step, or the same page asked twice in one, records it once.
+        _ = await store.AppendEventAsync(new AppendWorkSessionEventCommand
+            {
+                SessionId = session.Id,
+                ExpectedVersion = session.Version,
+                EventType = WorkSessionEventTypes.ArtifactRead,
+                OperationId = WorkSessionOperationId.For(session.Id, session.StepCount, string.Create(CultureInfo.InvariantCulture, $"artifact-read:{target.ArtifactId:N}:{offset}")),
+                Outcome = null,
+                DetailJson = JsonSerializer.Serialize(new WorkSessionArtifactReadDetail
+                {
+                    ArtifactId = target.ArtifactId,
+                    Name = target.Name,
+                    Producer = target.Producer,
+                    Version = target.Version,
+                    Offset = offset,
+                    Length = length,
+                    Total = content.Length
+                })
+            },
+            cancellationToken);
 
         var next = offset + length < content.Length ? (offset + length).ToString(CultureInfo.InvariantCulture) : EndOfArtifact;
         return Say(string.Concat(Header(target, offset, length, content.Length, next), content.AsSpan(offset, length)));

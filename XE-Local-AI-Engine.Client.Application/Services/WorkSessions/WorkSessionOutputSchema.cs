@@ -69,11 +69,15 @@ internal sealed class WorkSessionOutputSchema
     private static string Describe(WorkSessionOutputProperty property) =>
         property switch
         {
-            { Enum: { } values } => $"one of {string.Join(", ", values.Select(static value => JsonSerializer.Serialize(value)))}",
+            { Enum: { } values, UnmetOn: { } unmet } => $"one of {Quoted(values)}; {Quoted(unmet)} means the objective is NOT met and stops the run for a person",
+            { Enum: { } values } => $"one of {Quoted(values)}",
             { Type: WorkSessionOutputType.String } => $"string, at most {property.MaxLength ?? WorkSessionToolDefinitions.TextMaxLength} characters",
             { Type: WorkSessionOutputType.Integer } => "a whole number",
             _ => JsonNamingPolicy.CamelCase.ConvertName(property.Type.ToString())
         };
+
+    private static string Quoted(IEnumerable<string> values) =>
+        string.Join(", ", values.Select(static value => JsonSerializer.Serialize(value)));
 
     private static string? Mismatch(WorkSessionOutputProperty property, JsonElement value)
     {

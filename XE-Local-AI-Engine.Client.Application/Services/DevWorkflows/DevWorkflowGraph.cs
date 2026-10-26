@@ -756,10 +756,10 @@ internal sealed class DevWorkflowGraph
 
     /// <summary><c>GRAPH-C4-5</c> — an edge routing on a node's <c>output.*</c> names what its output schema declares, and a classifier routes every answer.</summary>
     /// <remarks>
-    ///     A condition on an undeclared member, comparing a member with a value of another kind than its type, or comparing an enum member
-    ///     with a value outside its enum, is an edge that can never fire.
-    ///     When EVERY out-edge is an <c>eq</c> on one enum member, the node is a classifier, and an enum value with no edge is an answer
-    ///     with nowhere to go. Edges of any other shape skip that third clause. See docs/wiki/25-dev-workflows.md ("Edges, joins and the pinned graph").
+    ///     A condition on an undeclared member, of another kind than its type, outside its enum, or eq an <c>unmetOn</c> value (which blocks
+    ///     the node instead) is an edge that can never fire. When EVERY out-edge is an <c>eq</c> on one enum member, the node is a classifier,
+    ///     and an enum value other than an <c>unmetOn</c> one with no edge is an answer with nowhere to go. Edges of any other shape skip
+    ///     that third clause. See docs/wiki/25-dev-workflows.md ("Edges, joins and the pinned graph").
     /// </remarks>
     private void EnsureOutputRoutesAreDeclared()
     {
@@ -807,6 +807,13 @@ internal sealed class DevWorkflowGraph
                                                              + $"{string.Join(", ", values.Select(static value => JsonSerializer.Serialize(value)))}, so it could never fire (invariant GRAPH-C4-5).");
                 }
 
+                // An unmetOn answer blocks the node run before any edge is read, so an eq naming one is written but never taken.
+                if (condition.Operator == DevWorkflowConditionOperator.Eq && property.UnmetOn?.Contains(condition.Value.GetString(), StringComparer.Ordinal) == true)
+                {
+                    throw new DevWorkflowValidationException($"The edge {edge} routes on '{condition.Path}' equal to {condition.Value.GetRawText()}, which the outputSchema of node "
+                                                             + $"'{node.NodeKey}' lists in 'unmetOn': that answer blocks the node for a person, so the edge could never fire (invariant GRAPH-C4-5).");
+                }
+
                 partition &= condition.Operator == DevWorkflowConditionOperator.Eq;
                 _ = classifiedBy.Add(property.Name);
                 _ = routed.Add(condition.Value.GetString()!);
@@ -825,7 +832,7 @@ internal sealed class DevWorkflowGraph
                                                          + "in 'required', so a run whose agent leaves it out would have nowhere to go. Make it required (invariant GRAPH-C4-5).");
             }
 
-            var unrouted = classified.Enum!.Where(value => !routed.Contains(value)).ToList();
+            var unrouted = classified.Enum!.Where(value => !routed.Contains(value) && classified.UnmetOn?.Contains(value, StringComparer.Ordinal) != true).ToList();
             if (unrouted.Count > 0)
             {
                 throw new DevWorkflowValidationException($"Node '{node.NodeKey}' routes on '{Prefix}{classified.Name}' and has no edge for "
