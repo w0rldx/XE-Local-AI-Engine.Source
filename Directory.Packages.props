@@ -47,7 +47,7 @@
     <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Sqlite" Version="13.6.0" />
     <PackageVersion Include="FastEndpoints" Version="8.3.0" />
     <PackageVersion Include="FastEndpoints.Swagger" Version="8.3.0" />
-    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.316" />
+    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.317" />
     <!-- Architecture conformance tests (layer-dependency direction). Test-project only. -->
     <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
     <!-- Architecture conformance tests (intra-project file/namespace placement). Test-project only, Apache-2.0.
@@ -62,10 +62,10 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
     <!-- Newest intended prerelease; banned-API hard wall (RS0030) over BannedSymbols.txt. -->
     <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0" />
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.14" />
     <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.13" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.13" />
-    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.14" />
     <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.13" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.13" />
@@ -101,15 +101,15 @@
          which requires Configuration.Abstractions >= 10.0.10, and central transitive pinning turns a mismatch into
          an NU1109 downgrade error across five projects. Same servicing band as the DependencyInjection.Abstractions
          and Logging.Abstractions pins directly below. -->
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.14" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.13" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.14" />
     <!-- Already in every host graph transitively; referenced directly only by Providers.ProcessSupervision, whose stale
          reaper is an IHostedService. -->
-    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.13" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.13" />
-    <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.13" />
-    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.14" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.11.0" />
     <!-- Compatibility cohort: upgrade the stable MAF trio together after verifying their matching release set. -->
     <PackageVersion Include="Microsoft.Agents.AI" Version="1.25.0" />
@@ -151,7 +151,7 @@
     <PackageVersion Include="Quartz.Plugins.TimeZoneConverter" Version="3.22.7" />
     <PackageVersion Include="Quartz.Serialization.SystemTextJson" Version="3.22.7" />
     <PackageVersion Include="Serilog" Version="4.4.0" />
-    <PackageVersion Include="Scalar.AspNetCore" Version="2.18.2" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.18.3" />
     <PackageVersion Include="Scrutor" Version="7.0.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="Serilog.Enrichers.Environment" Version="3.0.1" />
@@ -166,9 +166,9 @@
          core package alone; its ImageSharp add-on is deliberately not referenced. -->
     <PackageVersion Include="Spectre.Console" Version="0.57.2" />
     <PackageVersion Include="System.CommandLine" Version="2.0.13" />
-    <PackageVersion Include="System.Numerics.Tensors" Version="10.0.13" />
-    <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.13" />
-    <PackageVersion Include="TUnit" Version="1.76.0" />
+    <PackageVersion Include="System.Numerics.Tensors" Version="10.0.14" />
+    <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.14" />
+    <PackageVersion Include="TUnit" Version="1.76.28" />
     <PackageVersion Include="Velopack" Version="1.2.161" />
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
