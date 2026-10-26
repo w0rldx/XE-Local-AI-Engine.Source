@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
+using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -628,7 +629,7 @@ public sealed class DevWorkflowGraphTests
     }
 
     /// <summary>
-    ///     The byte-identical pin. Both graphs the product ships AND every prior revision it still keeps, because a run
+    ///     The byte-identical pin. Every graph the product ships AND every prior revision it still keeps, because a run
     ///     pinned on one of those is re-parsed by the graph cache long after the seeder has upgraded the definition row
     ///     — so a revision the product no longer ships must satisfy every invariant here as well.
     ///     <para>
@@ -652,6 +653,8 @@ public sealed class DevWorkflowGraphTests
         {
             AssertEx.NotEmpty(DevWorkflowGraph.Parse(json).Nodes, $"the seeded graph '{name}' must satisfy every invariant this validator holds.");
         }
+
+        AssertEx.NotEmpty(DevWorkflowGraph.Parse(DevWorkflowDefinitionSeeder.DevIntakeGraph).Nodes, "and so must the intake template, which has no prior revisions.");
     }
 
     /// <summary>
@@ -1277,5 +1280,216 @@ public sealed class DevWorkflowGraphTests
                                    """;
 
         AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(ClonedApply)).Message, "Integration runs once");
+    }
+
+    /// <summary>The intake classifier's contract: one required enum, one optional bounded string.</summary>
+    private const string ClassifierSchema = """
+                                            {"type":"object",
+                                             "properties":{"kind":{"type":"string","enum":["feature","bug","question","unclear"]},
+                                                           "rationale":{"type":"string","maxLength":1000}},
+                                             "required":["kind"]}
+                                            """;
+
+    [Test]
+    public void Parse_ReadsAnAgentNodesOutputSchema()
+    {
+        var graph = DevWorkflowGraph.Parse(Classifier("feature", "bug", "question", "unclear"));
+
+        var schema = AssertEx.NotNull(graph.Nodes["classify"].OutputSchema);
+        var kind = AssertEx.NotNull(schema.Find("kind"));
+        AssertEx.True(kind.Required);
+        AssertEx.Equal("feature, bug, question, unclear", string.Join(", ", AssertEx.NotNull(kind.Enum)));
+        AssertEx.Equal(expected: 1000, AssertEx.NotNull(schema.Find("rationale")).MaxLength);
+        AssertEx.False(AssertEx.NotNull(schema.Find("rationale")).Required);
+        AssertEx.Null(graph.Nodes["bug"].OutputSchema, "a node that declares none carries none.");
+    }
+
+    /// <summary>The subset is closed: anything outside it is refused at save rather than silently ignored at run time.</summary>
+    [Test]
+    [Arguments("""{"type":"object","properties":{"kind":{"type":"string"}}}""", "Tool", "only an Agent node's session hands in an output")]
+    [Arguments("""{"type":"array"}""", "Agent", "whose 'type' is \"object\"")]
+    [Arguments("""{"type":"object","properties":{}}""", "Agent", "non-empty 'properties'")]
+    [Arguments("""{"type":"object","properties":{"kind":{"type":"object"}}}""", "Agent", "there is no object or array")]
+    [Arguments("""{"type":"object","properties":{"kind":{"type":"array"}}}""", "Agent", "there is no object or array")]
+    [Arguments("""{"type":"object","properties":{"kind":{"type":"String"}}}""", "Agent", "needs a 'type'")]
+    [Arguments("""{"type":"object","properties":{"kind":{"$ref":"#/x"}}}""", "Agent", "uses '$ref'")]
+    [Arguments("""{"type":"object","oneOf":[],"properties":{"kind":{"type":"string"}}}""", "Agent", "uses 'oneOf'")]
+    [Arguments("""{"type":"object","properties":{"kind":{"type":"string","minLength":1}}}""", "Agent", "uses 'minLength'")]
+    [Arguments("""{"type":"object","additionalProperties":true,"properties":{"kind":{"type":"string"}}}""", "Agent", "only to false")]
+    [Arguments("""{"type":"object","properties":{"kind":{"type":"number","enum":["1"]}}}""", "Agent", "'enum' only as a string member")]
+    [Arguments("""{"type":"object","properties":{"kind":{"type":"string","enum":[]}}}""", "Agent", "'enum' only as a string member")]
+    [Arguments("""{"type":"object","properties":{"kind":{"type":"string","enum":["a","a"]}}}""", "Agent", "distinct")]
+    [Arguments("""{"type":"object","properties":{"kind":{"type":"string","maxLength":0}}}""", "Agent", "'maxLength' only as a string member")]
+    [Arguments("""{"type":"object","properties":{"kind":{"type":"boolean","maxLength":5}}}""", "Agent", "'maxLength' only as a string member")]
+    [Arguments("""{"type":"object","properties":{"kind":{"type":"string","maxLength":"100"}}}""", "Agent", "'maxLength' only as a string member")]
+    [Arguments("""{"type":"object","properties":{"kind":{"type":"string","maxLength":null}}}""", "Agent", "'maxLength' only as a string member")]
+    [Arguments("""{"type":"object","properties":{"kind":{"type":"string","maxLength":true}}}""", "Agent", "'maxLength' only as a string member")]
+    [Arguments("""{"type":"object","properties":{"kind":{"type":"string","enum":["bug","feature"],"maxLength":3}}}""", "Agent", "lists \"feature\" in its 'enum', which is longer than its 'maxLength' of 3")]
+    [Arguments("""{"type":"object","properties":{"kind":{"type":"string"}},"required":["area"]}""", "Agent", "requires 'area'")]
+    [Arguments("""{"type":"object","properties":{"kind":{"type":"string"}},"required":"kind"}""", "Agent", "array of distinct member names")]
+    [Arguments("""{"type":"object","properties":{"a.b":{"type":"string"}}}""", "Agent", "not a name a condition path can read")]
+    [Arguments("""{"type":"object","properties":{"kind":{"type":"string"},"kind":{"type":"boolean"}}}""", "Agent", "declares the member 'kind' more than once")]
+    public void Parse_RefusesAnOutputSchemaOutsideTheSubset(string schema, string nodeType, string expectedMessage)
+    {
+        var json = $$"""{"nodes":[{"nodeKey":"a","nodeType":"{{nodeType}}","outputSchema":{{schema}}}],"edges":[]}""";
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(json)).Message, expectedMessage);
+    }
+
+    [Test]
+    public void Parse_RefusesAnOutputSchemaWithMoreMembersThanTheCap()
+    {
+        var members = string.Join(",", Enumerable.Range(0, DevWorkflowOutputSchema.MaxProperties + 1).Select(static index => $"\"m{index}\":{{\"type\":\"boolean\"}}"));
+        var json = """{"nodes":[{"nodeKey":"a","nodeType":"Agent","outputSchema":{"type":"object","properties":{""" + members + "}}}],\"edges\":[]}";
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(json)).Message,
+            $"more than {DevWorkflowOutputSchema.MaxProperties} members");
+    }
+
+    /// <summary>
+    ///     Every member, name and enum value at its cap renders a contract far past what the objective can carry, so the
+    ///     bound is on the rendered text: a schema that saved here would otherwise refuse every run of its node.
+    /// </summary>
+    [Test]
+    public void Parse_RefusesAnOutputSchemaWhoseRenderedContractIsTooLong()
+    {
+        var values = string.Join(",", Enumerable.Range(0, DevWorkflowOutputSchema.MaxEnumValues).Select(static index => $"\"{index.ToString(CultureInfo.InvariantCulture).PadLeft(DevWorkflowOutputSchema.MaxTokenLength, 'v')}\""));
+        var members = string.Join(",", Enumerable.Range(0, DevWorkflowOutputSchema.MaxProperties)
+                                                 .Select(index => $"\"{index.ToString(CultureInfo.InvariantCulture).PadLeft(DevWorkflowOutputSchema.MaxTokenLength, 'm')}\":{{\"type\":\"string\",\"enum\":[{values}]}}"));
+        var json = """{"nodes":[{"nodeKey":"a","nodeType":"Agent","outputSchema":{"type":"object","properties":{""" + members + "}}}],\"edges\":[]}";
+
+        var message = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(json)).Message;
+
+        AssertEx.Contains(message, "node 'a'", StringComparison.Ordinal);
+        AssertEx.Contains(message, "too long", StringComparison.Ordinal);
+        AssertEx.Contains(message, $"at most {DevWorkflowOutputSchema.MaxRenderedLength}", StringComparison.Ordinal);
+    }
+
+    /// <summary>The shipped classifier, the realistic case, sits well inside the rendered bound it must keep satisfying.</summary>
+    [Test]
+    public void Parse_AcceptsTheSeededIntakeClassifierContractWithinTheRenderedBound()
+    {
+        var schema = AssertEx.NotNull(DevWorkflowGraph.Parse(DevWorkflowDefinitionSeeder.DevIntakeGraph).Nodes["classify"].OutputSchema);
+
+        var rendered = schema.Render().Length;
+        AssertEx.True(rendered * 2 <= DevWorkflowOutputSchema.MaxRenderedLength,
+            $"the intake classifier renders {rendered} characters, so the {DevWorkflowOutputSchema.MaxRenderedLength} bound leaves it too little headroom.");
+    }
+
+    /// <summary>
+    ///     <c>GRAPH-C4-5</c>: a comparison <c>DevWorkflowCondition</c> can never make against the member's type never fires.
+    ///     Strings still order ordinally, so a relational op on a string member stays legal; a boolean only takes eq or ne.
+    /// </summary>
+    [Test]
+    [Arguments("""{"path":"output.flag","op":"eq","value":"true"}""")]
+    [Arguments("""{"path":"output.flag","op":"gt","value":1}""")]
+    [Arguments("""{"path":"output.count","op":"eq","value":"3"}""")]
+    [Arguments("""{"path":"output.count","op":"ne","value":null}""")]
+    [Arguments("""{"path":"output.note","op":"lt","value":5}""")]
+    [Arguments("""{"path":"output.note","op":"eq","value":true}""")]
+    [Arguments("""{"path":"output.kind","op":"gte","value":2}""")]
+    public void Parse_RefusesAnOutputEdgeWhoseValueKindNeverMatchesTheMember(string condition)
+    {
+        var message = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(TypedOutputRoute(condition))).Message;
+
+        AssertEx.Contains(message, "GRAPH-C4-5", StringComparison.Ordinal);
+        AssertEx.Contains(message, "could never fire", StringComparison.Ordinal);
+    }
+
+    [Test]
+    [Arguments("""{"path":"output.flag","op":"ne","value":false}""")]
+    [Arguments("""{"path":"output.count","op":"gte","value":3}""")]
+    [Arguments("""{"path":"output.note","op":"gt","value":"m"}""")]
+    [Arguments("""{"path":"output.note","op":"exists"}""")]
+    [Arguments("""{"path":"output.flag","op":"notExists"}""")]
+    [Arguments("""{"path":"output.kind","op":"lt","value":"c"}""")]
+    public void Parse_AcceptsAnOutputEdgeWhoseValueKindMatchesTheMember(string condition) =>
+        AssertEx.NotNull(DevWorkflowGraph.Parse(TypedOutputRoute(condition)).Nodes["a"].OutputSchema);
+
+    /// <summary>Agent <c>a</c> with one member of each type, routing to <c>b</c> on <paramref name="condition" />.</summary>
+    private static string TypedOutputRoute(string condition) =>
+        """
+        {"schemaVersion":1,"nodes":[{"nodeKey":"a","nodeType":"Agent","outputSchema":{"type":"object","properties":{
+          "flag":{"type":"boolean"},"count":{"type":"integer"},"note":{"type":"string"},"kind":{"type":"string","enum":["a","b"]}}}},
+          {"nodeKey":"b","nodeType":"Agent"}],
+         "edges":[{"from":"a","to":"b","condition":
+        """ + condition + "}]}";
+
+    /// <summary><c>GRAPH-C4-5</c> clause 1: a path the schema does not declare, a nested one included, is an edge that never fires.</summary>
+    [Test]
+    [Arguments("output.severity")]
+    [Arguments("output.kind.label")]
+    public void Parse_RefusesAnEdgeOnAnUndeclaredOutputMember(string path)
+    {
+        var json = Classifier("feature", "bug", "question", "unclear").Replace("\"path\":\"output.kind\",\"op\":\"eq\",\"value\":\"bug\"",
+            $"\"path\":\"{path}\",\"op\":\"eq\",\"value\":\"bug\"",
+            StringComparison.Ordinal);
+
+        var message = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(json)).Message;
+
+        AssertEx.Contains(message, "GRAPH-C4-5", StringComparison.Ordinal);
+        AssertEx.Contains(message, $"routes on '{path}'");
+    }
+
+    /// <summary>Clause 2: an eq or ne against a value the enum does not allow can never fire either.</summary>
+    [Test]
+    [Arguments("eq")]
+    [Arguments("ne")]
+    public void Parse_RefusesAComparisonWithAValueOutsideTheEnum(string op)
+    {
+        var json = Classifier("feature", "bug", "question", "unclear").Replace("\"op\":\"eq\",\"value\":\"bug\"", $"\"op\":\"{op}\",\"value\":\"defect\"", StringComparison.Ordinal);
+
+        var message = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(json)).Message;
+
+        AssertEx.Contains(message, "GRAPH-C4-5", StringComparison.Ordinal);
+        AssertEx.Contains(message, "\"defect\"");
+    }
+
+    /// <summary>Clause 3: a classifier routes every answer, and the refusal names each one left without an edge.</summary>
+    [Test]
+    public void Parse_RefusesAClassifierThatLeavesAnEnumValueUnrouted()
+    {
+        var message = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(Classifier("feature", "bug"))).Message;
+
+        AssertEx.Contains(message, "GRAPH-C4-5", StringComparison.Ordinal);
+        AssertEx.Contains(message, "\"question\", \"unclear\"");
+    }
+
+    /// <summary>Clause 3: a classifier's routed member is required, since an omitted one fires no edge.</summary>
+    [Test]
+    public void Parse_RefusesAClassifierThatRoutesOnAnOptionalMember()
+    {
+        var json = Classifier("feature", "bug", "question", "unclear").Replace("\"required\":[\"kind\"]", "\"required\":[]", StringComparison.Ordinal);
+        AssertEx.Contains(json, "\"required\":[]");
+
+        var message = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(json)).Message;
+
+        AssertEx.Contains(message, "GRAPH-C4-5", StringComparison.Ordinal);
+        AssertEx.Contains(message, "'required'", StringComparison.Ordinal);
+    }
+
+    /// <summary>Edges that are not one eq-partition skip clause 3; clauses 1 and 2 still held them, so the graph saves.</summary>
+    [Test]
+    public void Parse_AcceptsRoutingThatIsNotAClassifierPartition()
+    {
+        var json = Classifier("feature", "bug").Replace("""{"from":"classify","to":"bug","condition":{"path":"output.kind","op":"eq","value":"bug"}}""",
+            """{"from":"classify","to":"bug","condition":{"path":"output.kind","op":"ne","value":"feature"}}""",
+            StringComparison.Ordinal);
+
+        AssertEx.NotNull(DevWorkflowGraph.Parse(json).Nodes["classify"].OutputSchema);
+    }
+
+    /// <summary>
+    ///     <c>classify</c> with the classifier schema and one Agent leaf per class, one <c>output.kind</c> eq edge to each
+    ///     leaf named in <paramref name="routed" />; the leaves left out are still declared, behind an unconditional edge off <c>bug</c>.
+    /// </summary>
+    internal static string Classifier(params string[] routed)
+    {
+        string[] classes = ["feature", "bug", "question", "unclear"];
+        var nodes = classes.Select(static leaf => $$"""{"nodeKey":"{{leaf}}","nodeType":"Agent"}""");
+        var edges = routed.Select(static leaf => $$$"""{"from":"classify","to":"{{{leaf}}}","condition":{"path":"output.kind","op":"eq","value":"{{{leaf}}}"}}""")
+                          .Concat(classes.Except(routed, StringComparer.Ordinal).Select(static leaf => $$"""{"from":"bug","to":"{{leaf}}"}"""));
+        return """{"schemaVersion":1,"nodes":[{"nodeKey":"classify","nodeType":"Agent","outputSchema":""" + ClassifierSchema + "}," + string.Join(",", nodes)
+               + "],\"edges\":[" + string.Join(",", edges) + "]}";
     }
 }

@@ -1,5 +1,5 @@
-// The definition editor's pure cell helpers: what a picker's choice does to the stored document, and how the two
-// free-text cells cross between the input's string and the scalar JSON the wire carries.
+// The definition editor's pure cell helpers: what a picker's choice does to the stored document, and how the
+// free-text cells cross between the input's string and the JSON the wire carries.
 
 /**
  * The declared set after the picker changed: a capability that was already there keeps the reason its author wrote, and
@@ -45,6 +45,29 @@ export function parseConditionValue(text: string): unknown {
 	try {
 		const parsed: unknown = JSON.parse(text);
 		return parsed === null || typeof parsed === "boolean" || typeof parsed === "number" ? parsed : text;
+	} catch {
+		return text;
+	}
+}
+
+/** The stored `outputSchema` for its textarea: indented JSON, the typed text while it does not parse, or empty for none. */
+export function readOutputSchema(value: unknown): string {
+	if (value === undefined || value === null) {
+		return "";
+	}
+	return typeof value === "string" ? value : JSON.stringify(value, null, 2);
+}
+
+/**
+ * The textarea back into the node: blank is no schema, JSON is the parsed value, and anything else stays the typed text
+ * so the save gate can refuse it by name instead of the editor silently keeping the last schema that parsed.
+ */
+export function parseOutputSchema(text: string): unknown {
+	if (text.trim().length === 0) {
+		return undefined;
+	}
+	try {
+		return JSON.parse(text) as unknown;
 	} catch {
 		return text;
 	}

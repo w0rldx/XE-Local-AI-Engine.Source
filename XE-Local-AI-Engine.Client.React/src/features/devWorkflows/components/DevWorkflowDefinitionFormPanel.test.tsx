@@ -218,6 +218,65 @@ describe("DevWorkflowDefinitionFormPanel", () => {
 		expect("allowUngatedWrites" in (sent?.graph ?? {})).toBe(false);
 	});
 
+	it("keeps an Agent node's output schema untouched through an edit elsewhere, and shows it indented", async () => {
+		const outputSchema = {
+			type: "object",
+			properties: { kind: { type: "string", enum: ["bug", "feature"] }, rationale: { type: "string", maxLength: 1000 } },
+			required: ["kind"],
+		};
+		let sent: { graph?: DevWorkflowGraph } | undefined;
+		server.use(
+			...optionRoutes(),
+			definitionRoute({
+				graph: { ...graph, nodes: graph.nodes?.map((node, index) => (index === 0 ? { ...node, outputSchema } : node)) },
+			}),
+			http.put(localApiPath(`development-workflows/definitions/${definitionId}`), async ({ request }) => {
+				sent = (await request.json()) as typeof sent;
+				return HttpResponse.json({ id: definitionId, version: 4 });
+			}),
+		);
+		renderPanel();
+
+		const field = await screen.findByTestId("dev-workflow-definition-node-output-schema-0");
+		expect((field as HTMLTextAreaElement).value).toBe(JSON.stringify(outputSchema, null, 2));
+		fireEvent.change(screen.getByTestId("dev-workflow-definition-node-label-0"), { target: { value: "Split the plan" } });
+		fireEvent.click(screen.getByTestId("dev-workflow-definition-save"));
+
+		await waitFor(() => expect(sent).toBeDefined());
+		expect(sent?.graph?.nodes?.[0]?.outputSchema).toEqual(outputSchema);
+		// And a node that declares none sends none, so a template authored before the field keeps its bytes.
+		expect(sent?.graph?.nodes?.some((node, index) => index > 0 && "outputSchema" in node)).toBe(false);
+	});
+
+	it("offers the output schema on an Agent node only, refuses a non-object one inline, and sends none when emptied", async () => {
+		let sent: { graph?: DevWorkflowGraph } | undefined;
+		server.use(
+			...optionRoutes(),
+			definitionRoute(),
+			http.put(localApiPath(`development-workflows/definitions/${definitionId}`), async ({ request }) => {
+				sent = (await request.json()) as typeof sent;
+				return HttpResponse.json({ id: definitionId, version: 4 });
+			}),
+		);
+		renderPanel();
+
+		const field = await screen.findByTestId("dev-workflow-definition-node-output-schema-0");
+		expect(screen.queryByTestId("dev-workflow-definition-node-output-schema-2")).toBeNull();
+
+		fireEvent.change(field, { target: { value: '{"type":"string"' } });
+		expect(screen.getByText('The output schema must be a JSON object whose "type" is "object".')).toBeDefined();
+		expect(screen.getByTestId("dev-workflow-definition-issue-invalidOutputSchema")).toBeDefined();
+		expect(screen.getByTestId("dev-workflow-definition-save")).toHaveProperty("disabled", true);
+
+		fireEvent.change(field, { target: { value: '{"type":"object","properties":{"kind":{"type":"string"}}}' } });
+		expect(screen.queryByTestId("dev-workflow-definition-issue-invalidOutputSchema")).toBeNull();
+		fireEvent.change(field, { target: { value: "  " } });
+		fireEvent.click(screen.getByTestId("dev-workflow-definition-save"));
+
+		await waitFor(() => expect(sent).toBeDefined());
+		expect("outputSchema" in (sent?.graph?.nodes?.[0] ?? {})).toBe(false);
+	});
+
 	it("shows the fields it will not edit as read-only badges, so nothing looks lost", async () => {
 		server.use(...optionRoutes(), definitionRoute());
 		renderPanel();

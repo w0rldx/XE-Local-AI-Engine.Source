@@ -444,8 +444,9 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             ? ProviderCallBudget.BeginCallCapScope(_options.MaxProviderCallsPerStep)
             : null;
 
-        // Seeded the same way: the resolver offers the state tools to whatever agent drives this step, off this flag.
-        using var workSessionTurn = WorkSessionTurnScope.Begin();
+        // Seeded the same way: the resolver offers the state tools to whatever agent drives this step, off this flag, and
+        // complete_work_session holds the step to the output contract a workflow node pinned on the override, if any.
+        using var workSessionTurn = WorkSessionTurnScope.Begin(run.Runtime?.OutputSchema);
 
         // And the repository a bound development-workflow node reads, so its coder tools serve that checkout rather than the AgentHome workspace.
         using var repository = CoderRepositoryScope.Begin(run.Runtime?.RepositoryRoot);

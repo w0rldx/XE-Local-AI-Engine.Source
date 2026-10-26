@@ -241,10 +241,8 @@ public sealed record DevWorkflowGraph(
 ///     How often this node's fix loop may re-run before the run asks a human; refused without a <c>RetryTarget</c>.
 ///     Absent means no per-loop cap, only the run-wide budget.
 /// </param>
-/// <param name="IsTemplate">
-///     Whether this node is a materialization template clone with no node run. Derived by the parser, never
-///     authored or stored, so a PUT round-trip keeps its bytes.
-/// </param>
+/// <param name="OutputSchema">An Agent node's flat output contract, carried as the JSON it was authored as; the runtime parser alone validates it.</param>
+/// <param name="IsTemplate">A materialization template clone with no node run. Derived by the parser, never authored or stored.</param>
 public sealed record DevWorkflowGraphNode(
     string NodeKey,
     string NodeType,
@@ -265,6 +263,7 @@ public sealed record DevWorkflowGraphNode(
     IReadOnlyDictionary<string, string>? RequiredCapabilities,
     string? ToolMode,
     int? MaxLoopIterations,
+    JsonElement? OutputSchema = null,
     bool? IsTemplate = null);
 
 public sealed record DevWorkflowMaterialization(string TemplateNodeKey, string ArtifactKind, string JoinNodeKey, int MaxChildren);

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -439,7 +440,8 @@ internal sealed class DevWorkflowAgentExecutor
             ModelProfile = node?.ModelProfile,
             ReasoningEffort = node?.ReasoningEffort,
             RefuseUndeclaredWrites = DeclarationRequired(graph, node),
-            RepositoryRoot = repositoryRoot
+            RepositoryRoot = repositoryRoot,
+            OutputSchema = node?.OutputSchema
         };
         return runtime.IsEmpty ? null : runtime;
     }
@@ -590,6 +592,12 @@ internal sealed class DevWorkflowAgentExecutor
                             .AppendLine("## Operator retry")
                             .AppendLine("The operator retried this step and said:")
                             .AppendLine(operatorRetry);
+        }
+
+        // The output contract is the request's other half — what the session must hand back — so it is uncapped and counted with it.
+        if (node.OutputSchema is { } outputSchema)
+        {
+            _ = inputSection.AppendLine().AppendLine(outputSchema.Render());
         }
 
         // The fair share, the visible truncation marker and the dropped-with-a-warning are DevWorkflowPolicyText's, shared with the DevTask lane so the two cannot drift into rendering
@@ -768,10 +776,12 @@ internal sealed class DevWorkflowAgentExecutor
         WorkSessionDetail session,
         CancellationToken cancellationToken)
     {
-        var unmet = await UnmetObjectiveAsync(session.Id, cancellationToken);
+        var completion = await ReadCompletionAsync(session.Id, cancellationToken);
+        var outputSchema = graph.Nodes.GetValueOrDefault(nodeRun.NodeKey)?.OutputSchema;
+        var unmet = await UnmetObjectiveAsync(session.Id, completion, cancellationToken) ?? OutputViolation(outputSchema, completion);
         if (unmet is null)
         {
-            return await SucceedAsync(store, graph, run, nodeRun, nodeRuns, session, cancellationToken);
+            return await SucceedAsync(store, graph, run, nodeRun, nodeRuns, session, outputSchema is null ? null : completion?.Output, cancellationToken);
         }
 
         // Promoted exactly as a success would be, because the STATUS carries the honesty and nothing downstream reads a Blocked row as a deliverable. Otherwise the operator choosing
@@ -788,7 +798,7 @@ internal sealed class DevWorkflowAgentExecutor
     ///     The blocked plan is read first because it is what the step prompt asks a stuck session for by name, and it
     ///     says WHICH piece of work stalled — which the declaration alone does not.
     /// </remarks>
-    private async Task<string?> UnmetObjectiveAsync(Guid sessionId, CancellationToken cancellationToken)
+    private async Task<string?> UnmetObjectiveAsync(Guid sessionId, WorkSessionCompletionDetail? completion, CancellationToken cancellationToken)
     {
         // The store's own order, not re-sorted: ListTasksAsync orders by CreatedStep so a task an update re-stamped does not jump the page, and re-sorting here would name the three
         // least recently touched tasks instead.
@@ -797,7 +807,9 @@ internal sealed class DevWorkflowAgentExecutor
                       .ToList();
         if (blocked.Count == 0)
         {
-            return await DeclaredUnmetAsync(sessionId, cancellationToken);
+            return completion is { ObjectiveMet: false } declared
+                ? DevWorkflowStateMachine.Bounded($"The agent's work session declared the objective NOT met: {declared.Summary}", DevWorkflowStateMachine.MaxNodeTerminalReason)
+                : null;
         }
 
         var named = string.Join("; ",
@@ -809,7 +821,7 @@ internal sealed class DevWorkflowAgentExecutor
     }
 
     /// <summary>
-    ///     The <c>objectiveMet:false</c> a session may declare on its way out, with the summary that explains it.
+    ///     The last completion request the session recorded: its <c>objectiveMet:false</c> declaration and its output.
     /// </summary>
     /// <remarks>
     ///     Read off the completion EVENT, not the session row, which keeps only a status; the event is the same row
@@ -818,7 +830,7 @@ internal sealed class DevWorkflowAgentExecutor
     ///     answers, pairing with the FIRST winning inside one step (the operation id is derived from the step, so a
     ///     repeat replays through dedupe) — a session that kept working after declaring is judged on what it said last.
     /// </remarks>
-    private async Task<string?> DeclaredUnmetAsync(Guid sessionId, CancellationToken cancellationToken)
+    private async Task<WorkSessionCompletionDetail?> ReadCompletionAsync(Guid sessionId, CancellationToken cancellationToken)
     {
         // Targeted, not the whole log: reading and decrypting every event the session wrote to keep one row scales with the session.
         var completion = await _sessionStore.FindLatestEventAsync(sessionId, WorkSessionEventTypes.CompletionRequested, cancellationToken);
@@ -829,10 +841,7 @@ internal sealed class DevWorkflowAgentExecutor
 
         try
         {
-            return JsonSerializer.Deserialize<WorkSessionCompletionDetail>(detail, CompletionDetailOptions) is { ObjectiveMet: false } declared
-                ? DevWorkflowStateMachine.Bounded($"The agent's work session declared the objective NOT met: {declared.Summary}",
-                    DevWorkflowStateMachine.MaxNodeTerminalReason)
-                : null;
+            return JsonSerializer.Deserialize<WorkSessionCompletionDetail>(detail, CompletionDetailOptions);
         }
         catch (JsonException exception)
         {
@@ -842,12 +851,23 @@ internal sealed class DevWorkflowAgentExecutor
         }
     }
 
+    /// <summary>Why a node with an output contract cannot route on what its session handed in, or null when it can or has no contract.</summary>
+    /// <remarks>
+    ///     The handler already refuses a completion without a valid output, so this should be unreachable; it is the defence in depth
+    ///     that keeps an edge from routing on an answer nobody checked. An unreadable completion has no output either, so it stands down here.
+    /// </remarks>
+    private static string? OutputViolation(WorkSessionOutputSchema? schema, WorkSessionCompletionDetail? completion) =>
+        schema?.Violation(completion?.Output) is { } violation
+            ? DevWorkflowStateMachine.Bounded($"The agent's work session completed without the output its node routes on: {violation}", DevWorkflowStateMachine.MaxNodeTerminalReason)
+            : null;
+
     private async Task<int> SucceedAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
         IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
         WorkSessionDetail session,
+        JsonElement? sessionOutput,
         CancellationToken cancellationToken)
     {
         // Evidence first, status last — the order the work-session loop uses one level down; a crash in that window re-derives the same answer, the promotion being keyed. A decomposing
@@ -865,7 +885,8 @@ internal sealed class DevWorkflowAgentExecutor
                 ArtifactCount = promoted,
                 Findings = findings.Where(static finding => !finding.Superseded)
                                    .GroupBy(static finding => finding.Kind)
-                                   .ToDictionary(static group => JsonNamingPolicy.CamelCase.ConvertName(group.Key.ToString()), static group => group.Count(), StringComparer.Ordinal)
+                                   .ToDictionary(static group => JsonNamingPolicy.CamelCase.ConvertName(group.Key.ToString()), static group => group.Count(), StringComparer.Ordinal),
+                Output = sessionOutput
             },
             JsonOptions);
 
@@ -1049,5 +1070,9 @@ internal sealed class DevWorkflowAgentExecutor
         public required int ArtifactCount { get; init; }
 
         public required IReadOnlyDictionary<string, int> Findings { get; init; }
+
+        /// <summary>What the session handed in under its node's output contract, where an <c>output.*</c> edge reads it; absent without one.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public JsonElement? Output { get; init; }
     }
 }

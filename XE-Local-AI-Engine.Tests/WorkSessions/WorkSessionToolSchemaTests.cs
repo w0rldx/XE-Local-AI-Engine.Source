@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.WorkSessions;
 using System.Text.Json;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
+using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -65,6 +66,87 @@ public sealed class WorkSessionToolSchemaTests
                                .EnumerateArray()
                                .Any(static member => string.Equals(member.GetString(), "objectiveMet", StringComparison.Ordinal)),
             "Absent means met, so requiring it would break every completion the model already knows how to write.");
+    }
+
+    /// <summary>
+    ///     The output argument's shape is ONE flat scalar map whatever a node declares, so the grammar the offer compiles never
+    ///     changes per node; optional, because only a session with an output contract owes one.
+    /// </summary>
+    [Test]
+    public void CompleteWorkSession_OffersOutputAsAnOptionalFlatScalarMap()
+    {
+        using var document = JsonDocument.Parse(WorkSessionToolDefinitions.CompleteWorkSession.ParameterSchema);
+
+        var output = document.RootElement.GetProperty("properties").GetProperty("output");
+        AssertEx.Equal("object", output.GetProperty("type").GetString());
+        AssertEx.Equal("string, number, boolean",
+            string.Join(", ", output.GetProperty("additionalProperties").GetProperty("type").EnumerateArray().Select(static type => type.GetString())));
+        AssertEx.False(output.TryGetProperty("properties", out _), "a declared member list would make the grammar per node.");
+        AssertEx.False(document.RootElement.GetProperty("required")
+                               .EnumerateArray()
+                               .Any(static member => string.Equals(member.GetString(), "output", StringComparison.Ordinal)),
+            "Sessions without an output contract never send one.");
+    }
+
+    /// <summary>A plain string member still has a bound, the tool's own text cap, and the rendered contract says so.</summary>
+    [Test]
+    public void OutputContract_RendersAPlainStringMemberWithTheToolsTextBound()
+    {
+        var contract = new WorkSessionOutputSchema
+        {
+            Properties =
+            [
+                new WorkSessionOutputProperty
+                {
+                    Name = "note",
+                    Type = WorkSessionOutputType.String,
+                    Required = false,
+                    Enum = null,
+                    MaxLength = null
+                }
+            ]
+        };
+
+        AssertEx.Contains(contract.Render(), $"- note: string, at most {WorkSessionToolDefinitions.TextMaxLength} characters");
+    }
+
+    /// <summary>An integer member is judged by value, not by spelling: JSON Schema counts 1.0 and 1e0 as integers too.</summary>
+    [Test]
+    [Arguments("3", true)]
+    [Arguments("3.0", true)]
+    [Arguments("1e0", true)]
+    [Arguments("-2E2", true)]
+    [Arguments("3.5", false)]
+    [Arguments("1e-1", false)]
+    [Arguments("\"3\"", false)]
+    public void OutputContract_AcceptsAnIntegerMemberByValueWhateverItsSpelling(string count, bool accepted)
+    {
+        var contract = new WorkSessionOutputSchema
+        {
+            Properties =
+            [
+                new WorkSessionOutputProperty
+                {
+                    Name = "count",
+                    Type = WorkSessionOutputType.Integer,
+                    Required = true,
+                    Enum = null,
+                    MaxLength = null
+                }
+            ]
+        };
+        using var output = JsonDocument.Parse($$"""{"count":{{count}}}""");
+
+        var violation = contract.Violation(output.RootElement);
+
+        if (accepted)
+        {
+            AssertEx.Null(violation);
+        }
+        else
+        {
+            AssertEx.Contains(AssertEx.NotNull(violation), "'output.count' must be a whole number");
+        }
     }
 
     [Test]

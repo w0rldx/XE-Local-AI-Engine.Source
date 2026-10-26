@@ -151,7 +151,7 @@ public sealed class DevWorkflowGraphContractTests
     }
 
     /// <summary>
-    ///     Everything the product ships stays saveable under the cap a node ships with — the two seeded templates and
+    ///     Everything the product ships stays saveable under the cap a node ships with — the seeded templates and
     ///     every prior revision the seeder still keeps, since a definition row holding one of those is re-saved by an
     ///     operator's next edit.
     /// </summary>
@@ -173,6 +173,8 @@ public sealed class DevWorkflowGraphContractTests
         {
             AssertEx.True(DevWorkflowGraphContract.ValidateAndCountNodes(json, cap) is > 0 and <= 500, $"the seeded graph '{name}' must fit under the shipped cap.");
         }
+
+        AssertEx.True(DevWorkflowGraphContract.ValidateAndCountNodes(DevWorkflowDefinitionSeeder.DevIntakeGraph, cap) is > 0 and <= 500, "and so must the intake template.");
     }
 
     /// <summary>

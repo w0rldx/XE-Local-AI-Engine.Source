@@ -38,8 +38,15 @@ internal sealed class CompleteWorkSessionToolHandler : WorkSessionToolHandler<Co
             return $"{ToolName} needs a non-empty 'summary' describing what the session achieved.";
         }
 
-        return Exceeds(request.Summary, WorkSessionToolDefinitions.TextMaxLength)
-            ? Exceeded("summary", WorkSessionToolDefinitions.TextMaxLength)
+        if (Exceeds(request.Summary, WorkSessionToolDefinitions.TextMaxLength))
+        {
+            return Exceeded("summary", WorkSessionToolDefinitions.TextMaxLength);
+        }
+
+        // An honest unmet close owes no output: it stands the node run down for a person instead of routing, and demanding
+        // one would push the model to invent an answer it just said it does not have.
+        return WorkSessionTurnScope.OutputSchema is { } schema && request.ObjectiveMet != false && schema.Violation(request.Output) is { } violation
+            ? $"{ToolName} was refused and the session stays open: {violation} Call it again with a valid 'output'."
             : null;
     }
 
@@ -56,7 +63,11 @@ internal sealed class CompleteWorkSessionToolHandler : WorkSessionToolHandler<Co
                 // One completion per step: a model that calls this twice in one turn records it once.
                 OperationId = WorkSessionOperationId.For(session.Id, session.StepCount, "completion"),
                 Outcome = null,
-                DetailJson = JsonSerializer.Serialize(new WorkSessionCompletionDetail(request.Summary!, request.ObjectiveMet))
+                DetailJson = JsonSerializer.Serialize(new WorkSessionCompletionDetail(request.Summary!,
+                    request.ObjectiveMet,
+                    // Kept only under a contract and only when Validate checked it: without one the member is ignored, so a session outside a
+                    // workflow records what it always did, and an unmet close skips validation, so what it carries is not routing data.
+                    WorkSessionTurnScope.OutputSchema is null || request.ObjectiveMet == false ? null : request.Output))
             },
             cancellationToken);
 

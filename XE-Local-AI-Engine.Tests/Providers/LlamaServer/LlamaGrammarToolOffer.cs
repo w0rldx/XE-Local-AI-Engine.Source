@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
+using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -59,7 +60,10 @@ internal static class LlamaGrammarToolOffer
                        .Select(static tool => BuildTool(tool.Name, tool.ParameterSchema!)),
             // The web tools are off by default, so the synchronous profile pool omits them; they join here so the
             // offline gates and the live smoke compile their schemas as the web-access-on offer would.
-            .. WebAccessToolCatalog.Descriptors.Select(static descriptor => BuildTool(descriptor.Name, descriptor.ParameterSchema!))
+            .. WebAccessToolCatalog.Descriptors.Select(static descriptor => BuildTool(descriptor.Name, descriptor.ParameterSchema!)),
+            // A work-session step is offered the state tools on top of its agent's pool, so complete_work_session's
+            // output map compiles into the same grammar as everything above.
+            .. WorkSessionToolCatalog.Descriptors.Select(static descriptor => BuildTool(descriptor.Name, descriptor.ParameterSchema!))
         ];
     }
 

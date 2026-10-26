@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     What the shipped <c>feature-development-v1</c> template says, and what its revision list has to keep saying.
+///     What the shipped templates say, and what the <c>feature-development-v1</c> revision list has to keep saying.
 ///     <para>
 ///         Wording pinned by string assertion rather than by execution: there is no code path that fails when the
 ///         decomposition instructions stop naming the constraints a coder is actually held to, which is precisely why
@@ -142,5 +142,92 @@ public sealed class DevWorkflowDefinitionSeederTests
         AssertEx.Equal(DevWorkflowDefinitionSeeder.FeatureDevelopmentPriorRevisions.Length,
             DevWorkflowDefinitionSeeder.FeatureDevelopmentPriorRevisions.Select(DevWorkflowDefinitionSeeder.GraphHash).Distinct(StringComparer.Ordinal).Count(),
             "and no two revisions are the same graph, which would mean one of them was copied from the wrong place.");
+    }
+
+    /// <summary>
+    ///     The intake template ships valid, its classifier declares the triage contract, and every answer that contract
+    ///     allows has its own edge — the save-time rule (<c>GRAPH-C4-5</c>) would refuse one left out, so this pins which
+    ///     node each class reaches.
+    /// </summary>
+    [Test]
+    public void TheShippedIntakeTemplateRoutesEveryClassOffItsClassifier()
+    {
+        var graph = DevWorkflowGraph.Parse(DevWorkflowDefinitionSeeder.DevIntakeGraph);
+
+        AssertEx.Equal(graph.Nodes.Count,
+            DevWorkflowGraphContract.ValidateAndCountNodes(DevWorkflowDefinitionSeeder.DevIntakeGraph, new DevWorkflowOptions().MaxNodesPerDefinition));
+        var schema = AssertEx.NotNull(graph.Nodes["classify"].OutputSchema);
+        AssertEx.Equal("kind, area, severity, environment, evidenceQuality, rationale", string.Join(", ", schema.Properties.Select(static property => property.Name)));
+        AssertEx.Equal("kind", string.Join(", ", schema.Properties.Where(static property => property.Required).Select(static property => property.Name)));
+        AssertEx.Equal(expected: 1000, AssertEx.NotNull(schema.Find("rationale")).MaxLength);
+        AssertEx.Equal("none, partial, good", string.Join(", ", AssertEx.NotNull(AssertEx.NotNull(schema.Find("evidenceQuality")).Enum)));
+
+        var routes = graph.Edges.Where(static edge => edge.From == "classify")
+                          .Select(static edge => $"{AssertEx.NotNull(edge.Condition).Value.GetString()}->{edge.To}")
+                          .Order(StringComparer.Ordinal);
+        AssertEx.Equal("bug->triage, feature->research, question->answer, unclear->needsinfo", string.Join(", ", routes));
+        AssertEx.Equal(DevWorkflowJoinPolicy.Any, graph.Nodes["approved"].JoinPolicy, "either approval carries the run into the shared tail.");
+        AssertEx.Equal("decompose, verify",
+            string.Join(", ", graph.Edges.Where(static edge => edge.From == "approved").Select(static edge => edge.To).Order(StringComparer.Ordinal)));
+        AssertEx.Equal(expected: 3,
+            new[] { DevWorkflowDefinitionSeeder.ResearchPlanApprovalSlug, DevWorkflowDefinitionSeeder.FeatureDevelopmentSlug, DevWorkflowDefinitionSeeder.DevIntakeSlug }
+                .Distinct(StringComparer.Ordinal).Count(),
+            "a new template ships under a new slug, leaving the two before it as they are.");
+    }
+
+    /// <summary>
+    ///     The tail is <c>feature-development-v1</c>'s copied: the same node types, retry targets, timeout, tool modes and
+    ///     materialization, and the decomposition keeps every sentence of the contract it is held to.
+    /// </summary>
+    [Test]
+    public void TheIntakeTailIsTheFeatureTemplatesTail()
+    {
+        var intake = DevWorkflowGraph.Parse(DevWorkflowDefinitionSeeder.DevIntakeGraph);
+        var feature = DevWorkflowGraph.Parse(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph);
+
+        foreach (var key in new[] { "decompose", "implement", "validate", "join", "verify", "integrationapproval", "integrate", "fullvalidate" })
+        {
+            var copy = intake.Nodes[key];
+            var original = feature.Nodes[key];
+            AssertEx.Equal($"{original.NodeType}|{original.ToolMode}|{original.RetryTarget}|{original.NodeTimeoutSeconds}|{original.JoinPolicy}|{original.AgentSeedSlug}",
+                $"{copy.NodeType}|{copy.ToolMode}|{copy.RetryTarget}|{copy.NodeTimeoutSeconds}|{copy.JoinPolicy}|{copy.AgentSeedSlug}",
+                $"'{key}' is the feature template's node.");
+        }
+
+        var materialization = AssertEx.NotNull(intake.Nodes["decompose"].Materialization);
+        var shipped = AssertEx.NotNull(feature.Nodes["decompose"].Materialization);
+        AssertEx.Equal($"{shipped.TemplateNodeKey}|{shipped.ArtifactKind}|{shipped.JoinNodeKey}|{shipped.MaxChildren}",
+            $"{materialization.TemplateNodeKey}|{materialization.ArtifactKind}|{materialization.JoinNodeKey}|{materialization.MaxChildren}");
+        AssertEx.True(AssertEx.NotNull(intake.Nodes["decompose"].Instructions).EndsWith(AssertEx.NotNull(feature.Nodes["decompose"].Instructions), StringComparison.Ordinal),
+            "the decomposition's contract is the feature template's, word for word, after the sentence about the path not taken.");
+    }
+
+    /// <summary>
+    ///     The two tail nodes that sit behind both paths are told the other path's steps appear as skipped by design, or
+    ///     they read the branch not taken as missing work; and every agent binds a persona the node already seeds.
+    /// </summary>
+    [Test]
+    public void TheIntakeTemplateExplainsTheBranchNotTakenAndBindsOnlyShippedPersonas()
+    {
+        var graph = DevWorkflowGraph.Parse(DevWorkflowDefinitionSeeder.DevIntakeGraph);
+
+        foreach (var key in new[] { "decompose", "verify" })
+        {
+            var instructions = AssertEx.NotNull(graph.Nodes[key].Instructions);
+            AssertEx.Contains(instructions, "\"Skipped steps\"");
+            AssertEx.Contains(instructions, "not missing work");
+        }
+
+        AssertEx.Contains(AssertEx.NotNull(graph.Nodes["triage"].Instructions), "objectiveMet false", message: "thin evidence stands the run down rather than planning on a guess.");
+        AssertEx.Equal(AgentDefaults.WorkSessionRepositoryResearchAgentSeedSlug, graph.Nodes["classify"].AgentSeedSlug);
+        foreach (var node in graph.Nodes.Values.Where(static node => node.NodeType == DevWorkflowNodeType.Agent))
+        {
+            AssertEx.True(node.AgentSeedSlug is AgentDefaults.WorkSessionRepositoryResearchAgentSeedSlug or AgentDefaults.WorkSessionGeneralAgentSeedSlug,
+                $"'{node.NodeKey}' binds '{node.AgentSeedSlug}', which is not a persona this template reuses.");
+        }
+
+        AssertEx.Contains(AssertEx.NotNull(graph.Nodes["classify"].Instructions), "name \"classification.md\"");
+        AssertEx.Contains(AssertEx.NotNull(graph.Nodes["answer"].Instructions), "name \"answer.md\"");
+        AssertEx.Contains(AssertEx.NotNull(graph.Nodes["needsinfo"].Instructions), "name \"what-is-missing.md\"");
     }
 }

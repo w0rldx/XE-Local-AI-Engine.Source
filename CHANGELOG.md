@@ -24,6 +24,13 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Added
 
+- **Dev Workflows intake template that classifies, then routes** — the seeded `dev-intake-v1` template starts with
+  one classifier that sorts a request into feature, bug, question or unclear. A feature and a bug each get their own
+  research, plan and approval gate, then share one implementation tail behind the integration gate; a question gets a
+  written answer and an unclear request a note on what is missing, and both end there. Agent nodes may declare an
+  `outputSchema` (a flat set of string, number, integer and boolean fields): the session must hand in a matching
+  `output` to finish, edges route on `output.*`, and a definition whose classifier leaves an answer unrouted is refused
+  at save (`GRAPH-C4-5`).
 - **Settings that wait for a restart are visible** — the node reports which settings apply only after a restart
   (`restartRequiredFields`) and which saved values the running node has not applied yet (`pendingRestartFields`,
   compared against the values it started with). A persistent banner lists them on every page; inside the desktop app

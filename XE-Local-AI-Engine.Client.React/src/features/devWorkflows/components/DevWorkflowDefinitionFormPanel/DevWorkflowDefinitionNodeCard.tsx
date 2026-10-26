@@ -12,13 +12,20 @@ import {
 	Tooltip,
 } from "@mantine/core";
 import { IconArrowDown, IconArrowUp, IconTrash } from "@tabler/icons-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { toOptionalNumber, withCapabilities } from "@/features/devWorkflows/models/DevWorkflowDefinitionFormHelpers";
+import {
+	parseOutputSchema,
+	readOutputSchema,
+	toOptionalNumber,
+	withCapabilities,
+} from "@/features/devWorkflows/models/DevWorkflowDefinitionFormHelpers";
 import {
 	devWorkflowCapabilityReasonMaxLength,
 	devWorkflowEffectsOf,
 	devWorkflowNodeEffects,
+	isDevWorkflowOutputSchemaShape,
 } from "@/features/devWorkflows/models/DevWorkflowDefinitionValidation";
 import { type DevWorkflowGraphNode, devWorkflowNodeTypes } from "@/features/devWorkflows/models/DevWorkflowModels";
 
@@ -72,6 +79,11 @@ export function DevWorkflowDefinitionNodeCard({
 	const { t } = useTranslation();
 	const nodeKey = node.nodeKey ?? "";
 	const isToolNode = node.nodeType === "Tool";
+	const isAgentNode = (node.nodeType ?? "Agent") === "Agent";
+	// The typed text is the cell's own state: rendering it from the node would re-indent the JSON on the keystroke that
+	// made it parse and take the caret with it. A reseeded draft remounts this card, which reseeds the text.
+	const [outputSchemaText, setOutputSchemaText] = useState(() => readOutputSchema(node.outputSchema));
+	const hasOutputSchema = node.outputSchema !== undefined && node.outputSchema !== null;
 
 	return (
 		<Paper withBorder={true} p="sm" data-testid={`dev-workflow-definition-node-${index}`}>
@@ -303,6 +315,39 @@ export function DevWorkflowDefinitionNodeCard({
 							/>
 						))}
 					</Stack>
+				) : null}
+
+				{/* Agent nodes only, as the server rules; still shown on another type while one is set, so the operator can
+				    clear what the save gate is refusing. Only the outer shape is checked here — the subset rules are the
+				    server's, and its 400 names the member that breaks them. */}
+				{isAgentNode || hasOutputSchema ? (
+					<Textarea
+						label={t("pages.devWorkflows.definition.outputSchema", "Output schema")}
+						description={t(
+							"pages.devWorkflows.definition.outputSchemaHint",
+							"Optional. A flat JSON object schema the agent must answer in; edges route on its members as output.<name>. Leave empty for none.",
+						)}
+						value={outputSchemaText}
+						autosize={true}
+						minRows={2}
+						maxRows={12}
+						error={
+							hasOutputSchema && !isAgentNode
+								? t("pages.devWorkflows.definition.outputSchemaNotOnAgent", "Only an Agent node can declare an output schema.")
+								: hasOutputSchema && !isDevWorkflowOutputSchemaShape(node.outputSchema)
+									? t(
+											"pages.devWorkflows.definition.outputSchemaInvalid",
+											'The output schema must be a JSON object whose "type" is "object".',
+										)
+									: undefined
+						}
+						onChange={(event) => {
+							const text = event.currentTarget.value;
+							setOutputSchemaText(text);
+							onPatch({ outputSchema: parseOutputSchema(text) });
+						}}
+						data-testid={`dev-workflow-definition-node-output-schema-${index}`}
+					/>
 				) : null}
 
 				{/* What this node can CHANGE, derived the way the invariants derive it — declared for an Agent and read

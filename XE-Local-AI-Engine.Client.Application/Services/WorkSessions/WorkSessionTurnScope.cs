@@ -18,16 +18,21 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 internal static class WorkSessionTurnScope
 {
     private static readonly AsyncLocal<bool> AmbientIsWorkSessionTurn = new();
+    private static readonly AsyncLocal<WorkSessionOutputSchema?> AmbientOutputSchema = new();
 
     /// <summary>Whether the current async flow is a work-session step.</summary>
     public static bool IsActive => AmbientIsWorkSessionTurn.Value;
 
-    /// <summary>Seeds the flag for the current async flow; disposal restores the prior value.</summary>
-    public static IDisposable Begin()
+    /// <summary>The output contract <c>complete_work_session</c> holds this step to, or null when its caller declared none.</summary>
+    public static WorkSessionOutputSchema? OutputSchema => AmbientOutputSchema.Value;
+
+    /// <summary>Seeds the flag and the step's output contract for the current async flow; disposal restores the prior values.</summary>
+    public static IDisposable Begin(WorkSessionOutputSchema? outputSchema = null)
     {
-        var previous = AmbientIsWorkSessionTurn.Value;
+        var previous = new Scope(AmbientIsWorkSessionTurn.Value, AmbientOutputSchema.Value);
         AmbientIsWorkSessionTurn.Value = true;
-        return new Scope(previous);
+        AmbientOutputSchema.Value = outputSchema;
+        return previous;
     }
 
     /// <summary>
@@ -64,15 +69,18 @@ internal static class WorkSessionTurnScope
     private sealed class Scope : IDisposable
     {
         private readonly bool _previous;
+        private readonly WorkSessionOutputSchema? _previousOutputSchema;
 
-        public Scope(bool previous)
+        public Scope(bool previous, WorkSessionOutputSchema? previousOutputSchema)
         {
             _previous = previous;
+            _previousOutputSchema = previousOutputSchema;
         }
 
         public void Dispose()
         {
             AmbientIsWorkSessionTurn.Value = _previous;
+            AmbientOutputSchema.Value = _previousOutputSchema;
         }
     }
 }

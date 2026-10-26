@@ -113,6 +113,28 @@ public sealed class DevWorkflowAgentExecutorTests
                                                           }
                                                           """;
 
+    /// <summary>The intake classifier: one schema'd agent, one bound agent per class behind an <c>output.kind</c> eq edge.</summary>
+    private const string Classifying = $$$"""
+                                       {
+                                         "schemaVersion": 1,
+                                         "nodes": [
+                                           { "nodeKey": "classify", "nodeType": "Agent", "label": "Classify", "agentDefinitionId": "{{{SeededAgentId}}}",
+                                             "outputSchema": { "type": "object", "required": ["kind"],
+                                                               "properties": { "kind": { "type": "string", "enum": ["feature", "bug", "question", "unclear"] } } } },
+                                           { "nodeKey": "feature", "nodeType": "Agent", "agentDefinitionId": "{{{SeededAgentId}}}" },
+                                           { "nodeKey": "bug", "nodeType": "Agent", "agentDefinitionId": "{{{SeededAgentId}}}" },
+                                           { "nodeKey": "question", "nodeType": "Agent", "agentDefinitionId": "{{{SeededAgentId}}}" },
+                                           { "nodeKey": "unclear", "nodeType": "Agent", "agentDefinitionId": "{{{SeededAgentId}}}" }
+                                         ],
+                                         "edges": [
+                                           { "from": "classify", "to": "feature", "condition": { "path": "output.kind", "op": "eq", "value": "feature" } },
+                                           { "from": "classify", "to": "bug", "condition": { "path": "output.kind", "op": "eq", "value": "bug" } },
+                                           { "from": "classify", "to": "question", "condition": { "path": "output.kind", "op": "eq", "value": "question" } },
+                                           { "from": "classify", "to": "unclear", "condition": { "path": "output.kind", "op": "eq", "value": "unclear" } }
+                                         ]
+                                       }
+                                       """;
+
     [ClassDataSource<DevWorkflowHostFixture>(Shared = SharedType.PerClass)]
     public required DevWorkflowHostFixture Host { get; init; }
 
@@ -736,6 +758,101 @@ public sealed class DevWorkflowAgentExecutorTests
         var succeeded = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, succeeded.Status);
         AssertEx.Null(succeeded.FailureClass);
+    }
+
+    /// <summary>
+    ///     A node with an output contract writes what its session handed in at <c>output</c> in its output document, where an
+    ///     <c>output.*</c> edge reads it; and the contract rides on every drive's runtime override and into the objective.
+    /// </summary>
+    [Test]
+    public async Task ACompletedAgent_UnderAnOutputContract_WritesItsOutputAndCarriesTheContract()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(Classifying);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        AssertEx.Contains(harness.Agent.Runtimes, entry => entry.Runtime?.OutputSchema?.Find("kind") is not null,
+            "the handler can only hold the session to a contract the drive handed it.");
+        var objective = harness.Agent.HandedObjective(await harness.ReadSessionIdAsync(runId, "classify"));
+        AssertEx.Contains(objective, "## Output contract");
+        AssertEx.Contains(objective, "- kind (required): one of \"feature\", \"bug\", \"question\", \"unclear\"");
+
+        await harness.RequestAgentCompletionAsync(runId, "classify", """{"Summary":"Triaged.","Output":{"kind":"bug"}}""");
+        await harness.SettleAgentAsync(runId, "classify");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        var classified = await harness.ReadNodeRunAsync(runId, "classify");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, classified.Status);
+        using var document = JsonDocument.Parse(AssertEx.NotNull(classified.OutputJson));
+        AssertEx.Equal("bug", document.RootElement.GetProperty("output").GetProperty("kind").GetString());
+    }
+
+    /// <summary>
+    ///     The harness end to end: the classifier's <c>output.kind</c> picks the one branch whose edge names it, and every
+    ///     other branch is skipped rather than run.
+    /// </summary>
+    [Test]
+    [Arguments("bug")]
+    [Arguments("question")]
+    public async Task AClassifier_RoutesItsOutputKindToTheMatchingBranchOnly(string kind)
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(Classifying);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        await harness.RequestAgentCompletionAsync(runId, "classify", $$$"""{"Summary":"Triaged.","Output":{"kind":"{{{kind}}}"}}""");
+        await harness.SettleAgentAsync(runId, "classify");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        foreach (var branch in new[] { "feature", "bug", "question", "unclear" })
+        {
+            var status = (await harness.ReadNodeRunAsync(runId, branch)).Status;
+            AssertEx.True(string.Equals(branch, kind, StringComparison.Ordinal) ? status == DevWorkflowNodeRunStatus.Running : status == DevWorkflowNodeRunStatus.Skipped,
+                $"branch '{branch}' read {status} for output.kind '{kind}'.");
+        }
+    }
+
+    /// <summary>
+    ///     Defence in depth: the handler refuses a contract-less completion, but should one reach the event log anyway — an old
+    ///     event, a contract added mid-flight — the node is stood down for a person rather than routed on an answer nobody checked.
+    /// </summary>
+    [Test]
+    [Arguments("""{"Summary":"Triaged."}""")]
+    [Arguments("""{"Summary":"Triaged.","Output":{"kind":"defect"}}""")]
+    public async Task ACompletedAgent_UnderAnOutputContract_WithoutAValidOutput_StandsDownAsObjectiveNotMet(string detail)
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(Classifying);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        await harness.RequestAgentCompletionAsync(runId, "classify", detail);
+        await harness.SettleAgentAsync(runId, "classify");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        var blocked = await harness.ReadNodeRunAsync(runId, "classify");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
+        AssertEx.Equal(DevWorkflowFailureClasses.ObjectiveNotMet, blocked.FailureClass);
+        AssertEx.Contains(AssertEx.NotNull(blocked.TerminalReason), "without the output its node routes on");
+        AssertEx.False((await harness.ReadNodeRunsAsync(runId)).Any(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Running),
+            "no branch may run on an unchecked answer.");
+    }
+
+    /// <summary>A node without a contract writes no <c>output</c> member, even when its completion event carries one.</summary>
+    [Test]
+    public async Task ACompletedAgent_WithoutAnOutputContract_WritesNoOutputMember()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        await harness.RequestAgentCompletionAsync(runId, "research", """{"Summary":"Done.","Output":{"kind":"bug"}}""");
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        var succeeded = await harness.ReadNodeRunAsync(runId, "research");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, succeeded.Status);
+        using var document = JsonDocument.Parse(AssertEx.NotNull(succeeded.OutputJson));
+        AssertEx.False(document.RootElement.TryGetProperty("output", out _), "an output nobody contracted for is not routing data.");
     }
 
     /// <summary>

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
 /// <summary>How a node with more than one inbound edge waits. The whole of the join semantics.</summary>
 internal enum DevWorkflowJoinPolicy
@@ -108,6 +109,9 @@ internal sealed class DevWorkflowGraphNode
     public required IReadOnlySet<DevWorkflowNodeEffect> RequiredCapabilities { get; init; }
 
     public required int? MaxLoopIterations { get; init; }
+
+    /// <summary>The flat object an Agent node's session must hand in, landing at <c>output.*</c> in its output document, or null.</summary>
+    public required WorkSessionOutputSchema? OutputSchema { get; init; }
 }
 
 internal sealed record DevWorkflowGraphEdge(string From, string To, DevWorkflowCondition? Condition)

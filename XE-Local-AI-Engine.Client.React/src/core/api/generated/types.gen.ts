@@ -2045,6 +2045,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph
 	} | null;
 	toolMode?: string | null;
 	maxLoopIterations?: number | null;
+	outputSchema?: unknown;
 	isTemplate?: boolean | null;
 };
 

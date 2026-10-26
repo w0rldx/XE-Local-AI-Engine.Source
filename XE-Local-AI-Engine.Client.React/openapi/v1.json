@@ -33351,6 +33351,9 @@
             "format": "int32",
             "nullable": true
           },
+          "outputSchema": {
+            "nullable": true
+          },
           "isTemplate": {
             "type": "boolean",
             "nullable": true

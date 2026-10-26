@@ -4,6 +4,7 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
+using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
 /// <summary>The parsed, in-memory projection of a run's pinned <c>graph_json</c> — the source of routing truth.</summary>
 /// <remarks>
@@ -362,7 +363,8 @@ internal sealed class DevWorkflowGraph
             ModelProfile = TrimmedOptionalString(element, "modelProfile"),
             ReasoningEffort = ParseReasoningEffort(element, nodeKey),
             RequiredCapabilities = ParseRequiredCapabilities(element, nodeKey, nodeType),
-            MaxLoopIterations = ParseMaxLoopIterations(element, nodeKey, retryTarget)
+            MaxLoopIterations = ParseMaxLoopIterations(element, nodeKey, retryTarget),
+            OutputSchema = DevWorkflowOutputSchema.Parse(element, nodeKey, nodeType)
         };
     }
 
@@ -638,6 +640,7 @@ internal sealed class DevWorkflowGraph
         EnsureEveryPathReachesAnEnd();
         EnsureDeclaredWritesAreGated();
         EnsureAppliesFollowAValidation();
+        EnsureOutputRoutesAreDeclared();
 
         foreach (var node in Nodes.Values.Where(static node => node.RetryTarget is not null))
         {
@@ -750,6 +753,96 @@ internal sealed class DevWorkflowGraph
                                                      + "having run. Put a Tool node in Validate mode on every path into it (invariant GRAPH-C4-3).");
         }
     }
+
+    /// <summary><c>GRAPH-C4-5</c> — an edge routing on a node's <c>output.*</c> names what its output schema declares, and a classifier routes every answer.</summary>
+    /// <remarks>
+    ///     A condition on an undeclared member, comparing a member with a value of another kind than its type, or comparing an enum member
+    ///     with a value outside its enum, is an edge that can never fire.
+    ///     When EVERY out-edge is an <c>eq</c> on one enum member, the node is a classifier, and an enum value with no edge is an answer
+    ///     with nowhere to go. Edges of any other shape skip that third clause. See docs/wiki/25-dev-workflows.md ("Edges, joins and the pinned graph").
+    /// </remarks>
+    private void EnsureOutputRoutesAreDeclared()
+    {
+        const string Prefix = "output.";
+        foreach (var node in Nodes.Values.Where(static node => node.OutputSchema is not null).OrderBy(static node => node.NodeKey, StringComparer.Ordinal))
+        {
+            var schema = node.OutputSchema!;
+            var edges = OutboundEdges(node.NodeKey);
+
+            // A classifier: every out-edge an eq on the SAME enum member. Anything else is routing this rule cannot read as a partition.
+            var partition = edges.Count > 0;
+            var classifiedBy = new HashSet<string>(StringComparer.Ordinal);
+            var routed = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var edge in edges)
+            {
+                if (edge.Condition is not { } condition || !condition.Path.StartsWith(Prefix, StringComparison.Ordinal))
+                {
+                    partition = false;
+                    continue;
+                }
+
+                if (schema.Find(condition.Path[Prefix.Length..]) is not { } property)
+                {
+                    throw new DevWorkflowValidationException($"The edge {edge} routes on '{condition.Path}', which the outputSchema of node '{node.NodeKey}' does not declare; "
+                                                             + $"it declares {string.Join(", ", schema.Properties.Select(static member => $"'{Prefix}{member.Name}'"))} (invariant GRAPH-C4-5).");
+                }
+
+                // DevWorkflowCondition compares only like kinds, eq and ne included, and a validated output never carries null, so a
+                // value of another kind than the member's never fires. Strings DO order (ordinally), so gt on a string member stays.
+                if (condition.Operator is not (DevWorkflowConditionOperator.Exists or DevWorkflowConditionOperator.NotExists) && !Comparable(property.Type, condition.Value.ValueKind))
+                {
+                    throw new DevWorkflowValidationException($"The edge {edge} compares '{condition.Path}' with {condition.Value.GetRawText()}, but the outputSchema of node "
+                                                             + $"'{node.NodeKey}' declares it a {JsonNamingPolicy.CamelCase.ConvertName(property.Type.ToString())}, so it could never fire (invariant GRAPH-C4-5).");
+                }
+
+                if (property.Enum is not { } values || condition.Operator is not (DevWorkflowConditionOperator.Eq or DevWorkflowConditionOperator.Ne))
+                {
+                    partition = false;
+                    continue;
+                }
+
+                if (condition.Value.ValueKind != JsonValueKind.String || !values.Contains(condition.Value.GetString(), StringComparer.Ordinal))
+                {
+                    throw new DevWorkflowValidationException($"The edge {edge} compares '{condition.Path}' with {condition.Value.GetRawText()}, which is not one of "
+                                                             + $"{string.Join(", ", values.Select(static value => JsonSerializer.Serialize(value)))}, so it could never fire (invariant GRAPH-C4-5).");
+                }
+
+                partition &= condition.Operator == DevWorkflowConditionOperator.Eq;
+                _ = classifiedBy.Add(property.Name);
+                _ = routed.Add(condition.Value.GetString()!);
+            }
+
+            if (!partition || classifiedBy.Count != 1)
+            {
+                continue;
+            }
+
+            var classified = schema.Find(classifiedBy.Single())!;
+            // An optional member the agent leaves out fires no edge at all, which is the same dead end as an unrouted value.
+            if (!classified.Required)
+            {
+                throw new DevWorkflowValidationException($"Node '{node.NodeKey}' routes every out-edge on '{Prefix}{classified.Name}', which its outputSchema does not list "
+                                                         + "in 'required', so a run whose agent leaves it out would have nowhere to go. Make it required (invariant GRAPH-C4-5).");
+            }
+
+            var unrouted = classified.Enum!.Where(value => !routed.Contains(value)).ToList();
+            if (unrouted.Count > 0)
+            {
+                throw new DevWorkflowValidationException($"Node '{node.NodeKey}' routes on '{Prefix}{classified.Name}' and has no edge for "
+                                                         + $"{string.Join(", ", unrouted.Select(static value => JsonSerializer.Serialize(value)))}, so a run whose agent answers that "
+                                                         + "would have nowhere to go. Add an edge for every value the schema allows (invariant GRAPH-C4-5).");
+            }
+        }
+    }
+
+    /// <summary>Whether a condition value of <paramref name="kind" /> can ever equal or order against a member of <paramref name="type" />.</summary>
+    private static bool Comparable(WorkSessionOutputType type, JsonValueKind kind) =>
+        type switch
+        {
+            WorkSessionOutputType.String => kind == JsonValueKind.String,
+            WorkSessionOutputType.Boolean => kind is JsonValueKind.True or JsonValueKind.False,
+            _ => kind == JsonValueKind.Number
+        };
 
     /// <summary>Has EVERY run reaching this node already passed one with <paramref name="property" />?</summary>
     /// <remarks>

@@ -564,6 +564,71 @@ public sealed class DevWorkflowEndpointTests
     }
 
     /// <summary>
+    ///     <c>outputSchema</c> is what a classifier routes on, and a field missing from the wire DTO is DROPPED by a PUT
+    ///     round-trip. Both halves are asserted: the stored blob keeps the schema as authored, and the response renders it.
+    /// </summary>
+    [Test]
+    public async Task Definition_KeepsAnAgentNodesOutputSchemaThroughTheRoundTrip()
+    {
+        const string Schema = """{"type":"object","properties":{"kind":{"type":"string","enum":["bug","feature"]},"rationale":{"type":"string","maxLength":1000}},"required":["kind"]}""";
+        var classifierGraph = $$$"""
+                                 {"schemaVersion":1,
+                                  "nodes":[{"nodeKey":"classify","nodeType":"Agent","outputSchema":{{{Schema}}}},
+                                           {"nodeKey":"bug","nodeType":"Agent"},
+                                           {"nodeKey":"feature","nodeType":"Agent"}],
+                                  "edges":[{"from":"classify","to":"bug","condition":{"path":"output.kind","op":"eq","value":"bug"}},
+                                           {"from":"classify","to":"feature","condition":{"path":"output.kind","op":"eq","value":"feature"}}]}
+                                 """;
+        var store = Store();
+        string? stored = null;
+        store.UpdateDefinitionAsync(Arg.Any<UpdateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call =>
+             {
+                 stored = call.Arg<UpdateDevWorkflowDefinitionCommand>().GraphJson;
+                 return DefinitionSnapshot(stored);
+             });
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "PUT", Definition, $$"""{"version":4,"name":"intake","graph":{{classifierGraph}}}""");
+        var body = await response.Content.ReadAsStringAsync();
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, body);
+        AssertEx.NotNull(stored);
+        using var storedDocument = JsonDocument.Parse(stored!);
+        var storedNodes = storedDocument.RootElement.GetProperty("nodes");
+        AssertEx.Equal(Schema, storedNodes[0].GetProperty("outputSchema").GetRawText(), "the stored graph is what a run pins, so the contract survives into it byte for byte.");
+        AssertEx.False(storedNodes[1].TryGetProperty("outputSchema", out _), "and a node that declares none writes none, so a definition authored before this field keeps its bytes.");
+
+        using var document = JsonDocument.Parse(body);
+        var nodes = document.RootElement.GetProperty("graph").GetProperty("nodes");
+        AssertEx.Equal(Schema, nodes[0].GetProperty("outputSchema").GetRawText());
+    }
+
+    /// <summary>
+    ///     The wire carries the schema as raw JSON and leaves every rule to the runtime's parser, so an invalid one is a
+    ///     400 with the parser's own sentence naming the node and the problem.
+    /// </summary>
+    [Test]
+    [Arguments("Agent", """{"type":"object","properties":{"kind":{"type":"array"}}}""", "member 'kind' needs a 'type' of")]
+    [Arguments("Agent", """{"type":"object","properties":{"kind":{"type":"string"}},"required":["area"]}""", "requires 'area', which its 'properties' do not declare")]
+    [Arguments("Tool", """{"type":"object","properties":{"kind":{"type":"string"}}}""", "only an Agent node's session hands in an output")]
+    public async Task CreateDefinition_WithAnInvalidOutputSchema_AnswersTheParsersSentence(string nodeType, string schema, string refusal)
+    {
+        var graph = $$$"""{"schemaVersion":1,"nodes":[{"nodeKey":"classify","nodeType":"{{{nodeType}}}","outputSchema":{{{schema}}}}],"edges":[]}""";
+        var store = Store();
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "POST", Definitions, CreateDefinitionBody(graph));
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var detail = document.RootElement.GetProperty("detail").GetString();
+        AssertEx.Contains(detail, "'classify'", StringComparison.Ordinal);
+        AssertEx.Contains(detail, refusal, StringComparison.Ordinal);
+        await store.DidNotReceive().CreateDefinitionAsync(Arg.Any<CreateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
     ///     A malformed <c>requiredCapabilities</c> is refused with the runtime parser's own sentence, naming the node,
     ///     rather than the serializer's message about a CLR dictionary type.
     /// </summary>

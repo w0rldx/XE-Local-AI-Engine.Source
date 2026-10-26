@@ -282,6 +282,28 @@ describe("validateDevWorkflowGraph", () => {
 		);
 	});
 
+	it("checks only an output schema's outer shape and leaves the subset rules to the server", () => {
+		// A member type the server refuses still passes here: its 400 names the member, which this form cannot.
+		const schema = { type: "object", properties: { kind: { type: "array" } } };
+		expect(
+			validateDevWorkflowGraph(chain({ nodes: [node("research", { outputSchema: schema }), node("plan"), node("approval")] })),
+		).toEqual([]);
+		for (const outputSchema of ["{ not json", ["object"], { type: "string" }, { properties: {} }]) {
+			expect(
+				validateDevWorkflowGraph(chain({ nodes: [node("research", { outputSchema }), node("plan"), node("approval")] })),
+			).toEqual([{ rule: "invalidOutputSchema", subject: "research" }]);
+		}
+	});
+
+	it("refuses an output schema on any node but an Agent, because only an Agent's session hands one in", () => {
+		const outputSchema = { type: "object", properties: { kind: { type: "string" } } };
+		expect(
+			validateDevWorkflowGraph(
+				chain({ nodes: [node("research"), node("plan", { nodeType: "Tool", outputSchema }), node("approval")] }),
+			),
+		).toContainEqual({ rule: "outputSchemaNotOnAgent", subject: "plan" });
+	});
+
 	it("refuses a gate out-edge no answer would take, and names the gate that owns it", () => {
 		// "Approved" is the past participle. It validates, it never fires, and the branch behind it is dead — which is
 		// exactly the mistake GRAPH-C4-1 exists to catch at authoring time.

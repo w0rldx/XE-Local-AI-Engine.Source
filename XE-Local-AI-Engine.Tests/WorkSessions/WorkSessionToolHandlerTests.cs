@@ -456,6 +456,120 @@ public sealed class WorkSessionToolHandlerTests
         AssertEx.Null(AssertEx.NotNull(ReadCompletionDetail(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId))).ObjectiveMet);
     }
 
+    /// <summary>
+    ///     Under an output contract a completion without a valid output is a tool error and records nothing, so the session stays
+    ///     open and the model corrects itself in the next call. A nested object is one of the invalid shapes.
+    /// </summary>
+    [Test]
+    [Arguments("""{"summary":"Done."}""", "needs an 'output' object")]
+    [Arguments("""{"summary":"Done.","output":{"kind":"defect"}}""", "\"defect\"")]
+    [Arguments("""{"summary":"Done.","output":{"kind":{"label":"bug"}}}""", "'output.kind' must be")]
+    [Arguments("""{"summary":"Done.","output":{"kind":"bug","severity":"high"}}""", "carries 'severity'")]
+    [Arguments("""{"summary":"Done.","output":{"rationale":"no kind"}}""", "missing the required member 'kind'")]
+    [Arguments("""{"summary":"Done.","output":["bug"]}""", "must be a flat object")]
+    public async Task CompleteWorkSession_UnderAnOutputContract_RefusesAMissingOrInvalidOutput(string arguments, string expected)
+    {
+        var factory = Host.Factory;
+        var sessionId = Guid.NewGuid();
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var handler = Handler(factory, WorkSessionToolDefinitions.CompleteWorkSession.ToolName);
+
+        string result;
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        using (WorkSessionTurnScope.Begin(KindContract))
+        {
+            result = await handler.ExecuteAsync(arguments);
+        }
+
+        AssertEx.Contains(result, "stays open");
+        AssertEx.Contains(result, expected);
+        AssertEx.False((await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId))
+            .Any(static entry => entry.EventType == WorkSessionEventTypes.CompletionRequested),
+            "A refused completion must not close the session.");
+    }
+
+    [Test]
+    public async Task CompleteWorkSession_UnderAnOutputContract_RecordsAValidOutputOnTheEventDetail()
+    {
+        var factory = Host.Factory;
+        var sessionId = Guid.NewGuid();
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var handler = Handler(factory, WorkSessionToolDefinitions.CompleteWorkSession.ToolName);
+
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        using (WorkSessionTurnScope.Begin(KindContract))
+        {
+            AssertEx.Contains(await handler.ExecuteAsync("""{"summary":"Triaged.","output":{"kind":"bug","rationale":"It crashes."}}"""), "close at the end of this turn");
+        }
+
+        var output = AssertEx.NotNull(ReadCompletionDetail(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId))).Output;
+        AssertEx.True(output.HasValue, "a valid output is recorded on the event.");
+        AssertEx.Equal("bug", output!.Value.GetProperty("kind").GetString());
+    }
+
+    /// <summary>An honest unmet close owes no output: it stands the node run down for a person, and demanding one invites an invented answer.</summary>
+    [Test]
+    public async Task CompleteWorkSession_UnderAnOutputContract_AcceptsAnUnmetCloseWithoutOutput()
+    {
+        var factory = Host.Factory;
+        var sessionId = Guid.NewGuid();
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var handler = Handler(factory, WorkSessionToolDefinitions.CompleteWorkSession.ToolName);
+
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        using (WorkSessionTurnScope.Begin(KindContract))
+        {
+            AssertEx.Contains(await handler.ExecuteAsync("""{"summary":"The request names nothing I can classify.","objectiveMet":false}"""), "close at the end of this turn");
+        }
+
+        AssertEx.Equal(false, AssertEx.NotNull(ReadCompletionDetail(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId))).ObjectiveMet);
+    }
+
+    /// <summary>An unmet close skips the output check, so whatever output it carries is unchecked and is not recorded as routing data.</summary>
+    [Test]
+    public async Task CompleteWorkSession_UnderAnOutputContract_DropsTheOutputOfAnUnmetClose()
+    {
+        var factory = Host.Factory;
+        var sessionId = Guid.NewGuid();
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var handler = Handler(factory, WorkSessionToolDefinitions.CompleteWorkSession.ToolName);
+
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        using (WorkSessionTurnScope.Begin(KindContract))
+        {
+            AssertEx.Contains(await handler.ExecuteAsync("""{"summary":"Could not classify it.","objectiveMet":false,"output":{"kind":"defect"}}"""),
+                "close at the end of this turn");
+        }
+
+        var detail = AssertEx.NotNull(ReadCompletionDetail(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId)));
+        AssertEx.Equal(false, detail.ObjectiveMet);
+        AssertEx.Null(detail.Output, "an output nobody validated must not be recorded under the contract.");
+    }
+
+    /// <summary>Without a contract the member is ignored, even malformed: a session outside a workflow records what it always did.</summary>
+    [Test]
+    [Arguments("""{"summary":"Done.","output":{"kind":"bug"}}""")]
+    [Arguments("""{"summary":"Done.","output":{"kind":{"label":"bug"}}}""")]
+    public async Task CompleteWorkSession_WithoutAnOutputContract_IgnoresTheOutput(string arguments)
+    {
+        var factory = Host.Factory;
+        var sessionId = Guid.NewGuid();
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var handler = Handler(factory, WorkSessionToolDefinitions.CompleteWorkSession.ToolName);
+
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        {
+            AssertEx.Contains(await handler.ExecuteAsync(arguments), "close at the end of this turn");
+        }
+
+        AssertEx.Null(AssertEx.NotNull(ReadCompletionDetail(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId))).Output);
+    }
+
+    /// <summary>A completion recorded before the member existed reads with no output rather than failing to read.</summary>
+    [Test]
+    public void CompletionDetail_RecordedBeforeTheOutputMember_ReadsAsNoOutput() =>
+        AssertEx.Null(AssertEx.NotNull(JsonSerializer.Deserialize<WorkSessionCompletionDetail>("""{"Summary":"Done.","ObjectiveMet":true}""")).Output);
+
     [Test]
     public async Task CompleteWorkSession_WhenAKeyIsUnknown_StillRejectsTheWholeCall()
     {
@@ -561,6 +675,30 @@ public sealed class WorkSessionToolHandlerTests
                 message: $"{handler.ToolName} must hand back a shape the model can copy rather than the parser's message.");
         }
     }
+
+    /// <summary>The intake classifier's contract, reduced to one required enum and one optional string.</summary>
+    private static readonly WorkSessionOutputSchema KindContract = new()
+    {
+        Properties =
+        [
+            new WorkSessionOutputProperty
+            {
+                Name = "kind",
+                Type = WorkSessionOutputType.String,
+                Required = true,
+                Enum = ["feature", "bug", "question", "unclear"],
+                MaxLength = null
+            },
+            new WorkSessionOutputProperty
+            {
+                Name = "rationale",
+                Type = WorkSessionOutputType.String,
+                Required = false,
+                Enum = null,
+                MaxLength = 200
+            }
+        ]
+    };
 
     private static string Example(string toolName) =>
         toolName switch

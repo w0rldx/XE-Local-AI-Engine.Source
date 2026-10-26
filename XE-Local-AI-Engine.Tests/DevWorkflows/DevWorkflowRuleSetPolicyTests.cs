@@ -236,6 +236,39 @@ public sealed class DevWorkflowRuleSetPolicyTests
             "both cut policies say so in the objective — a truncation an agent cannot see is one it will treat as the whole rule.");
     }
 
+    /// <summary>A contract at its rendered bound beside two full rule sets still composes inside the ceiling, carrying all three.</summary>
+    /// <remarks>The contract is uncapped in the objective, so its rendered bound is what keeps it from pushing past the ceiling.</remarks>
+    [Test]
+    public async Task AnOutputContractNearItsRenderedBound_BesideFullRuleSets_StaysInsideTheObjectiveCeiling()
+    {
+        await using var harness = new DevWorkflowHarness();
+        _ = await harness.CreateRuleSetAsync("Alpha rules", "ALPHA-HEAD " + new string('a', 4096), """{"projectIds":[],"nodeTypes":[]}""");
+        _ = await harness.CreateRuleSetAsync("Bravo rules", "BRAVO-HEAD " + new string('b', 4096), """{"projectIds":[],"nodeTypes":[]}""");
+        var graph = SingleAgent.Replace("\"label\": \"Research\",", "\"label\": \"Research\", \"outputSchema\": " + NearBoundContract() + ",", StringComparison.Ordinal);
+        var contract = AssertEx.NotNull(DevWorkflowGraph.Parse(graph).Nodes["research"].OutputSchema).Render();
+        AssertEx.True(contract.Length > DevWorkflowOutputSchema.MaxRenderedLength - 200,
+            $"the contract renders only {contract.Length} characters, so it never approaches the bound and this test proves nothing.");
+
+        var runId = await harness.StartRunAsync(graph, developmentProjectId: ProjectId);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        var objective = harness.Agent.Objectives.Single();
+        AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
+            $"the objective is {objective.Length} characters, past the {DevWorkflowAgentExecutor.MaxObjectiveCharacters} the work-session layer accepts.");
+        AssertEx.Contains(objective, contract, message: "the contract is the request's other half, so it is carried whole.");
+        AssertEx.Contains(objective, "ALPHA-HEAD");
+        AssertEx.Contains(objective, "BRAVO-HEAD", message: "and the policy still gets a share beside it.");
+    }
+
+    /// <summary>Nine string members of eight enum values each: within a couple of hundred characters of the rendered bound.</summary>
+    private static string NearBoundContract() =>
+        """{"type":"object","properties":{"""
+        + string.Join(",", Enumerable.Range(0, 9).Select(static member =>
+            $$"""
+              "member{{member}}":{"type":"string","enum":[{{string.Join(",", Enumerable.Range(0, 8).Select(value => $"\"value-{member}-{value}-padding\""))}}]}
+              """))
+        + "}}";
+
     /// <summary>
     ///     Only the node types that INJECT policy text carry a copy of it. Every node type still records WHICH rule
     ///     sets applied — a Tool or HumanGate row that snapshotted bodies would be storing, encrypting and decrypting a

@@ -42,6 +42,8 @@ export const devWorkflowGraphRules = [
 	"ungatedWrite",
 	"applyWithoutValidation",
 	"templateValidationLeaf",
+	"invalidOutputSchema",
+	"outputSchemaNotOnAgent",
 ] as const;
 export type DevWorkflowGraphRule = (typeof devWorkflowGraphRules)[number];
 
@@ -122,6 +124,15 @@ function templateNodeKeys(
 		}
 	}
 	return templates;
+}
+
+/**
+ * Whether an `outputSchema` has the one shape this form checks: a JSON object whose `type` is `"object"`. The subset
+ * rules beneath that (member types, enums, limits) are `DevWorkflowOutputSchema.Parse`'s alone, and its 400 names them.
+ * A value the editor could not parse is held as the typed text, which is a string and fails here.
+ */
+export function isDevWorkflowOutputSchemaShape(value: unknown): boolean {
+	return typeof value === "object" && value !== null && !Array.isArray(value) && (value as { type?: unknown }).type === "object";
 }
 
 /**
@@ -458,6 +469,13 @@ export function validateDevWorkflowGraph(graph: DevWorkflowGraph | undefined): r
 		}
 		if ((node.joinPolicy ?? "").toLowerCase() === "any" && (inboundCount.get(key) ?? 0) < 2) {
 			issues.push({ rule: "joinAnyNeedsTwoInbound", subject: key });
+		}
+		if (node.outputSchema !== undefined && node.outputSchema !== null) {
+			if (nodeTypeOf(node) !== "agent") {
+				issues.push({ rule: "outputSchemaNotOnAgent", subject: key });
+			} else if (!isDevWorkflowOutputSchemaShape(node.outputSchema)) {
+				issues.push({ rule: "invalidOutputSchema", subject: key });
+			}
 		}
 	}
 

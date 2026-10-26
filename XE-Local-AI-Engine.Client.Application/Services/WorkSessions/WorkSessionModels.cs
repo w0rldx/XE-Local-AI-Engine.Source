@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.WorkSessions;
 
+using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>One row of the work-session list. Deliberately carries no objective — the list never renders one.</summary>
@@ -243,6 +244,13 @@ public sealed class WorkSessionRuntimeOverride
     /// </remarks>
     public string? RepositoryRoot { get; init; }
 
+    /// <summary>The output contract <c>complete_work_session</c> holds every step to, or null for none.</summary>
+    /// <remarks>
+    ///     Set by a development-workflow Agent node that declares <c>outputSchema</c>, read off the run's PINNED graph on every
+    ///     drive like the rest of the override, so a definition edited mid-run cannot change what the session must hand in.
+    /// </remarks>
+    internal WorkSessionOutputSchema? OutputSchema { get; init; }
+
     /// <summary>
     ///     Nothing pinned and nothing to enforce, which is the shape every caller but the workflow runtime has.
     /// </summary>
@@ -250,7 +258,8 @@ public sealed class WorkSessionRuntimeOverride
     ///     The refusal flag counts: a node that pins no model and no effort still has to have its turns judged, and
     ///     the supervisor drops an override this reports empty.
     /// </remarks>
-    public bool IsEmpty => string.IsNullOrWhiteSpace(ModelProfile) && string.IsNullOrWhiteSpace(ReasoningEffort) && !RefuseUndeclaredWrites && RepositoryRoot is null;
+    public bool IsEmpty => string.IsNullOrWhiteSpace(ModelProfile) && string.IsNullOrWhiteSpace(ReasoningEffort) && !RefuseUndeclaredWrites && RepositoryRoot is null
+                           && OutputSchema is null;
 }
 
 /// <summary>
@@ -287,6 +296,7 @@ public sealed class UpdateWorkSessionRequestModel
 /// <remarks>
 ///     <see cref="ObjectiveMet" /> is nullable rather than defaulted so an event recorded before the argument existed
 ///     reads as <see langword="null" /> — absent, and therefore met — instead of as an unmet objective the model
-///     never declared. Only an explicit <see langword="false" /> stands a workflow-owned node run down.
+///     never declared. Only an explicit <see langword="false" /> stands a workflow-owned node run down. <see cref="Output" />
+///     is recorded only under an output contract, so an event without one, older ones included, reads as null.
 /// </remarks>
-internal sealed record WorkSessionCompletionDetail(string Summary, bool? ObjectiveMet = null);
+internal sealed record WorkSessionCompletionDetail(string Summary, bool? ObjectiveMet = null, JsonElement? Output = null);

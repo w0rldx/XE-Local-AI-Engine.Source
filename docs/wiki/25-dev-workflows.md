@@ -89,6 +89,14 @@ one thing and the edges another. What it buys is `branch` — one recorded answe
 and on what", otherwise reconstructible only by re-evaluating conditions against a document that may since have
 been superseded.
 
+**An `Agent` node may declare `outputSchema`**: a flat object of `string`, `number`, `integer` and `boolean` members,
+with `enum` and `maxLength` on strings, parsed and bounded by `DevWorkflowOutputSchema` and refused at save on any
+other node type or outside that subset. The node's session must then finish `complete_work_session` with an `output`
+object that matches it. A missing or invalid `output` is a tool error naming the violation and the session stays
+open, so the model corrects itself in-session; an honest `objectiveMet: false` close owes none. The answer lands at
+`output` in the node's output document, where an ordinary condition routes on it
+(`{"path":"output.kind","op":"eq","value":"bug"}`). The check is the shape, never the truth of the answer. A schema whose rendered contract (`WorkSessionOutputSchema.Render`) is longer than `DevWorkflowOutputSchema.MaxRenderedLength` is refused too, since that text rides uncapped in the objective; so is a member declared twice.
+
 ### 2.2 Edges, joins and the pinned graph
 
 Edges may carry conditions evaluated against the producing node's output document. A node's `joinPolicy`
@@ -160,7 +168,7 @@ verification node runs over a task package and no implementations. That is accep
 verify is an agent asked to judge what was produced, and judging that nothing was is a better answer than a run
 going terminal without saying so — and the skipped clones reach its objective by name, so it judges with facts.
 
-**Invariant ids in refusal messages.** Four structural rules are enforced when the graph is parsed, and each names
+**Invariant ids in refusal messages.** Five structural rules are enforced when the graph is parsed, and each names
 its id in the exception it throws, so an operator who greps an id out of a refusal finds the rule.
 
 | Id | The rule it denotes | Explained under |
@@ -169,6 +177,7 @@ its id in the exception it throws, so an operator who greps an id out of a refus
 | `GRAPH-C4-2` | A node that writes outside its sandbox is reached through a human gate. | Edges, joins and the pinned graph |
 | `GRAPH-C4-3` | An apply follows a validation. | Edges, joins and the pinned graph; The provenance walk in front of an apply |
 | `GRAPH-C4-4` | A fix loop's per-node cap is declared only where there is a loop to bound. | The cross-node fix loop |
+| `GRAPH-C4-5` | An edge routing on a node's `output.*` names what its outputSchema declares, and a classifier routes every answer. | Edges, joins and the pinned graph |
 
 Read literally, **`GRAPH-C4-1`** is implied by acyclicity, a node with no out-edge being an end. The non-vacuous version is
 over the edges a run can *take*: an out-edge of a human gate that is false for all three answers can never fire, so
@@ -180,7 +189,7 @@ reported on its own. A gate that owns a dead edge is named before anything else 
 two gates strands every gate above the broken one and an ordinal tie-break would send the operator to the wrong
 line. The rule is decidable for a **human** gate only: a `Gate` node's output document is whatever the node
 produced, so no definition-time reading of its conditions says which will fire. It is deliberately *not* the rule
-that every gate answer has somewhere to go — both seeded gates carry an `Approve` edge and nothing else, and a
+that every gate answer has somewhere to go — every seeded gate carries an `Approve` edge and nothing else, and a
 rejection ending the run is the design.
 
 **`GRAPH-C4-2`** is the structural half of the write rule. The apply rule below is strictly stronger for an apply node, so
@@ -217,6 +226,17 @@ acyclic, and that rests on two rules rather than one. A template subtree's only 
 template root could reach its materializing node is through that join — and a join that *is* the materializing node
 or one of its ancestors is refused. Without that second rule the virtual edge closes a loop the authored-edge
 acyclicity check is silent about, and the topological order would not be one.
+
+**`GRAPH-C4-5`** is `GRAPH-C4-1`'s question asked of a classifier, and it is decidable for the same reason: an
+`outputSchema` says at save time which answers a node can give, so an edge that can never fire is visible before a
+run takes it. Three clauses, each about an out-edge whose path starts `output.`. The member it names must be
+declared, because a condition on an absent member fails closed and the branch behind it is written but dead — a
+nested path included, since the schema is flat. An `eq` or `ne` on an enum member must compare with one of its
+values, for the same reason. And when **every** out-edge of the node is an `eq` on the same enum member, every value
+must have an edge: a classifier that leaves one unrouted strands each run that answers it, so the refusal names the
+values left out. That member must also be listed in the schema's `required`: an optional member the agent leaves out
+fires none of the node's edges, which is the same dead end as an unrouted value. Any comparison but `exists`/`notExists` must also carry a value of the member's own kind (a string for a string, a number for a number or integer, a boolean for a boolean), because `DevWorkflowCondition` compares only like kinds; strings still order, so `gt` on a string member stays legal. Edges of any other shape — mixed members, other operators — skip the third clause and keep the
+first two.
 
 **An apply node is reached from a human gate and from nothing else** — `Y3`, the name the React development pages
 use for the same rule when they say where a workflow-driven task's approval lives — and it is what the whole
@@ -260,7 +280,7 @@ checkout and not the AgentHome workspace. A node with no project, with Developme
 resolved is blocked `Configuration` before a session exists. Its reason names the three tools and says that Retry ends
 the same way and that Skip skips every node that depends on it.
 
-Two templates ship. `research-plan-approval` is strictly linear, needs no repository, and ends on the approval that
+Three templates ship. `research-plan-approval` is strictly linear, needs no repository, and ends on the approval that
 is the point of it. `feature-development-v1` is research and a plan a human approves, a decomposition that expands
 into one implementation-and-validation subtree per task, and an integration stage that applies nothing until a
 second human gate says so. Both its gates route on the approve decision and have **no other branch**, which is what
@@ -268,6 +288,29 @@ makes a refusal end the run rather than continue past it — for the integration
 node is reached from a human gate and from nothing else (`GRAPH-C4-2`'s stronger sibling, §2.2). Its implementation node declares a timeout of its
 own because nothing else bounds it: Development Mode bounds each attempt and each review round, but not attempts
 back to back.
+
+`dev-intake-v1` starts from one classifier and branches into a tree. `classify` binds the Repository Research persona
+and declares the triage contract (§2.1): `kind` (`feature`, `bug`, `question`, `unclear`, required), `area`,
+`severity`, `environment`, `evidenceQuality` and a bounded `rationale`. A change request is a `feature`. One
+`output.kind` edge per class leaves it, which `GRAPH-C4-5` holds exhaustive. A `question` goes to `answer`, which
+writes `answer.md` and changes nothing; an `unclear` request goes to `needsinfo`, which writes `what-is-missing.md`
+naming what the operator has to add. Both are endpoints, and the run completes with everything else skipped. A
+`feature` takes `research → plan → planapproval`; a `bug` takes `triage → rootcause → fixplan → fixapproval`, where
+triage reads the classification's area, environment and evidence quality and, when the evidence is too thin to act
+on, closes with `objectiveMet: false` so a person is asked instead of a fix being planned on a guess. The classifier
+also saves `classification.md`, because downstream nodes receive what it found as an upstream artifact (§5.6), not
+as its output document.
+
+**Both gates meet in `approved`, a `Join` under `Any`,** each on its `Approve` edge only, and `approved` feeds both
+`decompose` and `verify`; the rest is `feature-development-v1`'s tail, copied rather than referenced — the per-slice
+fix loop, the integration gate before `integrate`, and `fullvalidate`'s retry to `verify`. `approved → verify` plays
+the part `planapproval → verify` plays in the feature template, carrying whichever plan was approved. The two shapes
+that look simpler both fail. Putting `decompose` on `Any` with an evidence edge from each gate into `verify` parses,
+but `verify` is under `All` and the gate not taken leaves its edge `Dead`, so `verify` skips and the run cancels on
+every path. Putting `verify` on `Any` instead is refused by `GRAPH-C4-3`: the fixpoint ANDs an `Any` node's inbound
+edges, and the gate edge carries no validation. Because the not-taken path is skipped, its steps reach the
+`decompose` and `verify` objectives as skipped-step lines (§5.5); both nodes' instructions say that is the branch not
+taken rather than missing work.
 
 **Two of `feature-development-v1`'s edges are load-bearing for evidence rather than for routing.** Because a
 producing *type* stops the upstream-artifact walk on its own path (§3.7), the join's inbound edge from the
@@ -715,6 +758,7 @@ The objective is assembled in a fixed order, and the order is the point.
 | --- | --- | --- |
 | The node's own instructions | No | A node whose instructions exceed the work-session limit is the pre-existing refusal; silently trimming what an author wrote would be a worse answer than the block. |
 | The operator's request | No | With the instructions, what a node cannot do without. |
+| The output contract (§2.1) | No | Only on a node that declares `outputSchema`, rendered by `WorkSessionOutputSchema.Render`. It is the request's other half, what the session must hand back, so it is uncapped and counted with it. |
 | The decomposition contract (§6.4) | No | Lands before the policy phase reads the running length, so policy gets the room it leaves. |
 | The scoped rule sets | Yes | Policy that pushed the objective over the limit would crowd out the request it is supposed to govern. |
 | Upstream artifacts | Yes | The bounded phase (§5.6). |
