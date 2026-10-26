@@ -112,12 +112,12 @@ export function HardwareProfileCard({ profile, isLoading, isFetching, error, onR
 								)}
 							</Text>
 							{profile.cpuFallbackReason ? (
-								<Text size="sm" c="dimmed" data-testid="model-fit-hardware-cpu-fallback-reason">
+								<Text size="xs" data-testid="model-fit-hardware-cpu-fallback-reason">
 									{profile.cpuFallbackReason}
 								</Text>
 							) : null}
 							{profile.cpuFallbackRemediation ? (
-								<Text size="sm" c="dimmed" data-testid="model-fit-hardware-cpu-fallback-remediation">
+								<Text size="xs" data-testid="model-fit-hardware-cpu-fallback-remediation">
 									{profile.cpuFallbackRemediation}
 								</Text>
 							) : null}
@@ -140,7 +140,7 @@ export function HardwareProfileCard({ profile, isLoading, isFetching, error, onR
 									"The GPU devices of the selected runtime have not been listed, so whether inference will use the GPU is unknown. Model sizing on this page still assumes the GPU's VRAM is usable.",
 								)}
 							</Text>
-							<Text size="sm" c="dimmed" data-testid="model-fit-hardware-backend-undetermined-detail">
+							<Text size="xs" data-testid="model-fit-hardware-backend-undetermined-detail">
 								{profile.backendUndeterminedReason}
 							</Text>
 						</Stack>

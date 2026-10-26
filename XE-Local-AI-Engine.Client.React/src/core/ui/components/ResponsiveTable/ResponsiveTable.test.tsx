@@ -213,4 +213,21 @@ describe("ResponsiveTable", () => {
 		expect(screen.getByText("No jobs")).toBeTruthy();
 		expect(screen.queryByTestId("jobs")).toBeNull();
 	});
+
+	// A tour step that points at the table must still find its anchor while the table is empty.
+	it("keeps the tour anchor on the empty state", () => {
+		setViewportWidth(1440);
+		renderWithMantine(
+			<ResponsiveTable
+				rows={[]}
+				columns={columns}
+				rowKey={(job) => job.id}
+				minWidth={600}
+				empty={<p>No jobs</p>}
+				data-tour="jobs-tour"
+			/>,
+		);
+
+		expect(document.querySelector('[data-tour="jobs-tour"]')?.textContent).toBe("No jobs");
+	});
 });

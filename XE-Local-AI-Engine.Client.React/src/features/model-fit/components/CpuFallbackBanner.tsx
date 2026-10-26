@@ -1,4 +1,4 @@
-import { Alert, CloseButton, Group, Text } from "@mantine/core";
+import { Alert, CloseButton, Group, Stack, Text } from "@mantine/core";
 import { IconCpu } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
@@ -25,12 +25,16 @@ export function CpuFallbackBanner() {
 		return null;
 	}
 
-	const fallbackMessage =
-		profile?.cpuFallback && profile.cpuFallbackReason
-			? profile.cpuFallbackRemediation
-				? `${profile.cpuFallbackReason} ${profile.cpuFallbackRemediation}`
-				: profile.cpuFallbackReason
-			: t("pages.modelFit.hardware.cpuFallback.message", "No supported GPU detected — running on CPU. Responses will be slower.");
+	// The sentence is localized from the audit state; the server's English reason and remediation follow as detail.
+	const message = profile?.cpuFallback
+		? t(
+				"pages.modelFit.hardware.cpuFallbackAlert.reason",
+				"The selected inference runtime could not use this machine's GPU, so inference is running on the CPU.",
+			)
+		: t("pages.modelFit.hardware.cpuFallback.message", "No supported GPU detected — running on CPU. Responses will be slower.");
+	const detail = profile?.cpuFallback
+		? [profile.cpuFallbackReason, profile.cpuFallbackRemediation].filter(Boolean).join(" ")
+		: "";
 
 	return (
 		<Alert
@@ -42,7 +46,14 @@ export function CpuFallbackBanner() {
 			data-testid="cpu-fallback-banner"
 		>
 			<Group justify="space-between" align="center" wrap="nowrap" gap="sm">
-				<Text size="sm">{fallbackMessage}</Text>
+				<Stack gap={0}>
+					<Text size="sm">{message}</Text>
+					{detail ? (
+						<Text size="xs" data-testid="cpu-fallback-banner-detail">
+							{detail}
+						</Text>
+					) : null}
+				</Stack>
 				<CloseButton
 					aria-label={t("pages.modelFit.hardware.cpuFallback.dismiss", "Dismiss")}
 					onClick={dismiss}

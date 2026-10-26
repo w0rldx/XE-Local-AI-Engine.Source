@@ -68,7 +68,8 @@ export function ResponsiveTable<T>({
 	const { ref, width: containerWidth } = useElementSize<HTMLDivElement>();
 
 	if (rows.length === 0 && empty !== undefined) {
-		return empty;
+		// A tour step can point at an empty table, so the anchor stays on the empty state.
+		return tourId === undefined ? empty : <div data-tour={tourId}>{empty}</div>;
 	}
 
 	if (shouldRenderCards(viewportWidth, viewportHeight, containerWidth, minWidth)) {
