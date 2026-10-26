@@ -1132,7 +1132,7 @@ public sealed class DevWorkflowAgentExecutorTests
             "the node ran: an over-long objective is refused, and the refusal blocks it for a human.");
 
         var objective = await harness.ReadObjectiveAsync(runId, "verify");
-        AssertEx.Contains(objective, " characters.)", message: "the document that DID arrive is truncated, which is what leaves the list nothing to fit in.");
+        AssertEx.Contains(objective, " characters. Read the rest", message: "the document that DID arrive is truncated, which is what leaves the list nothing to fit in.");
         AssertEx.Contains(objective, "### Skipped steps");
         AssertEx.Contains(objective,
             "- 'doomed' was skipped: Skipped by an operator: No repository binding exists for this branch.",
@@ -1229,9 +1229,44 @@ public sealed class DevWorkflowAgentExecutorTests
             "the node ran: an over-long objective would have been refused and blocked it for a human.");
 
         var objective = await harness.ReadObjectiveAsync(runId, "plan");
-        AssertEx.Contains(objective, " characters.)", message: "the marker says how much of the document the agent is not seeing.");
+        AssertEx.Contains(objective,
+            " characters. Read the rest with read_upstream_artifact name=\"research.md\".)",
+            message: "the marker says how much of the document the agent is not seeing, and how to read the rest.");
         AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
             $"the objective was {objective.Length} characters, past the ceiling this lane holds itself to.");
+    }
+
+    /// <summary>
+    ///     The read tool's scope rides the override on EVERY drive, start and resume alike, because the work-session layer keeps none
+    ///     of it; an entry node handed nothing carries no scope, so its session is never offered the tool.
+    /// </summary>
+    [Test]
+    public async Task AnAgentNodeHandedUpstreamArtifacts_CarriesWhatItConsumedOnItsStartAndEveryResume()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(ResearchThenPlan);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var (_, entryRuntime) = harness.Agent.Runtimes.Single(static drive => drive.Verb == "start");
+        AssertEx.True(entryRuntime is null || entryRuntime.ReadableArtifacts.Count == 0, "the entry node was handed nothing, so it has nothing to read.");
+
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", ResearchMarkdown);
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await harness.SettleAgentAsync(runId, "plan", AgentWorkSessionStatus.Paused);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        var research = (await harness.ReadArtifactsAsync(runId)).Single();
+        var plan = harness.Agent.Runtimes.Count - harness.Agent.Runtimes.Reverse().TakeWhile(static drive => drive.Verb != "create").Count();
+        var drives = harness.Agent.Runtimes.Skip(plan).ToList();
+        AssertEx.Equal("start, resume", string.Join(", ", drives.Select(static drive => drive.Verb)));
+        foreach (var (verb, runtime) in drives)
+        {
+            var readable = AssertEx.NotNull(runtime).ReadableArtifacts.Single();
+            AssertEx.Equal(research.Id, readable.ArtifactId, $"the {verb} carries what the node run recorded consuming.");
+            AssertEx.Equal("research.md", readable.Name);
+            AssertEx.Equal("research", readable.Producer);
+            AssertEx.Equal(research.ContentSha256, readable.ContentSha256, "and the digest the tool verifies the bytes against.");
+        }
     }
 
     /// <summary>
@@ -1356,6 +1391,7 @@ public sealed class DevWorkflowAgentExecutorTests
         var objective = await harness.ReadObjectiveAsync(runId, "plan");
         AssertEx.Contains(objective, "research.md", message: "the node is still told the artifact exists.");
         AssertEx.Contains(objective, "too large to include here", message: "and why it is holding a reference rather than contents.");
+        AssertEx.Contains(objective, DevWorkflowAgentExecutor.ReadMoreMarker("research.md"), message: "and that the read tool can page through it.");
         AssertEx.False(objective.Contains("did not verify", StringComparison.Ordinal),
             "the bytes were gone, so anything that read them would have reported that instead — the size gate ran first.");
         AssertEx.False(objective.Contains("aaaaaaaaaa", StringComparison.Ordinal), "and no content was injected.");
@@ -1389,6 +1425,28 @@ public sealed class DevWorkflowAgentExecutorTests
     }
 
     /// <summary>
+    ///     A block with room for its header and the read line but not for a body falls back to exactly that, so the agent is
+    ///     still told the contents exist and how to read them rather than handed a bare reference.
+    /// </summary>
+    [Test]
+    public async Task TheObjective_WhenOnlyTheHeaderAndTheReadLineFit_TellsTheAgentHowToReadTheContents()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(ResearchThenPlanInstructed(new string('i', 6790)));
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", new string('a', 2000));
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        var objective = await harness.ReadObjectiveAsync(runId, "plan");
+        AssertEx.True(objective.EndsWith($"({DevWorkflowAgentExecutor.ReadMoreMarker("research.md")})", StringComparison.Ordinal),
+            "the header is followed by the read line and nothing else.");
+        AssertEx.False(objective.Contains("aaaaaaaaaa", StringComparison.Ordinal), "no body had room.");
+        AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters, $"the objective was {objective.Length} characters, past the ceiling.");
+    }
+
+    /// <summary>
     ///     An artifact that is not text is rendered as a reference and a reason — and that reference is counted against
     ///     the limit like any other, because a reference-only line is still characters in the objective.
     /// </summary>
@@ -1406,6 +1464,7 @@ public sealed class DevWorkflowAgentExecutorTests
         var objective = await harness.ReadObjectiveAsync(runId, "plan");
         AssertEx.Contains(objective, "diagram.png", message: "the node is told the artifact exists.");
         AssertEx.Contains(objective, "not text", message: "and why it is holding a reference rather than contents.");
+        AssertEx.False(objective.Contains("read_upstream_artifact", StringComparison.Ordinal), "the read tool reads text only, so it is not offered as a way in.");
         AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
             $"the objective was {objective.Length} characters, past the ceiling.");
     }

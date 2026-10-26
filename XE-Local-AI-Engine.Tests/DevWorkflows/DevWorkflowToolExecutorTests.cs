@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
+using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -173,6 +174,73 @@ public sealed class DevWorkflowToolExecutorTests
         AssertEx.Equal("""{"passed":true}""",
             await harness.ReadArtifactTextAsync(runId, artifact),
             "the report the substrate produced is the report the run keeps.");
+    }
+
+    /// <summary>
+    ///     A validation over an implementation publishes the patch it judged beside its report. A re-run versions the same
+    ///     lineage, and what a downstream node wrote from the first version is flagged stale through the feed, exactly as
+    ///     for the report.
+    /// </summary>
+    [Test]
+    public async Task AValidationPublishesThePatchItJudged_AndARerunSupersedesIt()
+    {
+        await using var harness = new DevWorkflowHarness();
+        harness.Tools.Answer("validate",
+            FakeDevWorkflowToolCommands.Passing() with
+            {
+                Patch = Encoding.UTF8.GetBytes("diff --git a/one b/one\n")
+            },
+            FakeDevWorkflowToolCommands.Passing() with
+            {
+                Patch = Encoding.UTF8.GetBytes("diff --git a/two b/two\n")
+            });
+        harness.Tools.Answer("verify", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Passing());
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.FixLoopOverAConsumedArtifact, developmentProjectId: DevelopmentProjectId);
+
+        // Round one: validate publishes, the agent consumes both of its documents, and verify fails back to validate.
+        await harness.AdvanceThroughToolLaneAsync(runId);
+        var first = (await harness.ReadArtifactsAsync(runId)).Single(static artifact => artifact.Kind == DevWorkflowArtifactKind.Patch);
+        AssertEx.Equal("validate.patch", first.Name);
+        AssertEx.Equal("text/x-diff", first.MediaType);
+        AssertEx.Equal("diff --git a/one b/one\n", await harness.ReadArtifactTextAsync(runId, first), "the published bytes are the ones the pass judged.");
+        AssertEx.Contains(await harness.ReadConsumedArtifactIdsAsync(runId, "summarize"), first.Id);
+        _ = await harness.SaveAgentArtifactAsync(runId, "summarize", "summary.md", "The diff looks right.");
+        await harness.SettleAgentAsync(runId, "summarize");
+        await harness.AdvanceThroughToolLaneAsync(runId);
+
+        // Round two: validate re-runs and its new patch supersedes the one the summary was written from.
+        await harness.SettleAgentAsync(runId, "summarize");
+        await harness.AdvanceThroughToolLaneAsync(runId);
+
+        var patches = (await harness.ReadArtifactsAsync(runId)).Where(static artifact => artifact.Kind == DevWorkflowArtifactKind.Patch).OrderBy(static artifact => artifact.Version).ToList();
+        AssertEx.Equal(expected: 2, patches.Count, "the re-run versioned the same lineage rather than starting a new one.");
+        AssertEx.False(patches[0].IsLatest);
+        AssertEx.True(patches[1].IsLatest);
+        AssertEx.Equal("diff --git a/two b/two\n", await harness.ReadArtifactTextAsync(runId, patches[1]));
+        var marked = (await harness.ReadEventsAsync(runId)).Where(static entry => entry.EventType == "artifact.stale.marked").ToList();
+        AssertEx.Equal(expected: 1,
+            marked.Count(entry => entry.DetailJson?.Contains(patches[0].Id.ToString(), StringComparison.OrdinalIgnoreCase) == true),
+            "what consumed the first patch is flagged once, through the same mark-only path the report takes.");
+    }
+
+    /// <summary>A failing pass publishes its patch too: the diff that failed is what the fix loop and a reader need to see.</summary>
+    [Test]
+    public async Task AFailingValidationStillPublishesThePatchItJudged()
+    {
+        await using var harness = new DevWorkflowHarness();
+        harness.Tools.Answer("validate",
+            FakeDevWorkflowToolCommands.Failing() with
+            {
+                Patch = Encoding.UTF8.GetBytes("diff --git a/broken b/broken\n")
+            });
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId);
+
+        await harness.AdvanceThroughToolLaneAsync(runId);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, (await harness.ReadNodeRunAsync(runId, "validate")).Status);
+        var patches = (await harness.ReadArtifactsAsync(runId)).Where(static artifact => artifact.Kind == DevWorkflowArtifactKind.Patch).ToList();
+        AssertEx.Equal(expected: 3, patches.Count, "every failing attempt kept the diff it failed on.");
+        AssertEx.True(patches.All(static artifact => artifact.Name == "validate.patch"));
     }
 
     /// <summary>

@@ -175,6 +175,10 @@ public sealed class DevWorkflowGraphContractTests
         }
 
         AssertEx.True(DevWorkflowGraphContract.ValidateAndCountNodes(DevWorkflowDefinitionSeeder.DevIntakeGraph, cap) is > 0 and <= 500, "and so must the intake template.");
+        foreach (var json in DevWorkflowDefinitionSeeder.DevIntakePriorRevisions)
+        {
+            AssertEx.True(DevWorkflowGraphContract.ValidateAndCountNodes(json, cap) is > 0 and <= 500, "and every kept intake revision.");
+        }
     }
 
     /// <summary>

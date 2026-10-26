@@ -123,6 +123,7 @@ public sealed class ToolInvocationServiceTests
     [Arguments("spawn_subagent", "not-read-local")]
     [Arguments("update_work_plan", "not-read-local")]
     [Arguments("ask_user", "approval-gated")]
+    [Arguments("read_upstream_artifact", "work-session-only")]
     public async Task Invoke_AToolOutsideTheEnvelope_IsRefusedWithItsGatesReason(string toolName, string expectedReason)
     {
         var service = ServiceOf(Factory);

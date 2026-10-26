@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Client.Services.Mcp;
+using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 
 /// <summary>The one place a workflow node's tool call is admitted or refused.</summary>
 /// <remarks>
@@ -347,6 +348,12 @@ internal sealed class ToolInvocationService : IToolInvocationService
         if (entry.Category != ToolCategory.ReadLocal)
         {
             return "not-read-local";
+        }
+
+        // Gate 1b. A work-session tool reads the step's own turn scope, which a node invocation never has.
+        if (WorkSessionToolCatalog.Descriptors.Any(descriptor => string.Equals(descriptor.Name, entry.Name, StringComparison.Ordinal)))
+        {
+            return "work-session-only";
         }
 
         // Gate 2. The composed effective approval, tighten-only over the catalog default. A node policy tightening

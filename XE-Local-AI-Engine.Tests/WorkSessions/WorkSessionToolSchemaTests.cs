@@ -149,11 +149,30 @@ public sealed class WorkSessionToolSchemaTests
         }
     }
 
+    /// <summary>The read tool's shape: a required name, an optional non-negative character offset, an optional producer, nothing else.</summary>
+    [Test]
+    public void ReadUpstreamArtifact_TakesANameAndAnOptionalOffsetAndProducer()
+    {
+        using var document = JsonDocument.Parse(WorkSessionToolDefinitions.ReadUpstreamArtifact.ParameterSchema);
+
+        var properties = document.RootElement.GetProperty("properties");
+        AssertEx.Equal("name, offset, producer", string.Join(", ", properties.EnumerateObject().Select(static property => property.Name)));
+        AssertEx.Equal("integer", properties.GetProperty("offset").GetProperty("type").GetString());
+        AssertEx.Equal(expected: 0, properties.GetProperty("offset").GetProperty("minimum").GetInt32());
+        AssertEx.Equal("name", string.Join(", ", document.RootElement.GetProperty("required").EnumerateArray().Select(static member => member.GetString())));
+        AssertEx.True(WorkSessionToolDefinitions.ReadUpstreamArtifact.PageCharacters <= WorkSessionToolDefinitions.TextMaxLength,
+            "a page is never longer than the text bound every other work-session tool holds itself to.");
+    }
+
+    /// <summary>The read tool writes nothing, so it is the one descriptor that is not WriteExecute; the four state tools all are.</summary>
     [Test]
     public void EveryDescriptor_MatchesTheHandlerNameAndCarriesNoApprovalGate()
     {
-        AssertEx.Equal(WorkSessionToolDefinitions.ToolNames.Count, WorkSessionToolCatalog.Descriptors.Count);
-        foreach (var descriptor in WorkSessionToolCatalog.Descriptors)
+        AssertEx.Equal(WorkSessionToolDefinitions.ToolNames.Count + 1, WorkSessionToolCatalog.Descriptors.Count);
+        var read = AssertEx.NotNull(WorkSessionToolCatalog.Descriptors.SingleOrDefault(static descriptor => descriptor.Name == WorkSessionToolDefinitions.ReadUpstreamArtifact.ToolName));
+        AssertEx.Equal(ToolCategory.ReadLocal, read.Category);
+        AssertEx.False(read.RequiresApproval);
+        foreach (var descriptor in WorkSessionToolCatalog.Descriptors.Where(static descriptor => descriptor.Name != WorkSessionToolDefinitions.ReadUpstreamArtifact.ToolName))
         {
             AssertEx.Contains(WorkSessionToolDefinitions.ToolNames, descriptor.Name);
             AssertEx.False(descriptor.RequiresApproval, "A prompt per recorded finding would make an unattended session unusable.");

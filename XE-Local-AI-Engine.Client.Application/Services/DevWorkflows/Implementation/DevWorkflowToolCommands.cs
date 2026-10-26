@@ -215,6 +215,7 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
                 TestsPassed = tests.Count == 0 ? null : tests.Sum(static outcome => outcome.Passed),
                 TestsFailed = tests.Count == 0 ? null : tests.Sum(static outcome => outcome.Failed),
                 Report = Compose(verdict, profile, session, nodeRun, evidence, overlay.BasedOn),
+                Patch = overlay.Patch,
                 SecretPaths = secrets.Paths
             };
         }
@@ -292,10 +293,18 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
                               + "so nothing was judged. The base branch has most likely moved since that patch was produced.");
             }
 
+            // The bytes just applied are the ones published, so a reader downstream sees exactly what was judged; over the artifact
+            // limit they are not, and the report says so (an accepted ceiling: the limit sits below the patch maximum).
+            var publishable = patch.Payload.Length <= _options.MaxArtifactBytes;
             return new DevWorkflowOverlay(new DevWorkflowValidationBasedOn(taskId,
                     patch.Artifact.ContentHash,
-                    "These commands ran against the implementation task's approved patch, applied to a fresh clone of the base commit."),
-                Refusal: null);
+                    "These commands ran against the implementation task's approved patch, applied to a fresh clone of the base commit.",
+                    publishable ? DevWorkflowToolExecutor.PatchArtifactName(nodeRun.NodeKey) : null,
+                    publishable
+                        ? null
+                        : $"The patch is {patch.Payload.Length} bytes, over the {_options.MaxArtifactBytes}-byte artifact limit, so it was not published as an artifact."),
+                Refusal: null,
+                publishable ? patch.Payload : ReadOnlyMemory<byte>.Empty);
         }
         catch (DevelopmentInvalidTransitionException exception)
         {

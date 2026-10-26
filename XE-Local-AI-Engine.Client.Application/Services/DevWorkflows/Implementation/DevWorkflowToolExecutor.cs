@@ -186,8 +186,9 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     {
         await RecordSecretsAsync(store, run, nodeRun, result, cancellationToken);
 
-        // Evidence first, status last — the same order the agent lane and the work-session loop use one level down. A
-        // crash in that window re-derives the same answer, because the artifact write is keyed and the poll runs again.
+        // Evidence first, status last, and the patch before the report that names it. A crash in that window re-derives
+        // the same answer, because the artifact writes are keyed and the poll runs again.
+        await PromotePatchAsync(store, run, nodeRun, result, cancellationToken);
         await PromoteReportAsync(store, graph, run, nodeRun, result, cancellationToken);
 
         if (result.Passed)
@@ -237,6 +238,9 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
             },
             cancellationToken);
     }
+
+    /// <summary>The name a validation node run's published patch carries, unique per node key so clones never collide.</summary>
+    internal static string PatchArtifactName(string nodeKey) => $"{nodeKey}.patch";
 
     /// <summary>Asks a node run's commands to stop, and answers whether there was anything to ask.</summary>
     /// <remarks>
@@ -497,18 +501,68 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         }
 
         var apply = IsApplying(graph, nodeRun);
-        var artifactId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "validation-report");
-        var write = await _blobs.WriteAsync(run.Id, artifactId, result.Report, cancellationToken);
+        await AppendAsync(store,
+            run,
+            nodeRun,
+            result.Report,
+            new ArtifactKeys("validation-report", "report", "report-stale"),
+            apply ? DevWorkflowArtifactKind.Report : DevWorkflowArtifactKind.ValidationReport,
+            apply ? $"{nodeRun.NodeKey}-apply.json" : $"{nodeRun.NodeKey}-validation.json",
+            "application/json",
+            cancellationToken);
+    }
+
+    /// <summary>Publishes the patch a validation pass overlaid, on a pass and on a fail alike, so a node downstream judges the diff that was tested.</summary>
+    /// <remarks>
+    ///     The bytes are the ones the overlay verified against the task's approved subject and applied, never a second read. Keyed
+    ///     like the report, so a re-attempt versions the same lineage and marks whoever read the first version stale.
+    /// </remarks>
+    private async Task PromotePatchAsync(IDevWorkflowStore store,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        DevWorkflowToolRun result,
+        CancellationToken cancellationToken)
+    {
+        if (result.Patch.IsEmpty)
+        {
+            // Nothing was overlaid (a profile-only pass, a refusal, an apply node), or the report records why it was not published.
+            return;
+        }
+
+        await AppendAsync(store,
+            run,
+            nodeRun,
+            result.Patch,
+            new ArtifactKeys("validation-patch", "patch", "patch-stale"),
+            DevWorkflowArtifactKind.Patch,
+            PatchArtifactName(nodeRun.NodeKey),
+            "text/x-diff",
+            cancellationToken);
+    }
+
+    /// <summary>Blob first, row second, then the mark-only staleness of whoever read the version this one supersedes.</summary>
+    private async Task AppendAsync(IDevWorkflowStore store,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        ReadOnlyMemory<byte> content,
+        ArtifactKeys keys,
+        DevWorkflowArtifactKind kind,
+        string name,
+        string mediaType,
+        CancellationToken cancellationToken)
+    {
+        var artifactId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, keys.Artifact);
+        var write = await _blobs.WriteAsync(run.Id, artifactId, content, cancellationToken);
         var appended = await store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand
             {
                 RunId = run.Id,
                 ArtifactId = artifactId,
                 NodeRunId = nodeRun.Id,
                 ExpectedVersion = DevWorkflowVersions.Any,
-                OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "report"),
-                Kind = apply ? DevWorkflowArtifactKind.Report : DevWorkflowArtifactKind.ValidationReport,
-                Name = apply ? $"{nodeRun.NodeKey}-apply.json" : $"{nodeRun.NodeKey}-validation.json",
-                MediaType = "application/json",
+                OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, keys.Append),
+                Kind = kind,
+                Name = name,
+                MediaType = mediaType,
                 ContentSha256 = write.ContentHash,
                 SizeBytes = write.ByteCount,
                 ManagedReference = write.OpaqueReference
@@ -520,7 +574,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
             return;
         }
 
-        // A re-attempt's report replaces the one a downstream node may already have read. Mark-only: nothing is
+        // A re-attempt's document replaces the one a downstream node may already have read. Mark-only: nothing is
         // regenerated, and a human decides what a stale consumer is worth.
         _ = await store.MarkDependentsStaleAsync(new MarkDevWorkflowStaleCommand
             {
@@ -528,7 +582,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                 SupersededArtifactId = superseded,
                 SupersedingArtifactId = artifactId,
                 ExpectedVersion = DevWorkflowVersions.Any,
-                OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "report-stale")
+                OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, keys.Stale)
             },
             cancellationToken);
     }
@@ -612,6 +666,9 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
 
         public required int Attempt { get; init; }
     }
+
+    /// <summary>The three operation-id purposes one published document derives its artifact, append and staleness ids from.</summary>
+    private readonly record struct ArtifactKeys(string Artifact, string Append, string Stale);
 
     private sealed record SecretsDetail
     {

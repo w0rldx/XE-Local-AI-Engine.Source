@@ -251,6 +251,13 @@ public sealed class WorkSessionRuntimeOverride
     /// </remarks>
     internal WorkSessionOutputSchema? OutputSchema { get; init; }
 
+    /// <summary>The upstream artifacts <c>read_upstream_artifact</c> may read in this session; empty, the default, offers no such tool.</summary>
+    /// <remarks>
+    ///     Set by a development-workflow Agent node from what its node run RECORDED consuming, never from the live graph, and
+    ///     re-supplied on every drive like the rest of the override. Server-built, so the tool trusts the ids and digests it carries.
+    /// </remarks>
+    internal IReadOnlyList<WorkSessionReadableArtifact> ReadableArtifacts { get; init; } = [];
+
     /// <summary>
     ///     Nothing pinned and nothing to enforce, which is the shape every caller but the workflow runtime has.
     /// </summary>
@@ -259,7 +266,31 @@ public sealed class WorkSessionRuntimeOverride
     ///     the supervisor drops an override this reports empty.
     /// </remarks>
     public bool IsEmpty => string.IsNullOrWhiteSpace(ModelProfile) && string.IsNullOrWhiteSpace(ReasoningEffort) && !RefuseUndeclaredWrites && RepositoryRoot is null
-                           && OutputSchema is null;
+                           && OutputSchema is null && ReadableArtifacts.Count == 0;
+}
+
+/// <summary>One artifact a work-session step may read back page by page: where its bytes live and the digest they must verify against.</summary>
+internal sealed class WorkSessionReadableArtifact
+{
+    /// <summary>The development-workflow run whose blob store holds the bytes.</summary>
+    public required Guid RunId { get; init; }
+
+    public required Guid ArtifactId { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string Kind { get; init; }
+
+    /// <summary>The node key that produced it, which tells two same-named artifacts apart.</summary>
+    public required string Producer { get; init; }
+
+    public required int Version { get; init; }
+
+    public required string MediaType { get; init; }
+
+    public required string ContentSha256 { get; init; }
+
+    public required long SizeBytes { get; init; }
 }
 
 /// <summary>

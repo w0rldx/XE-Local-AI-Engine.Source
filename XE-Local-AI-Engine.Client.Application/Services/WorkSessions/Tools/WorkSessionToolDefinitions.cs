@@ -158,6 +158,38 @@ internal static class WorkSessionToolDefinitions
         public const string ExampleArguments = """{"summary":"What the session achieved.","objectiveMet":true}""";
     }
 
+    public static class ReadUpstreamArtifact
+    {
+        public const string ToolName = "read_upstream_artifact";
+
+        /// <summary>How many characters one call hands back; the model pages on with the nextOffset the last page gave.</summary>
+        public const int PageCharacters = TextMaxLength;
+
+        public const string Description =
+            "Read an artifact the steps before you produced, one page at a time. The objective lists each one by name "
+            + "and inlines what fits; when one is cut short or shown by its header only, call this with that name to "
+            + "read the rest. Each call returns one page of text with offset, length, total and nextOffset; "
+            + "call again with offset set to nextOffset until it is null. Only the artifacts handed to this step can be "
+            + "read. Pass producer (the node key that made it) only when two steps produced artifacts with the same name.";
+
+        // Integer offset and plain strings: the offered tools compile into ONE GBNF grammar, and none of these adds a repetition bound.
+        public const string ParameterSchema = """
+                                              {
+                                                "type": "object",
+                                                "additionalProperties": false,
+                                                "required": ["name"],
+                                                "properties": {
+                                                  "name": { "type": "string", "minLength": 1 },
+                                                  "offset": { "type": "integer", "minimum": 0 },
+                                                  "producer": { "type": "string" }
+                                                }
+                                              }
+                                              """;
+
+        /// <summary>Handed back verbatim when the arguments would not read: a model recovers from a shape it can copy.</summary>
+        public const string ExampleArguments = """{"name":"implement.patch","offset":0}""";
+    }
+
     /// <summary>Every work-session tool name, in offer order.</summary>
     public static readonly IReadOnlyList<string> ToolNames =
     [
@@ -213,6 +245,16 @@ internal static class WorkSessionToolCatalog
             ParameterSchema = WorkSessionToolDefinitions.CompleteWorkSession.ParameterSchema,
             RequiresApproval = false,
             Category = ToolCategory.WriteExecute
+        },
+
+        // Not a state tool: it writes nothing and is offered only to a step that was handed upstream artifacts (WorkSessionTurnScope).
+        new()
+        {
+            Name = WorkSessionToolDefinitions.ReadUpstreamArtifact.ToolName,
+            Description = WorkSessionToolDefinitions.ReadUpstreamArtifact.Description,
+            ParameterSchema = WorkSessionToolDefinitions.ReadUpstreamArtifact.ParameterSchema,
+            RequiresApproval = false,
+            Category = ToolCategory.ReadLocal
         }
     ];
 }

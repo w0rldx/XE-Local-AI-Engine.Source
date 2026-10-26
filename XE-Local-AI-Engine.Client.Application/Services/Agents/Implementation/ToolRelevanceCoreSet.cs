@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 
 /// <summary>
-///     The node's always-on tool names: the four work-session state tools, plus every approval-bearing BUILT-IN from
+///     The node's always-on tool names: the work-session state tools and upstream read, plus every approval-bearing BUILT-IN from
 ///     the node tool catalog.
 /// </summary>
 /// <remarks>
@@ -31,7 +31,10 @@ internal sealed class ToolRelevanceCoreSet : IToolRelevanceCoreSet
     {
         // Read live rather than cached: the MCP registry (and therefore the catalog) is populated as servers connect,
         // and the composition below is a handful of string comparisons over a precomputed built-in list.
-        var core = new HashSet<string>(WorkSessionToolDefinitions.ToolNames, StringComparer.Ordinal);
+        var core = new HashSet<string>(WorkSessionToolDefinitions.ToolNames, StringComparer.Ordinal)
+        {
+            WorkSessionToolDefinitions.ReadUpstreamArtifact.ToolName
+        };
 
         foreach (var entry in _offerProvider.GetKnownTools())
         {

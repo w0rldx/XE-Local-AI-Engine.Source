@@ -1,10 +1,16 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
+using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -77,22 +83,79 @@ public sealed class DevWorkflowDefinitionSeederTests
             "the knowledge-base persona other features bind is left as it was; the template got its own.");
     }
 
-    /// <summary>
-    ///     The revision this build replaces differs from the shipped graph only in which persona its research node binds, compared
-    ///     by structure and by every node's text so any other drift in the kept copy fails here.
-    /// </summary>
+    /// <summary>Revision 4 is revision 3 with the research node bound to the repository-research persona, and nothing else.</summary>
+    /// <remarks>Compared by structure and by every node's text, so any other drift in the kept copy fails here.</remarks>
     [Test]
-    public void TheNewestKeptRevisionDiffersFromTheShippedTemplateOnlyInTheResearchPersona()
+    public void TheFourthRevisionDiffersFromTheThirdOnlyInTheResearchPersona()
     {
-        var shipped = DevWorkflowGraph.Parse(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph);
+        var newer = DevWorkflowGraph.Parse(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraphRevision4);
         var kept = DevWorkflowGraph.Parse(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraphRevision3);
 
-        AssertEx.Equal(string.Join(",", shipped.Edges.Select(static edge => edge.ToString()).Order(StringComparer.Ordinal)),
+        AssertEx.Equal(string.Join(",", newer.Edges.Select(static edge => edge.ToString()).Order(StringComparer.Ordinal)),
             string.Join(",", kept.Edges.Select(static edge => edge.ToString()).Order(StringComparer.Ordinal)));
-        foreach (var (key, node) in shipped.Nodes)
+        foreach (var (key, node) in newer.Nodes)
         {
             AssertEx.Equal(node.Instructions ?? string.Empty, kept.Nodes[key].Instructions ?? string.Empty, $"node '{key}' was not the one this change was about.");
             AssertEx.Equal(key == "research" ? AgentDefaults.WorkSessionResearchAgentSeedSlug : node.AgentSeedSlug ?? string.Empty, kept.Nodes[key].AgentSeedSlug ?? string.Empty);
+        }
+    }
+
+    /// <summary>Each template's newest kept revision is the shipped graph with only the verification node's instructions changed.</summary>
+    /// <remarks>
+    ///     Every node compared whole on every field but those instructions, and every edge with its condition, so a kept copy
+    ///     that drifted anywhere else, or a verify edit that leaked into another node, fails here.
+    /// </remarks>
+    [Test]
+    [Arguments(DevWorkflowDefinitionSeeder.FeatureDevelopmentSlug)]
+    [Arguments(DevWorkflowDefinitionSeeder.DevIntakeSlug)]
+    public void TheNewestKeptRevisionDiffersFromTheShippedTemplateOnlyInWhatVerifyIsTold(string slug)
+    {
+        var template = TemplateFor(slug);
+        var shipped = DevWorkflowGraph.Parse(template.Graph);
+        var kept = DevWorkflowGraph.Parse(template.NewestRevision);
+
+        AssertEx.Equal(string.Join(",", shipped.Nodes.Keys.Order(StringComparer.Ordinal)), string.Join(",", kept.Nodes.Keys.Order(StringComparer.Ordinal)));
+        AssertEx.Equal(string.Join("\n", shipped.Edges.Select(static edge => JsonSerializer.Serialize(edge)).Order(StringComparer.Ordinal)),
+            string.Join("\n", kept.Edges.Select(static edge => JsonSerializer.Serialize(edge)).Order(StringComparer.Ordinal)),
+            "edges and their conditions are untouched.");
+        foreach (var (key, node) in shipped.Nodes)
+        {
+            AssertEx.Equal(ShapeWithoutInstructions(kept.Nodes[key]), ShapeWithoutInstructions(node), $"node '{key}' keeps every field but its instructions.");
+            if (key != "verify")
+            {
+                AssertEx.Equal(kept.Nodes[key].Instructions ?? string.Empty, node.Instructions ?? string.Empty, $"node '{key}' was not the one this change was about.");
+            }
+        }
+
+        AssertEx.False(string.Equals(kept.Nodes["verify"].Instructions, shipped.Nodes["verify"].Instructions, StringComparison.Ordinal),
+            "the verification instructions ARE what changed.");
+        AssertEx.False(AssertEx.NotNull(kept.Nodes["verify"].Instructions).Contains("read_upstream_artifact", StringComparison.Ordinal),
+            "and the kept copy is the OLD text, the one an installation seeded before this change still holds.");
+    }
+
+    /// <summary>Both verification nodes are told the patch reaches them, how to read past the inlined part, and what to do when it never arrived.</summary>
+    /// <remarks>
+    ///     Pinned by wording because no code path fails when a model is told to sign off on a diff it cannot see, which is
+    ///     what blocked every feature and bug run before the patch was published.
+    /// </remarks>
+    [Test]
+    [Arguments(DevWorkflowDefinitionSeeder.FeatureDevelopmentSlug)]
+    [Arguments(DevWorkflowDefinitionSeeder.DevIntakeSlug)]
+    public void TheShippedVerificationReadsEveryPatchBeforeItSignsOff(string slug)
+    {
+        var instructions = AssertEx.NotNull(DevWorkflowGraph.Parse(TemplateFor(slug).Graph).Nodes["verify"].Instructions);
+
+        AssertEx.Contains(instructions, "validate#<task id>.patch", message: "the artifact a materialized validation clone publishes is named by its clone key.");
+        AssertEx.Contains(instructions, "read_upstream_artifact", message: "a patch past the inline share is read with the tool, not guessed at.");
+        AssertEx.Contains(instructions, "nextOffset", message: "the tool pages, so the instruction names the cursor it hands back.");
+        AssertEx.Contains(instructions, "sign off only on what you actually read");
+        AssertEx.Contains(instructions, "was not published", message: "a patch over the artifact cap never arrives, and the report says why.");
+        AssertEx.Contains(instructions, "objectiveMet false", message: "an unread patch stands the verification down instead of being signed blind.");
+        AssertEx.Contains(instructions, "plan.md");
+        AssertEx.Contains(instructions, "name \"verification.md\"", message: "the save_artifact contract is unchanged.");
+        if (slug == DevWorkflowDefinitionSeeder.DevIntakeSlug)
+        {
+            AssertEx.Contains(instructions, "fix-plan.md", message: "a bug run's approved plan is the fix plan.");
         }
     }
 
@@ -128,20 +191,164 @@ public sealed class DevWorkflowDefinitionSeederTests
     ///     installation holding it unrecognised and stranded on it for good.
     /// </summary>
     [Test]
-    public void TheKeptRevisionIsInTheListTheSeederIsGivenAndHashesApartFromTheShippedGraph()
+    [Arguments(DevWorkflowDefinitionSeeder.FeatureDevelopmentSlug)]
+    [Arguments(DevWorkflowDefinitionSeeder.DevIntakeSlug)]
+    public void TheKeptRevisionIsInTheListTheSeederIsGivenAndHashesApartFromTheShippedGraph(string slug)
     {
-        AssertEx.Contains(DevWorkflowDefinitionSeeder.FeatureDevelopmentPriorRevisions,
-            revision => string.Equals(revision, DevWorkflowDefinitionSeeder.FeatureDevelopmentGraphRevision3, StringComparison.Ordinal),
+        var template = TemplateFor(slug);
+        var newest = template.NewestRevision;
+        var revisions = template.PriorRevisions;
+
+        AssertEx.Contains(revisions,
+            revision => string.Equals(revision, newest, StringComparison.Ordinal),
             "the revision this build replaces has to reach the seeder, not merely exist beside it.");
 
-        AssertEx.False(string.Equals(DevWorkflowDefinitionSeeder.GraphHash(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraphRevision3),
-                DevWorkflowDefinitionSeeder.GraphHash(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph),
-                StringComparison.Ordinal),
+        AssertEx.False(string.Equals(DevWorkflowDefinitionSeeder.GraphHash(newest), DevWorkflowDefinitionSeeder.GraphHash(template.Graph), StringComparison.Ordinal),
             "a revision that hashes to the current graph is a copy of it, which catches nobody up and hides the edit it was meant to preserve.");
 
-        AssertEx.Equal(DevWorkflowDefinitionSeeder.FeatureDevelopmentPriorRevisions.Length,
-            DevWorkflowDefinitionSeeder.FeatureDevelopmentPriorRevisions.Select(DevWorkflowDefinitionSeeder.GraphHash).Distinct(StringComparer.Ordinal).Count(),
+        AssertEx.Equal(revisions.Length,
+            revisions.Select(DevWorkflowDefinitionSeeder.GraphHash).Distinct(StringComparer.Ordinal).Count(),
             "and no two revisions are the same graph, which would mean one of them was copied from the wrong place.");
+    }
+
+    /// <summary>
+    ///     An untouched row holding the graph the previous build shipped is rewritten to the one this build ships, through
+    ///     the definition update, and nothing else is written: the slug's other templates already match.
+    /// </summary>
+    [Test]
+    [Arguments(DevWorkflowDefinitionSeeder.FeatureDevelopmentSlug)]
+    [Arguments(DevWorkflowDefinitionSeeder.DevIntakeSlug)]
+    public async Task AnUntouchedRowOnThePreviousRevisionIsUpgradedToTheShippedTemplate(string slug)
+    {
+        var template = TemplateFor(slug);
+        var store = StoreHolding(slug, template.NewestRevision);
+
+        await SeedAsync(store);
+
+        var updates = store.ReceivedCalls().Where(static call => call.GetMethodInfo().Name == nameof(IDevWorkflowStore.UpdateDefinitionAsync))
+                           .Select(static call => (UpdateDevWorkflowDefinitionCommand)call.GetArguments()[0]!)
+                           .ToList();
+        AssertEx.Equal(expected: 1, updates.Count, "one row was on a revision this build knows it shipped.");
+        var update = updates[0];
+        AssertEx.Equal(template.Graph, update.GraphJson, "the row now holds the shipped template, byte for byte.");
+        AssertEx.Null(update.Name, "the name is the operator's to keep.");
+        AssertEx.Equal(expected: 1, update.ExpectedVersion);
+        _ = await store.DidNotReceiveWithAnyArgs().CreateDefinitionAsync(default!, default);
+    }
+
+    /// <summary>A row whose graph matches neither the shipped template nor any kept revision is an operator's edit, and is left alone.</summary>
+    [Test]
+    [Arguments(DevWorkflowDefinitionSeeder.FeatureDevelopmentSlug)]
+    [Arguments(DevWorkflowDefinitionSeeder.DevIntakeSlug)]
+    public async Task AnOperatorEditedRowIsNeverRewritten(string slug)
+    {
+        const string Edited = """
+                              {
+                                "schemaVersion": 1,
+                                "nodes": [{ "nodeKey": "approve", "nodeType": "HumanGate", "label": "Approve" }],
+                                "edges": []
+                              }
+                              """;
+        var store = StoreHolding(slug, Edited);
+
+        await SeedAsync(store);
+
+        _ = await store.DidNotReceiveWithAnyArgs().UpdateDefinitionAsync(default!, default);
+        _ = await store.DidNotReceiveWithAnyArgs().CreateDefinitionAsync(default!, default);
+    }
+
+    /// <summary>
+    ///     A store listing one seeded row per shipped slug: <paramref name="slug" /> holding <paramref name="graphJson" />,
+    ///     the others already on their shipped template, so only the row under test can draw a write.
+    /// </summary>
+    private static IDevWorkflowStore StoreHolding(string slug, string graphJson)
+    {
+        var shipped = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [DevWorkflowDefinitionSeeder.ResearchPlanApprovalSlug] = DevWorkflowDefinitionSeeder.ResearchPlanApprovalGraph,
+            [DevWorkflowDefinitionSeeder.FeatureDevelopmentSlug] = DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph,
+            [DevWorkflowDefinitionSeeder.DevIntakeSlug] = DevWorkflowDefinitionSeeder.DevIntakeGraph,
+            [slug] = graphJson
+        };
+        var rows = shipped.Select(static entry => new DevWorkflowDefinitionSummary
+                          {
+                              Id = Guid.NewGuid(),
+                              Name = entry.Key,
+                              GraphHash = DevWorkflowDefinitionSeeder.GraphHash(entry.Value),
+                              NodeCount = 1,
+                              Source = DevWorkflowDefinitionSource.Seeded,
+                              SeedSlug = entry.Key,
+                              Archived = false,
+                              Version = 1,
+                              CreatedAtUtc = 0,
+                              UpdatedAtUtc = 0
+                          })
+                          .ToList();
+
+        var store = Substitute.For<IDevWorkflowStore>();
+        store.ListDefinitionsAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(rows);
+        store.UpdateDefinitionAsync(Arg.Any<UpdateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>())
+             .Returns(static call =>
+             {
+                 var command = call.Arg<UpdateDevWorkflowDefinitionCommand>();
+                 return new DevWorkflowDefinitionSnapshot
+                 {
+                     Id = command.DefinitionId,
+                     Name = "updated",
+                     GraphJson = AssertEx.NotNull(command.GraphJson),
+                     GraphHash = DevWorkflowDefinitionSeeder.GraphHash(command.GraphJson!),
+                     NodeCount = command.NodeCount ?? 0,
+                     Source = DevWorkflowDefinitionSource.Seeded,
+                     SeedSlug = null,
+                     Archived = false,
+                     Version = command.ExpectedVersion + 1,
+                     CreatedAtUtc = 0,
+                     UpdatedAtUtc = 0
+                 };
+             });
+        return store;
+    }
+
+    private static Task SeedAsync(IDevWorkflowStore store)
+    {
+        var settings = Substitute.For<INodeRuntimeSettings>();
+        settings.GetDevWorkflowsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        var services = new ServiceCollection().AddSingleton(store).BuildServiceProvider();
+        return new DevWorkflowDefinitionSeeder(services.GetRequiredService<IServiceScopeFactory>(), settings, NullLogger<DevWorkflowDefinitionSeeder>.Instance)
+            .StartAsync(CancellationToken.None);
+    }
+
+    /// <summary>What one seeded slug ships: its live graph, the revision it replaces, and the list the seeder is given.</summary>
+    private sealed class ShippedTemplate
+    {
+        public required string Graph { get; init; }
+
+        public required string NewestRevision { get; init; }
+
+        public required string[] PriorRevisions { get; init; }
+    }
+
+    private static ShippedTemplate TemplateFor(string slug) =>
+        slug == DevWorkflowDefinitionSeeder.FeatureDevelopmentSlug
+            ? new ShippedTemplate
+            {
+                Graph = DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph,
+                NewestRevision = DevWorkflowDefinitionSeeder.FeatureDevelopmentGraphRevision4,
+                PriorRevisions = DevWorkflowDefinitionSeeder.FeatureDevelopmentPriorRevisions
+            }
+            : new ShippedTemplate
+            {
+                Graph = DevWorkflowDefinitionSeeder.DevIntakeGraph,
+                NewestRevision = DevWorkflowDefinitionSeeder.DevIntakeGraphRevision1,
+                PriorRevisions = DevWorkflowDefinitionSeeder.DevIntakePriorRevisions
+            };
+
+    /// <summary>A node's every field but its instructions, as JSON, so two nodes compare whole rather than field by field.</summary>
+    private static string ShapeWithoutInstructions(DevWorkflowGraphNode node)
+    {
+        var shape = AssertEx.NotNull(JsonSerializer.SerializeToNode(node)).AsObject();
+        _ = shape.Remove(nameof(DevWorkflowGraphNode.Instructions));
+        return shape.ToJsonString();
     }
 
     /// <summary>

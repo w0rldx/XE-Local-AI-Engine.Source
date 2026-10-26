@@ -208,6 +208,12 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **Dev Workflows verification reads the patches it signs off** — each validation node now publishes the patch it
+  tested as `<node key>.patch` beside its report, on a pass and on a failure; small diffs reach `verify` inline and
+  larger ones through a new read-only, paged `read_upstream_artifact` tool limited to what the node consumed. The
+  seeded `feature-development-v1` and `dev-intake-v1` templates tell `verify` to read every patch in full against the
+  approved plan and to refuse sign-off on one that was not published (over the artifact size cap). Untouched seeded
+  rows upgrade at startup; edited ones are left alone.
 - **Conversation list requests the 100 most recent conversations** and offers "Show all"; before, every list load read
   and decrypted every conversation's last message.
 - **Idle queue polling** for training runs, dataset generation and benchmarks falls back to 30 s instead of 1 s (every

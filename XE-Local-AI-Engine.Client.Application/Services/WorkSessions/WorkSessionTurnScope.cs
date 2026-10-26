@@ -19,6 +19,7 @@ internal static class WorkSessionTurnScope
 {
     private static readonly AsyncLocal<bool> AmbientIsWorkSessionTurn = new();
     private static readonly AsyncLocal<WorkSessionOutputSchema?> AmbientOutputSchema = new();
+    private static readonly AsyncLocal<IReadOnlyList<WorkSessionReadableArtifact>?> AmbientReadableArtifacts = new();
 
     /// <summary>Whether the current async flow is a work-session step.</summary>
     public static bool IsActive => AmbientIsWorkSessionTurn.Value;
@@ -26,12 +27,16 @@ internal static class WorkSessionTurnScope
     /// <summary>The output contract <c>complete_work_session</c> holds this step to, or null when its caller declared none.</summary>
     public static WorkSessionOutputSchema? OutputSchema => AmbientOutputSchema.Value;
 
-    /// <summary>Seeds the flag and the step's output contract for the current async flow; disposal restores the prior values.</summary>
-    public static IDisposable Begin(WorkSessionOutputSchema? outputSchema = null)
+    /// <summary>The upstream artifacts <c>read_upstream_artifact</c> may read in this step; empty outside a step that was handed any.</summary>
+    public static IReadOnlyList<WorkSessionReadableArtifact> ReadableArtifacts => AmbientReadableArtifacts.Value ?? [];
+
+    /// <summary>Seeds the flag, the step's output contract and its readable artifacts for the current async flow; disposal restores the prior values.</summary>
+    public static IDisposable Begin(WorkSessionOutputSchema? outputSchema = null, IReadOnlyList<WorkSessionReadableArtifact>? readableArtifacts = null)
     {
-        var previous = new Scope(AmbientIsWorkSessionTurn.Value, AmbientOutputSchema.Value);
+        var previous = new Scope(AmbientIsWorkSessionTurn.Value, AmbientOutputSchema.Value, AmbientReadableArtifacts.Value);
         AmbientIsWorkSessionTurn.Value = true;
         AmbientOutputSchema.Value = outputSchema;
+        AmbientReadableArtifacts.Value = readableArtifacts;
         return previous;
     }
 
@@ -51,12 +56,20 @@ internal static class WorkSessionTurnScope
         ArgumentNullException.ThrowIfNull(pool);
         ArgumentNullException.ThrowIfNull(toolApprovalPolicy);
 
+        // The read tool has nothing to read outside a step that was handed artifacts, so an agent listing it by name is not offered it there.
+        var reads = IsActive && ReadableArtifacts.Count > 0;
+        if (!reads && projected.Any(static tool => string.Equals(tool.Name, WorkSessionToolDefinitions.ReadUpstreamArtifact.ToolName, StringComparison.Ordinal)))
+        {
+            projected = [.. projected.Where(static tool => !string.Equals(tool.Name, WorkSessionToolDefinitions.ReadUpstreamArtifact.ToolName, StringComparison.Ordinal))];
+        }
+
         if (!IsActive)
         {
             return projected;
         }
 
-        var missing = pool.Where(tool => WorkSessionToolDefinitions.ToolNames.Contains(tool.Name, StringComparer.Ordinal)
+        var missing = pool.Where(tool => (WorkSessionToolDefinitions.ToolNames.Contains(tool.Name, StringComparer.Ordinal)
+                                          || (reads && string.Equals(tool.Name, WorkSessionToolDefinitions.ReadUpstreamArtifact.ToolName, StringComparison.Ordinal)))
                                          && !projected.Any(existing => string.Equals(existing.Name, tool.Name, StringComparison.Ordinal)))
                           .Select(tool => tool with
                           {
@@ -70,17 +83,20 @@ internal static class WorkSessionTurnScope
     {
         private readonly bool _previous;
         private readonly WorkSessionOutputSchema? _previousOutputSchema;
+        private readonly IReadOnlyList<WorkSessionReadableArtifact>? _previousReadableArtifacts;
 
-        public Scope(bool previous, WorkSessionOutputSchema? previousOutputSchema)
+        public Scope(bool previous, WorkSessionOutputSchema? previousOutputSchema, IReadOnlyList<WorkSessionReadableArtifact>? previousReadableArtifacts)
         {
             _previous = previous;
             _previousOutputSchema = previousOutputSchema;
+            _previousReadableArtifacts = previousReadableArtifacts;
         }
 
         public void Dispose()
         {
             AmbientIsWorkSessionTurn.Value = _previous;
             AmbientOutputSchema.Value = _previousOutputSchema;
+            AmbientReadableArtifacts.Value = _previousReadableArtifacts;
         }
     }
 }

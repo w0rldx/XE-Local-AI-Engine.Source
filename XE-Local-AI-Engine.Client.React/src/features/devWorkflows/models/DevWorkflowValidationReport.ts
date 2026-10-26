@@ -43,8 +43,8 @@ export interface DevWorkflowValidationCommand {
  * What the commands were actually run against, when the base commit alone would not say it: the sibling implementation
  * task whose hash-verified Dev Mode patch was overlaid onto the sandbox clone before they ran.
  *
- * Mirrors the server record `DevWorkflowValidationBasedOn(Guid DevelopmentTaskId, string PatchHash, string Detail)`
- * field for field — camelCase on the wire, the Guid as a string. PRESENT ONLY when a patch really was overlaid: every
+ * Mirrors the server record `DevWorkflowValidationBasedOn(Guid DevelopmentTaskId, string PatchHash, string Detail,
+ * string? PatchArtifact, string? PatchArtifactOmitted)` field for field — camelCase on the wire, the Guid as a string. PRESENT ONLY when a patch really was overlaid: every
  * other state (no sibling, an unbound or unverifiable patch, a patch that would not apply) refuses the node instead of
  * writing a report, so a present `basedOn` always carries a real hash. Absent means either an older report or an
  * honest base validation, and the reader may not tell those apart — so it renders nothing at all rather than a claim.
@@ -53,6 +53,10 @@ export interface DevWorkflowValidationBasedOn {
 	readonly developmentTaskId: string;
 	readonly patchHash: string;
 	readonly detail: string;
+	/** The run artifact holding the validated patch, absent on older reports and when it was not published. */
+	readonly patchArtifact?: string | null;
+	/** Why the patch was not published (over the artifact size cap), absent when it was. */
+	readonly patchArtifactOmitted?: string | null;
 }
 
 export interface DevWorkflowValidationReportBody {

@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -89,6 +90,9 @@ internal static class AddNodeDevWorkflowsExtensions
         // A singleton, unlike the agent executor: the sandbox lane's slot count and its in-flight registry outlive a
         // tick and a scope, and a second instance would hand the same slots out twice.
         builder.Services.AddSingleton<DevWorkflowToolExecutor>();
+
+        // A singleton for the registry's reason (it captures the handler enumerable once); it reads only what a step's turn scope carries.
+        builder.Services.AddSingleton<IClientLocalToolHandler, ReadUpstreamArtifactToolHandler>();
 
         // Only when Development Mode is on, because the workspace provider, the repository bindings and the sandbox come from there.
         // A tool node on a node with it off finds no commands and says so — a configuration answer, not a container failure in a task.

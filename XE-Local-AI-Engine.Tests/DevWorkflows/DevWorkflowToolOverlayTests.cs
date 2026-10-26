@@ -172,6 +172,26 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
         AssertEx.Contains(await StatusAsync(workspace),
             "A  subtract.txt",
             message: "staged, exactly as the apply gate stages it — the validation commands see an index that matches the approved subject.");
+        AssertEx.Equal("validate#alpha.patch", basedOn.PatchArtifact);
+        AssertEx.Null(basedOn.PatchArtifactOmitted);
+        AssertEx.Equal(Patch, Encoding.UTF8.GetString(overlay.Patch.Span), "the bytes carried back for publishing are exactly the ones that were applied.");
+    }
+
+    /// <summary>A patch over the artifact limit is still judged, but not published: the report names the limit instead of an artifact.</summary>
+    [Test]
+    public async Task APatchOverTheArtifactLimit_IsJudgedButNotCarriedBackForPublishing()
+    {
+        var workspace = await WorkspaceAsync();
+        var commands = Commands(DevTask(DevelopmentTaskStatus.AwaitingApply), Artifact(ApprovedSubject), maxArtifactBytes: 16);
+
+        var overlay = await commands.OverlayAsync(Run(), ValidateRow(), Session(workspace), CancellationToken.None);
+
+        AssertEx.Null(overlay.Refusal);
+        var basedOn = AssertEx.NotNull(overlay.BasedOn);
+        AssertEx.Null(basedOn.PatchArtifact);
+        AssertEx.Contains(AssertEx.NotNull(basedOn.PatchArtifactOmitted), "over the 16-byte artifact limit");
+        AssertEx.True(overlay.Patch.IsEmpty);
+        AssertEx.True(File.Exists(Path.Combine(workspace, "subtract.txt")), "the limit bounds what is published, never what is judged.");
     }
 
     /// <summary>
@@ -188,6 +208,7 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
 
         AssertEx.Null(overlay.BasedOn);
         AssertEx.Contains(AssertEx.NotNull(overlay.Refusal), "not the subject its approval names");
+        AssertEx.True(overlay.Patch.IsEmpty, "a patch the approval does not name is never handed on to be published.");
         AssertEx.False(File.Exists(Path.Combine(workspace, "subtract.txt")), "and nothing was written into the workspace on the way to refusing.");
     }
 
@@ -396,7 +417,8 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
     private static DevWorkflowToolCommands Commands(DevelopmentTaskSnapshot task,
         DevelopmentArtifactSnapshot? patch,
         IReadOnlyList<DevWorkflowNodeRunSnapshot>? rows = null,
-        bool twoImplementations = false)
+        bool twoImplementations = false,
+        int maxArtifactBytes = 1024 * 1024)
     {
         var development = Substitute.For<IDevelopmentStore>();
         _ = development.GetTaskAsync(TaskId, Arg.Any<CancellationToken>()).Returns(task);
@@ -414,7 +436,10 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
             workflows,
             new DevWorkflowGraphCache(),
             Options.Create(new DevelopmentOptions()),
-            Options.Create(new DevWorkflowOptions()),
+            Options.Create(new DevWorkflowOptions
+            {
+                MaxArtifactBytes = maxArtifactBytes
+            }),
             TimeProvider.System,
             Substitute.For<IServiceProvider>());
     }

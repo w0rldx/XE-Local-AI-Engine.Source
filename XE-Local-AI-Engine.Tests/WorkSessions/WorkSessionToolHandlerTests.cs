@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.WorkSessions;
 
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -7,6 +8,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -589,12 +591,183 @@ public sealed class WorkSessionToolHandlerTests
             "A call the deserializer refused must not close the session.");
     }
 
+    /// <summary>
+    ///     The read tool pages by characters off the offset the last page handed back, and says where the artifact ends, so a
+    ///     model reading a diff larger than one page reaches its last line by following nextOffset alone.
+    /// </summary>
+    [Test]
+    public async Task ReadUpstreamArtifact_PagesThroughTheArtifactByTheOffsetEachPageHandsBack()
+    {
+        var factory = Host.Factory;
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid());
+        var page = WorkSessionToolDefinitions.ReadUpstreamArtifact.PageCharacters;
+        var artifact = await ReadableAsync(factory, "validate.patch", "validate", new string('a', page) + new string('b', page) + "tail");
+        var handler = Handler(factory, WorkSessionToolDefinitions.ReadUpstreamArtifact.ToolName);
+
+        string first, second, last;
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        using (WorkSessionTurnScope.Begin(readableArtifacts: [artifact]))
+        {
+            first = await handler.ExecuteAsync("""{"name":"validate.patch"}""");
+            second = await handler.ExecuteAsync($$"""{"name":"validate.patch","offset":{{page}}}""");
+            last = await handler.ExecuteAsync($$"""{"name":"validate.patch","offset":{{2 * page}}}""");
+        }
+
+        AssertEx.Contains(first, $"offset=0 length={page} total={(2 * page) + 4} nextOffset={page}");
+        AssertEx.Contains(first, new string('a', page));
+        AssertEx.False(first.Contains('b', StringComparison.Ordinal), "a page stops at the page size.");
+        AssertEx.Contains(second, $"offset={page} length={page} total={(2 * page) + 4} nextOffset={2 * page}");
+        AssertEx.Contains(second, new string('b', page));
+        AssertEx.Contains(last, "length=4 total=");
+        AssertEx.Contains(last, "nextOffset=null (end of artifact)");
+        AssertEx.True(last.EndsWith("tail", StringComparison.Ordinal), "the last page ends where the artifact does.");
+    }
+
+    /// <summary>Under a result budget below the page size each page fits it, so the wrapper never cuts a page nextOffset moved past.</summary>
+    [Test]
+    public async Task ReadUpstreamArtifact_UnderATightResultBudget_PagesFitTheBudgetAndRebuildTheArtifact()
+    {
+        const int budget = 1_500;
+        var factory = Host.Factory;
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid());
+        var content = string.Concat(Enumerable.Range(0, 900).Select(static line => $"+line {line}\n"));
+        var artifact = await ReadableAsync(factory, "validate.patch", "validate", content);
+        var handler = Handler(factory, WorkSessionToolDefinitions.ReadUpstreamArtifact.ToolName);
+        var separator = Environment.NewLine + Environment.NewLine;
+
+        var rebuilt = new StringBuilder();
+        var pages = new List<string>();
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        using (WorkSessionTurnScope.Begin(readableArtifacts: [artifact]))
+        using (ToolResultBudgetScope.BeginScope(budget))
+        {
+            var offset = "0";
+            while (offset is not null && pages.Count < 100)
+            {
+                var page = await handler.ExecuteAsync($$"""{"name":"validate.patch","offset":{{offset}}}""");
+                pages.Add(page);
+                rebuilt.Append(page.AsSpan(page.IndexOf(separator, StringComparison.Ordinal) + separator.Length));
+                var cursor = page[(page.IndexOf("nextOffset=", StringComparison.Ordinal) + "nextOffset=".Length)..page.IndexOf(separator, StringComparison.Ordinal)];
+                offset = cursor.StartsWith("null", StringComparison.Ordinal) ? null : cursor;
+            }
+        }
+
+        AssertEx.True(content.Length > WorkSessionToolDefinitions.ReadUpstreamArtifact.PageCharacters, "the artifact must need more than one full page.");
+        AssertEx.True(pages.TrueForAll(static page => page.Length <= budget), "every page, header included, fits the tool-result budget.");
+        AssertEx.Equal(content, rebuilt.ToString(), "following nextOffset rebuilds the artifact with nothing skipped.");
+    }
+
+    /// <summary>What the step was handed is the whole readable set: any other name is refused, and the refusal lists what can be read.</summary>
+    [Test]
+    public async Task ReadUpstreamArtifact_ReadsOnlyWhatTheStepWasHanded()
+    {
+        var factory = Host.Factory;
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid());
+        var artifact = await ReadableAsync(factory, "validate.patch", "validate", "diff --git a/x b/x");
+        var handler = Handler(factory, WorkSessionToolDefinitions.ReadUpstreamArtifact.ToolName);
+
+        string unknown, nothingHanded;
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        {
+            using (WorkSessionTurnScope.Begin(readableArtifacts: [artifact]))
+            {
+                unknown = await handler.ExecuteAsync("""{"name":"secrets.env"}""");
+            }
+
+            using (WorkSessionTurnScope.Begin())
+            {
+                nothingHanded = await handler.ExecuteAsync("""{"name":"validate.patch"}""");
+            }
+        }
+
+        AssertEx.Contains(unknown, "No upstream artifact handed to this step is named 'secrets.env'");
+        AssertEx.Contains(unknown, "\"validate.patch\" (from 'validate')", message: "the refusal names what the step CAN read.");
+        AssertEx.Contains(nothingHanded, "handed no upstream artifacts");
+        AssertEx.False(nothingHanded.Contains("diff --git", StringComparison.Ordinal), "a step without the set reads nothing, whatever it asks for.");
+    }
+
+    /// <summary>Two producers can hand one step the same name, so a bare name is refused naming both, and producer picks one.</summary>
+    [Test]
+    public async Task ReadUpstreamArtifact_WhenTwoProducersShareAName_AsksWhichAndReadsTheOneNamed()
+    {
+        var factory = Host.Factory;
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid());
+        var left = await ReadableAsync(factory, "report.md", "left", "the left report");
+        var right = await ReadableAsync(factory, "report.md", "right", "the right report");
+        var handler = Handler(factory, WorkSessionToolDefinitions.ReadUpstreamArtifact.ToolName);
+
+        string ambiguous, picked;
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        using (WorkSessionTurnScope.Begin(readableArtifacts: [left, right]))
+        {
+            ambiguous = await handler.ExecuteAsync("""{"name":"report.md"}""");
+            picked = await handler.ExecuteAsync("""{"name":"report.md","producer":"right"}""");
+        }
+
+        AssertEx.Contains(ambiguous, "made by 'left', 'right'");
+        AssertEx.False(ambiguous.Contains("the left report", StringComparison.Ordinal), "an ambiguous name reads neither document.");
+        AssertEx.Contains(picked, "the right report");
+        AssertEx.False(picked.Contains("the left report", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task ReadUpstreamArtifact_ForAnArtifactThatIsNotText_GivesItsFactsAndNoBytes()
+    {
+        var factory = Host.Factory;
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid());
+        var artifact = await ReadableAsync(factory, "build.zip", "package", "PK-binary", mediaType: "application/zip");
+        var handler = Handler(factory, WorkSessionToolDefinitions.ReadUpstreamArtifact.ToolName);
+
+        string result;
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        using (WorkSessionTurnScope.Begin(readableArtifacts: [artifact]))
+        {
+            result = await handler.ExecuteAsync("""{"name":"build.zip"}""");
+        }
+
+        AssertEx.Contains(result, "is application/zip, 9 bytes");
+        AssertEx.Contains(result, "not text");
+        AssertEx.False(result.Contains("PK-binary", StringComparison.Ordinal));
+    }
+
+    /// <summary>Bytes that no longer match the digest the artifact row recorded are a refusal, never content.</summary>
+    [Test]
+    public async Task ReadUpstreamArtifact_WhenTheStoredBytesDoNotVerify_RefusesAndReadsNothing()
+    {
+        var factory = Host.Factory;
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid());
+        var artifact = await ReadableAsync(factory, "validate.patch", "validate", "the real diff");
+        var tampered = new WorkSessionReadableArtifact
+        {
+            RunId = artifact.RunId,
+            ArtifactId = artifact.ArtifactId,
+            Name = artifact.Name,
+            Kind = artifact.Kind,
+            Producer = artifact.Producer,
+            Version = artifact.Version,
+            MediaType = artifact.MediaType,
+            ContentSha256 = new string('0', 64),
+            SizeBytes = artifact.SizeBytes
+        };
+        var handler = Handler(factory, WorkSessionToolDefinitions.ReadUpstreamArtifact.ToolName);
+
+        string result;
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        using (WorkSessionTurnScope.Begin(readableArtifacts: [tampered]))
+        {
+            result = await handler.ExecuteAsync("""{"name":"validate.patch"}""");
+        }
+
+        AssertEx.Contains(result, "did not verify");
+        AssertEx.False(result.Contains("the real diff", StringComparison.Ordinal), "unverified bytes never reach the model.");
+    }
+
     [Test]
     public async Task EveryHandler_WithoutAnAmbientConversation_FailsClosed()
     {
         var factory = Host.Factory;
 
-        foreach (var handler in factory.Services.GetServices<IClientLocalToolHandler>().Where(candidate => WorkSessionToolDefinitions.ToolNames.Contains(candidate.ToolName)))
+        foreach (var handler in factory.Services.GetServices<IClientLocalToolHandler>().Where(candidate => SessionToolNames.Contains(candidate.ToolName)))
         {
             AssertEx.Equal("This tool only works inside a work session.",
                 await handler.ExecuteAsync("{}"),
@@ -608,7 +781,7 @@ public sealed class WorkSessionToolHandlerTests
         var factory = Host.Factory;
 
         using var scope = AgentRunConversationContext.BeginScope(Guid.NewGuid());
-        foreach (var handler in factory.Services.GetServices<IClientLocalToolHandler>().Where(candidate => WorkSessionToolDefinitions.ToolNames.Contains(candidate.ToolName)))
+        foreach (var handler in factory.Services.GetServices<IClientLocalToolHandler>().Where(candidate => SessionToolNames.Contains(candidate.ToolName)))
         {
             AssertEx.Contains(await handler.ExecuteAsync("{}"), "only works inside a work session");
         }
@@ -632,7 +805,7 @@ public sealed class WorkSessionToolHandlerTests
         }
 
         using var ambient = AgentRunConversationContext.BeginScope(session.ConversationId);
-        foreach (var handler in factory.Services.GetServices<IClientLocalToolHandler>().Where(candidate => WorkSessionToolDefinitions.ToolNames.Contains(candidate.ToolName)))
+        foreach (var handler in factory.Services.GetServices<IClientLocalToolHandler>().Where(candidate => SessionToolNames.Contains(candidate.ToolName)))
         {
             AssertEx.Contains(await handler.ExecuteAsync("{}"),
                 "already closed",
@@ -653,7 +826,7 @@ public sealed class WorkSessionToolHandlerTests
             }
         };
 
-        foreach (var handler in factory.Services.GetServices<IClientLocalToolHandler>().Where(candidate => WorkSessionToolDefinitions.ToolNames.Contains(candidate.ToolName)))
+        foreach (var handler in factory.Services.GetServices<IClientLocalToolHandler>().Where(candidate => SessionToolNames.Contains(candidate.ToolName)))
         {
             AssertEx.Equal("Work sessions are disabled on this node.", await handler.ExecuteAsync("{}"));
         }
@@ -666,7 +839,7 @@ public sealed class WorkSessionToolHandlerTests
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid());
 
         using var scope = AgentRunConversationContext.BeginScope(session.ConversationId);
-        foreach (var handler in factory.Services.GetServices<IClientLocalToolHandler>().Where(candidate => WorkSessionToolDefinitions.ToolNames.Contains(candidate.ToolName)))
+        foreach (var handler in factory.Services.GetServices<IClientLocalToolHandler>().Where(candidate => SessionToolNames.Contains(candidate.ToolName)))
         {
             var result = await handler.ExecuteAsync("{ not json");
             AssertEx.Contains(result, "were not valid JSON");
@@ -700,9 +873,13 @@ public sealed class WorkSessionToolHandlerTests
         ]
     };
 
+    /// <summary>Every handler that resolves its session from the ambient conversation: the four state tools and the upstream read.</summary>
+    private static readonly IReadOnlyList<string> SessionToolNames = [.. WorkSessionToolDefinitions.ToolNames, WorkSessionToolDefinitions.ReadUpstreamArtifact.ToolName];
+
     private static string Example(string toolName) =>
         toolName switch
         {
+            WorkSessionToolDefinitions.ReadUpstreamArtifact.ToolName => WorkSessionToolDefinitions.ReadUpstreamArtifact.ExampleArguments,
             WorkSessionToolDefinitions.UpdateWorkPlan.ToolName => WorkSessionToolDefinitions.UpdateWorkPlan.ExampleArguments,
             WorkSessionToolDefinitions.RecordFinding.ToolName => WorkSessionToolDefinitions.RecordFinding.ExampleArguments,
             WorkSessionToolDefinitions.SaveArtifact.ToolName => WorkSessionToolDefinitions.SaveArtifact.ExampleArguments,
@@ -737,6 +914,26 @@ public sealed class WorkSessionToolHandlerTests
         var start = result.IndexOf(marker, StringComparison.Ordinal);
         AssertEx.True(start >= 0, $"The add result names '{title}'. Result: {result}");
         return result.Substring(start + marker.Length, 36);
+    }
+
+    /// <summary>Writes the bytes through the real workflow blob store and answers the readable entry a workflow step would carry for them.</summary>
+    private static async Task<WorkSessionReadableArtifact> ReadableAsync(TestServerWebAppFactory factory, string name, string producer, string content, string mediaType = "text/x-diff")
+    {
+        var runId = Guid.NewGuid();
+        var artifactId = Guid.NewGuid();
+        var written = await factory.Services.GetRequiredService<IDevWorkflowArtifactBlobStore>().WriteAsync(runId, artifactId, System.Text.Encoding.UTF8.GetBytes(content));
+        return new WorkSessionReadableArtifact
+        {
+            RunId = runId,
+            ArtifactId = artifactId,
+            Name = name,
+            Kind = "Patch",
+            Producer = producer,
+            Version = 1,
+            MediaType = mediaType,
+            ContentSha256 = written.ContentHash,
+            SizeBytes = written.ByteCount
+        };
     }
 
     private static IClientLocalToolHandler Handler(TestServerWebAppFactory factory, string toolName) =>

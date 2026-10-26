@@ -333,11 +333,24 @@ a version that no longer exists.
 also the safe direction: the implementations are not reset, their tasks stay completed, and the apply node's re-run
 short-circuits per task rather than applying a patch twice.
 
-**A v1 ceiling.** What a re-run does *not* flag is `validate`'s own report. Only an agent node's promotion and a
-tool node's report write a workflow artifact, and `implement` is a `DevTask` — the patch it produces is a
-Development Mode artifact in another store, which the artifact-use table cannot name. So `validate` records
-consuming nothing and there is nothing for a re-run to supersede. Closing that means promoting the approved patch
-into the run's own artifacts, which is a producer this lane does not have yet.
+**The patch reaches `verify` because `validate` publishes it.** `implement` is a `DevTask`: the patch it produces is
+a Development Mode artifact in another store, which the artifact-use table cannot name, so `implement` still writes no
+workflow artifact and `validate` still records consuming nothing. The producer is `validate` itself. After a
+`Validate` pass over a `DevTask` overlay, pass or fail, it publishes the bytes it overlaid as `{nodeKey}.patch` (§7.2)
+— for a clone that is the clone key, `validate#<task id>.patch` — and the walk carries it along
+`validate → join → verify` beside the report. Both templates' `verify` instructions judge each task's patch against
+the approved plan (`plan.md`, or `fix-plan.md` on the intake's bug path) and that task's report, read past the
+inlined part with `read_upstream_artifact` (§5.6) until the whole patch is read, sign off only on what was read, and
+close with `objectiveMet: false` naming any task whose report says its patch was not published.
+
+A re-attempt of `validate` writes a new version of its own report and patch, superseding the previous ones, so a
+`verify` that already consumed them has its verification flagged stale (§3.7). What still flags nothing is an
+`implement` re-attempt on its own: `validate` consumed nothing from it, so nothing is superseded until `validate`
+runs again and publishes. **The remaining ceiling** is size: a patch over `MaxArtifactBytes` is not published, and the
+report says so, while `DevelopmentOptions.MaxPatchBytes` allows larger patches than the artifact store takes — such a
+task cannot be verified from the run, and `verify` is told to say so rather than sign it. Apply is untouched:
+`integrate` re-reads Development Mode's own hash-locked patch, never the published copy, so the copy cannot change what
+is applied.
 
 ### 2.4 Vocabularies
 
@@ -761,7 +774,7 @@ The objective is assembled in a fixed order, and the order is the point.
 | The output contract (§2.1) | No | Only on a node that declares `outputSchema`, rendered by `WorkSessionOutputSchema.Render`. It is the request's other half, what the session must hand back, so it is uncapped and counted with it. |
 | The decomposition contract (§6.4) | No | Lands before the policy phase reads the running length, so policy gets the room it leaves. |
 | The scoped rule sets | Yes | Policy that pushed the objective over the limit would crowd out the request it is supposed to govern. |
-| Upstream artifacts | Yes | The bounded phase (§5.6). |
+| Upstream artifacts | Yes | The bounded phase (§5.6). A text block cut short, or reduced to its header, names `read_upstream_artifact` so the rest stays reachable. |
 | The skipped-step lines | Yes | Under the same overall bound, spending whatever the artifacts left. |
 
 The whole composition holds itself to a ceiling **below** the work-session layer's own objective limit, which is
@@ -819,6 +832,18 @@ The ceiling for a *readable* artifact sits two orders of magnitude above anythin
 two below the maximum an artifact is allowed to be. The trade is that a huge document loses even its prefix,
 which is the right way round: the first few thousand characters of a 64 MiB file were never grounding, and the
 marker says so.
+
+**What did not fit is still readable.** A text artifact whose body was truncated, or that fell back to its header
+alone, carries a marker telling the model to `read the rest with read_upstream_artifact name="<name>"`. That
+work-session tool takes the artifact `name` as the header renders it and an optional `offset` in characters, and
+answers one bounded page with its offset, length, the total and the next offset, null at the end. The page bound is
+a fixed constant below the work-session text-output limit, shrunk so the page and its header fit the step's effective
+tool-result budget: a budget-cut page would leave a gap that `nextOffset` had already stepped past. It reads **only** the artifacts this node run's attempt
+recorded consuming (§3.7) — never another run's, an id or a path — through the same verified-digest read this
+section uses, so a digest mismatch is a refusal, never content. A non-text artifact answers with its header facts
+and an unknown name with the names that can be read. The tool is read-only and offered only on a workflow-owned
+work session, whose runtime override carries the readable set on every start and resume. This is how `verify` reads
+a patch longer than its share of the objective (§2.3).
 
 ## 6. The implementation lane
 
@@ -1253,6 +1278,15 @@ the captured text, with a line saying so: an evidence record that names what fai
 throws and leaves the node run with no evidence at all. The report is deliberately not the Development validation
 report — that record's subject, manifest and expected-result hashes describe a coder attempt's patch, and filling
 three hash fields with placeholders would claim evidence it does not have.
+
+**The patch a pass judged is published beside its report.** A `Validate` pass that overlaid a `DevTask`'s patch
+writes a second artifact, on a pass and on a failure alike — a failing diff is what the fix loop's next attempt and
+any reader need: name `{nodeKey}.patch` (the clone key for a clone), kind `Patch`, media type `text/x-diff`, the exact
+bytes the overlay applied. Its artifact and operation ids derive the way the report's do, so a replayed settle
+rewrites the same blob, and a re-attempt supersedes the previous version and marks its consumers stale the way the
+report's write does. The report links the two: beside the patch hash it already records, it names the patch artifact
+or says why none was published. A patch over `MaxArtifactBytes` is not published, an accepted ceiling (§2.3). An
+`Apply` pass and a pass with no overlay publish no patch, and the apply node never reads the published copy (§7.1).
 
 ## 8. The retry policy
 
@@ -1692,6 +1726,9 @@ A run's artifacts are its audit and outlive the sessions that produced them. Pro
 composition rather than a store method, because it spans three things no store can reach at once: the work
 session's bytes, the run's blob store, and the run's artifact rows. The session is execution scratch and can be
 deleted with its node run, so the bytes are **copied** rather than referenced.
+
+Three things write a run artifact: an agent node's promotion, a tool node's report, and a validation node's
+published patch, `{nodeKey}.patch` of kind `Patch` (§7.2). The rest of this section is about the promotion.
 
 It is **idempotent by construction**: both the artifact id and the append's operation id are derived from
 `(run, node key, attempt, artifact name)`, so a promotion replayed after a crash rewrites the same blob and the

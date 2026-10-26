@@ -4,5 +4,11 @@ namespace XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 /// <remarks>
 ///     The upstream implementation task whose approved patch was overlaid onto the workspace first. Absent means
 ///     nothing was overlaid: either this node has no upstream implementation to judge, or the pass was refused.
+///     <see cref="PatchArtifact" /> names the run artifact holding those bytes, or is null with <see cref="PatchArtifactOmitted" /> saying why.
 /// </remarks>
-internal sealed record DevWorkflowValidationBasedOn(Guid DevelopmentTaskId, string PatchHash, string Detail);
+internal sealed record DevWorkflowValidationBasedOn(
+    Guid DevelopmentTaskId,
+    string PatchHash,
+    string Detail,
+    string? PatchArtifact = null,
+    string? PatchArtifactOmitted = null);

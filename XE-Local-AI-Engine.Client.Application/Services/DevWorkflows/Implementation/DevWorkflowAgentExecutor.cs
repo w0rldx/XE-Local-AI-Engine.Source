@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
+using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>The agent lane: one work session per agent node-run attempt, driven by the run that owns it.</summary>
@@ -168,8 +169,11 @@ internal sealed class DevWorkflowAgentExecutor
             // The repository is resolved ONCE per admission, before a new session exists, so a node that cannot serve its reads blocks without one to release.
             var attached = await TryReadAttachedAsync(nodeRun, cancellationToken);
             var agentDefinitionId = attached?.AgentDefinitionId ?? await ResolveAgentAsync(node, cancellationToken);
-            runtime = RuntimeOf(graph, node, await RepositoryRootAsync(nodeRun, agentDefinitionId, cancellationToken));
+            var repositoryRoot = await RepositoryRootAsync(nodeRun, agentDefinitionId, cancellationToken);
             session = attached ?? await CreateSessionAsync(store, graph, run, node, nodeRun, agentDefinitionId, cancellationToken);
+
+            // After the create, whose objective composition is what records the consumption the read tool is scoped to.
+            runtime = RuntimeOf(graph, node, repositoryRoot, await ReadableArtifactsAsync(store, run, nodeRun, cancellationToken));
         }
         catch (WorkSessionValidationException exception)
         {
@@ -433,7 +437,10 @@ internal sealed class DevWorkflowAgentExecutor
     ///     resume, which makes the refusal flag the right place for <c>GRAPH-C4-2</c>'s per-turn half: it is read off
     ///     the run's PINNED graph each time, so nothing edited mid-run can widen what a running session is offered.
     /// </remarks>
-    private static WorkSessionRuntimeOverride? RuntimeOf(DevWorkflowGraph graph, DevWorkflowGraphNode? node, string? repositoryRoot = null)
+    private static WorkSessionRuntimeOverride? RuntimeOf(DevWorkflowGraph graph,
+        DevWorkflowGraphNode? node,
+        string? repositoryRoot = null,
+        IReadOnlyList<WorkSessionReadableArtifact>? readableArtifacts = null)
     {
         var runtime = new WorkSessionRuntimeOverride
         {
@@ -441,9 +448,48 @@ internal sealed class DevWorkflowAgentExecutor
             ReasoningEffort = node?.ReasoningEffort,
             RefuseUndeclaredWrites = DeclarationRequired(graph, node),
             RepositoryRoot = repositoryRoot,
-            OutputSchema = node?.OutputSchema
+            OutputSchema = node?.OutputSchema,
+            ReadableArtifacts = readableArtifacts ?? []
         };
         return runtime.IsEmpty ? null : runtime;
+    }
+
+    /// <summary>What <c>read_upstream_artifact</c> may read in this node run's session: what the node run RECORDED consuming.</summary>
+    /// <remarks>
+    ///     Read off the consumption rows, never the live graph. Those rows are per node run rather than per attempt, and every attempt
+    ///     records the latest version of each lineage it is handed, so the newest consumed version of a lineage is the current attempt's.
+    /// </remarks>
+    internal static async Task<IReadOnlyList<WorkSessionReadableArtifact>> ReadableArtifactsAsync(IDevWorkflowStore store,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        CancellationToken cancellationToken)
+    {
+        var consumed = (await store.ListConsumedArtifactIdsAsync(nodeRun.Id, cancellationToken)).ToHashSet();
+        if (consumed.Count == 0)
+        {
+            return [];
+        }
+
+        var artifacts = await store.ListArtifactsAsync(run.Id, sinceSequence: 0, cancellationToken);
+        return
+        [
+            .. artifacts.Where(artifact => consumed.Contains(artifact.Id))
+                        .GroupBy(static artifact => artifact.LineageId)
+                        .Select(static lineage => lineage.MaxBy(static artifact => artifact.Version)!)
+                        .OrderBy(static artifact => artifact.Sequence)
+                        .Select(artifact => new WorkSessionReadableArtifact
+                        {
+                            RunId = run.Id,
+                            ArtifactId = artifact.Id,
+                            Name = artifact.Name,
+                            Kind = artifact.Kind.ToString(),
+                            Producer = artifact.ProducingNodeKey,
+                            Version = artifact.Version,
+                            MediaType = artifact.MediaType,
+                            ContentSha256 = artifact.ContentSha256,
+                            SizeBytes = artifact.SizeBytes
+                        })
+        ];
     }
 
     /// <summary>
@@ -644,13 +690,19 @@ internal sealed class DevWorkflowAgentExecutor
                 // Everything still to be written shares the room left equally — the room BELOW the reserve, not below the limit — so a long first document cannot crowd out the ones
                 // after it and a short one hands its slack on. The share covers this artifact's own header and marker as well as its body, so both come off before the body is asked for.
                 var share = (artifactCeiling - objective.Length) / (upstream.Count - index);
-                var body = await RenderArtifactAsync(run.Id, artifact, share - header.Length - DevWorkflowPolicyText.TruncationMarkerReserve, cancellationToken);
+                var readMore = ArtifactMediaTypes.IsText(artifact.MediaType) ? ReadMoreMarker(artifact.Name) : null;
+                var body = await RenderArtifactAsync(run.Id,
+                    artifact,
+                    share - header.Length - DevWorkflowPolicyText.TruncationMarkerReserve - (readMore?.Length ?? 0),
+                    readMore,
+                    cancellationToken);
 
                 // The bound is enforced HERE, on the FINISHED block, counting header, body, whichever marker was rendered and the newlines. Nothing reaches the objective except through
-                // this check. A block that will not fit falls back to its header alone — the agent still learns the artifact exists — and one with no room even for that is dropped.
+                // this check. A block that will not fit falls back to its header and the read-more line, then its header alone, and one with no room even for that is dropped.
                 foreach (var candidate in new[]
                          {
                              header + body + Environment.NewLine,
+                             readMore is null ? header : $"{header}({readMore}){Environment.NewLine}",
                              header
                          })
                 {
@@ -685,7 +737,7 @@ internal sealed class DevWorkflowAgentExecutor
     ///     them is handed over as a reference and a warning: silently injecting unverified content is how a tampered
     ///     file would end up being reasoned about as if it were the research.
     /// </remarks>
-    private async Task<string> RenderArtifactAsync(Guid runId, DevWorkflowArtifactSnapshot artifact, int budget, CancellationToken cancellationToken)
+    private async Task<string> RenderArtifactAsync(Guid runId, DevWorkflowArtifactSnapshot artifact, int budget, string? readMore, CancellationToken cancellationToken)
     {
         if (!ArtifactMediaTypes.IsText(artifact.MediaType))
         {
@@ -694,14 +746,14 @@ internal sealed class DevWorkflowAgentExecutor
 
         if (budget <= 0)
         {
-            return "(The objective had no room left for its contents, so only this reference is given.)";
+            return $"(The objective had no room left for its contents, so only this reference is given.{(readMore is null ? "" : $" {readMore}")})";
         }
 
         if (artifact.SizeBytes > MaxInjectableArtifactBytes)
         {
             // Gated on the row's recorded size BEFORE the read, because reading is what costs: the blob store materialises the whole blob and the decode allocates a UTF-16 copy, so a
             // fan-in would spend hundreds of megabytes to keep a few thousand characters. A huge document loses even its prefix, which is right — and the marker says so.
-            return $"(It is {artifact.SizeBytes} bytes, too large to include here, so only this reference is given.)";
+            return $"(It is {artifact.SizeBytes} bytes, too large to include here, so only this reference is given.{(readMore is null ? "" : $" {readMore}")})";
         }
 
         var read = await _blobs.ReadAsync(runId, artifact.Id, artifact.ContentSha256, artifact.SizeBytes, cancellationToken);
@@ -721,8 +773,12 @@ internal sealed class DevWorkflowAgentExecutor
         }
 
         var cut = DevWorkflowPolicyText.CutAt(content, budget);
-        return $"{content[..cut]}{Environment.NewLine}(Truncated: the first {cut} of {content.Length} characters.)";
+        return $"{content[..cut]}{Environment.NewLine}(Truncated: the first {cut} of {content.Length} characters.{(readMore is null ? "" : $" {readMore}")})";
     }
+
+    /// <summary>The sentence that tells the agent how to read past what the objective could inline, naming the artifact as the tool takes it.</summary>
+    internal static string ReadMoreMarker(string name) =>
+        $"Read the rest with {WorkSessionToolDefinitions.ReadUpstreamArtifact.ToolName} name=\"{name}\".";
 
     private readonly record struct InputEntry(string Name, string Value);
 
@@ -926,7 +982,10 @@ internal sealed class DevWorkflowAgentExecutor
         WorkSessionRuntimeOverride? runtime;
         try
         {
-            runtime = RuntimeOf(graph, node, await RepositoryRootAsync(nodeRun, session.AgentDefinitionId, cancellationToken));
+            runtime = RuntimeOf(graph,
+                node,
+                await RepositoryRootAsync(nodeRun, session.AgentDefinitionId, cancellationToken),
+                await ReadableArtifactsAsync(store, run, nodeRun, cancellationToken));
         }
         catch (DevWorkflowValidationException exception)
         {

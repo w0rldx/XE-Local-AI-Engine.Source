@@ -68,6 +68,27 @@ public sealed class DevWorkflowUpstreamArtifactTests
                                                   }
                                                   """;
 
+    /// <summary>The feature-development tail in miniature: two validations meeting at a join, and the verification after it.</summary>
+    private const string TwoValidationsThroughAJoin = $$"""
+                                                        {
+                                                          "schemaVersion": 1,
+                                                          "nodes": [
+                                                            { "nodeKey": "fan", "nodeType": "Parallel" },
+                                                            { "nodeKey": "validate-a", "nodeType": "Tool" },
+                                                            { "nodeKey": "validate-b", "nodeType": "Tool" },
+                                                            { "nodeKey": "join", "nodeType": "Join" },
+                                                            { "nodeKey": "verify", "nodeType": "Agent", "label": "Verify", "agentDefinitionId": "{{SeededAgentId}}" }
+                                                          ],
+                                                          "edges": [
+                                                            { "from": "fan", "to": "validate-a" },
+                                                            { "from": "fan", "to": "validate-b" },
+                                                            { "from": "validate-a", "to": "join" },
+                                                            { "from": "validate-b", "to": "join" },
+                                                            { "from": "join", "to": "verify" }
+                                                          ]
+                                                        }
+                                                        """;
+
     [ClassDataSource<DevWorkflowHostFixture>(Shared = SharedType.PerClass)]
     public required DevWorkflowHostFixture Host { get; init; }
 
@@ -145,6 +166,45 @@ public sealed class DevWorkflowUpstreamArtifactTests
         var consumed = await harness.ReadConsumedArtifactIdsAsync(runId, "check");
         AssertEx.Equal(expected: 1, consumed.Count, "the sandbox lane consumed the step before it, and the record is what makes that decidable.");
         AssertEx.Contains(consumed, specification.Id);
+    }
+
+    /// <summary>
+    ///     The patch each validation judged reaches the verification behind the join through the walk as it stands, and the
+    ///     verification's session is scoped to read exactly what it recorded consuming: both patches and both reports.
+    /// </summary>
+    [Test]
+    public async Task AVerificationBehindAJoin_IsHandedEveryPatchItsValidationsJudged()
+    {
+        // Its own host: the scripted sandbox is a container singleton keyed by node key.
+        await using var harness = new DevWorkflowHarness();
+        harness.Tools.Answer("validate-a", FakeDevWorkflowToolCommands.Passing() with
+        {
+            Patch = System.Text.Encoding.UTF8.GetBytes("diff --git a/a b/a\n")
+        });
+        harness.Tools.Answer("validate-b", FakeDevWorkflowToolCommands.Passing() with
+        {
+            Patch = System.Text.Encoding.UTF8.GetBytes("diff --git a/b b/b\n")
+        });
+        var runId = await harness.StartRunAsync(TwoValidationsThroughAJoin, developmentProjectId: Guid.NewGuid());
+
+        await harness.AdvanceThroughToolLaneAsync(runId);
+
+        var artifacts = await harness.ReadArtifactsAsync(runId);
+        var patches = artifacts.Where(static artifact => artifact.Kind == DevWorkflowArtifactKind.Patch).OrderBy(static artifact => artifact.Name, StringComparer.Ordinal).ToList();
+        AssertEx.Equal("validate-a.patch, validate-b.patch", string.Join(", ", patches.Select(static artifact => artifact.Name)));
+        var consumed = await harness.ReadConsumedArtifactIdsAsync(runId, "verify");
+        AssertEx.Equal(expected: 4, consumed.Count, "both patches and both reports, and nothing else.");
+        foreach (var patch in patches)
+        {
+            AssertEx.Contains(consumed, patch.Id);
+        }
+
+        var (_, startRuntime) = harness.Agent.Runtimes.Last(static entry => entry.Verb == "start");
+        var readable = AssertEx.NotNull(startRuntime).ReadableArtifacts;
+        AssertEx.Equal(string.Join(", ", consumed.Order()),
+            string.Join(", ", readable.Select(static artifact => artifact.ArtifactId).Order()),
+            "the read tool is scoped to the recorded consumption.");
+        AssertEx.Contains(await harness.ReadObjectiveAsync(runId, "verify"), "diff --git a/a b/a", message: "a small diff is inlined as well.");
     }
 
     /// <summary>
