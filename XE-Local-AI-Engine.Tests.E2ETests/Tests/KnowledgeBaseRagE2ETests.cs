@@ -301,7 +301,7 @@ public sealed class KnowledgeBaseRagE2ETests : XESerialE2ETestBase
         var send = Page.GetByTestId("chat-send-button");
         await input.FillAsync($"What does {query} describe?");
         await send.ClickAsync();
-        await Expect(send).ToHaveTextAsync("Send", new LocatorAssertionsToHaveTextOptions
+        await Expect(send).ToHaveAttributeAsync("aria-label", "Send", new LocatorAssertionsToHaveAttributeOptions
         {
             Timeout = 20_000
         });
@@ -318,7 +318,7 @@ public sealed class KnowledgeBaseRagE2ETests : XESerialE2ETestBase
         await Page.GetByTestId("chat-sources-toggle").ClickAsync();
         var sourceCard = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
         {
-            Name = "Open source: Shared knowledge",
+            Name = $"Open source: {SharedDocument}",
             Exact = true
         });
         await Expect(sourceCard).ToBeVisibleAsync();

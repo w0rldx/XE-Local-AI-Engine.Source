@@ -134,7 +134,7 @@ public sealed class OnboardingTourE2ETests : XESerialE2ETestBase
                 response => response.Url.Contains("tutorial-state", StringComparison.OrdinalIgnoreCase)
                             && string.Equals(response.Request.Method, "PUT", StringComparison.OrdinalIgnoreCase));
 
-            await Expect(sendButton).ToHaveTextAsync("Send", new LocatorAssertionsToHaveTextOptions
+            await Expect(sendButton).ToHaveAttributeAsync("aria-label", "Send", new LocatorAssertionsToHaveAttributeOptions
             {
                 Timeout = 10000
             });
@@ -227,7 +227,7 @@ public sealed class OnboardingTourE2ETests : XESerialE2ETestBase
         var sendButton = Page.GetByTestId("chat-send-button");
         var replyCountBefore = await Page.GetByText("Node reply").CountAsync();
         await sendButton.ClickAsync();
-        await Expect(sendButton).ToHaveTextAsync("Send", new LocatorAssertionsToHaveTextOptions
+        await Expect(sendButton).ToHaveAttributeAsync("aria-label", "Send", new LocatorAssertionsToHaveAttributeOptions
         {
             Timeout = 10000
         });
