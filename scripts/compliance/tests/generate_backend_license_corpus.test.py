@@ -89,7 +89,7 @@ class BackendLicenseCorpusTests(unittest.TestCase):
         upstream.mkdir()
         for filename, contents in (
             ("FastEndpoints-8.3.0-LICENSE.md", "Copyright (c) 2021 FastEndpoints upstream\nMIT terms\n"),
-            ("Scalar.AspNetCore-2.18.2-LICENSE", "Copyright (c) 2023-present Scalar\nMIT terms\n"),
+            ("Scalar.AspNetCore-2.18.3-LICENSE", "Copyright (c) 2023-present Scalar\nMIT terms\n"),
             ("Scrutor-7.0.0-LICENSE", "Copyright (c) 2015 Kristian Hellang\nMIT terms\n"),
             ("TimeZoneConverter-7.2.0-LICENSE.txt", "Copyright (c) 2017 Matt Johnson-Pint\nMIT terms\n"),
         ):
@@ -249,9 +249,9 @@ class BackendLicenseCorpusTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "author-only MIT metadata.*no exact upstream"):
             self.generate(authors_only, output_name="authors-only-generic")
 
-        scalar_document = deps("linux-x64", {"Scalar.AspNetCore/2.18.2": {"runtime": {"Scalar.dll": {}}}})
+        scalar_document = deps("linux-x64", {"Scalar.AspNetCore/2.18.3": {"runtime": {"Scalar.dll": {}}}})
         authors_output = self.generate(
-            [package("Scalar.AspNetCore", "2.18.2", copyright_text="")],
+            [package("Scalar.AspNetCore", "2.18.3", copyright_text="")],
             scalar_document,
             output_name="authors-only-exact",
         )

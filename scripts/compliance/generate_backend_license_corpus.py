@@ -95,9 +95,9 @@ UPSTREAM_PACKAGE_LICENSE_TEXTS = {
             "FastEndpoints.Swagger",
         )
     },
-    ("scalar.aspnetcore", "2.18.2", "MIT"): (
-        Path("nuget/upstream/Scalar.AspNetCore-2.18.2-LICENSE"),
-        Path("nuget/upstream/Scalar.AspNetCore-2.18.2-LICENSE.source.txt"),
+    ("scalar.aspnetcore", "2.18.3", "MIT"): (
+        Path("nuget/upstream/Scalar.AspNetCore-2.18.3-LICENSE"),
+        Path("nuget/upstream/Scalar.AspNetCore-2.18.3-LICENSE.source.txt"),
     ),
     ("scrutor", "7.0.0", "MIT"): (
         Path("nuget/upstream/Scrutor-7.0.0-LICENSE"),

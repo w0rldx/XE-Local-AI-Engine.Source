@@ -59,7 +59,7 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
         build_job = re.search(r"\n  build-pack:\n(?P<body>.*)", self.package_source, re.DOTALL)
         self.assertIsNotNone(build_job)
         body = build_job.group("body")
-        setup = "uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
+        setup = "uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0"
         self.assertIn(setup, body)
         self.assertIn("python-version: '3.13'", body)
         self.assertNotIn("python3", body)

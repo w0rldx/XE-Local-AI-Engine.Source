@@ -1,6 +1,7 @@
 import { ActionIcon, Badge, Button, Group, Loader, Paper, Stack, Text } from "@mantine/core";
 import { IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
 import { useState } from "react";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -246,7 +247,7 @@ export function DevWorkflowRuleSetsPanel({ projects }: DevWorkflowRuleSetsPanelP
 function scopeSummary(
 	ruleSet: DevWorkflowRuleSetSummaryResponse,
 	projects: readonly DevelopmentProjectOption[],
-	t: (key: string, fallback: string, options?: Record<string, unknown>) => string,
+	t: TFunction,
 ): string {
 	const projectIds = ruleSet.scope?.projectIds ?? [];
 	const nodeTypes = ruleSet.scope?.nodeTypes ?? [];

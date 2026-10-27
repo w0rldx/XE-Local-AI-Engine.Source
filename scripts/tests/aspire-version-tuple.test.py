@@ -9,8 +9,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 CENTRAL_PACKAGES = REPO_ROOT / "Directory.Packages.props"
 APPHOST_PROJECT = REPO_ROOT / "XE-Local-AI-Engine.AppHost" / "XE-Local-AI-Engine.AppHost.csproj"
 
-ASPIRE_RELEASE_VERSION = "13.6.3"
-ASPIRE_BROWSERS_VERSION = "13.6.3-preview.1.26521.2"
+ASPIRE_RELEASE_VERSION = "13.6.4"
+ASPIRE_BROWSERS_VERSION = "13.6.4-preview.1.26523.11"
 SQLITE_TOOLKIT_VERSION = "13.6.0"
 
 
