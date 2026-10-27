@@ -77,9 +77,13 @@ public sealed class DevelopmentWarmRestoreTests : IDisposable
         AssertEx.Equal(expectedCeilings, warm.ResourceLimits);
         AssertEx.Equal(expectedCeilings, agentFacing.ResourceLimits);
 
-        // The same mount set, or the warm writes its cache somewhere the attempt cannot read.
-        AssertEx.Equal(string.Join('|', (agentFacing.Mounts ?? []).Select(static mount => mount.HostPath + "=>" + mount.SandboxPath)),
-            string.Join('|', (warm.Mounts ?? []).Select(static mount => mount.HostPath + "=>" + mount.SandboxPath)));
+        // The same package folder at the same place, or the warm writes its cache somewhere the attempt cannot read.
+        // Home, tmp and dotnet are the warm's own: it has egress, so it must not read what the coder left in them.
+        AssertEx.Equal(string.Join('|', (agentFacing.Mounts ?? []).Select(static mount => mount.SandboxPath)),
+            string.Join('|', (warm.Mounts ?? []).Select(static mount => mount.SandboxPath)));
+        var packages = Path.Combine(session.RuntimePath, "nuget");
+        AssertEx.Contains(warm.Mounts ?? [], mount => mount.HostPath == packages && mount.SandboxPath == "/xe-runtime/nuget");
+        AssertEx.Contains(agentFacing.Mounts ?? [], mount => mount.HostPath == packages && mount.SandboxPath == "/xe-runtime/nuget");
         AssertEx.Equal(session.HostWorktreePath, AssertEx.NotNull(warm.TrustedHostWorkspace).RootPath);
 
         // Killed before PrepareAsync returned, and only the warm one. A warm sandbox that outlived this method would

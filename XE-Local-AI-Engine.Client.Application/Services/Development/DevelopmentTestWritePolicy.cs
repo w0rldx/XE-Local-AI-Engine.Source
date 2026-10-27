@@ -29,6 +29,10 @@ internal static class DevelopmentTestWritePolicy
         "The attempt modified or deleted a test that existed at the base commit, which the Development test-write policy does not permit. "
         + "Adding new test files is allowed.";
 
+    /// <summary>The refusal for a change to a path the profile's test runner executes or reads its options from.</summary>
+    internal const string RunnerRefusalSentence =
+        "The attempt added, modified, deleted or renamed a file the test runner loads as code or options, which the Development test-write policy does not permit.";
+
     /// <summary>The same rule stated BEFORE the fact, for the coder and reviewer prompts.</summary>
     /// <remarks>
     ///     <see cref="RefusalSentence" /> only ever reaches a round that has already lost its attempt to the rule, and
@@ -59,13 +63,17 @@ internal static class DevelopmentTestWritePolicy
         }
 
         var remainder = profile.ProtectedPaths.Count - shown.Length;
+        var runnerPaths = DevelopmentCommandProfileCatalog.RunnerPathsFor(profile.ProfileId);
         return $"{PromptSentence} Protected test patterns: {string.Join(", ", shown)}"
-               + (remainder > 0 ? $" (+{remainder} more)." : ".");
+               + (remainder > 0 ? $" (+{remainder} more)." : ".")
+               + (runnerPaths.Count > 0
+                   ? $" Never add, modify, delete or rename: {string.Join(", ", runnerPaths)}, or a module or package at the root or under src/ named like a standard-library module or a pytest dependency."
+                   : string.Empty);
     }
 
     /// <summary>
     ///     Throws when the attempt's diff modifies, deletes or renames a path matching the profile's protected test
-    ///     patterns.
+    ///     patterns, or changes one of its runner paths in any way, adding it included.
     /// </summary>
     /// <remarks>
     ///     The evidence comes from <c>git diff --cached --name-status -z HEAD</c>, and the managed worktree is
@@ -78,6 +86,14 @@ internal static class DevelopmentTestWritePolicy
     {
         ArgumentNullException.ThrowIfNull(evidence);
         ArgumentNullException.ThrowIfNull(profile);
+
+        // First: a runner path is the more specific refusal, and the only one that also covers an added file.
+        if (evidence.ChangedFiles.SelectMany(static change => new[] { change.Path, change.PreviousPath })
+                    .Any(path => !string.IsNullOrWhiteSpace(path) && DevelopmentCommandProfileCatalog.IsRunnerPath(profile.ProfileId, path)))
+        {
+            throw new DevelopmentWorkspaceSecurityException(RunnerRefusalSentence);
+        }
+
         var offending = evidence.ChangedFiles
                                 .Where(static change => !NonDestructiveChangeTypes.Contains(change.ChangeType, StringComparer.Ordinal))
                                 .SelectMany(static change => new[]

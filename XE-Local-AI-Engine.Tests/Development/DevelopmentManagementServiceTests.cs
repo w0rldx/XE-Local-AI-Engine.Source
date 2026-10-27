@@ -224,6 +224,39 @@ public sealed class DevelopmentManagementServiceTests
     }
 
     /// <summary>
+    ///     A project created under an earlier catalog version is refused at the request, with the re-create instruction,
+    ///     before an attempt row exists to strand in Running behind a runner that throws after the request returned.
+    /// </summary>
+    [Test]
+    public async Task StartNextAction_WithAPriorCatalogVersionProfile_IsRefusedWithTheRecreateInstructionBeforeAnyAttempt()
+    {
+        var (store, coordinator, repositoryBindings, projectId, taskId) = ExternalModelFixture("ext:local-box/qwen3", DevelopmentEgressPolicy.LocalOnly);
+        var prior = DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null) with
+        {
+            ProfileVersion = "v2"
+        };
+        var project = await store.GetProjectAsync(projectId);
+        _ = store.GetProjectAsync(projectId, Arg.Any<CancellationToken>())
+                 .Returns(project with
+                 {
+                     CommandProfileJson = Encoding.UTF8.GetString(prior.ToCanonicalUtf8())
+                 });
+        var supervisor = Substitute.For<IDevelopmentAttemptExecutionSupervisor>();
+        var service = CreateService(store,
+            coordinator,
+            supervisor,
+            repositoryBindings,
+            modelTrustResolver: new FakeModelTrustResolver().Register("local-box", "qwen3"));
+
+        var refusal = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() =>
+            service.StartNextActionAsync(projectId, taskId, Guid.NewGuid()));
+
+        AssertEx.Contains(refusal.Message, "Re-create this Development project");
+        await coordinator.DidNotReceive().StartAttemptAsync(Arg.Any<DevelopmentStartAttemptCommand>(), Arg.Any<CancellationToken>());
+        _ = supervisor.DidNotReceive().StartAttempt(Arg.Any<Guid>(), Arg.Any<DevelopmentAttemptRole>());
+    }
+
+    /// <summary>
     ///     The project read always has the whole task list, so it asks for every task's workflow pointer ONCE. Asking
     ///     per task was a round trip per row on the page that renders most often, and the single-task read still
     ///     answers the single-task question.

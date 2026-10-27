@@ -76,6 +76,7 @@ internal sealed class DevWorkflowAgentExecutor
     private readonly DevWorkflowRetryPolicy _retries;
     private readonly IAgentWorkSessionStore _sessionStore;
     private readonly IWorkflowOwnedWorkSessionLifecycle _sessions;
+    private readonly WorkSessionToolGate _toolGate;
     private readonly WorkSessionWriteDeclarationGuard _writes;
     private readonly IServiceProvider _services;
 
@@ -83,6 +84,7 @@ internal sealed class DevWorkflowAgentExecutor
         IAgentWorkSessionStore sessionStore,
         IAgentDefinitionStore agents,
         WorkSessionWriteDeclarationGuard writes,
+        WorkSessionToolGate toolGate,
         DevWorkflowArtifactPromotion promotion,
         IDevWorkflowArtifactBlobStore blobs,
         DevWorkflowRetryPolicy retries,
@@ -96,6 +98,7 @@ internal sealed class DevWorkflowAgentExecutor
         _sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
         _agents = agents ?? throw new ArgumentNullException(nameof(agents));
         _writes = writes ?? throw new ArgumentNullException(nameof(writes));
+        _toolGate = toolGate ?? throw new ArgumentNullException(nameof(toolGate));
         _promotion = promotion ?? throw new ArgumentNullException(nameof(promotion));
         _blobs = blobs ?? throw new ArgumentNullException(nameof(blobs));
         _retries = retries ?? throw new ArgumentNullException(nameof(retries));
@@ -164,6 +167,7 @@ internal sealed class DevWorkflowAgentExecutor
 
         WorkSessionDetail session;
         WorkSessionRuntimeOverride? runtime;
+        IReadOnlyList<WorkSessionReadableArtifact> readable;
         try
         {
             // The repository is resolved ONCE per admission, before a new session exists, so a node that cannot serve its reads blocks without one to release.
@@ -173,7 +177,8 @@ internal sealed class DevWorkflowAgentExecutor
             session = attached ?? await CreateSessionAsync(store, graph, run, node, nodeRun, agentDefinitionId, cancellationToken);
 
             // After the create, whose objective composition is what records the consumption the read tool is scoped to.
-            runtime = RuntimeOf(graph, node, repositoryRoot, await ReadableArtifactsAsync(store, run, nodeRun, cancellationToken));
+            readable = await ReadableArtifactsAsync(store, run, nodeRun, cancellationToken);
+            runtime = RuntimeOf(graph, node, repositoryRoot, readable);
         }
         catch (WorkSessionValidationException exception)
         {
@@ -190,6 +195,21 @@ internal sealed class DevWorkflowAgentExecutor
             // GRAPH-C4-2's runtime half. NOT Configuration: nothing is misconfigured — the node's agent may do more than the definition admits to, and only a person can say
             // whether that is meant. Policy blocks for a human rather than failing the run, and a retry would produce the same answer.
             return written + await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.Policy, exception.Message, cancellationToken);
+        }
+
+        if (await SameModelReviewAsync(node, nodeRun, nodeRuns, session.AgentDefinitionId, readable, cancellationToken) is { } review)
+        {
+            // Keyed by attempt, so a lost admission race that dispatches again replays this event rather than repeating it.
+            _ = await store.AppendEventAsync(new AppendDevWorkflowEventCommand
+                {
+                    RunId = run.Id,
+                    ExpectedVersion = DevWorkflowVersions.Any,
+                    EventType = DevWorkflowEventTypes.NodeReviewerSameModel,
+                    NodeRunId = nodeRun.Id,
+                    OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "reviewer-same-model"),
+                    DetailJson = JsonSerializer.Serialize(review, JsonOptions)
+                },
+                cancellationToken);
         }
 
         if (!await TryDriveAsync(session, runtime, cancellationToken))
@@ -616,40 +636,25 @@ internal sealed class DevWorkflowAgentExecutor
 
         // The scoped rule sets sit between the node's instructions and what was asked, counted against the same budget so policy cannot crowd out the request it governs. They are read
         // from what the node run RECORDED — id, name, hash, text — never the rule set as it stands now, which an operator may edit mid-run into something the audit does not name.
-        var inputSection = new StringBuilder();
+        var policy = DevWorkflowRulePolicyResolver.Read(nodeRun.PolicyResolutionJson);
+        var inputSection = InputSection(nodeRun, node, requestCap: int.MaxValue, out var request);
 
-        // The operator's retry reason is lifted OUT of the generic member list into its own sentence: a person who retried this step and said why is not one more anonymous input line, and
-        // read as one it is what a model skims past. Only for the attempt their decision started — the reader is scoped by attempt, so a later automatic re-attempt carries no complaint.
-        var input = ReadInput(nodeRun.InputJson)
-                    .Where(static entry => entry.Name is not (DevWorkflowNodeInputs.OperatorRetryReason or DevWorkflowNodeInputs.OperatorRetryAttempt))
-                    .ToList();
-        if (input.Count > 0)
+        // The request may be longer than the whole ceiling, and every Agent node is handed it: uncut it would drop every rule set, then overrun the work-session
+        // limit. It gets the room the rest leaves, only HALF of it while a rule set applies; policy keeps the remainder, so a short request hands its slack on.
+        if (request is not null)
         {
-            _ = inputSection.AppendLine().AppendLine("## What was asked");
-            foreach (var (name, value) in input)
+            var room = MaxObjectiveCharacters - objective.Length - (inputSection.Length - request.Length);
+            var requestCap = Math.Max(0, policy.Count > 0 ? room / 2 : room);
+            if (request.Length > requestCap)
             {
-                _ = inputSection.AppendLine(CultureInfo.InvariantCulture, $"- {name}: {value}");
+                inputSection = InputSection(nodeRun, node, requestCap, out _);
             }
         }
 
-        if (DevWorkflowNodeInputs.OperatorRetryReasonFor(nodeRun.InputJson, nodeRun.Attempt) is { } operatorRetry)
-        {
-            _ = inputSection.AppendLine()
-                            .AppendLine("## Operator retry")
-                            .AppendLine("The operator retried this step and said:")
-                            .AppendLine(operatorRetry);
-        }
-
-        // The output contract is the request's other half — what the session must hand back — so it is uncapped and counted with it.
-        if (node.OutputSchema is { } outputSchema)
-        {
-            _ = inputSection.AppendLine().AppendLine(outputSchema.Render());
-        }
-
         // The fair share, the visible truncation marker and the dropped-with-a-warning are DevWorkflowPolicyText's, shared with the DevTask lane so the two cannot drift into rendering
-        // the same recorded rule sets differently. The ceiling subtracts the input section because that section is uncapped and appended after this one.
+        // the same recorded rule sets differently. The ceiling subtracts the input section, which is appended after this one and bounded only by the request's cut above.
         var policyCeiling = MaxObjectiveCharacters - inputSection.Length;
-        _ = objective.Append(DevWorkflowPolicyText.Render(DevWorkflowRulePolicyResolver.Read(nodeRun.PolicyResolutionJson),
+        _ = objective.Append(DevWorkflowPolicyText.Render(policy,
             policyCeiling,
             objective.Length,
             nodeRun.Id,
@@ -782,6 +787,73 @@ internal sealed class DevWorkflowAgentExecutor
 
     private readonly record struct InputEntry(string Name, string Value);
 
+    /// <summary>What was asked, the operator's retry reason and the output contract, the request cut to <paramref name="requestCap" />.</summary>
+    /// <param name="request">The request uncut, or null when this node run carries none.</param>
+    private static StringBuilder InputSection(DevWorkflowNodeRunSnapshot nodeRun, DevWorkflowGraphNode node, int requestCap, out string? request)
+    {
+        var inputSection = new StringBuilder();
+        request = null;
+
+        // The operator's retry reason is lifted OUT of the generic member list into its own sentence: a person who retried this step and said why is not one more anonymous input line, and
+        // read as one it is what a model skims past. Only for the attempt their decision started — the reader is scoped by attempt, so a later automatic re-attempt carries no complaint.
+        var input = ReadInput(nodeRun.InputJson)
+                    .Where(static entry => entry.Name is not (DevWorkflowNodeInputs.OperatorRetryReason or DevWorkflowNodeInputs.OperatorRetryAttempt))
+                    .ToList();
+        if (input.Count > 0)
+        {
+            _ = inputSection.AppendLine().AppendLine("## What was asked");
+            foreach (var (name, value) in input)
+            {
+                var rendered = value;
+                if (name == DevWorkflowNodeInputs.WorkItemRequest)
+                {
+                    request = value;
+                    rendered = CutRequest(value, requestCap);
+                }
+
+                _ = inputSection.AppendLine(CultureInfo.InvariantCulture, $"- {name}: {rendered}");
+            }
+        }
+
+        if (DevWorkflowNodeInputs.OperatorRetryReasonFor(nodeRun.InputJson, nodeRun.Attempt) is { } operatorRetry)
+        {
+            _ = inputSection.AppendLine()
+                            .AppendLine("## Operator retry")
+                            .AppendLine("The operator retried this step and said:")
+                            .AppendLine(operatorRetry);
+        }
+
+        // The output contract is the request's other half — what the session must hand back — so it is uncapped and counted with it.
+        if (node.OutputSchema is { } outputSchema)
+        {
+            _ = inputSection.AppendLine().AppendLine(outputSchema.Render());
+        }
+
+        return inputSection;
+    }
+
+    /// <summary>The request whole when it fits, else as much as fits with the marker inside the cap; a cap under the marker gets only its start.</summary>
+    internal static string CutRequest(string request, int cap)
+    {
+        if (request.Length <= cap)
+        {
+            return request;
+        }
+
+        var marker = RequestCutMarker(request.Length);
+        var keep = cap - marker.Length;
+        if (keep > 0)
+        {
+            return DevWorkflowStateMachine.Bounded(request, keep) + marker;
+        }
+
+        return cap > 0 ? DevWorkflowStateMachine.Bounded(marker.TrimStart(), cap) : string.Empty;
+    }
+
+    /// <summary>The line a cut request ends on.</summary>
+    internal static string RequestCutMarker(int length) =>
+        string.Create(CultureInfo.InvariantCulture, $" [request cut here to fit this step's objective; the whole request is {length} characters]");
+
     /// <summary>
     ///     The node run's input document as flat name/value lines. Nested and array values are rendered as their raw
     ///     JSON: a caller-supplied <c>inputsJson</c> is arbitrary, and reformatting it would be inventing structure it
@@ -890,6 +962,95 @@ internal sealed class DevWorkflowAgentExecutor
         {
             // A page nobody can read counts as unread: the safe direction, since it can only make a patch read as not covered.
             _logger.LogWarning(exception, "Work session {SessionId} recorded an unreadable artifact-read detail.", sessionId);
+            return null;
+        }
+    }
+
+    /// <summary>The warning an Agent node handed a patch earns by running on the model that produced it, or null when it does not or a side is unknown.</summary>
+    /// <remarks>
+    ///     Never a block: a model judging its own work is a weaker review, not a wrong one. The reviewer's model is the one the session's every step
+    ///     is judged on: node pin, bound definition, node default. A patch's is the coder attempt its producer recorded, else the project's coder model.
+    /// </remarks>
+    private async Task<SameModelReview?> SameModelReviewAsync(DevWorkflowGraphNode? node,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
+        Guid agentDefinitionId,
+        IReadOnlyList<WorkSessionReadableArtifact> readable,
+        CancellationToken cancellationToken)
+    {
+        var patches = readable.Where(static artifact => string.Equals(artifact.Kind, nameof(DevWorkflowArtifactKind.Patch), StringComparison.Ordinal)).ToList();
+        if (patches.Count == 0)
+        {
+            return null;
+        }
+
+        // The step loop's own resolution, so the default model a seeded node runs on counts; a deleted definition resolves to nothing.
+        if (Pinned((await _toolGate.InspectAllowListAsync(agentDefinitionId, node?.ModelProfile, cancellationToken)).EffectiveModel) is not { } reviewer)
+        {
+            return null;
+        }
+
+        var matched = new List<string>();
+        foreach (var patch in patches)
+        {
+            var producer = nodeRuns.FirstOrDefault(row => string.Equals(row.NodeKey, patch.Producer, StringComparison.Ordinal));
+            var coder = RecordedPatchModel(producer?.OutputJson) ?? await ProjectCoderModelAsync(producer?.DevelopmentProjectId ?? nodeRun.DevelopmentProjectId, cancellationToken);
+            if (string.Equals(coder, reviewer, StringComparison.Ordinal))
+            {
+                matched.Add($"'{patch.Name}' from '{patch.Producer}'");
+            }
+        }
+
+        return matched.Count == 0
+            ? null
+            : new SameModelReview
+            {
+                Attempt = nodeRun.Attempt,
+                ModelId = reviewer,
+                Patches = matched,
+                Warning = $"This node reviews {string.Join(", ", matched)} on '{reviewer}', the model that produced it, so its review is not independent of the work it judges."
+            };
+    }
+
+    private static string? Pinned(string? model) =>
+        string.IsNullOrWhiteSpace(model) ? null : model;
+
+    /// <summary>The coder model a validation node recorded for the patch it published, off its output's <c>patchModelId</c>.</summary>
+    private static string? RecordedPatchModel(string? outputJson)
+    {
+        if (string.IsNullOrWhiteSpace(outputJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(outputJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                   && document.RootElement.TryGetProperty("patchModelId", out var model)
+                   && model.ValueKind == JsonValueKind.String
+                ? Pinned(model.GetString())
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private async Task<string?> ProjectCoderModelAsync(Guid? projectId, CancellationToken cancellationToken)
+    {
+        if (projectId is not { } id || _services.GetService<IDevelopmentStore>() is not { } development)
+        {
+            return null;
+        }
+
+        try
+        {
+            return Pinned((await development.GetProjectAsync(id, cancellationToken)).CoderModelId);
+        }
+        catch (DevelopmentNotFoundException)
+        {
             return null;
         }
     }
@@ -1027,6 +1188,12 @@ internal sealed class DevWorkflowAgentExecutor
         var declaredKind = graph.Nodes.GetValueOrDefault(nodeRun.NodeKey)?.Materialization?.ArtifactKind;
         var promoted = await _promotion.PromoteAsync(run, nodeRun, session.Id, declaredKind, cancellationToken);
         var findings = await _sessionStore.ListFindingsAsync(session.Id, sinceSequence: 0, cancellationToken);
+        var review = await SameModelReviewAsync(graph.Nodes.GetValueOrDefault(nodeRun.NodeKey),
+            nodeRun,
+            nodeRuns,
+            session.AgentDefinitionId,
+            await ReadableArtifactsAsync(store, run, nodeRun, cancellationToken),
+            cancellationToken);
         var output = JsonSerializer.Serialize(new AgentOutput
             {
                 Status = DevWorkflowNodeOutputStatuses.Succeeded,
@@ -1039,7 +1206,8 @@ internal sealed class DevWorkflowAgentExecutor
                                    .GroupBy(static finding => finding.Kind)
                                    .ToDictionary(static group => JsonNamingPolicy.CamelCase.ConvertName(group.Key.ToString()), static group => group.Count(), StringComparer.Ordinal),
                 Output = sessionOutput,
-                Reads = coverage.Count == 0 ? null : [.. coverage.Select(static entry => entry.Line)]
+                Reads = coverage.Count == 0 ? null : [.. coverage.Select(static entry => entry.Line)],
+                Warnings = review is null ? null : [review.Warning]
             },
             JsonOptions);
 
@@ -1234,6 +1402,23 @@ internal sealed class DevWorkflowAgentExecutor
         /// <summary>One coverage line per readable text artifact, off the session's <c>ArtifactRead</c> events; absent when it was handed none.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public IReadOnlyList<string>? Reads { get; init; }
+
+        /// <summary>What the run should know about this success without it blocking anything; absent when there is nothing.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public IReadOnlyList<string>? Warnings { get; init; }
+    }
+
+    /// <summary>The detail of a <c>node.reviewer.same-model</c> event: the shared model, the patches it produced, and the sentence the output carries.</summary>
+    private sealed record SameModelReview
+    {
+        /// <summary>The node-run attempt it warns about, so a reader shows a retried node's current warning rather than an earlier attempt's.</summary>
+        public required int Attempt { get; init; }
+
+        public required string ModelId { get; init; }
+
+        public required IReadOnlyList<string> Patches { get; init; }
+
+        public required string Warning { get; init; }
     }
 
     /// <summary>How much of one readable artifact a session read: the union of the pages it was served, in characters.</summary>

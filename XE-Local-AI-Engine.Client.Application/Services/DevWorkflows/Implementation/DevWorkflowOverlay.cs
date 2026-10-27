@@ -7,5 +7,15 @@ namespace XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 /// <remarks>
 ///     <see cref="Patch" /> is the exact bytes that were overlaid, carried back for the lane to publish, and empty when
 ///     nothing was overlaid or the patch is over the artifact limit (<see cref="DevWorkflowValidationBasedOn.PatchArtifactOmitted" /> says so).
+///     <see cref="PatchModelId" /> is the model the Dev Mode coder attempt that produced the patch ran on, when that attempt is recorded.
 /// </remarks>
-internal readonly record struct DevWorkflowOverlay(DevWorkflowValidationBasedOn? BasedOn, string? Refusal, ReadOnlyMemory<byte> Patch = default);
+internal readonly record struct DevWorkflowOverlay
+{
+    public required DevWorkflowValidationBasedOn? BasedOn { get; init; }
+
+    public required string? Refusal { get; init; }
+
+    public ReadOnlyMemory<byte> Patch { get; init; }
+
+    public string? PatchModelId { get; init; }
+}

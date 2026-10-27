@@ -6,7 +6,7 @@ namespace XE_Local_AI_Engine.Client.Services.Development.Implementation;
 /// <remarks>
 ///     Detection is a proposal: it runs against the trusted host repository root at registration time and its result
 ///     is shown to the operator for confirmation, because a repository the agent can write must never choose its own
-///     build commands. A repository with no recognizable .NET build system resolves to
+///     build commands. A .NET build system wins over Python markers; a repository with neither resolves to
 ///     <see cref="DevelopmentCommandProfileCatalog.GenericGit" />, named in the confirmation step and stamped on
 ///     every artifact the gate produces, so a report that checked only whitespace says so.
 /// </remarks>
@@ -20,6 +20,8 @@ internal sealed class DevelopmentCommandProfileDetector : IDevelopmentCommandPro
     private const int MaxProjectSearchDepth = 3;
 
     private const int MaxCandidates = 50;
+
+    private static readonly string[] PythonMarkers = ["pyproject.toml", "pytest.ini", "setup.cfg"];
 
     public DevelopmentProfileDetection Detect(string repositoryRoot)
     {
@@ -45,19 +47,34 @@ internal sealed class DevelopmentCommandProfileDetector : IDevelopmentCommandPro
         var projects = EnumerateRelative(canonical, "*.csproj", MaxProjectSearchDepth)
                        .Take(MaxCandidates)
                        .ToArray();
-        return projects.Length > 0
-            ? new DevelopmentProfileDetection
+        if (projects.Length > 0)
+        {
+            return new DevelopmentProfileDetection
             {
                 ProfileId = DevelopmentCommandProfileCatalog.DotnetCsproj,
                 BuildTarget = projects[0],
                 Candidates = projects
-            }
-            : new DevelopmentProfileDetection
-            {
-                ProfileId = DevelopmentCommandProfileCatalog.GenericGit,
-                BuildTarget = null,
-                Candidates = []
             };
+        }
+
+        return new DevelopmentProfileDetection
+        {
+            ProfileId = IsPythonRepository(canonical) ? DevelopmentCommandProfileCatalog.PythonPytest : DevelopmentCommandProfileCatalog.GenericGit,
+            BuildTarget = null,
+            Candidates = []
+        };
+    }
+
+    /// <summary>A root-level Python project or pytest configuration file, or a <c>tests/</c> tree holding Python.</summary>
+    private static bool IsPythonRepository(string root)
+    {
+        if (PythonMarkers.Any(marker => File.Exists(Path.Combine(root, marker))))
+        {
+            return true;
+        }
+
+        var tests = Path.Combine(root, "tests");
+        return Directory.Exists(tests) && EnumerateRelative(tests, "*.py", MaxProjectSearchDepth).Any();
     }
 
     /// <summary>

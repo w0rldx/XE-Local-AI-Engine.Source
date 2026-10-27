@@ -326,6 +326,10 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
     {
         var project = await _store.GetProjectAsync(projectId, cancellationToken);
         DevelopmentTrustPolicy.EnsureCurrent(project, _timeProvider);
+
+        // Here rather than only in the runners, which resolve it after the attempt row is Running and the request has
+        // returned: a profile the catalog no longer honours is answered to the caller, with what to do about it.
+        _ = DevelopmentCommandProfileCatalog.ResolveStored(project.CommandProfileJson);
         _ = await _repositoryBindings.ResolveProjectAsync(projectId, cancellationToken);
 
         var existing = await _store.FindOperationAsync(projectId,

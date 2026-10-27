@@ -866,11 +866,11 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     {
         if (launch.MxcRequest is null)
         {
-            return "The sandbox command could not be launched.";
+            return SandboxCommandResult.LaunchFailurePrefix + ".";
         }
 
         _logger.LogError(exception, "The MXC AppContainer boundary refused or failed the sandbox launch; the command was not run.");
-        return $"The sandbox command could not be launched under the AppContainer boundary ({exception.Message}).";
+        return $"{SandboxCommandResult.LaunchFailurePrefix} under the AppContainer boundary ({exception.Message}).";
     }
 
     /// <summary>

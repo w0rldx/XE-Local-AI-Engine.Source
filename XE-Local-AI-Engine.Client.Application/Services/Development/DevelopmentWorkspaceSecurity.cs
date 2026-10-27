@@ -98,7 +98,8 @@ internal static class DevelopmentWorkspaceSecurity
     }
 
     /// <summary>
-    ///     Whether a workspace-relative path's FIRST segment is a dot-entry outside <see cref="EditableDotPaths" />.
+    ///     Whether a workspace-relative path's FIRST segment is a dot-entry outside <see cref="EditableDotPaths" />, or
+    ///     any segment spells <c>.git</c>: a deeper one makes its directory a gitlink that hides its files from the patch.
     /// </summary>
     /// <remarks>
     ///     The rule is the dot prefix itself, never a list of names, so the guard does not depend on which software a
@@ -114,6 +115,19 @@ internal static class DevelopmentWorkspaceSecurity
         // Segment-aware by construction: ".gitignore" is its own first segment and never a match for ".git". Span
         // IndexOf because the string overload is culture-sensitive and this splitting must be ordinal (CA1307).
         var path = relativePath.AsSpan();
+        foreach (var range in path.Split(SandboxSeparator))
+        {
+            // The NTFS spellings git's protectNTFS refuses too: trailing dots and spaces, the GIT~1 short name, and any
+            // colon, which names a stream (".git::$INDEX_ALLOCATION").
+            var segment = path[range].TrimEnd(". ");
+            if (segment.Equals(".git", StringComparison.OrdinalIgnoreCase)
+                || segment.Equals("git~1", StringComparison.OrdinalIgnoreCase)
+                || segment.Contains(':'))
+            {
+                return true;
+            }
+        }
+
         var separator = path.IndexOf(SandboxSeparator);
         var firstSegment = separator < 0 ? path : path[..separator];
 

@@ -302,8 +302,10 @@ back to back.
 and declares the triage contract (§2.1): `kind` (`feature`, `bug`, `question`, `unclear`, required), `area`,
 `severity`, `environment`, `evidenceQuality` and a bounded `rationale`. A change request is a `feature`. One
 `output.kind` edge per class leaves it, which `GRAPH-C4-5` holds exhaustive. A `question` goes to `answer`, which
-writes `answer.md` and changes nothing; an `unclear` request goes to `needsinfo`, which writes `what-is-missing.md`
-naming what the operator has to add. Both are endpoints, and the run completes with everything else skipped. A
+writes `answer.md` and changes nothing; an `unclear` request goes to `needsinfo`, which writes `questions.md`, the
+numbered questions the requester has to answer. **There is no clarification loop yet:** the run ends there, and the
+operator puts the answers into the work item's request and starts a new run. A gate that sends an answer back to
+`classify` needs an engine change, because a gate's `RequestChanges` does not follow a `retryTarget` today. Both are endpoints, and the run completes with everything else skipped. A
 `feature` takes `research → plan → planapproval`; a `bug` takes `triage → rootcause → fixplan → fixapproval`, where
 triage reads the classification's area, environment and evidence quality and, when the evidence is too thin to act
 on, closes with `objectiveMet: false` so a person is asked instead of a fix being planned on a guess. The classifier
@@ -364,6 +366,15 @@ report says so, while `DevelopmentOptions.MaxPatchBytes` allows larger patches t
 task cannot be verified from the run, and `verify` is told to say so rather than sign it. Apply is untouched:
 `integrate` re-reads Development Mode's own hash-locked patch, never the published copy, so the copy cannot change what
 is applied.
+
+**Both templates hold the plan and the verification to the request, not only to each other.** Every Agent node run is
+seeded with the work item's request (§5.5). Every plan node (`plan`, and the intake's `fixplan`) keeps each name,
+signature and interface the request specifies exactly as written, and lists any departure under a heading
+"Deviations from the request". Both `verify` nodes judge each patch against the request first and the approved plan
+second. A patch that drops, renames or changes something the request specifies is a refused task even when it
+matches the plan, unless the approved plan listed that departure. The `verdict` / `refusedTasks` contract is
+unchanged. Before this change, a plan that renamed the requested interface was approved, implemented and then signed
+off against itself.
 
 ### 2.4 Vocabularies
 
@@ -757,6 +768,18 @@ once, which is cheap and keeps the record honest. Every outcome carries one cove
 block appended to the reason, with up to half the reason column reserved for it so a long model summary cannot push it out. Coverage belongs to the session, so a `Retry`, which drives a new session, starts from
 zero and the new attempt has to read again.
 
+**A reviewer on the coder's model is warned, never stopped.** When an Agent node handed a `Patch` is dispatched, the
+lane compares the model it will run on (the node's `modelProfile`, else the bound agent definition's, else the node's
+default chat model, resolved by the same tool gate the session's step loop asks before every step) with the model that
+produced each patch: the coder attempt the publishing validation node
+recorded as `patchModelId` in its output (read off the attempt that owns the approved patch, §7.2), else the
+Development project's `CoderModelId`. Models are compared by id. On a match the run records one
+`node.reviewer.same-model` event per attempt (detail: `attempt`, `modelId`, the matching `patches` and the `warning`
+sentence), and a success carries the same sentence in the output document's `warnings` member; the node panel shows
+the current attempt's warning as a yellow banner, so a re-pinned and retried node does not keep an earlier one.
+Either side unknown (a deleted definition or no default model, no recorded attempt and no project coder model) is no
+warning. Nothing blocks on it: a model judging its own work is a weaker review, not a wrong one.
+
 The lane is not filtered by session kind: every session it drives was created through the workflow-owned
 lifecycle and is of the workflow kind by construction, so a kind check would be a condition that cannot be false.
 
@@ -796,7 +819,7 @@ The objective is assembled in a fixed order, and the order is the point.
 | Phase | Bounded? | Why it sits where it does |
 | --- | --- | --- |
 | The node's own instructions | No | A node whose instructions exceed the work-session limit is the pre-existing refusal; silently trimming what an author wrote would be a worse answer than the block. |
-| The operator's request | No | With the instructions, what a node cannot do without. |
+| The operator's request | Only the request itself | With the instructions, what a node cannot do without. Seeded at run start onto every entry node run, with the start's `inputsJson`, and onto every other Agent node run alone (`DevWorkflowRunSeeds.Compose`), so a plan or a verification downstream sees what was asked and not only what research made of it. The start's inputs stay with the entry node: at up to 32 KiB they would crowd the request out of a verification's objective. A request may be longer than the whole ceiling, so it gets the room the other uncapped phases leave, only half of it while a rule set applies, and is cut behind a visible marker naming its full length. Without the cut, a long request would push every rule set out and then overrun the work-session limit. |
 | The output contract (§2.1) | No | Only on a node that declares `outputSchema`, rendered by `WorkSessionOutputSchema.Render`. It is the request's other half, what the session must hand back, so it is uncapped and counted with it. |
 | The decomposition contract (§6.4) | No | Lands before the policy phase reads the running length, so policy gets the room it leaves. |
 | The scoped rule sets | Yes | Policy that pushed the objective over the limit would crowd out the request it is supposed to govern. |

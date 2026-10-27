@@ -381,6 +381,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
                 RepositoryIdentityHash = "identity",
                 HostWorktreePath = worktree,
                 RuntimePath = runtimePath,
+                TrustedGitDirectory = Path.Combine(worktree, ".git"),
                 SandboxHandle = handle
             };
             var tools = new DevelopmentWorkspaceTools(sandbox, session, Options.Create(OptionsValue()), profile);

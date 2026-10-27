@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
 using System.Text.Json;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>The node runs a graph gets at run start.</summary>
@@ -34,12 +35,17 @@ internal static class DevWorkflowRunSeeds
 
         var entryKeys = graph.EntryNodeKeys.Where(key => !graph.TemplateKeys.Contains(key)).ToHashSet(StringComparer.Ordinal);
 
-        // The operator's request has to reach the first agent, and there is no run-level input column: every ENTRY node
-        // run is seeded with it, and the objective composer renders it at the top.
+        // There is no run-level input column, so an ENTRY node run gets the request and the start's inputs, and every other
+        // AGENT one the request alone: a verify that never sees it drifts, and the inputs (up to 32 KiB) would crowd it out.
         var entryInput = JsonSerializer.Serialize(new EntryInput
         {
             WorkItemRequest = workItem.Request,
             InputsJson = inputsJson
+        }, JsonOptions);
+        var agentInput = JsonSerializer.Serialize(new EntryInput
+        {
+            WorkItemRequest = workItem.Request,
+            InputsJson = null
         }, JsonOptions);
         var seeds = graph.Nodes.Values.Where(node => !graph.TemplateKeys.Contains(node.NodeKey))
                          .OrderBy(static node => node.NodeKey, StringComparer.Ordinal)
@@ -51,12 +57,22 @@ internal static class DevWorkflowRunSeeds
                              MaxAttempts = node.MaxAttempts,
                              AgentDefinitionId = node.AgentDefinitionId,
                              DevelopmentProjectId = workItem.DevelopmentProjectId,
-                             InputJson = entryKeys.Contains(node.NodeKey) ? entryInput : null,
+                             InputJson = SeedInput(node),
                              // Recorded on EVERY node run, not only the entry or agent ones: the resolution is what the node-run detail answers "which rules
                              // applied" with, and a row that skipped it would read as "none did".
                              PolicyResolutionJson = DevWorkflowRulePolicyResolver.Compose(enabledRuleSets, workItem.DevelopmentProjectId, node.NodeType)
                          })
                          .ToList();
+
+        string? SeedInput(DevWorkflowGraphNode node)
+        {
+            if (entryKeys.Contains(node.NodeKey))
+            {
+                return entryInput;
+            }
+
+            return node.NodeType == DevWorkflowNodeType.Agent ? agentInput : null;
+        }
 
         return seeds.Count > maxNodeRunsPerRun
             ? throw new DevWorkflowValidationException($"This definition has {seeds.Count} nodes, more than the {maxNodeRunsPerRun} node runs a run may carry.")

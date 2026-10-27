@@ -365,6 +365,7 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
             RepositoryIdentityHash = "identity",
             HostWorktreePath = HostWorkspace,
             RuntimePath = HostRuntime,
+            TrustedGitDirectory = "/trusted/.git",
             SandboxHandle = new SandboxHandle
             {
                 ProviderName = "test",

@@ -22,8 +22,36 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 > The source version identity in `eng/ReleaseVersion.props` still reads `1.0.0-rc.2` — the version that has already
 > shipped. It is bumped when the next release is cut, at which point this section takes that version's heading.
 
+> **Breaking (pre-release): re-create existing Development projects after this upgrade.** The Development command-profile
+> catalog moved from `v2` to `v3` (the new `python-pytest` profile). A project created before the upgrade keeps its
+> stored `v2` profile, and every attempt, validation, review, apply and Dev Workflows Tool node on it is refused with
+> "Re-create this Development project to adopt the current command profiles". Create a new project on the same
+> repository; it detects and stores the current profile. There is no in-place upgrade.
+
 ### Added
 
+- **Python repositories validate with pytest in Development Mode** — a repository with no .NET solution or project and
+  a `pyproject.toml`, `pytest.ini`, `setup.cfg` or Python files under `tests/` is detected as the new `python-pytest`
+  profile. Its gate runs `git diff --check` and pytest through an isolated `python3 -I -B` with an engine-owned launch,
+  with network off and no install step, reads pytest's summary line (zero tests run never passes), and protects
+  existing `tests/**/*.py`, `test_*.py` and `*_test.py` from agent edits. pytest is imported before the workspace joins
+  `sys.path`, after the standard library and before site-packages, and test modules load in `importlib` mode, so
+  neither a repository `pytest.py` nor a standard-library name (`pdb.py`, `src/unittest/`) stands in for the runner,
+  and an installed copy of the project does not stand in for the patch; every pytest configuration file, the repository's and
+  any ancestor directory's, is replaced by an empty one, conftest discovery stops at the workspace, and host plugins do
+  not autoload. **The repository's own pytest settings (`addopts`, `pythonpath`, markers) are ignored.** An attempt
+  that adds, edits or removes a file the runner loads as code (`pytest.py`, `_pytest/`, `pluggy/`, any `conftest.py`,
+  compiled bytecode, a root or `src/` module named like a standard-library module, an interpreter-startup hook (`sitecustomize`, `usercustomize`) or a pytest dependency) is refused. Patch evidence is staged in an
+  engine-owned repository, and validation and the reviewer's tools run in a fresh clone of the base commit plus exactly
+  the stored patch under fresh home, tmp and dotnet directories, on every profile, after the coder's sandbox is
+  killed. What a command leaves in the task worktree, its `.git` or its `HOME` (an ignored `.pyc`, a nested `.git`, a
+  replace ref, an index bit, a `.gitconfig`, a git excludes file, an MSBuild user import) no longer reaches validation;
+  a nested `.git` is refused. Sandboxed git reads no global or system config. The package folder is read-only to the
+  coder and to validation and written only by the base commit's warm restore, where the backend has a mount layer; on
+  the process provider, Development's default, it stays writable, and a command can still write anything the node's user can. The patch's
+  own tests and build files still run, so the reviewer stays the control for them. pytest is never bundled or downloaded: the
+  operator installs it for the host `python3`, and a host without Python or pytest fails validation with a message
+  saying so.
 - **Dev Workflows intake template that classifies, then routes** — the seeded `dev-intake-v1` template starts with
   one classifier that sorts a request into feature, bug, question or unclear. A feature and a bug each get their own
   research, plan and approval gate, then share one implementation tail behind the integration gate; a question gets a
@@ -31,6 +59,12 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
   `outputSchema` (a flat set of string, number, integer and boolean fields): the session must hand in a matching
   `output` to finish, edges route on `output.*`, and a definition whose classifier leaves an answer unrouted is refused
   at save (`GRAPH-C4-5`).
+- **Dev Workflows hold the plan and the verification to the request** — every Agent node run is now handed the work
+  item's request, not only the first one. The seeded plans keep every name, signature and interface the request
+  specifies and list any departure under "Deviations from the request". Both `verify` nodes judge a patch against the
+  request first and the approved plan second, and refuse a task that matches the plan but not the request. On the
+  intake template an unclear request now ends with `questions.md`, the questions for the requester. There is no
+  clarification loop yet. Untouched seeded definitions are upgraded on the next start.
 - **Settings that wait for a restart are visible** — the node reports which settings apply only after a restart
   (`restartRequiredFields`) and which saved values the running node has not applied yet (`pendingRestartFields`,
   compared against the values it started with). A persistent banner lists them on every page; inside the desktop app
@@ -226,6 +260,10 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
   seeded `feature-development-v1` and `dev-intake-v1` templates tell `verify` to read every patch in full against the
   approved plan and to refuse sign-off on one that was not published (over the artifact size cap). Untouched seeded
   rows upgrade at startup; edited ones are left alone.
+- **Dev Workflows warns when a reviewer runs on the coder's model** — an Agent node handed a patch whose model (the
+  node's pin, else its agent's, else the node's default model) is the one that produced the patch (the recorded coder attempt, else the project's
+  coder model) records a `node.reviewer.same-model` run event and a `warnings` line on its output, and the node panel
+  shows a banner. It never blocks the run.
 - **Dev Workflows enforces what verification says** — an Agent node's `outputSchema` may mark enum values as
   `unmetOn`: an answer carrying one blocks the node for a person as "objective not met" even when the session said it
   was met. Both seeded templates' `verify` now hands in a `verdict` (`approved` or `refused`, the latter blocking) and

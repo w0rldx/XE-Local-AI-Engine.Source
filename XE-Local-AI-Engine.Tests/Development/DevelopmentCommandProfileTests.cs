@@ -433,6 +433,110 @@ public sealed class DevelopmentCommandProfileTests : IDisposable
             DevelopmentCommandProfileCatalog.Materialize(plain.ProfileId, plain.BuildTarget).ProfileId);
     }
 
+    /// <summary>
+    ///     A .NET build system wins over every Python marker, because the dotnet gate measures more than pytest would;
+    ///     only a repository with neither lands on <c>python-pytest</c>, and a <c>tests/</c> tree without Python does not.
+    /// </summary>
+    [Test]
+    public void Detector_ProposesPythonPytestOnlyWhenNoDotnetBuildSystemIsPresent()
+    {
+        var detector = new DevelopmentCommandProfileDetector();
+        string[][] pythonTrees =
+        [
+            ["pyproject.toml"],
+            ["pytest.ini"],
+            ["setup.cfg"],
+            ["tests/unit/test_core.py"]
+        ];
+        foreach (var files in pythonTrees)
+        {
+            var python = detector.Detect(CreateTree("python-" + Guid.NewGuid().ToString("N"), files));
+            AssertEx.Equal(DevelopmentCommandProfileCatalog.PythonPytest, python.ProfileId, $"'{files[0]}' marks a Python repository.");
+            AssertEx.Null(python.BuildTarget);
+            AssertEx.Empty(python.Candidates);
+            AssertEx.Equal(DevelopmentCommandProfileCatalog.PythonPytest,
+                DevelopmentCommandProfileCatalog.Materialize(python.ProfileId, python.BuildTarget).ProfileId);
+        }
+
+        AssertEx.Equal(DevelopmentCommandProfileCatalog.DotnetSlnx,
+            detector.Detect(CreateTree("mixed-solution", "pyproject.toml", "tests/test_core.py", "Thing.slnx")).ProfileId);
+        AssertEx.Equal(DevelopmentCommandProfileCatalog.DotnetCsproj,
+            detector.Detect(CreateTree("mixed-project", "pyproject.toml", "src/Lib/Lib.csproj")).ProfileId);
+        AssertEx.Equal(DevelopmentCommandProfileCatalog.GenericGit,
+            detector.Detect(CreateTree("tests-without-python", "tests/README.md", "src/app.py")).ProfileId);
+    }
+
+    /// <summary>
+    ///     The shape the operator confirms: the two baseline git commands and one pytest run on the host's own
+    ///     interpreter, nothing that installs anything, and pytest's discovery patterns protected on top of the default set.
+    /// </summary>
+    [Test]
+    public void PythonPytestProfile_RunsHostPytestWithoutAnInstallStepAndProtectsPythonTests()
+    {
+        var profile = DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.PythonPytest, buildTarget: null);
+
+        AssertEx.Equal(DevelopmentCommandProfileCatalog.CurrentVersion, profile.ProfileVersion);
+        AssertEx.Null(profile.BuildTarget);
+        AssertEx.Equal("git_status,git_diff_check,python_pytest", string.Join(',', profile.Commands.Select(static command => command.CommandId)));
+        AssertEx.Equal("git_diff_check,python_pytest", string.Join(',', profile.ValidationCommandIds));
+
+        var pytest = profile.ResolveCommand(DevelopmentCommandIds.PythonPytest);
+        AssertEx.Equal("python3", pytest.Executable);
+        // Isolated interpreter, engine-owned bootstrap, workspace-pinned discovery: the live-round fixes, pinned in order.
+        AssertEx.Equal("-I|-B|-c|<bootstrap>|-q|-p|no:cacheprovider|--rootdir=.|--confcutdir=.|--import-mode=importlib",
+            string.Join('|', pytest.Arguments.Select(static (argument, index) => index == 3 ? "<bootstrap>" : argument)));
+        var bootstrap = pytest.Arguments[3];
+        AssertEx.True(bootstrap.StartsWith("import os, site, sys, pytest; ", StringComparison.Ordinal), "pytest must be imported before any workspace path joins sys.path.");
+        // After the standard library, before site-packages: a workspace pdb.py loses to the interpreter's, and an
+        // installed or editable copy of the project loses to the patch under test. No site-packages: appended.
+        AssertEx.Contains(bootstrap, "sp = set(site.getsitepackages()); i = next((n for n, p in enumerate(sys.path) if p in sp), len(sys.path)); ");
+        AssertEx.Contains(bootstrap, "sys.path[i:i] = [root, os.path.join(root, 'src')]");
+        AssertEx.False(bootstrap.Contains("sys.path[:0]", StringComparison.Ordinal) || bootstrap.Contains("sys.path +=", StringComparison.Ordinal));
+        AssertEx.Contains(bootstrap, "sys.argv[1:1] = ['-c', os.devnull]");
+        AssertEx.Contains(bootstrap, "os.environ['PYTEST_DISABLE_PLUGIN_AUTOLOAD'] = '1'");
+        AssertEx.True(pytest.TimeoutSeconds > 0);
+
+        string[] protectedPaths = ["tests/unit/test_core.py", "tests/helpers.py", "pkg/test_api.py", "pkg/api_test.py", "Lib.Tests/FooTests.cs"];
+        foreach (var path in protectedPaths)
+        {
+            AssertEx.True(profile.IsProtectedTestPath(path), $"'{path}' must be protected from agent rewrites.");
+        }
+
+        string[] writablePaths = ["src/app.py", "pkg/testing.py", "pyproject.toml"];
+        foreach (var path in writablePaths)
+        {
+            AssertEx.False(profile.IsProtectedTestPath(path), $"'{path}' must stay writable.");
+        }
+
+        // The Python patterns belong to this profile alone; a .NET repository's tests/ helper scripts stay writable.
+        AssertEx.False(DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null)
+                                                       .IsProtectedTestPath("tests/helpers.py"));
+        Assert.Throws<DevelopmentWorkspaceSecurityException>(() =>
+            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.PythonPytest, "pyproject.toml"));
+    }
+
+    /// <summary>
+    ///     What a catalog bump does to every project created before it: the stored profile is refused, and the refusal
+    ///     names both versions and the way out, because re-creating the project is the only upgrade path there is.
+    /// </summary>
+    [Test]
+    [Arguments(DevelopmentCommandProfileCatalog.GenericGit, null)]
+    [Arguments(DevelopmentCommandProfileCatalog.DotnetSlnx, "Fixture.slnx")]
+    public void ResolveStored_RefusesAPriorCatalogVersionWithAnActionableMessage(string profileId, string? buildTarget)
+    {
+        var prior = DevelopmentCommandProfileCatalog.Materialize(profileId, buildTarget) with
+        {
+            ProfileVersion = "v2"
+        };
+
+        var refusal = AssertEx.Throws<DevelopmentWorkspaceSecurityException>(() =>
+            DevelopmentCommandProfileCatalog.ResolveStored(Encoding.UTF8.GetString(prior.ToCanonicalUtf8())));
+
+        AssertEx.Contains(refusal.Message, "catalog version v2");
+        AssertEx.Contains(refusal.Message, "version " + DevelopmentCommandProfileCatalog.CurrentVersion);
+        AssertEx.Contains(refusal.Message, "Re-create this Development project");
+    }
+
     /// <summary>A minimal but structurally valid profile to mutate, so digest coverage does not depend on the catalog.</summary>
     private static DevelopmentCommandProfile Probe() =>
         new("probe",

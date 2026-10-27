@@ -3378,6 +3378,7 @@
 				"producedArtifacts_other": "{{count}} Artefakte erzeugt",
 				"report": "Bericht",
 				"resumes": "{{count}}× wegen Schrittbudget pausiert",
+				"reviewerSameModel": "Dieser Knoten prüft {{patches}} mit {{model}}, demselben Modell, das es erzeugt hat; seine Prüfung ist daher nicht unabhängig.",
 				"sessionPurged": "Das Transkript des Agenten ist nicht mehr verfügbar. Die Ereignisse und Artefakte dieses Knotens sind davon nicht betroffen.",
 				"tool": "Prüfung"
 			},

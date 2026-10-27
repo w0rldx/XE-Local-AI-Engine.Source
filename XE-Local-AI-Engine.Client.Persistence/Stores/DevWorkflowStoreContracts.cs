@@ -1054,6 +1054,10 @@ public static class DevWorkflowEventTypes
     public const string NodeInterventionRequired = "node.intervention.required";
     public const string NodeRetryRouted = "node.retry.routed";
     public const string NodeInterrupted = "node.interrupted";
+
+    /// <summary>A warning, never a block: an Agent node handed a patch runs on the same model that produced it.</summary>
+    public const string NodeReviewerSameModel = "node.reviewer.same-model";
+
     public const string GateRequested = "gate.requested";
     public const string GateDecided = "gate.decided";
     public const string ArtifactCreated = "artifact.created";

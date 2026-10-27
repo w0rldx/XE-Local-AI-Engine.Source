@@ -685,11 +685,11 @@ public sealed class DevWorkflowDispatcherTests
     }
 
     /// <summary>
-    ///     The operator's request has to reach the first node, and there is no run-level input column: every entry node
-    ///     run is seeded with it at materialization, which is where the objective composer will read it from.
+    ///     The operator's request has to reach the first node and every agent after it, and there is no run-level input
+    ///     column: those node runs are seeded with it at materialization, which is where the objective composer reads it.
     /// </summary>
     [Test]
-    public async Task TheEntryNodeRunIsSeededWithTheWorkItemsRequest()
+    public async Task TheEntryAndAgentNodeRunsAreSeededWithTheWorkItemsRequest()
     {
         await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(DevWorkflowGraphs.ResearchPlanApproval, "Explain the KV cache");
@@ -698,10 +698,11 @@ public sealed class DevWorkflowDispatcherTests
         AssertEx.Contains(AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "research")).InputJson), "Explain the KV cache");
 
         // Every node run of the graph exists from the start — that is what keeps terminalization honest, since a run
-        // with rows still to come would otherwise read as "nothing live" and complete early. Only the ENTRY node is
-        // seeded with the request, though: the rest are fed by their upstreams.
+        // with rows still to come would otherwise read as "nothing live" and complete early. A non-entry AGENT is seeded
+        // too, since a plan that never sees the request drifts from it; the gate reads no objective and is seeded nothing.
         AssertEx.Equal(expected: 3, (await harness.ReadNodeRunsAsync(runId)).Count);
-        AssertEx.Null((await harness.ReadNodeRunAsync(runId, "plan")).InputJson);
+        AssertEx.Contains(AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "plan")).InputJson), "Explain the KV cache");
+        AssertEx.Null((await harness.ReadNodeRunAsync(runId, "approve")).InputJson);
     }
 
     /// <summary>

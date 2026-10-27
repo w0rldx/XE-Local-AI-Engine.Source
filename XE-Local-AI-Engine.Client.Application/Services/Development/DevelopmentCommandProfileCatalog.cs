@@ -3,7 +3,8 @@ namespace XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
 /// <summary>
-///     The code-owned command-profile catalog, shipping three .NET-family profiles and no user-defined ones.
+///     The code-owned command-profile catalog: two .NET profiles, a pytest profile and the git-only fallback, and no
+///     user-defined ones.
 /// </summary>
 /// <remarks>
 ///     A custom profile would let a repository describe its own build and test commands, which needs the container
@@ -15,6 +16,13 @@ internal static class DevelopmentCommandProfileCatalog
     public const string DotnetSlnx = "dotnet-slnx";
     public const string DotnetCsproj = "dotnet-csproj";
 
+    /// <summary>The profile for a Python repository whose tests run under the operator's own host <c>pytest</c>.</summary>
+    /// <remarks>
+    ///     Nothing installs, downloads or pins pytest: the operator installs it for the host <c>python3</c>, and a host
+    ///     without it fails validation with a message saying so rather than reading as a pass.
+    /// </remarks>
+    public const string PythonPytest = "python-pytest";
+
     /// <summary>The profile for a repository with no detected .NET build system.</summary>
     /// <remarks>
     ///     Its validation profile is the whitespace check alone, which is honest rather than false-green: the gate
@@ -25,14 +33,14 @@ internal static class DevelopmentCommandProfileCatalog
 
     /// <summary>
     ///     Bumped whenever the command set, argument vectors, timeouts or protected paths of any profile below change,
-    ///     and equally whenever <see cref="DependencyManifestPaths" /> gains or loses a rule.
+    ///     and equally whenever <see cref="DependencyManifestPaths" /> or <see cref="PythonRunnerPaths" /> gains or loses a rule.
     /// </summary>
     /// <remarks>
     ///     That set is a gate applied to every attempt run under a profile this catalog issued. A stored profile whose
     ///     <c>(ProfileId, ProfileVersion)</c> still resolves here but whose canonical content no longer matches is
     ///     rejected rather than silently re-interpreted — see <see cref="ResolveStored" />.
     /// </remarks>
-    public const string CurrentVersion = "v2";
+    public const string CurrentVersion = "v3";
 
     /// <summary>
     ///     The files whose content decides what <c>restore</c> resolves; changing one fails deterministic validation
@@ -92,8 +100,76 @@ internal static class DevelopmentCommandProfileCatalog
     ];
 
     /// <summary>
+    ///     The pytest profile's additions to <see cref="DefaultProtectedPaths" />: pytest's own discovery patterns and
+    ///     the conventional <c>tests/</c> tree. Conftest and option files are in <see cref="PythonRunnerPaths" />.
+    /// </summary>
+    public static readonly string[] PythonProtectedPaths =
+    [
+        .. DefaultProtectedPaths,
+        "tests/**/*.py",
+        "**/test_*.py",
+        "**/*_test.py"
+    ];
+
+    /// <summary>
+    ///     Paths an attempt under <see cref="PythonPytest" /> may not add, modify, delete or rename: modules that would
+    ///     shadow pytest or its imports, compiled bytecode and conftest files. <see cref="IsRunnerPath" /> adds the name rule.
+    /// </summary>
+    /// <remarks>
+    ///     Unlike the protected set, adding one is refused too: each runs inside the runner, so a new one can forge the
+    ///     summary the gate reads. Configuration files need no entry: the launch reads none of them.
+    /// </remarks>
+    public static readonly string[] PythonRunnerPaths =
+    [
+        "**/pytest.py",
+        "**/pytest/**",
+        "**/_pytest/**",
+        "**/py.py",
+        "**/pluggy.py",
+        "**/pluggy/**",
+        "**/conftest.py",
+        "**/*.pyc",
+        "**/__pycache__/**"
+    ];
+
+    /// <summary>The paths no attempt under this profile may touch in any way, including by adding them.</summary>
+    public static IReadOnlyList<string> RunnerPathsFor(string profileId) =>
+        string.Equals(profileId, PythonPytest, StringComparison.Ordinal) ? PythonRunnerPaths : [];
+
+    /// <summary>
+    ///     Whether a change to <paramref name="repositoryRelativePath" /> touches what the profile's runner loads: a
+    ///     <see cref="RunnerPathsFor" /> glob, or a module or package at the repository root or under <c>src/</c>
+    ///     named like a standard-library module or a pytest dependency.
+    /// </summary>
+    /// <remarks>
+    ///     Both roots sit after the standard library on <c>sys.path</c> but before site-packages, so neither a pytest
+    ///     dependency nor a module the platform lacks (<c>_winapi</c> off Windows) is safe by order alone. A non-module
+    ///     file or a directory without an <c>__init__</c> cannot shadow one, so <c>test/test_pdb.py</c> stays writable.
+    /// </remarks>
+    public static bool IsRunnerPath(string profileId, string repositoryRelativePath)
+    {
+        var path = repositoryRelativePath.Replace('\\', '/').TrimStart('/');
+        if (RunnerPathsFor(profileId).Any(pattern => DevelopmentGlob.IsMatch(pattern, path)))
+        {
+            return true;
+        }
+
+        if (!string.Equals(profileId, PythonPytest, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var segments = path.Split('/');
+        var top = segments.Length > 1 && string.Equals(segments[0], "src", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+        var isModuleFile = segments.Length == top + 1 && PythonModuleSuffixes.Any(suffix => segments[top].EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
+        var isPackageInit = segments.Length == top + 2 && segments[top + 1].StartsWith("__init__.", StringComparison.OrdinalIgnoreCase);
+        return (isModuleFile || isPackageInit) && ShadowableModuleNames.Contains(segments[top].Split('.')[0]);
+    }
+
+    /// <summary>
     ///     Builds the profile for a code-owned id. <paramref name="buildTarget" /> is the repository-relative solution or
-    ///     project file the .NET commands operate on, and must be null for <see cref="GenericGit" />.
+    ///     project file the .NET commands operate on, and must be null for <see cref="GenericGit" /> and
+    ///     <see cref="PythonPytest" />.
     /// </summary>
     public static DevelopmentCommandProfile Materialize(string profileId,
         string? buildTarget,
@@ -112,6 +188,25 @@ internal static class DevelopmentCommandProfileCatalog
                 [GitStatus(), GitDiffCheck()],
                 [DevelopmentCommandIds.GitDiffCheck],
                 DefaultProtectedPaths,
+                IsCustom: false).Validated(),
+            PythonPytest => new DevelopmentCommandProfile(PythonPytest,
+                CurrentVersion,
+                templateId,
+                BuildTarget: null,
+                importDigest,
+                [
+                    GitStatus(),
+                    GitDiffCheck(),
+
+                    // -B and no cache plugin keep __pycache__ and .pytest_cache out of the coder's patch; the
+                    // rootdir and confcutdir pins keep conftest discovery inside the workspace.
+                    new DevelopmentProfileCommand(DevelopmentCommandIds.PythonPytest,
+                        PythonExecutable,
+                        ["-I", "-B", "-c", PytestBootstrap, "-q", "-p", "no:cacheprovider", "--rootdir=.", "--confcutdir=.", "--import-mode=importlib"],
+                        TestTimeoutSeconds)
+                ],
+                [DevelopmentCommandIds.GitDiffCheck, DevelopmentCommandIds.PythonPytest],
+                PythonProtectedPaths,
                 IsCustom: false).Validated(),
             DotnetSlnx or DotnetCsproj => new DevelopmentCommandProfile(profileId,
                 CurrentVersion,
@@ -173,7 +268,8 @@ internal static class DevelopmentCommandProfileCatalog
         var expected = Materialize(stored.ProfileId, stored.BuildTarget, stored.TemplateId, stored.ImportDigest);
         if (!string.Equals(expected.ProfileVersion, stored.ProfileVersion, StringComparison.Ordinal))
         {
-            throw new DevelopmentWorkspaceSecurityException("The stored Development command profile was produced by a different catalog version.");
+            throw new DevelopmentWorkspaceSecurityException(
+                $"This Development project's command profile was produced by catalog version {stored.ProfileVersion}, and this engine runs version {CurrentVersion}. Re-create this Development project to adopt the current command profiles.");
         }
 
         if (!expected.ToCanonicalUtf8().AsSpan().SequenceEqual(stored.ToCanonicalUtf8()))
@@ -183,6 +279,58 @@ internal static class DevelopmentCommandProfileCatalog
 
         return stored;
     }
+
+    private static readonly string[] PythonModuleSuffixes = [".py", ".pyc", ".pyo", ".pyw", ".pyd", ".so"];
+
+    // simplified: Python 3.14's sys.stdlib_module_names, private names included, the interpreter-startup hooks site imports
+    // (sitecustomize, usercustomize), plus pytest's own imports, frozen here. Ceiling: a later Python's new module is missing.
+    private static readonly HashSet<string> ShadowableModuleNames = new(
+        ("abc annotationlib antigravity argparse array ast asyncio atexit base64 bdb binascii bisect builtins bz2 "
+        + "cProfile calendar cmath cmd code codecs codeop collections colorsys compileall compression concurrent "
+        + "configparser contextlib contextvars copy copyreg csv ctypes curses dataclasses datetime dbm decimal difflib "
+        + "dis doctest email encodings ensurepip enum errno faulthandler fcntl filecmp fileinput fnmatch fractions "
+        + "ftplib functools gc genericpath getopt getpass gettext glob graphlib grp gzip hashlib heapq hmac html http "
+        + "idlelib imaplib importlib inspect io ipaddress itertools json keyword linecache locale logging lzma mailbox "
+        + "marshal math mimetypes mmap modulefinder msvcrt multiprocessing netrc nt ntpath nturl2path numbers opcode "
+        + "operator optparse os pathlib pdb pickle pickletools pkgutil platform plistlib poplib posix posixpath pprint "
+        + "profile pstats pty pwd py_compile pyclbr pydoc pydoc_data pyexpat queue quopri random re readline reprlib "
+        + "resource rlcompleter runpy sched secrets select selectors shelve shlex shutil signal site smtplib socket "
+        + "socketserver sqlite3 sre_compile sre_constants sre_parse ssl stat statistics string stringprep struct "
+        + "subprocess symtable sys sysconfig syslog tabnanny tarfile tempfile termios textwrap this threading time "
+        + "timeit tkinter token tokenize tomllib trace traceback tracemalloc tty turtle turtledemo types typing "
+        + "unicodedata unittest urllib uuid venv warnings wave weakref webbrowser winreg winsound wsgiref xml xmlrpc "
+        + "zipapp zipfile zipimport zlib zoneinfo"
+        + " __future__ _abc _aix_support _android_support _apple_support _ast _ast_unparse _asyncio _bisect _blake2"
+        + " _bz2 _codecs _codecs_cn _codecs_hk _codecs_iso2022 _codecs_jp _codecs_kr _codecs_tw _collections"
+        + " _collections_abc _colorize _compat_pickle _contextvars _csv _ctypes _curses _curses_panel _datetime _dbm"
+        + " _decimal _elementtree _frozen_importlib _frozen_importlib_external _functools _gdbm _hashlib _heapq _hmac"
+        + " _imp _interpchannels _interpqueues _interpreters _io _ios_support _json _locale _lsprof _lzma _markupbase"
+        + " _md5 _multibytecodec _multiprocessing _opcode _opcode_metadata _operator _osx_support _overlapped _pickle"
+        + " _posixshmem _posixsubprocess _py_abc _py_warnings _pydatetime _pydecimal _pyio _pylong _pyrepl _queue"
+        + " _random _remote_debugging _scproxy _sha1 _sha2 _sha3 _signal _sitebuiltins _socket _sqlite3 _sre _ssl"
+        + " _stat _statistics _string _strptime _struct _suggestions _symtable _sysconfig _thread _threading_local"
+        + " _tkinter _tokenize _tracemalloc _types _typing _uuid _warnings _weakref _weakrefset _winapi _wmi _zoneinfo"
+        + " _zstd"
+        + " sitecustomize usercustomize"
+        + " pytest _pytest py pluggy iniconfig packaging pygments colorama exceptiongroup tomli argcomplete").Split(' '),
+        StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Resolved through the host PATH like <c>dotnet</c> and <c>git</c>, never a bundled interpreter.</summary>
+    private const string PythonExecutable = "python3";
+
+    /// <summary>
+    ///     The engine-owned pytest launch, run by an isolated (<c>-I</c>) interpreter: pytest is imported before the
+    ///     workspace and its <c>src/</c> join <c>sys.path</c>, after the standard library and before site-packages.
+    /// </summary>
+    /// <remarks>
+    ///     <c>-c os.devnull</c> replaces every pytest configuration file, the repository's and any ancestor's, so
+    ///     neither can add options or plugins; host plugins do not autoload either. The repository's own pytest
+    ///     settings are deliberately ignored.
+    /// </remarks>
+    private const string PytestBootstrap =
+        "import os, site, sys, pytest; root = os.getcwd(); sp = set(site.getsitepackages()); "
+        + "i = next((n for n, p in enumerate(sys.path) if p in sp), len(sys.path)); sys.path[i:i] = [root, os.path.join(root, 'src')]; "
+        + "os.environ['PYTEST_DISABLE_PLUGIN_AUTOLOAD'] = '1'; sys.argv[1:1] = ['-c', os.devnull]; raise SystemExit(pytest.main())";
 
     private const int GitTimeoutSeconds = 120;
     private const int RestoreTimeoutSeconds = 900;
@@ -207,11 +355,11 @@ internal static class DevelopmentCommandProfileCatalog
     /// </summary>
     private static string? NormalizeTarget(string profileId, string? buildTarget)
     {
-        if (string.Equals(profileId, GenericGit, StringComparison.Ordinal))
+        if (profileId is GenericGit or PythonPytest)
         {
             return buildTarget is null
                 ? null
-                : throw new DevelopmentWorkspaceSecurityException("The generic Development command profile does not take a build target.");
+                : throw new DevelopmentWorkspaceSecurityException("This Development command profile does not take a build target.");
         }
 
         if (string.IsNullOrWhiteSpace(buildTarget))

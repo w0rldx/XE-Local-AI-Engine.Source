@@ -382,6 +382,7 @@ public sealed class DevelopmentRoundFeedbackTests
             RepositoryIdentityHash = "identity",
             HostWorktreePath = "/worktree",
             RuntimePath = "/runtime",
+            TrustedGitDirectory = "/trusted/.git",
             SandboxHandle = new SandboxHandle
             {
                 ProviderName = "test",

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -636,7 +637,8 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                 CommandsRun = run?.CommandsRun ?? 0,
                 CommandsFailed = run?.CommandsFailed ?? 0,
                 TestsPassed = run?.TestsPassed,
-                TestsFailed = run?.TestsFailed
+                TestsFailed = run?.TestsFailed,
+                PatchModelId = run is { Patch.IsEmpty: false } ? run.PatchModelId : null
             },
             JsonOptions);
 
@@ -694,5 +696,9 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         public required int? TestsPassed { get; init; }
 
         public required int? TestsFailed { get; init; }
+
+        /// <summary>The coder model behind the patch this pass published, which the agent lane compares a reviewer of that patch with; absent without one.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? PatchModelId { get; init; }
     }
 }

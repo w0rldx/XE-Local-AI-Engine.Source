@@ -27,6 +27,21 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 
     private const int WorkspaceManifestVersion = 2;
 
+    /// <summary>The runtime profile of the per-run validation sandbox, distinct so its attach key never meets the coder's.</summary>
+    private const string ValidationRuntimeProfile = "development-validation";
+
+    /// <summary>
+    ///     The per-run validation directory inside the task's never-mounted runtime directory: the tree in <c>tree</c>,
+    ///     beside fresh home, tmp and dotnet directories.
+    /// </summary>
+    private const string ValidationDirectoryName = "validation";
+
+    /// <summary>The warm restore's fresh home, tmp and dotnet directories, removed once it finishes.</summary>
+    private const string WarmDirectoryName = "warm";
+
+    /// <summary>The oldest git Development runs on: the first that honours <c>GIT_CONFIG_GLOBAL</c>.</summary>
+    private const string MinimumGitVersion = "2.32";
+
     /// <summary>The in-sandbox root the per-task runtime directories are requested at.</summary>
     /// <remarks>
     ///     A <em>requested</em> path: the process provider identity-maps and reports the host path instead, and only
@@ -72,6 +87,12 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     ///     <see cref="PrepareAsync" /> and running before the sandbox exists.
     /// </remarks>
     private static readonly string[] RuntimeDirectoryNames = ["home", "tmp", "nuget", "dotnet"];
+
+    /// <summary>
+    ///     The runtime directories a sandbox's commands write freely, so the ones a sandbox that must not trust the
+    ///     coder gets fresh: a HOME carries git's global config and excludes, MSBuild user imports and NuGet.Config.
+    /// </summary>
+    private static readonly string[] ScratchDirectoryNames = ["home", "tmp", "dotnet"];
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -195,6 +216,9 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             "--git-common-dir",
             "The trusted repository Git directory could not be resolved.",
             cancellationToken);
+        var objectFormatResult = await git.RunAsync(canonicalRepositoryRoot, AgentHomeGit.Arguments("rev-parse", "--show-object-format"), cancellationToken);
+        EnsureGitSuccess(objectFormatResult, "The trusted repository's object format could not be read.");
+        var objectFormat = ParseObjectFormat(objectFormatResult.StandardOutput);
         string baseCommit;
         DeleteUntrustedLeftovers(worktreePath, workspaceManifestPath);
         if (!Directory.Exists(worktreePath))
@@ -294,6 +318,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         await EnsureWarmRestoreAsync(git,
             snapshot,
             identity,
+            trustedCommonGitDirectory,
             worktreePath,
             runtimePath,
             workspaceManifestPath,
@@ -319,7 +344,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             {
                 RootPath = worktreePath
             },
-            Mounts = BuildMounts(runtimePath, worktreePath, secrets),
+            Mounts = BuildMounts(runtimePath, runtimePath, worktreePath, secrets, packagesWritable: false),
 
             // The node's ceilings wherever the backend can impose them, through the helper every create site shares.
             // Read SandboxResourceCeilings first: its defaults are sized for run_python, not for a `dotnet build`.
@@ -338,8 +363,146 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             RepositoryIdentityHash = identity,
             HostWorktreePath = worktreePath,
             RuntimePath = runtimePath,
+            TrustedGitDirectory = trustedCommonGitDirectory,
+            ObjectFormat = objectFormat,
             SandboxHandle = handle
         };
+    }
+
+    public async Task<DevelopmentWorkspaceSession> PrepareValidationAsync(DevelopmentWorkspaceSession workspace,
+        DevelopmentRepositoryBinding repository,
+        ReadOnlyMemory<byte> patch,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workspace);
+        ArgumentNullException.ThrowIfNull(repository);
+        var profile = await _runtimeSettings.GetSandboxSecurityProfileAsync(cancellationToken);
+        SandboxSecurityProfilePolicy.EnsureServed(SandboxWorkloads.DevelopmentModeHostToolchain, _sandbox.Capabilities, profile);
+        var canonicalRepositoryRoot = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository.RepositoryRoot);
+        if (!string.Equals(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(canonicalRepositoryRoot), workspace.RepositoryIdentityHash, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new DevelopmentWorkspaceSecurityException("The supplied repository does not match the persisted trusted repository identity.");
+        }
+
+        // Rebuilt for every run, never reused: the previous run's commands could write this tree's .git and its home as
+        // freely as the coder's, so a reset would re-derive trust from them. Only the read-only package folder is shared.
+        var validationRoot = CreateScratch(Path.Combine(workspace.RuntimePath, ValidationDirectoryName));
+        var validationPath = Path.Combine(validationRoot, "tree");
+        await EnsureBuildConfigurationBarrierAsync(validationRoot, cancellationToken);
+        var git = new HostGitRunner(_options.MaxAttemptDurationSeconds);
+        await CreateValidationTreeAsync(git, canonicalRepositoryRoot, validationPath, workspace.BaseCommit, workspace.ObjectFormat, cancellationToken);
+
+        var applied = await DevelopmentPatchOverlay.ApplyAsync(validationPath, patch, _options, refuseWhitespaceErrors: false, cancellationToken);
+        EnsureGitSuccess(applied, "The task's patch did not apply to a fresh clone of its base commit.");
+        await DevelopmentWorkspaceWhitespacePolicy.ApplyAsync(git, validationPath, cancellationToken);
+        var secrets = await DetectCommittedSecretsAsync(git, validationPath, cancellationToken);
+
+        var handle = await _sandbox.CreateOrAttachAsync(new SandboxCreateRequest
+        {
+            // A key of its own per run, so a sandbox a crashed run left attached to the deleted tree is never reused.
+            AttachKey = new SandboxAttachKey
+            {
+                OwnerUserId = workspace.ProjectId.ToString("N"),
+                NodeId = Guid.NewGuid().ToString("N"),
+                ProviderName = _sandbox.ProviderName,
+                RuntimeProfile = ValidationRuntimeProfile,
+                ManifestVersion = WorkspaceManifestVersion
+            },
+            RuntimeProfile = ValidationRuntimeProfile,
+            NetworkPolicy = ResolveAgentFacingNetworkPolicy(profile),
+            TrustedHostWorkspace = new SandboxTrustedHostWorkspace
+            {
+                RootPath = validationPath
+            },
+            Mounts = BuildMounts(workspace.RuntimePath, validationRoot, validationPath, secrets, packagesWritable: false),
+            ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.DevelopmentModeHostToolchain,
+                _sandbox.Capabilities,
+                _ceilingDefaults,
+                _nodeOptions)
+        }, cancellationToken);
+
+        return new DevelopmentWorkspaceSession
+        {
+            ProjectId = workspace.ProjectId,
+            TaskId = workspace.TaskId,
+            AttemptId = workspace.AttemptId,
+            BaseCommit = workspace.BaseCommit,
+            RepositoryIdentityHash = workspace.RepositoryIdentityHash,
+            HostWorktreePath = validationPath,
+            RuntimePath = workspace.RuntimePath,
+            TrustedGitDirectory = workspace.TrustedGitDirectory,
+            ObjectFormat = workspace.ObjectFormat,
+            ScratchPath = validationRoot,
+            SandboxHandle = handle
+        };
+    }
+
+    /// <summary>
+    ///     A standalone repository holding the base commit alone, fetched by id from the operator's checkout.
+    /// </summary>
+    /// <remarks>
+    ///     By id rather than by branch: the base branch may have moved since the task started, and a branch clone would
+    ///     then lack the commit. A fetch by path records no remote, so nothing points back at the source; git takes the
+    ///     pack transport for a fetch from a local path, so <c>--depth</c> holds. Created in the trusted checkout's
+    ///     object format, or a SHA-256 repository could not be fetched from.
+    /// </remarks>
+    private static async Task CreateValidationTreeAsync(HostGitRunner git,
+        string canonicalRepositoryRoot,
+        string validationPath,
+        string baseCommit,
+        string objectFormat,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            EnsureGitSuccess(await git.RunAsync(Path.GetDirectoryName(validationPath)!,
+                    AgentHomeGit.Arguments("init", "--quiet", "--object-format=" + objectFormat, validationPath),
+                    cancellationToken),
+                "The Development validation tree could not be created.");
+            EnsureGitSuccess(await git.RunAsync(validationPath,
+                    AgentHomeGit.Arguments("fetch", "--quiet", "--depth", "1", "--no-tags", canonicalRepositoryRoot, baseCommit),
+                    cancellationToken),
+                "The Development validation tree could not fetch its base commit.");
+            EnsureGitSuccess(await git.RunAsync(validationPath,
+                    AgentHomeGit.Arguments("checkout", "--quiet", "--detach", baseCommit),
+                    cancellationToken),
+                "The Development validation tree could not check out its base commit.");
+            if (!StandaloneGitClone.IsStandalone(validationPath))
+            {
+                throw new DevelopmentWorkspaceSecurityException("The Development validation tree does not own a standalone Git directory.");
+            }
+        }
+        catch
+        {
+            StandaloneGitClone.TryDelete(validationPath);
+            throw;
+        }
+    }
+
+    /// <summary>The object format <c>rev-parse --show-object-format</c> printed, refusing anything but <c>sha1</c> or <c>sha256</c>.</summary>
+    /// <remarks>
+    ///     Git before 2.29 echoes the unknown option and exits 0. Development needs 2.32 anyway, the first git that honours
+    ///     <c>GIT_CONFIG_GLOBAL</c>, so the refusal names that floor rather than letting a later init fail obscurely.
+    /// </remarks>
+    internal static string ParseObjectFormat(string output)
+    {
+        var format = output.Trim();
+        return format is "sha1" or "sha256"
+            ? format
+            : throw new DevelopmentWorkspaceSecurityException($"Development Mode needs git {MinimumGitVersion} or later on the node's PATH; this git did not report the "
+                                                              + "repository's object format. Upgrade git and try again.");
+    }
+
+    /// <summary>Recreates <paramref name="path" /> holding nothing but empty home, tmp and dotnet directories.</summary>
+    private static string CreateScratch(string path)
+    {
+        StandaloneGitClone.Delete(path);
+        foreach (var name in ScratchDirectoryNames)
+        {
+            Directory.CreateDirectory(Path.Combine(path, name));
+        }
+
+        return path;
     }
 
     /// <summary>
@@ -405,6 +568,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     private async Task EnsureWarmRestoreAsync(HostGitRunner git,
         DevelopmentExecutionSnapshot snapshot,
         string identity,
+        string trustedCommonGitDirectory,
         string worktreePath,
         string runtimePath,
         string workspaceManifestPath,
@@ -438,69 +602,82 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
                                                             + "commit. Reset the task's workspace so the warm restore can run against the base commit alone.");
         }
 
-        var warmHandle = await _sandbox.CreateOrAttachAsync(new SandboxCreateRequest
-        {
-            AttachKey = new SandboxAttachKey
-            {
-                OwnerUserId = snapshot.ProjectId.ToString("N"),
-                NodeId = snapshot.TaskId.ToString("N"),
-                ProviderName = _sandbox.ProviderName,
-                RuntimeProfile = WarmRuntimeProfile,
-                ManifestVersion = WorkspaceManifestVersion
-            },
-            RuntimeProfile = WarmRuntimeProfile,
-
-            // The one Development sandbox that asks for egress, unconditionally and exempt from RequireEgressDenial by
-            // design: it never runs agent-written content, and denying it would empty the cache every build relies on.
-            NetworkPolicy = SandboxNetworkPolicy.Unrestricted,
-            TrustedHostWorkspace = new SandboxTrustedHostWorkspace
-            {
-                RootPath = worktreePath
-            },
-
-            // The SAME mount set as the agent-facing sandbox. A warm that wrote its cache anywhere else would warm
-            // nothing the attempt can read.
-            Mounts = BuildMounts(runtimePath, worktreePath, detectedSecrets),
-
-            // The SAME ceilings as the agent-facing sandbox too: the warm runs the repository's own restore, so it is
-            // exactly as capable of a runaway as the attempt is.
-            ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.DevelopmentModeHostToolchain,
-                _sandbox.Capabilities,
-                _ceilingDefaults,
-                _nodeOptions)
-        }, cancellationToken);
-
+        // Fresh, not the task's: the warm restore has egress, so a NuGet.Config or MSBuild import a coder left in the
+        // task's HOME (a reset workspace re-warms under the same runtime directory) would choose what it downloads.
+        var scratch = Path.Combine(runtimePath, WarmDirectoryName);
         try
         {
-            var warmSession = new DevelopmentWorkspaceSession
+            _ = CreateScratch(scratch);
+            var warmHandle = await _sandbox.CreateOrAttachAsync(new SandboxCreateRequest
             {
-                ProjectId = snapshot.ProjectId,
-                TaskId = snapshot.TaskId,
-                AttemptId = snapshot.AttemptId,
-                BaseCommit = baseCommit,
-                RepositoryIdentityHash = identity,
-                HostWorktreePath = worktreePath,
-                RuntimePath = runtimePath,
-                SandboxHandle = warmHandle
-            };
+                AttachKey = new SandboxAttachKey
+                {
+                    OwnerUserId = snapshot.ProjectId.ToString("N"),
+                    NodeId = snapshot.TaskId.ToString("N"),
+                    ProviderName = _sandbox.ProviderName,
+                    RuntimeProfile = WarmRuntimeProfile,
+                    ManifestVersion = WorkspaceManifestVersion
+                },
+                RuntimeProfile = WarmRuntimeProfile,
 
-            // Routed through the same tools the attempt uses, so the warm shares its environment, per-command budget
-            // and post-command invariants; a second execution path is how it would drift from the later --no-restore.
-            var tools = new DevelopmentWorkspaceTools(_sandbox, warmSession, Options.Create(_options), profile);
-            _ = await tools.RunCommandAsync(DevelopmentCommandIds.DotnetRestore, cancellationToken);
+                // The one Development sandbox that asks for egress, unconditionally and exempt from RequireEgressDenial by
+                // design: it never runs agent-written content, and denying it would empty the cache every build relies on.
+                NetworkPolicy = SandboxNetworkPolicy.Unrestricted,
+                TrustedHostWorkspace = new SandboxTrustedHostWorkspace
+                {
+                    RootPath = worktreePath
+                },
 
-            var evidence = tools.CommandEvidence[^1];
-            if (!evidence.Completed || evidence.ExitCode != 0)
+                // The SAME package folder as the agent-facing sandbox, and the one sandbox that may write it. A warm that
+                // wrote its cache anywhere else would warm nothing the attempt can read.
+                Mounts = BuildMounts(runtimePath, scratch, worktreePath, detectedSecrets, packagesWritable: true),
+
+                // The SAME ceilings as the agent-facing sandbox too: the warm runs the repository's own restore, so it is
+                // exactly as capable of a runaway as the attempt is.
+                ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.DevelopmentModeHostToolchain,
+                    _sandbox.Capabilities,
+                    _ceilingDefaults,
+                    _nodeOptions)
+            }, cancellationToken);
+
+            try
             {
-                throw new InvalidOperationException("The Development dependency warm restore did not succeed, so the attempt's sandbox would have no packages to build against "
-                                                    + $"(exit {evidence.ExitCode}, completed {evidence.Completed}). Check the repository's package sources and try again.");
+                var warmSession = new DevelopmentWorkspaceSession
+                {
+                    ProjectId = snapshot.ProjectId,
+                    TaskId = snapshot.TaskId,
+                    AttemptId = snapshot.AttemptId,
+                    BaseCommit = baseCommit,
+                    RepositoryIdentityHash = identity,
+                    HostWorktreePath = worktreePath,
+                    RuntimePath = runtimePath,
+                    TrustedGitDirectory = trustedCommonGitDirectory,
+                    ScratchPath = scratch,
+                    SandboxHandle = warmHandle
+                };
+
+                // Routed through the same tools the attempt uses, so the warm shares its environment, per-command budget
+                // and post-command invariants; a second execution path is how it would drift from the later --no-restore.
+                var tools = new DevelopmentWorkspaceTools(_sandbox, warmSession, Options.Create(_options), profile);
+                _ = await tools.RunCommandAsync(DevelopmentCommandIds.DotnetRestore, cancellationToken);
+
+                var evidence = tools.CommandEvidence[^1];
+                if (!evidence.Completed || evidence.ExitCode != 0)
+                {
+                    throw new InvalidOperationException("The Development dependency warm restore did not succeed, so the attempt's sandbox would have no packages to build against "
+                                                        + $"(exit {evidence.ExitCode}, completed {evidence.Completed}). Check the repository's package sources and try again.");
+                }
+            }
+            finally
+            {
+                // Before PrepareAsync returns, unconditionally. A warm sandbox that outlived this method would be a second
+                // container per task with egress, held open for the whole attempt — precisely what the split sandbox design prevents.
+                await _sandbox.KillAsync(warmHandle, CancellationToken.None);
             }
         }
         finally
         {
-            // Before PrepareAsync returns, unconditionally. A warm sandbox that outlived this method would be a second
-            // container per task with egress, held open for the whole attempt — precisely what the split sandbox design prevents.
-            await _sandbox.KillAsync(warmHandle, CancellationToken.None);
+            StandaloneGitClone.TryDelete(scratch);
         }
 
         await WriteWorkspaceManifestAsync(workspaceManifestPath,
@@ -514,24 +691,28 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 
     /// <summary>The engine-generated mounts this feature needs beyond the workspace itself.</summary>
     /// <remarks>
-    ///     Naming the four runtime subdirectories individually rather than mounting their parent is the whole of the
-    ///     control-state exclusion, <c>workspace.json</c> living in that unmounted parent. <c>.git/config</c> is a
-    ///     nested read-only file mount over the read-write workspace, requested only where
-    ///     <see cref="SandboxProviderCapabilities.SupportsReadOnlyMounts" /> is advertised: a filter driver that
-    ///     cannot be DEFINED cannot run, and a provider without a mount layer fails the request closed.
+    ///     Mounting the four runtime subdirectories rather than their parent keeps <c>workspace.json</c> out. The package
+    ///     folder is the task's and, unless <paramref name="packagesWritable" />, read-only, since validation trusts every
+    ///     package in it; the rest come from <paramref name="scratchPath" />. It, <c>.git/config</c> (a filter driver that
+    ///     cannot be DEFINED cannot run) and the shadows are read-only only where the provider advertises
+    ///     <see cref="SandboxProviderCapabilities.SupportsReadOnlyMounts" />; one without a mount layer fails them closed.
     /// </remarks>
-    private IReadOnlyList<SandboxMount> BuildMounts(string runtimePath, string worktreePath, IReadOnlyList<string> detectedSecrets)
+    private IReadOnlyList<SandboxMount> BuildMounts(string runtimePath,
+        string scratchPath,
+        string worktreePath,
+        IReadOnlyList<string> detectedSecrets,
+        bool packagesWritable)
     {
+        var supportsReadOnly = (_sandbox.Capabilities & SandboxProviderCapabilities.SupportsReadOnlyMounts) != SandboxProviderCapabilities.None;
         var mounts = RuntimeDirectoryNames
                      .Select(name => new SandboxMount
                      {
-                         HostPath = Path.Combine(runtimePath, name),
+                         HostPath = Path.Combine(ScratchDirectoryNames.Contains(name, StringComparer.Ordinal) ? scratchPath : runtimePath, name),
                          SandboxPath = RuntimeMountRoot + "/" + name,
-                         ReadOnly = false
+                         ReadOnly = supportsReadOnly && !packagesWritable && !ScratchDirectoryNames.Contains(name, StringComparer.Ordinal)
                      })
                      .ToList();
 
-        var supportsReadOnly = (_sandbox.Capabilities & SandboxProviderCapabilities.SupportsReadOnlyMounts) != SandboxProviderCapabilities.None;
         var gitConfigPath = Path.Combine(worktreePath, ".git", "config");
         if (supportsReadOnly && File.Exists(gitConfigPath))
         {

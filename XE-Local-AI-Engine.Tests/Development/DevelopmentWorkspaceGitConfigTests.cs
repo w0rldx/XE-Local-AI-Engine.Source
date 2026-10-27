@@ -314,6 +314,7 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
             RepositoryIdentityHash = "identity",
             HostWorktreePath = workspace,
             RuntimePath = runtime,
+            TrustedGitDirectory = Path.Combine(workspace, ".git"),
             SandboxHandle = new SandboxHandle
             {
                 ProviderName = "process",

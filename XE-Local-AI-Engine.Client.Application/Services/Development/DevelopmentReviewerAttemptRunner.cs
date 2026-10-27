@@ -79,10 +79,14 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
         timeout.CancelAfter(TimeSpan.FromSeconds(Math.Min(snapshot.MaxDurationSeconds ?? _options.MaxAttemptDurationSeconds,
             _options.MaxAttemptDurationSeconds)));
 
+        SandboxHandle? treeHandle = null;
         try
         {
             var task = await _store.GetTaskAsync(snapshot.TaskId, timeout.Token);
             var session = await _workspaceProvider.PrepareAsync(snapshot, repository, timeout.Token);
+
+            // The coder's sandbox, re-created by the prepare: the review reads its own tree, and nothing may write meanwhile.
+            await _sandbox.KillAsync(session.SandboxHandle, CancellationToken.None);
             var evidence = await _evidence.ResolveCurrentAsync(snapshot.TaskId, session, timeout.Token);
             DevelopmentArtifactWith<DevelopmentValidationReport> validation;
             try
@@ -107,7 +111,10 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                     _timeProvider,
                     maxOutputTokens,
                     _options.MaxToolCalls);
-            var tools = new DevelopmentWorkspaceTools(_sandbox, session, Options.Create(_options), profile, liveProgress);
+            // The same fresh tree validation judged, never the coder's worktree with its ignored files.
+            var tree = await _workspaceProvider.PrepareValidationAsync(session, repository, evidence.Patch, timeout.Token);
+            treeHandle = tree.SandboxHandle;
+            var tools = new DevelopmentWorkspaceTools(_sandbox, tree, Options.Create(_options), profile, liveProgress);
             var cloudContext = await CreateCloudContextAsync(snapshot,
                 evidence,
                 validationArtifact,
@@ -214,6 +221,13 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
             }
 
             throw;
+        }
+        finally
+        {
+            if (treeHandle is not null)
+            {
+                await _sandbox.KillAsync(treeHandle, CancellationToken.None);
+            }
         }
     }
 

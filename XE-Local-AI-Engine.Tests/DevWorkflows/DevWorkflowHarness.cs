@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TUnit.Core.Interfaces;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
@@ -930,7 +931,7 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     ///         <see cref="FakeDevelopmentTaskChain" /> scripts.
     ///     </para>
     /// </summary>
-    public async Task<(Guid ProjectId, Guid TaskId)> SeedDevelopmentProjectAsync()
+    public async Task<(Guid ProjectId, Guid TaskId)> SeedDevelopmentProjectAsync(string? coderModelId = null)
     {
         var hostFolder = new TempDirectory("xe-devtask");
         _seededFolders.Add(hostFolder);
@@ -957,9 +958,30 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
                            BaseBranch = "main",
                            Title = "Add the feature",
                            Requirements = "It has to do the thing.",
-                           AcceptanceCriteriaJson = "[\"it does the thing\"]"
+                           AcceptanceCriteriaJson = "[\"it does the thing\"]",
+                           CoderModelId = coderModelId
                        });
         return (projectId, taskId);
+    }
+
+    /// <summary>A real agent definition pinning no model and allowing no tools, so its sessions run on the node's default model.</summary>
+    public async Task<Guid> SeedUnpinnedAgentAsync()
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var definition = await scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>()
+                                    .AddAsync(new AgentDefinitionInput
+                                    {
+                                        Name = $"Unpinned reviewer {Guid.NewGuid():N}",
+                                        Description = null,
+                                        Instructions = "Review the patch.",
+                                        ModelProfile = null,
+                                        ReasoningEffort = null,
+                                        Kind = AgentDefinitionKind.Single,
+                                        AllowedToolNames = [],
+                                        ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
+                                        OrchestrationTopologyJson = null
+                                    });
+        return definition.Id;
     }
 
     public async Task<DevelopmentTaskSnapshot> ReadDevelopmentTaskAsync(Guid taskId)

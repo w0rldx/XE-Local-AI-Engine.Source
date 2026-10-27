@@ -3378,6 +3378,7 @@
 				"producedArtifacts_other": "produced {{count}} artifacts",
 				"report": "Report",
 				"resumes": "paused for step budget {{count}}×",
+				"reviewerSameModel": "This node reviews {{patches}} on {{model}}, the same model that produced it, so its review is not independent.",
 				"sessionPurged": "The agent's transcript is no longer available. This node's events and artifacts are unaffected.",
 				"tool": "Validation"
 			},

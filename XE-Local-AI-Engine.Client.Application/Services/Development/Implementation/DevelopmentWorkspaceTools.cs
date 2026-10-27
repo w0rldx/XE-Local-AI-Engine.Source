@@ -187,7 +187,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             throw new InvalidOperationException("The requested file write exceeds the configured Development file limit.");
         }
 
-        var tempPath = Path.Combine(_session.RuntimePath, "tmp", Guid.NewGuid().ToString("N") + ".write");
+        var tempPath = Path.Combine(HostRuntimeDirectory("tmp"), Guid.NewGuid().ToString("N") + ".write");
         Directory.CreateDirectory(Path.GetDirectoryName(tempPath)!);
         try
         {
@@ -514,7 +514,12 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             ["DOTNET_NOLOGO"] = "1",
             // Or the CLI's first-run appends the per-task DOTNET_CLI_HOME tools directory to the PERSISTED per-user PATH,
             // one dead entry per task, until cmd.exe gets an EMPTY %PATH%. DOTNET_SKIP_FIRST_TIME_EXPERIENCE is a .NET 10 no-op.
-            ["DOTNET_ADD_GLOBAL_TOOLS_TO_PATH"] = "0"
+            ["DOTNET_ADD_GLOBAL_TOOLS_TO_PATH"] = "0",
+            // No global or system git config, or a core.whitespace planted in a HOME relaxes `git diff --check`. Git for
+            // Windows maps /dev/null to NUL itself, and a Linux container has it, so the value is the same everywhere.
+            ["GIT_CONFIG_GLOBAL"] = "/dev/null",
+            ["GIT_CONFIG_NOSYSTEM"] = "1",
+            ["GIT_ATTR_NOSYSTEM"] = "1"
         };
         if (testPlatformPipeDirectory is not null)
         {
@@ -539,7 +544,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     {
         const int maxUnixSocketPathBytes = 103;
         const int pipeFileNameBytes = 33;
-        var hostTemporary = Path.Combine(_session.RuntimePath, "tmp");
+        var hostTemporary = HostRuntimeDirectory("tmp");
         var temporary = ResolveRuntimeDirectory("tmp");
         // Mounts stay identity-mapped under SandboxIsolationMode.Filesystem, but its bwrap view binds only /work and a jail /tmp, so no host
         // path exists there. Dev Mode never runs isolated today: the process provider refuses isolation with a trusted host workspace.
@@ -576,7 +581,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     /// </remarks>
     private string ResolveRuntimeDirectory(string name)
     {
-        var hostPath = Path.Combine(_session.RuntimePath, name);
+        var hostPath = HostRuntimeDirectory(name);
         return _session.SandboxHandle.TryResolveSandboxPath(hostPath)
                ?? throw new InvalidOperationException($"The sandbox does not expose the Development runtime directory '{name}'. The workspace provider must request it as an "
                                                       + "engine-generated mount before any command runs.");
@@ -592,9 +597,13 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
                      "dotnet"
                  })
         {
-            Directory.CreateDirectory(Path.Combine(_session.RuntimePath, name));
+            Directory.CreateDirectory(HostRuntimeDirectory(name));
         }
     }
+
+    /// <summary>The host path of one runtime directory: the task's package folder, the session's own scratch for the rest.</summary>
+    private string HostRuntimeDirectory(string name) =>
+        Path.Combine(name == "nuget" ? _session.RuntimePath : _session.ScratchPath ?? _session.RuntimePath, name);
 
     /// <summary>Refuses a read whose path names a credential-bearing entry.</summary>
     /// <remarks>

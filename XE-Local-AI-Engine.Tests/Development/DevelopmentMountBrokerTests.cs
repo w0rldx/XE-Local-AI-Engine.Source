@@ -28,7 +28,16 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
     private static readonly DevelopmentCommandProfile GenericProfile =
         DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null);
 
+    /// <summary>A profile with a restore command, so <c>PrepareAsync</c> runs the warm restore.</summary>
+    private static readonly DevelopmentCommandProfile RestoringProfile =
+        DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.DotnetCsproj, "src/App/App.csproj");
+
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-development-mounts-" + Guid.NewGuid().ToString("N"));
+
+    /// <summary>The provider and binding of the last <see cref="PrepareAsync" />.</summary>
+    private DevelopmentWorkspaceProvider? _provider;
+
+    private DevelopmentRepositoryBinding? _binding;
 
     public void Dispose()
     {
@@ -189,23 +198,95 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
         AssertEx.Empty(plain.SandboxHandle.Mounts.Where(static mount => mount.ReadOnly));
     }
 
-    private async Task<(DevelopmentWorkspaceSession Session, DevelopmentWorkspaceTools Tools)> PrepareAsync(IDevelopmentSandboxRuntimeProvider sandbox)
+    /// <summary>
+    ///     The coder's sandbox wrote the package folder, and validation trusted every package in it that had a
+    ///     <c>.nupkg.metadata</c>. Only the warm restore, which runs the base commit alone, may write it now.
+    /// </summary>
+    [Test]
+    public async Task PrepareAsync_MountsThePackageFolderReadOnlyForEverySandboxButTheWarmRestore()
+    {
+        var sandbox = CreateMappingSandbox();
+        var (session, _) = await PrepareAsync(sandbox, RestoringProfile);
+        var nuget = Path.Combine(session.RuntimePath, "nuget");
+
+        AssertEx.Equal("development-warm:writable,development-local:read-only",
+            string.Join(',', sandbox.Created.Select(request => request.RuntimeProfile + ":" + PackageFolderMode(request, nuget))));
+    }
+
+    /// <summary>
+    ///     The warm restore runs with egress, so it must not read a NuGet.Config or MSBuild import a coder left in the
+    ///     task's HOME: it gets home, tmp and dotnet directories of its own, removed afterwards.
+    /// </summary>
+    [Test]
+    public async Task PrepareAsync_RunsTheWarmRestoreUnderFreshDirectories()
+    {
+        var sandbox = CreateMappingSandbox();
+        var (session, _) = await PrepareAsync(sandbox, RestoringProfile);
+        var warm = sandbox.Created.Single(static request => request.RuntimeProfile == "development-warm");
+
+        foreach (var name in new[] { "home", "tmp", "dotnet" })
+        {
+            var mount = warm.Mounts!.Single(mount => mount.SandboxPath == "/xe-runtime/" + name);
+            AssertEx.NotEqual(Path.Combine(session.RuntimePath, name), mount.HostPath);
+            AssertEx.False(Directory.Exists(mount.HostPath), $"the warm restore's {name} directory outlived it");
+        }
+    }
+
+    /// <summary>
+    ///     Validation's home, tmp and dotnet directories are fresh, outside the tree, and its package folder is the
+    ///     task's warm one mounted read-only.
+    /// </summary>
+    [Test]
+    public async Task PrepareValidationAsync_GivesFreshDirectoriesAndAReadOnlyPackageFolder()
+    {
+        var sandbox = CreateMappingSandbox();
+        var (session, _) = await PrepareAsync(sandbox);
+        await File.WriteAllTextAsync(Path.Combine(session.RuntimePath, "home", ".gitconfig"), "[core]\n\twhitespace = -blank-at-eol\n");
+        await File.WriteAllTextAsync(Path.Combine(session.HostWorktreePath, "feature.txt"), "implemented\n");
+        var evidence = await new DevelopmentPatchEvidenceService(Options.Create(OptionsValue())).ExportAsync(session);
+
+        var tree = await _provider!.PrepareValidationAsync(session, _binding!, evidence.PatchBytes);
+        _ = await new DevelopmentWorkspaceTools(sandbox, tree, Options.Create(OptionsValue()), GenericProfile).RunCommandAsync(DevelopmentCommandIds.GitStatus);
+
+        var request = sandbox.Created[^1];
+        AssertEx.Equal("development-validation", request.RuntimeProfile);
+        AssertEx.Equal("read-only", PackageFolderMode(request, Path.Combine(session.RuntimePath, "nuget")));
+        foreach (var name in new[] { "home", "tmp", "dotnet" })
+        {
+            var hostPath = request.Mounts!.Single(mount => mount.SandboxPath == "/xe-runtime/" + name).HostPath;
+            AssertEx.NotEqual(Path.Combine(session.RuntimePath, name), hostPath);
+            AssertEx.False(hostPath.StartsWith(tree.HostWorktreePath, StringComparison.Ordinal), $"validation's {name} directory is inside the tree it judges");
+            AssertEx.Empty(Directory.EnumerateFileSystemEntries(hostPath));
+        }
+
+        var environment = AssertEx.NotNull(sandbox.Executed[^1].Environment);
+        AssertEx.Equal("/dev/null", environment["GIT_CONFIG_GLOBAL"]);
+        AssertEx.Equal("1", environment["GIT_CONFIG_NOSYSTEM"]);
+        AssertEx.Equal("1", environment["GIT_ATTR_NOSYSTEM"]);
+    }
+
+    private static string PackageFolderMode(SandboxCreateRequest request, string packageFolder) =>
+        request.Mounts!.Single(mount => string.Equals(mount.HostPath, packageFolder, StringComparison.Ordinal)).ReadOnly ? "read-only" : "writable";
+
+    private async Task<(DevelopmentWorkspaceSession Session, DevelopmentWorkspaceTools Tools)> PrepareAsync(IDevelopmentSandboxRuntimeProvider sandbox,
+        DevelopmentCommandProfile? profile = null)
     {
         var repository = await CreateRepositoryAsync();
         var data = Path.Combine(_root, "data-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue());
-        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
-
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(),
-            StubNodeRuntimeSettings.Create().Build());
-        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)), profile ?? GenericProfile);
         if (sandbox is MappingSandboxRuntimeProvider mapping)
         {
-            mapping.BaseCommit = session.BaseCommit;
+            // Before the prepare, whose warm restore already runs the workspace invariant probes.
+            mapping.BaseCommit = (await File.ReadAllTextAsync(Path.Combine(repository, ".git", "refs", "heads", "main"))).Trim();
         }
 
-        return (session, new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile));
+        _provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(),
+            StubNodeRuntimeSettings.Create().Build());
+        _binding = Binding(snapshot, repository);
+        var session = await _provider.PrepareAsync(snapshot, _binding);
+        return (session, new DevelopmentWorkspaceTools(sandbox, session, options, profile ?? GenericProfile));
     }
 
     private static MappingSandboxRuntimeProvider CreateMappingSandbox()
@@ -227,7 +308,7 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
             MaxOutputTokens = 2048
         };
 
-    private static DevelopmentExecutionSnapshot Snapshot(string identity)
+    private static DevelopmentExecutionSnapshot Snapshot(string identity, DevelopmentCommandProfile profile)
     {
         return new DevelopmentExecutionSnapshot
         {
@@ -254,7 +335,7 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
             ModelId = "local-model",
             Provider = "local",
             AttemptVersion = 1,
-            CommandProfileJson = Encoding.UTF8.GetString(GenericProfile.ToCanonicalUtf8())
+            CommandProfileJson = Encoding.UTF8.GetString(profile.ToCanonicalUtf8())
         };
     }
 
@@ -322,6 +403,8 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
 
         public IReadOnlyList<SandboxCommandRequest> Executed => _executed;
 
+        public List<SandboxCreateRequest> Created { get; } = [];
+
         /// <summary>Maps every mount onto its own host path, as the process provider does by contract.</summary>
         public bool IdentityMap { get; init; }
 
@@ -342,6 +425,7 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
 
         public Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default)
         {
+            Created.Add(request);
             var workspaceRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(request.TrustedHostWorkspace!.RootPath));
             var mounts = new List<SandboxMountBinding>
             {

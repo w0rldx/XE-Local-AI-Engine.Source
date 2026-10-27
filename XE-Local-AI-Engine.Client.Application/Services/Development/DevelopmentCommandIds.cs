@@ -7,4 +7,5 @@ public static class DevelopmentCommandIds
     public const string DotnetRestore = "dotnet_restore";
     public const string DotnetBuildRelease = "dotnet_build_release_no_restore";
     public const string DotnetTestRelease = "dotnet_test_release_no_build";
+    public const string PythonPytest = "python_pytest";
 }

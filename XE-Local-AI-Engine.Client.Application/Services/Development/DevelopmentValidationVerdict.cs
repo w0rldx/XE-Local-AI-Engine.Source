@@ -62,6 +62,18 @@ internal sealed class DevelopmentValidationVerdict
     /// </remarks>
     private static DevelopmentValidationVerdict? EvaluateCommand(DevelopmentCommandEvidence command)
     {
+        // Ahead of "did not finish": an interpreter that never started is also a command that did not finish, and the
+        // operator needs to hear what to install rather than that something stopped.
+        if (command.TestOutcome is { ParseFailureCode: DevelopmentTestParseFailureCodes.RunnerNotInstalled } missing)
+        {
+            return new DevelopmentValidationVerdict
+            {
+                Passed = false,
+                FailureCode = DevelopmentValidationFailureCodes.TestResultsUnparsed,
+                FailureDetail = $"Command {command.CommandId} could not run its tests: {missing.ParseFailureDetail}"
+            };
+        }
+
         if (!command.Completed)
         {
             return new DevelopmentValidationVerdict

@@ -49,6 +49,9 @@ internal static class DevelopmentTestParseFailureCodes
 
     /// <summary>Output was truncated, so the summary may have been cut off and cannot be trusted.</summary>
     public const string OutputTruncated = "output_truncated";
+
+    /// <summary>The host has no runner to execute: the interpreter could not be started, or the test runner is not installed.</summary>
+    public const string RunnerNotInstalled = "runner_not_installed";
 }
 
 /// <summary>Reads a structured test result out of one profile command's raw output.</summary>
@@ -80,7 +83,7 @@ internal interface IDevelopmentTestResultAdapter
 /// </summary>
 internal static class DevelopmentTestResultAdapters
 {
-    private static readonly IDevelopmentTestResultAdapter[] All = [new DotnetTestResultAdapter()];
+    private static readonly IDevelopmentTestResultAdapter[] All = [new DotnetTestResultAdapter(), new PytestTestResultAdapter()];
 
     /// <summary>
     ///     The adapter for this profile's command, or null when the command produces no test result to read (every

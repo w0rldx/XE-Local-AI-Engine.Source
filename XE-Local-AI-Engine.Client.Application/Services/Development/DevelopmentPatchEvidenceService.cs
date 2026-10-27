@@ -20,13 +20,18 @@ internal interface IDevelopmentPatchEvidenceService
 ///     Exports the final patch subject for a Development attempt.
 /// </summary>
 /// <remarks>
-///     It takes no sandbox provider, deliberately: every Git command here runs on the host against the managed
-///     worktree (see <see cref="RunGitExactAsync" />) rather than inside the attempt's sandbox, because the subject
-///     hash the operator approves must come from the engine's own trusted Git and not from anything the sandboxed
-///     attempt can influence.
+///     No sandbox provider, deliberately: every Git command runs on the host (see <see cref="RunGitExactAsync" />),
+///     because the subject hash the operator approves must come from the engine's own Git. Nor is the worktree's own
+///     <c>.git</c> trusted, every sandboxed command being able to write it: each call stages into an engine-owned
+///     repository (see <see cref="StageAsync" />), so refs, replace refs, index bits and ignore files there change nothing.
 /// </remarks>
 internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenceService
 {
+    private const string StagePrefix = "stage-";
+
+    /// <summary>More Git commands than any export runs, each bounded by the attempt cap; a stage older than that many caps is no live export's.</summary>
+    private const int MaxCommandsPerStage = 8;
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly DevelopmentOptions _options;
@@ -42,16 +47,24 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
         ArgumentNullException.ThrowIfNull(session);
         cancellationToken.ThrowIfCancellationRequested();
 
-        await StageWorkingTreeAsync(session, cancellationToken);
+        using var stage = await StageAsync(session, cancellationToken);
         var patch = await RunGitExactAsync(session,
-            ["diff", "--cached", "--binary", "--full-index", "--no-ext-diff", "HEAD", "--", "."],
+            stage,
+            ["diff", "--cached", "--binary", "--full-index", "--no-ext-diff", "--ignore-submodules=none", session.BaseCommit, "--", "."],
             maxOutputBytes: _options.MaxPatchBytes,
             cancellationToken);
         var status = await RunGitExactAsync(session,
-            ["diff", "--cached", "--name-status", "-z", "HEAD", "--", "."],
+            stage,
+            ["diff", "--cached", "--name-status", "-z", "--ignore-submodules=none", session.BaseCommit, "--", "."],
+            maxOutputBytes: _options.MaxPatchBytes,
+            cancellationToken);
+        var raw = await RunGitExactAsync(session,
+            stage,
+            ["diff", "--cached", "--raw", "-z", "--ignore-submodules=none", session.BaseCommit, "--", "."],
             maxOutputBytes: _options.MaxPatchBytes,
             cancellationToken);
         var resultTree = await RunGitExactAsync(session,
+            stage,
             ["write-tree"],
             maxOutputBytes: 4096,
             cancellationToken);
@@ -60,6 +73,14 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
         if (patchBytes.Length == 0 || patchBytes.Length > _options.MaxPatchBytes)
         {
             throw new InvalidOperationException("The final Development patch is empty or exceeds the configured patch limit.");
+        }
+
+        // A nested .git still makes add -A stage its directory as one gitlink, hiding every file inside it. The index is
+        // the stage's own and --ignore-submodules=none outranks any .gitmodules, so nothing can hide that entry here.
+        var stagedTree = Encoding.ASCII.GetString(resultTree.StandardOutput).Trim();
+        if (raw.StandardOutput.Length > 0 && TouchesGitlink(raw.StandardOutput))
+        {
+            throw new DevelopmentWorkspaceSecurityException("The final patch adds, changes or removes a nested Git repository (gitlink).");
         }
 
         var changedFiles = ParseStatus(status.StandardOutput);
@@ -98,7 +119,7 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
             PatchHash = patchHash,
             ManifestHash = manifestHash,
             SubjectHash = subjectHash,
-            ExpectedResultHash = Encoding.UTF8.GetString(resultTree.StandardOutput).Trim(),
+            ExpectedResultHash = stagedTree,
             PatchBytes = patchBytes,
             ManifestBytes = manifestBytes,
             ChangedFiles = changedFiles
@@ -116,9 +137,10 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
     {
         ArgumentNullException.ThrowIfNull(session);
         cancellationToken.ThrowIfCancellationRequested();
-        await StageWorkingTreeAsync(session, cancellationToken);
+        using var stage = await StageAsync(session, cancellationToken);
         var status = await RunGitExactAsync(session,
-            ["diff", "--cached", "--name-status", "-z", "HEAD", "--", "."],
+            stage,
+            ["diff", "--cached", "--name-status", "-z", "--ignore-submodules=none", session.BaseCommit, "--", "."],
             maxOutputBytes: _options.MaxPatchBytes,
             cancellationToken);
         return status.StandardOutput.Length == 0
@@ -133,36 +155,73 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
     }
 
     /// <summary>
-    ///     Refreshes the index so a <c>--cached</c> diff against HEAD sees the whole working tree, untracked files
-    ///     included.
+    ///     A fresh bare repository under the never-mounted runtime directory, its index read from the base commit and
+    ///     then refreshed from the worktree's files by <c>add -A</c>.
     /// </summary>
     /// <remarks>
-    ///     The config restore sits immediately before the first host-side Git command, and that ordering is the
-    ///     control: <c>reset</c> refreshes the index and <c>add -A</c> runs clean filters, so a <c>core.fsmonitor</c>
-    ///     or <c>filter.&lt;driver&gt;.clean</c> in the agent-writable workspace .git/config would execute on the
-    ///     engine's own machine. A <c>-c</c> pin closes fsmonitor but not filter drivers, whose names are arbitrary;
-    ///     removing the definitions closes both without enumerating a key. See <see cref="DevelopmentWorkspaceGitConfig" />.
+    ///     Objects from the operator's checkout through <c>objects/info/alternates</c>, in its object format; the base
+    ///     commit from the engine-owned manifest; no refs. Git reads the worktree's files byte for byte and never stages
+    ///     a <c>.git</c> component; a nested repository still becomes a gitlink, which the export refuses. A stage a hard
+    ///     stop left goes once older than <see cref="MaxCommandsPerStage" /> commands may run, judged on the file system's
+    ///     own clock against the new stage's.
     /// </remarks>
-    private async Task StageWorkingTreeAsync(DevelopmentWorkspaceSession session, CancellationToken cancellationToken)
+    private async Task<EvidenceStage> StageAsync(DevelopmentWorkspaceSession session, CancellationToken cancellationToken)
     {
+        // First because the provider runs host Git inside the worktree too.
         await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(session.HostWorktreePath, cancellationToken);
-        _ = await RunGitExactAsync(session,
-            ["reset", "--mixed", "--quiet", "HEAD", "--"],
-            maxOutputBytes: 4096,
-            cancellationToken);
-        _ = await RunGitExactAsync(session,
-            ["add", "-A", "--", "."],
-            maxOutputBytes: 4096,
-            cancellationToken);
+        var stage = new EvidenceStage(Path.Combine(session.RuntimePath, StagePrefix + Guid.NewGuid().ToString("N")));
+        try
+        {
+            var staleBefore = stage.CreatedAtUtc.AddSeconds(-(double)_options.MaxAttemptDurationSeconds * MaxCommandsPerStage);
+            foreach (var leftover in new DirectoryInfo(session.RuntimePath).EnumerateDirectories(StagePrefix + "*"))
+            {
+                if (leftover.LastWriteTimeUtc < staleBefore)
+                {
+                    StandaloneGitClone.TryDelete(leftover.FullName);
+                }
+            }
+
+            _ = await RunGitAsync(session,
+                stage.Home,
+                AgentHomeGit.Arguments("init", "--quiet", "--bare", "--object-format=" + session.ObjectFormat, stage.GitDirectory),
+                maxOutputBytes: 4096,
+                cancellationToken);
+            await File.WriteAllTextAsync(Path.Combine(stage.GitDirectory, "objects", "info", "alternates"),
+                Path.Combine(session.TrustedGitDirectory, "objects") + "\n",
+                cancellationToken);
+            _ = await RunGitExactAsync(session, stage, ["read-tree", session.BaseCommit], maxOutputBytes: 4096, cancellationToken);
+            _ = await RunGitExactAsync(session, stage, ["add", "-A", "--", "."], maxOutputBytes: 4096, cancellationToken);
+            return stage;
+        }
+        catch
+        {
+            stage.Dispose();
+            throw;
+        }
     }
 
-    private async Task<ExactGitResult> RunGitExactAsync(DevelopmentWorkspaceSession session,
+    /// <summary>Git scoped to <paramref name="stage" />'s repository, over the task's worktree.</summary>
+    /// <remarks>
+    ///     The HOME is the stage's own empty directory and <c>core.excludesFile</c> is empty, because its default is a file
+    ///     under the config home and the coder's sandbox writes the task's HOME, where a pattern can hide an untracked file.
+    /// </remarks>
+    private Task<ExactGitResult> RunGitExactAsync(DevelopmentWorkspaceSession session,
+        EvidenceStage stage,
         IReadOnlyList<string> tail,
+        int maxOutputBytes,
+        CancellationToken cancellationToken) =>
+        RunGitAsync(session,
+            stage.Home,
+            AgentHomeGit.Arguments(["-c", "core.excludesFile=", $"--git-dir={stage.GitDirectory}", $"--work-tree={session.HostWorktreePath}", .. tail]),
+            maxOutputBytes,
+            cancellationToken);
+
+    private async Task<ExactGitResult> RunGitAsync(DevelopmentWorkspaceSession session,
+        string home,
+        IReadOnlyList<string> arguments,
         int maxOutputBytes,
         CancellationToken cancellationToken)
     {
-        Directory.CreateDirectory(Path.Combine(session.RuntimePath, "home"));
-        Directory.CreateDirectory(Path.Combine(session.RuntimePath, "tmp"));
 #pragma warning disable S4036 // Git is the code-owned executable and must resolve cross-platform through the controlled PATH.
         var startInfo = new ProcessStartInfo
         {
@@ -174,7 +233,7 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
             UseShellExecute = false,
             CreateNoWindow = true
         };
-        foreach (var argument in AgentHomeGit.Arguments([.. tail]))
+        foreach (var argument in arguments)
         {
             startInfo.ArgumentList.Add(argument);
         }
@@ -183,11 +242,13 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
         CopyEnvironment(startInfo, "PATH");
         CopyEnvironment(startInfo, "SystemRoot");
         CopyEnvironment(startInfo, "windir");
-        startInfo.Environment["HOME"] = Path.Combine(session.RuntimePath, "home");
-        startInfo.Environment["TMPDIR"] = Path.Combine(session.RuntimePath, "tmp");
-        startInfo.Environment["TMP"] = Path.Combine(session.RuntimePath, "tmp");
-        startInfo.Environment["TEMP"] = Path.Combine(session.RuntimePath, "tmp");
+        startInfo.Environment["HOME"] = home;
+        startInfo.Environment["XDG_CONFIG_HOME"] = home;
+        startInfo.Environment["TMPDIR"] = home;
+        startInfo.Environment["TMP"] = home;
+        startInfo.Environment["TEMP"] = home;
         startInfo.Environment["LC_ALL"] = "C";
+        startInfo.Environment["GIT_NO_REPLACE_OBJECTS"] = "1";
         // HOME alone left $HOME/.gitconfig and the system file readable; the node-wide hardening removes both from git's search.
         foreach (var (name, value) in AgentHomeGitHardening.Environment)
         {
@@ -274,6 +335,31 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
         return result.OrderBy(static item => item.Path, StringComparer.Ordinal).ToArray();
     }
 
+    /// <summary>Whether a <c>--raw -z</c> record has a gitlink (mode <c>160000</c>) on either side.</summary>
+    /// <remarks>Read as Latin-1, which maps every byte, so a path that is not UTF-8 never fails the check.</remarks>
+    private static bool TouchesGitlink(byte[] raw)
+    {
+        var tokens = Encoding.Latin1.GetString(raw).Split('\0');
+        for (var index = 0; index < tokens.Length && tokens[index].Length > 0;)
+        {
+            // ":<old mode> <new mode> <old id> <new id> <status>", then one path, or two for a rename or copy.
+            var fields = tokens[index].Split(' ');
+            if (fields.Length != 5)
+            {
+                throw new InvalidDataException("The Git raw changed-file manifest was malformed.");
+            }
+
+            if (string.Equals(fields[0], ":160000", StringComparison.Ordinal) || string.Equals(fields[1], "160000", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            index += fields[4].StartsWith('R') || fields[4].StartsWith('C') ? 3 : 2;
+        }
+
+        return false;
+    }
+
     private static string ChangeType(string status) =>
         status.Length == 0
             ? "unknown"
@@ -355,6 +441,26 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
         {
             startInfo.Environment[name] = value;
         }
+    }
+
+    /// <summary>The engine-owned staging repository of one export and its empty HOME, deleted with its scope.</summary>
+    private sealed class EvidenceStage : IDisposable
+    {
+        private readonly string _root;
+
+        public EvidenceStage(string root)
+        {
+            _root = root;
+            Directory.CreateDirectory(Home);
+        }
+
+        public string GitDirectory => Path.Combine(_root, "git");
+
+        public string Home => Path.Combine(_root, "home");
+
+        public DateTime CreatedAtUtc => Directory.GetLastWriteTimeUtc(_root);
+
+        public void Dispose() => StandaloneGitClone.TryDelete(_root);
     }
 
     private sealed record ExactGitResult

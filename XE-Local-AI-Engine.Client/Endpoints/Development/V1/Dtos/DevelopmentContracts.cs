@@ -25,7 +25,7 @@ public sealed class CreateDevelopmentProjectRequest
     /// </summary>
     public string? CommandProfileId { get; init; }
 
-    /// <summary>The repository-relative solution or project file the confirmed profile builds. Null for generic-git.</summary>
+    /// <summary>The repository-relative solution or project file the confirmed profile builds. Null for generic-git and python-pytest.</summary>
     public string? BuildTarget { get; init; }
 }
 

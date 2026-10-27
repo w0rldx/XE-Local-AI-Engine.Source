@@ -167,6 +167,110 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
         }), profile);
     }
 
+    /// <summary>
+    ///     A repository-root <c>pytest.py</c> once forged a passing summary. Under <c>python-pytest</c> every runner path is
+    ///     refused however it changes, ADDING included, while ordinary new tests and other profiles stay unaffected.
+    /// </summary>
+    [Test]
+    public async Task TestWritePolicy_RefusesEveryChangeToAPytestRunnerPathIncludingAnAdd()
+    {
+        var pytest = DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.PythonPytest, buildTarget: null);
+        string[] runnerPaths =
+        [
+            "pytest.py", "src/pytest.py", "pytest/__init__.py", "_pytest/terminal.py", "py.py", "pluggy/__init__.py", "pluggy.py",
+            "conftest.py", "tests/unit/conftest.py", "\\pytest.py",
+
+            // Standard-library and pytest-dependency names at the two roots on sys.path, and compiled bytecode anywhere.
+            "pdb.py", "src/unittest/__init__.py", "difflib.pyc", "heapq.py", "xml/__init__.py", "src/code.py",
+            "codeop.cpython-313-x86_64-linux-gnu.so", "pygments/__init__.py", "iniconfig.py",
+            "pkg/helper.pyc", "pkg/__pycache__/helper.cpython-313.pyc", "__pycache__/pdb.cpython-313.pyc",
+
+            // Private standard-library names: a platform without the C module (_winapi off Windows) imports the file.
+            "_winapi.py", "src/_ssl.py", "_posixsubprocess/__init__.py",
+
+            // Interpreter-startup hooks site imports by name.
+            "sitecustomize.py", "src/sitecustomize.py", "sitecustomize/__init__.py",
+            "usercustomize.py", "src/usercustomize.py", "src/usercustomize/__init__.py"
+        ];
+        foreach (var path in runnerPaths)
+        {
+            foreach (var changeType in new[] { "added", "copied", "modified", "deleted", "renamed" })
+            {
+                var refusal = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() =>
+                {
+                    DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile
+                    {
+                        Path = path,
+                        ChangeType = changeType
+                    }), pytest);
+                    return Task.CompletedTask;
+                }, $"{changeType} '{path}' must be refused.");
+                AssertEx.Equal(DevelopmentTestWritePolicy.RunnerRefusalSentence, refusal.Message);
+            }
+        }
+
+        // Renaming a runner file away still touches it.
+        _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() =>
+        {
+            DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile
+            {
+                Path = "notes.txt",
+                ChangeType = "renamed",
+                PreviousPath = "conftest.py"
+            }), pytest);
+            return Task.CompletedTask;
+        });
+
+        DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile
+            {
+                Path = "tests/test_new_feature.py",
+                ChangeType = "added"
+            },
+            new DevelopmentChangedFile
+            {
+                Path = "shop/cart.py",
+                ChangeType = "modified"
+            },
+            // Configuration files are inert: the launch replaces every one of them with an empty config.
+            new DevelopmentChangedFile
+            {
+                Path = "pytest.ini",
+                ChangeType = "added"
+            },
+            new DevelopmentChangedFile
+            {
+                Path = "setup.cfg",
+                ChangeType = "modified"
+            },
+
+            // A standard-library name inside a package, a non-module file, and a namespace directory never shadow one.
+            new DevelopmentChangedFile
+            {
+                Path = "shop/pdb.py",
+                ChangeType = "added"
+            },
+            new DevelopmentChangedFile
+            {
+                Path = "code.txt",
+                ChangeType = "added"
+            },
+            new DevelopmentChangedFile
+            {
+                Path = "test/test_pdb.py",
+                ChangeType = "added"
+            }),
+            pytest);
+        DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile
+        {
+            Path = "pytest.py",
+            ChangeType = "added"
+        }), DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null));
+
+        var prompt = DevelopmentTestWritePolicy.Prompt(pytest);
+        AssertEx.Contains(prompt, "Never add, modify, delete or rename: **/pytest.py");
+        AssertEx.Contains(prompt, "standard-library module or a pytest dependency");
+    }
+
     private static DevelopmentPatchEvidence Evidence(params DevelopmentChangedFile[] changedFiles) =>
         new()
         {

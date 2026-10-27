@@ -36,6 +36,9 @@ internal sealed record DevWorkflowToolRun
     /// <summary>The patch this pass overlaid and judged, which the lane publishes beside the report; empty when nothing was overlaid.</summary>
     public ReadOnlyMemory<byte> Patch { get; init; }
 
+    /// <summary>The model the coder attempt behind <see cref="Patch" /> ran on, which a reviewer of the patch is compared with; null when unrecorded.</summary>
+    public string? PatchModelId { get; init; }
+
     /// <summary>
     ///     The committed credential paths the prepared workspace carried, which the tick records as a run event. Carried
     ///     back rather than written where they are found, so the detached pass writes nothing at all.

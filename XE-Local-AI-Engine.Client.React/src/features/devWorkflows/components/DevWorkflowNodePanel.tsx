@@ -10,6 +10,7 @@ import { DevWorkflowDevTaskNodePanel } from "@/features/devWorkflows/components/
 import { DevWorkflowHumanGatePanel } from "@/features/devWorkflows/components/DevWorkflowHumanGatePanel";
 import { DevWorkflowNodeAttempts } from "@/features/devWorkflows/components/DevWorkflowNodeAttempts";
 import { DevWorkflowNodeCascadeRerunNotice } from "@/features/devWorkflows/components/DevWorkflowNodePanel/DevWorkflowNodeCascadeRerunNotice";
+import { DevWorkflowNodeReviewerModelNotice } from "@/features/devWorkflows/components/DevWorkflowNodePanel/DevWorkflowNodeReviewerModelNotice";
 import { DevWorkflowNodeCostSection } from "@/features/devWorkflows/components/DevWorkflowNodePanel/DevWorkflowNodeCostSection";
 import { DevWorkflowNodeStatusBadge } from "@/features/devWorkflows/components/DevWorkflowStatusBadge";
 import { DevWorkflowStructuralNodePanel } from "@/features/devWorkflows/components/DevWorkflowStructuralNodePanel";
@@ -176,6 +177,8 @@ export function DevWorkflowNodePanel({
 				) : null}
 
 				<DevWorkflowNodeCascadeRerunNotice nodeRun={nodeRun} nodeEvents={nodeEvents} events={events} run={run} />
+
+				<DevWorkflowNodeReviewerModelNotice nodeEvents={nodeEvents} attempt={nodeRun.attempt ?? 1} />
 
 				<DevWorkflowHumanGatePanel
 					nodeRun={nodeRun}

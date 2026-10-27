@@ -156,6 +156,18 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     /// </summary>
     private readonly List<SandboxCreateRequest> _sandboxCreates = [];
 
+    /// <summary>The trusted host workspace every sandboxed command ran in, in order.</summary>
+    private readonly List<string> _commandRoots = [];
+
+    /// <summary>Every command's environment, keyed by the runtime profile of the sandbox it ran in, in order.</summary>
+    private readonly List<KeyValuePair<string, IReadOnlyDictionary<string, string>>> _commandEnvironments = [];
+
+    /// <summary>"exec:" and "kill:" plus the sandbox's runtime profile, and "export" for each patch export, in order.</summary>
+    private readonly List<string> _sandboxEvents = [];
+
+    /// <summary>The runtime profiles whose commands throw instead of running.</summary>
+    private readonly HashSet<string> _throwingProfiles = new(StringComparer.Ordinal);
+
     public void Dispose()
     {
         try
@@ -241,6 +253,215 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         AssertEx.Equal(DevelopmentOperationPhases.ApplyCompleted, completed.Phase);
         AssertEx.Equal("implemented\n", await File.ReadAllTextAsync(Path.Combine(repository, "feature.txt")));
         AssertEx.Equal(DevelopmentTaskStatus.Completed, (await store.GetTaskAsync(seed.TaskId)).Status);
+    }
+
+    /// <summary>
+    ///     A gitignored file never reaches the patch, so neither the write policy nor the reviewer sees it, yet the
+    ///     validation commands used to run beside it. They now run in a fresh tree that is the base plus the patch alone.
+    /// </summary>
+    [Test]
+    public async Task Validation_RunsInAFreshTreeOfTheBasePlusThePatchAlone()
+    {
+        var repository = await CreateRepositoryAsync();
+        await File.WriteAllTextAsync(Path.Combine(repository, ".gitignore"), "__pycache__/\n*.py[cod]\n");
+        EnsureSuccess(await RunProcessAsync(repository, "git", "add", ".gitignore"));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "commit", "-m", "ignore bytecode"));
+        await using var provider = await BuildProviderAsync(new PlantingCoderModel(), new ApprovingReviewerModel());
+        await using var scope = provider.CreateAsyncScope();
+        var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
+        var coder = scope.ServiceProvider.GetRequiredService<IDevelopmentCoderAttemptRunner>();
+        var validator = scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>();
+        var seed = Seed(repository);
+        var repositoryBinding = Binding(seed, repository);
+
+        _ = await coordinator.CreateProjectAsync(seed);
+        var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+        {
+            TaskId = seed.TaskId,
+            OperationId = Guid.NewGuid(),
+            TargetStatus = DevelopmentTaskStatus.Ready,
+            ExpectedTaskVersion = 1
+        });
+        var coderAttemptId = Guid.NewGuid();
+        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand
+        {
+            TaskId = seed.TaskId,
+            AttemptId = coderAttemptId,
+            OperationId = Guid.NewGuid(),
+            Role = DevelopmentAttemptRole.Coder,
+            ModelId = "coder-local",
+            Provider = "local",
+            ExpectedTaskVersion = ready.Version
+        });
+        var coded = await coder.RunAsync(coderAttemptId, repositoryBinding);
+
+        // Non-vacuity: the planted files exist in the managed worktree, and the patch does not carry them.
+        AssertEx.Equal("feature.txt", string.Join(',', coded.ChangedFiles));
+        var planted = PlantedFiles(repository);
+        AssertEx.Equal(expected: 2, planted.Length);
+
+        _commandRoots.Clear();
+
+        var validation = await validator.RunAsync(seed.TaskId, repositoryBinding);
+
+        AssertEx.True(validation.Passed);
+        var roots = _commandRoots.Distinct(StringComparer.Ordinal).ToArray();
+        AssertEx.Equal(expected: 1, roots.Length);
+        AssertEx.False(planted.Any(path => path.StartsWith(roots[0] + Path.DirectorySeparatorChar, StringComparison.Ordinal)),
+            "validation must not run in the coder's worktree, where the planted files are");
+        AssertEx.Equal("implemented\n", await File.ReadAllTextAsync(Path.Combine(roots[0], "feature.txt")));
+        AssertEx.Empty(Directory.EnumerateFiles(roots[0], "*.pyc", SearchOption.AllDirectories));
+        AssertEx.Equal(expected: 2, PlantedFiles(repository).Length);
+    }
+
+    /// <summary>
+    ///     Validation shared the coder's HOME, so a planted <c>.gitconfig</c> relaxing <c>core.whitespace</c> made
+    ///     <c>git diff --check</c> pass trailing spaces. Now its HOME is fresh and its git reads no global config.
+    /// </summary>
+    [Test]
+    public async Task Validation_IgnoresAGitConfigTheCoderPlantedInItsHome()
+    {
+        var repository = await CreateRepositoryAsync();
+        await using var provider = await BuildProviderAsync(new WritingCoderModel("trailing whitespace \n"), new ApprovingReviewerModel());
+        await using var scope = provider.CreateAsyncScope();
+        var seed = Seed(repository);
+        var repositoryBinding = Binding(seed, repository);
+        _ = await CodeAsync(scope.ServiceProvider, seed, repositoryBinding);
+        await File.WriteAllTextAsync(Path.Combine(CoderHome(), ".gitconfig"),
+            "[core]\n\twhitespace = -blank-at-eol,-space-before-tab,-indent-with-non-tab,-blank-at-eof\n");
+
+        var validation = await scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>().RunAsync(seed.TaskId, repositoryBinding);
+
+        AssertEx.False(validation.Passed, "the planted global git config relaxed the whitespace check");
+    }
+
+    /// <summary>
+    ///     Validation's home, temp and .NET CLI directories are fresh: an MSBuild user import the coder left under its
+    ///     HOME is not there. The coder's sandbox is killed first, so a lingering process cannot write meanwhile.
+    /// </summary>
+    [Test]
+    public async Task Validation_KillsTheCoderSandboxFirstAndRunsUnderFreshDirectoriesAndNoGlobalGitConfig()
+    {
+        var repository = await CreateRepositoryAsync();
+        await using var provider = await BuildProviderAsync(new WritingCoderModel("implemented\n"), new ApprovingReviewerModel());
+        await using var scope = provider.CreateAsyncScope();
+        var seed = Seed(repository);
+        var repositoryBinding = Binding(seed, repository);
+        _ = await CodeAsync(scope.ServiceProvider, seed, repositoryBinding);
+        var coderHome = CoderHome();
+        var coderRuntime = Path.GetDirectoryName(coderHome)!;
+        await PlantMSBuildImportAsync(coderHome);
+        _sandboxEvents.Clear();
+        _commandEnvironments.Clear();
+
+        var validation = await scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>().RunAsync(seed.TaskId, repositoryBinding);
+
+        AssertEx.True(validation.Passed);
+        AssertEx.Equal("kill:development-local,export,exec:development-validation,kill:development-validation",
+            string.Join(',', _sandboxEvents.Distinct(StringComparer.Ordinal)));
+        AssertEx.Equal(expected: 1, _sandboxEvents.Count(static item => item == "kill:development-local"));
+        AssertEx.Equal(expected: 1, _sandboxEvents.Count(static item => item == "kill:development-validation"));
+        var environments = _commandEnvironments.Where(static item => item.Key == "development-validation").Select(static item => item.Value).ToArray();
+        AssertEx.NotEmpty(environments);
+        foreach (var environment in environments)
+        {
+            AssertEx.NotEqual(coderHome, environment["HOME"]);
+            AssertEx.False(File.Exists(Path.Combine(environment["HOME"], MSBuildImportPath)), "the coder's MSBuild import reached validation's HOME");
+            AssertEx.NotEqual(Path.Combine(coderRuntime, "tmp"), environment["TMPDIR"]);
+            AssertEx.NotEqual(Path.Combine(coderRuntime, "dotnet"), environment["DOTNET_CLI_HOME"]);
+            AssertEx.Equal(Path.Combine(coderRuntime, "nuget"), environment["NUGET_PACKAGES"]);
+            AssertEx.Equal("/dev/null", environment["GIT_CONFIG_GLOBAL"]);
+            AssertEx.Equal("1", environment["GIT_CONFIG_NOSYSTEM"]);
+            AssertEx.Equal("1", environment["GIT_ATTR_NOSYSTEM"]);
+        }
+    }
+
+    /// <summary>A command that throws still leaves no validation sandbox running.</summary>
+    [Test]
+    public async Task Validation_WhenACommandThrows_StillKillsTheValidationSandbox()
+    {
+        var repository = await CreateRepositoryAsync();
+        await using var provider = await BuildProviderAsync(new WritingCoderModel("implemented\n"), new ApprovingReviewerModel());
+        await using var scope = provider.CreateAsyncScope();
+        var seed = Seed(repository);
+        var repositoryBinding = Binding(seed, repository);
+        _ = await CodeAsync(scope.ServiceProvider, seed, repositoryBinding);
+        _sandboxEvents.Clear();
+        _throwingProfiles.Add("development-validation");
+
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
+            scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>().RunAsync(seed.TaskId, repositoryBinding));
+
+        AssertEx.Equal("exec:development-validation", _sandboxEvents[^2]);
+        AssertEx.Equal("kill:development-validation", _sandboxEvents[^1]);
+    }
+
+    /// <summary>
+    ///     The base branch moving after the task started must not change what validation judges: the tree is fetched by
+    ///     the task's base commit, so a commit landed since is not in it and the patch still applies.
+    /// </summary>
+    [Test]
+    public async Task Validation_AfterTheBaseBranchMoved_JudgesTheTaskBasePlusThePatch()
+    {
+        var repository = await CreateRepositoryAsync();
+        await using var provider = await BuildProviderAsync(new WritingCoderModel("implemented\n"), new ApprovingReviewerModel());
+        await using var scope = provider.CreateAsyncScope();
+        var seed = Seed(repository);
+        var repositoryBinding = Binding(seed, repository);
+        _ = await CodeAsync(scope.ServiceProvider, seed, repositoryBinding);
+        await File.WriteAllTextAsync(Path.Combine(repository, "later.txt"), "landed after the task started\n");
+        EnsureSuccess(await RunProcessAsync(repository, "git", "add", "later.txt"));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "commit", "-m", "moves main"));
+        _commandRoots.Clear();
+
+        var validation = await scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>().RunAsync(seed.TaskId, repositoryBinding);
+
+        AssertEx.True(validation.Passed);
+        var tree = _commandRoots.Distinct(StringComparer.Ordinal).Single();
+        AssertEx.Equal("implemented\n", await File.ReadAllTextAsync(Path.Combine(tree, "feature.txt")));
+        AssertEx.False(File.Exists(Path.Combine(tree, "later.txt")));
+    }
+
+    /// <summary>
+    ///     The reviewer's read-only tools read a fresh tree of the base plus the patch, like validation, so a file the
+    ///     coder left ignored in its worktree is not there to read.
+    /// </summary>
+    [Test]
+    public async Task Reviewer_ReadsAFreshTreeOfTheBasePlusThePatchAlone()
+    {
+        var repository = await CreateRepositoryAsync();
+        await File.WriteAllTextAsync(Path.Combine(repository, ".gitignore"), "__pycache__/\n*.py[cod]\n");
+        EnsureSuccess(await RunProcessAsync(repository, "git", "add", ".gitignore"));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "commit", "-m", "ignore bytecode"));
+        var reviewerModel = new ListingReviewerModel();
+        await using var provider = await BuildProviderAsync(new PlantingCoderModel(), reviewerModel);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var seed = Seed(repository);
+        var repositoryBinding = Binding(seed, repository);
+        _ = await CodeAsync(scope.ServiceProvider, seed, repositoryBinding);
+        AssertEx.True((await scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>().RunAsync(seed.TaskId, repositoryBinding)).Passed);
+        var reviewerAttemptId = Guid.NewGuid();
+        _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>().StartAttemptAsync(new DevelopmentStartAttemptCommand
+        {
+            TaskId = seed.TaskId,
+            AttemptId = reviewerAttemptId,
+            OperationId = Guid.NewGuid(),
+            Role = DevelopmentAttemptRole.Reviewer,
+            ModelId = "reviewer-local",
+            Provider = "local",
+            ExpectedTaskVersion = (await store.GetTaskAsync(seed.TaskId)).Version
+        });
+        _sandboxEvents.Clear();
+
+        _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentReviewerAttemptRunner>().RunAsync(reviewerAttemptId, repositoryBinding);
+
+        AssertEx.Contains(reviewerModel.Listing, "feature.txt", StringComparison.Ordinal);
+        AssertEx.False(reviewerModel.Listing.Contains(".pyc", StringComparison.Ordinal), reviewerModel.Listing);
+        AssertEx.Equal(expected: 2, PlantedFiles(repository).Length);
+        AssertEx.Equal("kill:development-local", _sandboxEvents[0], "the re-created coder sandbox is killed before the review resolves its patch");
+        AssertEx.Equal(expected: 1, _sandboxEvents.Count(static item => item == "kill:development-local"));
+        AssertEx.Equal("kill:development-validation", _sandboxEvents[^1]);
     }
 
     [Test]
@@ -937,6 +1158,20 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     }
 
     /// <summary>
+    ///     The coder's sandbox can write its HOME, where MSBuild looks for user imports: one planted there ran inside
+    ///     every validation build. Validation now builds under a HOME of its own.
+    /// </summary>
+    [Test]
+    public async Task Validation_UnderTheDotnetCsprojProfile_IgnoresAnMSBuildImportTheCoderPlantedInItsHome()
+    {
+        var (validation, _, commands, report) = await RunDotnetProfileValidationAsync(CsprojProfile(),
+            DevelopmentSyntheticSolutionRepository.PassingLibrarySource,
+            beforeValidation: PlantMSBuildImportAsync);
+
+        AssertEx.True(validation.Passed, DescribeValidation(commands, report));
+    }
+
+    /// <summary>
     ///     The failing half, kept to the test-failing source rather than the build-breaking one because it is the
     ///     stronger evidence: reaching a failed <c>dotnet_test_release_no_build</c> proves all four commands really
     ///     executed under this profile, where a build break would stop one command earlier.
@@ -1242,7 +1477,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     private async Task<(DevelopmentValidationResult Validation, DevelopmentTaskSnapshot Task, IReadOnlyList<DevelopmentCommandEvidence> Commands, DevelopmentValidationReport Report)>
         RunDotnetProfileValidationAsync(DevelopmentCommandProfile profile,
             string librarySource,
-            bool includeTests = true)
+            bool includeTests = true,
+            Func<string, Task>? beforeValidation = null)
     {
         Directory.CreateDirectory(_root);
         var repository = Path.Combine(_root, "solution-" + Guid.NewGuid().ToString("N"));
@@ -1282,6 +1518,10 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         });
         _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoderAttemptRunner>()
                        .RunAsync(coderAttemptId, repositoryBinding);
+        if (beforeValidation is not null)
+        {
+            await beforeValidation(CoderHome());
+        }
 
         var validation = await scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>()
                                     .RunAsync(seed.TaskId, repositoryBinding);
@@ -1445,7 +1685,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         // every Development service failed to resolve its sandbox.
         services.AddSingleton<IDevelopmentSandboxRuntimeProvider>(_ => new RecordingDevelopmentSandbox(new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()),
                 TimeProvider.System),
-            _sandboxCreates));
+            this));
         services.AddSingleton<NodeEncryptionSaveChangesInterceptor>();
         services.AddSingleton<NodeEncryptionMaterializationInterceptor>();
         services.AddDbContext<NodeChatDbContext>((serviceProvider, builder) => builder.UseSqlite($"Data Source={databasePath}")
@@ -1457,7 +1697,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         services.AddSingleton<IDevelopmentArtifactBlobStore, ManagedDevelopmentArtifactBlobStore>();
         services.AddScoped<IDevelopmentWorkspaceSecretsSink, DevelopmentStoreWorkspaceSecretsSink>();
         services.AddScoped<IDevelopmentWorkspaceProvider, DevelopmentWorkspaceProvider>();
-        services.AddScoped<IDevelopmentPatchEvidenceService, DevelopmentPatchEvidenceService>();
+        services.AddScoped<IDevelopmentPatchEvidenceService>(serviceProvider =>
+            new RecordingPatchEvidenceService(new DevelopmentPatchEvidenceService(serviceProvider.GetRequiredService<IOptions<DevelopmentOptions>>()), this));
         services.AddScoped<IDevelopmentEvidenceService, DevelopmentEvidenceService>();
         services.AddScoped(_ => Substitute.For<IDevelopmentRepositoryBindingService>());
         services.AddSingleton(coderModel);
@@ -1621,29 +1862,45 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     private sealed class RecordingDevelopmentSandbox : IDevelopmentSandboxRuntimeProvider
     {
         private readonly ProcessSandboxRuntimeProvider _inner;
-        private readonly List<SandboxCreateRequest> _created;
+        private readonly DevelopmentValidationReviewAndApplyTests _fixture;
+        private readonly Dictionary<string, string> _roots = new(StringComparer.Ordinal);
 
-        public RecordingDevelopmentSandbox(ProcessSandboxRuntimeProvider inner, List<SandboxCreateRequest> created)
+        public RecordingDevelopmentSandbox(ProcessSandboxRuntimeProvider inner, DevelopmentValidationReviewAndApplyTests fixture)
         {
             _inner = inner;
-            _created = created;
+            _fixture = fixture;
         }
 
         public string ProviderName => _inner.ProviderName;
 
         public SandboxProviderCapabilities Capabilities => _inner.Capabilities;
 
-        public Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default)
+        public async Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default)
         {
-            _created.Add(request);
-            return _inner.CreateOrAttachAsync(request, cancellationToken);
+            _fixture._sandboxCreates.Add(request);
+            var handle = await _inner.CreateOrAttachAsync(request, cancellationToken);
+            if (request.TrustedHostWorkspace is { } workspace)
+            {
+                _roots[handle.SandboxId] = workspace.RootPath;
+            }
+
+            return handle;
         }
 
         public Task<SandboxHandle> ConnectAsync(SandboxAttachKey attachKey, CancellationToken cancellationToken = default) =>
             _inner.ConnectAsync(attachKey, cancellationToken);
 
-        public Task<SandboxCommandResult> ExecuteAsync(SandboxHandle handle, SandboxCommandRequest request, CancellationToken cancellationToken = default) =>
-            _inner.ExecuteAsync(handle, request, cancellationToken);
+        public Task<SandboxCommandResult> ExecuteAsync(SandboxHandle handle, SandboxCommandRequest request, CancellationToken cancellationToken = default)
+        {
+            var profile = handle.AttachKey.RuntimeProfile;
+            _fixture._commandRoots.Add(_roots.GetValueOrDefault(handle.SandboxId, string.Empty));
+            _fixture._commandEnvironments.Add(new KeyValuePair<string, IReadOnlyDictionary<string, string>>(profile,
+                request.Environment ?? new Dictionary<string, string>(StringComparer.Ordinal)));
+            _fixture._sandboxEvents.Add("exec:" + profile);
+            return _fixture._throwingProfiles.Contains(profile)
+                ? throw new InvalidOperationException("The fixture's sandbox refused the command.")
+                : _inner.ExecuteAsync(handle, request, cancellationToken);
+        }
 
         public Task CopyIntoAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default) =>
             _inner.CopyIntoAsync(handle, request, cancellationToken);
@@ -1657,8 +1914,36 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         public Task CancelCommandAsync(SandboxHandle handle, string executionId, CancellationToken cancellationToken = default) =>
             _inner.CancelCommandAsync(handle, executionId, cancellationToken);
 
-        public Task KillAsync(SandboxHandle handle, CancellationToken cancellationToken = default) =>
-            _inner.KillAsync(handle, cancellationToken);
+        public Task KillAsync(SandboxHandle handle, CancellationToken cancellationToken = default)
+        {
+            _fixture._sandboxEvents.Add("kill:" + handle.AttachKey.RuntimeProfile);
+            return _inner.KillAsync(handle, cancellationToken);
+        }
+    }
+
+    /// <summary>Passes through to the real export and records each call in the fixture's event order.</summary>
+    private sealed class RecordingPatchEvidenceService : IDevelopmentPatchEvidenceService
+    {
+        private readonly DevelopmentPatchEvidenceService _inner;
+        private readonly DevelopmentValidationReviewAndApplyTests _fixture;
+
+        public RecordingPatchEvidenceService(DevelopmentPatchEvidenceService inner, DevelopmentValidationReviewAndApplyTests fixture)
+        {
+            _inner = inner;
+            _fixture = fixture;
+        }
+
+        public Task<DevelopmentPatchEvidence> ExportAsync(DevelopmentWorkspaceSession session, CancellationToken cancellationToken = default)
+        {
+            _fixture._sandboxEvents.Add("export");
+            return _inner.ExportAsync(session, cancellationToken);
+        }
+
+        public Task<IReadOnlySet<string>> ListChangedPathsAsync(DevelopmentWorkspaceSession session, CancellationToken cancellationToken = default)
+        {
+            _fixture._sandboxEvents.Add("export");
+            return _inner.ListChangedPathsAsync(session, cancellationToken);
+        }
     }
 
     private sealed class UnexpectedCloudContextService : IDevelopmentCloudAttemptContextService
@@ -1706,6 +1991,88 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         }
     }
 
+    /// <summary>An MSBuild user import, relative to a HOME, that fails every build it is imported into.</summary>
+    private static readonly string MSBuildImportPath = Path.Combine(".local", "share", "Microsoft", "MSBuild", "Current", "Imports", "Microsoft.Common.props", "ImportBefore",
+        "Forged.props");
+
+    private static async Task PlantMSBuildImportAsync(string home)
+    {
+        var path = Path.Combine(home, MSBuildImportPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllTextAsync(path, "<Project><Target Name=\"XeForged\" BeforeTargets=\"Build\"><Error Text=\"forged import ran\" /></Target></Project>\n");
+    }
+
+    /// <summary>The host HOME the coder's sandbox ran under, which its commands can write.</summary>
+    private string CoderHome() =>
+        _sandboxCreates.First(static request => request.RuntimeProfile == "development-local")
+                       .Mounts!.Single(static mount => mount.SandboxPath == "/xe-runtime/home")
+                       .HostPath;
+
+    /// <summary>Creates the project, makes the task ready and runs one coder attempt against it.</summary>
+    private static async Task<DevelopmentCoderAttemptResult> CodeAsync(IServiceProvider services,
+        DevelopmentCreateProjectCommand seed,
+        DevelopmentRepositoryBinding repositoryBinding)
+    {
+        var coordinator = services.GetRequiredService<IDevelopmentCoordinator>();
+        _ = await coordinator.CreateProjectAsync(seed);
+        var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+        {
+            TaskId = seed.TaskId,
+            OperationId = Guid.NewGuid(),
+            TargetStatus = DevelopmentTaskStatus.Ready,
+            ExpectedTaskVersion = 1
+        });
+        var coderAttemptId = Guid.NewGuid();
+        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand
+        {
+            TaskId = seed.TaskId,
+            AttemptId = coderAttemptId,
+            OperationId = Guid.NewGuid(),
+            Role = DevelopmentAttemptRole.Coder,
+            ModelId = "coder-local",
+            Provider = "local",
+            ExpectedTaskVersion = ready.Version
+        });
+        return await services.GetRequiredService<IDevelopmentCoderAttemptRunner>().RunAsync(coderAttemptId, repositoryBinding);
+    }
+
+    /// <summary>Every planted file under the fixture root, outside the operator's own repository.</summary>
+    private string[] PlantedFiles(string repository) =>
+        Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories)
+                 .Where(path => !path.StartsWith(repository + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                 .Where(static path => path.EndsWith("pdb.pyc", StringComparison.Ordinal) || path.EndsWith("forged.cpython-313.pyc", StringComparison.Ordinal))
+                 .ToArray();
+
+    /// <summary>Writes one tracked change and two gitignored bytecode files a later validation would import.</summary>
+    private sealed class PlantingCoderModel : IDevelopmentCoderModel
+    {
+        public async Task<DevelopmentCoderModelResult> RunAsync(string modelId,
+            string prompt,
+            IDevelopmentWorkspaceTools tools,
+            int maxOutputTokens,
+            int maxToolCalls,
+            DevelopmentAttemptLiveProgress? liveProgress = null,
+            DevelopmentCloudRoleRoute? cloudRoute = null,
+            CancellationToken cancellationToken = default)
+        {
+            _ = await tools.WriteFileAsync("feature.txt", "implemented\n", cancellationToken);
+            _ = await tools.WriteFileAsync("pdb.pyc", "forged\n", cancellationToken);
+            _ = await tools.WriteFileAsync("__pycache__/forged.cpython-313.pyc", "forged\n", cancellationToken);
+            return new DevelopmentCoderModelResult
+            {
+                Submission = new DevelopmentCoderSubmission
+                {
+                    Summary = "Implemented feature file.",
+                    ChangedFiles = ["feature.txt"],
+                    CommandIds = [],
+                    Notes = null
+                },
+                InputTokens = 10,
+                OutputTokens = 10
+            };
+        }
+    }
+
     private sealed class ApprovingReviewerModel : IDevelopmentReviewerModel
     {
         public Task<DevelopmentReviewerModelResult> RunAsync(string modelId,
@@ -1727,6 +2094,25 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                 InputTokens = 10,
                 OutputTokens = 10
             });
+    }
+
+    /// <summary>Lists the workspace through its tools, then approves.</summary>
+    private sealed class ListingReviewerModel : IDevelopmentReviewerModel
+    {
+        public string Listing { get; private set; } = string.Empty;
+
+        public async Task<DevelopmentReviewerModelResult> RunAsync(string modelId,
+            string prompt,
+            IDevelopmentWorkspaceTools tools,
+            int maxOutputTokens,
+            int maxToolCalls,
+            DevelopmentAttemptLiveProgress? liveProgress = null,
+            DevelopmentCloudRoleRoute? cloudRoute = null,
+            CancellationToken cancellationToken = default)
+        {
+            Listing = await tools.ListFilesAsync(null, cancellationToken);
+            return await new ApprovingReviewerModel().RunAsync(modelId, prompt, tools, maxOutputTokens, maxToolCalls, liveProgress, cloudRoute, cancellationToken);
+        }
     }
 
     private sealed class ChangesRequestingReviewerModel : IDevelopmentReviewerModel

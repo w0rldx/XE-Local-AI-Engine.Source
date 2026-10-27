@@ -13,6 +13,9 @@ using XE_Local_AI_Engine.Client.Common;
 /// </remarks>
 internal static class DevWorkflowNodeInputs
 {
+    /// <summary>The work item's request, which run start seeds onto every entry and Agent node run (<c>DevWorkflowRunSeeds</c>).</summary>
+    public const string WorkItemRequest = "workItemRequest";
+
     /// <summary>What the operator said when they retried this node run, for the ONE attempt their decision started.</summary>
     public const string OperatorRetryReason = "operatorRetryReason";
 

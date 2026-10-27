@@ -4,7 +4,6 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
@@ -216,6 +215,7 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
                 TestsFailed = tests.Count == 0 ? null : tests.Sum(static outcome => outcome.Failed),
                 Report = Compose(verdict, profile, session, nodeRun, evidence, overlay.BasedOn),
                 Patch = overlay.Patch,
+                PatchModelId = overlay.PatchModelId,
                 SecretPaths = secrets.Paths
             };
         }
@@ -278,13 +278,7 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
                               + "Nothing was applied to this workspace.");
             }
 
-            var applied = await new HostGitRunner(_developmentOptions.MaxAttemptDurationSeconds)
-                .RunAsync(session.HostWorktreePath,
-                    AgentHomeGit.Arguments("apply", "--index", "--whitespace=error-all", "-"),
-                    cancellationToken,
-                    patch.Payload,
-                    _developmentOptions.MaxPatchBytes,
-                    _developmentOptions.MaxCommandOutputBytes);
+            var applied = await DevelopmentPatchOverlay.ApplyAsync(session.HostWorktreePath, patch.Payload, _developmentOptions, refuseWhitespaceErrors: true, cancellationToken);
             if (applied.ExitCode != 0)
             {
                 // Deliberately without git's own stderr: it interpolates workspace paths, and this sentence reaches an
@@ -296,15 +290,21 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
             // The bytes just applied are the ones published, so a reader downstream sees exactly what was judged; over the artifact
             // limit they are not, and the report says so (an accepted ceiling: the limit sits below the patch maximum).
             var publishable = patch.Payload.Length <= _options.MaxArtifactBytes;
-            return new DevWorkflowOverlay(new DevWorkflowValidationBasedOn(taskId,
+            var coder = (await _development.ListAttemptsAsync(taskId, cancellationToken))
+                        .FirstOrDefault(attempt => attempt.Id == patch.Artifact.AttemptId && attempt.Role == DevelopmentAttemptRole.Coder);
+            return new DevWorkflowOverlay
+            {
+                BasedOn = new DevWorkflowValidationBasedOn(taskId,
                     patch.Artifact.ContentHash,
                     "These commands ran against the implementation task's approved patch, applied to a fresh clone of the base commit.",
                     publishable ? DevWorkflowToolExecutor.PatchArtifactName(nodeRun.NodeKey) : null,
                     publishable
                         ? null
                         : $"The patch is {patch.Payload.Length} bytes, over the {_options.MaxArtifactBytes}-byte artifact limit, so it was not published as an artifact."),
-                Refusal: null,
-                publishable ? patch.Payload : ReadOnlyMemory<byte>.Empty);
+                Refusal = null,
+                Patch = publishable ? patch.Payload : ReadOnlyMemory<byte>.Empty,
+                PatchModelId = string.IsNullOrWhiteSpace(coder?.ModelId) ? null : coder.ModelId
+            };
         }
         catch (DevelopmentInvalidTransitionException exception)
         {
@@ -314,7 +314,11 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
 
     /// <summary>A refusal: nothing was overlaid, so the node run is answered rather than judged.</summary>
     private static DevWorkflowOverlay Refuse(string sanitizedReason) =>
-        new(BasedOn: null, sanitizedReason);
+        new()
+        {
+            BasedOn = null,
+            Refusal = sanitizedReason
+        };
 
     /// <summary>The implementations this validation node exists to judge, resolved from the GRAPH.</summary>
     /// <remarks>

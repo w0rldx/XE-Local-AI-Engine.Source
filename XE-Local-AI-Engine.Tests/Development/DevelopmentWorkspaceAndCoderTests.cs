@@ -41,6 +41,11 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-development-workspace-coder-" + Guid.NewGuid().ToString("N"));
 
+    /// <summary>The provider and binding of the last <see cref="PrepareWorkspaceAsync" />, for a test that validates too.</summary>
+    private DevelopmentWorkspaceProvider? _workspaceProvider;
+
+    private DevelopmentRepositoryBinding? _workspaceBinding;
+
     public void Dispose()
     {
         try
@@ -73,6 +78,19 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         AssertEx.False(DevelopmentWorkspaceSecurity.Confine(".git/config", allowRoot: false).IsAccepted);
         AssertEx.False(DevelopmentWorkspaceSecurity.Confine(".GIT/config", allowRoot: false).IsAccepted);
         AssertEx.True(DevelopmentWorkspaceSecurity.Confine("src/feature.cs", allowRoot: false).IsAccepted);
+
+        // A .git below the root turns its directory into a gitlink that hides every file inside from the patch.
+        AssertEx.False(DevelopmentWorkspaceSecurity.Confine("tests/evil/.git", allowRoot: false).IsAccepted);
+        AssertEx.False(DevelopmentWorkspaceSecurity.Confine("tests/evil/.GIT/HEAD", allowRoot: false).IsAccepted);
+        AssertEx.False(DevelopmentWorkspaceSecurity.Confine("tests/evil/.git. ", allowRoot: false).IsAccepted);
+        AssertEx.True(DevelopmentWorkspaceSecurity.Confine("tests/evil/.gitignore", allowRoot: false).IsAccepted);
+        AssertEx.True(DevelopmentWorkspaceSecurity.Confine("tests/evil/x.git", allowRoot: false).IsAccepted);
+
+        // NTFS spellings of the same entry, refused as git's protectNTFS refuses them: the 8.3 short name and a stream.
+        AssertEx.False(DevelopmentWorkspaceSecurity.Confine("tests/evil/GIT~1", allowRoot: false).IsAccepted);
+        AssertEx.False(DevelopmentWorkspaceSecurity.Confine("tests/evil/git~1. ", allowRoot: false).IsAccepted);
+        AssertEx.False(DevelopmentWorkspaceSecurity.Confine("tests/evil/.git::$INDEX_ALLOCATION/HEAD", allowRoot: false).IsAccepted);
+        AssertEx.False(DevelopmentWorkspaceSecurity.Confine("tests/a:b.py", allowRoot: false).IsAccepted);
     }
 
     /// <summary>
@@ -709,6 +727,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
                 RepositoryIdentityHash = "identity",
                 HostWorktreePath = repository,
                 RuntimePath = runtime,
+                TrustedGitDirectory = Path.Combine(repository, ".git"),
                 SandboxHandle = new SandboxHandle
                 {
                     ProviderName = "process",
@@ -1046,6 +1065,262 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         var evidence = new DevelopmentPatchEvidenceService(options);
         await AssertEx.ThrowsAsync<InvalidDataException>(() => evidence.ExportAsync(session));
+    }
+
+    /// <summary>
+    ///     A <c>.git</c> pointer a command wrote makes <c>add -A</c> stage one gitlink that hides its <c>conftest.py</c>.
+    ///     The export refuses it, even when a gitignored <c>.gitmodules</c> with <c>ignore = all</c> hides it from diffs.
+    /// </summary>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task EvidenceExport_WhenANestedGitPointerHidesFiles_RefusesTheGitlink(bool hiddenByGitmodules)
+    {
+        var repository = await CreateRepositoryAsync();
+        var options = Options.Create(OptionsValue());
+        using var sandbox = CreateSandbox();
+        var session = await PrepareWorkspaceAsync(repository, sandbox, options);
+        var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
+        _ = await tools.WriteFileAsync("feature.txt", "implemented\n");
+        await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => tools.WriteFileAsync("tests/evil/.git", "gitdir: ../../.git\n"));
+
+        // What a test the coder ran could write instead: the tool refusal alone does not close it.
+        var nested = Path.Combine(session.HostWorktreePath, "tests", "evil");
+        Directory.CreateDirectory(nested);
+        await File.WriteAllTextAsync(Path.Combine(nested, ".git"), "gitdir: ../../.git\n");
+        await File.WriteAllTextAsync(Path.Combine(nested, "conftest.py"), "forged = True\n");
+        if (hiddenByGitmodules)
+        {
+            await File.WriteAllTextAsync(Path.Combine(session.HostWorktreePath, ".gitmodules"),
+                "[submodule \"evil\"]\n\tpath = tests/evil\n\turl = ./evil\n\tignore = all\n");
+            Directory.CreateDirectory(Path.Combine(session.HostWorktreePath, ".git", "info"));
+            await File.AppendAllTextAsync(Path.Combine(session.HostWorktreePath, ".git", "info", "exclude"), "/.gitmodules\n");
+        }
+
+        var refusal = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() =>
+            new DevelopmentPatchEvidenceService(options).ExportAsync(session));
+        AssertEx.Contains(refusal.Message, "nested Git repository", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     The other side: a gitlink the base commit holds, which the attempt removes or replaces with a file. Neither
+    ///     shape is a reviewable code change, so the export refuses both.
+    /// </summary>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task EvidenceExport_WhenTheAttemptRemovesOrRetypesABaseGitlink_RefusesIt(bool replaceWithFile)
+    {
+        var repository = await CreateRepositoryAsync();
+        var head = (await RunProcessAsync(repository, "git", "rev-parse", "HEAD")).StandardOutput.Trim();
+        EnsureSuccess(await RunProcessAsync(repository, "git", "update-index", "--add", "--cacheinfo", $"160000,{head},vendor/lib"));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "commit", "-m", "vendor gitlink"));
+        var options = Options.Create(OptionsValue());
+        using var sandbox = CreateSandbox();
+        var session = await PrepareWorkspaceAsync(repository, sandbox, options);
+        await File.WriteAllTextAsync(Path.Combine(session.HostWorktreePath, "feature.txt"), "implemented\n");
+
+        var lib = Path.Combine(session.HostWorktreePath, "vendor", "lib");
+        if (Directory.Exists(lib))
+        {
+            Directory.Delete(lib, recursive: true);
+        }
+
+        if (replaceWithFile)
+        {
+            await File.WriteAllTextAsync(lib, "now a file\n");
+        }
+
+        var refusal = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() =>
+            new DevelopmentPatchEvidenceService(options).ExportAsync(session));
+        AssertEx.Contains(refusal.Message, "nested Git repository", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     A replace ref in the task's own repository made <c>HEAD^{tree}</c> carry the planted gitlink, so the tree
+    ///     compare saw none. The export no longer reads the task's refs at all.
+    /// </summary>
+    [Test]
+    public async Task EvidenceExport_WhenATaskReplaceRefCoversTheGitlink_StillRefusesIt()
+    {
+        var repository = await CreateRepositoryAsync();
+        var options = Options.Create(OptionsValue());
+        using var sandbox = CreateSandbox();
+        var session = await PrepareWorkspaceAsync(repository, sandbox, options);
+        var worktree = session.HostWorktreePath;
+        await File.WriteAllTextAsync(Path.Combine(worktree, "feature.txt"), "implemented\n");
+        var nested = Path.Combine(worktree, "tests", "evil");
+        Directory.CreateDirectory(nested);
+        await File.WriteAllTextAsync(Path.Combine(nested, ".git"), "gitdir: ../../.git\n");
+        await File.WriteAllTextAsync(Path.Combine(nested, "conftest.py"), "forged = True\n");
+
+        // What a command could run: a base tree plus the gitlink, swapped in for the real base tree by a replace ref.
+        var head = (await RunProcessAsync(worktree, "git", "rev-parse", "HEAD")).StandardOutput.Trim();
+        var baseTree = (await RunProcessAsync(worktree, "git", "rev-parse", "HEAD^{tree}")).StandardOutput.Trim();
+        EnsureSuccess(await RunProcessAsync(worktree, "git", "update-index", "--add", "--cacheinfo", $"160000,{head},tests/evil"));
+        var forgedTree = (await RunProcessAsync(worktree, "git", "write-tree")).StandardOutput.Trim();
+        EnsureSuccess(await RunProcessAsync(worktree, "git", "replace", "-f", baseTree, forgedTree));
+        EnsureSuccess(await RunProcessAsync(worktree, "git", "read-tree", "HEAD"));
+        AssertEx.Contains((await RunProcessAsync(worktree, "git", "ls-tree", "-r", "HEAD")).StandardOutput, "160000", StringComparison.Ordinal);
+
+        var refusal = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() =>
+            new DevelopmentPatchEvidenceService(options).ExportAsync(session));
+        AssertEx.Contains(refusal.Message, "nested Git repository", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     A skip-worktree or assume-unchanged bit in the task's index survived <c>reset --mixed</c> and <c>add -A</c>,
+    ///     so an edited <c>tests/conftest.py</c> never reached the patch. The export now stages in an index of its own.
+    /// </summary>
+    [Test]
+    [Arguments("--skip-worktree")]
+    [Arguments("--assume-unchanged")]
+    public async Task EvidenceExport_WhenATaskIndexBitHidesAnEdit_StillExportsIt(string bit)
+    {
+        var repository = await CreateRepositoryAsync();
+        Directory.CreateDirectory(Path.Combine(repository, "tests"));
+        await File.WriteAllTextAsync(Path.Combine(repository, "tests", "conftest.py"), "x = 1\n");
+        EnsureSuccess(await RunProcessAsync(repository, "git", "add", "tests/conftest.py"));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "commit", "-m", "conftest"));
+        var options = Options.Create(OptionsValue());
+        using var sandbox = CreateSandbox();
+        var session = await PrepareWorkspaceAsync(repository, sandbox, options);
+        await File.WriteAllTextAsync(Path.Combine(session.HostWorktreePath, "tests", "conftest.py"), "forged = True\n");
+        EnsureSuccess(await RunProcessAsync(session.HostWorktreePath, "git", "update-index", bit, "tests/conftest.py"));
+
+        var evidence = await new DevelopmentPatchEvidenceService(options).ExportAsync(session);
+
+        AssertEx.Equal("tests/conftest.py:modified", string.Join('|', evidence.ChangedFiles.Select(static file => $"{file.Path}:{file.ChangeType}")));
+    }
+
+    /// <summary>
+    ///     An untouched tracked file whose name is not UTF-8 is not part of the change, so it must not fail the export:
+    ///     the old gitlink listing decoded the whole tree strictly and refused every patch in such a repository.
+    /// </summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task EvidenceExport_WithAnUntouchedNonUtf8TrackedName_Exports()
+    {
+        var repository = await CreateRepositoryAsync();
+        EnsureSuccess(await RunProcessAsync(repository, "bash", "-c", "printf 'latin\\n' > \"$(printf 'caf\\351.txt')\" && git add -A && git commit -qm latin1"));
+        var options = Options.Create(OptionsValue());
+        using var sandbox = CreateSandbox();
+        var session = await PrepareWorkspaceAsync(repository, sandbox, options);
+        await File.WriteAllTextAsync(Path.Combine(session.HostWorktreePath, "feature.txt"), "implemented\n");
+
+        var evidence = await new DevelopmentPatchEvidenceService(options).ExportAsync(session);
+
+        AssertEx.Equal("feature.txt", string.Join('|', evidence.ChangedFiles.Select(static file => file.Path)));
+    }
+
+    /// <summary>
+    ///     Git's default <c>core.excludesFile</c> is <c>$HOME/.config/git/ignore</c>, and the stage's HOME was the
+    ///     coder's: a pattern planted there hid an untracked file from <c>add -A</c>, so the patch never showed it.
+    /// </summary>
+    [Test]
+    public async Task EvidenceExport_IgnoresAnExcludesFileTheCoderPlantedInItsHome()
+    {
+        var repository = await CreateRepositoryAsync();
+        var options = Options.Create(OptionsValue());
+        using var sandbox = CreateSandbox();
+        var session = await PrepareWorkspaceAsync(repository, sandbox, options);
+        var ignore = Path.Combine(session.RuntimePath, "home", ".config", "git", "ignore");
+        Directory.CreateDirectory(Path.GetDirectoryName(ignore)!);
+        await File.WriteAllTextAsync(ignore, "conftest.py\n");
+        await File.WriteAllTextAsync(Path.Combine(session.HostWorktreePath, "feature.txt"), "implemented\n");
+        await File.WriteAllTextAsync(Path.Combine(session.HostWorktreePath, "conftest.py"), "forged = True\n");
+
+        var evidence = await new DevelopmentPatchEvidenceService(options).ExportAsync(session);
+
+        AssertEx.Equal("conftest.py|feature.txt", string.Join('|', evidence.ChangedFiles.Select(static file => file.Path)));
+    }
+
+    /// <summary>
+    ///     Each export stages in a directory of its own and removes it, refused or not; one a hard stop left behind is
+    ///     removed by the next export once it is older than any live export could be.
+    /// </summary>
+    [Test]
+    public async Task EvidenceExport_LeavesNoStageDirectoryAndRemovesAStaleOne()
+    {
+        var repository = await CreateRepositoryAsync();
+        var options = Options.Create(OptionsValue());
+        using var sandbox = CreateSandbox();
+        var session = await PrepareWorkspaceAsync(repository, sandbox, options);
+        var stale = Directory.CreateDirectory(Path.Combine(session.RuntimePath, "stage-" + Guid.NewGuid().ToString("N")));
+        Directory.SetLastWriteTimeUtc(stale.FullName, DateTime.UtcNow.AddDays(-1));
+        var live = Directory.CreateDirectory(Path.Combine(session.RuntimePath, "stage-" + Guid.NewGuid().ToString("N")));
+        var service = new DevelopmentPatchEvidenceService(options);
+        await File.WriteAllTextAsync(Path.Combine(session.HostWorktreePath, "feature.txt"), "implemented\n");
+
+        _ = await service.ExportAsync(session);
+        AssertEx.Equal(live.FullName, Directory.EnumerateDirectories(session.RuntimePath, "stage-*").Single(), "a concurrent export's stage must survive");
+        live.Delete();
+
+        var nested = Path.Combine(session.HostWorktreePath, "tests", "evil");
+        Directory.CreateDirectory(nested);
+        EnsureSuccess(await RunProcessAsync(nested, "git", "init", "-q"));
+        await File.WriteAllTextAsync(Path.Combine(nested, "conftest.py"), "forged = True\n");
+        EnsureSuccess(await RunProcessAsync(nested, "git", "add", "conftest.py"));
+        EnsureSuccess(await RunProcessAsync(nested, "git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", "nested"));
+        _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => service.ExportAsync(session));
+        AssertEx.Empty(Directory.EnumerateDirectories(session.RuntimePath, "stage-*"));
+    }
+
+    /// <summary>
+    ///     A SHA-256 repository: the stage borrows its objects and validation fetches from it, so both must be created
+    ///     in the trusted checkout's object format or every export and validation fails.
+    /// </summary>
+    [Test]
+    public async Task EvidenceExportAndValidationTree_InASha256Repository_Work()
+    {
+        var repository = await CreateRepositoryAsync("sha256");
+        var options = Options.Create(OptionsValue());
+        using var sandbox = CreateSandbox();
+        var session = await PrepareWorkspaceAsync(repository, sandbox, options);
+        await File.WriteAllTextAsync(Path.Combine(session.HostWorktreePath, "feature.txt"), "implemented\n");
+
+        var evidence = await new DevelopmentPatchEvidenceService(options).ExportAsync(session);
+        var tree = await _workspaceProvider!.PrepareValidationAsync(session, _workspaceBinding!, evidence.PatchBytes);
+
+        AssertEx.Equal("feature.txt", string.Join('|', evidence.ChangedFiles.Select(static file => file.Path)));
+        AssertEx.Equal(expected: 64, evidence.ExpectedResultHash.Length);
+        AssertEx.Equal("implemented\n", await File.ReadAllTextAsync(Path.Combine(tree.HostWorktreePath, "feature.txt")));
+        await sandbox.KillAsync(tree.SandboxHandle);
+    }
+
+    [Test]
+    [Arguments("sha1\n", "sha1")]
+    [Arguments("sha256\n", "sha256")]
+    public void ParseObjectFormat_AcceptsSha1AndSha256(string output, string expected) =>
+        AssertEx.Equal(expected, DevelopmentWorkspaceProvider.ParseObjectFormat(output));
+
+    /// <summary>Git before 2.29 echoes <c>--show-object-format</c> and exits 0, so anything else is refused, naming the floor.</summary>
+    [Test]
+    [Arguments("--show-object-format\n")]
+    [Arguments("")]
+    public void ParseObjectFormat_RefusesAnythingElseAndNamesTheGitFloor(string output)
+    {
+        var refusal = AssertEx.Throws<DevelopmentWorkspaceSecurityException>(() => _ = DevelopmentWorkspaceProvider.ParseObjectFormat(output));
+
+        AssertEx.Contains(refusal.Message, "git 2.32 or later", StringComparison.Ordinal);
+    }
+
+    /// <summary>A rename beside an added file is an ordinary patch: the gitlink guard must not refuse it.</summary>
+    [Test]
+    public async Task EvidenceExport_WithARenameAndAnAddedFile_ExportsBoth()
+    {
+        var repository = await CreateRepositoryAsync();
+        var options = Options.Create(OptionsValue());
+        using var sandbox = CreateSandbox();
+        var session = await PrepareWorkspaceAsync(repository, sandbox, options);
+        Directory.CreateDirectory(Path.Combine(session.HostWorktreePath, "docs"));
+        File.Move(Path.Combine(session.HostWorktreePath, "README.md"), Path.Combine(session.HostWorktreePath, "docs", "README.md"));
+        await File.WriteAllTextAsync(Path.Combine(session.HostWorktreePath, "feature.txt"), "implemented\n");
+
+        var evidence = await new DevelopmentPatchEvidenceService(options).ExportAsync(session);
+
+        AssertEx.Equal("docs/README.md:renamed:README.md|feature.txt:added:",
+            string.Join('|', evidence.ChangedFiles.Select(static file => $"{file.Path}:{file.ChangeType}:{file.PreviousPath}")));
     }
 
     [Test]
@@ -1600,17 +1875,31 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             RepositoryIdentityHash = snapshot.RepositoryIdentityHash
         };
 
-    private async Task<string> CreateRepositoryAsync()
+    private async Task<string> CreateRepositoryAsync(string objectFormat = "sha1")
     {
         var repository = Path.Combine(_root, "repo-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(repository);
-        EnsureSuccess(await RunProcessAsync(repository, "git", "init", "--initial-branch=main", "."));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "init", "--initial-branch=main", "--object-format=" + objectFormat, "."));
         EnsureSuccess(await RunProcessAsync(repository, "git", "config", "user.email", "development-workspace@example.invalid"));
         EnsureSuccess(await RunProcessAsync(repository, "git", "config", "user.name", "Development Workspace Test"));
         await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n");
         EnsureSuccess(await RunProcessAsync(repository, "git", "add", "README.md"));
         EnsureSuccess(await RunProcessAsync(repository, "git", "commit", "-m", "base"));
         return repository;
+    }
+
+    /// <summary>A managed workspace for <paramref name="repository" />, on its own data directory.</summary>
+    private async Task<DevelopmentWorkspaceSession> PrepareWorkspaceAsync(string repository,
+        ProcessSandboxRuntimeProvider sandbox,
+        IOptions<DevelopmentOptions> options)
+    {
+        var data = Path.Combine(_root, "data-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(data);
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+        _workspaceProvider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(),
+            StubNodeRuntimeSettings.Create().Build());
+        _workspaceBinding = Binding(snapshot, repository);
+        return await _workspaceProvider.PrepareAsync(snapshot, _workspaceBinding);
     }
 
     private static ProcessSandboxRuntimeProvider CreateSandbox()
@@ -1905,6 +2194,12 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     {
         public Task<DevelopmentWorkspaceSession> PrepareAsync(DevelopmentExecutionSnapshot snapshot,
             DevelopmentRepositoryBinding repository,
+            CancellationToken cancellationToken = default) =>
+            throw new OperationCanceledException("The attempt was cancelled.");
+
+        public Task<DevelopmentWorkspaceSession> PrepareValidationAsync(DevelopmentWorkspaceSession workspace,
+            DevelopmentRepositoryBinding repository,
+            ReadOnlyMemory<byte> patch,
             CancellationToken cancellationToken = default) =>
             throw new OperationCanceledException("The attempt was cancelled.");
     }

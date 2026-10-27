@@ -226,8 +226,8 @@ configuration** to run, so an in-tree `.gitattributes` naming an undefined one i
 the hardened `-c` set, because a command-line `-c` outranks every config file, `include.path` chains included. The
 exec-bearing key that is actually live there is `core.fsmonitor`: a value planted in a repository-local `.git/config`
 runs as a shell command on the first index refresh — `status`, `reset`, `add` and `diff` all trigger it — and that is
-reachable from the **host**, not only the sandbox, because `DevelopmentPatchEvidenceService` runs `reset` and `add -A`
-with its working directory set to the workspace and the workspace `.git/config` is writable from inside the container.
+reachable from the **host**, not only the sandbox, because the Development workspace provider runs host Git with its
+working directory set to the workspace and the workspace `.git/config` is writable from inside the container.
 `core.sshCommand`, `core.pager` and `core.editor` are not reachable from today's command set (no network operation, and
 stdout is always redirected so no pager spawns) and are pinned anyway, so adding a fetch or a paging command later
 cannot quietly re-open the hole. `core.autocrlf=false` and `core.filemode=false` are *not* in that shared set:
@@ -239,10 +239,12 @@ that legitimately stores CRLF — Development Mode derives that policy from the 
 (`DevelopmentWorkspaceWhitespacePolicy`) precisely so that it is not forced.
 
 **Which host git carries the hardening environment, and which deliberately does not.** `HostGitRunner` and
-`DevelopmentPatchEvidenceService` (its exact-bytes runner, which clears the environment and points `HOME` at the
-attempt's runtime directory) both apply every entry of `AgentHomeGitHardening.Environment` on top of the `-c` pins and
-the `.git/config` rewrite: the evidence service's `add -A` runs over an agent-written tree, so a driver defined in the
-system file or in that `HOME`'s `.gitconfig` would otherwise run when an in-tree `.gitattributes` names it.
+`DevelopmentPatchEvidenceService` (its exact-bytes runner, which clears the environment and points `HOME` and
+`XDG_CONFIG_HOME` at an empty directory inside each export's own stage) both apply every entry of
+`AgentHomeGitHardening.Environment` on top of the `-c` pins and the `.git/config` rewrite: the evidence service's
+`add -A` runs over an agent-written tree, so a driver defined in the system file or in a `HOME`'s `.gitconfig` would
+otherwise run when an in-tree `.gitattributes` names it. The stage also empties `core.excludesFile`, whose default is
+a file under the config home: a pattern a coder left in the task's `HOME` once hid an untracked file from the patch.
 `TrustedDevelopmentHostApplyPort` deliberately **inherits** the operator's environment and global and system
 configuration: it runs against the operator's own registered repository with a human-approved patch hash, and that
 configuration is what makes the apply correct there — commit identity, credential helpers, `safe.directory` for
@@ -250,6 +252,17 @@ other-owner or mounted repositories, and `core.autocrlf` on Windows, where chang
 against the approved `PatchHash`. Its closure is the `-c` exec-key pins alone, and it never rewrites that repository's
 `.git/config` (`TrustedDevelopmentHostApplyPortHardeningTests`). The residual is stated: an approved patch whose
 `.gitattributes` names a driver the operator's own configuration already defines.
+
+**Development evidence and validation never read the task worktree's `.git` or `HOME`.** Every sandboxed command
+can write both, so `DevelopmentPatchEvidenceService` stages each export in a fresh repository whose objects come from
+`DevelopmentWorkspaceSession.TrustedGitDirectory` (the operator checkout's Git common directory, resolved by the
+provider from the trusted root) and which is created in that checkout's `DevelopmentWorkspaceSession.ObjectFormat`.
+`IDevelopmentWorkspaceProvider.PrepareValidationAsync` builds the tree that validation's commands and the reviewer's
+tools work in: the base commit fetched by id from the operator's checkout, plus the stored patch applied by
+`DevelopmentPatchOverlay.ApplyAsync`, the helper the Dev Workflows overlay shares, with fresh home, tmp and dotnet
+directories (`DevelopmentWorkspaceSession.ScratchPath`) and a sandbox of its own that the caller kills. What the coder
+can still influence is listed in
+[reference 12](12-sandbox-modes-and-options.md#the-validation-tree-and-what-the-coder-can-still-influence).
 
 Two residuals are stated rather than claimed away. The rewrite happens immediately before the invocation, so a
 process a `run_command` deliberately double-forked could in principle rewrite the file again in between — the

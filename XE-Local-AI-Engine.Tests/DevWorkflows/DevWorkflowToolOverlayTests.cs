@@ -131,6 +131,9 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
 
     private static readonly Guid ProjectId = Guid.Parse("22222222-2222-2222-2222-222222222222");
 
+    /// <summary>The coder attempt the stored patch names, which the overlay reads the patch's model off.</summary>
+    private static readonly Guid CoderAttemptId = Guid.Parse("66666666-6666-6666-6666-666666666666");
+
     private static readonly Guid RunId = Guid.Parse("33333333-3333-3333-3333-333333333333");
 
     private static readonly Guid TaskId = Guid.Parse("44444444-4444-4444-4444-444444444444");
@@ -175,6 +178,7 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
         AssertEx.Equal("validate#alpha.patch", basedOn.PatchArtifact);
         AssertEx.Null(basedOn.PatchArtifactOmitted);
         AssertEx.Equal(Patch, Encoding.UTF8.GetString(overlay.Patch.Span), "the bytes carried back for publishing are exactly the ones that were applied.");
+        AssertEx.Equal("coder-model", overlay.PatchModelId, "the model is the one the attempt that produced the patch recorded, which a reviewer is compared with.");
     }
 
     /// <summary>A patch over the artifact limit is still judged, but not published: the report names the limit instead of an artifact.</summary>
@@ -422,6 +426,25 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
     {
         var development = Substitute.For<IDevelopmentStore>();
         _ = development.GetTaskAsync(TaskId, Arg.Any<CancellationToken>()).Returns(task);
+        _ = development.ListAttemptsAsync(TaskId, Arg.Any<CancellationToken>())
+                       .Returns([
+                           new DevelopmentAttemptSnapshot
+                           {
+                               Id = CoderAttemptId,
+                               TaskId = TaskId,
+                               PredecessorAttemptId = null,
+                               Role = DevelopmentAttemptRole.Coder,
+                               ModelId = "coder-model",
+                               Provider = "local",
+                               Status = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus.Succeeded,
+                               StartedAtUtc = 1,
+                               EndedAtUtc = 2,
+                               TerminalReason = null,
+                               InputTokens = null,
+                               OutputTokens = null,
+                               Version = 1
+                           }
+                       ]);
 
         var workflows = Substitute.For<IDevWorkflowStore>();
         _ = workflows.ListNodeRunsAsync(RunId, Arg.Any<CancellationToken>())
@@ -471,6 +494,7 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
             RepositoryIdentityHash = "IDENTITY",
             HostWorktreePath = workspace,
             RuntimePath = runtime,
+            TrustedGitDirectory = Path.Combine(workspace, ".git"),
             SandboxHandle = new SandboxHandle
             {
                 ProviderName = "test",
@@ -536,7 +560,7 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
             Id = Guid.Parse("55555555-5555-5555-5555-555555555555"),
             ProjectId = ProjectId,
             TaskId = TaskId,
-            AttemptId = Guid.NewGuid(),
+            AttemptId = CoderAttemptId,
             Kind = DevelopmentArtifactKind.Patch,
             SchemaVersion = 1,
             ManagedReference = $"{ProjectId:N}/55555555555555555555555555555555",

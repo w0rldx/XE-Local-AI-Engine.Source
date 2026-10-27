@@ -436,7 +436,7 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
                 Blocks = false,
                 ExitCode = -1,
                 StandardOutput = string.Empty,
-                StandardError = "The sandbox command could not be launched.",
+                StandardError = SandboxCommandResult.LaunchFailurePrefix + ".",
                 FailsToLaunch = true
             };
         }

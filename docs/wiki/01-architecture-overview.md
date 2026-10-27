@@ -196,8 +196,8 @@ result. Three accepted ADRs record the non-obvious decisions:
   the scoped Docker permission described above, as a stopgap ahead of MXC. Its living implementation-status companion is
   [Development Mode container implementation status](../roadmaps/development-mode-container-status.md).
 
-Command execution is selected from the code-owned `dotnet-slnx`, `dotnet-csproj`, or `generic-git`
-profiles. The React project-creation form requires confirmation before it submits a detected
+Command execution is selected from the code-owned `dotnet-slnx`, `dotnet-csproj`, `python-pytest`
+or `generic-git` profiles. The React project-creation form requires confirmation before it submits a detected
 proposal, but that confirmation is a normal UI workflow control, not a backend authorization
 invariant. The backend accepts an omitted profile and applies this precedence: explicit
 `CommandProfileId`, then the optional repository import at `.xe-dev/profile.json`, then read-only

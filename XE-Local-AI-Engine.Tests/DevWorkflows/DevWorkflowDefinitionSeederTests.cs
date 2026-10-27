@@ -100,7 +100,7 @@ public sealed class DevWorkflowDefinitionSeederTests
         }
     }
 
-    /// <summary>Each template's newest kept revision is the shipped graph with only the verification node's instructions and output contract changed.</summary>
+    /// <summary>The previous kept revision is the newest one with only the verification node's instructions and output contract changed.</summary>
     /// <remarks>
     ///     Every node compared whole on every field but those, and every edge with its condition, so a kept copy that drifted anywhere
     ///     else, or a verify edit that leaked into another node, fails here.
@@ -108,29 +108,86 @@ public sealed class DevWorkflowDefinitionSeederTests
     [Test]
     [Arguments(DevWorkflowDefinitionSeeder.FeatureDevelopmentSlug)]
     [Arguments(DevWorkflowDefinitionSeeder.DevIntakeSlug)]
-    public void TheNewestKeptRevisionDiffersFromTheShippedTemplateOnlyInWhatVerifyIsToldAndAnswers(string slug)
+    public void ThePreviousKeptRevisionDiffersFromTheNewestOnlyInWhatVerifyIsToldAndAnswers(string slug)
     {
         var template = TemplateFor(slug);
-        var kept = AssertOnlyVerifyDiffers(DevWorkflowGraph.Parse(template.Graph), DevWorkflowGraph.Parse(template.NewestRevision));
+        var kept = AssertOnlyVerifyDiffers(DevWorkflowGraph.Parse(template.NewestRevision), DevWorkflowGraph.Parse(template.PreviousRevision));
 
         AssertEx.Null(kept.Nodes["verify"].OutputSchema, "the kept copy is the one an installation seeded before verify had a verdict to hand in.");
         AssertEx.False(AssertEx.NotNull(kept.Nodes["verify"].Instructions).Contains("refusedTasks", StringComparison.Ordinal),
             "and its text is the OLD one, which never named the verdict.");
     }
 
-    /// <summary>The revision before it is the newest kept one with only the verification node's instructions changed.</summary>
+    /// <summary>The revision before that is the previous kept one with only the verification node's instructions changed.</summary>
     [Test]
     [Arguments(DevWorkflowDefinitionSeeder.FeatureDevelopmentSlug)]
     [Arguments(DevWorkflowDefinitionSeeder.DevIntakeSlug)]
-    public void ThePreviousKeptRevisionDiffersFromTheNewestOnlyInWhatVerifyIsTold(string slug)
+    public void TheOlderKeptRevisionDiffersFromThePreviousOnlyInWhatVerifyIsTold(string slug)
     {
         var template = TemplateFor(slug);
-        var newer = DevWorkflowGraph.Parse(template.NewestRevision);
-        var kept = AssertOnlyVerifyDiffers(newer, DevWorkflowGraph.Parse(template.PreviousRevision));
+        var newer = DevWorkflowGraph.Parse(template.PreviousRevision);
+        var kept = AssertOnlyVerifyDiffers(newer, DevWorkflowGraph.Parse(template.OlderRevision));
 
         AssertEx.Equal(ShapeWithoutInstructions(kept.Nodes["verify"]), ShapeWithoutInstructions(newer.Nodes["verify"]), "only the verify text changed between these two.");
         AssertEx.False(AssertEx.NotNull(kept.Nodes["verify"].Instructions).Contains("read_upstream_artifact", StringComparison.Ordinal),
             "and the older copy is the text from before verify was handed the patch.");
+    }
+
+    /// <summary>The newest kept revision is the shipped graph with only what the plan, verify and (intake) needsinfo nodes are told changed.</summary>
+    /// <remarks>Every other node compared whole, and every edge with its condition, so a kept copy that drifted elsewhere fails here.</remarks>
+    [Test]
+    [Arguments(DevWorkflowDefinitionSeeder.FeatureDevelopmentSlug)]
+    [Arguments(DevWorkflowDefinitionSeeder.DevIntakeSlug)]
+    public void TheNewestKeptRevisionDiffersFromTheShippedTemplateOnlyInWhatItsAgentsAreTold(string slug)
+    {
+        var template = TemplateFor(slug);
+        var shipped = DevWorkflowGraph.Parse(template.Graph);
+        var kept = DevWorkflowGraph.Parse(template.NewestRevision);
+        string[] told = slug == DevWorkflowDefinitionSeeder.DevIntakeSlug ? ["plan", "fixplan", "verify", "needsinfo"] : ["plan", "verify"];
+
+        AssertEx.Equal(string.Join(",", shipped.Nodes.Keys.Order(StringComparer.Ordinal)), string.Join(",", kept.Nodes.Keys.Order(StringComparer.Ordinal)));
+        AssertEx.Equal(string.Join("\n", shipped.Edges.Select(static edge => JsonSerializer.Serialize(edge)).Order(StringComparer.Ordinal)),
+            string.Join("\n", kept.Edges.Select(static edge => JsonSerializer.Serialize(edge)).Order(StringComparer.Ordinal)),
+            "edges and their conditions are untouched.");
+        foreach (var (key, node) in shipped.Nodes)
+        {
+            AssertEx.Equal(ShapeWithoutInstructions(kept.Nodes[key]), ShapeWithoutInstructions(node), $"node '{key}' keeps every field but its instructions.");
+            AssertEx.Equal(!told.Contains(key),
+                string.Equals(kept.Nodes[key].Instructions, node.Instructions, StringComparison.Ordinal),
+                $"node '{key}' changed its instructions exactly when it is one this change was about.");
+        }
+
+        AssertEx.False(AssertEx.NotNull(kept.Nodes["plan"].Instructions).Contains("Deviations from the request", StringComparison.Ordinal),
+            "and the kept copy is the text from before the plan was held to the request.");
+    }
+
+    /// <summary>
+    ///     Both plans keep what the request names and list any departure, and both verifications judge the request before the plan:
+    ///     without it a plan that renamed the requested interface is approved, implemented and signed off against itself.
+    /// </summary>
+    /// <remarks>Pinned by wording because nothing fails in code when a model is told to judge a patch against the wrong document.</remarks>
+    [Test]
+    [Arguments(DevWorkflowDefinitionSeeder.FeatureDevelopmentSlug)]
+    [Arguments(DevWorkflowDefinitionSeeder.DevIntakeSlug)]
+    public void TheShippedPlanAndVerificationAreHeldToTheRequest(string slug)
+    {
+        var graph = DevWorkflowGraph.Parse(TemplateFor(slug).Graph);
+        string[] plans = slug == DevWorkflowDefinitionSeeder.DevIntakeSlug ? ["plan", "fixplan"] : ["plan"];
+
+        foreach (var key in plans)
+        {
+            var plan = AssertEx.NotNull(graph.Nodes[key].Instructions);
+            AssertEx.Contains(plan, "keep every name, signature and interface it specifies", message: $"'{key}' keeps what the request names.");
+            AssertEx.Contains(plan, "Deviations from the request", message: $"'{key}' lists every departure under one heading the operator can find.");
+            AssertEx.Contains(plan, "workItemRequest", message: "the plan is told where the request is in its objective.");
+        }
+
+        var verify = AssertEx.NotNull(graph.Nodes["verify"].Instructions);
+        AssertEx.Contains(verify, "against the operator's request first");
+        AssertEx.True(verify.IndexOf("request first", StringComparison.Ordinal) < verify.IndexOf("then against the approved plan", StringComparison.Ordinal),
+            "the request is judged before the plan.");
+        AssertEx.Contains(verify, "even when the patch matches the plan", message: "a patch true to the plan but not the request is refused.");
+        AssertEx.Contains(verify, "verdict \"refused\" with refusedTasks", message: "the verdict contract is unchanged.");
     }
 
     /// <summary>
@@ -353,6 +410,9 @@ public sealed class DevWorkflowDefinitionSeederTests
         /// <summary>The revision <see cref="NewestRevision" /> replaced.</summary>
         public required string PreviousRevision { get; init; }
 
+        /// <summary>The revision <see cref="PreviousRevision" /> replaced.</summary>
+        public required string OlderRevision { get; init; }
+
         public required string[] PriorRevisions { get; init; }
     }
 
@@ -361,15 +421,17 @@ public sealed class DevWorkflowDefinitionSeederTests
             ? new ShippedTemplate
             {
                 Graph = DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph,
-                NewestRevision = DevWorkflowDefinitionSeeder.FeatureDevelopmentGraphRevision5,
-                PreviousRevision = DevWorkflowDefinitionSeeder.FeatureDevelopmentGraphRevision4,
+                NewestRevision = DevWorkflowDefinitionSeeder.FeatureDevelopmentGraphRevision6,
+                PreviousRevision = DevWorkflowDefinitionSeeder.FeatureDevelopmentGraphRevision5,
+                OlderRevision = DevWorkflowDefinitionSeeder.FeatureDevelopmentGraphRevision4,
                 PriorRevisions = DevWorkflowDefinitionSeeder.FeatureDevelopmentPriorRevisions
             }
             : new ShippedTemplate
             {
                 Graph = DevWorkflowDefinitionSeeder.DevIntakeGraph,
-                NewestRevision = DevWorkflowDefinitionSeeder.DevIntakeGraphRevision2,
-                PreviousRevision = DevWorkflowDefinitionSeeder.DevIntakeGraphRevision1,
+                NewestRevision = DevWorkflowDefinitionSeeder.DevIntakeGraphRevision3,
+                PreviousRevision = DevWorkflowDefinitionSeeder.DevIntakeGraphRevision2,
+                OlderRevision = DevWorkflowDefinitionSeeder.DevIntakeGraphRevision1,
                 PriorRevisions = DevWorkflowDefinitionSeeder.DevIntakePriorRevisions
             };
 
@@ -489,6 +551,6 @@ public sealed class DevWorkflowDefinitionSeederTests
 
         AssertEx.Contains(AssertEx.NotNull(graph.Nodes["classify"].Instructions), "name \"classification.md\"");
         AssertEx.Contains(AssertEx.NotNull(graph.Nodes["answer"].Instructions), "name \"answer.md\"");
-        AssertEx.Contains(AssertEx.NotNull(graph.Nodes["needsinfo"].Instructions), "name \"what-is-missing.md\"");
+        AssertEx.Contains(AssertEx.NotNull(graph.Nodes["needsinfo"].Instructions), "name \"questions.md\"", message: "an unclear request ends on the questions for its requester.");
     }
 }

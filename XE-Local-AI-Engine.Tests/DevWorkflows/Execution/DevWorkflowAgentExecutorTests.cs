@@ -76,6 +76,24 @@ public sealed class DevWorkflowAgentExecutorTests
                                             }
                                             """;
 
+    /// <summary>The seeded tail's verification reduced to its routing: an agent behind a gate, two edges away from the entry.</summary>
+    private const string ResearchGateVerify = """
+                                              {
+                                                "schemaVersion": 1,
+                                                "nodes": [
+                                                  { "nodeKey": "research", "nodeType": "Agent", "label": "Research",
+                                                    "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" },
+                                                  { "nodeKey": "planapproval", "nodeType": "HumanGate", "label": "Approve" },
+                                                  { "nodeKey": "verify", "nodeType": "Agent", "label": "Verify",
+                                                    "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" }
+                                                ],
+                                                "edges": [
+                                                  { "from": "research", "to": "planapproval" },
+                                                  { "from": "planapproval", "to": "verify", "condition": { "path": "decision", "op": "eq", "value": "Approve" } }
+                                                ]
+                                              }
+                                              """;
+
     /// <summary>What the research node writes, distinctive enough that finding it downstream cannot be a coincidence.</summary>
     private const string ResearchMarkdown = """
                                             # What the inference path does
@@ -1021,6 +1039,56 @@ public sealed class DevWorkflowAgentExecutorTests
             document.RootElement.GetProperty("reads").EnumerateArray().Single().GetString());
     }
 
+    /// <summary>
+    ///     An agent node that is not an entry is handed the operator's request too: a verification that sees only the plan judges
+    ///     the patch against the plan, so a plan that renamed what the request named is signed off against itself.
+    /// </summary>
+    [Test]
+    public async Task ANonEntryAgent_IsHandedTheOperatorsRequest()
+    {
+        const string Request = "Add IInvoiceExporter.ExportAsync(Guid invoiceId) and keep that exact signature.";
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(ResearchGateVerify, Request);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await harness.DecideAsync(runId, "planapproval", DevWorkflowDecisionKind.Approve);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        var objective = await harness.ReadObjectiveAsync(runId, "verify");
+        AssertEx.Contains(objective, "## What was asked");
+        AssertEx.Contains(objective, $"- workItemRequest: {Request}", message: "the verification judges the request, so it has to be handed it.");
+        AssertEx.Null((await harness.ReadNodeRunAsync(runId, "planapproval")).InputJson, "a gate reads no objective, so it is seeded nothing.");
+    }
+
+    /// <summary>
+    ///     A start's large <c>inputsJson</c> stays with the entry node: a verification with the shipped length of instructions behind it
+    ///     still gets the whole request, and neither objective passes the ceiling.
+    /// </summary>
+    [Test]
+    public async Task ALargeStartInput_StaysOnTheEntryNodeAndLeavesTheVerificationItsRequest()
+    {
+        const string Request = "Add IInvoiceExporter.ExportAsync(Guid invoiceId) and keep that exact signature.";
+        var graph = ResearchGateVerify.Replace("\"label\": \"Verify\",", $"\"label\": \"Verify\", \"instructions\": \"{new string('v', 3600)}\",", StringComparison.Ordinal);
+        var inputsJson = $$"""{"notes":"{{new string('n', 5000)}}"}""";
+        await using var harness = new DevWorkflowHarness(Host);
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(graph, Request);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson, Guid.NewGuid()))).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await harness.DecideAsync(runId, "planapproval", DevWorkflowDecisionKind.Approve);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        var entry = await harness.ReadObjectiveAsync(runId, "research");
+        var verify = await harness.ReadObjectiveAsync(runId, "verify");
+        AssertEx.Contains(entry, "nnnnnnnnnn", message: "the start's inputs still reach the entry node they were given to.");
+        AssertEx.Contains(verify, $"- workItemRequest: {Request}", message: "the verification keeps the whole request it judges against.");
+        AssertEx.False(verify.Contains("nnnnnnnnnn", StringComparison.Ordinal), "the start's inputs are the entry node's, not every agent's.");
+        AssertEx.True(entry.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters, $"the entry objective was {entry.Length} characters.");
+        AssertEx.True(verify.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters, $"the verify objective was {verify.Length} characters.");
+    }
+
     /// <summary>Only a patch has to be read to the end: a report read in part still succeeds, and its line records how much.</summary>
     [Test]
     public async Task ACompletedAgent_ThatReadAReportInPart_SucceedsWithItsPartialCoverage()
@@ -1050,6 +1118,144 @@ public sealed class DevWorkflowAgentExecutorTests
         await harness.SettleAgentAsync(runId, "research");
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
         AssertEx.Equal(DevWorkflowArtifactKind.Patch, (await harness.ReadArtifactsAsync(runId)).Single().Kind);
+        return runId;
+    }
+
+    /// <summary>
+    ///     A reviewer pinned to the project's coder model is warned, never stopped: the dispatch records the event, the session runs,
+    ///     and the success carries the same sentence under <c>warnings</c>.
+    /// </summary>
+    [Test]
+    public async Task AnAgentHandedAPatch_OnTheModelThatProducedIt_IsWarnedAndRunsOn()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await HandAPatchToAPinnedPlanAsync(harness, reviewerModel: "coder-model", coderModel: "coder-model");
+
+        var plan = await harness.ReadNodeRunAsync(runId, "plan");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, plan.Status, "a warning never blocks the review.");
+        var warning = (await harness.ReadEventsAsync(runId)).Single(static entry => entry.EventType == DevWorkflowEventTypes.NodeReviewerSameModel);
+        AssertEx.Equal(plan.Id, warning.NodeRunId);
+        using var detail = JsonDocument.Parse(AssertEx.NotNull(warning.DetailJson));
+        AssertEx.Equal("coder-model", detail.RootElement.GetProperty("modelId").GetString());
+        AssertEx.Equal(plan.Attempt, detail.RootElement.GetProperty("attempt").GetInt32(), "the attempt rides along, so a reader can drop an earlier attempt's warning.");
+        AssertEx.Equal("'validate.patch' from 'research'", detail.RootElement.GetProperty("patches").EnumerateArray().Single().GetString());
+
+        await harness.RecordAgentArtifactReadAsync(runId, "plan", (await harness.ReadArtifactsAsync(runId)).Single(), offset: 0, length: PatchText.Length, total: PatchText.Length);
+        await harness.SettleAgentAsync(runId, "plan");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        var succeeded = await harness.ReadNodeRunAsync(runId, "plan");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, succeeded.Status);
+        using var output = JsonDocument.Parse(AssertEx.NotNull(succeeded.OutputJson));
+        AssertEx.Equal(AssertEx.NotNull(detail.RootElement.GetProperty("warning").GetString()), output.RootElement.GetProperty("warnings").EnumerateArray().Single().GetString());
+    }
+
+    /// <summary>A reviewer on another model than the patch's coder records no warning and writes no <c>warnings</c> member.</summary>
+    [Test]
+    public async Task AnAgentHandedAPatch_OnAnotherModel_IsNotWarned()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await HandAPatchToAPinnedPlanAsync(harness, reviewerModel: "reviewer-model", coderModel: "coder-model");
+        await harness.RecordAgentArtifactReadAsync(runId, "plan", (await harness.ReadArtifactsAsync(runId)).Single(), offset: 0, length: PatchText.Length, total: PatchText.Length);
+        await harness.SettleAgentAsync(runId, "plan");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        AssertEx.False((await harness.ReadEventsAsync(runId)).Any(static entry => entry.EventType == DevWorkflowEventTypes.NodeReviewerSameModel));
+        var succeeded = await harness.ReadNodeRunAsync(runId, "plan");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, succeeded.Status);
+        using var output = JsonDocument.Parse(AssertEx.NotNull(succeeded.OutputJson));
+        AssertEx.False(output.RootElement.TryGetProperty("warnings", out _));
+    }
+
+    /// <summary>
+    ///     Neither side known: neither the node nor its agent pins a model, the host has no default one, and the project names no coder model.
+    ///     Nothing to compare is no warning, and the review runs as it would have.
+    /// </summary>
+    [Test]
+    public async Task AnAgentHandedAPatch_WithNoResolvableModel_IsNotWarnedAndRunsOn()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await HandAPatchToAPinnedPlanAsync(harness, reviewerModel: null, coderModel: null);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "plan")).Status);
+        AssertEx.False((await harness.ReadEventsAsync(runId)).Any(static entry => entry.EventType == DevWorkflowEventTypes.NodeReviewerSameModel));
+    }
+
+    /// <summary>Neither the node nor its agent pins a model, and the node's default is the coder's: warned. A host of its own, for the default.</summary>
+    [Test]
+    public async Task AnAgentHandedAPatch_OnTheDefaultModelThatProducedIt_IsWarned()
+    {
+        var defaultModel = Substitute.For<ILocalDefaultChatModelResolver>();
+        _ = defaultModel.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("coder-model");
+        await using var harness = new DevWorkflowHarness(services =>
+        {
+            services.RemoveAll<ILocalDefaultChatModelResolver>();
+            services.AddSingleton(defaultModel);
+        });
+        var runId = await HandAPatchToAPinnedPlanAsync(harness, reviewerModel: null, coderModel: "coder-model");
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "plan")).Status, "a warning never blocks the review.");
+        var warning = (await harness.ReadEventsAsync(runId)).Single(static entry => entry.EventType == DevWorkflowEventTypes.NodeReviewerSameModel);
+        using var detail = JsonDocument.Parse(AssertEx.NotNull(warning.DetailJson));
+        AssertEx.Equal("coder-model", detail.RootElement.GetProperty("modelId").GetString());
+    }
+
+    /// <summary>
+    ///     The coder model a validation recorded for the patch it published answers before the project's: a reviewer on that recorded
+    ///     model is warned although the project's coder model is another. A host of its own, for the scripted tool answer.
+    /// </summary>
+    [Test]
+    public async Task AnAgentHandedAValidatedPatch_OnTheRecordedCoderModel_IsWarned()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var (projectId, _) = await harness.SeedDevelopmentProjectAsync(coderModelId: "project-coder");
+        var reviewer = await harness.SeedUnpinnedAgentAsync();
+        harness.Tools.Answer("validate",
+            FakeDevWorkflowToolCommands.Passing() with
+            {
+                Patch = Encoding.UTF8.GetBytes(PatchText),
+                PatchModelId = "attempt-coder"
+            });
+        var runId = await harness.StartRunAsync($$"""
+                                                {
+                                                  "schemaVersion": 1,
+                                                  "nodes": [
+                                                    { "nodeKey": "validate", "nodeType": "Tool" },
+                                                    { "nodeKey": "verify", "nodeType": "Agent", "label": "Verify",
+                                                      "agentDefinitionId": "{{reviewer}}", "modelProfile": "attempt-coder" }
+                                                  ],
+                                                  "edges": [{ "from": "validate", "to": "verify" }]
+                                                }
+                                                """,
+            developmentProjectId: projectId);
+        await harness.AdvanceThroughToolLaneAsync(runId);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "verify")).Status);
+        var warning = (await harness.ReadEventsAsync(runId)).Single(static entry => entry.EventType == DevWorkflowEventTypes.NodeReviewerSameModel);
+        AssertEx.Contains(AssertEx.NotNull(warning.DetailJson), "attempt-coder");
+    }
+
+    /// <summary>Research saves a Patch in a project coded on <paramref name="coderModel" />; plan runs on a real unpinned agent, pinned to <paramref name="reviewerModel" /> if given.</summary>
+    private static async Task<Guid> HandAPatchToAPinnedPlanAsync(DevWorkflowHarness harness, string? reviewerModel, string? coderModel)
+    {
+        var (projectId, _) = await harness.SeedDevelopmentProjectAsync(coderModel);
+        var reviewer = await harness.SeedUnpinnedAgentAsync();
+        var pin = reviewerModel is null ? string.Empty : $", \"modelProfile\": \"{reviewerModel}\"";
+        var runId = await harness.StartRunAsync($$"""
+                                                {
+                                                  "schemaVersion": 1,
+                                                  "nodes": [
+                                                    { "nodeKey": "research", "nodeType": "Agent", "label": "Research", "agentDefinitionId": "{{SeededAgentId}}" },
+                                                    { "nodeKey": "plan", "nodeType": "Agent", "label": "Plan", "agentDefinitionId": "{{reviewer}}"{{pin}} }
+                                                  ],
+                                                  "edges": [{ "from": "research", "to": "plan" }]
+                                                }
+                                                """,
+            developmentProjectId: projectId);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "validate.patch", PatchText, AgentWorkSessionArtifactKind.Patch, "text/x-diff");
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
         return runId;
     }
 
@@ -1623,9 +1829,9 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task TheObjective_WhenOnlyAReferenceFits_KeepsItAndStillStopsAtTheLimit()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        // Sized so the section header and the artifact's own header still fit but nothing is left for a body: the
-        // rendered marker plus that header overrun the ceiling, which is the only shape that reaches the guard.
-        var runId = await harness.StartRunAsync(ResearchThenPlanInstructed(new string('i', 6820)));
+        // Sized, with the plan's 76-character "What was asked" section, so the section header and the artifact's header fit but no body does:
+        // the rendered marker plus that header overrun the ceiling, which is the only shape that reaches the guard.
+        var runId = await harness.StartRunAsync(ResearchThenPlanInstructed(new string('i', 6744)));
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", new string('a', 2000));
@@ -1648,7 +1854,7 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task TheObjective_WhenOnlyTheHeaderAndTheReadLineFit_TellsTheAgentHowToReadTheContents()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(ResearchThenPlanInstructed(new string('i', 6790)));
+        var runId = await harness.StartRunAsync(ResearchThenPlanInstructed(new string('i', 6714)));
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", new string('a', 2000));

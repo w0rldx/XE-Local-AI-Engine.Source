@@ -73,6 +73,10 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
             var snapshot = await _store.GetExecutionSnapshotAsync(coderAttempt.Id, cancellationToken);
             var profile = DevelopmentCommandProfileCatalog.ResolveStored(snapshot.CommandProfileJson);
             var session = await _workspaceProvider.PrepareAsync(snapshot, repository, cancellationToken);
+
+            // The coder's sandbox, re-attached by the prepare: a process it left running could still write the worktree
+            // and the runtime directories while the patch is resolved and validated.
+            await _sandbox.KillAsync(session.SandboxHandle, CancellationToken.None);
             var evidence = await _evidence.ResolveCurrentAsync(taskId, session, cancellationToken);
 
             // Before the command loop and the tools that would run it: an egress-denied attempt cannot resolve a
@@ -81,23 +85,18 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
             IReadOnlyList<DevelopmentCommandEvidence> commands = [];
             if (verdict is null)
             {
-                var tools = new DevelopmentWorkspaceTools(_sandbox, session, Options.Create(_options), profile);
-
-                // The validation run needs a deadline of its own: bounded only per command, a four-command profile runs
-                // for four times the attempt cap it is meant to respect.
-                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeout.CancelAfter(TimeSpan.FromSeconds(Math.Min(snapshot.MaxDurationSeconds ?? _options.MaxAttemptDurationSeconds,
-                    _options.MaxAttemptDurationSeconds)));
-
-                foreach (var commandId in profile.ValidationCommandIds)
+                // Never the coder's worktree or home: its ignored files, nested .git, index and HOME were never in the
+                // patch the review sees. The commands judge a fresh clone of the base plus exactly the stored patch.
+                var tree = await _workspaceProvider.PrepareValidationAsync(session, repository, evidence.Patch, cancellationToken);
+                try
                 {
-                    _ = await tools.RunCommandAsync(commandId, timeout.Token);
+                    commands = await RunCommandsAsync(tree, snapshot, profile, repository, cancellationToken);
+                }
+                finally
+                {
+                    await _sandbox.KillAsync(tree.SandboxHandle, CancellationToken.None);
                 }
 
-                var protectedRoots = DevelopmentArtifactSanitizer.ResolveProtectedRoots(repository.RepositoryRoot, session);
-                commands = tools.CommandEvidence
-                                .Select(command => DevelopmentArtifactSanitizer.Sanitize(command, protectedRoots))
-                                .ToArray();
                 verdict = DevelopmentValidationVerdict.Evaluate(profile, commands);
             }
 
@@ -173,6 +172,32 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
 
             throw;
         }
+    }
+
+    /// <summary>Runs the profile's validation commands in <paramref name="tree" /> and returns their sanitized evidence.</summary>
+    private async Task<IReadOnlyList<DevelopmentCommandEvidence>> RunCommandsAsync(DevelopmentWorkspaceSession tree,
+        DevelopmentExecutionSnapshot snapshot,
+        DevelopmentCommandProfile profile,
+        DevelopmentRepositoryBinding repository,
+        CancellationToken cancellationToken)
+    {
+        var tools = new DevelopmentWorkspaceTools(_sandbox, tree, Options.Create(_options), profile);
+
+        // The validation run needs a deadline of its own: bounded only per command, a four-command profile runs
+        // for four times the attempt cap it is meant to respect.
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(Math.Min(snapshot.MaxDurationSeconds ?? _options.MaxAttemptDurationSeconds,
+            _options.MaxAttemptDurationSeconds)));
+
+        foreach (var commandId in profile.ValidationCommandIds)
+        {
+            _ = await tools.RunCommandAsync(commandId, timeout.Token);
+        }
+
+        var protectedRoots = DevelopmentArtifactSanitizer.ResolveProtectedRoots(repository.RepositoryRoot, tree);
+        return tools.CommandEvidence
+                    .Select(command => DevelopmentArtifactSanitizer.Sanitize(command, protectedRoots))
+                    .ToArray();
     }
 
     /// <summary>Where a finished deterministic gate leaves the task.</summary>

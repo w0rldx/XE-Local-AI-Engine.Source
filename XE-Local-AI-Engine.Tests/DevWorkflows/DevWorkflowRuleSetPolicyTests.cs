@@ -115,6 +115,51 @@ public sealed class DevWorkflowRuleSetPolicyTests
             "policy sits between the node's instructions and what was asked.");
     }
 
+    /// <summary>A request as long as the API allows is cut behind its marker to half the room, so the rule set keeps the rest and the whole fits the ceiling.</summary>
+    [Test]
+    public async Task ARequestAsLongAsAllowed_IsCutSoTheRuleSetStillReachesTheObjective()
+    {
+        var request = new string('r', 8000);
+        await using var harness = new DevWorkflowHarness();
+        _ = await harness.CreateRuleSetAsync("House rules", HouseRules, $$"""{"projectIds":["{{ProjectId}}"],"nodeTypes":["Agent"]}""");
+
+        var runId = await harness.StartRunAsync(SingleAgent, request, ProjectId);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "research")).Status, "an objective the session layer refused would block the node.");
+        var objective = harness.Agent.Objectives.Single();
+        AssertEx.Contains(objective, HouseRules, message: "the rule set survives a request longer than the whole ceiling.");
+        AssertEx.Contains(objective, DevWorkflowAgentExecutor.RequestCutMarker(request.Length), message: "the cut is visible and names the request's length.");
+        AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters, $"the objective was {objective.Length} characters, past the ceiling.");
+    }
+
+    /// <summary>A request that fits is left whole; one that does not is cut inside its cap, the marker included.</summary>
+    [Test]
+    public void CutRequest_KeepsAFittingRequestWholeAndCutsALongOneInsideItsCap()
+    {
+        AssertEx.Equal("Add the export.", DevWorkflowAgentExecutor.CutRequest("Add the export.", cap: 15));
+
+        var cut = DevWorkflowAgentExecutor.CutRequest(new string('r', 1000), cap: 200);
+        AssertEx.Equal(expected: 200, cut.Length);
+        AssertEx.True(cut.EndsWith(DevWorkflowAgentExecutor.RequestCutMarker(1000), StringComparison.Ordinal), "the cut says it is one, and how long the whole was.");
+    }
+
+    /// <summary>A cap at or below the marker's own length is never overrun: the marker itself is cut, down to nothing at a cap of zero.</summary>
+    [Test]
+    [Arguments(0)]
+    [Arguments(1)]
+    [Arguments(40)]
+    public void CutRequest_NeverOverrunsACapSmallerThanItsMarker(int cap)
+    {
+        var marker = DevWorkflowAgentExecutor.RequestCutMarker(1000);
+        AssertEx.True(cap < marker.Length, "the case under test is a cap the marker alone would overrun.");
+
+        var cut = DevWorkflowAgentExecutor.CutRequest(new string('r', 1000), cap);
+
+        AssertEx.True(cut.Length <= cap, $"the cut was {cut.Length} characters against a cap of {cap}.");
+        AssertEx.True(marker.TrimStart().StartsWith(cut, StringComparison.Ordinal), "no room for the marker is no room for the request: what is left is the marker's start.");
+    }
+
     /// <summary>
     ///     A materialized clone resolves for ITSELF, against its own node type — so a rule set scoped to Tool nodes
     ///     reaches the cloned validation node and not the cloned implementation beside it. Without this the children a

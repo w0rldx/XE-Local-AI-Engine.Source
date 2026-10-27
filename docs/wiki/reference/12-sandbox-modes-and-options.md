@@ -205,7 +205,7 @@ two sandboxes, not one sandbox with two postures.
    base commit": a warm runs only from a worktree whose **tracked** files are clean
    (`git status --porcelain --untracked-files=no`), once per `BaseCommit`, with the result recorded in
    `workspace.json` — which lives in `RuntimePath` and is **never mounted**, so it cannot be read or forged from
-   inside any sandbox. A profile with no restore command (`generic-git`) skips warming entirely.
+   inside any sandbox. A profile with no restore command (`generic-git`, `python-pytest`) skips warming entirely.
 
 2. **A dependency-manifest change fails validation.** `DevelopmentDependencyManifestPolicy` runs *before* the
    command loop and fails the gate with `dependency_manifest_changed` for any change to `**/*.csproj`,
@@ -319,8 +319,9 @@ this page. What the decision fixes, and what a reviewer should hold it to:
 
 ### The managed workspace's Git configuration is engine-owned
 
-The engine runs `git reset` and `git add -A` **on the host** against the managed worktree, so anything a repository's
-own `.git/config` can make Git execute runs on the machine running the engine — `core.fsmonitor` on any index
+The engine runs Git **on the host** against the managed worktree (the provider's checks, and the evidence stage's
+`add -A`, which reads its files), so anything a repository's own `.git/config` can make Git execute runs on the
+machine running the engine — `core.fsmonitor` on any index
 refresh, and a `filter.<driver>.clean` selected by an in-tree `.gitattributes` on `git add`. The standalone clone
 made `<workspace>/.git/config` a real, agent-writable file inside the jail, on the process provider Development runs
 on by default.
@@ -408,6 +409,131 @@ same tests went green with no code change.
 > **`DOTNET_SKIP_FIRST_TIME_EXPERIENCE` is not an alternative** — it is a no-op in .NET 10. This is the obvious fix
 > a reader will reach for; it does nothing.
 
+**The pytest command is engine-owned end to end:** `python3 -I -B -c <bootstrap> -q -p no:cacheprovider --rootdir=.
+--confcutdir=. --import-mode=importlib`, where the bootstrap (`DevelopmentCommandProfileCatalog`, `PytestBootstrap`)
+imports pytest, then inserts the workspace and its `src/` into `sys.path` after the standard library and before the
+first `site.getsitepackages()` entry (appended when there is none), sets `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` and
+runs `pytest.main` with `-c os.devnull` in front of the arguments. Each part answers a measured failure:
+
+- **A repository file stood in for pytest.** Plain `python3 -m pytest` puts the working directory first on
+  `sys.path`; on a host without pytest a coder's root `pytest.py` printed `===== 5 passed in 0.00s =====` and
+  validation passed. `-I` drops the working directory, the `PYTHON*` variables and the user site, and the workspace
+  joins `sys.path` only after pytest is imported, so that host now ends with
+  `ModuleNotFoundError: No module named 'pytest'` (`runner_not_installed`).
+- **A repository file stood in for the standard library.** Importing pytest first is not enough: its plugins import
+  `pdb`, `unittest`, `difflib`, `code` and others later, inside `pytest.main`. With the workspace prepended, a root
+  `pdb.py` or a `src/unittest/__init__.py` that printed a passing summary and exited 0 forged a pass. The workspace now
+  follows the standard library, so the interpreter's own modules win, and `--import-mode=importlib` keeps pytest's default
+  `prepend` mode from putting each test directory first (measured: it put `tests/` at `sys.path[0]`). The cost: test
+  modules can no longer import a sibling helper by its bare name (`import helpers` from `tests/`); a package import
+  (`from tests.helpers import …`) works, and anything else fails closed.
+- **An installed copy of the project stood in for the patch.** Appending the workspace instead, as one round did, put
+  it after site-packages: with the project `pip install -e`'d (or installed) into the pytest environment, the tests
+  imported the operator's copy, and a correct patch failed against it. Inserting before site-packages makes the patch
+  win, at a cost the name rule pays: a root or `src/` module named like a pytest dependency, or like a standard-library
+  module the platform lacks (`_winapi` off Windows), would now be found first, so both are refused (below).
+- **Configuration discovery left the worktree.** With no configuration file in the repository, pytest walked up the
+  ancestors, picked an unrelated `pyproject.toml` (its `--cov` options failed the run with exit 4) and set the
+  conftest cut-off there, so ancestor `conftest.py` files could load. `-c os.devnull` means no configuration file is
+  read at all, which also stops an added `pyproject.toml` or `pytest.ini` from adding `-p <module>` through `addopts`;
+  `--rootdir=.` and `--confcutdir=.` keep the root and conftest discovery inside the workspace. **The repository's own
+  pytest settings (`addopts`, `pythonpath`, markers, `testpaths`) are ignored**: accepted pre-release. A design that
+  honours the base commit's configuration would read it from the trusted host checkout and pass the vetted file as
+  `-c`; it is not built.
+- **Host plugins change what "green" means.** An entry-point plugin installed beside the host's pytest autoloads into
+  every run (measured with `pytest-randomly`); `PYTEST_DISABLE_PLUGIN_AUTOLOAD` stops that. It is set inside the
+  bootstrap, so it is part of the digest-bound command rather than the environment. A suite that needs a plugin such
+  as `pytest-asyncio` fails closed.
+
+`-B` and `-p no:cacheprovider` keep `__pycache__` and `.pytest_cache` out of the coder's patch.
+
+### The validation tree, and what the coder can still influence
+
+**Nothing the task worktree's `.git` or `HOME` holds is trusted, by evidence or by validation.** Every sandboxed
+command can write both, and four review rounds each forged a pass through the `.git` alone: a cached pytest `.pyc` under an ignored
+`__pycache__/` (`-B` stops writing bytecode, not reading it, and the assertion rewriter loads a cached file whose
+header matches the source's size and mtime: `1 passed` over `assert 1 == 2`); a nested `tests/evil/.git` making
+`add -A` stage one gitlink so the `conftest.py` inside never reached the patch, also behind a gitignored `.gitmodules`
+with `ignore = all` that hid it from every `diff --cached`; a replace ref over the base tree that made the gitlink look
+like part of the base; and skip-worktree or assume-unchanged bits that survived `reset --mixed`, so an edited
+`tests/conftest.py` never appeared. Each patch-up only moved the forge, so both sides were rebuilt:
+
+- **Evidence is staged in an engine-owned repository.** `DevelopmentPatchEvidenceService` creates a bare repository
+  under the never-mounted runtime directory for each export, whose objects come from the operator's checkout
+  (`objects/info/alternates` to `DevelopmentWorkspaceSession.TrustedGitDirectory`) and whose base commit comes from
+  the engine-owned workspace manifest. It has no refs, no index bits and no ignore file of its own, and the export
+  sets `GIT_NO_REPLACE_OBJECTS=1` anyway. `read-tree <base>`, then `--git-dir=<stage> --work-tree=<worktree> add -A`:
+  git reads the worktree's files byte for byte and never the worktree's `.git`. The patch, the changed-file manifest
+  and the expected result tree all come from that stage, against the base commit, with `--ignore-submodules=none`.
+- **A nested repository is still refused.** Git never stages a `.git` path component, but a nested `.git` still turns
+  its directory into a gitlink. The stage's index is the engine's own and `--ignore-submodules=none` outranks any
+  `.gitmodules`, so a mode-`160000` entry on either side of the stage's raw diff refuses the export; it reads the raw
+  records as Latin-1, so a path that is not UTF-8 never fails the check. The workspace tools also refuse a `.git`
+  segment at any depth, with the NTFS spellings git's `protectNTFS` refuses (any case, trailing dots and spaces,
+  `GIT~1`, any segment with a `:`), as an earlier and clearer error for the coder. The cost: a task cannot add,
+  remove or move a submodule pointer.
+- **The stage reads no `HOME` the coder wrote.** Its git runs with `HOME` and `XDG_CONFIG_HOME` at an empty directory
+  inside the stage and `-c core.excludesFile=`: with the task's `HOME`, git's default excludes file
+  (`$HOME/.config/git/ignore`) hid an untracked file from `add -A`, so the patch never showed it. The stage is
+  created in the trusted checkout's object format (`DevelopmentWorkspaceSession.ObjectFormat`, read once per prepare
+  with `rev-parse --show-object-format`), or every export of a SHA-256 repository failed. A stage a hard stop left
+  behind is deleted by a later export once it is older than eight attempt caps (`MaxAttemptDurationSeconds`): no
+  export runs more than seven Git commands, each bounded by one cap.
+- **Development needs git 2.32 or later on the node.** `GIT_CONFIG_GLOBAL` is honoured from 2.32, and before 2.29
+  `rev-parse --show-object-format` echoes the option and exits 0, so the prepare accepts only `sha1` or `sha256` and
+  otherwise refuses with a message naming the 2.32 floor.
+- **Validation runs in a fresh tree that is the base plus exactly the stored patch, under fresh directories.**
+  `IDevelopmentWorkspaceProvider.PrepareValidationAsync` deletes and rebuilds `<runtime>/validation` for every run:
+  the tree in `tree/` (`git init` in the checkout's object format, a depth-1 fetch of the base commit by id from the
+  checkout's path, so a base branch that has moved since does not matter and no remote is recorded, a detached
+  checkout, then the stored patch through `DevelopmentPatchOverlay.ApplyAsync`, the same apply the Dev Workflows
+  overlay uses), and empty `home/`, `tmp/` and `dotnet/` beside it for `HOME`, `TMPDIR` and `DOTNET_CLI_HOME`. With
+  the coder's `HOME`, a planted `.gitconfig` relaxing `core.whitespace` passed trailing spaces through the profile's
+  `git diff --check`, and an MSBuild user import under `.local/share/Microsoft/MSBuild/Current/Imports/` ran in
+  every validation build. The runner kills the coder's sandbox before it resolves the patch, so a process left
+  running there cannot write meanwhile. The commands run in a sandbox of its own (runtime profile
+  `development-validation`, a fresh attach key per run, the agent-facing ceilings and egress posture), killed
+  afterwards, also when a command throws. Validation applies the patch as is (`--whitespace=nowarn`) so the profile's
+  own `git diff --check` reports whitespace to the coder; the Dev Workflows overlay refuses such a patch.
+- **The reviewer's read-only tools read the same kind of tree**, rebuilt for the review with its own sandbox, so a
+  file the coder left ignored in its worktree is not there to read. The subject-hash check before and after the
+  review still runs against the coder's worktree.
+- **Only the warm restore writes the package folder.** Validation's offline `dotnet restore` trusts every extracted
+  package that has a `.nupkg.metadata`, so an edited one the coder's sandbox left in `<runtime>/nuget` would have been
+  built against. The coder's and validation's sandboxes now mount that folder read-only, and the warm restore, which
+  runs the base commit alone, is its one writer; it gets fresh home, tmp and dotnet directories of its own too,
+  because it has egress and a `NuGet.Config` in the task's `HOME` would choose its sources. Measured: an offline
+  restore into a fresh tree against a read-only, fully warmed folder succeeds. A read-only mount needs a provider
+  that advertises `SupportsReadOnlyMounts`, like the `.git/config` mount.
+- **Sandboxed git reads no global or system file.** Every Development command carries `GIT_CONFIG_GLOBAL=/dev/null`,
+  `GIT_CONFIG_NOSYSTEM=1` and `GIT_ATTR_NOSYSTEM=1`, so a git config in any `HOME` configures nothing.
+
+**What the coder can still influence.** These are stated, not closed:
+
+- **The patch itself, by design.** Its tests, build files and in-tree configuration (`Directory.Build.props`,
+  `NuGet.Config`, `.gitattributes`, `.gitignore`) run or apply in validation, so a newly added test can still patch
+  the runner in-process. The test-write policy, the dependency-manifest refusal and the reviewer are the controls.
+- **Validation's own run.** The commands execute patch code, which can write the validation tree, its `.git` and its
+  fresh directories while it runs. Nothing is read back from them afterwards, and the next run starts over.
+- **The process provider, Development's default.** It has no mount layer, so by default the package folder is not
+  read-only, and Development has no filesystem boundary on it: a coder command can write anything the node's user can, the runtime directory and a
+  running validation included, and a process that leaves the provider's process group survives the kill. Fresh
+  directories, the stage and the read-only folder close carry-over on a provider with a mount layer; on the process
+  provider they close accidental carry-over, not a hostile one.
+- **What the base commit's package sources serve.** The warm restore downloads whatever they answer; that is the
+  operator's trust in the repository, not something the coder controls.
+
+Measured on this repository (8,288 tracked files, a 2.2 GB working tree with `bin/` and `obj/`): an export takes
+about 0.6 s, almost all of it `add -A` re-hashing every tracked file into a fresh index with no stat cache; building
+the validation tree takes about 1.3 s for the fetch and checkout, plus the apply, and a review now pays it too. A
+fresh `DOTNET_CLI_HOME` costs about 0.08 s per `dotnet` command for the CLI's first-use sentinels. A .NET validation
+rebuilds `obj/` and `bin/` from scratch, as it already did once ignored files stopped reaching it.
+
+> **`HOME` is the per-task directory, so a `pip install --user` pytest is invisible.** Python's user site lives under
+> `~/.local`, which inside a Development command is the empty per-task `HOME`. Install pytest where the host `python3`
+> on the node's `PATH` finds it without the user site: the distribution's package, or a virtual environment whose
+> `python3` comes first on that `PATH`.
+
 ### The test-write policy's protected-path set
 
 `DevelopmentCommandProfileCatalog.DefaultProtectedPaths` names the paths an agent may create but may not modify,
@@ -428,6 +554,24 @@ repository, `XE-Framework` and the synthetic fixture rather than assumed, and ea
 - **Two patterns are deliberately left out, each for a measured reason.** `*Spec.cs` has three false positives
   across the two repositories (`OrchestrationSpec.cs`, `LlamaServerLaunchSpec.cs`, `ImageServerLaunchSpec.cs`) and
   zero true positives; `*Test.cs` singular matches nothing in either repository.
+
+The `python-pytest` profile protects `DevelopmentCommandProfileCatalog.PythonProtectedPaths`: the default set plus
+`tests/**/*.py`, `**/test_*.py` and `**/*_test.py` (pytest's own discovery patterns and the conventional tree). These
+apply to that profile alone, so a .NET repository's Python helper scripts stay writable.
+
+`DevelopmentCommandProfileCatalog.PythonRunnerPaths` is stricter: an attempt may not add, modify, delete or rename any
+of them. Each is loaded by the runner as code, so a new one is as dangerous as an edited one: `pytest.py`,
+`pytest/`, `_pytest/`, `py.py`, `pluggy.py` and `pluggy/` at any depth, every `conftest.py` (a new one can rewrite every
+test report to "passed"), and every `*.pyc` and `__pycache__/` entry. `DevelopmentCommandProfileCatalog.IsRunnerPath`
+adds a name rule: a module file or package `__init__` at the root or under `src/` whose name is a standard-library
+module (Python 3.14's `sys.stdlib_module_names`, private `_` names included, frozen in the source) or a pytest
+dependency (`iniconfig`, `packaging`, `pygments` and the rest). A directory without an `__init__` cannot shadow a
+module, so `test/test_pdb.py` stays writable. `sitecustomize` and `usercustomize`, the interpreter-startup hooks `site`
+imports by name, are listed too: the engine's launch imports them before any workspace path exists, but any other
+Python that starts with the workspace on its path runs them. No other `__init__.py` is listed, such as `tests/__init__.py`: importing it
+runs repository code inside pytest exactly as a new test module does, which is the in-process residual the reviewer
+already owns, and refusing it would break the package layout `from tests.helpers import …` needs. Configuration files need no entry, because the launch reads none of
+them.
 
 The set is code-owned and versioned with `DevelopmentCommandProfileCatalog.CurrentVersion`, so widening or narrowing
 it is a source change plus a version bump, never configuration.

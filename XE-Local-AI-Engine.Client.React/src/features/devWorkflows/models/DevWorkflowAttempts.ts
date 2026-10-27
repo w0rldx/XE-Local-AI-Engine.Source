@@ -133,6 +133,21 @@ export function devWorkflowRoutedDetail(detailJson: string | null | undefined): 
 	};
 }
 
+/** The `node.reviewer.same-model` detail: the attempt it warns about, the model the reviewer shares with its patches, and those patches. */
+export function devWorkflowReviewerSameModelDetail(detailJson: string | null | undefined): {
+	attempt?: number;
+	modelId?: string;
+	patches: string[];
+} {
+	const detail = detailOf(detailJson);
+	const patches = detail["patches"];
+	return {
+		attempt: typeof detail["attempt"] === "number" ? detail["attempt"] : undefined,
+		modelId: typeof detail["modelId"] === "string" ? detail["modelId"] : undefined,
+		patches: Array.isArray(patches) ? patches.filter((patch): patch is string => typeof patch === "string") : [],
+	};
+}
+
 export function devWorkflowNodeEvents(
 	events: readonly DevWorkflowRunEventResponse[],
 	nodeRunId: string | undefined,

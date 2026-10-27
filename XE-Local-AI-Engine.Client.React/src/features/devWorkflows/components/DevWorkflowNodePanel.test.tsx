@@ -392,6 +392,52 @@ describe("DevWorkflowNodePanel", () => {
 		expect(screen.queryByTestId("dev-workflow-node-cascade-rerun")).toBeNull();
 	});
 
+	it("warns that a reviewer runs on the model that produced the patch it was handed", () => {
+		const nodeRunId = devWorkflowNodeRunDetail().id;
+		renderPanel(devWorkflowNodeRunDetail({ nodeKey: "verify" }), {
+			events: [
+				devWorkflowRunEvent({
+					id: "same-model",
+					eventType: "node.reviewer.same-model",
+					nodeRunId,
+					detailJson: JSON.stringify({
+						attempt: 1,
+						modelId: "coder-model",
+						patches: ["'validate.patch' from 'validate'"],
+						warning: "…",
+					}),
+				}),
+			],
+		});
+
+		const notice = screen.getByTestId("dev-workflow-node-reviewer-same-model").textContent;
+		expect(notice).toContain("coder-model");
+		expect(notice).toContain("'validate.patch' from 'validate'");
+	});
+
+	it("drops an earlier attempt's reviewer warning once the node has been retried", () => {
+		// Attempt 1 ran on the coder's model and was warned; the node was re-pinned and retried, and attempt 2 was not.
+		const nodeRunId = devWorkflowNodeRunDetail().id;
+		renderPanel(devWorkflowNodeRunDetail({ nodeKey: "verify", attempt: 2 }), {
+			events: [
+				devWorkflowRunEvent({
+					id: "same-model-attempt-1",
+					eventType: "node.reviewer.same-model",
+					nodeRunId,
+					detailJson: JSON.stringify({ attempt: 1, modelId: "coder-model", patches: ["'validate.patch' from 'validate'"] }),
+				}),
+			],
+		});
+
+		expect(screen.queryByTestId("dev-workflow-node-reviewer-same-model")).toBeNull();
+	});
+
+	it("raises no reviewer warning on a node the engine did not warn", () => {
+		renderPanel(devWorkflowNodeRunDetail({ nodeKey: "verify" }), { events: [devWorkflowRunEvent()] });
+
+		expect(screen.queryByTestId("dev-workflow-node-reviewer-same-model")).toBeNull();
+	});
+
 	it("says why a completed node is running again, rather than letting it silently un-complete", () => {
 		const nodeRunId = devWorkflowNodeRunDetail().id;
 		renderPanel(devWorkflowNodeRunDetail({ nodeKey: "implement", attempt: 2 }), {

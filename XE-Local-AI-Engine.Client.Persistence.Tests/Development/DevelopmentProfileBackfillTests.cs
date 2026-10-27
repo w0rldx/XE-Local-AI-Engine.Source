@@ -148,6 +148,62 @@ public sealed class DevelopmentProfileBackfillTests : IDisposable
             AssertEx.NotNull(DevelopmentProfileSummary.TryFrom((await store.GetProjectAsync(current.ProjectId)).CommandProfileJson)).ProfileId);
     }
 
+    /// <summary>
+    ///     What a catalog bump does to stored projects: backfill leaves them untouched, execution refuses them with the
+    ///     re-create instruction, and a new project on the same repository stores and resolves the current profile.
+    /// </summary>
+    [Test]
+    public async Task CatalogBump_LeavesPriorProfilesForRecreationAndANewProjectOnTheSameRepositoryResolves()
+    {
+        Directory.CreateDirectory(_repositoryRoot);
+        await File.WriteAllTextAsync(Path.Combine(_repositoryRoot, "pyproject.toml"), "[project]\nname = \"fixture\"\n");
+
+        await using var provider = await _fixture.BuildProviderAsync();
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+
+        var priorGeneric = DevelopmentTestFixture.CreateSeed() with
+        {
+            CommandProfileJson = PriorVersion(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null)
+        };
+        var priorDotnet = DevelopmentTestFixture.CreateSeed() with
+        {
+            CommandProfileJson = PriorVersion(DevelopmentCommandProfileCatalog.DotnetSlnx, "Fixture.slnx")
+        };
+        _ = await store.CreateProjectAsync(priorGeneric);
+        _ = await store.CreateProjectAsync(priorDotnet);
+
+        var backfill = CreateBackfill(store, new StubRepositoryBindings(_repositoryRoot));
+        AssertEx.Equal(expected: 0, await backfill.BackfillAllAsync());
+        foreach (var prior in new[] { priorGeneric, priorDotnet })
+        {
+            var stored = await store.GetProjectAsync(prior.ProjectId);
+            AssertEx.Equal(prior.CommandProfileJson!, stored.CommandProfileJson);
+            var refusal = AssertEx.Throws<DevelopmentWorkspaceSecurityException>(() => DevelopmentCommandProfileCatalog.ResolveStored(stored.CommandProfileJson));
+            AssertEx.True(refusal.Message.Contains("Re-create this Development project", StringComparison.Ordinal), refusal.Message);
+        }
+
+        // Re-creation: same selected folder and repository identity as both stale projects, nothing unique in the way.
+        var detected = new DevelopmentCommandProfileDetector().Detect(_repositoryRoot);
+        var recreated = DevelopmentTestFixture.CreateSeed() with
+        {
+            CommandProfileJson = Encoding.UTF8.GetString(DevelopmentCommandProfileCatalog.Materialize(detected.ProfileId, detected.BuildTarget).ToCanonicalUtf8())
+        };
+        AssertEx.Equal(priorGeneric.SelectedFolderId, recreated.SelectedFolderId);
+        AssertEx.Equal(priorGeneric.RepositoryIdentityHash, recreated.RepositoryIdentityHash);
+        _ = await store.CreateProjectAsync(recreated);
+
+        var profile = DevelopmentCommandProfileCatalog.ResolveStored((await store.GetProjectAsync(recreated.ProjectId)).CommandProfileJson);
+        AssertEx.Equal(DevelopmentCommandProfileCatalog.PythonPytest, profile.ProfileId);
+        AssertEx.Equal(DevelopmentCommandProfileCatalog.CurrentVersion, profile.ProfileVersion);
+    }
+
+    private static string PriorVersion(string profileId, string? buildTarget) =>
+        Encoding.UTF8.GetString((DevelopmentCommandProfileCatalog.Materialize(profileId, buildTarget) with
+        {
+            ProfileVersion = "v2"
+        }).ToCanonicalUtf8());
+
     private static DevelopmentProfileBackfillService CreateBackfill(IDevelopmentStore store,
         IDevelopmentRepositoryBindingService bindings) =>
         new(store, bindings, new DevelopmentCommandProfileDetector(), NullLogger<DevelopmentProfileBackfillService>.Instance);

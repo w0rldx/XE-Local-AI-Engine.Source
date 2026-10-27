@@ -11,6 +11,9 @@ public sealed record SandboxCommandResult
     /// <summary>How a disk-ceiling stop's <see cref="StandardError" /> starts; the compute gateway keys its typed reason on it.</summary>
     public const string JailDiskCeilingExceededPrefix = "Command exceeded the sandbox jail disk ceiling";
 
+    /// <summary>How an executable that could not be started (not installed, not on the PATH) begins its <see cref="StandardError" />.</summary>
+    public const string LaunchFailurePrefix = "The sandbox command could not be launched";
+
     /// <summary>Echo of the request's execution id.</summary>
     public required string ExecutionId { get; init; }
 

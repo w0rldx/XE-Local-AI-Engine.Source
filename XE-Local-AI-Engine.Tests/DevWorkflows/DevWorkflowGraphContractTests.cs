@@ -168,13 +168,14 @@ public sealed class DevWorkflowGraphContractTests
                                                    .Select(static (json, index) => ($"FeatureDevelopmentPriorRevisions[{index}]", json)));
 
         AssertEx.Equal(expected: 500, cap, "the shipped cap is what these are held to.");
-        AssertEx.True(graphs.Count >= 4, $"every kept revision has to reach this pin; it found {graphs.Count} graphs.");
+        AssertEx.True(graphs.Count >= 8, $"every kept revision has to reach this pin; it found {graphs.Count} graphs.");
         foreach (var (name, json) in graphs)
         {
             AssertEx.True(DevWorkflowGraphContract.ValidateAndCountNodes(json, cap) is > 0 and <= 500, $"the seeded graph '{name}' must fit under the shipped cap.");
         }
 
         AssertEx.True(DevWorkflowGraphContract.ValidateAndCountNodes(DevWorkflowDefinitionSeeder.DevIntakeGraph, cap) is > 0 and <= 500, "and so must the intake template.");
+        AssertEx.True(DevWorkflowDefinitionSeeder.DevIntakePriorRevisions.Length >= 3, "every kept intake revision has to reach this pin.");
         foreach (var json in DevWorkflowDefinitionSeeder.DevIntakePriorRevisions)
         {
             AssertEx.True(DevWorkflowGraphContract.ValidateAndCountNodes(json, cap) is > 0 and <= 500, "and every kept intake revision.");
