@@ -19,4 +19,5 @@ internal sealed record DevWorkflowValidationReport(
     string? FailureDetail,
     IReadOnlyList<DevelopmentCommandEvidence> Commands,
     long CompletedAtUtc,
-    DevWorkflowValidationBasedOn? BasedOn = null);
+    DevWorkflowValidationBasedOn? BasedOn = null,
+    bool? FilesystemBoundary = null);

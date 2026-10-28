@@ -318,6 +318,13 @@ internal static class DevelopmentCommandProfileCatalog
     /// <summary>Resolved through the host PATH like <c>dotnet</c> and <c>git</c>, never a bundled interpreter.</summary>
     private const string PythonExecutable = "python3";
 
+    /// <summary>Every executable a profile in this catalog names, which the bubblewrap chain must be able to find.</summary>
+    /// <remarks>
+    ///     <c>DevelopmentWorkspaceProvider</c> binds their host install trees read-only and composes the jail <c>PATH</c> from this list,
+    ///     so a profile command naming anything else would run "not found" inside the filesystem boundary.
+    /// </remarks>
+    internal static readonly string[] SandboxedExecutables = [AgentHomeGit.Executable, "dotnet", PythonExecutable];
+
     /// <summary>
     ///     The engine-owned pytest launch, run by an isolated (<c>-I</c>) interpreter: pytest is imported before the
     ///     workspace and its <c>src/</c> join <c>sys.path</c>, after the standard library and before site-packages.

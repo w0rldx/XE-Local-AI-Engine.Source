@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Development;
 
+using XE_Local_AI_Engine.Client.Services.Sandbox;
+
 /// <summary>
 ///     The deterministic gate's verdict over one attempt's command evidence.
 /// </summary>
@@ -18,6 +20,9 @@ internal sealed class DevelopmentValidationVerdict
 
     public required string? FailureDetail { get; init; }
 
+    /// <summary>Whether the failure is the host's rather than the patch's, so another coder round would fail identically.</summary>
+    public bool StopsTask => FailureCode == DevelopmentValidationFailureCodes.RunnerNotInstalled;
+
     private static readonly DevelopmentValidationVerdict Success = new()
     {
         Passed = true,
@@ -25,8 +30,12 @@ internal sealed class DevelopmentValidationVerdict
         FailureDetail = null
     };
 
+    /// <param name="profile">The profile whose commands ran.</param>
+    /// <param name="commands">Their evidence, in order.</param>
+    /// <param name="unreachable">The toolchain trees the boundary left out (<see cref="DevelopmentWorkspaceSession.UnreachableToolchain" />).</param>
     public static DevelopmentValidationVerdict Evaluate(DevelopmentCommandProfile profile,
-        IReadOnlyList<DevelopmentCommandEvidence> commands)
+        IReadOnlyList<DevelopmentCommandEvidence> commands,
+        IReadOnlyList<Implementation.DevelopmentSkippedToolchainTree>? unreachable = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(commands);
@@ -46,11 +55,38 @@ internal sealed class DevelopmentValidationVerdict
             var failure = EvaluateCommand(command);
             if (failure is not null)
             {
-                return failure;
+                return Unreachable(profile, command, failure, unreachable ?? []) ?? failure;
             }
         }
 
         return Success;
+    }
+
+    /// <summary>
+    ///     A missing runner whose executable the host <c>PATH</c> does have, in a tree the boundary left out: never "not installed", but
+    ///     unreachable, naming each tree and the rule that refused it.
+    /// </summary>
+    private static DevelopmentValidationVerdict? Unreachable(DevelopmentCommandProfile profile,
+        DevelopmentCommandEvidence command,
+        DevelopmentValidationVerdict failure,
+        IReadOnlyList<Implementation.DevelopmentSkippedToolchainTree> unreachable)
+    {
+        var executable = profile.Commands.FirstOrDefault(candidate => string.Equals(candidate.CommandId, command.CommandId, StringComparison.Ordinal))?.Executable;
+        var skipped = unreachable.Where(entry => string.Equals(entry.Executable, executable, StringComparison.Ordinal)).ToList();
+        if (failure.FailureCode != DevelopmentValidationFailureCodes.RunnerNotInstalled || skipped.Count == 0)
+        {
+            return null;
+        }
+
+        return new DevelopmentValidationVerdict
+        {
+            Passed = false,
+            FailureCode = DevelopmentValidationFailureCodes.RunnerNotInstalled,
+            FailureDetail = $"Command {command.CommandId} could not reach its runner behind the filesystem boundary. {executable} may well be installed on the host, "
+                            + "but the boundary left out what the host PATH finds it through: "
+                            + string.Join("; ", skipped.Select(static entry => $"'{DevelopmentArtifactSanitizer.NeutralizeEngineText(entry.Tree)}' ({DevelopmentArtifactSanitizer.NeutralizeEngineText(entry.Reason)})"))
+                            + " (the engine log names each path in full). Install it somewhere the boundary can bind (owned by your account or root, not group- or world-writable, outside /tmp and the protected folders), then retry."
+        };
     }
 
     /// <summary>
@@ -62,15 +98,26 @@ internal sealed class DevelopmentValidationVerdict
     /// </remarks>
     private static DevelopmentValidationVerdict? EvaluateCommand(DevelopmentCommandEvidence command)
     {
-        // Ahead of "did not finish": an interpreter that never started is also a command that did not finish, and the
-        // operator needs to hear what to install rather than that something stopped.
+        // Ahead of "did not finish": the operator needs to hear what to install. The adapter's hint is the specific
+        // answer; the launch-failure prefix covers every profile, including those whose adapter does not look.
         if (command.TestOutcome is { ParseFailureCode: DevelopmentTestParseFailureCodes.RunnerNotInstalled } missing)
         {
             return new DevelopmentValidationVerdict
             {
                 Passed = false,
-                FailureCode = DevelopmentValidationFailureCodes.TestResultsUnparsed,
+                FailureCode = DevelopmentValidationFailureCodes.RunnerNotInstalled,
                 FailureDetail = $"Command {command.CommandId} could not run its tests: {missing.ParseFailureDetail}"
+            };
+        }
+
+        if (command.StandardError.StartsWith(SandboxCommandResult.LaunchFailurePrefix, StringComparison.Ordinal))
+        {
+            return new DevelopmentValidationVerdict
+            {
+                Passed = false,
+                FailureCode = DevelopmentValidationFailureCodes.RunnerNotInstalled,
+                FailureDetail = $"Command {command.CommandId} could not be started on this host: its executable is not installed or not on the node's PATH, "
+                                + "or the sandbox could not establish its filesystem boundary (the engine log says which). Install it on the host yourself; XE never installs it."
             };
         }
 

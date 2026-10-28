@@ -14,6 +14,9 @@ public sealed record SandboxCommandResult
     /// <summary>How an executable that could not be started (not installed, not on the PATH) begins its <see cref="StandardError" />.</summary>
     public const string LaunchFailurePrefix = "The sandbox command could not be launched";
 
+    /// <summary>How a launch failure begins when the filesystem boundary, not the executable, was what could not be set up.</summary>
+    public const string BoundaryFailurePrefix = LaunchFailurePrefix + ": the sandbox filesystem boundary could not be established";
+
     /// <summary>Echo of the request's execution id.</summary>
     public required string ExecutionId { get; init; }
 

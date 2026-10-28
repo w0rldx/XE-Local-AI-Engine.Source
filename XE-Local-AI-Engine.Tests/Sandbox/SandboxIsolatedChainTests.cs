@@ -119,6 +119,33 @@ public sealed class SandboxIsolatedChainTests
         await Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Engine binds follow the jail and its /tmp, in order and with their posture, so a read-only file inside the workspace covers the
+    ///     writable tree there and nothing the chain places later shadows them; HOME is the input's.
+    /// </summary>
+    [Test]
+    public async Task Render_PlacesTheEngineBindsAfterTheJailAndItsTemp()
+    {
+        var chain = SandboxIsolatedChain.Render(UsrMergedInputs() with
+        {
+            HomePath = "/tmp",
+            Binds =
+            [
+                new SandboxIsolatedMountBinding { FileDescriptor = 40, SandboxPath = "/xe-runtime/home", ReadOnly = false },
+                new SandboxIsolatedMountBinding { FileDescriptor = 41, SandboxPath = "/work/.git/config", ReadOnly = true }
+            ]
+        }, "/bin/sh", []);
+
+        var temp = IndexOfSequence(chain, ["--bind-fd", "21", "/tmp"]);
+        var home = IndexOfSequence(chain, ["--bind-fd", "40", "/xe-runtime/home"]);
+        var config = IndexOfSequence(chain, ["--ro-bind-fd", "41", "/work/.git/config"]);
+        AssertEx.True(temp >= 0 && home > temp && config > home, "binds must follow /work and /tmp in their given order");
+        AssertEx.True(config < IndexOfSequence(chain, ["--remount-ro", "/"]), "binds must precede the read-only remount of the root");
+        AssertEx.True(IndexOfSequence(chain, ["--setenv", "HOME", "/tmp"]) >= 0);
+
+        await Task.CompletedTask;
+    }
+
     [Test]
     public async Task Render_CarriesTheCallersOwnEnvironment_AfterTheFixedAllowList()
     {

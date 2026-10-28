@@ -546,15 +546,18 @@ internal sealed class DevWorkflowDevTaskExecutor
 
             case DevelopmentTaskStatus.Blocked:
 
-                // Unless a person has just retried this node run, the ONE thing that changes what "not going anywhere" means: a Retry buys the task the round its cap stopped, exactly as it
-                // buys the node one more attempt, starting from ChangesRequested with whatever they said. Without it the re-dispatch re-reads a task at N of N and stands the node down again.
+                // Unless a person has just retried this node run: a Retry buys the round the cap stopped (ChangesRequested with whatever they said) or re-runs the validation
+                // a missing runner stopped. Without it the re-dispatch re-reads a task at N of N and stands the node down again.
                 if (await CarryOperatorRetryAsync(development, run, nodeRun, projectId, task, attempts, cancellationToken))
                 {
                     return 1;
                 }
 
                 // The chain gave up on its own terms — review rounds ran out, or an operator stood it down. Another node-run attempt would re-drive a task that is not going
-                // anywhere, so this is the class that goes straight to a human.
+                // anywhere, so this goes straight to a human: Configuration for a host without the test runner, where nothing ran out.
+                var blockedClass = RunnerNotInstalled(task)
+                    ? DevWorkflowFailureClasses.Configuration
+                    : DevWorkflowFailureClasses.BudgetExhausted;
                 return await SettleFailureAsync(store,
                     graph,
                     run,
@@ -562,9 +565,9 @@ internal sealed class DevWorkflowDevTaskExecutor
                     nodeRuns,
                     new DevWorkflowFailure
                     {
-                        FailureClass = DevWorkflowFailureClasses.BudgetExhausted,
+                        FailureClass = blockedClass,
                         SanitizedReason = task.BlockedReason ?? "The development task this node run was implementing was blocked.",
-                        OutputJson = Output(nodeRun, task, taskId, DevWorkflowFailureClasses.BudgetExhausted)
+                        OutputJson = Output(nodeRun, task, taskId, blockedClass)
                     },
                     cancellationToken);
 
@@ -626,11 +629,10 @@ internal sealed class DevWorkflowDevTaskExecutor
     ///     it wrote one.
     /// </summary>
     /// <remarks>
-    ///     Marked <c>OperatorDirected</c>, so coder and reviewer prompts rank the person's sentence above the task's
-    ///     immutable requirements. It carries only where the next action is already an unbriefed coder round —
-    ///     <c>InProgress</c> after a coder attempt that did not succeed — plus <c>Blocked</c> AT THE ROUND CAP,
-    ///     which also widens the cap by one, bought per Retry. Every other status carries nothing: see
-    ///     docs/wiki/25-dev-workflows.md ("Operator retry reasons").
+    ///     Marked <c>OperatorDirected</c>, so prompts rank the person's sentence above the task's requirements. It carries where the next
+    ///     action is an unbriefed coder round (<c>InProgress</c> after a failed coder attempt) and at <c>Blocked</c>: at the round cap the
+    ///     Retry widens it by one; on a missing test runner it re-validates the same patch, charging nothing, so no model reads the
+    ///     sentence. See docs/wiki/25-dev-workflows.md ("Operator retry reasons").
     /// </remarks>
     private async Task<bool> CarryOperatorRetryAsync(IDevelopmentStore development,
         DevWorkflowRunSnapshot run,
@@ -642,10 +644,11 @@ internal sealed class DevWorkflowDevTaskExecutor
     {
         var said = DevWorkflowNodeInputs.OperatorRetryReasonFor(nodeRun.InputJson, nodeRun.Attempt);
 
-        // The cap case reads the ACT (IsOperatorRetry), the InProgress case reads the SENTENCE, because that is what each is for: one buys a round whether or not anything was typed,
-        // the other only adds a sentence to a round that was going to run regardless.
-        var atTheRoundCap = task.Status == DevelopmentTaskStatus.Blocked && task.CurrentReviewRound >= task.MaxReviewRounds;
-        if (atTheRoundCap
+        // The Blocked case (round cap, or a missing test runner that spent no round) reads the ACT (IsOperatorRetry): it buys a round whether or not anything was typed.
+        // The InProgress case reads the SENTENCE, which only adds to a round that was going to run regardless.
+        var leavesBlocked = task.Status == DevelopmentTaskStatus.Blocked
+                            && (task.CurrentReviewRound >= task.MaxReviewRounds || RunnerNotInstalled(task));
+        if (leavesBlocked
                 ? !DevWorkflowNodeInputs.IsOperatorRetry(nodeRun.InputJson, nodeRun.Attempt)
                 : said is null
                   || task.Status != DevelopmentTaskStatus.InProgress
@@ -653,6 +656,10 @@ internal sealed class DevWorkflowDevTaskExecutor
         {
             return false;
         }
+
+        // A missing test runner judged nothing and charged no round, so the retry re-runs that validation on the same patch rather than sending
+        // it back to the coder and buying a round nobody spent. Not at the cap: a pass there could not enter review.
+        var retriesValidation = leavesBlocked && RunnerNotInstalled(task) && task.CurrentReviewRound < task.MaxReviewRounds;
 
         // One ask per (node run, ATTEMPT), and the ledger enforces it: the reason stays on the inputs for the life of the attempt while the round asked for walks the task back through
         // InProgress without starting an attempt this node run owns, so without the operation id every later tick would ask again and loop the task back to ChangesRequested.
@@ -668,7 +675,7 @@ internal sealed class DevWorkflowDevTaskExecutor
                 {
                     TaskId = task.Id,
                     OperationId = operationId,
-                    TargetStatus = DevelopmentTaskStatus.ChangesRequested,
+                    TargetStatus = retriesValidation ? DevelopmentTaskStatus.InProgress : DevelopmentTaskStatus.ChangesRequested,
                     ExpectedTaskVersion = task.Version,
                     // A silent Retry writes an operator row with NO reason, which IS the retraction: the round it buys is told nothing. No branch withdraws an instruction, because the
                     // Pending → Running dispatch already records a fresh policy row above every instruction an earlier attempt wrote.
@@ -676,13 +683,21 @@ internal sealed class DevWorkflowDevTaskExecutor
                         ? null
                         : $"An operator retried the '{nodeRun.NodeKey}' step of the workflow driving this task, and said: {said}",
                     OperatorDirected = true,
-                    WidenReviewRounds = atTheRoundCap
+                    WidenReviewRounds = leavesBlocked && !retriesValidation,
+                    RetryValidation = retriesValidation
                 },
                 cancellationToken);
 
             // The one task status hop nothing else records: DevelopmentManagementService logs the hops IT decides, and this edge is bought by an operator's Retry in the workflow lane,
             // so the cap could otherwise widen and the task move unlogged. Same literal "task status" phrase, so the one grep that finds every hop still finds this one.
-            if (atTheRoundCap)
+            if (retriesValidation)
+            {
+                _logger.LogInformation(
+                    "Development task status moved Blocked to InProgress for task {TaskId} in project {ProjectId} to re-run the validation a missing test runner stopped; no review round charged or widened.",
+                    task.Id,
+                    projectId);
+            }
+            else if (leavesBlocked)
             {
                 _logger.LogInformation(
                     "Development task status moved Blocked to ChangesRequested for task {TaskId} in project {ProjectId}, widening the review-round cap to {MaxReviewRounds}; operator reason carried: {CarriedReason}.",
@@ -1148,6 +1163,10 @@ internal sealed class DevWorkflowDevTaskExecutor
 
     private static int Number(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number) ? number : 0;
+
+    /// <summary>Whether deterministic validation stood the task down because the host has no runner for its tests.</summary>
+    private static bool RunnerNotInstalled(DevelopmentTaskSnapshot task) =>
+        DevelopmentAttemptEvidenceException.Names(task.BlockedReason, DevelopmentValidationFailureCodes.RunnerNotInstalled);
 
     /// <summary>What a landed attempt failed with, in the terms the retry decision is made on.</summary>
     private static DevWorkflowFailure Failure(DevelopmentAttemptSnapshot attempt,

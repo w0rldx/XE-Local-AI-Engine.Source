@@ -3,11 +3,14 @@ namespace XE_Local_AI_Engine.Client.Services.Development.Implementation;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.Compute;
+using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
@@ -48,7 +51,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     ///     a provider with a mount layer places anything here. It sits outside the workspace and the scratch tmpfs so
     ///     it cannot shadow either.
     /// </remarks>
-    private const string RuntimeMountRoot = "/xe-runtime";
+    internal const string RuntimeMountRoot = "/xe-runtime";
 
     private const string PartialCloneMarker = ".partial-";
 
@@ -127,6 +130,8 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     private readonly TimeProvider _timeProvider;
     private readonly INodeRuntimeSettings _runtimeSettings;
 
+    private readonly ILogger _logger;
+
     public DevelopmentWorkspaceProvider(INodeDataDirectory dataDirectory,
         IDevelopmentSandboxRuntimeProvider sandbox,
         IOptions<DevelopmentOptions> options,
@@ -136,9 +141,11 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         ISensitiveFileExclusionService? exclusions = null,
         IOptions<DevelopmentSandboxOptions>? sandboxOptions = null,
         IOptions<ComputeOptions>? ceilingDefaults = null,
-        IOptions<LocalContainerOptions>? nodeOptions = null)
+        IOptions<LocalContainerOptions>? nodeOptions = null,
+        ILogger<DevelopmentWorkspaceProvider>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _logger = logger ?? (ILogger)NullLogger.Instance;
         // Required, never defaulted: a provider built without node settings would silently run under `low` (ADR 0020).
         _runtimeSettings = runtimeSettings;
         _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
@@ -174,7 +181,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         // Read once per prepare and applied to BOTH sandboxes it creates: under `high` the declared ceilings are a precondition for the
         // warm-restore sandbox too, and egress denial for the agent-facing one (the warm restore keeps its deliberate egress). ADR 0020.
         var profile = await _runtimeSettings.GetSandboxSecurityProfileAsync(cancellationToken);
-        SandboxSecurityProfilePolicy.EnsureServed(SandboxWorkloads.DevelopmentModeHostToolchain, _sandbox.Capabilities, profile);
+        SandboxSecurityProfilePolicy.EnsureServed(Workload, _sandbox.Capabilities, profile);
 
         var canonicalRepositoryRoot = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository.RepositoryRoot);
         var identity = DevelopmentWorkspaceSecurity.RepositoryIdentityHash(canonicalRepositoryRoot);
@@ -335,20 +342,23 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             RuntimeProfile = RuntimeProfile,
             ManifestVersion = WorkspaceManifestVersion
         };
+        var toolchain = ResolveBoundaryToolchain();
         var handle = await _sandbox.CreateOrAttachAsync(new SandboxCreateRequest
         {
             AttachKey = attachKey,
             RuntimeProfile = RuntimeProfile,
             NetworkPolicy = ResolveAgentFacingNetworkPolicy(profile),
+            Isolation = AgentFacingIsolation,
+            ReadOnlyTrees = toolchain?.ReadOnlyTrees,
             TrustedHostWorkspace = new SandboxTrustedHostWorkspace
             {
                 RootPath = worktreePath
             },
-            Mounts = BuildMounts(runtimePath, runtimePath, worktreePath, secrets, packagesWritable: false),
+            Mounts = BuildMounts(runtimePath, runtimePath, worktreePath, secrets, packagesWritable: false, toolchain),
 
             // The node's ceilings wherever the backend can impose them, through the helper every create site shares.
             // Read SandboxResourceCeilings first: its defaults are sized for run_python, not for a `dotnet build`.
-            ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.DevelopmentModeHostToolchain,
+            ResourceLimits = SandboxResourceCeilings.Resolve(Workload,
                 _sandbox.Capabilities,
                 _ceilingDefaults,
                 _nodeOptions)
@@ -365,7 +375,10 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             RuntimePath = runtimePath,
             TrustedGitDirectory = trustedCommonGitDirectory,
             ObjectFormat = objectFormat,
-            SandboxHandle = handle
+            SandboxHandle = handle,
+            SandboxSearchPath = toolchain?.SearchPath,
+            SandboxDotnetRoot = toolchain?.DotnetRoot,
+            UnreachableToolchain = toolchain?.SkippedTrees ?? []
         };
     }
 
@@ -377,7 +390,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         ArgumentNullException.ThrowIfNull(workspace);
         ArgumentNullException.ThrowIfNull(repository);
         var profile = await _runtimeSettings.GetSandboxSecurityProfileAsync(cancellationToken);
-        SandboxSecurityProfilePolicy.EnsureServed(SandboxWorkloads.DevelopmentModeHostToolchain, _sandbox.Capabilities, profile);
+        SandboxSecurityProfilePolicy.EnsureServed(Workload, _sandbox.Capabilities, profile);
         var canonicalRepositoryRoot = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository.RepositoryRoot);
         if (!string.Equals(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(canonicalRepositoryRoot), workspace.RepositoryIdentityHash, StringComparison.OrdinalIgnoreCase))
         {
@@ -397,6 +410,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         await DevelopmentWorkspaceWhitespacePolicy.ApplyAsync(git, validationPath, cancellationToken);
         var secrets = await DetectCommittedSecretsAsync(git, validationPath, cancellationToken);
 
+        var toolchain = ResolveBoundaryToolchain();
         var handle = await _sandbox.CreateOrAttachAsync(new SandboxCreateRequest
         {
             // A key of its own per run, so a sandbox a crashed run left attached to the deleted tree is never reused.
@@ -410,12 +424,14 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             },
             RuntimeProfile = ValidationRuntimeProfile,
             NetworkPolicy = ResolveAgentFacingNetworkPolicy(profile),
+            Isolation = AgentFacingIsolation,
+            ReadOnlyTrees = toolchain?.ReadOnlyTrees,
             TrustedHostWorkspace = new SandboxTrustedHostWorkspace
             {
                 RootPath = validationPath
             },
-            Mounts = BuildMounts(workspace.RuntimePath, validationRoot, validationPath, secrets, packagesWritable: false),
-            ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.DevelopmentModeHostToolchain,
+            Mounts = BuildMounts(workspace.RuntimePath, validationRoot, validationPath, secrets, packagesWritable: false, toolchain),
+            ResourceLimits = SandboxResourceCeilings.Resolve(Workload,
                 _sandbox.Capabilities,
                 _ceilingDefaults,
                 _nodeOptions)
@@ -433,7 +449,10 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             TrustedGitDirectory = workspace.TrustedGitDirectory,
             ObjectFormat = workspace.ObjectFormat,
             ScratchPath = validationRoot,
-            SandboxHandle = handle
+            SandboxHandle = handle,
+            SandboxSearchPath = toolchain?.SearchPath,
+            SandboxDotnetRoot = toolchain?.DotnetRoot,
+            UnreachableToolchain = toolchain?.SkippedTrees ?? []
         };
     }
 
@@ -548,11 +567,48 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     ///     precondition instead, and <see cref="SandboxSecurityProfilePolicy" /> holds the decision, so no consumer can stop matching the backend.
     /// </remarks>
     private SandboxNetworkPolicy ResolveAgentFacingNetworkPolicy(SandboxSecurityProfile profile) =>
-        SandboxSecurityProfilePolicy.ResolveEgress(SandboxWorkloads.DevelopmentModeHostToolchain,
+        SandboxSecurityProfilePolicy.ResolveEgress(Workload,
             _sandbox.Capabilities,
             profile,
             _sandboxOptions.RequireEgressDenial,
             SandboxEgressPolicy.DevelopmentOptionKey);
+
+    /// <summary>The declaration the resolved backend was selected under: host toolchain on the process provider, image on a container.</summary>
+    private SandboxRequirements Workload => SandboxWorkloads.DevelopmentFor(_sandbox.Capabilities);
+
+    /// <summary>
+    ///     The boundary the coder and validation sandboxes ask for: the bubblewrap chain wherever it is advertised, none elsewhere (the
+    ///     capability view and the validation report then warn; the <c>high</c> profile refuses before this is reached).
+    /// </summary>
+    private SandboxIsolationMode AgentFacingIsolation => Workload.RequestedIsolation(_sandbox.Capabilities);
+
+    /// <summary>
+    ///     The host toolchain trees and jail <c>PATH</c> for a sandbox behind the boundary, or <see langword="null" /> without one.
+    /// </summary>
+    /// <remarks>
+    ///     Read from the engine's own <c>PATH</c> per prepare, so the sandbox finds the same <c>dotnet</c>, <c>python3</c> and <c>git</c>
+    ///     the host would. No bound tree exposes a Sandboxed MCP sensitive root: the home, a credential store, the node data directory.
+    /// </remarks>
+    private DevelopmentSandboxToolchain? ResolveBoundaryToolchain()
+    {
+        if (AgentFacingIsolation != SandboxIsolationMode.Filesystem)
+        {
+            return null;
+        }
+
+        var toolchain = DevelopmentSandboxToolchain.Resolve(DevelopmentCommandProfileCatalog.SandboxedExecutables,
+            Environment.GetEnvironmentVariable("PATH"),
+            SandboxedMcpStdioTransport.BuildSensitiveHostRoots(_dataDirectory.Root));
+        foreach (var skipped in toolchain.SkippedTrees)
+        {
+            _logger.LogWarning("The Development sandbox leaves out {Tree}, which {Executable} on the host PATH needs, because {Reason}; that tool may not be reachable behind the filesystem boundary.",
+                skipped.Tree,
+                skipped.Executable,
+                skipped.Reason);
+        }
+
+        return toolchain;
+    }
 
     /// <summary>
     ///     Populates the per-task package cache from the BASE COMMIT's dependency manifests, in a second short-lived
@@ -630,11 +686,11 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 
                 // The SAME package folder as the agent-facing sandbox, and the one sandbox that may write it. A warm that
                 // wrote its cache anywhere else would warm nothing the attempt can read.
-                Mounts = BuildMounts(runtimePath, scratch, worktreePath, detectedSecrets, packagesWritable: true),
+                Mounts = BuildMounts(runtimePath, scratch, worktreePath, detectedSecrets, packagesWritable: true, toolchain: null),
 
                 // The SAME ceilings as the agent-facing sandbox too: the warm runs the repository's own restore, so it is
                 // exactly as capable of a runaway as the attempt is.
-                ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.DevelopmentModeHostToolchain,
+                ResourceLimits = SandboxResourceCeilings.Resolve(Workload,
                     _sandbox.Capabilities,
                     _ceilingDefaults,
                     _nodeOptions)
@@ -691,27 +747,49 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 
     /// <summary>The engine-generated mounts this feature needs beyond the workspace itself.</summary>
     /// <remarks>
-    ///     Mounting the four runtime subdirectories rather than their parent keeps <c>workspace.json</c> out. The package
-    ///     folder is the task's and, unless <paramref name="packagesWritable" />, read-only, since validation trusts every
-    ///     package in it; the rest come from <paramref name="scratchPath" />. It, <c>.git/config</c> (a filter driver that
-    ///     cannot be DEFINED cannot run) and the shadows are read-only only where the provider advertises
-    ///     <see cref="SandboxProviderCapabilities.SupportsReadOnlyMounts" />; one without a mount layer fails them closed.
+    ///     Mounting the four runtime subdirectories rather than their parent keeps <c>workspace.json</c> out. The package folder is the
+    ///     task's and, unless <paramref name="packagesWritable" />, read-only, since validation trusts every package in it; the rest come
+    ///     from <paramref name="scratchPath" />. It, <c>.git/config</c> (a filter driver that cannot be DEFINED cannot run) and the shadows
+    ///     are read-only only with a mount layer (<see cref="SandboxProviderCapabilities.SupportsReadOnlyMounts" />, or the bubblewrap chain:
+    ///     a non-null <paramref name="toolchain" />, whose aliases are added too); one without fails them closed, so they are not asked for.
     /// </remarks>
     private IReadOnlyList<SandboxMount> BuildMounts(string runtimePath,
         string scratchPath,
         string worktreePath,
         IReadOnlyList<string> detectedSecrets,
-        bool packagesWritable)
+        bool packagesWritable,
+        DevelopmentSandboxToolchain? toolchain)
     {
-        var supportsReadOnly = (_sandbox.Capabilities & SandboxProviderCapabilities.SupportsReadOnlyMounts) != SandboxProviderCapabilities.None;
+        var mountLayer = toolchain is not null;
+        var supportsReadOnly = mountLayer || (_sandbox.Capabilities & SandboxProviderCapabilities.SupportsReadOnlyMounts) != SandboxProviderCapabilities.None;
         var mounts = RuntimeDirectoryNames
                      .Select(name => new SandboxMount
                      {
                          HostPath = Path.Combine(ScratchDirectoryNames.Contains(name, StringComparer.Ordinal) ? scratchPath : runtimePath, name),
-                         SandboxPath = RuntimeMountRoot + "/" + name,
+                         // Behind the bubblewrap chain the package folder keeps its host path: the warm restore runs as a host child and
+                         // writes that path into obj/, so a `--no-restore` build inside the chain must find the packages at the same place.
+                         SandboxPath = mountLayer && !ScratchDirectoryNames.Contains(name, StringComparer.Ordinal)
+                             ? Path.Combine(runtimePath, name)
+                             : RuntimeMountRoot + "/" + name,
                          ReadOnly = supportsReadOnly && !packagesWritable && !ScratchDirectoryNames.Contains(name, StringComparer.Ordinal)
                      })
                      .ToList();
+
+        // A version manager's alias (`latest`) on the way to a bound interpreter: the chain shows the canonical tree again at the link's path,
+        // unless that path would shadow a bound tree or one of the mounts above.
+        var aliases = DevelopmentSandboxToolchain.WithoutShadowingAliases(toolchain?.Aliases ?? [],
+            [.. toolchain?.ReadOnlyTrees ?? [], .. mounts.Select(static mount => mount.SandboxPath)]);
+        foreach (var dropped in (toolchain?.Aliases ?? []).Except(aliases))
+        {
+            _logger.LogWarning("The Development sandbox does not show the toolchain alias {Alias}, which would shadow a bound tree or mount.", dropped.LinkPath);
+        }
+
+        mounts.AddRange(aliases.Select(static alias => new SandboxMount
+        {
+            HostPath = alias.Target,
+            SandboxPath = alias.LinkPath,
+            ReadOnly = true
+        }));
 
         var gitConfigPath = Path.Combine(worktreePath, ".git", "config");
         if (supportsReadOnly && File.Exists(gitConfigPath))

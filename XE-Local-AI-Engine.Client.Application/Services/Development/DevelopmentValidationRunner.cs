@@ -83,11 +83,13 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
             // changed manifest, so running the commands spends the budget on a vaguer answer. Zero evidence is honest.
             var verdict = DevelopmentDependencyManifestPolicy.Evaluate(evidence.Current);
             IReadOnlyList<DevelopmentCommandEvidence> commands = [];
+            bool? filesystemBoundary = null;
             if (verdict is null)
             {
                 // Never the coder's worktree or home: its ignored files, nested .git, index and HOME were never in the
                 // patch the review sees. The commands judge a fresh clone of the base plus exactly the stored patch.
                 var tree = await _workspaceProvider.PrepareValidationAsync(session, repository, evidence.Patch, cancellationToken);
+                filesystemBoundary = DevelopmentFilesystemBoundary.IsServed(tree.SandboxHandle, _sandbox.Capabilities);
                 try
                 {
                     commands = await RunCommandsAsync(tree, snapshot, profile, repository, cancellationToken);
@@ -97,7 +99,7 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
                     await _sandbox.KillAsync(tree.SandboxHandle, CancellationToken.None);
                 }
 
-                verdict = DevelopmentValidationVerdict.Evaluate(profile, commands);
+                verdict = DevelopmentValidationVerdict.Evaluate(profile, commands, tree.UnreachableToolchain);
             }
 
             var passed = verdict.Passed;
@@ -113,7 +115,8 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
                 verdict.FailureCode,
                 verdict.FailureDetail,
                 commands,
-                _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
+                _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+                filesystemBoundary);
             var prepared = await _evidence.PrepareAsync(snapshot,
                 DevelopmentArtifactKind.ValidationReport,
                 JsonSerializer.SerializeToUtf8Bytes(report, JsonOptions),
@@ -123,14 +126,14 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
                 profileDigest,
                 cancellationToken);
 
-            var target = TargetFor(passed);
+            var target = TargetFor(verdict);
             _ = await _store.FinalizeValidationAsync(new DevelopmentFinalizeValidationCommand
                 {
                     Artifact = prepared.Attachment,
                     OperationId = Guid.NewGuid(),
                     ExpectedTaskVersion = transition.Version,
                     TargetStatus = target,
-                    SanitizedReason = passed ? null : BuildFailureReason(verdict)
+                    SanitizedReason = ReasonFor(verdict)
                 },
                 cancellationToken);
             return new DevelopmentValidationResult
@@ -205,19 +208,28 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
     ///     A failed gate hands the failure to the coder as a change request. Returning the task to <c>InProgress</c>
     ///     instead puts it back in the state meaning "implemented, validate it" — a succeeded coder attempt, no
     ///     evidence of the round just judged — so the next-action decision schedules the same validation again: 289
-    ///     restore/build/test runs on one task in 25 minutes, zero coder rounds. Named so the one expression routing a
-    ///     gate verdict has one home, and so a test can drive the persistence hops without a workspace.
+    ///     restore/build/test runs on one task in 25 minutes, zero coder rounds. A host without the test runner is
+    ///     <c>Blocked</c> at once, since every further coder round would fail on the same missing tool.
     /// </remarks>
-    internal static DevelopmentTaskStatus TargetFor(bool passed) =>
-        passed ? DevelopmentTaskStatus.InReview : DevelopmentTaskStatus.ChangesRequested;
+    internal static DevelopmentTaskStatus TargetFor(DevelopmentValidationVerdict verdict) => verdict switch
+    {
+        { Passed: true } => DevelopmentTaskStatus.InReview,
+        { StopsTask: true } => DevelopmentTaskStatus.Blocked,
+        _ => DevelopmentTaskStatus.ChangesRequested
+    };
 
-    /// <summary>The task's terminal reason.</summary>
+    /// <summary>The task's terminal reason for a failed verdict, or null for a pass.</summary>
     /// <remarks>
     ///     It is clamped because <c>development_tasks.terminal_reason</c> is <c>HasMaxLength(1024)</c> and the detail
-    ///     interpolates a parser message a future adapter could make arbitrarily long.
+    ///     interpolates a parser message a future adapter could make arbitrarily long. A task-stopping verdict leads with
+    ///     its code in brackets, the prefix the workflow lane classes it on.
     /// </remarks>
-    private static string BuildFailureReason(DevelopmentValidationVerdict verdict) =>
-        Clamp($"Deterministic validation failed ({verdict.FailureCode}): {verdict.FailureDetail}");
+    internal static string? ReasonFor(DevelopmentValidationVerdict verdict) => verdict switch
+    {
+        { Passed: true } => null,
+        { StopsTask: true, FailureCode: { } code, FailureDetail: { } detail } => DevelopmentAttemptEvidenceException.Compose(code, detail),
+        _ => Clamp($"Deterministic validation failed ({verdict.FailureCode}): {verdict.FailureDetail}")
+    };
 
     /// <summary>What an operator is told when the gate has thrown twice on the same implementation.</summary>
     /// <remarks>
@@ -227,8 +239,11 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
     ///     leave the task legible. A type name is a bounded code identifier that cannot name this machine, and the
     ///     caller rethrows, so the full detail still reaches the engine log.
     /// </remarks>
-    private static string BuildRecoveryExhaustedReason(Exception exception) =>
-        Clamp($"Deterministic validation failed twice on this implementation without producing usable evidence ({exception.GetType().Name}). The engine log has the detail.");
+    internal static string BuildRecoveryExhaustedReason(Exception exception) =>
+        Clamp(DevelopmentArtifactSanitizer.IsScannerRefusal(exception)
+            ? "Deterministic validation failed twice on this implementation: its report contained text the secret scanner refused, so it could not be persisted. "
+              + "Nothing the coder wrote was judged; the engine log has the detail."
+            : $"Deterministic validation failed twice on this implementation without producing usable evidence ({exception.GetType().Name}). The engine log has the detail.");
 
     /// <summary>
     ///     The operation id the recovery hop for one coder attempt is written under, and so the key that says whether

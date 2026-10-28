@@ -401,6 +401,16 @@ produces the same answer), a manifest check that hard-fails with zero commands r
 and `ObjectiveNotMet` (a session that gave up honestly gives up again on an identical second run; what changes
 the answer is the operator's retry reason). All three go straight to a human.
 
+A **host without a validation runner** is `Configuration` too. When Dev Mode's deterministic gate, or a `Tool` node's
+validation, reports `runner_not_installed` (a profile tool such as `python3` or `dotnet` could not be launched, or
+pytest is missing for the host `python3`), the gate stands the task down at once: `Blocked`, no review round spent,
+reason `[runner_not_installed] <install hint>`. A `DevTask` node that finds its task blocked on that prefix settles
+as `Configuration` instead of `BudgetExhausted`; a `Tool` node settles `Configuration` instead of
+`ToolCommandFailed`, so the fix loop never routes the host's fault back at a coder. The node panel and the gate
+panel show a localized "no runner on this host" sentence above the install hint. After the operator installs the
+runner, a `Retry` moves the task back to `InProgress` so the same succeeded coder attempt is validated again: no
+coder round, no round charged, no cap widened (section 6.7).
+
 ## 3. The dispatcher
 
 `DevWorkflowDispatcher` is the runtime's one loop, and its central invariant is:
@@ -1093,7 +1103,11 @@ There are two shapes of the same act:
 
 - From **`InProgress` with a coder attempt that did not succeed**, the next action is a coder round either way,
   so the change request adds the sentence without changing what the retry does. This case reads the **sentence**.
-- From **`Blocked` at the round cap**, it does more: it **widens the cap by one**, turning the retry from a no-op
+- From **`Blocked` on `[runner_not_installed]`** below the cap, it re-runs the validation the missing runner stopped:
+  the task goes back to `InProgress` (`RetryValidation`) with its succeeded coder attempt, so the unchanged patch is
+  validated again. No coder round runs, so a typed sentence reaches no model; nothing is charged or widened.
+- From **`Blocked` at the round cap**, it does more: it **widens the cap by
+  one**, turning the retry from a no-op
   into a round. That widening is the single documented exception to a Dev Mode task being immutable, bought one
   round at a time by the same click that already widens the node's own attempt cap. This case reads the **act**,
   not the sentence, so a silent `Retry` buys the round exactly as a spoken one does and the operator row it writes

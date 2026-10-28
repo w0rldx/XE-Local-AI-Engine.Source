@@ -492,6 +492,23 @@ describe("DevWorkflowNodePanel", () => {
 		expect(failure.textContent).toContain("no step in 900s");
 	});
 
+	it("labels a missing test runner and keeps its install hint", () => {
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				status: "Failed",
+				failureClass: "Configuration",
+				terminalReason:
+					"[runner_not_installed] Command python_pytest could not run its tests: Install pytest on the host yourself.",
+				completedAtUtc: 2,
+			}),
+		);
+
+		const failure = screen.getByTestId("dev-workflow-node-failure");
+		expect(failure.textContent).toContain("These tests' runner could not be started on this host");
+		expect(failure.textContent).toContain("Install pytest on the host yourself.");
+		expect(failure.textContent).not.toContain("[runner_not_installed]");
+	});
+
 	it("falls back to a plain sentence for a failure class a newer server invented", () => {
 		renderPanel(devWorkflowNodeRunDetail({ status: "Failed", failureClass: "QuantumFluctuation" }));
 

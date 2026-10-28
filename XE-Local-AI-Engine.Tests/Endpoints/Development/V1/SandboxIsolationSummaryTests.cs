@@ -252,15 +252,11 @@ public sealed class SandboxIsolationSummaryTests
     }
 
     /// <summary>
-    ///     Regression guard: on a Linux box with a working chain, the panel showed
-    ///     role <c>development</c> as filesystem-isolated and <c>Isolated</c> — read straight off the process backend's
-    ///     advertised flags. It is false: <see cref="SandboxWorkloads.DevelopmentModeHostToolchain" /> declares
-    ///     <see cref="SandboxIsolationMode.None" />, and Development Mode runs the host toolchain with the worktree
-    ///     mounted. Same provider, same host, same call as the <c>run_python</c> case above — only the declaration
-    ///     differs, and the served posture differs with it.
+    ///     On a Linux host with a working chain, Development Mode's coder and validation sandboxes run inside it: the row reads the boundary
+    ///     as served, from the declaration's preference intersected with the backend, not from the backend's flags alone.
     /// </summary>
     [Test]
-    public void ToIsolationSummary_ForDevelopmentOnAFullyContainedHost_ReportsConfinedBecauseTheRoleAsksForNoBoundary()
+    public void ToIsolationSummary_ForDevelopmentOnAFullyContainedHost_ReportsIsolatedBehindTheChain()
     {
         var containment = FullyContainedHost();
         using var provider = CreateProcessProvider(containment);
@@ -270,9 +266,10 @@ public sealed class SandboxIsolationSummaryTests
             provider,
             containment);
 
-        AssertEx.False(summary.FilesystemIsolation);
-        AssertEx.Equal("process", summary.Backend);
-        AssertEx.Equal("Confined", summary.Level);
+        AssertEx.True(summary.FilesystemIsolation);
+        AssertEx.Null(summary.FilesystemIsolationUnavailableReason);
+        AssertEx.Equal("bwrap", summary.Backend);
+        AssertEx.Equal("Isolated", summary.Level);
 
         // Egress IS served here and stays Yes: ResolveAgentFacingNetworkPolicy requests SandboxNetworkPolicy.None
         // wherever the flag is advertised, which is what that column reports.
@@ -286,10 +283,6 @@ public sealed class SandboxIsolationSummaryTests
 
         // Denial is served but not REQUIRED with the switch off — the distinction the panel spells out.
         AssertEx.False(summary.NetworkIsolationRequired);
-
-        AssertEx.Contains(summary.FilesystemIsolationUnavailableReason, "not requested by this role");
-        AssertEx.Contains(summary.FilesystemIsolationUnavailableReason,
-            SandboxWorkloads.DevelopmentModeHostToolchain.Workload);
     }
 
     /// <summary>
@@ -318,12 +311,11 @@ public sealed class SandboxIsolationSummaryTests
     }
 
     /// <summary>
-    ///     A real host shape — systemd user scopes and empty network namespaces work, bwrap does not — on the role
-    ///     that asks for no boundary either way. Both reasons apply and the ROLE's wins: an operator told "bwrap is
-    ///     not installed" here would go install it and see this row unchanged.
+    ///     A real host shape — systemd user scopes and empty network namespaces work, bwrap does not — on Development, which prefers the
+    ///     boundary: the row is the "no filesystem boundary" warning, carrying the measured reason an operator can act on.
     /// </summary>
     [Test]
-    public void ToIsolationSummary_WhenOnlySomeMechanismsAreActive_ReportsConfined()
+    public void ToIsolationSummary_WhenOnlySomeMechanismsAreActive_ReportsConfinedWithTheMeasuredReason()
     {
         var containment = FullyContainedHost() with
         {
@@ -339,8 +331,8 @@ public sealed class SandboxIsolationSummaryTests
 
         AssertEx.Equal("Confined", summary.Level);
         AssertEx.Equal("process", summary.Backend);
-        AssertEx.Contains(summary.FilesystemIsolationUnavailableReason, "not requested by this role");
-        AssertEx.False(summary.FilesystemIsolationUnavailableReason?.Contains("bwrap", StringComparison.Ordinal) == true);
+        AssertEx.False(summary.FilesystemIsolation);
+        AssertEx.Equal("bwrap is not installed", summary.FilesystemIsolationUnavailableReason);
     }
 
     [Test]
@@ -530,7 +522,7 @@ public sealed class SandboxIsolationSummaryTests
 
     /// <summary>
     ///     Under <c>high</c> on a host that serves nothing, AgentHome requires all three axes and is not satisfied: the row an operator
-    ///     reads to learn the run will refuse. Development requires egress and ceilings, never a boundary it does not ask for.
+    ///     reads to learn the run will refuse. Development on the host toolchain requires the same three.
     /// </summary>
     [Test]
     public void ToIsolationSummary_UnderTheHighProfile_OnAnUncontainedHost_RequiresTheDeclaredAxesAndIsNotSatisfied()
@@ -553,7 +545,7 @@ public sealed class SandboxIsolationSummaryTests
         AssertEx.True(agentHome.ResourceLimitsRequired);
         AssertEx.True(agentHome.NetworkIsolationRequired);
         AssertEx.False(agentHome.Satisfied);
-        AssertEx.False(development.FilesystemIsolationRequired, "high never requires a boundary Development Mode does not ask for.");
+        AssertEx.True(development.FilesystemIsolationRequired, "Development on the host toolchain prefers the boundary, so high requires it.");
         AssertEx.True(development.ResourceLimitsRequired);
         AssertEx.True(development.NetworkIsolationRequired);
         AssertEx.False(development.Satisfied);

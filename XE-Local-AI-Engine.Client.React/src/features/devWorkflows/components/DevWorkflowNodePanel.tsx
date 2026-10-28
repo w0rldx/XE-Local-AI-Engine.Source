@@ -10,6 +10,7 @@ import { DevWorkflowDevTaskNodePanel } from "@/features/devWorkflows/components/
 import { DevWorkflowHumanGatePanel } from "@/features/devWorkflows/components/DevWorkflowHumanGatePanel";
 import { DevWorkflowNodeAttempts } from "@/features/devWorkflows/components/DevWorkflowNodeAttempts";
 import { DevWorkflowNodeCascadeRerunNotice } from "@/features/devWorkflows/components/DevWorkflowNodePanel/DevWorkflowNodeCascadeRerunNotice";
+import { DevWorkflowNodeTerminalReason } from "@/features/devWorkflows/components/DevWorkflowNodePanel/DevWorkflowNodeTerminalReason";
 import { DevWorkflowNodeReviewerModelNotice } from "@/features/devWorkflows/components/DevWorkflowNodePanel/DevWorkflowNodeReviewerModelNotice";
 import { DevWorkflowNodeCostSection } from "@/features/devWorkflows/components/DevWorkflowNodePanel/DevWorkflowNodeCostSection";
 import { DevWorkflowNodeStatusBadge } from "@/features/devWorkflows/components/DevWorkflowStatusBadge";
@@ -166,11 +167,7 @@ export function DevWorkflowNodePanel({
 										</Badge>
 									) : null}
 								</Group>
-								{nodeRun.terminalReason ? (
-									<Text size="xs" c="dimmed" style={{ whiteSpace: "pre-wrap" }}>
-										{nodeRun.terminalReason}
-									</Text>
-								) : null}
+								<DevWorkflowNodeTerminalReason reason={nodeRun.terminalReason} />
 							</Stack>
 						}
 					/>

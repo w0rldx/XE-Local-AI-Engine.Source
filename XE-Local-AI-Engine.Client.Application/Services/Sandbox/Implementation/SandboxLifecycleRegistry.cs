@@ -7,6 +7,7 @@ using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Owns the live process-jail set of one <see cref="ProcessSandboxRuntimeProvider" />: create-or-attach by key, reconnect, lookup,
@@ -75,6 +76,17 @@ internal sealed class SandboxLifecycleRegistry
             var jailDirectory = request.TrustedHostWorkspace is null
                 ? Path.Combine(_jailRoot, sandboxId)
                 : ResolveTrustedHostWorkspace(request.TrustedHostWorkspace.RootPath);
+            var chained = IsChained(launchPolicy);
+            if (chained)
+            {
+                // Resolved before anything is created, so a mount the chain cannot place refuses the create and leaves nothing behind.
+                launchPolicy = launchPolicy with
+                {
+                    Binds = ResolveIsolatedBinds(request, jailDirectory),
+                    PrivateRoot = request.TrustedHostWorkspace is null ? null : Path.Combine(_jailRoot, sandboxId)
+                };
+            }
+
             Directory.CreateDirectory(jailDirectory);
 
             var handle = new SandboxHandle
@@ -84,7 +96,7 @@ internal sealed class SandboxLifecycleRegistry
                 AttachKey = request.AttachKey,
                 CreatedAt = _timeProvider.GetUtcNow(),
                 ManifestVersion = request.AttachKey.ManifestVersion,
-                Mounts = ResolveIdentityMounts(request, jailDirectory),
+                Mounts = chained ? ResolveIsolatedMounts(launchPolicy, request, jailDirectory) : ResolveIdentityMounts(request, jailDirectory),
                 // What the launch policy RESOLVED to, after every fail-closed refusal above — so the handle reports
                 // the boundary the sandbox really has rather than the one its caller asked for.
                 Isolation = launchPolicy.Isolation,
@@ -197,12 +209,12 @@ internal sealed class SandboxLifecycleRegistry
                 $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider cannot isolate the host filesystem on this host ({FilesystemUnavailableReason(containment)}), so SandboxIsolationMode.Filesystem cannot be honored. Gate the request on SupportsFilesystemIsolation, or use a provider that advertises it."));
         }
 
-        // An isolated jail is tightened to 0700 and never exposed at its host pathname, neither of which is a thing to do to a user's own
-        // checkout, so the two features are refused together rather than one silently reshaping the other's directory.
-        if (wantsIsolation && request.TrustedHostWorkspace is not null)
+        // Under bwrap a trusted workspace becomes the 0700 jail at /work, right for an engine-owned clone and never for an operator's checkout.
+        // The AppContainer boundary grants by DACL on the directory itself, so the combination stays refused there.
+        if (appContainerBoundary is not null && request.TrustedHostWorkspace is not null)
         {
             throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
-                $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider cannot combine SandboxIsolationMode.Filesystem with a trusted host workspace: the isolated jail is private to one sandbox and is not reachable at its host path, which is the opposite of what a preserved workspace is for."));
+                $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider cannot combine the {appContainerBoundary.Mechanism} AppContainer boundary with a trusted host workspace: the boundary grants by access-control entries on the directory, which is not a thing to do to a preserved workspace."));
         }
 
         // Read-only trees only mean something inside a mount namespace: the non-isolated mode already reads the whole host filesystem, so
@@ -250,9 +262,9 @@ internal sealed class SandboxLifecycleRegistry
                 $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider cannot enforce resource limits (CPU/memory/PID) on this host ({containment.ResourceLimitsUnavailableReason ?? "no mechanism is available"}). Remove SandboxResourceLimits or use a provider that advertises SupportsResourceLimits."));
         }
 
-        // A read-only mount needs a mount layer and this provider has none. Rejected rather than served writable, because a caller would
-        // believe a file protected that anything can overwrite; callers gate the request on SupportsReadOnlyMounts.
-        if (request.Mounts?.Any(static mount => mount.ReadOnly) == true)
+        // A read-only mount needs a mount layer, which only the bubblewrap chain has: rejected elsewhere rather than served writable, because
+        // a caller would believe a file protected that anything can overwrite.
+        if ((!wantsIsolation || appContainerBoundary is not null) && request.Mounts?.Any(static mount => mount.ReadOnly) == true)
         {
             throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
                 $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider has no mount layer and cannot make a mount read-only. Remove the read-only mount, or use a provider that advertises SupportsReadOnlyMounts."));
@@ -270,8 +282,8 @@ internal sealed class SandboxLifecycleRegistry
         };
     }
 
-    // The view the serving mechanism presents: the mount namespace's fixed POSIX paths, or — with no namespace under the AppContainer
-    // boundary — the jail's own host paths. Consumers compose HOME/TMPDIR from this, never from a constant.
+    // The view the serving mechanism presents: the namespace's POSIX paths (HOME = the private /tmp for a trusted workspace, which gains
+    // no home directory), or the jail's host paths under the AppContainer boundary. Consumers compose HOME/TMPDIR from this.
     private static SandboxIsolatedPaths? ResolveIsolatedPaths(SandboxLaunchPolicy launchPolicy, string jailDirectory)
     {
         if (launchPolicy.Isolation != SandboxIsolationMode.Filesystem)
@@ -279,7 +291,118 @@ internal sealed class SandboxLifecycleRegistry
             return null;
         }
 
-        return launchPolicy.AppContainerBoundary is null ? SandboxIsolatedPaths.Posix : SandboxIsolatedPaths.ForHostJail(jailDirectory);
+        if (launchPolicy.AppContainerBoundary is not null)
+        {
+            return SandboxIsolatedPaths.ForHostJail(jailDirectory);
+        }
+
+        return launchPolicy.PrivateRoot is null
+            ? SandboxIsolatedPaths.Posix
+            : SandboxIsolatedPaths.Posix with
+            {
+                Home = SandboxIsolatedPaths.PosixTemp
+            };
+    }
+
+    // The bubblewrap chain, the one mechanism here with a mount layer.
+    private static bool IsChained(SandboxLaunchPolicy launchPolicy) =>
+        launchPolicy.Isolation == SandboxIsolationMode.Filesystem && launchPolicy.AppContainerBoundary is null;
+
+    /// <summary>
+    ///     Resolves each engine-generated mount to the target the isolated chain binds it at: <c>/work</c> plus the workspace-relative path
+    ///     for a shadow or a file inside the trusted workspace, the requested absolute path otherwise.
+    /// </summary>
+    /// <remarks>
+    ///     Unlike the identity map this CONFINES: the chain shows nothing of the host but <c>/usr</c>, the read-only trees, the jail and
+    ///     these binds. A target the chain cannot place (<see cref="SandboxIsolatedChain.CanBindAfterJail" />) is refused, and a relative
+    ///     segment is refused rather than normalized.
+    /// </remarks>
+    private static IReadOnlyList<SandboxIsolatedBind> ResolveIsolatedBinds(SandboxCreateRequest request, string jailDirectory)
+    {
+        var binds = new List<SandboxIsolatedBind>();
+        foreach (var mount in request.Mounts ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(mount.HostPath))
+            {
+                throw new ArgumentException("An engine-generated sandbox mount must name a host path.", nameof(request));
+            }
+
+            var canonical = Path.TrimEndingDirectorySeparator(Path.GetFullPath(mount.HostPath));
+            var isFile = File.Exists(canonical);
+            if (!isFile && !Directory.Exists(canonical))
+            {
+                throw new DirectoryNotFoundException($"The engine-generated sandbox mount source '{mount.HostPath}' does not exist.");
+            }
+
+            string target;
+            if (mount.TargetIsWorkspaceRelative)
+            {
+                if (request.TrustedHostWorkspace is null)
+                {
+                    throw new SandboxCapabilityNotSupportedException("A workspace-relative sandbox mount needs a trusted host workspace to be relative to.");
+                }
+
+                target = SandboxIsolatedChain.WorkPath + "/" + RequireCleanRelative(mount.SandboxPath.TrimStart('/'), mount.SandboxPath);
+            }
+            else if (request.TrustedHostWorkspace is not null && PathContainment.IsUnderRoot(canonical, jailDirectory))
+            {
+                target = SandboxIsolatedChain.WorkPath + "/" + Path.GetRelativePath(jailDirectory, canonical).Replace(Path.DirectorySeparatorChar, '/');
+            }
+            else
+            {
+                target = "/" + RequireCleanRelative(mount.SandboxPath.TrimStart('/'), mount.SandboxPath);
+                if (!mount.SandboxPath.StartsWith('/') || !SandboxIsolatedChain.CanBindAfterJail(target))
+                {
+                    throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
+                        $"The sandbox mount target '{mount.SandboxPath}' is not an absolute path outside the mount points the isolated sandbox owns ({string.Join(", ", SandboxIsolatedChain.ReservedMountPoints)})."));
+                }
+            }
+
+            binds.Add(new SandboxIsolatedBind
+            {
+                HostPath = canonical,
+                SandboxPath = target,
+                ReadOnly = mount.ReadOnly,
+                IsFile = isFile
+            });
+        }
+
+        return binds;
+    }
+
+    private static string RequireCleanRelative(string relative, string requested)
+    {
+        var segments = relative.Split('/');
+        if (relative.Length == 0 || segments.Any(static segment => segment is "" or "." or ".."))
+        {
+            throw new SandboxCapabilityNotSupportedException($"The sandbox mount target '{requested}' is not a clean path.");
+        }
+
+        return relative;
+    }
+
+    // What the chain will show: the trusted workspace at /work and every bind at its resolved target, so a caller composes child-visible
+    // paths from the handle exactly as it does for a container.
+    private static IReadOnlyList<SandboxMountBinding> ResolveIsolatedMounts(SandboxLaunchPolicy launchPolicy, SandboxCreateRequest request, string jailDirectory)
+    {
+        var bindings = new List<SandboxMountBinding>();
+        if (request.TrustedHostWorkspace is not null)
+        {
+            bindings.Add(new SandboxMountBinding
+            {
+                HostPath = jailDirectory,
+                SandboxPath = SandboxIsolatedChain.WorkPath,
+                ReadOnly = false
+            });
+        }
+
+        bindings.AddRange(launchPolicy.Binds.Select(static bind => new SandboxMountBinding
+        {
+            HostPath = bind.HostPath,
+            SandboxPath = bind.SandboxPath,
+            ReadOnly = bind.ReadOnly
+        }));
+        return bindings;
     }
 
     // A measured-but-ineligible boundary is named as such, so the refusal says what the operator can change rather than "no mechanism".
@@ -464,6 +587,12 @@ internal sealed class SandboxLifecycleRegistry
             if (!state.PreserveJailRoot && Directory.Exists(state.JailRoot))
             {
                 Directory.Delete(state.JailRoot, recursive: true);
+            }
+
+            // A preserved workspace's private /tmp is the sandbox's own, never the workspace's, so it goes with the sandbox.
+            if (state.LaunchPolicy.PrivateRoot is { } privateRoot && Directory.Exists(privateRoot))
+            {
+                Directory.Delete(privateRoot, recursive: true);
             }
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)

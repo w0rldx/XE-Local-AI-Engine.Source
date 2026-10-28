@@ -150,6 +150,26 @@ describe("DevWorkflowHumanGatePanel", () => {
 		expect(screen.getByTestId("dev-workflow-gate-Abandon")).toBeDefined();
 	});
 
+	it("reads a missing test runner as the host's to fix and shows the install hint without its code prefix", () => {
+		renderPanel(
+			gateNode({
+				status: "Blocked",
+				pendingDecisionKind: "Retry",
+				allowedDecisions: ["Retry", "Abandon"],
+				failureClass: "Configuration",
+				terminalReason:
+					"[runner_not_installed] Command python_pytest could not run its tests: Install pytest on the host yourself.",
+			}),
+		);
+
+		const failure = screen.getByTestId("dev-workflow-gate-failure");
+		expect(failure.textContent).toContain("Misconfigured");
+		const runner = screen.getByTestId("dev-workflow-node-runner-not-installed");
+		expect(runner.textContent).toContain("These tests' runner could not be started on this host");
+		expect(runner.textContent).toContain("Command python_pytest could not run its tests: Install pytest on the host yourself.");
+		expect(runner.textContent).not.toContain("[runner_not_installed]");
+	});
+
 	it("promises the comment reaches the retried work only on the node types that actually read it", () => {
 		const retryGate = { status: "Blocked", allowedDecisions: ["Retry", "Abandon"] };
 

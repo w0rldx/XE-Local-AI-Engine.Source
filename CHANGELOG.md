@@ -28,6 +28,18 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 > "Re-create this Development project to adopt the current command profiles". Create a new project on the same
 > repository; it detects and stores the current profile. There is no in-place upgrade.
 
+> **Breaking (pre-release): Development Mode runs inside the filesystem boundary where the host has one.** On Linux
+> with bubblewrap, the coder and validation sandboxes now see only the workspace (or validation tree), their runtime
+> directories, and read-only views of the package folder, `.git/config`, committed-credential shadows and the host
+> toolchain, with no network. A repository whose `NuGet.Config` points at a host-only local feed or fallback folder no
+> longer restores there (`NU1301`): make its packages reachable through the task's warmed package folder, or set
+> `RestoreIgnoreFailedSources`. A host without the boundary (Windows, macOS, Linux without bubblewrap) keeps running
+> Development under the `low` profile with a persistent "No filesystem boundary on this host" warning on the
+> Development page and in validation reports; under `high` it is refused with the profile's remedy. A venv made through
+> a version manager's alias (mise, pyenv, asdf) works behind the boundary. A toolchain tree the boundary refuses (one
+> under `/tmp`, group-writable, or inside a protected folder) is left out and logged, and a validation that then misses
+> its runner says the runner was unreachable behind the boundary and names the tree, instead of "not installed".
+
 ### Added
 
 - **Python repositories validate with pytest in Development Mode** — a repository with no .NET solution or project and
@@ -439,6 +451,18 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
     translation of what it did.
 
 ### Fixed
+
+- **A host without the test runner stops a Development task after one validation** — when validation finds no runner
+  for a profile command (no `python3`, no `dotnet`, or pytest missing for the host `python3`), the task is now
+  `Blocked` at once with `[runner_not_installed]` and the install hint, and no review round is spent. Before, each
+  such validation charged a round and sent the coder back, until the round cap blocked the task with a reason that
+  never said what to install. The report-level validation code is now `runner_not_installed` instead of
+  `test_results_unparsed` for this case. A Dev Workflows `DevTask` or `Tool` node that hits it settles as
+  `Configuration` (never retried automatically) and shows a localized "no runner on this host" label with the hint;
+  an operator `Retry` after installing the runner validates the same patch again, with no coder round and no round
+  charged. A tool missing behind the sandbox's wrapper (`bwrap`, `setsid`) or a filesystem boundary that could not be
+  established is classified the same way. In Development Mode alone the task stays blocked; create a new task after
+  installing the runner.
 
 - **Desktop start page after a vault unlock** — the desktop app retried its start page once, immediately, while the
   engine host was still rebinding the port the unlock page had released, so an unlock sent the moment the window

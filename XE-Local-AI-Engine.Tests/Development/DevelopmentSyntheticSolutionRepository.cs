@@ -117,9 +117,10 @@ internal static class DevelopmentSyntheticSolutionRepository
             cancellationToken);
 
         // Restore has to succeed with no network. DevelopmentWorkspaceTools.BuildEnvironment points NUGET_PACKAGES at
-        // a fresh per-session directory, so the ambient package cache is not visible; clearing the package sources and
-        // declaring the host cache as a FALLBACK folder resolves the graph from disk instead. The host cache is
-        // guaranteed to hold this exact version — it is the version this very test assembly was restored with.
+        // a fresh per-task directory, so the ambient package cache is not visible; the host cache is the only package
+        // SOURCE, from which the warm restore (a host child) fills that directory. Not a fallback folder: behind the
+        // filesystem boundary the host cache is invisible, and every later restore must resolve from the task's folder.
+        // The host cache is guaranteed to hold this exact version: this very test assembly was restored with it.
         await WriteAsync(repositoryRoot,
             "NuGet.config",
             $"""
@@ -127,10 +128,10 @@ internal static class DevelopmentSyntheticSolutionRepository
              <configuration>
                <packageSources>
                  <clear />
+                 <add key="host" value="{packagesRoot}" />
                </packageSources>
                <fallbackPackageFolders>
                  <clear />
-                 <add key="host" value="{packagesRoot}" />
                </fallbackPackageFolders>
              </configuration>
 
@@ -201,6 +202,19 @@ internal static class DevelopmentSyntheticSolutionRepository
         string testFrameworkVersion,
         CancellationToken cancellationToken)
     {
+        // Behind the filesystem boundary the host-cache source is missing, and NuGet fails a fresh restore on a missing LOCAL source
+        // (NU1301) even with every package in NUGET_PACKAGES; a solution restore reads the switch here, a project restore below.
+        await WriteAsync(repositoryRoot,
+            "Directory.Solution.props",
+            """
+            <Project>
+              <PropertyGroup>
+                <RestoreIgnoreFailedSources>true</RestoreIgnoreFailedSources>
+              </PropertyGroup>
+            </Project>
+
+            """,
+            cancellationToken);
         await WriteAsync(repositoryRoot,
             ProbeProjectPath,
             $"""
@@ -208,6 +222,7 @@ internal static class DevelopmentSyntheticSolutionRepository
                <PropertyGroup>
                  <TargetFramework>net10.0</TargetFramework>
                  <OutputType>Exe</OutputType>
+                 <RestoreIgnoreFailedSources>true</RestoreIgnoreFailedSources>
                  <Nullable>enable</Nullable>
                  <ImplicitUsings>enable</ImplicitUsings>
                </PropertyGroup>

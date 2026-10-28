@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
+
 /// <summary>
 ///     The containment a single sandbox asks its children to run under, derived once from the
 ///     <see cref="SandboxCreateRequest" /> and carried for the sandbox's lifetime. It is the request-side input to
@@ -36,6 +38,18 @@ public sealed record SandboxLaunchPolicy
 
     /// <summary>Host trees the isolated chain binds read-only. Empty under <see cref="SandboxIsolationMode.None" />.</summary>
     public IReadOnlyList<string> ReadOnlyTrees { get; init; } = [];
+
+    /// <summary>The engine-generated mounts the isolated chain binds after the jail, in order. Empty without the bubblewrap chain.</summary>
+    internal IReadOnlyList<SandboxIsolatedBind> Binds { get; init; } = [];
+
+    /// <summary>
+    ///     The private host directory that backs the chain's <c>/tmp</c> when the jail is a trusted host workspace, or
+    ///     <see langword="null" /> when the jail backs it itself.
+    /// </summary>
+    /// <remarks>
+    ///     A preserved workspace is the tree a patch is diffed from, so the chain must not create its home or temp directories inside it.
+    /// </remarks>
+    internal string? PrivateRoot { get; init; }
 
     /// <summary>
     ///     The Windows AppContainer boundary that serves <see cref="SandboxIsolationMode.Filesystem" /> for this sandbox, or

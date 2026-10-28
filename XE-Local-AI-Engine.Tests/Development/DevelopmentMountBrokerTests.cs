@@ -1,14 +1,18 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
 using System.Diagnostics;
+using System.Runtime.Versioning;
 using System.Text;
 using Microsoft.Extensions.Options;
+using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
@@ -150,8 +154,8 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
     [Test]
     public async Task BuildEnvironment_WhenTheSandboxIsFilesystemIsolated_GivesNoHostPipeDirectory()
     {
-        // The process handle identity-maps its mounts even under isolation, but the bwrap view binds neither the host system temp nor
-        // the runtime directory, so a host pipe directory would name a path the child cannot see.
+        // Even where a handle reports host paths under isolation, the bwrap view does not bind the host system temp, so a host pipe
+        // directory would name a path the child cannot see.
         var sandbox = new MappingSandboxRuntimeProvider
         {
             IdentityMap = true,
@@ -167,11 +171,11 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
     }
 
     [Test]
-    public async Task BuildEnvironment_OnTheProcessProvider_StillEmitsTheHostPathsItAlwaysDid()
+    public async Task BuildEnvironment_OnTheProcessProviderWithoutABoundary_StillEmitsTheHostPathsItAlwaysDid()
     {
-        // The other direction, and the reason the identity map exists: Development runs on the process provider today,
-        // and a translation that changed these values there would break every build on the currently shipping path.
-        using var sandbox = new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()), TimeProvider.System);
+        // The other direction, and the reason the identity map exists: a host without the bubblewrap chain runs Development as a host
+        // child, and a translation that changed these values there would break every build on that path.
+        using var sandbox = CreateBoundarylessProcessProvider();
         var (session, tools) = await PrepareAsync(sandbox);
 
         _ = await tools.RunCommandAsync(DevelopmentCommandIds.GitStatus);
@@ -193,9 +197,62 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
         AssertEx.Contains(mapped.SandboxHandle.Mounts,
             mount => mount.ReadOnly && mount.SandboxPath.EndsWith(".git/config", StringComparison.Ordinal));
 
-        using var process = new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()), TimeProvider.System);
+        using var process = CreateBoundarylessProcessProvider();
         var (plain, _) = await PrepareAsync(process);
         AssertEx.Empty(plain.SandboxHandle.Mounts.Where(static mount => mount.ReadOnly));
+    }
+
+    /// <summary>
+    ///     Behind the bubblewrap chain the coder's commands write the workspace and their own runtime directories and nothing else: not
+    ///     the host beside the jail, not the package folder validation trusts, not <c>.git/config</c>.
+    /// </summary>
+    [Test]
+    [Category(TestCategories.ExternalInfra)]
+    public async Task PrepareAsync_BehindTheBubblewrapChain_ConfinesWritesToTheWorkspaceAndItsRuntimeDirectories()
+    {
+        using var sandbox = RequireBoundaryProcessProvider();
+        var (session, _) = await PrepareAsync(sandbox);
+        // Under the account's home, not this test's /tmp root: inside the chain /tmp is the sandbox's own private directory, where the
+        // package folder's bind already created the test root's name.
+        var outside = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".xe-dev-boundary-" + Guid.NewGuid().ToString("N"));
+        var nuget = Path.Combine(session.RuntimePath, "nuget");
+
+        AssertEx.Equal(SandboxIsolationMode.Filesystem, session.SandboxHandle.Isolation);
+        AssertEx.Equal("/work", session.SandboxHandle.TryResolveSandboxPath(session.HostWorktreePath));
+        AssertEx.Equal("/xe-runtime/home", session.SandboxHandle.TryResolveSandboxPath(Path.Combine(session.RuntimePath, "home")));
+        // The package folder keeps its host path, so obj/ written by the warm restore (a host child) still resolves.
+        AssertEx.Equal(nuget, session.SandboxHandle.TryResolveSandboxPath(nuget));
+
+        var result = await sandbox.ExecuteAsync(session.SandboxHandle, new SandboxCommandRequest
+        {
+            ExecutionId = Guid.NewGuid().ToString("N"),
+            Executable = "/bin/sh",
+            Arguments =
+            [
+                "-c",
+                $"""
+                 if touch '{outside}' 2>/dev/null; then echo OUTSIDE=WRITTEN; else echo OUTSIDE=REFUSED; fi
+                 if touch '{nuget}/planted' 2>/dev/null; then echo NUGET=WRITTEN; else echo NUGET=REFUSED; fi
+                 if echo x >> /work/.git/config 2>/dev/null; then echo GITCONFIG=WRITTEN; else echo GITCONFIG=REFUSED; fi
+                 if touch /xe-runtime/home/ok 2>/dev/null; then echo HOME=WRITTEN; else echo HOME=REFUSED; fi
+                 if touch /work/inside.txt 2>/dev/null; then echo WORK=WRITTEN; else echo WORK=REFUSED; fi
+                 """
+            ],
+            WorkingDirectory = "/",
+            Timeout = TimeSpan.FromSeconds(30)
+        });
+
+        AssertEx.Equal(expected: 0, result.ExitCode, result.StandardError);
+        AssertEx.Contains(result.StandardOutput, "OUTSIDE=REFUSED");
+        AssertEx.Contains(result.StandardOutput, "NUGET=REFUSED");
+        AssertEx.Contains(result.StandardOutput, "GITCONFIG=REFUSED");
+        AssertEx.Contains(result.StandardOutput, "HOME=WRITTEN");
+        AssertEx.Contains(result.StandardOutput, "WORK=WRITTEN");
+        var escaped = File.Exists(outside);
+        File.Delete(outside);
+        AssertEx.False(escaped, "a sandboxed write outside the jail reached the host");
+        AssertEx.False(File.Exists(Path.Combine(nuget, "planted")), "a sandboxed write reached the read-only package folder");
+        AssertEx.True(File.Exists(Path.Combine(session.HostWorktreePath, "inside.txt")), "the workspace must be the jail the chain binds at /work");
     }
 
     /// <summary>
@@ -265,6 +322,49 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
         AssertEx.Equal("1", environment["GIT_ATTR_NOSYSTEM"]);
     }
 
+    /// <summary>A boundary no command can get (a writable runtime bind turned group-writable) stops the task as runner_not_installed.</summary>
+    /// <remarks>
+    ///     Every validation command keeps its launch-failure evidence; the workspace invariant probes used to fail through the same
+    ///     boundary and throw before any evidence was kept.
+    /// </remarks>
+    [Test]
+    [Category(TestCategories.ExternalInfra)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task ACommandWhoseBoundaryCannotBeEstablished_KeepsItsEvidence_AndStopsTheTaskAsRunnerNotInstalled()
+    {
+        using var sandbox = RequireBoundaryProcessProvider();
+        var (session, tools) = await PrepareAsync(sandbox);
+        var home = Path.Combine(session.RuntimePath, "home");
+        File.SetUnixFileMode(home, File.GetUnixFileMode(home) | UnixFileMode.GroupWrite);
+
+        foreach (var commandId in GenericProfile.ValidationCommandIds)
+        {
+            _ = await tools.RunCommandAsync(commandId);
+        }
+
+        AssertEx.Equal(GenericProfile.ValidationCommandIds.Count, tools.CommandEvidence.Count);
+        AssertEx.True(tools.CommandEvidence.All(static evidence => evidence.StandardError.StartsWith(SandboxCommandResult.BoundaryFailurePrefix, StringComparison.Ordinal)),
+            string.Join(" | ", tools.CommandEvidence.Select(static evidence => evidence.StandardError)));
+        var verdict = DevelopmentValidationVerdict.Evaluate(GenericProfile, tools.CommandEvidence);
+        AssertEx.Equal(DevelopmentValidationFailureCodes.RunnerNotInstalled, verdict.FailureCode);
+        AssertEx.True(verdict.StopsTask);
+    }
+
+    /// <summary>Only an engine-composed "nothing started" result skips the invariant probes; the wrapper-rewritten form came from a child.</summary>
+    [Test]
+    public async Task OnlyAnEngineComposedLaunchFailure_CountsAsNeverStarted()
+    {
+        static SandboxCommandResult Failed(string error) => new() { ExecutionId = "x", ExitCode = -1, Completed = false, StandardError = error };
+
+        AssertEx.True(DevelopmentWorkspaceTools.NeverStarted(Failed(SandboxCommandResult.BoundaryFailurePrefix + " ('/x' is writable by group or world).")));
+        AssertEx.True(DevelopmentWorkspaceTools.NeverStarted(Failed(SandboxCommandResult.LaunchFailurePrefix + ".")));
+        AssertEx.False(DevelopmentWorkspaceTools.NeverStarted(Failed(SandboxCommandResult.LaunchFailurePrefix + " (bwrap: execvp dotnet: No such file or directory).")),
+            "a running workload can print the wrapper's line, so it must not be able to skip the invariant with it.");
+        AssertEx.False(DevelopmentWorkspaceTools.NeverStarted(Failed("Command timed out.")));
+
+        await Task.CompletedTask;
+    }
+
     private static string PackageFolderMode(SandboxCreateRequest request, string packageFolder) =>
         request.Mounts!.Single(mount => string.Equals(mount.HostPath, packageFolder, StringComparison.Ordinal)).ReadOnly ? "read-only" : "writable";
 
@@ -292,6 +392,37 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
     private static MappingSandboxRuntimeProvider CreateMappingSandbox()
     {
         return new MappingSandboxRuntimeProvider();
+    }
+
+    // The process provider on a host that measured no boundary, whatever this host has: the shape every non-Linux host gets.
+    private static ProcessSandboxRuntimeProvider CreateBoundarylessProcessProvider() =>
+        new(Options.Create(new LocalContainerOptions()), TimeProvider.System, launcher: new SandboxLauncher(new NoContainmentProbe()));
+
+    // The real process provider, skipped visibly where this host cannot run the chain; a present bwrap that cannot isolate fails
+    // under the opt-in live switch, as the sandbox live suite does.
+    private static ProcessSandboxRuntimeProvider RequireBoundaryProcessProvider()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            throw new SkipTestException("the bubblewrap chain is Linux-only.");
+        }
+
+        if (TrustedBinaryResolver.Resolve("bwrap") is null)
+        {
+            throw new SkipTestException("this host has no root-owned bwrap under /usr/bin, /bin or /usr/local/bin.");
+        }
+
+        var provider = new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()), TimeProvider.System);
+        if (!provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation))
+        {
+            var reason = provider.FilesystemIsolationUnavailableReason;
+            provider.Dispose();
+            AssertEx.False(string.Equals(Environment.GetEnvironmentVariable("XE_COMPUTE_LIVE"), "1", StringComparison.Ordinal),
+                $"this host has a trusted bwrap, so the filesystem boundary must hold; the probe reported: {reason}");
+            throw new SkipTestException($"this host's bwrap cannot isolate here: {reason}");
+        }
+
+        return provider;
     }
 
     private static DevelopmentOptions OptionsValue() =>
@@ -394,6 +525,11 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
     ///     provider identity-maps by contract, so a test built on it cannot tell a correct mapping from no mapping at
     ///     all, and the container provider needs a daemon.
     /// </summary>
+    private sealed class NoContainmentProbe : ISandboxContainmentProbe
+    {
+        public SandboxContainment Containment => SandboxContainment.None;
+    }
+
     private sealed class MappingSandboxRuntimeProvider : IDevelopmentSandboxRuntimeProvider
     {
         private const string WorkspaceTarget = "/workspace";

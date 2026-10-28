@@ -2,9 +2,13 @@ namespace XE_Local_AI_Engine.Tests.Hosting;
 
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client;
+using XE_Local_AI_Engine.Client.Testing.Fakes;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -41,6 +45,21 @@ public sealed class StartupDatabaseRecoveryHintTests : IDisposable
         var webRoot = Path.Combine(_rootPath, "wwwroot");
         Directory.CreateDirectory(webRoot);
 
+        // A scratch copy of the Client content root, never the real one, with the node state a live dev host keeps
+        // there: the host must leave it in place (a differing NodeData:Directory would otherwise migrate it away).
+        var contentRoot = Path.Combine(_rootPath, "content");
+        Directory.CreateDirectory(contentRoot);
+        foreach (var settings in Directory.EnumerateFiles(TestServerWebAppFactory.ResolveClientContentRoot(), "appsettings*.json"))
+        {
+            File.Copy(settings, Path.Combine(contentRoot, Path.GetFileName(settings)));
+        }
+
+        string[] liveNodeState = ["node-settings.json", "cloud-credentials.enc"];
+        foreach (var artifact in liveNodeState)
+        {
+            await File.WriteAllTextAsync(Path.Combine(contentRoot, artifact), "sentinel");
+        }
+
         using var standardError = new StringWriter();
         ProgramStartResult start;
         await TestServerWebAppFactory.HostStartupLock.WaitAsync();
@@ -48,7 +67,7 @@ public sealed class StartupDatabaseRecoveryHintTests : IDisposable
         {
             start = await Program.CreateAppAsync([], new ProgramAppCustomization
             {
-                ContentRootPath = TestServerWebAppFactory.ResolveClientContentRoot(),
+                ContentRootPath = contentRoot,
                 WebRootPath = webRoot,
                 StandardError = standardError,
                 Configuration = new Dictionary<string, string?>
@@ -59,7 +78,15 @@ public sealed class StartupDatabaseRecoveryHintTests : IDisposable
                     ["NodeData:Directory"] = dataDirectory,
                     ["EntityFramework:ServiceProviderCaching"] = "false"
                 },
-                ConfigureBuilder = static builder => builder.WebHost.UseTestServer()
+                ConfigureBuilder = builder =>
+                {
+                    builder.WebHost.UseTestServer();
+
+                    // The product NodeDataDirectory would migrate the content root's node state into the differing
+                    // data dir, which Dispose deletes. The fake pins the same Root with no migration.
+                    builder.Services.RemoveAll<INodeDataDirectory>();
+                    builder.Services.AddSingleton<INodeDataDirectory>(new FakeNodeDataDirectory(dataDirectory));
+                }
             });
         }
         finally
@@ -73,6 +100,10 @@ public sealed class StartupDatabaseRecoveryHintTests : IDisposable
         AssertEx.True(output.Contains("is damaged or is not a SQLite database", StringComparison.Ordinal), output);
         AssertEx.True(output.Contains("node.sqlite.broken", StringComparison.Ordinal), output);
         AssertEx.True(output.Contains(newestSnapshot, StringComparison.Ordinal), output);
+        foreach (var artifact in liveNodeState)
+        {
+            AssertEx.True(File.Exists(Path.Combine(contentRoot, artifact)), $"Startup moved {artifact} out of the content root.");
+        }
     }
 
     [Test]

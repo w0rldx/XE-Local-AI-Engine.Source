@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 /// </summary>
 /// <remarks>
 ///     <c>high</c> promotes every preference a workload DECLARES in <see cref="SandboxWorkloads" /> to a precondition and never adds an axis
-///     it does not ask for: Development Mode and work sessions declare no filesystem boundary, so <c>high</c> never refuses them for one.
+///     it does not ask for: work sessions and container Development declare no filesystem boundary, so <c>high</c> never refuses them for one.
 ///     Floors are untouched under both profiles. The configuration's <c>RequireEgressDenial</c> keys stay tighten-only ABOVE the profile:
 ///     a key can add the egress precondition under <c>low</c>, and nothing here removes it. A caller never re-derives any of this, so a
 ///     summary row cannot report <c>Satisfied</c> while the create site it describes refuses.

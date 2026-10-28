@@ -43,6 +43,11 @@ export interface DevelopmentValidationReportBody {
 	readonly failureDetail: string | null;
 	readonly commands: readonly DevelopmentValidationCommand[];
 	readonly completedAtUtc: number;
+	/**
+	 * Whether the commands ran behind the host filesystem boundary. `false` is the "no filesystem boundary on this host"
+	 * warning; absent on older reports and null when no command ran, both of which render nothing.
+	 */
+	readonly filesystemBoundary?: boolean | null;
 }
 
 /**

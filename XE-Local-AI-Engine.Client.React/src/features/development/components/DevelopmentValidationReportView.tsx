@@ -37,6 +37,10 @@ const validationFailureLabels: Readonly<Record<string, readonly [string, string]
 		"The suite ran but executed no tests, so this run evidences the build and nothing about behaviour.",
 	],
 	tests_failed: ["pages.development.validation.failure.testsFailed", "At least one test failed."],
+	runner_not_installed: [
+		"pages.development.validation.failure.runnerNotInstalled",
+		"A validation command's runner could not be started on this host, so nothing the coder wrote was judged: it is not installed, or the filesystem boundary could not reach it. The detail says which; XE never installs it.",
+	],
 };
 
 /** The per-outcome parse failure codes. A parse failure is a validation failure, never missing data. */
@@ -57,6 +61,10 @@ const validationParseFailureLabels: Readonly<Record<string, readonly [string, st
 	output_truncated: [
 		"pages.development.validation.parseFailure.outputTruncated",
 		"The command output was truncated before the test summary was written.",
+	],
+	runner_not_installed: [
+		"pages.development.validation.parseFailure.runnerNotInstalled",
+		"These tests' runner could not be started on this host: it is not installed, or the filesystem boundary could not reach it. The detail says which; XE never installs it.",
 	],
 };
 
@@ -274,6 +282,17 @@ export function ValidationReportView({ artifact }: { readonly artifact: Developm
 						"The failed gate invalidated this task's approval evidence, which is why the report is marked invalidated. The failure below is still what happened.",
 					)}
 				</Text>
+			) : null}
+
+			{report.filesystemBoundary === false ? (
+				<Alert color="yellow" icon={<IconAlertTriangle size={16} />} data-testid="development-validation-no-boundary">
+					<Text size="sm">
+						{t(
+							"pages.development.validation.noFilesystemBoundary",
+							"No filesystem boundary on this host: these commands could write outside their workspace.",
+						)}
+					</Text>
+				</Alert>
 			) : null}
 
 			{report.failureCode ? <ValidationFailureAlert code={report.failureCode} detail={report.failureDetail} /> : null}

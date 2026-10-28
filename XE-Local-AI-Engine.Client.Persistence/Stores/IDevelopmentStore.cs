@@ -115,6 +115,12 @@ public sealed class DevelopmentTerminalizeAttemptCommand
 
 public sealed class DevelopmentTransitionTaskCommand
 {
+    /// <summary>
+    ///     The validation failure code (<c>DevelopmentValidationFailureCodes.RunnerNotInstalled</c>) whose stand-down alone
+    ///     <see cref="RetryValidation" /> may lift; homed here so the store can check the blocked reason's <c>[code]</c> prefix.
+    /// </summary>
+    public const string RetryValidationFailureCode = "runner_not_installed";
+
     public required Guid TaskId { get; init; }
 
     public required Guid OperationId { get; init; }
@@ -135,8 +141,8 @@ public sealed class DevelopmentTransitionTaskCommand
     public bool OperatorDirected { get; init; }
 
     /// <summary>
-    ///     Raises the task's <c>MaxReviewRounds</c> by one, and is the ONLY thing that opens the single edge out of
-    ///     <c>Blocked</c>.
+    ///     Raises the task's <c>MaxReviewRounds</c> by one, and is the ONLY thing that opens the edge from <c>Blocked</c> to
+    ///     <c>ChangesRequested</c>.
     /// </summary>
     /// <remarks>
     ///     A person retrying a workflow node stopped at "all N rounds used" is buying the task the round it needs, the
@@ -146,6 +152,17 @@ public sealed class DevelopmentTransitionTaskCommand
     ///     <c>DevWorkflowDevTaskExecutor.CarryOperatorRetryAsync</c>, gated on <c>IsOperatorRetry</c>.
     /// </remarks>
     public bool WidenReviewRounds { get; init; }
+
+    /// <summary>
+    ///     Moves a <c>Blocked</c> task back to <c>InProgress</c> so its latest, succeeded coder attempt is validated again, charging and
+    ///     widening nothing; the ONLY thing that opens that edge.
+    /// </summary>
+    /// <remarks>
+    ///     For a validation stopped because the host had no test runner: no patch was judged, so the retry re-runs the gate on the same
+    ///     patch instead of sending it back to the coder. CALLER-TRUSTED like <see cref="WidenReviewRounds" />; set only by
+    ///     <c>DevWorkflowDevTaskExecutor.CarryOperatorRetryAsync</c>, gated on <c>IsOperatorRetry</c>.
+    /// </remarks>
+    public bool RetryValidation { get; init; }
 }
 
 public sealed class DevelopmentStartValidationCommand

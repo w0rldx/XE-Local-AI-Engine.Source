@@ -9,6 +9,7 @@ import {
 	type DevWorkflowTestOutcome,
 	type DevWorkflowValidationCommand,
 	devWorkflowMissingEvidenceCode,
+	devWorkflowRunnerNotInstalledCode,
 	type parseDevWorkflowValidationReport,
 } from "@/features/devWorkflows/models/DevWorkflowValidationReport";
 
@@ -97,10 +98,35 @@ export function DevWorkflowValidationReportPanel({
 				</Alert>
 			) : null}
 
+			{report.filesystemBoundary === false ? (
+				<Alert
+					color="yellow"
+					variant="light"
+					icon={<IconAlertTriangle size={16} />}
+					data-testid="dev-workflow-validation-no-boundary"
+				>
+					<Text size="sm">
+						{t(
+							"pages.devWorkflows.validation.noFilesystemBoundary",
+							"No filesystem boundary on this host: these commands could write outside their workspace.",
+						)}
+					</Text>
+				</Alert>
+			) : null}
+
 			{/* Server prose, displayed verbatim: the verdict's detail already names the command and the reason,
 			    and the raw code is shown beside it so an unrecognised one is never silently dropped. */}
 			{report.failureCode && !partial ? (
 				<InlineErrorAlert variant="light" message={report.failureDetail} data-testid="dev-workflow-validation-failure">
+					{/* The one code that is a person's to fix, so it gets a sentence saying so above the server's hint. */}
+					{report.failureCode === devWorkflowRunnerNotInstalledCode ? (
+						<Text size="sm" data-testid="dev-workflow-validation-runner-not-installed">
+							{t(
+								"pages.development.validation.failure.runnerNotInstalled",
+								"A validation command's runner could not be started on this host, so nothing the coder wrote was judged: it is not installed, or the filesystem boundary could not reach it. The detail says which; XE never installs it.",
+							)}
+						</Text>
+					) : null}
 					<Code data-testid="dev-workflow-validation-failure-code">{report.failureCode}</Code>
 				</InlineErrorAlert>
 			) : null}
@@ -159,10 +185,17 @@ function ValidationTestParseFailure({ outcome }: { readonly outcome: DevWorkflow
 		<InlineErrorAlert
 			mt="sm"
 			variant="light"
-			message={t(
-				"pages.devWorkflows.validation.tests.unparsed",
-				"The test results could not be read, so no executed, passed or failed count is available for this run.",
-			)}
+			message={
+				outcome.parseFailureCode === devWorkflowRunnerNotInstalledCode
+					? t(
+							"pages.development.validation.parseFailure.runnerNotInstalled",
+							"These tests' runner could not be started on this host: it is not installed, or the filesystem boundary could not reach it. The detail says which; XE never installs it.",
+						)
+					: t(
+							"pages.devWorkflows.validation.tests.unparsed",
+							"The test results could not be read, so no executed, passed or failed count is available for this run.",
+						)
+			}
 			data-testid="dev-workflow-validation-tests-unparsed"
 		>
 			<Code>{outcome.parseFailureCode ?? "unknown"}</Code>

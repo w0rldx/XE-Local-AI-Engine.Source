@@ -61,9 +61,9 @@ public sealed partial class DevelopmentStore : IDevelopmentStore
             [DevelopmentTaskStatus.AwaitingApply] =
                 [DevelopmentTaskStatus.ChangesRequested, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
 
-            // The one edge out of Blocked, and TransitionTaskAsync refuses it to any command that does not also widen the round cap: not "Blocked is recoverable" but
-            // "an operator's Retry can buy the round the cap stopped". Measured: a Retry at N of N re-dispatched the node, which stood itself down ~2 s later, twice.
-            [DevelopmentTaskStatus.Blocked] = [DevelopmentTaskStatus.ChangesRequested]
+            // The edges out of Blocked, each refused without its flag: a Retry buys the round the cap stopped (ChangesRequested, WidenReviewRounds; a Retry at N of N
+            // without it stood itself down ~2 s later, twice) or re-runs the validation a missing runner stopped (InProgress, RetryValidation).
+            [DevelopmentTaskStatus.Blocked] = [DevelopmentTaskStatus.ChangesRequested, DevelopmentTaskStatus.InProgress]
         };
 
     private readonly NodeChatDbContext _dbContext;

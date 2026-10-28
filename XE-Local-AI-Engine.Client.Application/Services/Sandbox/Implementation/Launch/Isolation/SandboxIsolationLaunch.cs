@@ -57,9 +57,20 @@ internal sealed class SandboxIsolationLaunch : IDisposable
             // 0700 on the jail itself, not only on what is created under it: it is the workload's single writable surface and the
             // descriptor opener refuses anything looser, so a default-umask 0755 directory would fail an otherwise capable host.
             var jailRoot = EnsurePrivateDirectory(Path.TrimEndingDirectorySeparator(Path.GetFullPath(request.JailRoot)));
-            // HOME inside the sandbox is /work/home; this is the host directory behind it.
-            _ = EnsurePrivateDirectory(Path.Combine(jailRoot, HomeDirectoryName));
-            var temp = EnsurePrivateDirectory(Path.Combine(jailRoot, TempDirectoryName));
+            string temp;
+            if (request.PrivateRoot is { } privateRoot)
+            {
+                // A trusted host workspace: its tree is what a patch is diffed from, so /tmp comes from a private directory beside it and
+                // HOME is that /tmp, rather than two new directories appearing in the workspace.
+                temp = EnsurePrivateDirectory(Path.Combine(EnsurePrivateDirectory(Path.TrimEndingDirectorySeparator(Path.GetFullPath(privateRoot))),
+                    TempDirectoryName));
+            }
+            else
+            {
+                // HOME inside the sandbox is /work/home; this is the host directory behind it.
+                _ = EnsurePrivateDirectory(Path.Combine(jailRoot, HomeDirectoryName));
+                temp = EnsurePrivateDirectory(Path.Combine(jailRoot, TempDirectoryName));
+            }
 
             // The jail itself must be 0700: it is the one writable surface the workload has, and a mode anyone else
             // could write to would make the boundary pointless from the outside in.
@@ -75,13 +86,28 @@ internal sealed class SandboxIsolationLaunch : IDisposable
                         $"the read-only tree '{tree}' lies under a mount point the sandbox chain owns ({string.Join(", ", SandboxIsolatedChain.ReservedMountPoints)}), where it would be shadowed rather than visible");
                 }
 
-                // Read-only trees are engine-owned but not necessarily private: a provisioned interpreter is 0755 so
+                // Read-only trees are engine- or root-owned but not necessarily private: a provisioned interpreter is 0755 so
                 // it can be executed. What matters is that nobody ELSE can write it, which the opener enforces.
-                var descriptor = Track(resources, SandboxTrustedDescriptorOpener.Open(tree, requirePrivateMode: false));
+                var descriptor = Track(resources, SandboxTrustedDescriptorOpener.OpenBindSource(tree, expectFile: false, readOnly: true));
                 readOnlyTrees.Add(new SandboxIsolatedTreeBinding
                 {
                     FileDescriptor = descriptor.FileDescriptor,
                     Path = descriptor.Path
+                });
+            }
+
+            var binds = new List<SandboxIsolatedMountBinding>(request.Binds.Count);
+            foreach (var bind in request.Binds)
+            {
+                // Same walk as the trees: no symlink component, trustworthy ancestors, not group- or world-writable, and owned by the
+                // engine (or, read-only only, by root).
+                var descriptor = Track(resources,
+                    SandboxTrustedDescriptorOpener.OpenBindSource(bind.HostPath, bind.IsFile, bind.ReadOnly));
+                binds.Add(new SandboxIsolatedMountBinding
+                {
+                    FileDescriptor = descriptor.FileDescriptor,
+                    SandboxPath = bind.SandboxPath,
+                    ReadOnly = bind.ReadOnly
                 });
             }
 
@@ -113,6 +139,8 @@ internal sealed class SandboxIsolationLaunch : IDisposable
                 JailDescriptor = jailDescriptor.FileDescriptor,
                 JailTempDescriptor = tempDescriptor.FileDescriptor,
                 ReadOnlyTrees = readOnlyTrees,
+                Binds = binds,
+                HomePath = request.PrivateRoot is null ? SandboxIsolatedChain.HomePath : SandboxIsolatedPaths.PosixTemp,
                 ResourceLimits = request.ResourceLimits,
                 ThreadLimit = request.ThreadLimit,
                 WorkingDirectory = request.WorkingDirectory,

@@ -72,6 +72,8 @@ export interface DevWorkflowValidationReportBody {
 	readonly completedAtUtc: number;
 	/** Additive: a report written before the overlay existed carries no such field at all. */
 	readonly basedOn?: DevWorkflowValidationBasedOn | null;
+	/** Additive: `false` when the commands ran with no filesystem boundary on this host, which the panel warns about. */
+	readonly filesystemBoundary?: boolean | null;
 }
 
 /**
@@ -79,6 +81,19 @@ export interface DevWorkflowValidationReportBody {
  * out of time reports, because the commands it never reached are exactly the missing evidence.
  */
 export const devWorkflowMissingEvidenceCode = "missing_command_evidence";
+
+/**
+ * The code both gates use when the host has no runner for a validation command (no `python3`, no pytest, no `dotnet`).
+ * The same value names the report-level verdict and the per-command parse failure. No coder round can fix it, so the
+ * node stands down as `Configuration` with a terminal reason of `[runner_not_installed] <install hint>`.
+ */
+export const devWorkflowRunnerNotInstalledCode = "runner_not_installed";
+
+/** The install hint out of a `[runner_not_installed] …` terminal reason, or null for any other reason. */
+export function devWorkflowRunnerNotInstalledHint(reason: string | null | undefined): string | null {
+	const prefix = `[${devWorkflowRunnerNotInstalledCode}] `;
+	return reason?.startsWith(prefix) ? reason.slice(prefix.length) : null;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;

@@ -8,7 +8,12 @@
   today, or becomes a precondition that is refused fail-closed where the host cannot serve it. It changes no workload
   declaration, no floor, no selector ranking and no mechanism, and under `low` it changes no behaviour. (Amended
   2026-10-13: independent of the profile, a launch that has no filesystem boundary now gets the jail's own home
-  directory as `HOME`, see `ProcessSandboxRuntimeProvider`; `low` otherwise still means today's behaviour.)
+  directory as `HOME`, see `ProcessSandboxRuntimeProvider`; `low` otherwise still means today's behaviour. Amended
+  2026-10-27: the host-toolchain Development declaration now prefers the filesystem boundary, so `high` refuses
+  Development Mode on a host without the bubblewrap chain; the container declaration still asks for none. Decision 2's
+  "Development Mode never asks" reads as the container form only. The warm restore still runs outside the chain under
+  both profiles, because it needs egress. Operator decision "Warn and run" for `low`,
+  `Plans/dev-mode-hardening-2026-10-27/PLAN.md`.)
 - **Authority:** Operator decisions of 2026-10-08 (full proposal chosen over parking it or shipping switches only, with
   the pre-1.0 feature freeze lifted for this round; O1 `high` promotes only declared preferences; O2 the chooser sits
   after external access and before the interface mode; O3 the execution-previews switch moves into the new Sandbox &

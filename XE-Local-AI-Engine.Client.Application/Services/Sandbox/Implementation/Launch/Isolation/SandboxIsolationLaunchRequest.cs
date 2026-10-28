@@ -13,6 +13,14 @@ internal sealed record SandboxIsolationLaunchRequest
     /// <summary>Host trees bound read-only at their own canonical paths.</summary>
     public IReadOnlyList<string> ReadOnlyTrees { get; init; } = [];
 
+    /// <summary>Engine-generated mounts bound after the jail, at the targets the registry resolved.</summary>
+    public IReadOnlyList<SandboxIsolatedBind> Binds { get; init; } = [];
+
+    /// <summary>
+    ///     The host directory backing <c>/tmp</c> when the jail is a trusted host workspace; <see langword="null" /> when the jail backs it.
+    /// </summary>
+    public string? PrivateRoot { get; init; }
+
     public SandboxResourceLimits? ResourceLimits { get; init; }
 
     public int ThreadLimit { get; init; } = 1;

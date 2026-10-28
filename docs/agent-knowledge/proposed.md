@@ -4,6 +4,10 @@ Pending rules awaiting operator approval. Not required reading: nothing here is 
 Add an entry in the normal format (`### <heading>`, then `**Rule:** … **Prevents:** … **Authority:** …`).
 Once the operator approves it, move the entry to its topic file and delete it here; a rejected entry is deleted.
 
+### Development behind the chain: the package folder keeps its host path, build servers are off
+
+**Rule:** coder and validation sandboxes run in the bubblewrap chain where advertised, the trusted workspace as the jail and engine mounts as binds after `/work`. Bind the package folder at its HOST path: the warm restore runs outside the chain (it needs egress) and writes that path into `obj/`. Set `UseSharedCompilation=false` behind the chain: a compiler server in a fresh namespace holds stdout and the command hangs to its timeout. A `NuGet.Config` naming a host-only local source fails restore there (`NU1301`). **Prevents:** a `--no-restore` build missing the warmed packages, validation timing out after a green build. **Authority:** `DevelopmentWorkspaceProvider.BuildMounts`, `DevelopmentWorkspaceTools.BuildEnvironment`, `DevelopmentMountBrokerTests`.
+
 ### A new project's publish profile is ignored until `.gitignore` un-ignores its folder
 
 **Rule:** after adding `Properties/PublishProfiles/*.pubxml` to a new project, add

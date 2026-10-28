@@ -321,7 +321,14 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
                                                            raw.StandardOutputTruncated || raw.StandardErrorTruncated);
 
         var result = TruncateForEvidence(raw);
-        await EnsureWorkspaceInvariantAsync(cancellationToken);
+
+        // A command the engine never started cannot have changed the worktree, and the invariant probes would fail through the same
+        // dead boundary and throw before this evidence is kept: the verdict then reads the launch failure as runner_not_installed.
+        if (!NeverStarted(raw))
+        {
+            await EnsureWorkspaceInvariantAsync(cancellationToken);
+        }
+
         var evidence = new DevelopmentCommandEvidence(commandId,
             result.ExitCode,
             result.Completed,
@@ -334,6 +341,14 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         _liveProgress?.CommandCompleted(evidence);
         return result;
     }
+
+    /// <summary>A result the ENGINE composed because nothing was started: no filesystem boundary, or no executable to start.</summary>
+    /// <remarks>Never the wrapper-rewritten form (<c>bwrap: execvp …</c>), whose line came from a child's stderr.</remarks>
+    internal static bool NeverStarted(SandboxCommandResult result) =>
+        !result.Completed
+        && result.ExitCode == -1
+        && (result.StandardError.StartsWith(SandboxCommandResult.BoundaryFailurePrefix, StringComparison.Ordinal)
+            || string.Equals(result.StandardError, SandboxCommandResult.LaunchFailurePrefix + ".", StringComparison.Ordinal));
 
     private async Task EnsureWorkspaceInvariantAsync(CancellationToken cancellationToken)
     {
@@ -526,7 +541,34 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             environment["TESTINGPLATFORM_PIPE_DIRECTORY"] = testPlatformPipeDirectory;
         }
 
+        AddBoundaryEnvironment(environment, _session.SandboxSearchPath, _session.SandboxDotnetRoot);
         return environment;
+    }
+
+    /// <summary>What a command behind the filesystem boundary needs on top: the chain clears the environment to an allow-list.</summary>
+    /// <remarks>
+    ///     The jail PATH is /usr/bin:/bin alone, so <paramref name="searchPath" /> names the host toolchain trees bound read-only, and the
+    ///     host's <c>DOTNET_ROOT</c> is gone, so a framework-dependent apphost (an MTP test exe, a repository tool) finds a runtime outside
+    ///     /usr only through <paramref name="dotnetRoot" />. Request variables are applied after the allow-list, so both survive the chain.
+    /// </remarks>
+    internal static void AddBoundaryEnvironment(Dictionary<string, string> environment, string? searchPath, string? dotnetRoot)
+    {
+        if (searchPath is null)
+        {
+            return;
+        }
+
+        environment["PATH"] = searchPath;
+        if (dotnetRoot is not null)
+        {
+            environment["DOTNET_ROOT"] = dotnetRoot;
+        }
+
+        // No build servers: each command is a fresh namespace, so a compiler or MSBuild server is never reused, and one started
+        // inside holds the command's stdout open after the build exits, so the command looks hung until its timeout.
+        environment["UseSharedCompilation"] = "false";
+        environment["UseRazorBuildServer"] = "false";
+        environment["DOTNET_CLI_USE_MSBUILD_SERVER"] = "0";
     }
 
     /// <summary>
@@ -546,8 +588,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         const int pipeFileNameBytes = 33;
         var hostTemporary = HostRuntimeDirectory("tmp");
         var temporary = ResolveRuntimeDirectory("tmp");
-        // Mounts stay identity-mapped under SandboxIsolationMode.Filesystem, but its bwrap view binds only /work and a jail /tmp, so no host
-        // path exists there. Dev Mode never runs isolated today: the process provider refuses isolation with a trusted host workspace.
+        // Behind the filesystem boundary TMPDIR is the short /xe-runtime/tmp bind and no host path exists inside, so only a host child needs one.
         var hostChild = _session.SandboxHandle.Isolation == SandboxIsolationMode.None
                         && string.Equals(temporary, Path.GetFullPath(hostTemporary), StringComparison.Ordinal);
         if (OperatingSystem.IsWindows() || !hostChild

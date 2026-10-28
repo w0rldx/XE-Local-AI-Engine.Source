@@ -126,6 +126,8 @@ public sealed class SandboxLauncher : ISandboxLauncher
                 Executable = startInfo.FileName,
                 Arguments = [.. startInfo.ArgumentList],
                 ReadOnlyTrees = policy.ReadOnlyTrees,
+                Binds = policy.Binds,
+                PrivateRoot = policy.PrivateRoot,
                 ResourceLimits = policy.ResourceLimits,
                 ThreadLimit = policy.ThreadLimit,
                 RuntimeMaxSeconds = (long)Math.Ceiling(lifetime.TotalSeconds),

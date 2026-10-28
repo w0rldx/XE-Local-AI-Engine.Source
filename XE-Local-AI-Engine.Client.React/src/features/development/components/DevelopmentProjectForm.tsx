@@ -51,6 +51,8 @@ interface DevelopmentProjectFormProps {
 	 * which describe two different isolation postures and must not be hard-coded to either.
 	 */
 	readonly sandboxProvider?: string;
+	/** Whether this host serves Development the filesystem boundary, read from the `development` isolation row. */
+	readonly filesystemBoundary?: boolean;
 }
 
 const emptyTemplates: readonly DevelopmentTemplate[] = [];
@@ -74,6 +76,7 @@ export function DevelopmentProjectForm({
 	onRemoveTemplate,
 	onSubmit,
 	sandboxProvider,
+	filesystemBoundary = false,
 }: DevelopmentProjectFormProps) {
 	const { t } = useTranslation();
 	const containerProvider = isDevelopmentContainerProvider(sandboxProvider);
@@ -98,6 +101,7 @@ export function DevelopmentProjectForm({
 			t={t}
 			project={{
 				containerProvider,
+				filesystemBoundary,
 				values: draft.values,
 				setValues: draft.setValues,
 				repositoryOptions: draft.repositoryOptions,

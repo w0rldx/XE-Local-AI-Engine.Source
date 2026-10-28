@@ -8,6 +8,7 @@ import type {
 	XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryFromTemplateResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskDetailResponse,
+	XeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse,
 } from "@/core/api/generated";
 
 export type DevelopmentProject = XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse;
@@ -77,6 +78,13 @@ const developmentSandboxProviders = {
  */
 export function isDevelopmentContainerProvider(sandboxProvider?: string | null): boolean {
 	return sandboxProvider === developmentSandboxProviders.container;
+}
+
+/** Whether the `development` isolation row reports the filesystem boundary as served on this host. */
+export function developmentFilesystemBoundaryServed(
+	roles: readonly XeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse[] | undefined,
+): boolean {
+	return roles?.find((role) => role.role === "development")?.filesystemIsolation === true;
 }
 
 export interface DevelopmentRepository {

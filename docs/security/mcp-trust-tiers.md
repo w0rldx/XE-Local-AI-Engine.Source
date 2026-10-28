@@ -44,6 +44,8 @@ when one is set. Those two are where a stdio server's package files actually liv
 and both are already on the registration, so nothing new is asked of the operator and nothing is derived from a
 repository. The **working directory is the jail**, not the configured path: the configured path is bound read-only
 because a third-party server has no reason to write into the tree it was installed from.
+Each read-only tree is opened under the descriptor opener's read-only rule: owned by the engine's user or by root, and
+not group- or world-writable, ancestors included, so a root-owned install under `/opt` binds as `/usr` does.
 
 **Sandboxed is for self-contained servers.** Only those two trees are bound. The chain does **not** follow the command
 further: the target of a symlinked command (an npm `bin/` shim pointing into `../lib/node_modules`) is not bound, the

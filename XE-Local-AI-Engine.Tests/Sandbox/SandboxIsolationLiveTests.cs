@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Sandbox;
 
 using System.Globalization;
+using System.Runtime.Versioning;
 using Microsoft.Extensions.Options;
 using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
@@ -117,6 +118,73 @@ public sealed class SandboxIsolationLiveTests
         await Task.CompletedTask;
     }
 
+    /// <summary>A version manager's alias (<c>latest</c>), bound read-only at the link's own path, resolves inside the chain.</summary>
+    [Test]
+    public async Task IsolatedCommand_ReadsATreeThroughAnAliasBoundAtTheLinksPath()
+    {
+        RequireIsolationCapableHost();
+        using var tree = new EngineOwnedTree();
+        var alias = tree.Path + "-latest";
+        using var provider = CreateProvider();
+        var handle = await CreateIsolatedSandboxAsync(provider,
+            readOnlyTrees: [tree.Path],
+            mounts: [new SandboxMount { HostPath = tree.Path, SandboxPath = alias, ReadOnly = true }]);
+
+        var result = await RunShellAsync(provider,
+            handle,
+            $"""
+             cat '{alias}/payload.txt'
+             if touch '{alias}/planted.txt' 2>/dev/null; then echo ALIAS=WRITABLE; else echo ALIAS=READONLY; fi
+             """);
+
+        AssertEx.Equal(expected: 0, result.ExitCode, result.StandardError);
+        AssertEx.Contains(result.StandardOutput, "payload");
+        AssertEx.Contains(result.StandardOutput, "ALIAS=READONLY");
+
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
+    ///     A framework-dependent apphost (this suite's own test host) behind the chain, against the host's dotnet outside <c>/usr</c>: the
+    ///     chain clears <c>DOTNET_ROOT</c>, so it finds no runtime until Development's boundary environment names one.
+    /// </summary>
+    [Test]
+    public async Task AnApphostBehindTheChain_FindsARuntimeOutsideUsrOnlyThroughDotnetRoot()
+    {
+        RequireIsolationCapableHost();
+        var toolchain = Client.Services.Development.Implementation.DevelopmentSandboxToolchain.Resolve(["dotnet"], Environment.GetEnvironmentVariable("PATH"), []);
+        var apphost = Path.Combine(AppContext.BaseDirectory, "XE-Local-AI-Engine.Tests");
+        if (toolchain.DotnetRoot is null || !File.Exists(apphost))
+        {
+            Skip("this host's dotnet is a /usr install, or the suite runs without its apphost; neither can show the missing runtime.");
+        }
+
+        using var provider = CreateProvider();
+        var handle = await CreateIsolatedSandboxAsync(provider,
+            readOnlyTrees: [.. toolchain.ReadOnlyTrees, Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory)]);
+
+        async Task<SandboxCommandResult> RunAsync(string? dotnetRoot)
+        {
+            var environment = new Dictionary<string, string>(StringComparer.Ordinal);
+            Client.Services.Development.Implementation.DevelopmentWorkspaceTools.AddBoundaryEnvironment(environment, toolchain.SearchPath, dotnetRoot);
+            return await provider.ExecuteAsync(handle,
+                new SandboxCommandRequest
+                {
+                    ExecutionId = Guid.NewGuid().ToString("N"),
+                    Executable = apphost,
+                    Arguments = ["--help"],
+                    Environment = environment,
+                    Timeout = CommandTimeout
+                });
+        }
+
+        var without = await RunAsync(dotnetRoot: null);
+        var with = await RunAsync(toolchain.DotnetRoot);
+
+        AssertEx.NotEqual(notExpected: 0, without.ExitCode, "without DOTNET_ROOT the apphost must not find the runtime, or this test proves nothing.");
+        AssertEx.Equal(expected: 0, with.ExitCode, with.StandardError + with.StandardOutput);
+    }
+
     [Test]
     public async Task IsolatedCommand_FindsEveryReadOnlySurfaceReadOnly_AndEveryDeviceStillUsable()
     {
@@ -173,6 +241,53 @@ public sealed class SandboxIsolationLiveTests
 
         AssertEx.Equal(expected: 42, result.ExitCode);
         AssertEx.True(result.Completed);
+
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
+    ///     A command whose executable is missing inside the chain is bwrap's exit, not a start failure; the provider reports it as the
+    ///     launch failure an unwrapped start does, which is what Development classes as <c>runner_not_installed</c>.
+    /// </summary>
+    [Test]
+    public async Task IsolatedCommand_WithAMissingExecutable_IsReportedAsALaunchFailure()
+    {
+        RequireIsolationCapableHost();
+        using var provider = CreateProvider();
+        var handle = await CreateIsolatedSandboxAsync(provider);
+
+        var result = await provider.ExecuteAsync(handle,
+            new SandboxCommandRequest
+            {
+                ExecutionId = Guid.NewGuid().ToString("N"),
+                Executable = "xe-no-such-tool",
+                Arguments = [],
+                Timeout = CommandTimeout
+            });
+
+        AssertEx.False(result.Completed);
+        AssertEx.True(result.StandardError.StartsWith(SandboxCommandResult.LaunchFailurePrefix, StringComparison.Ordinal), result.StandardError);
+        AssertEx.Contains(result.StandardError, "xe-no-such-tool");
+
+        await Task.CompletedTask;
+    }
+
+    /// <summary>A boundary that cannot be established at launch (a tree turned group-writable) is reported as a launch failure too.</summary>
+    [Test]
+    [UnsupportedOSPlatform("windows")]
+    public async Task IsolatedCommand_WhoseBoundaryCannotBeEstablished_IsReportedAsALaunchFailure()
+    {
+        RequireIsolationCapableHost();
+        using var tree = new EngineOwnedTree();
+        using var provider = CreateProvider();
+        var handle = await CreateIsolatedSandboxAsync(provider, readOnlyTrees: [tree.Path]);
+        File.SetUnixFileMode(tree.Path, File.GetUnixFileMode(tree.Path) | UnixFileMode.GroupWrite);
+
+        var result = await RunShellAsync(provider, handle, "echo ran");
+
+        AssertEx.False(result.Completed);
+        AssertEx.True(result.StandardError.StartsWith(SandboxCommandResult.LaunchFailurePrefix, StringComparison.Ordinal), result.StandardError);
+        AssertEx.Contains(result.StandardError, "filesystem boundary could not be established");
 
         await Task.CompletedTask;
     }
@@ -347,7 +462,8 @@ public sealed class SandboxIsolationLiveTests
     }
 
     private static async Task<SandboxHandle> CreateIsolatedSandboxAsync(ProcessSandboxRuntimeProvider provider,
-        IReadOnlyList<string>? readOnlyTrees = null)
+        IReadOnlyList<string>? readOnlyTrees = null,
+        IReadOnlyList<SandboxMount>? mounts = null)
     {
         return await provider.CreateOrAttachAsync(new SandboxCreateRequest
         {
@@ -362,6 +478,7 @@ public sealed class SandboxIsolationLiveTests
             RuntimeProfile = "compute",
             Isolation = SandboxIsolationMode.Filesystem,
             ReadOnlyTrees = readOnlyTrees,
+            Mounts = mounts,
             ThreadLimit = 1,
             ResourceLimits = new SandboxResourceLimits
             {

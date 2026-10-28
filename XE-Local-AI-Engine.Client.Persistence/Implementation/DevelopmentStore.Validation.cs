@@ -32,14 +32,8 @@ public sealed partial class DevelopmentStore
                     throw new DevelopmentInvalidTransitionException("Deterministic validation cannot overlap an active Development attempt.");
                 }
 
-                var latestAttempt = await _dbContext.DevelopmentAttempts
-                                                    .Where(entity => entity.TaskId == task.Id)
-                                                    .OrderByDescending(entity => entity.StartedAtUtc)
-                                                    .ThenByDescending(entity => entity.Id)
-                                                    .FirstOrDefaultAsync(cancellationToken);
-                if (latestAttempt is null
-                    || latestAttempt.Role != DevelopmentAttemptRole.Coder
-                    || latestAttempt.Status != DevelopmentAttemptStatus.Succeeded)
+                var latestAttempt = await LatestAttemptAsync(task.Id, cancellationToken);
+                if (latestAttempt is not { Role: DevelopmentAttemptRole.Coder, Status: DevelopmentAttemptStatus.Succeeded })
                 {
                     throw new DevelopmentInvalidTransitionException("Deterministic validation requires the latest Development attempt to be a successful coder attempt.");
                 }
@@ -63,6 +57,16 @@ public sealed partial class DevelopmentStore
             },
             cancellationToken);
     }
+
+    private Task<DevelopmentAttempt?> LatestAttemptAsync(Guid taskId, CancellationToken cancellationToken) =>
+        _dbContext.DevelopmentAttempts
+                  .Where(entity => entity.TaskId == taskId)
+                  .OrderByDescending(entity => entity.StartedAtUtc)
+                  .ThenByDescending(entity => entity.Id)
+                  .FirstOrDefaultAsync(cancellationToken);
+
+    private async Task<bool> LatestAttemptIsSucceededCoderAsync(Guid taskId, CancellationToken cancellationToken) =>
+        await LatestAttemptAsync(taskId, cancellationToken) is { Role: DevelopmentAttemptRole.Coder, Status: DevelopmentAttemptStatus.Succeeded };
 
     public async Task<DevelopmentOperationResult> InvalidateEvidenceAsync(DevelopmentInvalidateEvidenceCommand command,
         CancellationToken cancellationToken = default)
@@ -123,9 +127,9 @@ public sealed partial class DevelopmentStore
         ArgumentNullException.ThrowIfNull(command);
         ValidateArtifactCommand(command.Artifact);
         if (command.Artifact.Kind != DevelopmentArtifactKind.ValidationReport
-            || command.TargetStatus is not (DevelopmentTaskStatus.InReview or DevelopmentTaskStatus.ChangesRequested))
+            || command.TargetStatus is not (DevelopmentTaskStatus.InReview or DevelopmentTaskStatus.ChangesRequested or DevelopmentTaskStatus.Blocked))
         {
-            throw new ArgumentException("Validation finalization requires a validation artifact and a review or rework target.", nameof(command));
+            throw new ArgumentException("Validation finalization requires a validation artifact and a review, rework or blocked target.", nameof(command));
         }
 
         return await ExecuteOperationAsync(command.Artifact.ProjectId,
@@ -178,10 +182,15 @@ public sealed partial class DevelopmentStore
                 else
                 {
                     // A failed gate SPENDS a round as a reviewer's rejection does — the round budget is the only bound on this loop — charged here because this hop
-                    // never enters review. The count is what StartNextActionAsync stands a task down on; bounded so it can never exceed the cap the live path never reaches.
-                    if (task.CurrentReviewRound < task.MaxReviewRounds)
+                    // never enters review; bounded by the cap. A Blocked target (no test runner on the host) spends none: nothing the coder wrote was judged.
+                    if (command.TargetStatus == DevelopmentTaskStatus.ChangesRequested && task.CurrentReviewRound < task.MaxReviewRounds)
                     {
                         task.CurrentReviewRound++;
+                    }
+
+                    if (command.TargetStatus == DevelopmentTaskStatus.Blocked)
+                    {
+                        task.BlockedAtUtc = now;
                     }
 
                     // The reason reaches the next coder round through the event log, as a reviewer's does. This column is the OPERATOR-facing copy — the same widening

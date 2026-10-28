@@ -31,6 +31,21 @@ internal sealed class DevelopmentWorkspaceSession
     public string? ScratchPath { get; init; }
 
     public required SandboxHandle SandboxHandle { get; init; }
+
+    /// <summary>
+    ///     The <c>PATH</c> commands get inside a filesystem boundary, naming the host toolchain trees bound read-only; <see langword="null" />
+    ///     when the sandbox has none and commands inherit the host's.
+    /// </summary>
+    public string? SandboxSearchPath { get; init; }
+
+    /// <summary>The <c>DOTNET_ROOT</c> commands get inside a filesystem boundary (<see cref="Implementation.DevelopmentSandboxToolchain.DotnetRoot" />).</summary>
+    public string? SandboxDotnetRoot { get; init; }
+
+    /// <summary>
+    ///     The toolchain trees a <c>PATH</c> executable needed that the boundary could not bind, with why: a runner the commands then
+    ///     miss may well be installed on the host. Empty without a boundary.
+    /// </summary>
+    public IReadOnlyList<Implementation.DevelopmentSkippedToolchainTree> UnreachableToolchain { get; init; } = [];
 }
 
 internal interface IDevelopmentWorkspaceProvider

@@ -34,6 +34,8 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
 
     private const string RoundLimitReason = "The configured maximum number of rounds has been reached.";
 
+    private const string RunnerReason = "[runner_not_installed] Command python_pytest could not run its tests.";
+
     private readonly DevelopmentTestFixture _fixture = new();
 
     public void Dispose() =>
@@ -365,7 +367,7 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     ///     re-block it within seconds.
     /// </summary>
     [Test]
-    public async Task AnOperatorRetryWidensTheRoundCapByOne_AndIsTheOnlyEdgeOutOfBlocked()
+    public async Task AnOperatorRetryWidensTheRoundCapByOne_AndIsTheOnlyReworkEdgeOutOfBlocked()
     {
         await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
@@ -885,6 +887,159 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
         AssertEx.Equal(GateReason,
             (await store.GetExecutionSnapshotAsync(next)).PreviousRoundFeedback,
             "and the round is told what the gate found, or it re-implements blind.");
+    }
+
+    /// <summary>A gate that found the host without its test runner blocks the task at once and spends no round, since no patch was judged.</summary>
+    [Test]
+    public async Task AGateThatStandsTheTaskDownSpendsNoRoundAndKeepsTheReason()
+    {
+        await using var provider = await _fixture.BuildProviderAsync();
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var (seed, attemptId) = await SeedTaskInValidationAsync(store);
+        const string reason = "[runner_not_installed] Command python_pytest could not run its tests: pytest is not installed for the host's python3.";
+
+        var reportId = Guid.NewGuid();
+        var finalized = await store.FinalizeValidationAsync(new DevelopmentFinalizeValidationCommand
+        {
+            Artifact = ValidationArtifact(reportId, seed, attemptId),
+            OperationId = Guid.NewGuid(),
+            ExpectedTaskVersion = (await store.GetTaskAsync(seed.TaskId)).Version,
+            TargetStatus = DevelopmentTaskStatus.Blocked,
+            SanitizedReason = reason
+        });
+
+        AssertEx.Equal(nameof(DevelopmentTaskStatus.Blocked), finalized.Status);
+        var task = await store.GetTaskAsync(seed.TaskId);
+        AssertEx.Equal(DevelopmentTaskStatus.Blocked, task.Status);
+        AssertEx.Equal(expected: 0, task.CurrentReviewRound, "nothing the coder wrote was judged, so no round is spent.");
+        AssertEx.Equal(reason, task.BlockedReason, "the operator reads what to install.");
+        AssertEx.True(task.BlockedAtUtc is not null, "a stand-down is timed, as every other one is.");
+        AssertEx.False(await IsValidAsync(dbContext, reportId), "a failing report is never current evidence.");
+    }
+
+    /// <summary>
+    ///     A Retry after the runner is installed re-validates the same patch: back to <c>InProgress</c>, where the next action is
+    ///     the validation again, with nothing charged or widened. Only that flag opens the edge, and only over a succeeded coder attempt.
+    /// </summary>
+    [Test]
+    public async Task ARetriedValidationReturnsTheBlockedTaskToInProgress_AndSpendsAndWidensNothing()
+    {
+        await using var provider = await _fixture.BuildProviderAsync();
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var (seed, attemptId) = await SeedTaskInValidationAsync(store);
+        var blocked = await store.FinalizeValidationAsync(new DevelopmentFinalizeValidationCommand
+        {
+            Artifact = ValidationArtifact(Guid.NewGuid(), seed, attemptId),
+            OperationId = Guid.NewGuid(),
+            ExpectedTaskVersion = (await store.GetTaskAsync(seed.TaskId)).Version,
+            TargetStatus = DevelopmentTaskStatus.Blocked,
+            SanitizedReason = RunnerReason
+        });
+        var cap = (await store.GetTaskAsync(seed.TaskId)).MaxReviewRounds;
+
+        _ = await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() =>
+            store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+            {
+                TaskId = seed.TaskId,
+                OperationId = Guid.NewGuid(),
+                TargetStatus = DevelopmentTaskStatus.InProgress,
+                ExpectedTaskVersion = blocked.Version
+            }));
+        _ = await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() =>
+            store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+            {
+                TaskId = seed.TaskId,
+                OperationId = Guid.NewGuid(),
+                TargetStatus = DevelopmentTaskStatus.ChangesRequested,
+                ExpectedTaskVersion = blocked.Version,
+                RetryValidation = true
+            }));
+
+        _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+        {
+            TaskId = seed.TaskId,
+            OperationId = Guid.NewGuid(),
+            TargetStatus = DevelopmentTaskStatus.InProgress,
+            ExpectedTaskVersion = blocked.Version,
+            OperatorDirected = true,
+            RetryValidation = true
+        });
+
+        var task = await store.GetTaskAsync(seed.TaskId);
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress, task.Status);
+        AssertEx.Equal(expected: 0, task.CurrentReviewRound, "no round was charged for the host's fault, and the retry charges none.");
+        AssertEx.Equal(cap, task.MaxReviewRounds, "nothing was spent, so nothing is bought.");
+        _ = await store.StartValidationAsync(new DevelopmentStartValidationCommand
+        {
+            TaskId = seed.TaskId,
+            OperationId = Guid.NewGuid(),
+            ExpectedTaskVersion = task.Version
+        });
+        AssertEx.Equal(DevelopmentTaskStatus.Validation, (await store.GetTaskAsync(seed.TaskId)).Status, "the same succeeded attempt is validated again.");
+    }
+
+    /// <summary>The validation retry is not a way out of a stand-down whose latest attempt is not a succeeded coder attempt.</summary>
+    [Test]
+    public async Task ARetriedValidationIsRefusedWithoutASucceededCoderAttempt()
+    {
+        await using var provider = await _fixture.BuildProviderAsync();
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store);
+        var blocked = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+        {
+            TaskId = seed.TaskId,
+            OperationId = Guid.NewGuid(),
+            TargetStatus = DevelopmentTaskStatus.Blocked,
+            ExpectedTaskVersion = version,
+            Reason = RunnerReason
+        });
+
+        _ = await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() =>
+            store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+            {
+                TaskId = seed.TaskId,
+                OperationId = Guid.NewGuid(),
+                TargetStatus = DevelopmentTaskStatus.InProgress,
+                ExpectedTaskVersion = blocked.Version,
+                RetryValidation = true
+            }));
+        AssertEx.Equal(DevelopmentTaskStatus.Blocked, (await store.GetTaskAsync(seed.TaskId)).Status);
+    }
+
+    /// <summary>
+    ///     Only a missing-runner stand-down is lifted for free: a task blocked for any other reason (here the round cap, over a succeeded
+    ///     coder attempt) is refused, so the flag cannot be a way past a stand-down that judged the patch.
+    /// </summary>
+    [Test]
+    public async Task ARetriedValidationIsRefusedForAnyOtherBlockReason()
+    {
+        await using var provider = await _fixture.BuildProviderAsync();
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var (seed, attemptId) = await SeedTaskInValidationAsync(store);
+        var blocked = await store.FinalizeValidationAsync(new DevelopmentFinalizeValidationCommand
+        {
+            Artifact = ValidationArtifact(Guid.NewGuid(), seed, attemptId),
+            OperationId = Guid.NewGuid(),
+            ExpectedTaskVersion = (await store.GetTaskAsync(seed.TaskId)).Version,
+            TargetStatus = DevelopmentTaskStatus.Blocked,
+            SanitizedReason = RoundLimitReason
+        });
+
+        _ = await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() =>
+            store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+            {
+                TaskId = seed.TaskId,
+                OperationId = Guid.NewGuid(),
+                TargetStatus = DevelopmentTaskStatus.InProgress,
+                ExpectedTaskVersion = blocked.Version,
+                RetryValidation = true
+            }));
+        AssertEx.Equal(DevelopmentTaskStatus.Blocked, (await store.GetTaskAsync(seed.TaskId)).Status);
     }
 
     /// <summary>

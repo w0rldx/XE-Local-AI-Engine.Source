@@ -7,6 +7,10 @@ internal static partial class DevelopmentArtifactSanitizer
 {
     private const string RedactedPath = "[REDACTED:development-path]";
 
+    private const string CredentialRefusal = "Development artifact content contains credential-like material and cannot be persisted.";
+
+    private const string PasswordRefusal = "Development artifact content contains a bare password-like value and cannot be persisted.";
+
     /// <summary>
     ///     How many trailing path segments a generic redaction keeps; what survives is a relative tail carrying no
     ///     host layout.
@@ -237,6 +241,28 @@ internal static partial class DevelopmentArtifactSanitizer
     private static string Placeholder(int index) =>
         $"\uE000{index}\uE001";
 
+    /// <summary>Whether <paramref name="exception" /> is this sanitizer's own refusal, whose engine-authored message names no content.</summary>
+    internal static bool IsScannerRefusal(Exception exception) =>
+        exception is DevelopmentWorkspaceSecurityException { Message: CredentialRefusal or PasswordRefusal };
+
+    /// <summary>Neutralizes engine-composed text quoting host paths as command output is, redacting rather than rejecting.</summary>
+    /// <remarks>
+    ///     Paths are redacted, then credential-like runs redacted; text that still cannot pass becomes the bare marker. For text the ENGINE
+    ///     wrote from host facts (a left-out toolchain tree, a rule's reason), never coder- or command-produced text: a hash-named path
+    ///     segment must not make the whole report it is quoted in unpersistable.
+    /// </remarks>
+    internal static string NeutralizeEngineText(string text)
+    {
+        try
+        {
+            return SanitizeText(text, allowRedaction: true, []);
+        }
+        catch (DevelopmentWorkspaceSecurityException)
+        {
+            return RedactedPath;
+        }
+    }
+
     /// <summary>
     ///     Sanitizes model-authored artifact text. Any credential-like match rejects the whole artifact — a reviewer
     ///     submission has no business containing one, so there is nothing to salvage by redacting it.
@@ -285,14 +311,14 @@ internal static partial class DevelopmentArtifactSanitizer
         // context, so there is no safe partial form. Always rejects, for every caller.
         if (scan.ShouldReject)
         {
-            throw new DevelopmentWorkspaceSecurityException("Development artifact content contains credential-like material and cannot be persisted.");
+            throw new DevelopmentWorkspaceSecurityException(CredentialRefusal);
         }
 
         if (scan.RedactedContent is not null)
         {
             if (!allowRedaction)
             {
-                throw new DevelopmentWorkspaceSecurityException("Development artifact content contains credential-like material and cannot be persisted.");
+                throw new DevelopmentWorkspaceSecurityException(CredentialRefusal);
             }
 
             sanitized = scan.RedactedContent;
@@ -302,7 +328,7 @@ internal static partial class DevelopmentArtifactSanitizer
         // bare one that survived has no redaction class of its own, so it still rejects the artifact.
         if (BarePasswordLikeValueRegex().IsMatch(sanitized))
         {
-            throw new DevelopmentWorkspaceSecurityException("Development artifact content contains a bare password-like value and cannot be persisted.");
+            throw new DevelopmentWorkspaceSecurityException(PasswordRefusal);
         }
 
         return sanitized;

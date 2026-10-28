@@ -194,11 +194,17 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
             var verdict = DevelopmentValidationVerdict.Evaluate(profile with
             {
                 ValidationCommandIds = commandIds
-            }, evidence);
+            }, evidence, session.UnreachableToolchain);
 
             var tests = evidence.Select(static command => command.TestOutcome).OfType<DevelopmentTestOutcome>().Where(static outcome => outcome.Parsed).ToList();
             var passed = verdict.Passed && timedOutAfterSeconds is null;
-            var refusal = timedOutAfterSeconds is null ? DevWorkflowFailureClasses.ToolCommandFailed : DevWorkflowFailureClasses.Timeout;
+            // A host without the test runner is a person's to fix: ToolCommandFailed would route the fix loop back at a coder whose next patch fails identically.
+            var refusal = (timedOutAfterSeconds, verdict.StopsTask) switch
+            {
+                (not null, _) => DevWorkflowFailureClasses.Timeout,
+                (_, true) => DevWorkflowFailureClasses.Configuration,
+                _ => DevWorkflowFailureClasses.ToolCommandFailed
+            };
             var failureClass = passed ? null : refusal;
 
             return new DevWorkflowToolRun
@@ -208,7 +214,7 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
                 FailureCode = verdict.FailureCode,
                 SanitizedReason = timedOutAfterSeconds is { } seconds
                     ? $"This node run did not finish its validation commands within the {seconds} seconds it was given."
-                    : verdict.FailureDetail,
+                    : StoppingReason(verdict),
                 CommandsRun = evidence.Length,
                 CommandsFailed = evidence.Count(static command => !command.Completed || command.ExitCode != 0),
                 TestsPassed = tests.Count == 0 ? null : tests.Sum(static outcome => outcome.Passed),
@@ -220,6 +226,12 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
             };
         }
     }
+
+    /// <summary>The verdict's detail, led by its bracketed code when it stops the work for a human, as Dev Mode's own gate words it.</summary>
+    private static string? StoppingReason(DevelopmentValidationVerdict verdict) =>
+        verdict is { StopsTask: true, FailureCode: { } code, FailureDetail: { } detail }
+            ? DevelopmentAttemptEvidenceException.Compose(code, detail)
+            : verdict.FailureDetail;
 
     /// <summary>Puts the implementation's OWN work into the freshly prepared workspace before anything judges it.</summary>
     /// <remarks>
@@ -412,7 +424,8 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
             verdict.FailureDetail,
             evidence,
             _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-            basedOn);
+            basedOn,
+            DevelopmentFilesystemBoundary.IsServed(session.SandboxHandle, _sandbox.Capabilities));
         var composed = JsonSerializer.SerializeToUtf8Bytes(report, JsonOptions);
         if (composed.Length <= _options.MaxArtifactBytes)
         {

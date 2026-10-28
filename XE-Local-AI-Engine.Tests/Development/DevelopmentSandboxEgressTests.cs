@@ -118,15 +118,17 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
     }
 
     /// <summary>
-    ///     <c>high</c> on Development Mode promotes egress denial and ceilings, the preferences it declares, and never a boundary it does not
-    ///     ask for: this backend advertises none and still serves (ADR 0020).
+    ///     <c>high</c> on Development Mode promotes the three preferences it declares, egress denial, the filesystem boundary and ceilings:
+    ///     a backend serving all three serves, and the agent-facing sandbox asks for the boundary (ADR 0020).
     /// </summary>
     [Test]
-    public async Task PrepareAsync_UnderTheHighProfile_OnABackendServingEgressDenialAndCeilings_ServesWithoutAskingForABoundary()
+    public async Task PrepareAsync_UnderTheHighProfile_OnABackendServingAllThreeAxes_ServesBehindTheBoundary()
     {
         var sandbox = new CapabilitySandbox(SandboxProviderCapabilities.SupportsTrustedHostWorkspace
                                             | SandboxProviderCapabilities.SupportsNetworkPolicy
                                             | SandboxProviderCapabilities.SupportsResourceLimits
+                                            | SandboxProviderCapabilities.SupportsFilesystemIsolation
+                                            | SandboxProviderCapabilities.SupportsHostFilesystemBoundary
                                             | SandboxProviderCapabilities.SupportsKill);
 
         _ = await PrepareAsync(sandbox, profile: SandboxSecurityProfile.High);
@@ -134,7 +136,31 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
         AssertEx.Equal(expected: 1, sandbox.Created.Count);
         AssertEx.Equal(SandboxNetworkPolicy.None, sandbox.Created[0].NetworkPolicy);
         AssertEx.NotNull(sandbox.Created[0].ResourceLimits);
-        AssertEx.Equal(SandboxIsolationMode.None, sandbox.Created[0].Isolation);
+        AssertEx.Equal(SandboxIsolationMode.Filesystem, sandbox.Created[0].Isolation);
+    }
+
+    /// <summary>
+    ///     The fallback's other half: under <c>low</c> a host without the boundary still runs Development (the capability view and the
+    ///     report warn), while <c>high</c> refuses it naming the boundary and the remedy, before any sandbox exists.
+    /// </summary>
+    [Test]
+    public async Task PrepareAsync_OnABackendWithoutTheBoundary_RunsUnderLowAndIsRefusedUnderHigh()
+    {
+        const SandboxProviderCapabilities NoBoundary = SandboxProviderCapabilities.SupportsTrustedHostWorkspace
+                                                       | SandboxProviderCapabilities.SupportsNetworkPolicy
+                                                       | SandboxProviderCapabilities.SupportsResourceLimits
+                                                       | SandboxProviderCapabilities.SupportsKill;
+        var low = new CapabilitySandbox(NoBoundary);
+        _ = await PrepareAsync(low);
+        AssertEx.Equal(SandboxIsolationMode.None, low.Created[0].Isolation);
+
+        var high = new CapabilitySandbox(NoBoundary);
+        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(async () =>
+            await PrepareAsync(high, profile: SandboxSecurityProfile.High));
+
+        AssertEx.Contains(exception.Message, "host-filesystem boundary");
+        AssertEx.Contains(exception.Message, SandboxSecurityProfilePolicy.Remedy);
+        AssertEx.Equal(expected: 0, high.Created.Count, "the refusal must land BEFORE a sandbox is created.");
     }
 
     /// <summary>
@@ -535,9 +561,10 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
         private readonly List<SandboxCreateRequest> _created = [];
         private readonly SandboxProviderCapabilities _capabilities;
 
+        // Always the host-toolchain shape, so the provider reads the declaration the process backend is selected under.
         public CapabilitySandbox(SandboxProviderCapabilities capabilities)
         {
-            _capabilities = capabilities;
+            _capabilities = capabilities | SandboxProviderCapabilities.SuppliesHostToolchain;
         }
 
         public IReadOnlyList<SandboxCreateRequest> Created => _created;

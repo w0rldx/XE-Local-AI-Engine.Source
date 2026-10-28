@@ -105,8 +105,8 @@ public static class SandboxWorkloads
     };
 
     /// <summary>
-    ///     Development Mode on a node that has NOT been given a container image: the host's toolchain, and the worktree preserved across
-    ///     kill and restart.
+    ///     Development Mode on a node that has NOT been given a container image: the host's toolchain, the worktree preserved across
+    ///     kill and restart, and the filesystem boundary wherever the backend advertises one.
     /// </summary>
     /// <remarks>
     ///     The network floor stays <see cref="SandboxNetworkPolicy.Unrestricted" /> for AgentHome's reason, not as a leftover: this feature
@@ -121,6 +121,9 @@ public static class SandboxWorkloads
         Toolchain = SandboxToolchainSource.HostToolchain,
         IsolationFloor = SandboxIsolationMode.None,
         NetworkFloor = SandboxNetworkPolicy.Unrestricted,
+        // As AgentHome's: coder and validation run inside the bubblewrap chain where measured, elsewhere with a warning unless `high` refuses.
+        // The warm-restore sandbox never asks: it needs egress, which the chain never has.
+        RequestsFilesystemIsolationWhereAdvertised = true,
         // BOTH sandboxes DevelopmentWorkspaceProvider creates ask for host-toolchain ceilings wherever advertised. This role's measurement
         // produced the two-profile split: under run_python's numbers a real `dotnet build` fails, not merely runs slowly (SandboxToolchainLimits).
         Ceilings = SandboxCeilingProfile.HostToolchain,
@@ -139,6 +142,20 @@ public static class SandboxWorkloads
     public static readonly SandboxRequirements DevelopmentModeImageToolchain = DevelopmentModeHostToolchain with
     {
         Workload = "DevelopmentMode (image toolchain)",
-        Toolchain = SandboxToolchainSource.EngineApprovedImage
+        Toolchain = SandboxToolchainSource.EngineApprovedImage,
+        // A container has the host-filesystem boundary by construction and no bubblewrap chain to ask for, so under `high` it is never
+        // refused for a preference it could only serve through a mechanism it does not have.
+        RequestsFilesystemIsolationWhereAdvertised = false
     };
+
+    /// <summary>
+    ///     The Development declaration a RESOLVED backend serves: the host-toolchain form where the backend supplies the host's toolchain,
+    ///     the image form otherwise.
+    /// </summary>
+    /// <remarks>
+    ///     The toolchain axis is the one the two forms differ on and the one <c>SandboxProviderSelector.ResolveDevelopment</c> selected by,
+    ///     so a create site or a summary that holds only the provider reads back the declaration it was selected under.
+    /// </remarks>
+    public static SandboxRequirements DevelopmentFor(SandboxProviderCapabilities capabilities) =>
+        capabilities.HasFlag(SandboxProviderCapabilities.SuppliesHostToolchain) ? DevelopmentModeHostToolchain : DevelopmentModeImageToolchain;
 }

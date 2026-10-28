@@ -49,6 +49,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
     private int _validationStallsOwed;
     private bool _advanceOnStall;
     private bool _gateFails;
+    private DevelopmentValidationVerdict _gateVerdict = TestsFailedVerdict;
 
     public FakeDevelopmentTaskChain(IServiceScopeFactory scopes) =>
         _scopes = scopes ?? throw new ArgumentNullException(nameof(scopes));
@@ -187,6 +188,20 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
     }
 
     /// <summary>
+    ///     As <see cref="FailTheDeterministicGate" />, with the verdict a host without pytest produces: the product's
+    ///     <see cref="DevelopmentValidationRunner.TargetFor" /> and <see cref="DevelopmentValidationRunner.ReasonFor" />
+    ///     decide where that leaves the task and what it says.
+    /// </summary>
+    public void FailTheDeterministicGateOnAMissingRunner()
+    {
+        lock (_gate)
+        {
+            _gateFails = true;
+            _gateVerdict = MissingRunnerVerdict;
+        }
+    }
+
+    /// <summary>
     ///     What the gate says when it declines a patch. Settable because it lands on the TASK as its blocked reason, and
     ///     the workflow's retried refusal reads it back — so its LENGTH is part of a contract worth testing.
     /// </summary>
@@ -280,7 +295,13 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
 
         if (gateFails && task.Status == DevelopmentTaskStatus.InProgress)
         {
-            return await FailTheGateAsync(store, projectId, task, cancellationToken);
+            DevelopmentValidationVerdict verdict;
+            lock (_gate)
+            {
+                verdict = _gateVerdict;
+            }
+
+            return await FailTheGateAsync(store, projectId, task, verdict, cancellationToken);
         }
 
         if (!NextStatus.TryGetValue(task.Status, out var next))
@@ -316,6 +337,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
     private static async Task<DevelopmentNextActionResult> FailTheGateAsync(IDevelopmentStore store,
         Guid projectId,
         DevelopmentTaskSnapshot task,
+        DevelopmentValidationVerdict verdict,
         CancellationToken cancellationToken)
     {
         if (task.CurrentReviewRound >= task.MaxReviewRounds)
@@ -377,8 +399,8 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
                 },
                 OperationId = Guid.NewGuid(),
                 ExpectedTaskVersion = opened.Version,
-                TargetStatus = DevelopmentValidationRunner.TargetFor(passed: false),
-                SanitizedReason = GateFailureReason
+                TargetStatus = DevelopmentValidationRunner.TargetFor(verdict),
+                SanitizedReason = DevelopmentValidationRunner.ReasonFor(verdict)
             },
             cancellationToken);
         return new DevelopmentNextActionResult
@@ -392,9 +414,21 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
         };
     }
 
-    /// <summary>What the scripted gate reports, in the shape <c>DevelopmentValidationRunner</c> composes.</summary>
-    private const string GateFailureReason =
-        "Deterministic validation failed (tests_failed): Command dotnet_test_release_no_build reported 1 failing of 3 executed tests.";
+    /// <summary>What the scripted gate reports by default: a red suite.</summary>
+    private static readonly DevelopmentValidationVerdict TestsFailedVerdict = new()
+    {
+        Passed = false,
+        FailureCode = DevelopmentValidationFailureCodes.TestsFailed,
+        FailureDetail = "Command dotnet_test_release_no_build reported 1 failing of 3 executed tests."
+    };
+
+    /// <summary>What the scripted gate reports on a host without pytest.</summary>
+    internal static readonly DevelopmentValidationVerdict MissingRunnerVerdict = new()
+    {
+        Passed = false,
+        FailureCode = DevelopmentValidationFailureCodes.RunnerNotInstalled,
+        FailureDetail = "Command python_pytest could not run its tests: pytest is not installed for the host's python3. Install pytest on the host yourself; XE never installs it."
+    };
 
     /// <summary>
     ///     A real attempt row, landed on <paramref name="terminal" /> or left running, so the node run reads it off the

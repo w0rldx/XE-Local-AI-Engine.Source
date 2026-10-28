@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Development;
 
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     The persisted validation report.
@@ -11,12 +12,9 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 ///     <see cref="CommandProfileDigest" /> are an independent dimension recording which commands the gate ran.
 ///     Adding them does not weaken the protocol check; replacing the protocol check with them would.
 /// </remarks>
-/// <param name="FailureCode">
-///     A stable <see cref="DevelopmentValidationFailureCodes" /> value when the gate failed, else null.
-/// </param>
-/// <param name="FailureDetail">
-///     Operator-facing detail for <paramref name="FailureCode" />, or null when the gate passed.
-/// </param>
+/// <param name="FailureCode">A stable <see cref="DevelopmentValidationFailureCodes" /> value when the gate failed, else null.</param>
+/// <param name="FailureDetail">Operator-facing detail for <paramref name="FailureCode" />, or null when the gate passed.</param>
+/// <param name="FilesystemBoundary">Whether the commands ran behind the host filesystem boundary; false is the views' warning, null: none ran.</param>
 internal sealed record DevelopmentValidationReport(
     bool Passed,
     string BaseCommit,
@@ -29,7 +27,8 @@ internal sealed record DevelopmentValidationReport(
     string? FailureCode,
     string? FailureDetail,
     IReadOnlyList<DevelopmentCommandEvidence> Commands,
-    long CompletedAtUtc);
+    long CompletedAtUtc,
+    bool? FilesystemBoundary = null);
 
 /// <summary>Stable <see cref="DevelopmentValidationReport.FailureCode" /> values, so a UI can localize them.</summary>
 internal static class DevelopmentValidationFailureCodes
@@ -45,6 +44,12 @@ internal static class DevelopmentValidationFailureCodes
 
     /// <summary>A test command ran but its result could not be read. This fails the gate; it never passes by default.</summary>
     public const string TestResultsUnparsed = "test_results_unparsed";
+
+    /// <summary>
+    ///     The host has no runner for a validation command: its executable could not be started, or a code-owned adapter
+    ///     reported its test runner missing. The one failure no coder round can fix, so it stops the task for a human.
+    /// </summary>
+    public const string RunnerNotInstalled = DevelopmentTransitionTaskCommand.RetryValidationFailureCode;
 
     /// <summary>A test command reported a readable result in which nothing actually ran.</summary>
     public const string NoTestsExecuted = "no_tests_executed";

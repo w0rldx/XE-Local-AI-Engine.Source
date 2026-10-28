@@ -9,6 +9,7 @@ import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineEr
 import { MarkdownView } from "@/core/ui/components/MarkdownView/MarkdownView";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
+import { DevWorkflowNodeTerminalReason } from "@/features/devWorkflows/components/DevWorkflowNodePanel/DevWorkflowNodeTerminalReason";
 import { devWorkflowConflictTypes, readDevWorkflowConflict } from "@/features/devWorkflows/api/DevWorkflowConflict";
 import {
 	asDevWorkflowDecisionKind,
@@ -224,11 +225,7 @@ export function DevWorkflowHumanGatePanel({
 									t("pages.devWorkflows.failureClass.unknown", "The node failed"),
 								)}
 							</Text>
-							{nodeRun.terminalReason ? (
-								<Text size="xs" c="dimmed" style={{ whiteSpace: "pre-wrap" }}>
-									{nodeRun.terminalReason}
-								</Text>
-							) : null}
+							<DevWorkflowNodeTerminalReason reason={nodeRun.terminalReason} />
 						</Stack>
 					}
 				/>

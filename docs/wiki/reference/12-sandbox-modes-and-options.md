@@ -503,8 +503,8 @@ like part of the base; and skip-worktree or assume-unchanged bits that survived 
   built against. The coder's and validation's sandboxes now mount that folder read-only, and the warm restore, which
   runs the base commit alone, is its one writer; it gets fresh home, tmp and dotnet directories of its own too,
   because it has egress and a `NuGet.Config` in the task's `HOME` would choose its sources. Measured: an offline
-  restore into a fresh tree against a read-only, fully warmed folder succeeds. A read-only mount needs a provider
-  that advertises `SupportsReadOnlyMounts`, like the `.git/config` mount.
+  restore into a fresh tree against a read-only, fully warmed folder succeeds. A read-only mount needs a mount layer,
+  like the `.git/config` mount: a provider that advertises `SupportsReadOnlyMounts`, or the bubblewrap chain (below).
 - **Sandboxed git reads no global or system file.** Every Development command carries `GIT_CONFIG_GLOBAL=/dev/null`,
   `GIT_CONFIG_NOSYSTEM=1` and `GIT_ATTR_NOSYSTEM=1`, so a git config in any `HOME` configures nothing.
 
@@ -515,11 +515,12 @@ like part of the base; and skip-worktree or assume-unchanged bits that survived 
   the runner in-process. The test-write policy, the dependency-manifest refusal and the reviewer are the controls.
 - **Validation's own run.** The commands execute patch code, which can write the validation tree, its `.git` and its
   fresh directories while it runs. Nothing is read back from them afterwards, and the next run starts over.
-- **The process provider, Development's default.** It has no mount layer, so by default the package folder is not
-  read-only, and Development has no filesystem boundary on it: a coder command can write anything the node's user can, the runtime directory and a
-  running validation included, and a process that leaves the provider's process group survives the kill. Fresh
-  directories, the stage and the read-only folder close carry-over on a provider with a mount layer; on the process
-  provider they close accidental carry-over, not a hostile one.
+- **The process provider without the bubblewrap chain.** On Windows, macOS and a Linux host without bwrap or
+  unprivileged user namespaces there is no mount layer: the package folder is not read-only, and a coder command can
+  write anything the node's user can, the runtime directory and a running validation included, and a process that
+  leaves the provider's process group survives the kill. Fresh directories, the stage and the read-only folder close
+  carry-over behind the chain or a container; on this path they close accidental carry-over, not a hostile one. The
+  Development page and the validation report say so (see "Development Mode behind the bubblewrap chain").
 - **What the base commit's package sources serve.** The warm restore downloads whatever they answer; that is the
   operator's trust in the repository, not something the coder controls.
 
@@ -529,10 +530,105 @@ the validation tree takes about 1.3 s for the fetch and checkout, plus the apply
 fresh `DOTNET_CLI_HOME` costs about 0.08 s per `dotnet` command for the CLI's first-use sentinels. A .NET validation
 rebuilds `obj/` and `bin/` from scratch, as it already did once ignored files stopped reaching it.
 
+### Development Mode behind the bubblewrap chain
+
+`SandboxWorkloads.DevelopmentModeHostToolchain` sets `RequestsFilesystemIsolationWhereAdvertised`, so the coder and
+validation sandboxes ask for `SandboxIsolationMode.Filesystem` wherever the process provider advertises
+`SupportsFilesystemIsolation` (`DevelopmentWorkspaceProvider.AgentFacingIsolation`). What the chain then shows a
+command:
+
+| Path inside | Host source | Writable |
+|---|---|---|
+| `/work` (the working directory) | the coder's workspace, or the validation `tree/`; tightened to `0700` | yes |
+| `/xe-runtime/home`, `/xe-runtime/tmp`, `/xe-runtime/dotnet` | the session's runtime or fresh validation directories | yes |
+| the package folder, at its own host path | `<runtime>/nuget`, so `obj/` the warm restore wrote still resolves | no |
+| `/work/.git/config`, each committed credential path | the rewritten config; an empty shadow file | no |
+| the install trees of `dotnet`, `python3` and `git` outside `/usr` | `DevelopmentSandboxToolchain` from the engine's `PATH` | no |
+| `/usr`, a synthetic `/etc`, `/dev`, `/proc`, a private `/tmp` | the chain's own (`SandboxIsolatedChain`) | `/tmp` only |
+
+Nothing else of the host is visible, and the network namespace is empty. `PATH` is the host `PATH` filtered to what
+is visible, then `/usr/bin:/bin`. No toolchain tree may expose a root of the Sandboxed MCP sensitive-root set
+(`SandboxedMcpStdioTransport.BuildSensitiveHostRoots`: it may not contain the account's home, nor be, contain or lie
+inside a credential store such as `~/.config` or `~/.ssh`, the node data directory or the engine's install directory),
+compared after resolving symlinks (a `/home` linked to `/var/home` included), so a `~/.local/bin` entry is dropped
+rather than binding `~/.local`. Where an executable found in that entry links into a bound tree (`~/.local/bin/dotnet`
+to `~/.dotnet`, uv's default `python3`), the PATH carries that real directory at the entry's position instead, so it
+still shadows later entries as on the host, but only when that directory finds the executable by its own name as the
+same binary (a `python3` link into a directory holding only `python3.12` is not substituted, and stays reported
+unreachable).
+
+A toolchain tree must pass the descriptor opener's read-only rule: owned by the engine's user or by root, and not
+group- or world-writable, the same for every ancestor, so a root-owned `/opt/dotnet` or `/snap/bin` is bound like
+`/usr`. A tree that fails it is left out at resolve time, so only the tool inside it fails "not found"; it never fails
+every command's launch. A tree under `/tmp` stays refused. Every refused tree is recorded with its executable and the
+rule (`DevelopmentSkippedToolchainTree`) and logged; when validation then reports `runner_not_installed` for that
+executable, the detail says the runner may be installed but was unreachable behind the boundary and names each tree
+and rule, never "not installed". The detail quotes each tree and reason through
+`DevelopmentArtifactSanitizer.NeutralizeEngineText`, the redaction command output gets (no account home, a
+layout-free tail; a hash-like run redacted rather than rejecting the report); the warning log keeps the full path. A
+report the secret scanner still refuses twice blocks the task with that reason instead of an exception type.
+
+A symlinked directory on the way to a bound interpreter that sits outside every bound tree, such as a version
+manager's `latest` alias that a venv's `bin/python3` and its `pyvenv.cfg` `home` both name (mise, pyenv and asdf
+create venvs this way), is shown inside the chain as a read-only bind of its canonical target at the link's own path
+(`DevelopmentToolchainAlias`), under the same placement, protected-root and trust rules (applied to the link's parent
+directory). Without it the venv's interpreter dangles and the bare base interpreter runs instead. A link under `/etc`
+or `/xe-runtime`, or one that is or contains a bound tree or mount target, is refused so it cannot shadow one.
+
+The chain clears the environment to an allow-list, so a `dotnet` the chain shows (in a bound tree, or under `/usr`)
+also sets `DOTNET_ROOT` to its directory (`DevelopmentSandboxToolchain.DotnetRoot`): a framework-dependent apphost,
+such as an MTP test executable or a repository tool, otherwise finds no runtime outside its default locations, which
+`/usr/local/share/dotnet` is not. Build servers are off
+(`UseSharedCompilation=false`, `UseRazorBuildServer=false`, `DOTNET_CLI_USE_MSBUILD_SERVER=0`): each command is a new
+namespace, and a compiler server started inside held the command's stdout open after the build exited. The engine's
+own git and stage work runs host-side and is unchanged. The warm-restore sandbox stays outside the chain: it needs
+egress, which the chain never has, and it runs only the base commit's `dotnet_restore`. That holds under both security
+profiles: `high` does not move the warm restore behind the boundary.
+
+**The read-only binds hold per command, not across commands.** Every command is a new namespace over the same
+writable `/work`. Inside one command, `.git/config` and each credential shadow are read-only mounts; but that command
+can rename `.git` or a shadowed credential's parent directory, and plant an unmounted `.git/config` (with a filter
+driver, say) or move the real credential out from under the shadow's path. The next command then binds the planted
+file, or shadows a path the credential no longer sits at. The same holds for the Docker backend's mounts. Host-side
+git is a separate surface ("The managed workspace's Git configuration is engine-owned", above); what this exposure
+leaves is repository code in a later sandboxed command reading a moved credential or running a planted filter driver
+inside the same sandbox. Pinning each target's identity across commands is not done yet.
+
+| Host | Coder and validation sandboxes |
+|---|---|
+| Linux with a trusted bwrap, unprivileged user namespaces and a systemd user scope | inside the chain |
+| Linux without them | host child (`low`: runs, warns; `high`: refused) |
+| Windows, with or without the MXC Preview boundary | host child; the Preview boundary serves floor workloads only (ADR 0019) |
+| macOS | host child |
+| `Development:Sandbox:Provider=docker` | the container, unchanged |
+
+The warning is the `development` row of the capability isolation summary (`FilesystemIsolation=false` with its
+measured reason, rendered as a banner on the Development page) and the validation report's `FilesystemBoundary=false`.
+A repository whose `NuGet.Config` names a host-only local source or fallback folder no longer restores behind the
+chain: the folder is not visible. Make every package reachable through the task's package folder; NuGet fails a
+fresh restore on a missing local source (`NU1301`) unless the repository sets `RestoreIgnoreFailedSources`.
+
 > **`HOME` is the per-task directory, so a `pip install --user` pytest is invisible.** Python's user site lives under
 > `~/.local`, which inside a Development command is the empty per-task `HOME`. Install pytest where the host `python3`
 > on the node's `PATH` finds it without the user site: the distribution's package, or a virtual environment whose
 > `python3` comes first on that `PATH`.
+
+**A missing runner stops the task after one validation.** `DevelopmentValidationVerdict` reports `runner_not_installed`
+when a code-owned adapter says its runner is missing (pytest's bootstrap `ModuleNotFoundError`) or when any validation
+command's evidence starts with the sandbox's launch-failure sentence (no `python3`, no `dotnet`, any profile). That
+verdict is the host's fault, not the patch's, so `DevelopmentValidationRunner.TargetFor` sends the task to `Blocked`
+instead of `ChangesRequested`, charges no review round, and stores the reason as `[runner_not_installed] <install
+hint>`. Before this, each such run cost a whole coder round until the round cap, and the task then read as "rounds
+used". Behind a wrapper the engine starts the wrapper, not the tool, so a missing tool is the wrapper's own stderr
+line (`bwrap: execvp dotnet: No such file or directory`, or `setsid`'s, `env`'s, `unshare`'s, `systemd-run`'s);
+`SandboxWrapperExecFailure` rewrites that result to the same launch-failure sentence, and a filesystem boundary that
+could not be established reports it too, so one rule covers every host. A command the engine never started (the
+boundary could not be established, or the executable could not be started at all) keeps that evidence without the
+workspace invariant probes, which would fail through the same boundary and throw first
+(`DevelopmentWorkspaceTools.NeverStarted`); the wrapper-rewritten form still runs them, since its line came from a child. In Development Mode the blocked task stays
+blocked; under Dev Workflows an operator `Retry` after installing the runner moves it back to `InProgress`
+(`RetryValidation`), so the same succeeded coder attempt is validated again with no round charged and no cap widened
+(wiki 25, "Operator retry reasons").
 
 ### The test-write policy's protected-path set
 

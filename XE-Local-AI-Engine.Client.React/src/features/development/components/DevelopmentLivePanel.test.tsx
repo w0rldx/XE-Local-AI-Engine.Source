@@ -206,6 +206,21 @@ describe("DevelopmentLivePanel validation evidence", () => {
 		expect(queriesMock.useDevelopmentArtifactContent).toHaveBeenCalledWith("project-1", "task-1", "artifact-newest-invalid");
 	});
 
+	it("warns when the commands ran with no filesystem boundary, and only then", () => {
+		contentQuery(JSON.stringify(report({ filesystemBoundary: false })));
+		renderPanel();
+		expect(screen.getByTestId("development-validation-no-boundary").textContent).toContain("No filesystem boundary on this host");
+		cleanup();
+
+		// Behind the boundary, and on a report written before the field existed, nothing is claimed either way.
+		for (const body of [report({ filesystemBoundary: true }), report()]) {
+			contentQuery(JSON.stringify(body));
+			renderPanel();
+			expect(screen.queryByTestId("development-validation-no-boundary")).toBeNull();
+			cleanup();
+		}
+	});
+
 	it("renders a failed validation as failed, with its reason, rather than as nothing having run", () => {
 		// The live failure, verbatim: the container gate failed, the timeline read `ValidationFinalized — Failed`, and the
 		// Validation tab said "No deterministic validation has run for this task yet." A failed gate invalidates the
@@ -280,6 +295,41 @@ describe("DevelopmentLivePanel validation evidence", () => {
 		expect(screen.queryByTestId("development-validation-test-counts")).toBeNull();
 		expect(screen.getByTestId("development-validation-failure")).toBeTruthy();
 		expect(screen.getByTestId("development-validation-result").textContent).toBe("Validation failed");
+	});
+
+	it("names a host without the test runner as the operator's to fix, with the install hint", () => {
+		contentQuery(
+			JSON.stringify(
+				report({
+					passed: false,
+					failureCode: "runner_not_installed",
+					failureDetail: "Command python_pytest could not run its tests: Install pytest on the host yourself.",
+					commands: [
+						command("python_pytest", {
+							testOutcome: testOutcome({
+								parsed: false,
+								parseFailureCode: "runner_not_installed",
+								parseFailureDetail: "Install pytest on the host yourself.",
+								discovered: 0,
+							}),
+						}),
+					],
+				}),
+			),
+		);
+
+		renderPanel();
+
+		const failure = screen.getByTestId("development-validation-failure");
+		expect(failure.textContent).toContain("A validation command's runner could not be started on this host");
+		expect(failure.textContent).toContain("Install pytest on the host yourself.");
+		const parseFailure = screen.getByTestId("development-validation-test-parse-failure");
+		expect(
+			within(parseFailure).getByText(
+				"These tests' runner could not be started on this host: it is not installed, or the filesystem boundary could not reach it. The detail says which; XE never installs it.",
+			),
+		).toBeTruthy();
+		expect(within(parseFailure).getByText("runner_not_installed")).toBeTruthy();
 	});
 
 	it("reads the no-tests policy case as a reduced guarantee rather than a generic failure", () => {

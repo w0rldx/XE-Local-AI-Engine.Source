@@ -132,7 +132,7 @@ export function DevelopmentConsentGate({ children }: DevelopmentConsentGateProps
 							<List.Item>
 								{t(
 									"pages.development.consent.processUser",
-									"On this node those commands run as the signed-in user account that runs the engine — with that account's access to your files, not just the repository.",
+									"On this node those commands run as the signed-in user account that runs the engine. Where this host offers a filesystem boundary (Linux with bubblewrap), the coder's and validation commands see only the managed worktree, their runtime directories and the toolchain; elsewhere they have that account's access to your files. The engine's dependency restore of your base commit runs outside the boundary either way, with your account's access and the network.",
 								)}
 							</List.Item>
 							<List.Item>

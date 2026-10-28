@@ -120,6 +120,24 @@ describe("DevWorkflowToolNodePanel", () => {
 		expect(screen.getByTestId("dev-workflow-validation-based-on-detail").textContent).toContain("fresh clone");
 	});
 
+	it("warns when a Tool node's commands ran with no filesystem boundary", async () => {
+		serveContent(report({ passed: true, filesystemBoundary: false }));
+
+		renderPanel();
+
+		const warning = await screen.findByTestId("dev-workflow-validation-no-boundary");
+		expect(warning.textContent).toContain("No filesystem boundary on this host");
+	});
+
+	it("does not warn about the boundary on a report that ran behind one", async () => {
+		serveContent(report({ passed: true, filesystemBoundary: true }));
+
+		renderPanel();
+
+		await screen.findByTestId("dev-workflow-validation-result");
+		expect(screen.queryByTestId("dev-workflow-validation-no-boundary")).toBeNull();
+	});
+
 	it("claims nothing about the subject when a report carries no basedOn, because an older report has none either", async () => {
 		serveContent(report({ passed: true }));
 
@@ -268,6 +286,46 @@ describe("DevWorkflowToolNodePanel", () => {
 			expect(screen.getByTestId("dev-workflow-validation-output-dotnet_test_release_no_build").textContent).toContain(
 				"too large for one artifact",
 			),
+		);
+	});
+
+	it("labels a host without the test runner in the verdict and in the command's parse failure", async () => {
+		serveContent(
+			report({
+				failureCode: "runner_not_installed",
+				failureDetail: "Command python_pytest could not run its tests: Install pytest on the host yourself.",
+				commands: [
+					{
+						commandId: "python_pytest",
+						exitCode: 1,
+						completed: true,
+						outputTruncated: false,
+						durationMilliseconds: 30,
+						standardOutput: "",
+						standardError: "ModuleNotFoundError: No module named 'pytest'",
+						testOutcome: {
+							adapter: "pytest",
+							parsed: false,
+							discovered: 0,
+							executed: 0,
+							passed: 0,
+							failed: 0,
+							parseFailureCode: "runner_not_installed",
+							parseFailureDetail: "Install pytest on the host yourself.",
+						},
+					},
+				],
+			}),
+		);
+
+		renderPanel();
+
+		expect((await screen.findByTestId("dev-workflow-validation-runner-not-installed")).textContent).toContain(
+			"A validation command's runner could not be started on this host",
+		);
+		expect(screen.getByTestId("dev-workflow-validation-failure").textContent).toContain("Install pytest on the host yourself.");
+		expect(screen.getByTestId("dev-workflow-validation-tests-unparsed").textContent).toContain(
+			"These tests' runner could not be started on this host",
 		);
 	});
 

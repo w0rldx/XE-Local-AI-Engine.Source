@@ -549,4 +549,34 @@ describe("DevelopmentProjectForm", () => {
 		expect(screen.getByText(/container sandbox/)).toBeTruthy();
 		expect(screen.queryByText(/host-user permissions/)).toBeNull();
 	});
+
+	it("says the commands run behind the filesystem boundary where the development isolation row reports it", () => {
+		const renderForm = (filesystemBoundary: boolean) =>
+			render(
+				<MantineProvider env="test" theme={testMantineTheme}>
+					<DevelopmentProjectForm
+						repositories={[]}
+						repositoriesLoading={false}
+						isRegistering={false}
+						isSubmitting={false}
+						onRegister={vi.fn()}
+						onSubmit={vi.fn()}
+						sandboxProvider="process"
+						filesystemBoundary={filesystemBoundary}
+					/>
+				</MantineProvider>,
+			);
+
+		renderForm(true);
+		const bounded = screen.getByTestId("development-security-notice").textContent ?? "";
+		expect(bounded).toContain("filesystem boundary");
+		expect(bounded).toContain("The coder's and validation commands run");
+		expect(bounded).toContain("dependency restore of your base commit runs outside it");
+		expect(bounded).not.toContain("not OS isolation");
+
+		cleanup();
+
+		renderForm(false);
+		expect(screen.getByTestId("development-security-notice").textContent).toContain("not OS isolation");
+	});
 });

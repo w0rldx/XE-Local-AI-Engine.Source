@@ -11,7 +11,7 @@ using System.Text;
 /// <remarks>
 ///     Ancestors must be root-owned and non-writable by anyone else, a root-owned sticky directory such as <c>/tmp</c> counting because
 ///     entries in it can only be removed by their own owner; the target itself must belong to the engine's own user, and a jail anchor
-///     must also be <c>0700</c>. That accepts the three shapes this engine uses — a jail under <c>/tmp</c>, a runtime root under the
+///     must also be <c>0700</c>. The source of a read-only bind may instead be root-owned, under the same not-group-or-world-writable rule. That accepts the three shapes this engine uses — a jail under <c>/tmp</c>, a runtime root under the
 ///     user's home, a data directory under either — and rejects a tree anyone else on the host could have swapped.
 /// </remarks>
 internal static class SandboxTrustedDescriptorOpener
@@ -40,7 +40,22 @@ internal static class SandboxTrustedDescriptorOpener
     ///     <paramref name="requirePrivateMode" /> additionally demands <c>0700</c>, which is what a writable jail must
     ///     be. Throws <see cref="SandboxIsolationUnavailableException" /> with a measured reason otherwise.
     /// </summary>
-    public static SandboxTrustedDescriptor Open(string path, bool requirePrivateMode)
+    public static SandboxTrustedDescriptor Open(string path, bool requirePrivateMode) =>
+        Open(path, requirePrivateMode, expectFile: false, readOnly: false);
+
+    /// <summary>
+    ///     Opens the source of a bind or read-only tree, a directory or (<paramref name="expectFile" />) a REGULAR FILE such as a read-only
+    ///     <c>.git/config</c> or an empty credential shadow, under the same ancestor rule.
+    /// </summary>
+    /// <remarks>
+    ///     A <paramref name="readOnly" /> source may also be root-owned: a toolchain outside <c>/usr</c> (<c>/opt/dotnet</c>,
+    ///     <c>/snap/bin</c>, a system conda) that nobody else can write is as trustworthy as the <c>/usr</c> the chain already binds. A
+    ///     writable source stays engine-owned.
+    /// </remarks>
+    public static SandboxTrustedDescriptor OpenBindSource(string path, bool expectFile, bool readOnly) =>
+        Open(path, requirePrivateMode: false, expectFile, readOnly);
+
+    private static SandboxTrustedDescriptor Open(string path, bool requirePrivateMode, bool expectFile, bool readOnly)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
@@ -75,7 +90,7 @@ internal static class SandboxTrustedDescriptorOpener
                 }
 
                 var isTarget = index == components.Length - 1;
-                var next = OpenBeneath(current.Descriptor, component, currentPath, closeOnExec: !isTarget);
+                var next = OpenBeneath(current.Descriptor, component, currentPath, closeOnExec: !isTarget, directory: !(isTarget && expectFile));
                 current.Dispose();
                 current = next;
                 currentPath = string.Concat(currentPath, "/", component);
@@ -85,7 +100,7 @@ internal static class SandboxTrustedDescriptorOpener
 
                 if (isTarget)
                 {
-                    EnsureTargetIsOwnedByTheEngine(facts, currentPath, ownUserId, requirePrivateMode);
+                    EnsureTargetIsTrustworthy(facts, currentPath, ownUserId, requirePrivateMode, expectFile, readOnly);
                 }
                 else
                 {
@@ -138,16 +153,18 @@ internal static class SandboxTrustedDescriptorOpener
             : $"'{path}' is owned by uid {facts.UserId}, which is neither root nor this engine");
     }
 
-    private static void EnsureTargetIsOwnedByTheEngine(SandboxUnixFileFacts facts, string path, uint ownUserId, bool requirePrivateMode)
+    private static void EnsureTargetIsTrustworthy(SandboxUnixFileFacts facts, string path, uint ownUserId, bool requirePrivateMode, bool expectFile, bool readOnly)
     {
-        if (!facts.IsDirectory)
+        if (expectFile ? !facts.IsRegularFile : !facts.IsDirectory)
         {
-            throw new SandboxIsolationUnavailableException($"'{path}' is not a directory");
+            throw new SandboxIsolationUnavailableException(expectFile ? $"'{path}' is not a regular file" : $"'{path}' is not a directory");
         }
 
-        if (facts.UserId != ownUserId)
+        if (facts.UserId != ownUserId && !(readOnly && facts.UserId == 0))
         {
-            throw new SandboxIsolationUnavailableException($"'{path}' is owned by uid {facts.UserId} rather than by this engine");
+            throw new SandboxIsolationUnavailableException(readOnly
+                ? $"'{path}' is owned by uid {facts.UserId}, which is neither root nor this engine"
+                : $"'{path}' is owned by uid {facts.UserId} rather than by this engine");
         }
 
         if (facts.IsGroupOrWorldWritable)
@@ -174,9 +191,9 @@ internal static class SandboxTrustedDescriptorOpener
             : new OwnedDescriptor(descriptor);
     }
 
-    private static OwnedDescriptor OpenBeneath(int directoryDescriptor, string component, string parentPath, bool closeOnExec)
+    private static OwnedDescriptor OpenBeneath(int directoryDescriptor, string component, string parentPath, bool closeOnExec, bool directory)
     {
-        var flags = OpenPath | OpenDirectory | (closeOnExec ? OpenCloseOnExec : 0);
+        var flags = OpenPath | (directory ? OpenDirectory : 0) | (closeOnExec ? OpenCloseOnExec : 0);
         var how = new byte[OpenHowBytes];
         BitConverter.TryWriteBytes(how.AsSpan(start: 0), flags);
         BitConverter.TryWriteBytes(how.AsSpan(start: 8), value: 0UL);

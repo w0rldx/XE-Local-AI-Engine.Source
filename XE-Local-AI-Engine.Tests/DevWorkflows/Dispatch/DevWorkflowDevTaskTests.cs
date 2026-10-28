@@ -242,6 +242,58 @@ public sealed class DevWorkflowDevTaskTests
             message: "the policy's own sentence is what tells the operator which rule was broken.");
     }
 
+    /// <summary>A missing test runner stands the node down as Configuration on the first validation, with no round spent.</summary>
+    /// <remarks>
+    ///     Charged as a review round it re-drove the coder until the cap (live: five rounds, about 55 minutes of 27B
+    ///     time) and the operator never read "install pytest". A Retry after installing it validates the same patch again: no
+    ///     coder round, no round charged, no cap widened. The scripted host still has no runner, so the retry stands down again.
+    /// </remarks>
+    [Test]
+    public async Task AMissingTestRunnerStandsTheNodeDownForAHumanWithoutSpendingARound_AndARetryRevalidatesTheSamePatch()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
+        var cap = (await ReadTaskAsync(harness, taskId)).MaxReviewRounds;
+        harness.Chain.FailTheDeterministicGateOnAMissingRunner();
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        var blocked = await harness.ReadNodeRunAsync(runId, "implement");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status, AssertEx.NotNull(blocked.TerminalReason ?? blocked.OutputJson));
+        AssertEx.Equal(DevWorkflowFailureClasses.Configuration, blocked.FailureClass, "nothing ran out: the host is missing a tool a person has to install.");
+        AssertEx.Equal(expected: 1, blocked.Attempt, "the same host answers the same way every time, so no second attempt is spent finding that out.");
+        AssertEx.True(AssertEx.NotNull(blocked.TerminalReason).StartsWith("[runner_not_installed] ", StringComparison.Ordinal), blocked.TerminalReason);
+        AssertEx.Contains(AssertEx.NotNull(blocked.TerminalReason), "Install pytest on the host", message: "the operator is told what to install.");
+        var stoodDown = await ReadTaskAsync(harness, taskId);
+        AssertEx.Equal(DevelopmentTaskStatus.Blocked, stoodDown.Status);
+        AssertEx.Equal(expected: 0, stoodDown.CurrentReviewRound, "a missing runner judged nothing the coder wrote, so it spends no review round.");
+        AssertEx.Equal(expected: 1,
+            (await ListDevelopmentEventsAsync(harness, projectId)).Count(static entry => entry.EventType == "ValidationStarted"),
+            "one validation, then a human.");
+
+        var attemptsBefore = await ListAttemptIdsAsync(harness, taskId);
+
+        await harness.DecideAsync(runId, "implement", DevWorkflowDecisionKind.Retry, comment: "pytest is installed now.");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        AssertEx.False(harness.Chain.Actions.Contains(nameof(DevelopmentTaskStatus.ChangesRequested)),
+            $"the unchanged, valid patch is not sent back to the coder: {string.Join(", ", harness.Chain.Actions)}");
+        AssertEx.Equal(string.Join(',', attemptsBefore), string.Join(',', await ListAttemptIdsAsync(harness, taskId)), "no coder round ran.");
+        AssertEx.Equal(expected: 2,
+            (await ListDevelopmentEventsAsync(harness, projectId)).Count(static entry => entry.EventType == "ValidationStarted"),
+            "the Retry re-ran the validation the missing runner stopped, against the same attempt.");
+        var resumed = await ReadTaskAsync(harness, taskId);
+        AssertEx.Equal(expected: 0, resumed.CurrentReviewRound, "still no round spent on the host's fault.");
+        AssertEx.Equal(cap, resumed.MaxReviewRounds, "nothing was spent, so nothing is bought: the cap stays where it was.");
+    }
+
+    private static async Task<IReadOnlyList<Guid>> ListAttemptIdsAsync(DevWorkflowHarness harness, Guid taskId)
+    {
+        await using var scope = harness.Services.CreateAsyncScope();
+        return [.. (await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>().ListAttemptsAsync(taskId)).Select(static attempt => attempt.Id)];
+    }
+
     /// <summary>
     ///     A task inside its own deterministic-validation window is WORKING, not misconfigured.
     ///     <para>

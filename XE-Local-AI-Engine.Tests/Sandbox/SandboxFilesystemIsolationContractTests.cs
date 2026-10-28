@@ -131,6 +131,107 @@ public sealed class SandboxFilesystemIsolationContractTests
         await Task.CompletedTask;
     }
 
+    /// <summary>A trusted host workspace behind the chain is the jail at <c>/work</c>, and every engine mount is placed where the handle says.</summary>
+    /// <remarks>
+    ///     A file inside the workspace lands at its workspace path, a shadow under <c>/work</c>, an absolute request at its own target.
+    ///     HOME is the private <c>/tmp</c>, so the workspace gains no directory of the chain's.
+    /// </remarks>
+    [Test]
+    public async Task ATrustedWorkspaceBehindTheChain_IsTheJail_AndEveryEngineMountIsPlaced()
+    {
+        var root = Directory.CreateTempSubdirectory("xe-isolated-workspace-").FullName;
+        try
+        {
+            var workspace = Directory.CreateDirectory(Path.Combine(root, "workspace")).FullName;
+            var gitConfig = Path.Combine(Directory.CreateDirectory(Path.Combine(workspace, ".git")).FullName, "config");
+            await File.WriteAllTextAsync(gitConfig, "[core]\n");
+            var home = Directory.CreateDirectory(Path.Combine(root, "home")).FullName;
+            var shadow = Path.Combine(root, "shadow");
+            await File.WriteAllBytesAsync(shadow, []);
+            using var provider = CreateProvider(new StubProbe(SandboxContainment.None with
+            {
+                FilesystemIsolation = FakeIsolation()
+            }));
+
+            var handle = await provider.CreateOrAttachAsync(IsolatedRequest() with
+            {
+                TrustedHostWorkspace = new SandboxTrustedHostWorkspace { RootPath = workspace },
+                Mounts =
+                [
+                    new SandboxMount { HostPath = home, SandboxPath = "/xe-runtime/home" },
+                    new SandboxMount { HostPath = gitConfig, SandboxPath = "/.git/config", ReadOnly = true },
+                    new SandboxMount { HostPath = shadow, SandboxPath = "/secrets/key.pem", TargetIsWorkspaceRelative = true, ReadOnly = true }
+                ]
+            });
+
+            AssertEx.Equal(SandboxIsolationMode.Filesystem, handle.Isolation);
+            AssertEx.Equal("/work", handle.TryResolveSandboxPath(workspace));
+            AssertEx.Equal("/xe-runtime/home", handle.TryResolveSandboxPath(home));
+            AssertEx.Equal("/work/.git/config", handle.TryResolveSandboxPath(gitConfig));
+            AssertEx.Contains(handle.Mounts, mount => mount.HostPath == shadow && mount.SandboxPath == "/work/secrets/key.pem" && mount.ReadOnly);
+            AssertEx.Equal("/tmp", AssertEx.NotNull(handle.IsolatedPaths).Home);
+            AssertEx.False(Directory.Exists(Path.Combine(workspace, SandboxIsolatedPaths.HomeDirectoryName)));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>A mount the chain cannot place is refused at create time, before any directory exists, never silently dropped.</summary>
+    [Test]
+    [Arguments("/usr/lib/xe")]
+    [Arguments("/work/escape")]
+    [Arguments("/tmp")]
+    [Arguments("/xe/../etc")]
+    [Arguments("relative/path")]
+    public async Task AnEngineMountTheChainCannotPlace_IsRefusedAtCreate(string target)
+    {
+        var source = Directory.CreateTempSubdirectory("xe-isolated-mount-").FullName;
+        try
+        {
+            using var provider = CreateProvider(new StubProbe(SandboxContainment.None with
+            {
+                FilesystemIsolation = FakeIsolation()
+            }));
+
+            _ = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(async () =>
+                await provider.CreateOrAttachAsync(IsolatedRequest() with
+                {
+                    Mounts = [new SandboxMount { HostPath = source, SandboxPath = target }]
+                }));
+        }
+        finally
+        {
+            Directory.Delete(source, recursive: true);
+        }
+    }
+
+    /// <summary>Without the chain there is still no mount layer, so a read-only mount is refused exactly as before.</summary>
+    [Test]
+    public async Task AReadOnlyMountWithoutTheChain_IsStillRefused()
+    {
+        var source = Directory.CreateTempSubdirectory("xe-plain-mount-").FullName;
+        try
+        {
+            using var provider = CreateProvider(new StubProbe(SandboxContainment.None with
+            {
+                FilesystemIsolation = FakeIsolation()
+            }));
+
+            _ = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(async () =>
+                await provider.CreateOrAttachAsync(IsolatedRequest() with
+                {
+                    Isolation = SandboxIsolationMode.None,
+                    Mounts = [new SandboxMount { HostPath = source, SandboxPath = "/xe-runtime/nuget", ReadOnly = true }]
+                }));
+        }
+        finally
+        {
+            Directory.Delete(source, recursive: true);
+        }
+    }
+
     /// <summary>The three flags a served AppContainer boundary advertises together (ADR 0019).</summary>
     private const SandboxProviderCapabilities AppContainerFloor = SandboxProviderCapabilities.SupportsAppContainerBoundary
                                                                   | SandboxProviderCapabilities.SupportsFilesystemIsolation
@@ -234,6 +335,18 @@ public sealed class SandboxFilesystemIsolationContractTests
         {
             ThreadLimit = -1
         });
+
+        await Task.CompletedTask;
+    }
+
+    /// <summary>The synthetic <c>/etc</c> is the chain's own: neither a read-only tree nor an engine bind may land beneath it and shadow passwd or nsswitch.</summary>
+    [Test]
+    public async Task TheSyntheticEtc_IsReserved_ForTreesAndBindsAlike()
+    {
+        AssertEx.False(SandboxIsolatedChain.CanBindReadOnlyTree("/etc"));
+        AssertEx.False(SandboxIsolatedChain.CanBindReadOnlyTree("/etc/alternatives/python"));
+        AssertEx.False(SandboxIsolatedChain.CanBindAfterJail("/etc/passwd"));
+        AssertEx.True(SandboxIsolatedChain.CanBindAfterJail("/xe-runtime/home"), "the engine's own runtime binds stay placeable.");
 
         await Task.CompletedTask;
     }

@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -276,6 +278,51 @@ public sealed class DevelopmentTestResultAdapterTests
 
         AssertEx.False(verdict.Passed);
         AssertEx.Equal(DevelopmentValidationFailureCodes.TestResultsUnparsed, verdict.FailureCode);
+    }
+
+    /// <summary>A profile tool the host cannot launch (here <c>dotnet</c>) stops the task with the install instruction, whatever the adapter.</summary>
+    [Test]
+    public void Verdict_StopsTheTaskWhenAValidationCommandCouldNotBeLaunched()
+    {
+        var verdict = DevelopmentValidationVerdict.Evaluate(SlnxProfile,
+        [
+            Evidence(DevelopmentCommandIds.GitDiffCheck),
+            Evidence(DevelopmentCommandIds.DotnetRestore) with
+            {
+                ExitCode = -1,
+                Completed = false,
+                StandardError = SandboxCommandResult.LaunchFailurePrefix + "."
+            },
+            Evidence(DevelopmentCommandIds.DotnetBuildRelease),
+            Evidence(DevelopmentCommandIds.DotnetTestRelease,
+                outcome: DevelopmentTestOutcome.ParseFailure("dotnet", DevelopmentTestParseFailureCodes.SummaryNotFound, "no summary"))
+        ]);
+
+        AssertEx.False(verdict.Passed);
+        AssertEx.Equal(DevelopmentValidationFailureCodes.RunnerNotInstalled, verdict.FailureCode);
+        AssertEx.True(verdict.StopsTask);
+        AssertEx.Contains(verdict.FailureDetail, DevelopmentCommandIds.DotnetRestore);
+        AssertEx.Contains(verdict.FailureDetail, "Install it on the host yourself");
+        AssertEx.Equal(DevelopmentTaskStatus.Blocked, DevelopmentValidationRunner.TargetFor(verdict));
+        AssertEx.True(AssertEx.NotNull(DevelopmentValidationRunner.ReasonFor(verdict)).StartsWith("[runner_not_installed] ", StringComparison.Ordinal),
+            "the bracketed code is what the workflow lane classes the stand-down on.");
+    }
+
+    /// <summary>Every other failure stays the coder's to fix: a rework round, never a stand-down.</summary>
+    [Test]
+    public void Verdict_LeavesAnOrdinaryFailureToTheCoder()
+    {
+        var verdict = DevelopmentValidationVerdict.Evaluate(SlnxProfile,
+        [
+            Evidence(DevelopmentCommandIds.GitDiffCheck),
+            Evidence(DevelopmentCommandIds.DotnetRestore, exitCode: 1),
+            Evidence(DevelopmentCommandIds.DotnetBuildRelease),
+            Evidence(DevelopmentCommandIds.DotnetTestRelease, outcome: DevelopmentTestOutcome.Counts("dotnet", 1, 1, 1, 0))
+        ]);
+
+        AssertEx.Equal(DevelopmentValidationFailureCodes.CommandFailed, verdict.FailureCode);
+        AssertEx.False(verdict.StopsTask);
+        AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, DevelopmentValidationRunner.TargetFor(verdict));
     }
 
     /// <summary>

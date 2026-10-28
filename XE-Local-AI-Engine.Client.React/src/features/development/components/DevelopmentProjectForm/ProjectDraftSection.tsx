@@ -12,6 +12,7 @@ import type {
 
 export interface ProjectDraftSectionProps {
 	readonly containerProvider: boolean;
+	readonly filesystemBoundary: boolean;
 	readonly values: DevelopmentProjectFormValues;
 	readonly setValues: Dispatch<SetStateAction<DevelopmentProjectFormValues>>;
 	readonly repositoryOptions: readonly DevelopmentFormSelectOption[];
@@ -47,6 +48,7 @@ export function ProjectDraftSection({
 }) {
 	const {
 		containerProvider,
+		filesystemBoundary,
 		values,
 		setValues,
 		repositoryOptions,
@@ -308,10 +310,15 @@ export function ProjectDraftSection({
 									"pages.development.form.securityWarningContainer",
 									"Development commands run inside a hardened container — read-only root filesystem, all capabilities dropped, no host namespaces — with only the managed worktree and runtime directories mounted. Repository code still executes, so register only repositories you trust.",
 								)
-							: t(
-									"pages.development.form.securityWarning",
-									"Development commands run as your host user. The managed worktree confines application-mediated changes, but it is not OS isolation and repository code may access other host resources.",
-								)}
+							: filesystemBoundary
+								? t(
+										"pages.development.form.securityWarningBoundary",
+										"The coder's and validation commands run as your host user inside this host's filesystem boundary (bubblewrap): they see only the managed worktree, their runtime directories and the read-only toolchain, with no network. The engine's dependency restore of your base commit runs outside it, with your account's access. Repository code still executes, so register only repositories you trust.",
+									)
+								: t(
+										"pages.development.form.securityWarning",
+										"Development commands run as your host user. The managed worktree confines application-mediated changes, but it is not OS isolation and repository code may access other host resources.",
+									)}
 					</Text>
 				</Alert>
 				<Checkbox

@@ -2,6 +2,8 @@ namespace XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
@@ -14,6 +16,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using OllamaSharp;
 using TUnit.Core.Interfaces;
@@ -34,6 +37,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
 using XE_Local_AI_Engine.Client.Services.Training.Export;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
+using XE_Local_AI_Engine.Client.Testing.Fakes;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -205,6 +209,15 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
 
         // Touching Services forces host construction + socket bind so the address feature is populated.
         _ = Services;
+
+        // Before anything protects data: a key written to a live dev host's ring under this fixture's secret fails
+        // that host's next start with AuthenticationTagMismatch.
+        var keyRepository = Services.GetRequiredService<IOptions<KeyManagementOptions>>().Value.XmlRepository;
+        if (keyRepository is not FileSystemXmlRepository { Directory.FullName: var keyDirectory }
+            || !keyDirectory.StartsWith(_fixtureDataRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"The E2E host's Data Protection key ring is outside {_fixtureDataRoot}: {keyRepository}.");
+        }
 
         var server = Services.GetRequiredService<IServer>();
         var addressFeature = server.Features.Get<IServerAddressesFeature>();
@@ -403,6 +416,10 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
 
         builder.UseEnvironment("Testing");
         builder.UseSetting("Development:Enabled", "true");
+
+        // A host setting, not the in-memory collection below: WebApplicationFactory applies that collection only at
+        // Build(), after ConfigureServices has read this key and rooted dp-keys in the REAL Client directory.
+        builder.UseSetting("NodeData:Directory", Path.Combine(_fixtureDataRoot, "node-data"));
         builder.ConfigureAppConfiguration((_, configurationBuilder) =>
         {
             configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>
@@ -413,7 +430,6 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
                 ["Ollama:ChatModel"] = "qwen3.5:0.8b",
                 ["KnowledgeBase:EmbeddingProviderName"] = "ollama",
                 ["KnowledgeBase:EmbeddingModelName"] = "qwen3-embedding:0.6b",
-                ["NodeData:Directory"] = Path.Combine(_fixtureDataRoot, "node-data"),
                 ["Development:Enabled"] = "true",
                 // Stated rather than inherited: the shipped default is ON, and a fixture that
                 // relied on that default would go quietly dark the day an operator-facing default moved again.
@@ -424,6 +440,13 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
         _ = builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IHostedService>();
+
+            // The content root is the REAL Client directory: the product NodeDataDirectory would move its node state
+            // into the temp NodeData:Directory, which teardown deletes. The fake pins the same Root with no migration.
+            var nodeDataDirectory = Path.Combine(_fixtureDataRoot, "node-data");
+            _ = Directory.CreateDirectory(nodeDataDirectory);
+            services.RemoveAll<INodeDataDirectory>();
+            services.AddSingleton<INodeDataDirectory>(new FakeNodeDataDirectory(nodeDataDirectory));
 
             // Most production workers are intentionally absent from browser E2E, but knowledge imports are defined as
             // queue-backed operations. Keep the real ingestion worker so the focused RAG scenario exercises the same

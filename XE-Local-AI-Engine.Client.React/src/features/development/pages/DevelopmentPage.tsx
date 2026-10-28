@@ -8,6 +8,7 @@ import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { DevelopmentAttemptsTable } from "@/features/development/components/DevelopmentAttemptsTable";
 import { DevelopmentContainerRuntimePanel } from "@/features/development/components/DevelopmentContainerRuntimePanel";
 import { DevelopmentEventTimeline } from "@/features/development/components/DevelopmentEventTimeline";
+import { DevelopmentFilesystemBoundaryNotice } from "@/features/development/components/DevelopmentFilesystemBoundaryNotice";
 import { DevelopmentLivePanel } from "@/features/development/components/DevelopmentLivePanel";
 import { DevelopmentPatchApplyPanel } from "@/features/development/components/DevelopmentPatchApplyPanel";
 import { DevelopmentProjectList } from "@/features/development/components/DevelopmentProjectList";
@@ -17,6 +18,7 @@ import { DevelopmentTaskSwitcher } from "@/features/development/components/Devel
 import { DevelopmentWorkflowTaskBanner } from "@/features/development/components/DevelopmentWorkflowTaskBanner";
 import { SandboxIsolationPanel } from "@/features/development/components/SandboxIsolationPanel";
 import { useDevelopmentPageController } from "@/features/development/hooks/useDevelopmentPageController";
+import { developmentFilesystemBoundaryServed } from "@/features/development/models/DevelopmentModels";
 
 export interface DevelopmentPageProps {
 	/** Deep-link seed (X8). Absent — the ordinary arrival — leaves the default-to-the-first-project behaviour alone. */
@@ -153,6 +155,8 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 
 			<SandboxIsolationPanel roles={sandboxIsolation} />
 
+			<DevelopmentFilesystemBoundaryNotice roles={sandboxIsolation} />
+
 			<PageHeader
 				icon={<IconCode size={24} />}
 				title={t("pages.development.title", "Development Mode")}
@@ -195,6 +199,7 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 						: undefined,
 					repositoriesLoading: repositoriesQuery.isLoading,
 					sandboxProvider,
+					filesystemBoundary: developmentFilesystemBoundaryServed(sandboxIsolation),
 					templates,
 					templatesLoading: templatesQuery.isLoading,
 				}}

@@ -118,6 +118,9 @@ describe("DevelopmentConsentGate", () => {
 
 		const terms = screen.getByTestId("development-consent-terms").textContent ?? "";
 		expect(terms).toContain("signed-in user account that runs the engine");
+		// The boundary covers the coder's and validation commands only: the dependency restore runs outside it, and the terms say so.
+		expect(terms).toContain("the coder's and validation commands see only the managed worktree");
+		expect(terms).toContain("dependency restore of your base commit runs outside the boundary");
 
 		// The obsolete sentence is gone, and its replacement must not swing to the opposite over-claim: the denial is
 		// conditional on the backend advertising confinement, and Windows is still named as the case where it is not.

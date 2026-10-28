@@ -42,6 +42,15 @@ internal sealed record SandboxIsolatedChainInputs
 
     public IReadOnlyList<SandboxIsolatedTreeBinding> ReadOnlyTrees { get; init; } = [];
 
+    /// <summary>Engine-generated mounts, bound after <c>/work</c> and <c>/tmp</c> in this order, so a bind inside the workspace wins over it.</summary>
+    public IReadOnlyList<SandboxIsolatedMountBinding> Binds { get; init; } = [];
+
+    /// <summary>
+    ///     <c>HOME</c> inside the sandbox: <see cref="SandboxIsolatedChain.HomePath" />, or <c>/tmp</c> when the jail is a trusted host
+    ///     workspace whose tree must not gain a home directory.
+    /// </summary>
+    public string HomePath { get; init; } = SandboxIsolatedChain.HomePath;
+
     public SandboxResourceLimits? ResourceLimits { get; init; }
 
     /// <summary>The value every numeric-library thread-count variable is pinned to inside the jail.</summary>

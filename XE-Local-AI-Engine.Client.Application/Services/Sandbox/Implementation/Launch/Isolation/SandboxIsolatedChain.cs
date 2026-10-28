@@ -72,6 +72,8 @@ internal static class SandboxIsolatedChain
         "/proc",
         "/work",
         TempPath,
+        // The synthetic passwd, group, nsswitch and hosts: a bind beneath would shadow them, or fail to create its mount point.
+        "/etc",
         "/bin",
         "/sbin",
         "/lib",
@@ -97,6 +99,20 @@ internal static class SandboxIsolatedChain
 
         return !ReservedMountPoints.Any(reserved => string.Equals(trimmed, reserved, StringComparison.Ordinal)
                                                     || trimmed.StartsWith(reserved + "/", StringComparison.Ordinal));
+    }
+
+    /// <summary><see langword="true" /> when an engine-generated bind, placed after <c>/work</c> and <c>/tmp</c>, can target <paramref name="sandboxPath" />.</summary>
+    /// <remarks>A path inside the private <c>/tmp</c> is placed there; the system mounts, <c>/work</c> (workspace-relative binds only) and the root are refused.</remarks>
+    public static bool CanBindAfterJail(string sandboxPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sandboxPath);
+
+        var trimmed = sandboxPath.TrimEnd('/');
+        return trimmed.Length > 0
+               && !string.Equals(trimmed, TempPath, StringComparison.Ordinal)
+               && !ReservedMountPoints.Where(static reserved => !string.Equals(reserved, TempPath, StringComparison.Ordinal))
+                                      .Any(reserved => string.Equals(trimmed, reserved, StringComparison.Ordinal)
+                                                       || trimmed.StartsWith(reserved + "/", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -278,6 +294,15 @@ internal static class SandboxIsolatedChain
         chain.Add("--bind-fd");
         chain.Add(inputs.JailTempDescriptor.ToString(CultureInfo.InvariantCulture));
         chain.Add(TempPath);
+
+        // After /work, so a read-only file bind inside the workspace (.git/config, a credential shadow) covers the writable tree there.
+        foreach (var bind in inputs.Binds)
+        {
+            chain.Add(bind.ReadOnly ? "--ro-bind-fd" : "--bind-fd");
+            chain.Add(bind.FileDescriptor.ToString(CultureInfo.InvariantCulture));
+            chain.Add(bind.SandboxPath);
+        }
+
         chain.Add("--chdir");
         chain.Add(inputs.WorkingDirectory);
     }
@@ -300,7 +325,7 @@ internal static class SandboxIsolatedChain
         // including the systemd bus address the outer layer needed — can reach the workload.
         chain.Add("--clearenv");
         AppendVariable(chain, "PATH", SandboxPath);
-        AppendVariable(chain, "HOME", HomePath);
+        AppendVariable(chain, "HOME", inputs.HomePath);
         AppendVariable(chain, "PWD", WorkPath);
         AppendVariable(chain, "TMPDIR", TempPath);
         AppendVariable(chain, "TMP", TempPath);

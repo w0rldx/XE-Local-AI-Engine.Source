@@ -35,7 +35,7 @@ public sealed class SandboxSecurityProfilePolicyTests
     [Arguments(nameof(SandboxWorkloads.WorkSession), true, false, true)]
     [Arguments(nameof(SandboxWorkloads.RunPython), false, false, true)]
     [Arguments(nameof(SandboxWorkloads.McpStdio), false, false, true)]
-    [Arguments(nameof(SandboxWorkloads.DevelopmentModeHostToolchain), true, false, true)]
+    [Arguments(nameof(SandboxWorkloads.DevelopmentModeHostToolchain), true, true, true)]
     [Arguments(nameof(SandboxWorkloads.DevelopmentModeImageToolchain), true, false, true)]
     public void Preconditions_UnderHigh_AreTheDeclaredPreferences(string declaration, bool egress, bool boundary, bool ceilings)
     {
@@ -83,15 +83,20 @@ public sealed class SandboxSecurityProfilePolicyTests
     [Arguments(nameof(SandboxWorkloads.AgentHome), BoundaryAndEgress, 1)]
     [Arguments(nameof(SandboxWorkloads.AgentHome), AllThree, 0)]
     [Arguments(nameof(SandboxWorkloads.AgentHome), AppContainerOnly, 3)]
-    // Work sessions and Development Mode: egress and ceilings, never a boundary they do not ask for.
+    // Work sessions: egress and ceilings, never a boundary they do not ask for.
     [Arguments(nameof(SandboxWorkloads.WorkSession), None, 2)]
     [Arguments(nameof(SandboxWorkloads.WorkSession), EgressOnly, 1)]
     [Arguments(nameof(SandboxWorkloads.WorkSession), BoundaryAndEgress, 1)]
     [Arguments(nameof(SandboxWorkloads.WorkSession), AllThree, 0)]
     [Arguments(nameof(SandboxWorkloads.WorkSession), AppContainerOnly, 2)]
-    [Arguments(nameof(SandboxWorkloads.DevelopmentModeHostToolchain), None, 2)]
-    [Arguments(nameof(SandboxWorkloads.DevelopmentModeHostToolchain), EgressOnly, 1)]
+    // Development Mode on the host toolchain prefers the boundary as AgentHome does; the container form asks for none (a container has it).
+    [Arguments(nameof(SandboxWorkloads.DevelopmentModeHostToolchain), None, 3)]
+    [Arguments(nameof(SandboxWorkloads.DevelopmentModeHostToolchain), EgressOnly, 2)]
+    [Arguments(nameof(SandboxWorkloads.DevelopmentModeHostToolchain), BoundaryAndEgress, 1)]
     [Arguments(nameof(SandboxWorkloads.DevelopmentModeHostToolchain), AllThree, 0)]
+    [Arguments(nameof(SandboxWorkloads.DevelopmentModeHostToolchain), AppContainerOnly, 3)]
+    [Arguments(nameof(SandboxWorkloads.DevelopmentModeImageToolchain), EgressOnly, 1)]
+    [Arguments(nameof(SandboxWorkloads.DevelopmentModeImageToolchain), AllThree, 0)]
     // Floor workloads: only the ceilings are the profile's.
     [Arguments(nameof(SandboxWorkloads.RunPython), None, 1)]
     [Arguments(nameof(SandboxWorkloads.RunPython), BoundaryAndEgress, 1)]

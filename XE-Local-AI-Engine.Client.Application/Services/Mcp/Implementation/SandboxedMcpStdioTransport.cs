@@ -437,7 +437,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     ///     Whether binding <paramref name="tree" /> would expose <paramref name="root" />: it is or contains the root, or it lies beneath
     ///     a subtree-denied root outside that root's carve-out.
     /// </summary>
-    private static bool Exposes(string tree, SensitiveHostRoot root)
+    internal static bool Exposes(string tree, SensitiveHostRoot root)
     {
         return IsAtOrBeneath(root.HostPath, tree)
                || (root.DeniesSubtree

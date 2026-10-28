@@ -28,6 +28,13 @@ internal sealed partial class PytestTestResultAdapter : IDevelopmentTestResultAd
         var output = standardOutput ?? string.Empty;
         var error = standardError ?? string.Empty;
 
+        if (error.StartsWith(SandboxCommandResult.BoundaryFailurePrefix, StringComparison.Ordinal))
+        {
+            return DevelopmentTestOutcome.ParseFailure(Name,
+                DevelopmentTestParseFailureCodes.RunnerNotInstalled,
+                "The test command could not be started on this host: its runner is not installed, or the sandbox filesystem boundary could not be established (the engine log says which).");
+        }
+
         if (error.StartsWith(SandboxCommandResult.LaunchFailurePrefix, StringComparison.Ordinal))
         {
             return DevelopmentTestOutcome.ParseFailure(Name,

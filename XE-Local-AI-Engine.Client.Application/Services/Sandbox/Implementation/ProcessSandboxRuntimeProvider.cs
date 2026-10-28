@@ -181,7 +181,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                                // image, which keeps a workload that needs one off this provider.
                                | SandboxProviderCapabilities.SuppliesHostToolchain;
 
-            // Read-only mounts are never served: there is no mount layer. The two flags below are read from the launcher's own
+            // SupportsReadOnlyMounts is never advertised: only a bwrap-served Filesystem request has a mount layer. The two flags below are read from the launcher's own
             // probe, the same one the launch path applies, so neither can be advertised where the wrapper would not be.
             var containment = _launcher.Containment;
             if (containment.SupportsResourceLimits)
@@ -266,7 +266,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             {
                 ExecutionId = request.ExecutionId,
                 ExitCode = -1,
-                StandardError = $"The sandbox filesystem boundary could not be established ({exception.Message}); the command was not run.",
+                StandardError = $"{SandboxCommandResult.BoundaryFailurePrefix} ({exception.Message}).",
                 Completed = false,
                 Duration = _timeProvider.GetUtcNow() - startedAt
             };
@@ -398,12 +398,30 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 };
             }
 
+            var standardOutput = standardOutputBuilder.ToString();
+            var standardError = standardErrorBuilder.ToString();
+
+            // Behind a wrapper a missing executable is the wrapper's exit, not a start failure: reported as the unwrapped launch failure is.
+            if (!string.Equals(launch.FileName, request.Executable, StringComparison.Ordinal)
+                && SandboxWrapperExecFailure.Describe(request.Executable, exitCode, standardOutput, standardError) is { } launchFailure)
+            {
+                _logger.LogWarning("The sandbox command {Executable} could not be launched: {LaunchFailure}", request.Executable, launchFailure);
+                return new SandboxCommandResult
+                {
+                    ExecutionId = request.ExecutionId,
+                    ExitCode = -1,
+                    StandardError = launchFailure,
+                    Completed = false,
+                    Duration = _timeProvider.GetUtcNow() - startedAt
+                };
+            }
+
             return new SandboxCommandResult
             {
                 ExecutionId = request.ExecutionId,
                 ExitCode = exitCode,
-                StandardOutput = standardOutputBuilder.ToString(),
-                StandardError = standardErrorBuilder.ToString(),
+                StandardOutput = standardOutput,
+                StandardError = standardError,
                 StandardOutputTruncated = standardOutputBuilder.IsTruncated,
                 StandardErrorTruncated = standardErrorBuilder.IsTruncated,
                 Completed = true,

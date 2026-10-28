@@ -157,9 +157,9 @@ internal sealed class DevelopmentCapabilityService : IDevelopmentCapabilityServi
             // A Sandboxed stdio MCP server: served by the agent-role provider instance, its own row for run_python's reason, and the row an operator reads BEFORE registering a server — on a host that
             // cannot isolate, every Sandboxed registration refuses to connect. A PrivilegedHost server has no row: it declares nothing, an explicit per-server host grant.
             Row("mcp-stdio", SandboxWorkloads.McpStdio, _agentSandboxRuntimeProvider, containment, agentRequiresDenial, profile, HomeDirectoryCaveat()),
-            // Either Development declaration works: DevelopmentModeImageToolchain is DevelopmentModeHostToolchain `with` a different name and toolchain source, and this projection reads only the
-            // isolation floor, None on both. The host-toolchain constant avoids re-deriving SandboxProviderSelector.ResolveDevelopment's predicate; the resolved PROVIDER comes from the instance.
-            Row("development", SandboxWorkloads.DevelopmentModeHostToolchain, _sandboxRuntimeProvider, containment, developmentRequiresDenial, profile),
+            // The declaration the resolved provider serves (SandboxWorkloads.DevelopmentFor): the two differ on the boundary preference, which only the host-toolchain form asks
+            // for. Where it is not served, this row's FilesystemIsolation=false with its reason IS the "no filesystem boundary" warning the Development view shows.
+            Row("development", SandboxWorkloads.DevelopmentFor(_sandboxRuntimeProvider.Capabilities), _sandboxRuntimeProvider, containment, developmentRequiresDenial, profile),
             Row("work-session", SandboxWorkloads.WorkSession, _workSessionSandboxRuntimeProvider, containment, agentRequiresDenial, profile)
         ];
     }
