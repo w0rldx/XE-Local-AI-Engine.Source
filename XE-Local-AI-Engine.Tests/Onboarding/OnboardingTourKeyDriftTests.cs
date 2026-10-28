@@ -18,9 +18,9 @@ public sealed class OnboardingTourKeyDriftTests
     [Arguments("knowledge-base-basics", "KnowledgeBaseTourKey")]
     public async Task ReactTutorialRegistryKey_MatchesTheE2EFixture(string tutorialId, string factoryConstant)
     {
-        var registrySource = await File.ReadAllTextAsync(ResolveRepositoryFile("XE-Local-AI-Engine.Client.React",
-            "src", "features", "onboarding", "data", "TutorialRegistry.ts"));
-        var factorySource = await File.ReadAllTextAsync(ResolveRepositoryFile("XE-Local-AI-Engine.Tests.E2ETests",
+        var registrySource = await File.ReadAllTextAsync(RepositoryPaths.Combine("XE-Local-AI-Engine.Client.React",
+            "src", "core", "onboarding", "data", "TutorialRegistry.ts"));
+        var factorySource = await File.ReadAllTextAsync(RepositoryPaths.Combine("XE-Local-AI-Engine.Tests.E2ETests",
             "Infrastructure", "XENodeE2EWebApplicationFactory.cs"));
 
         var registryPattern = "id:\\s*\\\"" + Regex.Escape(tutorialId)
@@ -36,9 +36,9 @@ public sealed class OnboardingTourKeyDriftTests
     [Test]
     public async Task ReactProgressStoragePrefix_MatchesTheE2EAssertionKey()
     {
-        var reactSource = await File.ReadAllTextAsync(ResolveRepositoryFile("XE-Local-AI-Engine.Client.React",
-            "src", "features", "onboarding", "hooks", "useTourState.ts"));
-        var factorySource = await File.ReadAllTextAsync(ResolveRepositoryFile("XE-Local-AI-Engine.Tests.E2ETests",
+        var reactSource = await File.ReadAllTextAsync(RepositoryPaths.Combine("XE-Local-AI-Engine.Client.React",
+            "src", "core", "onboarding", "hooks", "useTourState.ts"));
+        var factorySource = await File.ReadAllTextAsync(RepositoryPaths.Combine("XE-Local-AI-Engine.Tests.E2ETests",
             "Infrastructure", "XENodeE2EWebApplicationFactory.cs"));
 
         AssertEx.Contains(reactSource, "`xe-onboarding-${persistenceKey}-step`", StringComparison.Ordinal,
@@ -52,22 +52,5 @@ public sealed class OnboardingTourKeyDriftTests
         var match = Regex.Match(source, pattern, RegexOptions.None, RegexTimeout);
         AssertEx.True(match.Success, $"could not find {description}");
         return match.Groups["value"].Value;
-    }
-
-    private static string ResolveRepositoryFile(params string[] relativeSegments)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine([directory.FullName, .. relativeSegments]);
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException($"Could not locate {Path.Combine(relativeSegments)}.");
     }
 }

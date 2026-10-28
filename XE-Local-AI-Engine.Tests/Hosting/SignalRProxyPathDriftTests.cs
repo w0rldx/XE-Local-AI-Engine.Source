@@ -51,7 +51,7 @@ public sealed class SignalRProxyPathDriftTests
     /// <summary>Extracts every <c>MapHub</c> route constant from Program.cs and resolves it to its value.</summary>
     private static async Task<HashSet<string>> ReadMappedHubRoutesAsync()
     {
-        var source = await File.ReadAllTextAsync(ResolveRepositoryFile("XE-Local-AI-Engine.Client", "Program.cs"));
+        var source = await File.ReadAllTextAsync(RepositoryPaths.Combine("XE-Local-AI-Engine.Client", "Program.cs"));
         var matches = Regex.Matches(source,
             @"MapHub<\w+>\(\s*LocalApiRoutes\.(?<path>[A-Za-z0-9_.]+)\s*\)",
             RegexOptions.ExplicitCapture,
@@ -89,26 +89,8 @@ public sealed class SignalRProxyPathDriftTests
 
     private static async Task<HashSet<string>> ReadProxiedPathsAsync()
     {
-        var json = await File.ReadAllTextAsync(ResolveRepositoryFile("XE-Local-AI-Engine.Client.React", "config", "signalr-proxy-paths.json"));
+        var json = await File.ReadAllTextAsync(RepositoryPaths.Combine("XE-Local-AI-Engine.Client.React", "config", "signalr-proxy-paths.json"));
         var paths = JsonSerializer.Deserialize<string[]>(json) ?? [];
         return new HashSet<string>(paths, StringComparer.Ordinal);
-    }
-
-    // Walks up from the test binary to the repo root, matching OnboardingTourKeyDriftTests / AppUpdateContractTests.
-    private static string ResolveRepositoryFile(params string[] relativeSegments)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine([directory.FullName, .. relativeSegments]);
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException($"Could not locate {Path.Combine(relativeSegments)} by walking up from {AppContext.BaseDirectory}.");
     }
 }

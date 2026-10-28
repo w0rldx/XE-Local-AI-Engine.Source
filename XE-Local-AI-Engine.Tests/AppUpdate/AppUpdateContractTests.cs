@@ -103,18 +103,6 @@ public sealed class AppUpdateContractTests
 
     private static string GetEndpointPath(string fileName)
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(directory.FullName, "XE-Local-AI-Engine.Client", "Endpoints", "AppUpdate", "V1", fileName);
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException($"Could not locate endpoint source {fileName}.");
+        return RepositoryPaths.Combine("XE-Local-AI-Engine.Client", "Endpoints", "AppUpdate", "V1", fileName);
     }
 }
