@@ -2,7 +2,6 @@ import { ActionIcon, Tooltip } from "@mantine/core";
 import { IconPlayerPlayFilled, IconPlayerStopFilled } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
-import type { ChatMessageModel } from "@/features/chat/models/ChatModels";
 import { useVoiceRuntime } from "@/features/voice/hooks/VoiceRuntimeContext";
 import { useVoicePreferencesStore } from "@/features/voice/stores/VoicePreferencesStore";
 
@@ -13,8 +12,15 @@ import { useVoicePreferencesStore } from "@/features/voice/stores/VoicePreferenc
 // The engine/language is chosen by playMessage from the SELECTED voice ("selected voice always wins"), so this
 // button no longer guesses a language from the answer text.
 
+// The fields this button reads; a chat message satisfies it structurally, so voice does not import the chat hub.
+interface SpeakableMessage {
+	readonly id: string;
+	readonly role: string;
+	readonly content: string;
+}
+
 interface VoiceMessagePlayButtonProps {
-	readonly message: ChatMessageModel;
+	readonly message: SpeakableMessage;
 }
 
 export function VoiceMessagePlayButton({ message }: VoiceMessagePlayButtonProps) {

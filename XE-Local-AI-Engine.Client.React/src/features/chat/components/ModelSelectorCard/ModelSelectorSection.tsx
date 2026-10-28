@@ -1,7 +1,7 @@
 import { Box, Text } from "@mantine/core";
 
+import type { ModelOption } from "@/core/models/ModelOption";
 import { ModelSelectorOption } from "@/features/chat/components/ModelSelectorCard/ModelSelectorOption";
-import type { ModelOption } from "@/features/chat/models/ChatModels";
 
 import classes from "../ModelSelectorCard.module.css";
 

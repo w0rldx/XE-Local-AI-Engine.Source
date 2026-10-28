@@ -5,10 +5,10 @@ import { useCallback, useMemo, useState } from "react";
 import { ApiError } from "@/core/api/errors/ApiError";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { deleteConversationFile, listConversationFiles, uploadConversationFile } from "@/core/api/generated";
+import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
 import { toast } from "@/core/ui/notifications/Toast";
 import type { ChatAttachment, PendingAttachmentUpload } from "@/features/chat/models/ChatAttachmentModels";
 import { toChatAttachment } from "@/features/chat/models/ChatAttachmentModels";
-import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 
 export interface UseConversationAttachmentsResult {
 	readonly attachments: ChatAttachment[];

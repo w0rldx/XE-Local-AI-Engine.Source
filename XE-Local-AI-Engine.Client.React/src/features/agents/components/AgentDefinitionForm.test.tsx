@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The basic-fields section now embeds the AI-draft affordance, which is server-state backed (installed models +
 // running set). Stub it out: this file covers the form's own fields, and the affordance has its own test.
-vi.mock("@/features/assist/components/AssistActions", () => ({ AssistActions: () => null }));
+vi.mock("@/core/assist/components/AssistActions/AssistActions", () => ({ AssistActions: () => null }));
 
 // The tool selector now fetches the catalog via useToolCatalog (dynamic tool-catalog dynamic catalog). Mock it so the form
 // renders the built-in tool rows deterministically without a QueryClient or a real request.
@@ -25,7 +25,7 @@ vi.mock("@/core/tools/queries/useToolCatalog", () => ({
 
 // The skill selector fetches the node skill library via useSkills. Mock it so the form renders without a
 // QueryClient or a real request (the skill rows aren't asserted here — see AgentSkillSelector.test.tsx).
-vi.mock("@/features/skills/queries/useSkills", () => ({
+vi.mock("@/core/skills/queries/useSkills", () => ({
 	useSkills: useSkillsMock,
 }));
 

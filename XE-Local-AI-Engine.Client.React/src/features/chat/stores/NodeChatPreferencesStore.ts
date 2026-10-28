@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
+import { localDefaultModelValue } from "@/core/models/NodeChatModelSelection";
 import type { ReasoningEffort } from "@/features/chat/models/ChatModels";
-import { localDefaultModelValue } from "@/features/chat/models/NodeChatModelSelection";
 
 /* eslint-disable react-doctor/auth-token-in-web-storage -- The nine xe-node-chat-* keys below hold composer UI preferences only (selected model, reasoning effort, tools/agent-mode/knowledge-base/tokens-per-second toggles, sidebar collapse, selected conversation and agent ids); no credential or session token is persisted here. */
 

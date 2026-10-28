@@ -34,7 +34,7 @@ import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
 import { toast } from "@/core/ui/notifications/Toast";
-import { DownloadProgressPanel } from "@/features/models/components/DownloadProgressPanel";
+import { DownloadProgressPanel } from "@/core/model-downloads/components/DownloadProgressPanel/DownloadProgressPanel";
 import { HfTokenPanel } from "@/features/node-settings/components/HfTokenPanel";
 import { ImageRuntimeSourceBuildCard } from "@/features/node-settings/components/ImageRuntimeSourceBuildCard";
 import { LlamaCppUpdaterPanel } from "@/features/node-settings/components/LlamaCppUpdaterPanel";

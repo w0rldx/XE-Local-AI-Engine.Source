@@ -15,7 +15,7 @@ vi.mock("@/features/app-update/components/AppUpdateSection", () => ({
 }));
 
 import { AboutDialog } from "@/features/about/components/AboutDialog/AboutDialog";
-import { OnboardingContext, type OnboardingContextValue } from "@/features/onboarding/context/OnboardingContext";
+import { OnboardingContext, type OnboardingContextValue } from "@/core/onboarding/context/OnboardingContext";
 import { applicationInfo, runtimeLegalDocumentsForUserAgent } from "@/features/about/data/AboutData";
 import { testMantineTheme } from "@/test/MantineTestRender";
 

@@ -5,14 +5,14 @@ import { useTranslation } from "react-i18next";
 
 import { COMPACT_CONTROLS_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
+import { groupExternalModelOptions, hasNoLocalChatModels } from "@/core/models/ChatModelOptions";
 import { EXTERNAL_PROVIDER } from "@/core/models/LocalModelProviders";
+import type { ModelOption } from "@/core/models/ModelOption";
 import { CloudModelSection } from "@/features/chat/components/ModelSelectorCard/CloudModelSection";
 import { ModelNameTooltip } from "@/features/chat/components/ModelSelectorCard/ModelNameTooltip";
 import { ModelSelectorSection } from "@/features/chat/components/ModelSelectorCard/ModelSelectorSection";
 import { cx } from "@/features/chat/components/ModelSelectorCard.helpers";
-import type { ModelOption } from "@/features/chat/models/ChatModels";
 import { deriveModelDisplay } from "@/features/chat/models/ModelDisplay";
-import { groupExternalModelOptions, hasNoLocalChatModels } from "@/features/chat/pages/ChatModelOptions";
 import { AZURE_FOUNDRY_PROVIDER } from "@/features/chat/queries/useCodexModelOptions";
 
 import classes from "./ModelSelectorCard.module.css";

@@ -11,16 +11,16 @@ import { getAiAcknowledgementOptions } from "@/core/api/generated/@tanstack/reac
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { router } from "@/core/integrations/tanstack-router/Router";
 import { WelcomeTourDialog } from "@/features/onboarding/components/WelcomeTourDialog";
-import { OnboardingContext } from "@/features/onboarding/context/OnboardingContext";
+import { OnboardingContext } from "@/core/onboarding/context/OnboardingContext";
 import { hasChatCapableDefault, hasInstalledChatModel } from "@/features/onboarding/data/TourAdvanceSignals";
 import {
 	buildTutorialSteps,
 	getTutorialDefinition,
 	resolveResumeStepId,
 	type TutorialId,
-} from "@/features/onboarding/data/TutorialRegistry";
+} from "@/core/onboarding/data/TutorialRegistry";
 import { useQuickStartReadiness } from "@/features/onboarding/hooks/useQuickStartReadiness";
-import { clearTutorialProgress, readTutorialProgress, writeTutorialProgress } from "@/features/onboarding/hooks/useTourState";
+import { clearTutorialProgress, readTutorialProgress, writeTutorialProgress } from "@/core/onboarding/hooks/useTourState";
 import { useTutorialProgress } from "@/features/onboarding/hooks/useTutorialProgress";
 import { useVisibleAssistantReplyCount } from "@/features/onboarding/hooks/useVisibleAssistantReplyCount";
 import type { ActiveTutorial } from "@/features/onboarding/models/OnboardingModels";

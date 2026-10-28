@@ -3,10 +3,10 @@
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { ModelOption } from "@/core/models/ModelOption";
+import { localDefaultModelValue } from "@/core/models/NodeChatModelSelection";
 import { sourceThemeConfiguration } from "@/core/theme/config/ThemeConfiguration";
 import { ModelSelectorCard } from "@/features/chat/components/ModelSelectorCard";
-import type { ModelOption } from "@/features/chat/models/ChatModels";
-import { localDefaultModelValue } from "@/features/chat/models/NodeChatModelSelection";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // The trigger is the only place an operator can read which model the next turn goes to, and it is the narrowest

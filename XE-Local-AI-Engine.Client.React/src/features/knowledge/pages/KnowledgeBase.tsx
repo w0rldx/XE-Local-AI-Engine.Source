@@ -36,7 +36,7 @@ import {
 import { useKnowledgeRepositoryImport } from "@/features/knowledge/queries/useKnowledgeRepositoryImport";
 import { useKnowledgeSearch } from "@/features/knowledge/queries/useKnowledgeSearch";
 import { useKnowledgeUpload } from "@/features/knowledge/queries/useKnowledgeUpload";
-import { TutorialInvitation } from "@/features/onboarding/components/TutorialInvitation";
+import { TutorialInvitation } from "@/core/onboarding/components/TutorialInvitation/TutorialInvitation";
 
 /* eslint-disable react-doctor/no-event-handler, react-doctor/no-chain-state-updates -- Mutation callbacks must coordinate the drawer selection and server-result notifications after each user action. */
 

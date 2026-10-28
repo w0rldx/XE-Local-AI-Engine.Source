@@ -1,4 +1,5 @@
-import type { ChatStreamingState, ModelOption, ReasoningEffort } from "@/features/chat/models/ChatModels";
+import type { ModelOption } from "@/core/models/ModelOption";
+import type { ChatStreamingState, ReasoningEffort } from "@/features/chat/models/ChatModels";
 
 /**
  * The assistant message "Answer now" may target, or undefined to hide the button: the turn is live, its trailing

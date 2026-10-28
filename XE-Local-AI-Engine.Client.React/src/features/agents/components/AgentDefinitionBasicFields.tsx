@@ -3,9 +3,9 @@ import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { AgentDefinitionFormValues } from "@/core/agents/models/AgentDefinitionModels";
+import { AssistActions } from "@/core/assist/components/AssistActions/AssistActions";
 import type { AssistDraft } from "@/core/assist/models/AssistModels";
 import { MarkdownEditorField } from "@/core/ui/components/MarkdownEditorField/MarkdownEditorField";
-import { AssistActions } from "@/features/assist/components/AssistActions";
 
 interface AgentDefinitionBasicFieldsProps {
 	values: AgentDefinitionFormValues;

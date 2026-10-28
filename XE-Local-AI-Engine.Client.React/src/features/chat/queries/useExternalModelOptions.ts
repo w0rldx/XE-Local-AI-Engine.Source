@@ -11,8 +11,8 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import type { ModelOption } from "@/features/chat/models/ChatModels";
-import { toExternalModelOptions } from "@/features/chat/pages/ChatModelOptions";
+import { toExternalModelOptions } from "@/core/models/ChatModelOptions";
+import type { ModelOption } from "@/core/models/ModelOption";
 
 export function useExternalModelOptions(): ModelOption[] {
 	const modelsQuery = useQuery({

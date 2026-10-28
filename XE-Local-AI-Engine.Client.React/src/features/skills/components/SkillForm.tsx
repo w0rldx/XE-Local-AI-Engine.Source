@@ -3,18 +3,18 @@ import { IconDeviceFloppy, IconInfoCircle, IconX } from "@tabler/icons-react";
 import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { AssistActions } from "@/core/assist/components/AssistActions/AssistActions";
 import type { AssistDraft } from "@/core/assist/models/AssistModels";
-import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import { MarkdownEditorField } from "@/core/ui/components/MarkdownEditorField/MarkdownEditorField";
-import { AssistActions } from "@/features/assist/components/AssistActions";
-import { SkillResourcesPanel } from "@/features/skills/components/SkillResourcesPanel";
 import {
 	SKILL_BODY_GUIDANCE_LINES,
 	SKILL_BODY_GUIDANCE_TOKENS,
 	type SkillFormValues,
 	type SkillProvenance,
 	skillFormSchema,
-} from "@/features/skills/models/SkillModels";
+} from "@/core/skills/models/SkillModels";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { MarkdownEditorField } from "@/core/ui/components/MarkdownEditorField/MarkdownEditorField";
+import { SkillResourcesPanel } from "@/features/skills/components/SkillResourcesPanel";
 
 // Imperative handle so the host dialog can place Save in its sticky footer (outside the form body) yet still
 // trigger the form's own validate-then-submit. The footer button calls submit(); validation stays in the form.

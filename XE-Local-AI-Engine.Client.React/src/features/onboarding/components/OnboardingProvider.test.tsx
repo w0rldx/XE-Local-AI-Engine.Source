@@ -58,8 +58,8 @@ vi.mock("react-joyride", async (importOriginal) => {
 	};
 });
 
-vi.mock("@/features/onboarding/hooks/useTourState", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@/features/onboarding/hooks/useTourState")>()),
+vi.mock("@/core/onboarding/hooks/useTourState", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@/core/onboarding/hooks/useTourState")>()),
 	useTutorialState: () => ({ ...stateRef.current, markDone: markDoneMock }),
 }));
 
@@ -94,8 +94,8 @@ vi.mock("react-i18next", () => ({
 import { ACTIONS, EVENTS, STATUS } from "react-joyride";
 
 import { OnboardingProvider } from "@/features/onboarding/components/OnboardingProvider";
-import { type OnboardingContextValue, useOnboarding } from "@/features/onboarding/context/OnboardingContext";
-import { tutorialProgressStorageKey } from "@/features/onboarding/hooks/useTourState";
+import { type OnboardingContextValue, useOnboarding } from "@/core/onboarding/context/OnboardingContext";
+import { tutorialProgressStorageKey } from "@/core/onboarding/hooks/useTourState";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 const contextRef = { current: null as OnboardingContextValue | null };

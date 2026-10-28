@@ -2,12 +2,12 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { useCallback, useMemo, useState } from "react";
 
 import { ApiError } from "@/core/api/errors/ApiError";
+import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { mergeSelectedConversation } from "@/features/chat/models/ChatConversationDerivations";
 import type { ChatConversationModel, ChatMessageFeedback, ChatScope } from "@/features/chat/models/ChatModels";
 import { deriveContextWindow, deriveUsedContextTokens } from "@/features/chat/models/ContextUsageDerivation";
 import type { ContextWindowSnapshot } from "@/features/chat/models/ContextWindowModels";
-import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 
 const emptyConversations: ChatConversationModel[] = [];
 // The list endpoint's maximum page; the sidebar asks for this many until the operator chooses "Show all".

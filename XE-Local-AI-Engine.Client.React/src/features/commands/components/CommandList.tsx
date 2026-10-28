@@ -1,8 +1,8 @@
 import { Badge, Button, Group, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
+import type { SlashCommand } from "@/core/commands/models/CommandModels";
 import { ResponsiveTable } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
-import type { SlashCommand } from "@/features/commands/models/CommandModels";
 
 interface CommandListProps {
 	commands: readonly SlashCommand[];

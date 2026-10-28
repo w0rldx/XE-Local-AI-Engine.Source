@@ -34,7 +34,7 @@ const appliedDraft = vi.hoisted(
 // The basic-fields section embeds the AI-draft affordance, which is server-state backed (installed models + running
 // set) and has its own tests. It hands `onApply` straight to GenerationAssistDialog, which calls it with the draft and
 // then closes; this stand-in exposes exactly that call, so the form's side of the apply is what runs here.
-vi.mock("@/features/assist/components/AssistActions", () => ({
+vi.mock("@/core/assist/components/AssistActions/AssistActions", () => ({
 	AssistActions: ({ onApply }: { onApply: (draft: AssistDraft) => void }) => (
 		<button type="button" data-testid="stub-assist-apply" onClick={() => onApply(appliedDraft)}>
 			apply
@@ -83,8 +83,8 @@ vi.mock("@/core/ui/components/CodeEditor/MonacoRuntime", () => ({
 	monaco: { editor: { create: editorMock.create, setModelLanguage: vi.fn(), setTheme: vi.fn() } },
 }));
 
+import type { SkillFormValues } from "@/core/skills/models/SkillModels";
 import { SkillForm, type SkillFormHandle } from "@/features/skills/components/SkillForm";
-import type { SkillFormValues } from "@/features/skills/models/SkillModels";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 const baseValues: SkillFormValues = {

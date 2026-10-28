@@ -11,12 +11,12 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useTranslation } from "react-i18next";
 
 import { getErrorStatus } from "@/core/api/errors/RetryClassification";
+import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { titleFromContent } from "@/features/chat/models/ChatConversationDerivations";
 import { errorMessage } from "@/features/chat/models/ChatErrorMessage";
 import type { ChatConversationModel, ChatWorkflowSlots } from "@/features/chat/models/ChatModels";
-import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import {
 	activeWorkflowNode,
 	graphAcceptsAttachments,

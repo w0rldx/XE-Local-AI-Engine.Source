@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { listGraphWorkflowDefinitionsOptions, listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { toChatModelOptions, toDraftModelOptions } from "@/features/chat/pages/ChatModelOptions";
+import { toChatModelOptions, toDraftModelOptions } from "@/core/models/ChatModelOptions";
 import type { NodeSettingsFieldsForm } from "@/features/node-settings/models/NodeSettingsFieldsModel";
 
 /**

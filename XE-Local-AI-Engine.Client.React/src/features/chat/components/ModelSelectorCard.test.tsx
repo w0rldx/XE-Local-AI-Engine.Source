@@ -5,9 +5,9 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { ModelOption } from "@/core/models/ModelOption";
+import { localDefaultModelValue } from "@/core/models/NodeChatModelSelection";
 import { ModelSelectorCard } from "@/features/chat/components/ModelSelectorCard";
-import type { ModelOption } from "@/features/chat/models/ChatModels";
-import { localDefaultModelValue } from "@/features/chat/models/NodeChatModelSelection";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderWithProviders(ui: ReactElement) {

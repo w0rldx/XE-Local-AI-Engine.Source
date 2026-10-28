@@ -36,7 +36,7 @@ import { FeedbackInsightsPanel } from "@/features/agents/components/FeedbackInsi
 import { GoldenConversationPanel } from "@/features/agents/components/GoldenConversationPanel";
 import { PlaybookPanel } from "@/features/agents/components/PlaybookPanel";
 import { useAgentEditorDialog } from "@/features/agents/hooks/useAgentEditorDialog";
-import { TutorialInvitation } from "@/features/onboarding/components/TutorialInvitation";
+import { TutorialInvitation } from "@/core/onboarding/components/TutorialInvitation/TutorialInvitation";
 
 const emptyFormValues: AgentDefinitionFormValues = {
 	name: "",

@@ -9,7 +9,7 @@ vi.mock("@/features/chat/api/NodeChatAdapter", () => ({
 	nodeChatAdapter: { getConversationContextState: getSpy },
 }));
 
-import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
+import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
 import { useConversationContextState } from "@/features/chat/queries/useConversationContextState";
 import { createProvidersWrapper } from "@/test/RenderWithProviders";
 

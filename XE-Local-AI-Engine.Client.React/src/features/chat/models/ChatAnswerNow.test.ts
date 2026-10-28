@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import type { ModelOption } from "@/core/models/ModelOption";
 import { answerNowMessageId } from "@/features/chat/models/ChatAnswerNow";
-import type { ChatStreamingState, ModelOption } from "@/features/chat/models/ChatModels";
+import type { ChatStreamingState } from "@/features/chat/models/ChatModels";
 
 const controllable: ModelOption = {
 	value: "qwen3",

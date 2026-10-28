@@ -32,8 +32,8 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	}),
 }));
 
+import { localDefaultModelValue } from "@/core/models/NodeChatModelSelection";
 import { useChatModelSelection } from "@/features/chat/hooks/useChatModelSelection";
-import { localDefaultModelValue } from "@/features/chat/models/NodeChatModelSelection";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 import { createProvidersWrapper } from "@/test/RenderWithProviders";
 

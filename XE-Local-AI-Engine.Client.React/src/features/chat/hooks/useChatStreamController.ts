@@ -2,7 +2,11 @@ import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { AgentOption } from "@/core/agents/models/AgentOption";
+import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
+import type { ModelOption } from "@/core/models/ModelOption";
+import { toNodeChatRequestModel } from "@/core/models/NodeChatModelSelection";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import {
 	isNodeChatReadOnlyConflict,
@@ -28,17 +32,13 @@ import {
 } from "@/features/chat/models/ChatConversationDerivations";
 import { errorMessage } from "@/features/chat/models/ChatErrorMessage";
 import type {
-	AgentOption,
 	ChatConversationModel,
 	ChatStreamingState,
 	ChatTimelineEntry,
-	ModelOption,
 	ReasoningEffort,
 } from "@/features/chat/models/ChatModels";
 import { toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
 import type { ActiveChatStream, PendingStreamCommit } from "@/features/chat/models/ChatStreamState";
-import { toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
-import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { useChatSamplingPreferencesStore } from "@/features/chat/stores/ChatSamplingPreferencesStore";
 import { isWebContentAutoAccepted } from "@/features/chat/stores/WebContentAutoAcceptStore";
 

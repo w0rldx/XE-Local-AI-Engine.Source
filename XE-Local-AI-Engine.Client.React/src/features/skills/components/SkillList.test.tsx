@@ -18,8 +18,8 @@ vi.mock("react-i18next", () => ({
 	}),
 }));
 
+import type { SkillSummary } from "@/core/skills/models/SkillModels";
 import { SkillList } from "@/features/skills/components/SkillList";
-import type { SkillSummary } from "@/features/skills/models/SkillModels";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 const base = {

@@ -4,6 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { toCreateSkillRequest, toUpdateSkillRequest } from "@/core/skills/models/SkillMappers";
+import type { Skill, SkillFormValues, SkillSummary } from "@/core/skills/models/SkillModels";
+import { useCreateSkill, useDeleteSkill, useSkill, useSkills, useUpdateSkill } from "@/core/skills/queries/useSkills";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
@@ -15,9 +18,6 @@ import { toast } from "@/core/ui/notifications/Toast";
 import { SkillForm, type SkillFormHandle } from "@/features/skills/components/SkillForm";
 import { SkillImportDialog } from "@/features/skills/components/SkillImportDialog";
 import { SkillList } from "@/features/skills/components/SkillList";
-import { toCreateSkillRequest, toUpdateSkillRequest } from "@/features/skills/models/SkillMappers";
-import type { Skill, SkillFormValues, SkillSummary } from "@/features/skills/models/SkillModels";
-import { useCreateSkill, useDeleteSkill, useSkill, useSkills, useUpdateSkill } from "@/features/skills/queries/useSkills";
 import { useSkillManagementStore } from "@/features/skills/stores/SkillManagementStore";
 
 // A new skill always persists enabled by the store default; the create form has no enabled toggle, so the default

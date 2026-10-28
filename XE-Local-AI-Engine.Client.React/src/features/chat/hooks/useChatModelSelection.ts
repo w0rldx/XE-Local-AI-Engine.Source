@@ -3,16 +3,17 @@ import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { getLocalModelDetailsOptions, listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import type { ModelOption, ReasoningEffort } from "@/features/chat/models/ChatModels";
-import { deriveModelDisplay, deriveModelIdDisplay } from "@/features/chat/models/ModelDisplay";
-import { localDefaultModelValue, toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
-import { resolveContextCapacityTokens, shouldFetchLocalModelDetails } from "@/features/chat/pages/ChatModelDetailsQuery";
 import {
 	hasNoLocalChatModels,
 	resolveLocalDefaultModelCapabilities,
 	resolveLocalDefaultModelName,
 	toChatModelOptions,
-} from "@/features/chat/pages/ChatModelOptions";
+} from "@/core/models/ChatModelOptions";
+import type { ModelOption } from "@/core/models/ModelOption";
+import { localDefaultModelValue, toNodeChatRequestModel } from "@/core/models/NodeChatModelSelection";
+import type { ReasoningEffort } from "@/features/chat/models/ChatModels";
+import { deriveModelDisplay, deriveModelIdDisplay } from "@/features/chat/models/ModelDisplay";
+import { resolveContextCapacityTokens, shouldFetchLocalModelDetails } from "@/features/chat/pages/ChatModelDetailsQuery";
 import { resolveAvailableReasoningEfforts } from "@/features/chat/pages/ChatReasoningEfforts";
 import { useCodexModelOptions } from "@/features/chat/queries/useCodexModelOptions";
 import { useExternalModelOptions } from "@/features/chat/queries/useExternalModelOptions";

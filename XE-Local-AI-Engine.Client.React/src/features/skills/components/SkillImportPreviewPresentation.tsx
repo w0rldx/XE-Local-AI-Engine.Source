@@ -6,10 +6,10 @@ import type {
 	XeLocalAiEngineClientEndpointsSkillsV1SkillImportPreviewResponse,
 	XeLocalAiEngineClientServicesAgentsSkillImportConflictResolution,
 } from "@/core/api/generated";
+import type { SkillImportOutcome } from "@/core/skills/models/SkillModels";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SkillImportCandidateCard } from "@/features/skills/components/SkillImportCandidateCard";
-import type { SkillImportOutcome } from "@/features/skills/models/SkillModels";
 
 interface SkillImportPreviewPresentationProps {
 	readonly warningId: string;

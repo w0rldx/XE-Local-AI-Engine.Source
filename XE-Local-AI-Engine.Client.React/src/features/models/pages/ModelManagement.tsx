@@ -23,7 +23,7 @@ import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
-import { DownloadProgressPanel } from "@/features/models/components/DownloadProgressPanel";
+import { DownloadProgressPanel } from "@/core/model-downloads/components/DownloadProgressPanel/DownloadProgressPanel";
 import { GgufBrowsePanel } from "@/features/models/components/GgufBrowsePanel";
 import { GgufDownloadDialog } from "@/features/models/components/GgufDownloadDialog";
 import { GgufImportDialog } from "@/features/models/components/GgufImportDialog";

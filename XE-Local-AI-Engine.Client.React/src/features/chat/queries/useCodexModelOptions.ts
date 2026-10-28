@@ -12,7 +12,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import type { ModelOption } from "@/features/chat/models/ChatModels";
+import type { ModelOption } from "@/core/models/ModelOption";
 
 const CODEX_PROVIDER = "CodexOAuth";
 export const AZURE_FOUNDRY_PROVIDER = "AzureFoundry";

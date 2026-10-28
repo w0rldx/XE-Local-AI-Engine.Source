@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { type ContextEstimateRequest, nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
-import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
+import { type ContextEstimateRequest, nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
+import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 
 /**
  * Pre-send estimate of the fixed context parts (system prompt, instructions, tools) for the selected model and agent.

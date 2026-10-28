@@ -1,9 +1,9 @@
 import { Badge, Box, Group, Stack, Text, UnstyledButton } from "@mantine/core";
 import { IconChevronRight, IconSparkles } from "@tabler/icons-react";
 
+import type { ModelOption } from "@/core/models/ModelOption";
 import { ModelNameTooltip } from "@/features/chat/components/ModelSelectorCard/ModelNameTooltip";
 import { cx } from "@/features/chat/components/ModelSelectorCard.helpers";
-import type { ModelOption } from "@/features/chat/models/ChatModels";
 import { deriveModelDisplay } from "@/features/chat/models/ModelDisplay";
 
 import classes from "../ModelSelectorCard.module.css";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { ModelOption } from "@/features/chat/models/ChatModels";
+import type { ModelOption } from "@/core/models/ModelOption";
 import { deriveModelDisplay, deriveModelIdDisplay, middleEllipsis } from "@/features/chat/models/ModelDisplay";
 
 function option(overrides: Partial<ModelOption>): ModelOption {

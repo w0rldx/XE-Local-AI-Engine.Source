@@ -5,13 +5,13 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { AgentOption } from "@/core/agents/models/AgentOption";
 // AgentSelectorCard is purely presentational — it receives agentOptions as a prop and does NOT call
 // useAgentDefinitions internally. Tests pass the derived list directly, mirroring Chat.tsx behavior.
 // It is the single merged agent control: picking an agent calls onSelectAgent(id) (which enables agent mode at
 // the call site); picking the Default Assistant row calls onSelectAgent("") (which disables it).
 import { AgentSelectorCard } from "@/features/chat/components/AgentSelectorCard";
 import classes from "@/features/chat/components/ChatInputArea/ChatComposerToolbar.module.css";
-import type { AgentOption } from "@/features/chat/models/ChatModels";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderWithProviders(ui: ReactElement) {

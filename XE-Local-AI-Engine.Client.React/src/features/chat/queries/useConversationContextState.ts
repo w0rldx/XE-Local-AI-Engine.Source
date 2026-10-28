@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
+import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
-import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 
 /**
  * The conversation's distilled context state and synopsis. Fetched only while `enabled` (the drawer is open), and

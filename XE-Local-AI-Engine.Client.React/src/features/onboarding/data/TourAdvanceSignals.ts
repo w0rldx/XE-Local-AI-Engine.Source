@@ -1,9 +1,8 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse as LocalModelResponse } from "@/core/api/generated/types.gen";
-import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
-import { isLocalChatModel } from "@/features/chat/pages/ChatModelOptions";
-import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
+import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
+import { isLocalChatModel } from "@/core/models/ChatModelOptions";
 
 // A model counts as chat-capable only when its kind is exactly "Chat" — a whitelist matching the chat picker
 // (toChatModelOptions), which likewise offers `kind === "Chat"` and excludes every non-chat kind (Embedding, Reranker,
@@ -39,8 +38,13 @@ export function hasChatCapableDefault(
 // Counts cached non-empty assistant messages so the provider can baseline existing history and react only when a new
 // reply appears. Scanning the conversation query cache (rather than a specific conversation id) keeps the provider
 // decoupled from the router, which it lives outside of.
+// The cached-conversation fields the count reads; chat's `ChatConversationModel` satisfies it structurally.
+interface CachedConversation {
+	readonly messages?: readonly { readonly role: string; readonly content: string }[];
+}
+
 export function countVisibleAssistantReplies(queryClient: QueryClient): number {
-	const conversations = queryClient.getQueriesData<ChatConversationModel>({
+	const conversations = queryClient.getQueriesData<CachedConversation>({
 		queryKey: nodeChatQueryKeys.conversations(),
 	});
 

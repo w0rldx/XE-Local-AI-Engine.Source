@@ -6,8 +6,9 @@ import i18next from "i18next";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import "@/i18n";
+
+import type { SlashCommand } from "@/core/commands/models/CommandModels";
 import { CommandList } from "@/features/commands/components/CommandList";
-import type { SlashCommand } from "@/features/commands/models/CommandModels";
 import de from "@/locales/de.json";
 import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 

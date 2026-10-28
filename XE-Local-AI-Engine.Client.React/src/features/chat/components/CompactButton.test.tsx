@@ -3,8 +3,8 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
 import { CompactButton } from "@/features/chat/components/CompactButton";
-import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // vi.mock factories are hoisted above the module, so the spies/state they close over must be created with vi.hoisted.

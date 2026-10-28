@@ -2,8 +2,7 @@ import { Stack, Textarea, TextInput } from "@mantine/core";
 import { type Ref, useCallback, useEffect, useImperativeHandle, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { type CommandFormValues, commandFormSchema } from "@/features/commands/models/CommandModels";
-
+import { type CommandFormValues, commandFormSchema } from "@/core/commands/models/CommandModels";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 
 export interface CommandFormHandle {

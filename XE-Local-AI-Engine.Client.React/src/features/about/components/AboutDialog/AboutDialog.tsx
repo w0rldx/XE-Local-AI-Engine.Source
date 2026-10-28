@@ -13,8 +13,8 @@ import {
 	thirdPartyPackages,
 } from "@/features/about/data/AboutData";
 import { AppUpdateSection } from "@/features/app-update/components/AppUpdateSection";
-import { useOnboarding } from "@/features/onboarding/context/OnboardingContext";
-import { tutorialRegistry, type TutorialId } from "@/features/onboarding/data/TutorialRegistry";
+import { useOnboarding } from "@/core/onboarding/context/OnboardingContext";
+import { tutorialRegistry, type TutorialId } from "@/core/onboarding/data/TutorialRegistry";
 
 export interface IAboutDialogProps {
 	opened: boolean;

@@ -1,8 +1,8 @@
 import { Box, Group, Text } from "@mantine/core";
 import type { ReactNode } from "react";
 
+import type { ModelOption } from "@/core/models/ModelOption";
 import { CloudModelOption } from "@/features/chat/components/ModelSelectorCard/CloudModelOption";
-import type { ModelOption } from "@/features/chat/models/ChatModels";
 
 import classes from "../ModelSelectorCard.module.css";
 

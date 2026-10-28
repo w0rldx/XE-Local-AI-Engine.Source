@@ -3,12 +3,12 @@ import { IconArrowsMinimize } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
+import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
+import { toNodeChatRequestModel } from "@/core/models/NodeChatModelSelection";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import type { ChatCompactionResult } from "@/features/chat/models/ChatModels";
-import { toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
-import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 
 interface CompactButtonProps {

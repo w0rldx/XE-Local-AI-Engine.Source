@@ -5,6 +5,7 @@ import { act, cleanup, fireEvent, renderHook, screen, waitFor } from "@testing-l
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
 import { ConfirmContext } from "@/core/ui/context/ConfirmContext";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { nodeChatStreamEventTypes } from "@/features/chat/api/NodeChatStreamState";
@@ -12,7 +13,6 @@ import { useChatStreamController } from "@/features/chat/hooks/useChatStreamCont
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 import { Chat } from "@/features/chat/pages/Chat";
-import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { createProvidersWrapper, renderWithProviders } from "@/test/RenderWithProviders";
 
 // The no-installed-model guidance renders a TanStack-router Link to /models whenever the fixture's model list

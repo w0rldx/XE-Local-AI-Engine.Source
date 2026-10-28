@@ -3,9 +3,11 @@ import { useElementSize } from "@mantine/hooks";
 import { type DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { AgentOption } from "@/core/agents/models/AgentOption";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { DESKTOP_NAV_MIN_HEIGHT, isCompactViewport } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
+import type { ModelOption } from "@/core/models/ModelOption";
 import { usePendingComposerTextStore } from "@/core/ui/stores/PendingComposerTextStore";
 import { ChatAttachmentChips } from "@/features/chat/components/ChatAttachmentChips";
 import { ChatComposerToolbar } from "@/features/chat/components/ChatInputArea/ChatComposerToolbar";
@@ -16,11 +18,9 @@ import { useSlashCommandAutocomplete } from "@/features/chat/hooks/useSlashComma
 import type { ChatAttachment, PendingAttachmentUpload } from "@/features/chat/models/ChatAttachmentModels";
 import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
 import type {
-	AgentOption,
 	ChatUiCapabilities,
 	ChatWorkflowSlots,
 	ContextUsageModel,
-	ModelOption,
 	ReasoningEffort,
 } from "@/features/chat/models/ChatModels";
 import { evaluateComposerSize, toDisplayKb } from "@/features/chat/models/ComposerSizeLimit";

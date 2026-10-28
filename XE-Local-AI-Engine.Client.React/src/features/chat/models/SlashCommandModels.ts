@@ -1,4 +1,4 @@
-import type { CommandSource, SlashCommand } from "@/features/commands/models/CommandModels";
+import type { CommandSource, SlashCommand } from "@/core/commands/models/CommandModels";
 
 export interface ChatCommandOption {
 	readonly id: string | null;

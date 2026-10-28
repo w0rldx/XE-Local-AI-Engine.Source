@@ -16,8 +16,8 @@ import { IconCheck, IconChevronDown, IconChevronRight, IconSearch, IconUsers } f
 import { type KeyboardEvent, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { AgentOption } from "@/core/agents/models/AgentOption";
 import classes from "@/features/chat/components/ChatInputArea/ChatComposerToolbar.module.css";
-import type { AgentOption } from "@/features/chat/models/ChatModels";
 
 // Show a search box once the agent list exceeds this many items.
 const AGENT_SEARCH_THRESHOLD = 5;

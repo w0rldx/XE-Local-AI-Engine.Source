@@ -1,0 +1,122 @@
+import { Button, Group } from "@mantine/core";
+import { IconSparkles, IconWand } from "@tabler/icons-react";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+
+import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
+import { GenerationAssistDialog } from "@/core/assist/components/GenerationAssistDialog/GenerationAssistDialog";
+import {
+	type AssistDraft,
+	type AssistExistingContent,
+	type AssistMode,
+	type AssistSurface,
+	isSameModelName,
+} from "@/core/assist/models/AssistModels";
+import { useLoadedModels } from "@/core/loaded-models/queries/useLoadedModels";
+import { useRunningModels } from "@/core/loaded-models/queries/useRunningModels";
+import { isLocalChatModel } from "@/core/models/ChatModelOptions";
+import { DisabledReasonTooltip } from "@/core/ui/components/DisabledReasonTooltip/DisabledReasonTooltip";
+
+interface AssistActionsProps {
+	surface: AssistSurface;
+	/** Live form values. Drives the Improve baseline and whether there is anything to improve yet. */
+	existing: AssistExistingContent;
+	onApply: (draft: AssistDraft) => void;
+	onDiscard: () => void;
+}
+
+/**
+ * The "Draft with AI" / "Improve with AI" entry point the agent, skill and image forms embed, plus the dialog it opens.
+ *
+ * Eligibility shown here is a UI HINT only — the server re-checks the model fail-closed on every draft. It exists so
+ * a node with no installed chat model explains itself up front instead of failing on the first Generate.
+ */
+export function AssistActions({ surface, existing, onApply, onDiscard }: AssistActionsProps) {
+	const { t } = useTranslation();
+	const [mode, setMode] = useState<AssistMode | null>(null);
+
+	const { data: modelsData } = useQuery(listLocalModelsOptions());
+	const loadedModelsQuery = useLoadedModels();
+	const runningModelsQuery = useRunningModels();
+
+	// Same predicate the chat picker uses: installed, classified Chat, non-cloud provider.
+	const models = useMemo(() => (modelsData?.items ?? []).filter(isLocalChatModel), [modelsData]);
+	// Each picker entry is checked against its own runtime: Ollama entries against Ollama's in-memory list, llama.cpp
+	// entries against the supervisor's live chat processes (an exited or embedding process cannot serve the draft).
+	const loadedModelNames = useMemo(() => {
+		const ollamaNames = (loadedModelsQuery.data?.models ?? []).map((model) => model.modelName);
+		const llamaCppNames = (runningModelsQuery.data ?? [])
+			.filter((model) => model.role === "chat" && model.detailCode !== "exited")
+			.map((model) => model.modelName);
+		return models
+			.filter((model) => {
+				const names = model.provider === "ollama" ? ollamaNames : model.provider === "llamacpp" ? llamaCppNames : [];
+				return names.some((name) => isSameModelName(name, model.modelName));
+			})
+			.map((model) => model.modelName ?? "");
+	}, [models, loadedModelsQuery.data, runningModelsQuery.data]);
+
+	const hasEligibleModel = models.length > 0;
+	const canImprove = existing.content.trim().length > 0;
+
+	return (
+		<>
+			<Group gap="xs" data-testid="assist-actions">
+				<DisabledReasonTooltip
+					label={t("assist.noModelHint", "No local chat model is installed on this node, so nothing can draft yet.")}
+					disabled={hasEligibleModel}
+					controlDisabled={!hasEligibleModel}
+					multiline={true}
+					w={260}
+				>
+					<Button
+						variant="light"
+						size="compact-sm"
+						leftSection={<IconSparkles size={14} />}
+						disabled={!hasEligibleModel}
+						onClick={() => setMode("Create")}
+						data-testid="assist-open-create"
+					>
+						{surface === "image" ? t("assist.promptButton", "Write prompt with AI") : t("assist.draftButton", "Draft with AI")}
+					</Button>
+				</DisabledReasonTooltip>
+				{canImprove ? (
+					<DisabledReasonTooltip
+						label={t("assist.noModelHint", "No local chat model is installed on this node, so nothing can draft yet.")}
+						disabled={hasEligibleModel}
+						controlDisabled={!hasEligibleModel}
+						multiline={true}
+						w={260}
+					>
+						<Button
+							variant="subtle"
+							size="compact-sm"
+							leftSection={<IconWand size={14} />}
+							disabled={!hasEligibleModel}
+							onClick={() => setMode("Improve")}
+							data-testid="assist-open-improve"
+						>
+							{t("assist.improveButton", "Improve with AI")}
+						</Button>
+					</DisabledReasonTooltip>
+				) : null}
+			</Group>
+			{mode ? (
+				<GenerationAssistDialog
+					// Re-key per mode so switching between Draft and Improve starts from a clean brief and result.
+					key={mode}
+					opened={true}
+					surface={surface}
+					mode={mode}
+					existing={existing}
+					models={models}
+					loadedModelNames={loadedModelNames}
+					onApply={onApply}
+					onDiscard={onDiscard}
+					onClose={() => setMode(null)}
+				/>
+			) : null}
+		</>
+	);
+}

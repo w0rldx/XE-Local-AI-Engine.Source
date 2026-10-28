@@ -4,10 +4,10 @@ import { MantineProvider } from "@mantine/core";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { AgentOption } from "@/core/agents/models/AgentOption";
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { ChatInputArea } from "@/features/chat/components/ChatInputArea";
 import classes from "@/features/chat/components/ChatInputArea/ChatComposerToolbar.module.css";
-import type { AgentOption } from "@/features/chat/models/ChatModels";
 import { WorkflowSelectorCard } from "@/features/chat/workflow/WorkflowSelectorCard";
 import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 import { renderWithProviders } from "@/test/RenderWithProviders";

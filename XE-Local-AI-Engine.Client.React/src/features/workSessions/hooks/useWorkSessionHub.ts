@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
-import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
+import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
 import type { WorkSessionEventResponse } from "@/features/workSessions/models/WorkSessionModels";
 import { workSessionInvalidationKey, workSessionQueryIds } from "@/features/workSessions/queries/useWorkSessions";
 

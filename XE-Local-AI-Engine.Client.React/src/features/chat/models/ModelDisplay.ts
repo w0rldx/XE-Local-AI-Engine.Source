@@ -8,7 +8,7 @@
 // structure of the id (org prefix, repo-kind suffix, quantization tag) keeps the identifying half and moves the
 // stripped metadata onto a second line instead of throwing it away.
 
-import type { ModelOption } from "@/features/chat/models/ChatModels";
+import type { ModelOption } from "@/core/models/ModelOption";
 
 /** How one model option is named across the picker trigger, the option rows and the context meter. */
 export interface ModelDisplay {

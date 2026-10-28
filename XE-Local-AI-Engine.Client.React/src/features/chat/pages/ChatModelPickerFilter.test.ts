@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse } from "@/core/api/generated";
-import { toChatModelOptions, toDraftModelOptions } from "@/features/chat/pages/ChatModelOptions";
+import { toChatModelOptions, toDraftModelOptions } from "@/core/models/ChatModelOptions";
 
 type LocalModelDto = XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse;
 

@@ -2,9 +2,9 @@ import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { toast } from "@/core/ui/notifications/Toast";
-import type { TutorialUiState } from "@/features/onboarding/context/OnboardingContext";
-import { getTutorialDefinition, type TutorialId, tutorialRegistry } from "@/features/onboarding/data/TutorialRegistry";
-import { clearTutorialProgress, readTutorialProgress, useTutorialState } from "@/features/onboarding/hooks/useTourState";
+import type { TutorialUiState } from "@/core/onboarding/context/OnboardingContext";
+import { getTutorialDefinition, type TutorialId, tutorialRegistry } from "@/core/onboarding/data/TutorialRegistry";
+import { clearTutorialProgress, readTutorialProgress, useTutorialState } from "@/core/onboarding/hooks/useTourState";
 
 export interface TutorialProgressState {
 	isResolved: boolean;

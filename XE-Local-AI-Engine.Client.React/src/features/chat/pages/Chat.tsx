@@ -5,6 +5,8 @@ import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react
 import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
+import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
+import { useCommands } from "@/core/commands/queries/useCommands";
 import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
@@ -32,12 +34,10 @@ import type {
 	ChatScope,
 } from "@/features/chat/models/ChatModels";
 import { toChatCommandOption } from "@/features/chat/models/SlashCommandModels";
-import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { useConversationAttachments } from "@/features/chat/queries/useConversationAttachments";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 import { adoptWebContentAutoAcceptDraft, forgetWebContentAutoAccept } from "@/features/chat/stores/WebContentAutoAcceptStore";
 import { useChatWorkflow } from "@/features/chat/workflow/useChatWorkflow";
-import { useCommands } from "@/features/commands/queries/useCommands";
 import { useKnowledgeDocuments } from "@/features/knowledge/queries/useKnowledgeDocuments";
 import { useVoicePlayback } from "@/features/voice/hooks/useVoicePlayback";
 import { useVoiceRuntime } from "@/features/voice/hooks/VoiceRuntimeContext";

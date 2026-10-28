@@ -9,9 +9,9 @@ import type {
 	XeLocalAiEngineClientEndpointsSkillsV1SkillImportCandidateResponse,
 	XeLocalAiEngineClientEndpointsSkillsV1SkillResourceSummaryResponse,
 } from "@/core/api/generated";
+import { SKILL_BODY_GUIDANCE_LINES } from "@/core/skills/models/SkillModels";
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import { SKILL_BODY_GUIDANCE_LINES } from "@/features/skills/models/SkillModels";
 import { useSkillImportPreviewResource } from "@/features/skills/queries/useSkillImport";
 
 interface SkillImportCandidateCardProps {

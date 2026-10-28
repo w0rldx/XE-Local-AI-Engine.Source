@@ -1,4 +1,5 @@
-import type { ModelOption, ReasoningEffort } from "@/features/chat/models/ChatModels";
+import type { ModelOption } from "@/core/models/ModelOption";
+import type { ReasoningEffort } from "@/features/chat/models/ChatModels";
 import { binaryReasoningEfforts, codexReasoningEfforts, reasoningEfforts } from "@/features/chat/stores/NodeChatPreferencesStore";
 
 // Which reasoning-effort vocabulary the composer offers for the active model. Lives beside the page rather than in it

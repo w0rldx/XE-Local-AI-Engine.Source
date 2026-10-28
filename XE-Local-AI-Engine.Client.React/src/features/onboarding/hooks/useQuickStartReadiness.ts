@@ -9,7 +9,7 @@ import {
 	getTutorialDefinition,
 	type QuickStartReadiness,
 	type TutorialId,
-} from "@/features/onboarding/data/TutorialRegistry";
+} from "@/core/onboarding/data/TutorialRegistry";
 
 export interface QuickStartReadinessState {
 	/** The installed models, or undefined while the runtime has not reported an available catalog yet. */

@@ -32,7 +32,7 @@ const { skillHooksMock, toastMock, applyDraftSpy, discardDraftSpy } = vi.hoisted
 	discardDraftSpy: vi.fn(),
 }));
 
-vi.mock("@/features/skills/queries/useSkills", () => skillHooksMock);
+vi.mock("@/core/skills/queries/useSkills", () => skillHooksMock);
 // The page reads useConfirm at render; nothing in these tests takes a confirm path.
 vi.mock("@/core/ui/hooks/useConfirm", () => ({ useConfirm: () => ({ confirm: vi.fn() }) }));
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
@@ -46,7 +46,7 @@ vi.mock("@tanstack/react-router", async (importOriginal) => ({
 }));
 // Stand in for the assist affordance with two bare buttons that fire the same callbacks the real dialog does. The
 // dialog itself is covered by GenerationAssistDialog.test.tsx; what matters here is what the FORM does with a draft.
-vi.mock("@/features/assist/components/AssistActions", () => ({
+vi.mock("@/core/assist/components/AssistActions/AssistActions", () => ({
 	AssistActions: ({ onApply, onDiscard }: { onApply: (draft: unknown) => void; onDiscard: () => void }) => (
 		<>
 			<button
@@ -80,7 +80,7 @@ vi.mock("@/features/assist/components/AssistActions", () => ({
 
 import type { XeLocalAiEngineClientEndpointsSkillsV1UpdateSkillRequest } from "@/core/api/generated";
 import type { GenerationMetadata } from "@/core/assist/models/AssistModels";
-import type { Skill } from "@/features/skills/models/SkillModels";
+import type { Skill } from "@/core/skills/models/SkillModels";
 import { SkillsPage } from "@/features/skills/pages/SkillsPage";
 import { useSkillManagementStore } from "@/features/skills/stores/SkillManagementStore";
 import { testMantineTheme } from "@/test/MantineTestRender";

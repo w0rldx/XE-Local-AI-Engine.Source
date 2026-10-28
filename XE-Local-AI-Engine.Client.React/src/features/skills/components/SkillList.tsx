@@ -2,8 +2,8 @@ import { ActionIcon, Badge, Group, Text, Tooltip } from "@mantine/core";
 import { IconAlertTriangle, IconPencil, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { isSkillNameResolvable, type SkillSummary } from "@/core/skills/models/SkillModels";
 import { ResponsiveTable } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
-import { isSkillNameResolvable, type SkillSummary } from "@/features/skills/models/SkillModels";
 
 interface SkillListProps {
 	skills: readonly SkillSummary[];

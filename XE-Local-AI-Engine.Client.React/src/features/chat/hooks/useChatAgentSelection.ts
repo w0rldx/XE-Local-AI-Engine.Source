@@ -1,8 +1,8 @@
 import { useCallback, useMemo } from "react";
 
+import { type AgentOption, toAgentOptions } from "@/core/agents/models/AgentOption";
 import { useAgentDefinitions } from "@/core/agents/queries/useAgentDefinitions";
-import type { AgentOption, ChatScope } from "@/features/chat/models/ChatModels";
-import { DEFAULT_ASSISTANT_NAME } from "@/features/chat/models/ChatModels";
+import type { ChatScope } from "@/features/chat/models/ChatModels";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 
 interface ChatAgentSelection {
@@ -48,24 +48,14 @@ export function useChatAgentSelection(
 		: undefined;
 	const scopedModelPending = scope?.pinnedAgentId !== undefined && agentDefinitionsQuery.data === undefined;
 
-	// Build the live agent option list (sorted, excluding the Default Assistant by shared constant).
+	// Build the live agent option list (sorted, excluding the Default Assistant).
 	// Single derivation site — AgentSelectorCard receives this as a prop (no internal query call).
 	// Chat.tsx uses this list to gate send: a stale/deleted selectedAgentId that no longer appears here is
 	// silently dropped → the send falls back to Default Assistant (mode-off behavior).
-	const agentOptions = useMemo<AgentOption[]>(() => {
-		const definitions = agentDefinitionsQuery.data ?? [];
-		return definitions
-			.filter((agent) => agent.name.toLowerCase() !== DEFAULT_ASSISTANT_NAME.toLowerCase())
-			.map((agent) => ({
-				id: agent.id,
-				name: agent.name,
-				description: agent.description,
-				kind: agent.kind,
-				modelProfile: agent.modelProfile,
-				playbookEnabled: agent.playbookEnabled,
-			}))
-			.sort((a, b) => a.name.localeCompare(b.name));
-	}, [agentDefinitionsQuery.data]);
+	const agentOptions = useMemo<AgentOption[]>(
+		() => toAgentOptions(agentDefinitionsQuery.data ?? []),
+		[agentDefinitionsQuery.data],
+	);
 	// agentControlsAvailable: capability gate AND at least one agent in the live list.
 	const agentControlsAvailable = showAgentControls && agentOptions.length > 0;
 	// Whether the currently bound agent (agent mode on + a selected agent that still exists) has adaptive memory

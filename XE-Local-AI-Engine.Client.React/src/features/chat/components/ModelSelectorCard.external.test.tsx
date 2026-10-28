@@ -3,9 +3,9 @@
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { ModelOption } from "@/core/models/ModelOption";
+import { localDefaultModelValue } from "@/core/models/NodeChatModelSelection";
 import { ModelSelectorCard } from "@/features/chat/components/ModelSelectorCard";
-import type { ModelOption } from "@/features/chat/models/ChatModels";
-import { localDefaultModelValue } from "@/features/chat/models/NodeChatModelSelection";
 // The shared provider stack — used here rather than the sibling suite's hand-rolled Mantine wrapper because these
 // section titles and egress cues are INTERPOLATED translations, which need the app's real i18next instance to resolve.
 import { renderWithProviders } from "@/test/RenderWithProviders";

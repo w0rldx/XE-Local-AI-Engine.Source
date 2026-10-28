@@ -10,7 +10,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
+import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
 import type { WorkSessionEventResponse } from "@/features/workSessions/models/WorkSessionModels";
 import { workSessionInvalidationKey, workSessionQueryIds } from "@/features/workSessions/queries/useWorkSessions";
 

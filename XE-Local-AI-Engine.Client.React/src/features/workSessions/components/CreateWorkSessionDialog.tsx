@@ -1,11 +1,11 @@
-import { Button, Group, SegmentedControl, Stack, Text, TextInput, Textarea } from "@mantine/core";
+import { Button, Group, SegmentedControl, Stack, Text, Textarea, TextInput } from "@mantine/core";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { AgentOption } from "@/core/agents/models/AgentOption";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { AgentSelectorCard } from "@/features/chat/components/AgentSelectorCard";
-import type { AgentOption } from "@/features/chat/models/ChatModels";
 import { type WorkSessionKind, workSessionKinds } from "@/features/workSessions/models/WorkSessionModels";
 
 export interface CreateWorkSessionDialogProps {

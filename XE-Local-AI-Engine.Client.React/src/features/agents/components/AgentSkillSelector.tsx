@@ -3,9 +3,9 @@ import { IconInfoCircle } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { SkillSummary } from "@/core/skills/models/SkillModels";
+import { useSkills } from "@/core/skills/queries/useSkills";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import type { SkillSummary } from "@/features/skills/models/SkillModels";
-import { useSkills } from "@/features/skills/queries/useSkills";
 
 interface AgentSkillSelectorProps {
 	// Selected node skill ids, owned by the parent form. Mirrors AgentToolSelector's selectedToolNames.

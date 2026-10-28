@@ -71,7 +71,7 @@ deliberately does not restate their counts.
 
 - **`no-cross-feature`** — one feature importing another feature's internals; shared
   code belongs in `core/`. Examples: `chat` -> `graphWorkflows`/`voice`, `workSessions` -> `chat`,
-  `models` -> `model-fit`, `agents` -> `assist`/`skills`.
+  `models` -> `model-fit`, `training` -> `benchmarks`. `docs/wiki/10-react-client.md` gives the reason for each remaining pair.
 - **`no-orphans`** (currently clean) — modules imported by nothing in the current graph.
 
 ## Browser and bundle feedback

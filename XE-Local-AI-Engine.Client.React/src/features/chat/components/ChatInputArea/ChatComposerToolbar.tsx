@@ -13,6 +13,9 @@ import {
 import type { ReactNode, RefObject } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { AgentOption } from "@/core/agents/models/AgentOption";
+import type { ModelOption } from "@/core/models/ModelOption";
+import { toNodeChatRequestModel } from "@/core/models/NodeChatModelSelection";
 import { DisabledReasonTooltip } from "@/core/ui/components/DisabledReasonTooltip/DisabledReasonTooltip";
 import { AgentSelectorCard } from "@/features/chat/components/AgentSelectorCard";
 import { AnswerNowButton } from "@/features/chat/components/ChatInputArea/AnswerNowButton";
@@ -21,8 +24,7 @@ import { CompactButton } from "@/features/chat/components/CompactButton";
 import { ContextStateButton } from "@/features/chat/components/ContextStatePanel";
 import { ContextUsagePopover } from "@/features/chat/components/ContextUsagePopover/ContextUsagePopover";
 import { ModelSelectorCard } from "@/features/chat/components/ModelSelectorCard";
-import type { AgentOption, ContextUsageModel, ModelOption, ReasoningEffort } from "@/features/chat/models/ChatModels";
-import { toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
+import type { ContextUsageModel, ReasoningEffort } from "@/features/chat/models/ChatModels";
 import { VoiceComposerControls } from "@/features/voice/components/VoiceComposerControls";
 
 import classes from "./ChatComposerToolbar.module.css";

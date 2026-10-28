@@ -19,6 +19,7 @@ import {
 	type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatBranchConversationResponse,
 	type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationContextStateResponse,
 } from "@/core/api/generated";
+import type { ContextEstimateRequest } from "@/core/chat/queries/NodeChatQueryKeys";
 import {
 	mapConversation,
 	mapConversationSummary,
@@ -84,16 +85,6 @@ export interface SendMessageRequest {
 	// The conversation's web content review mode: true lets web_fetch/web_search results reach the model unreviewed.
 	// Omitted when off (the server default), keeping the wire payload byte-identical to the review path.
 	autoAcceptWebContent?: boolean;
-}
-
-// What the next request would resolve, so the pre-send estimate matches the turn: model (blank = node default), agent,
-// the local-tools toggle and the developer-mode output reserve and window overrides.
-export interface ContextEstimateRequest {
-	modelName: string;
-	agentId?: string;
-	useLocalTools: boolean;
-	maxOutputTokens?: number;
-	numCtx?: number;
 }
 
 export interface NodeChatAdapter {

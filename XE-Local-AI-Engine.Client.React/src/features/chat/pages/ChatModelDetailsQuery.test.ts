@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { ModelOption } from "@/features/chat/models/ChatModels";
+import type { ModelOption } from "@/core/models/ModelOption";
 import { resolveContextCapacityTokens, shouldFetchLocalModelDetails } from "@/features/chat/pages/ChatModelDetailsQuery";
 
 function option(overrides: Partial<ModelOption>): ModelOption {

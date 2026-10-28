@@ -2,7 +2,7 @@ import { FileInput, Stack, Tabs, Text, Textarea, TextInput } from "@mantine/core
 import { IconBrandGithub, IconClipboardText, IconUpload } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
-import type { SkillImportSourceTab } from "@/features/skills/models/SkillModels";
+import type { SkillImportSourceTab } from "@/core/skills/models/SkillModels";
 
 const PASTE_PLACEHOLDER = "---\nname: invoice-review\ndescription: …\n---\n\n# …";
 

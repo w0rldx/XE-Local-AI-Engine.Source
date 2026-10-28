@@ -5,13 +5,13 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { SkillSummary } from "@/features/skills/models/SkillModels";
+import type { SkillSummary } from "@/core/skills/models/SkillModels";
 
 const { useSkillsMock } = vi.hoisted(() => ({
 	useSkillsMock: vi.fn(),
 }));
 
-vi.mock("@/features/skills/queries/useSkills", () => ({
+vi.mock("@/core/skills/queries/useSkills", () => ({
 	useSkills: useSkillsMock,
 }));
 

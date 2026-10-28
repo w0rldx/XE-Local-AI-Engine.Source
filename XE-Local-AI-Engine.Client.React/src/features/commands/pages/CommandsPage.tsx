@@ -4,6 +4,14 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { toSaveCommandRequest } from "@/core/commands/models/CommandMappers";
+import {
+	type CommandEditorTarget,
+	type CommandFormValues,
+	CUSTOM_COMMAND_CAPACITY,
+	type SlashCommand,
+} from "@/core/commands/models/CommandModels";
+import { useCommands, useCreateCommand, useDeleteCommand, useUpdateCommand } from "@/core/commands/queries/useCommands";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
@@ -14,14 +22,6 @@ import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
 import { toast } from "@/core/ui/notifications/Toast";
 import { CommandForm, type CommandFormHandle } from "@/features/commands/components/CommandForm";
 import { CommandList } from "@/features/commands/components/CommandList";
-import { toSaveCommandRequest } from "@/features/commands/models/CommandMappers";
-import {
-	type CommandEditorTarget,
-	type CommandFormValues,
-	CUSTOM_COMMAND_CAPACITY,
-	type SlashCommand,
-} from "@/features/commands/models/CommandModels";
-import { useCommands, useCreateCommand, useDeleteCommand, useUpdateCommand } from "@/features/commands/queries/useCommands";
 
 const emptyFormValues: CommandFormValues = { name: "", description: "", actionType: "SendPrompt", prompt: "" };
 

@@ -1,6 +1,5 @@
 import { useCallback, useRef } from "react";
 
-import type { ChatStreamingState } from "@/features/chat/models/ChatModels";
 import { useVoiceRuntime } from "@/features/voice/hooks/VoiceRuntimeContext";
 import { detectAnswerLanguage } from "@/features/voice/models/DetectAnswerLanguage";
 import { SentenceBuffer } from "@/features/voice/models/SentenceBuffer";
@@ -32,11 +31,18 @@ function isOddFenceCount(text: string): boolean {
 // line. Barge-in (`onTurnStart`) stops playback + resets all per-turn state on every new send / regenerate / cancel.
 // Engages only when the user has voice + autoplay on and a runtime exists; otherwise every call is a cheap no-op.
 
+// The streaming-turn fields the tap reads; chat's `ChatStreamingState` satisfies it structurally.
+interface VoiceStreamingAnswer {
+	readonly messageId: string;
+	readonly content: string;
+	readonly isActive: boolean;
+}
+
 export interface VoicePlaybackTap {
 	/** Barge-in: stop any current playback and reset the per-turn sentence buffer. Call on send/regenerate/cancel. */
 	readonly onTurnStart: () => void;
 	/** Feed the latest streaming state; diffs + flushes answer sentences, and flushes the remainder on terminal. */
-	readonly onAnswerProgress: (streaming: ChatStreamingState | undefined) => void;
+	readonly onAnswerProgress: (streaming: VoiceStreamingAnswer | undefined) => void;
 }
 
 export function useVoicePlayback(): VoicePlaybackTap {
@@ -97,7 +103,7 @@ export function useVoicePlayback(): VoicePlaybackTap {
 	}, [stopPlayback]);
 
 	const onAnswerProgress = useCallback(
-		(streaming: ChatStreamingState | undefined): void => {
+		(streaming: VoiceStreamingAnswer | undefined): void => {
 			const prefs = useVoicePreferencesStore.getState();
 			if (!runtime || !prefs.voiceEnabled || !prefs.autoPlayAssistant || !streaming) {
 				return;
