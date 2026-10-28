@@ -18,7 +18,8 @@ public static class StagedDirectoryPublish
         [TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)];
 
     /// <summary>Publishes <paramref name="stagingDir" /> as <paramref name="targetDir" />.</summary>
-    public static Task PublishAsync(string stagingDir, string targetDir, CancellationToken ct) => PublishCoreAsync(stagingDir, targetDir, ct);
+    public static Task PublishAsync(string stagingDir, string targetDir, CancellationToken ct) =>
+        PublishCoreAsync(stagingDir, targetDir, ct);
 
     /// <summary>The publish behind <see cref="PublishAsync" />; <paramref name="move" /> and <paramref name="delay" /> are test seams.</summary>
     internal static async Task PublishCoreAsync(string stagingDir, string targetDir, CancellationToken ct,

@@ -493,7 +493,12 @@ public sealed class DevWorkflowDefinitionSeederTests
         AssertEx.Equal("decompose, verify",
             string.Join(", ", graph.Edges.Where(static edge => edge.From == "approved").Select(static edge => edge.To).Order(StringComparer.Ordinal)));
         AssertEx.Equal(expected: 3,
-            new[] { DevWorkflowDefinitionSeeder.ResearchPlanApprovalSlug, DevWorkflowDefinitionSeeder.FeatureDevelopmentSlug, DevWorkflowDefinitionSeeder.DevIntakeSlug }
+            new[]
+                {
+                    DevWorkflowDefinitionSeeder.ResearchPlanApprovalSlug,
+                    DevWorkflowDefinitionSeeder.FeatureDevelopmentSlug,
+                    DevWorkflowDefinitionSeeder.DevIntakeSlug
+                }
                 .Distinct(StringComparer.Ordinal).Count(),
             "a new template ships under a new slug, leaving the two before it as they are.");
     }
@@ -508,7 +513,17 @@ public sealed class DevWorkflowDefinitionSeederTests
         var intake = DevWorkflowGraph.Parse(DevWorkflowDefinitionSeeder.DevIntakeGraph);
         var feature = DevWorkflowGraph.Parse(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph);
 
-        foreach (var key in new[] { "decompose", "implement", "validate", "join", "verify", "integrationapproval", "integrate", "fullvalidate" })
+        foreach (var key in new[]
+                 {
+                     "decompose",
+                     "implement",
+                     "validate",
+                     "join",
+                     "verify",
+                     "integrationapproval",
+                     "integrate",
+                     "fullvalidate"
+                 })
         {
             var copy = intake.Nodes[key];
             var original = feature.Nodes[key];
@@ -534,7 +549,11 @@ public sealed class DevWorkflowDefinitionSeederTests
     {
         var graph = DevWorkflowGraph.Parse(DevWorkflowDefinitionSeeder.DevIntakeGraph);
 
-        foreach (var key in new[] { "decompose", "verify" })
+        foreach (var key in new[]
+                 {
+                     "decompose",
+                     "verify"
+                 })
         {
             var instructions = AssertEx.NotNull(graph.Nodes[key].Instructions);
             AssertEx.Contains(instructions, "\"Skipped steps\"");

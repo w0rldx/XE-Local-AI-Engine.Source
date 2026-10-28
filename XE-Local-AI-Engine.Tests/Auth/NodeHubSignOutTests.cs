@@ -212,6 +212,7 @@ public sealed class NodeHubSignOutTests
 
         public required Task Closed { get; init; }
 
-        public ValueTask DisposeAsync() => Connection.DisposeAsync();
+        public ValueTask DisposeAsync() =>
+            Connection.DisposeAsync();
     }
 }

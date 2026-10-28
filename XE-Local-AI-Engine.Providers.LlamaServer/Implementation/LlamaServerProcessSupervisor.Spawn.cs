@@ -727,8 +727,7 @@ public sealed partial class LlamaServerProcessSupervisor
         {
             // An expert-offload spawn is the most VRAM-marginal launch on the host, so a one-shot success without KV quantization proves nothing about KV
             // (placement or transient pressure could have failed the primary), and recording it would disable the optimized config for EVERY model here.
-            _logger.LogInformation(
-                "Safe-retry readiness for expert-offload model {ModelName} role {Role} is inconclusive about the optimized KV config; nothing recorded for backend {Variant}.",
+            _logger.LogInformation("Safe-retry readiness for expert-offload model {ModelName} role {Role} is inconclusive about the optimized KV config; nothing recorded for backend {Variant}.",
                 key.ModelName,
                 key.Role,
                 variant);
@@ -793,8 +792,7 @@ public sealed partial class LlamaServerProcessSupervisor
                 return false;
             }
 
-            _logger.LogWarning(
-                "The selected llama-server runtime does not support the optimized KV-cache/Flash Attention vector for model {ModelName} role {Role}; using the explicit safe candidate.",
+            _logger.LogWarning("The selected llama-server runtime does not support the optimized KV-cache/Flash Attention vector for model {ModelName} role {Role}; using the explicit safe candidate.",
                 key.ModelName,
                 key.Role);
             return true;
@@ -1106,10 +1104,10 @@ public sealed partial class LlamaServerProcessSupervisor
     private async Task WaitForReadyOrExitAsync(IProcessTreeHandle handle, Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct)
     {
         var outcome = await ProcessReadinessRace.RunAsync(handle,
-                token => _healthProbe.WaitForReadyAsync(baseAddress, readinessTimeout, token),
-                _timeProvider,
-                ct)
-            .ConfigureAwait(false);
+                                                    token => _healthProbe.WaitForReadyAsync(baseAddress, readinessTimeout, token),
+                                                    _timeProvider,
+                                                    ct)
+                                                .ConfigureAwait(false);
 
         if (outcome == ProcessReadinessOutcome.Exited)
         {
@@ -1130,7 +1128,8 @@ public sealed partial class LlamaServerProcessSupervisor
     /// <summary>
     ///     What a spawn resolved before the admission gate and every launch attempt reads.
     /// </summary>
-    private readonly record struct SpawnLaunchInputs(string ModelFilePath,
+    private readonly record struct SpawnLaunchInputs(
+        string ModelFilePath,
         string? AdapterFilePath,
         string? ProjectorFilePath,
         TimeSpan ReadinessTimeout,

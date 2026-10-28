@@ -1324,7 +1324,8 @@ public sealed class DevWorkflowGraphTests
     [Arguments("""{"type":"object","properties":{"kind":{"type":"string","maxLength":"100"}}}""", "Agent", "'maxLength' only as a string member")]
     [Arguments("""{"type":"object","properties":{"kind":{"type":"string","maxLength":null}}}""", "Agent", "'maxLength' only as a string member")]
     [Arguments("""{"type":"object","properties":{"kind":{"type":"string","maxLength":true}}}""", "Agent", "'maxLength' only as a string member")]
-    [Arguments("""{"type":"object","properties":{"kind":{"type":"string","enum":["bug","feature"],"maxLength":3}}}""", "Agent", "lists \"feature\" in its 'enum', which is longer than its 'maxLength' of 3")]
+    [Arguments("""{"type":"object","properties":{"kind":{"type":"string","enum":["bug","feature"],"maxLength":3}}}""", "Agent",
+        "lists \"feature\" in its 'enum', which is longer than its 'maxLength' of 3")]
     [Arguments("""{"type":"object","properties":{"kind":{"type":"string"}},"required":["area"]}""", "Agent", "requires 'area'")]
     [Arguments("""{"type":"object","properties":{"kind":{"type":"string"}},"required":"kind"}""", "Agent", "array of distinct member names")]
     [Arguments("""{"type":"object","properties":{"a.b":{"type":"string"}}}""", "Agent", "not a name a condition path can read")]
@@ -1358,9 +1359,12 @@ public sealed class DevWorkflowGraphTests
     [Test]
     public void Parse_RefusesAnOutputSchemaWhoseRenderedContractIsTooLong()
     {
-        var values = string.Join(",", Enumerable.Range(0, DevWorkflowOutputSchema.MaxEnumValues).Select(static index => $"\"{index.ToString(CultureInfo.InvariantCulture).PadLeft(DevWorkflowOutputSchema.MaxTokenLength, 'v')}\""));
+        var values = string.Join(",",
+            Enumerable.Range(0, DevWorkflowOutputSchema.MaxEnumValues)
+                      .Select(static index => $"\"{index.ToString(CultureInfo.InvariantCulture).PadLeft(DevWorkflowOutputSchema.MaxTokenLength, 'v')}\""));
         var members = string.Join(",", Enumerable.Range(0, DevWorkflowOutputSchema.MaxProperties)
-                                                 .Select(index => $"\"{index.ToString(CultureInfo.InvariantCulture).PadLeft(DevWorkflowOutputSchema.MaxTokenLength, 'm')}\":{{\"type\":\"string\",\"enum\":[{values}]}}"));
+                                                 .Select(index =>
+                                                     $"\"{index.ToString(CultureInfo.InvariantCulture).PadLeft(DevWorkflowOutputSchema.MaxTokenLength, 'm')}\":{{\"type\":\"string\",\"enum\":[{values}]}}"));
         var json = """{"nodes":[{"nodeKey":"a","nodeType":"Agent","outputSchema":{"type":"object","properties":{""" + members + "}}}],\"edges\":[]}";
 
         var message = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(json)).Message;

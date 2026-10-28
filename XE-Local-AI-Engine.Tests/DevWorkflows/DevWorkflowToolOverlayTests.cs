@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Tests.Development;
 using XE_Local_AI_Engine.Tests.Testing;
 using DevelopmentArtifactKind = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentArtifactKind;
+using DevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 
 /// <summary>
 ///     What a materialized child's validation node judges. Live, it judged the committed base: Dev Mode leaves the
@@ -436,7 +437,7 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
                                Role = DevelopmentAttemptRole.Coder,
                                ModelId = "coder-model",
                                Provider = "local",
-                               Status = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus.Succeeded,
+                               Status = DevelopmentAttemptStatus.Succeeded,
                                StartedAtUtc = 1,
                                EndedAtUtc = 2,
                                TerminalReason = null,

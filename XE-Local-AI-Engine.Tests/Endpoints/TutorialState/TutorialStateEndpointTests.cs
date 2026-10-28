@@ -176,7 +176,11 @@ public sealed class TutorialStateEndpointTests
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
-        foreach (var method in new[] { HttpMethod.Get, HttpMethod.Post })
+        foreach (var method in new[]
+                 {
+                     HttpMethod.Get,
+                     HttpMethod.Post
+                 })
         {
             using var request = new HttpRequestMessage(method, AiAcknowledgementRoute);
             request.Headers.Add("Origin", "http://localhost");

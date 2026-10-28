@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Options;
 using TUnit.Core.Exceptions;
+using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
@@ -128,7 +129,15 @@ public sealed class SandboxIsolationLiveTests
         using var provider = CreateProvider();
         var handle = await CreateIsolatedSandboxAsync(provider,
             readOnlyTrees: [tree.Path],
-            mounts: [new SandboxMount { HostPath = tree.Path, SandboxPath = alias, ReadOnly = true }]);
+            mounts:
+            [
+                new SandboxMount
+                {
+                    HostPath = tree.Path,
+                    SandboxPath = alias,
+                    ReadOnly = true
+                }
+            ]);
 
         var result = await RunShellAsync(provider,
             handle,
@@ -152,7 +161,7 @@ public sealed class SandboxIsolationLiveTests
     public async Task AnApphostBehindTheChain_FindsARuntimeOutsideUsrOnlyThroughDotnetRoot()
     {
         RequireIsolationCapableHost();
-        var toolchain = Client.Services.Development.Implementation.DevelopmentSandboxToolchain.Resolve(["dotnet"], Environment.GetEnvironmentVariable("PATH"), []);
+        var toolchain = DevelopmentSandboxToolchain.Resolve(["dotnet"], Environment.GetEnvironmentVariable("PATH"), []);
         var apphost = Path.Combine(AppContext.BaseDirectory, "XE-Local-AI-Engine.Tests");
         if (toolchain.DotnetRoot is null || !File.Exists(apphost))
         {
@@ -166,7 +175,7 @@ public sealed class SandboxIsolationLiveTests
         async Task<SandboxCommandResult> RunAsync(string? dotnetRoot)
         {
             var environment = new Dictionary<string, string>(StringComparer.Ordinal);
-            Client.Services.Development.Implementation.DevelopmentWorkspaceTools.AddBoundaryEnvironment(environment, toolchain.SearchPath, dotnetRoot);
+            DevelopmentWorkspaceTools.AddBoundaryEnvironment(environment, toolchain.SearchPath, dotnetRoot);
             return await provider.ExecuteAsync(handle,
                 new SandboxCommandRequest
                 {

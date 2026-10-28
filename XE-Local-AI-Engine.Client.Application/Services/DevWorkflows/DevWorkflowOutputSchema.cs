@@ -227,7 +227,8 @@ internal static class DevWorkflowOutputSchema
         }
 
         // TryGetInt32 throws rather than answering false on a non-number, so the kind is checked first.
-        return type == WorkSessionOutputType.String && declared.ValueKind == JsonValueKind.Number && declared.TryGetInt32(out var maxLength) && maxLength is > 0 and <= WorkSessionToolDefinitions.TextMaxLength
+        return type == WorkSessionOutputType.String && declared.ValueKind == JsonValueKind.Number && declared.TryGetInt32(out var maxLength) &&
+               maxLength is > 0 and <= WorkSessionToolDefinitions.TextMaxLength
             ? maxLength
             : throw new DevWorkflowValidationException($"{member} may carry a 'maxLength' only as a string member, a whole number from 1 to {WorkSessionToolDefinitions.TextMaxLength}.");
     }

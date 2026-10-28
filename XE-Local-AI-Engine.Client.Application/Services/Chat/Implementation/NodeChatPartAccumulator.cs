@@ -126,6 +126,7 @@ public sealed class NodeChatPartAccumulator
             {
                 terminalState = NodeChatToolPartStates.Denied;
             }
+
             if (_toolPartsByCallId.TryGetValue(toolCallId, out var existing))
             {
                 existing.State = terminalState;

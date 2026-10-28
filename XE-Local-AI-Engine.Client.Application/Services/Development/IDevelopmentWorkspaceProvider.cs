@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Development;
 
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 
 internal sealed class DevelopmentWorkspaceSession
@@ -45,7 +46,7 @@ internal sealed class DevelopmentWorkspaceSession
     ///     The toolchain trees a <c>PATH</c> executable needed that the boundary could not bind, with why: a runner the commands then
     ///     miss may well be installed on the host. Empty without a boundary.
     /// </summary>
-    public IReadOnlyList<Implementation.DevelopmentSkippedToolchainTree> UnreachableToolchain { get; init; } = [];
+    public IReadOnlyList<DevelopmentSkippedToolchainTree> UnreachableToolchain { get; init; } = [];
 }
 
 internal interface IDevelopmentWorkspaceProvider

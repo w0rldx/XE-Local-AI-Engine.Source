@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows.Materialization;
 
+using System.Text;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -179,11 +180,11 @@ public sealed class DevWorkflowUpstreamArtifactTests
         await using var harness = new DevWorkflowHarness();
         harness.Tools.Answer("validate-a", FakeDevWorkflowToolCommands.Passing() with
         {
-            Patch = System.Text.Encoding.UTF8.GetBytes("diff --git a/a b/a\n")
+            Patch = Encoding.UTF8.GetBytes("diff --git a/a b/a\n")
         });
         harness.Tools.Answer("validate-b", FakeDevWorkflowToolCommands.Passing() with
         {
-            Patch = System.Text.Encoding.UTF8.GetBytes("diff --git a/b b/b\n")
+            Patch = Encoding.UTF8.GetBytes("diff --git a/b b/b\n")
         });
         var runId = await harness.StartRunAsync(TwoValidationsThroughAJoin, developmentProjectId: Guid.NewGuid());
 

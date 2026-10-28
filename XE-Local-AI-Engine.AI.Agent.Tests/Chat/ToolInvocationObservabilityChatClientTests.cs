@@ -29,7 +29,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
         }
 
         AssertEx.ContainsSingle(logger.Entries.Select(static entry => entry.Message), message => message.Contains("AgentRunToolInvoked", StringComparison.Ordinal)
-                                                            && message.Contains("approve-job", StringComparison.Ordinal));
+                                                                                                 && message.Contains("approve-job", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -122,7 +122,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
         var expectedHashPrefix = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(serializedArguments)))[..12];
 
         AssertEx.ContainsSingle(logger.Entries.Select(static entry => entry.Message), message => message.Contains("ArgsLength=", StringComparison.Ordinal)
-                                                            && message.Contains($"ArgsHash={expectedHashPrefix}", StringComparison.Ordinal));
+                                                                                                 && message.Contains($"ArgsHash={expectedHashPrefix}", StringComparison.Ordinal));
     }
 
     [Test]
@@ -167,7 +167,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
 
         AssertEx.True(updateCount > 0, "the response stream must still flow through when summarizing fails");
         AssertEx.ContainsSingle(logger.Entries.Select(static entry => entry.Message), message => message.Contains("ArgsLength=-1", StringComparison.Ordinal)
-                                                            && message.Contains("ArgsHash=unserializable", StringComparison.Ordinal));
+                                                                                                 && message.Contains("ArgsHash=unserializable", StringComparison.Ordinal));
     }
 
     [Test]
@@ -249,7 +249,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
 
         // Four streamed updates carry one logical call under a single CallId: exactly one log line and one span.
         AssertEx.ContainsSingle(logger.Entries.Select(static entry => entry.Message), message => message.Contains("AgentRunToolInvoked", StringComparison.Ordinal)
-                                                            && message.Contains(callId, StringComparison.Ordinal));
+                                                                                                 && message.Contains(callId, StringComparison.Ordinal));
         AssertEx.ContainsSingle(stoppedActivities,
             activity => string.Equals(activity.OperationName, "AgentRun.ToolCallRequested", StringComparison.Ordinal)
                         && string.Equals(activity.CallId, callId, StringComparison.Ordinal));
@@ -362,7 +362,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
         }
 
         AssertEx.ContainsSingle(logger.Entries.Select(static entry => entry.Message), message => message.Contains("AgentRunToolCompleted", StringComparison.Ordinal)
-                                                            && message.Contains($"Outcome={expectedOutcome} ", StringComparison.Ordinal));
+                                                                                                 && message.Contains($"Outcome={expectedOutcome} ", StringComparison.Ordinal));
     }
 
     [Test]

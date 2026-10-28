@@ -34,7 +34,8 @@ internal static partial class SandboxWrapperExecFailure
 
     // bwrap: "bwrap: execvp X: …"; util-linux: "setsid: failed to execute X: …", "unshare: failed to execute X: …"; coreutils and uutils:
     // "env: 'X': …"; systemd-run: "Failed to find executable X: …".
-    [GeneratedRegex(@"^(?:bwrap: execvp |setsid: failed to execute |unshare: failed to execute |env: '|Failed to find executable |Failed to execute )(?<executable>.+?)'?: (?:No such file or directory|Permission denied)$",
+    [GeneratedRegex(
+        @"^(?:bwrap: execvp |setsid: failed to execute |unshare: failed to execute |env: '|Failed to find executable |Failed to execute )(?<executable>.+?)'?: (?:No such file or directory|Permission denied)$",
         RegexOptions.CultureInvariant,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex WrapperExecFailureLine();

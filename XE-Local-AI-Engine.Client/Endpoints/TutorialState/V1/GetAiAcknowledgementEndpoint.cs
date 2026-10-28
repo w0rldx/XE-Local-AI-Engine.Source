@@ -28,10 +28,10 @@ public sealed class GetAiAcknowledgementEndpoint : EndpointWithoutRequest<AiAckn
     {
         var acknowledgedAt = await _tutorialStateService.GetAiAcknowledgedAtAsync(User, ct);
         await Send.OkAsync(new AiAcknowledgementResponse
-        {
-            Acknowledged = acknowledgedAt is not null,
-            AcknowledgedAtUtc = acknowledgedAt
-        },
+            {
+                Acknowledged = acknowledgedAt is not null,
+                AcknowledgedAtUtc = acknowledgedAt
+            },
             ct);
     }
 }

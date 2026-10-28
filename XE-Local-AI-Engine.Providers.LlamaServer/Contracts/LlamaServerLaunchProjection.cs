@@ -233,13 +233,22 @@ public sealed record LlamaServerLaunchProjection
             switch (argument)
             {
                 case "--jinja":
-                    projection = projection with { Jinja = true };
+                    projection = projection with
+                    {
+                        Jinja = true
+                    };
                     continue;
                 case "--metrics":
-                    projection = projection with { Metrics = true };
+                    projection = projection with
+                    {
+                        Metrics = true
+                    };
                     continue;
                 case "--cpu-moe" or "-cmoe":
-                    projection = projection with { CpuMoe = true };
+                    projection = projection with
+                    {
+                        CpuMoe = true
+                    };
                     continue;
             }
 
@@ -270,7 +279,10 @@ public sealed record LlamaServerLaunchProjection
             projection = next;
         }
 
-        return projection with { CacheReuse = projection.CacheReuse is > 0 ? projection.CacheReuse : null };
+        return projection with
+        {
+            CacheReuse = projection.CacheReuse is > 0 ? projection.CacheReuse : null
+        };
     }
 
     /// <summary>
@@ -280,22 +292,88 @@ public sealed record LlamaServerLaunchProjection
     private static LlamaServerLaunchProjection? WithValueFlag(LlamaServerLaunchProjection projection, string argument, string value) =>
         argument switch
         {
-            "--fit" => projection with { AutoFit = string.Equals(value, "on", StringComparison.Ordinal) },
-            "-c" or "--ctx-size" => TryParseInt(value, out var contextTokens) ? projection with { ContextTokens = contextTokens } : null,
-            "-ngl" or "--n-gpu-layers" => TryParseInt(value, out var gpuLayers) ? projection with { GpuLayers = gpuLayers } : null,
-            "-ts" or "--tensor-split" => projection with { TensorSplit = NullIfBlank(value) },
-            "-ot" or "--override-tensor" => projection with { OverrideTensor = NullIfBlank(value) },
-            "-ctk" or "--cache-type-k" => projection with { KvCacheTypeK = NullIfBlank(value) },
-            "-ctv" or "--cache-type-v" => projection with { KvCacheTypeV = NullIfBlank(value) },
-            "-fa" or "--flash-attn" => projection with { FlashAttentionMode = NullIfBlank(value) ?? FlashAttentionAuto },
-            "-t" or "--threads" => TryParseInt(value, out var threads) ? projection with { Threads = threads } : null,
-            "-tb" or "--threads-batch" => TryParseInt(value, out var threadsBatch) ? projection with { ThreadsBatch = threadsBatch } : null,
-            "-b" or "--batch-size" => TryParseInt(value, out var batchSize) ? projection with { BatchSize = batchSize } : null,
-            "-ub" or "--ubatch-size" => TryParseInt(value, out var ubatchSize) ? projection with { UbatchSize = ubatchSize } : null,
-            "--parallel" or "-np" => TryParseInt(value, out var parallel) && parallel is { } slots ? projection with { Parallel = slots } : null,
-            "--cache-reuse" => TryParseInt(value, out var cacheReuse) ? projection with { CacheReuse = cacheReuse } : null,
-            "--cache-ram" => TryParseInt(value, out var cacheRam) && cacheRam is { } cacheRamMiB ? projection with { CacheRamMiB = cacheRamMiB } : null,
-            "--pooling" => projection with { Pooling = NullIfBlank(value) },
+            "--fit" => projection with
+            {
+                AutoFit = string.Equals(value, "on", StringComparison.Ordinal)
+            },
+            "-c" or "--ctx-size" => TryParseInt(value, out var contextTokens)
+                ? projection with
+                {
+                    ContextTokens = contextTokens
+                }
+                : null,
+            "-ngl" or "--n-gpu-layers" => TryParseInt(value, out var gpuLayers)
+                ? projection with
+                {
+                    GpuLayers = gpuLayers
+                }
+                : null,
+            "-ts" or "--tensor-split" => projection with
+            {
+                TensorSplit = NullIfBlank(value)
+            },
+            "-ot" or "--override-tensor" => projection with
+            {
+                OverrideTensor = NullIfBlank(value)
+            },
+            "-ctk" or "--cache-type-k" => projection with
+            {
+                KvCacheTypeK = NullIfBlank(value)
+            },
+            "-ctv" or "--cache-type-v" => projection with
+            {
+                KvCacheTypeV = NullIfBlank(value)
+            },
+            "-fa" or "--flash-attn" => projection with
+            {
+                FlashAttentionMode = NullIfBlank(value) ?? FlashAttentionAuto
+            },
+            "-t" or "--threads" => TryParseInt(value, out var threads)
+                ? projection with
+                {
+                    Threads = threads
+                }
+                : null,
+            "-tb" or "--threads-batch" => TryParseInt(value, out var threadsBatch)
+                ? projection with
+                {
+                    ThreadsBatch = threadsBatch
+                }
+                : null,
+            "-b" or "--batch-size" => TryParseInt(value, out var batchSize)
+                ? projection with
+                {
+                    BatchSize = batchSize
+                }
+                : null,
+            "-ub" or "--ubatch-size" => TryParseInt(value, out var ubatchSize)
+                ? projection with
+                {
+                    UbatchSize = ubatchSize
+                }
+                : null,
+            "--parallel" or "-np" => TryParseInt(value, out var parallel) && parallel is { } slots
+                ? projection with
+                {
+                    Parallel = slots
+                }
+                : null,
+            "--cache-reuse" => TryParseInt(value, out var cacheReuse)
+                ? projection with
+                {
+                    CacheReuse = cacheReuse
+                }
+                : null,
+            "--cache-ram" => TryParseInt(value, out var cacheRam) && cacheRam is { } cacheRamMiB
+                ? projection with
+                {
+                    CacheRamMiB = cacheRamMiB
+                }
+                : null,
+            "--pooling" => projection with
+            {
+                Pooling = NullIfBlank(value)
+            },
             _ => projection
         };
 

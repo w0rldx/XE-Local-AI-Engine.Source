@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
+using System.Text;
+using System.Text.Json;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
@@ -239,8 +241,11 @@ public sealed class DevelopmentPytestResultAdapterTests
     public void AnUnreachableRunnerAtAHashNamedPath_StillYieldsAPersistableReport(string tree)
     {
         var verdict = Verdict(Evidence(exitCode: 1, Parse(string.Empty, MissingPytestError)),
-            [Skipped("python3", tree, "it lies under a mount point the sandbox owns (such as /tmp, /etc or /xe-runtime), where it would be shadowed"),
-                Skipped("python3", tree + "/bin/python3", "it is a link to '/home/operator/.local/share/mise/installs/python/3.14.8/bin/python3.14', which is not a directory inside a bound toolchain tree")]);
+        [
+            Skipped("python3", tree, "it lies under a mount point the sandbox owns (such as /tmp, /etc or /xe-runtime), where it would be shadowed"),
+            Skipped("python3", tree + "/bin/python3",
+                "it is a link to '/home/operator/.local/share/mise/installs/python/3.14.8/bin/python3.14', which is not a directory inside a bound toolchain tree")
+        ]);
         var report = new DevelopmentValidationReport(false,
             new string('a', 40),
             new string('b', 64),
@@ -255,8 +260,7 @@ public sealed class DevelopmentPytestResultAdapterTests
             1,
             FilesystemBoundary: true);
 
-        var persisted = DevelopmentArtifactSanitizer.SanitizeText(System.Text.Encoding.UTF8.GetString(
-            System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(report, ReportJsonOptions)));
+        var persisted = DevelopmentArtifactSanitizer.SanitizeText(Encoding.UTF8.GetString(JsonSerializer.SerializeToUtf8Bytes(report, ReportJsonOptions)));
 
         AssertEx.Contains(persisted, "could not reach its runner behind the filesystem boundary");
         AssertEx.False(AssertEx.NotNull(verdict.FailureDetail).Contains(tree, StringComparison.Ordinal), "the tree is quoted in its redacted form.");
@@ -266,13 +270,14 @@ public sealed class DevelopmentPytestResultAdapterTests
     [Test]
     public void ARecoveryExhaustedByTheSecretScanner_SaysSo()
     {
-        var refusal = AssertEx.Throws<DevelopmentWorkspaceSecurityException>(() => DevelopmentArtifactSanitizer.SanitizeText("-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA\n-----END RSA PRIVATE KEY-----"));
+        var refusal = AssertEx.Throws<DevelopmentWorkspaceSecurityException>(() =>
+            DevelopmentArtifactSanitizer.SanitizeText("-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA\n-----END RSA PRIVATE KEY-----"));
 
         AssertEx.Contains(DevelopmentValidationRunner.BuildRecoveryExhaustedReason(refusal), "text the secret scanner refused");
         AssertEx.Contains(DevelopmentValidationRunner.BuildRecoveryExhaustedReason(new InvalidOperationException("boom")), "(InvalidOperationException)");
     }
 
-    private static readonly System.Text.Json.JsonSerializerOptions ReportJsonOptions = new(System.Text.Json.JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions ReportJsonOptions = new(JsonSerializerDefaults.Web);
 
     private static DevelopmentSkippedToolchainTree Skipped(string executable, string tree, string reason) =>
         new()
@@ -284,10 +289,10 @@ public sealed class DevelopmentPytestResultAdapterTests
 
     private static DevelopmentValidationVerdict Verdict(DevelopmentCommandEvidence pytest, IReadOnlyList<DevelopmentSkippedToolchainTree>? unreachable = null) =>
         DevelopmentValidationVerdict.Evaluate(PytestProfile,
-        [
-            new DevelopmentCommandEvidence(DevelopmentCommandIds.GitDiffCheck, 0, Completed: true, OutputTruncated: false, 1, string.Empty, string.Empty),
-            pytest
-        ],
+            [
+                new DevelopmentCommandEvidence(DevelopmentCommandIds.GitDiffCheck, 0, Completed: true, OutputTruncated: false, 1, string.Empty, string.Empty),
+                pytest
+            ],
             unreachable);
 
     private static DevelopmentCommandEvidence Evidence(int exitCode, DevelopmentTestOutcome outcome, bool completed = true) =>

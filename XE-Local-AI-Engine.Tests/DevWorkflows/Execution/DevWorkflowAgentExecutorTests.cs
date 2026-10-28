@@ -139,40 +139,40 @@ public sealed class DevWorkflowAgentExecutorTests
 
     /// <summary>The intake classifier: one schema'd agent, one bound agent per class behind an <c>output.kind</c> eq edge.</summary>
     private const string Classifying = $$$"""
-                                       {
-                                         "schemaVersion": 1,
-                                         "nodes": [
-                                           { "nodeKey": "classify", "nodeType": "Agent", "label": "Classify", "agentDefinitionId": "{{{SeededAgentId}}}",
-                                             "outputSchema": { "type": "object", "required": ["kind"],
-                                                               "properties": { "kind": { "type": "string", "enum": ["feature", "bug", "question", "unclear"] } } } },
-                                           { "nodeKey": "feature", "nodeType": "Agent", "agentDefinitionId": "{{{SeededAgentId}}}" },
-                                           { "nodeKey": "bug", "nodeType": "Agent", "agentDefinitionId": "{{{SeededAgentId}}}" },
-                                           { "nodeKey": "question", "nodeType": "Agent", "agentDefinitionId": "{{{SeededAgentId}}}" },
-                                           { "nodeKey": "unclear", "nodeType": "Agent", "agentDefinitionId": "{{{SeededAgentId}}}" }
-                                         ],
-                                         "edges": [
-                                           { "from": "classify", "to": "feature", "condition": { "path": "output.kind", "op": "eq", "value": "feature" } },
-                                           { "from": "classify", "to": "bug", "condition": { "path": "output.kind", "op": "eq", "value": "bug" } },
-                                           { "from": "classify", "to": "question", "condition": { "path": "output.kind", "op": "eq", "value": "question" } },
-                                           { "from": "classify", "to": "unclear", "condition": { "path": "output.kind", "op": "eq", "value": "unclear" } }
-                                         ]
-                                       }
-                                       """;
+                                          {
+                                            "schemaVersion": 1,
+                                            "nodes": [
+                                              { "nodeKey": "classify", "nodeType": "Agent", "label": "Classify", "agentDefinitionId": "{{{SeededAgentId}}}",
+                                                "outputSchema": { "type": "object", "required": ["kind"],
+                                                                  "properties": { "kind": { "type": "string", "enum": ["feature", "bug", "question", "unclear"] } } } },
+                                              { "nodeKey": "feature", "nodeType": "Agent", "agentDefinitionId": "{{{SeededAgentId}}}" },
+                                              { "nodeKey": "bug", "nodeType": "Agent", "agentDefinitionId": "{{{SeededAgentId}}}" },
+                                              { "nodeKey": "question", "nodeType": "Agent", "agentDefinitionId": "{{{SeededAgentId}}}" },
+                                              { "nodeKey": "unclear", "nodeType": "Agent", "agentDefinitionId": "{{{SeededAgentId}}}" }
+                                            ],
+                                            "edges": [
+                                              { "from": "classify", "to": "feature", "condition": { "path": "output.kind", "op": "eq", "value": "feature" } },
+                                              { "from": "classify", "to": "bug", "condition": { "path": "output.kind", "op": "eq", "value": "bug" } },
+                                              { "from": "classify", "to": "question", "condition": { "path": "output.kind", "op": "eq", "value": "question" } },
+                                              { "from": "classify", "to": "unclear", "condition": { "path": "output.kind", "op": "eq", "value": "unclear" } }
+                                            ]
+                                          }
+                                          """;
 
     /// <summary>A verify-shaped node: an overall verdict whose <c>refused</c> means not met, and the refused task ids beside it.</summary>
     private const string Verifying = $$$"""
-                                      {
-                                        "schemaVersion": 1,
-                                        "nodes": [
-                                          { "nodeKey": "verify", "nodeType": "Agent", "label": "Verify", "agentDefinitionId": "{{{SeededAgentId}}}",
-                                            "outputSchema": { "type": "object", "required": ["verdict"],
-                                                              "properties": { "verdict": { "type": "string", "enum": ["approved", "refused"], "unmetOn": ["refused"] },
-                                                                              "refusedTasks": { "type": "string", "maxLength": 1000 } } } },
-                                          { "nodeKey": "approve", "nodeType": "HumanGate", "label": "Approve" }
-                                        ],
-                                        "edges": [{ "from": "verify", "to": "approve" }]
-                                      }
-                                      """;
+                                        {
+                                          "schemaVersion": 1,
+                                          "nodes": [
+                                            { "nodeKey": "verify", "nodeType": "Agent", "label": "Verify", "agentDefinitionId": "{{{SeededAgentId}}}",
+                                              "outputSchema": { "type": "object", "required": ["verdict"],
+                                                                "properties": { "verdict": { "type": "string", "enum": ["approved", "refused"], "unmetOn": ["refused"] },
+                                                                                "refusedTasks": { "type": "string", "maxLength": 1000 } } } },
+                                            { "nodeKey": "approve", "nodeType": "HumanGate", "label": "Approve" }
+                                          ],
+                                          "edges": [{ "from": "verify", "to": "approve" }]
+                                        }
+                                        """;
 
     [ClassDataSource<DevWorkflowHostFixture>(Shared = SharedType.PerClass)]
     public required DevWorkflowHostFixture Host { get; init; }
@@ -843,7 +843,13 @@ public sealed class DevWorkflowAgentExecutorTests
         await harness.SettleAgentAsync(runId, "classify");
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        foreach (var branch in new[] { "feature", "bug", "question", "unclear" })
+        foreach (var branch in new[]
+                 {
+                     "feature",
+                     "bug",
+                     "question",
+                     "unclear"
+                 })
         {
             var status = (await harness.ReadNodeRunAsync(runId, branch)).Status;
             AssertEx.True(string.Equals(branch, kind, StringComparison.Ordinal) ? status == DevWorkflowNodeRunStatus.Running : status == DevWorkflowNodeRunStatus.Skipped,
@@ -913,7 +919,11 @@ public sealed class DevWorkflowAgentExecutorTests
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         await harness.RequestAgentCompletionAsync(runId, "verify", JsonSerializer.Serialize(new WorkSessionCompletionDetail(new string('s', 1800), ObjectiveMet: false,
-            JsonSerializer.SerializeToElement(new { verdict = "refused", refusedTasks = "sales-report" }))));
+            JsonSerializer.SerializeToElement(new
+            {
+                verdict = "refused",
+                refusedTasks = "sales-report"
+            }))));
         await harness.SettleAgentAsync(runId, "verify");
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
@@ -933,7 +943,11 @@ public sealed class DevWorkflowAgentExecutorTests
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         await harness.RequestAgentCompletionAsync(runId, "verify", JsonSerializer.Serialize(new WorkSessionCompletionDetail("Verified.", ObjectiveMet: true,
-            JsonSerializer.SerializeToElement(new { verdict = "refused", refusedTasks = new string('t', 1000) }))));
+            JsonSerializer.SerializeToElement(new
+            {
+                verdict = "refused",
+                refusedTasks = new string('t', 1000)
+            }))));
         await harness.SettleAgentAsync(runId, "verify");
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
@@ -1217,16 +1231,16 @@ public sealed class DevWorkflowAgentExecutorTests
                 PatchModelId = "attempt-coder"
             });
         var runId = await harness.StartRunAsync($$"""
-                                                {
-                                                  "schemaVersion": 1,
-                                                  "nodes": [
-                                                    { "nodeKey": "validate", "nodeType": "Tool" },
-                                                    { "nodeKey": "verify", "nodeType": "Agent", "label": "Verify",
-                                                      "agentDefinitionId": "{{reviewer}}", "modelProfile": "attempt-coder" }
-                                                  ],
-                                                  "edges": [{ "from": "validate", "to": "verify" }]
-                                                }
-                                                """,
+                                                  {
+                                                    "schemaVersion": 1,
+                                                    "nodes": [
+                                                      { "nodeKey": "validate", "nodeType": "Tool" },
+                                                      { "nodeKey": "verify", "nodeType": "Agent", "label": "Verify",
+                                                        "agentDefinitionId": "{{reviewer}}", "modelProfile": "attempt-coder" }
+                                                    ],
+                                                    "edges": [{ "from": "validate", "to": "verify" }]
+                                                  }
+                                                  """,
             developmentProjectId: projectId);
         await harness.AdvanceThroughToolLaneAsync(runId);
 
@@ -1242,15 +1256,15 @@ public sealed class DevWorkflowAgentExecutorTests
         var reviewer = await harness.SeedUnpinnedAgentAsync();
         var pin = reviewerModel is null ? string.Empty : $", \"modelProfile\": \"{reviewerModel}\"";
         var runId = await harness.StartRunAsync($$"""
-                                                {
-                                                  "schemaVersion": 1,
-                                                  "nodes": [
-                                                    { "nodeKey": "research", "nodeType": "Agent", "label": "Research", "agentDefinitionId": "{{SeededAgentId}}" },
-                                                    { "nodeKey": "plan", "nodeType": "Agent", "label": "Plan", "agentDefinitionId": "{{reviewer}}"{{pin}} }
-                                                  ],
-                                                  "edges": [{ "from": "research", "to": "plan" }]
-                                                }
-                                                """,
+                                                  {
+                                                    "schemaVersion": 1,
+                                                    "nodes": [
+                                                      { "nodeKey": "research", "nodeType": "Agent", "label": "Research", "agentDefinitionId": "{{SeededAgentId}}" },
+                                                      { "nodeKey": "plan", "nodeType": "Agent", "label": "Plan", "agentDefinitionId": "{{reviewer}}"{{pin}} }
+                                                    ],
+                                                    "edges": [{ "from": "research", "to": "plan" }]
+                                                  }
+                                                  """,
             developmentProjectId: projectId);
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
         _ = await harness.SaveAgentArtifactAsync(runId, "research", "validate.patch", PatchText, AgentWorkSessionArtifactKind.Patch, "text/x-diff");

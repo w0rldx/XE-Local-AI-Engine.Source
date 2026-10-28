@@ -318,12 +318,12 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
         string? expectedModelAlias = null)
     {
         var outcome = await ProcessReadinessRace.RunAsync(handle,
-                token => expectedModelAlias is null
-                    ? _healthProbe.WaitForReadyAsync(baseAddress, readinessTimeout, token)
-                    : _healthProbe.WaitForReadyAndVerifyModelAliasAsync(baseAddress, expectedModelAlias, readinessTimeout, token),
-                _timeProvider,
-                ct)
-            .ConfigureAwait(false);
+                                                    token => expectedModelAlias is null
+                                                        ? _healthProbe.WaitForReadyAsync(baseAddress, readinessTimeout, token)
+                                                        : _healthProbe.WaitForReadyAndVerifyModelAliasAsync(baseAddress, expectedModelAlias, readinessTimeout, token),
+                                                    _timeProvider,
+                                                    ct)
+                                                .ConfigureAwait(false);
 
         if (outcome == ProcessReadinessOutcome.Exited)
         {

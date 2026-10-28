@@ -20,7 +20,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
-using static XE_Local_AI_Engine.Tests.Chat.NodeChatStreamServiceTestSupport;
+using static NodeChatStreamServiceTestSupport;
 
 [Category(TestCategories.Unit)]
 public sealed class NodeChatStreamServiceTests

@@ -159,7 +159,13 @@ public sealed class ManagedRuntimeAdoptionLinkPolicyTests
         await harness.AdoptAsync(buildDir);
 
         var installedBin = Path.Combine(harness.InstallRoot, "bin");
-        foreach (var directory in new[] { harness.ManagedRoot, Path.GetDirectoryName(harness.InstallRoot)!, harness.InstallRoot, installedBin })
+        foreach (var directory in new[]
+                 {
+                     harness.ManagedRoot,
+                     Path.GetDirectoryName(harness.InstallRoot)!,
+                     harness.InstallRoot,
+                     installedBin
+                 })
         {
             AssertEx.Equal(OwnerOnly, File.GetUnixFileMode(directory), $"{Path.GetFileName(directory)} must be owner-only.");
         }
@@ -237,9 +243,11 @@ public sealed class ManagedRuntimeAdoptionLinkPolicyTests
 
         public string InstallRoot => Path.Combine(ManagedRoot, _backendSlug, _commit);
 
-        public Task AdoptAsync(string buildDir) => _adopt(buildDir);
+        public Task AdoptAsync(string buildDir) =>
+            _adopt(buildDir);
 
-        public Task<ManagedRuntimeValidity?> ReadValidityAsync() => _readValidity();
+        public Task<ManagedRuntimeValidity?> ReadValidityAsync() =>
+            _readValidity();
 
         public async Task AssertUnsafeLinkRejectedAsync(string buildDir)
         {
@@ -260,6 +268,7 @@ public sealed class ManagedRuntimeAdoptionLinkPolicyTests
             return buildDir;
         }
 
-        public void Dispose() => _store.Dispose();
+        public void Dispose() =>
+            _store.Dispose();
     }
 }

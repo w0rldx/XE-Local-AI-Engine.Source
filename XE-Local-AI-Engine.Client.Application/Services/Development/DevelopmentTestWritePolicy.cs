@@ -88,7 +88,11 @@ internal static class DevelopmentTestWritePolicy
         ArgumentNullException.ThrowIfNull(profile);
 
         // First: a runner path is the more specific refusal, and the only one that also covers an added file.
-        if (evidence.ChangedFiles.SelectMany(static change => new[] { change.Path, change.PreviousPath })
+        if (evidence.ChangedFiles.SelectMany(static change => new[]
+                    {
+                        change.Path,
+                        change.PreviousPath
+                    })
                     .Any(path => !string.IsNullOrWhiteSpace(path) && DevelopmentCommandProfileCatalog.IsRunnerPath(profile.ProfileId, path)))
         {
             throw new DevelopmentWorkspaceSecurityException(RunnerRefusalSentence);

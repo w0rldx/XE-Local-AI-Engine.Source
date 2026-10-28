@@ -1,9 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Invocation;
 
-using System.ClientModel.Primitives;
 using System.Collections.Frozen;
 using System.Net;
-using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -30,7 +28,7 @@ using XE_Local_AI_Engine.Client.Services.Validation.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
-using static XE_Local_AI_Engine.Tests.Invocation.InvocationRunnerTestSupport;
+using static InvocationRunnerTestSupport;
 using ChatMessage = Microsoft.Extensions.AI.ChatMessage;
 
 [Category(TestCategories.Unit)]

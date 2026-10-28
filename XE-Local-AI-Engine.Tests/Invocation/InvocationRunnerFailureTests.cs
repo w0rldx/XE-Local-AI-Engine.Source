@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Invocation;
 
 using System.Net;
-using Microsoft.Agents.AI;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
@@ -12,7 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
-using static XE_Local_AI_Engine.Tests.Invocation.InvocationRunnerTestSupport;
+using static InvocationRunnerTestSupport;
 
 [Category(TestCategories.Unit)]
 public sealed class InvocationRunnerFailureTests

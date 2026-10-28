@@ -584,6 +584,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             DesktopEngineSession.ValidateRequestedPort(_engine.Origin, origin.Port);
             _exitCode = 0;
             if (_window is DesktopWindow window) { await window.ReloadCurrentAsync(); }
+
             if (_engine.WaitForEngineExitAsync() is { } exit)
             {
                 _ = ExitWithEngineAsync(exit);

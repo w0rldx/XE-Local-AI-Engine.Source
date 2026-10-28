@@ -35,7 +35,8 @@ internal sealed class RefreshTokenReadHookIdentityStore : INodeIdentityStore
         return token;
     }
 
-    public Task<bool> HasCompletedSetupAsync(CancellationToken cancellationToken) => _inner.HasCompletedSetupAsync(cancellationToken);
+    public Task<bool> HasCompletedSetupAsync(CancellationToken cancellationToken) =>
+        _inner.HasCompletedSetupAsync(cancellationToken);
 
     public Task<NodeUser?> FindCompletedSetupUserAsync(CancellationToken cancellationToken) =>
         _inner.FindCompletedSetupUserAsync(cancellationToken);
@@ -43,7 +44,8 @@ internal sealed class RefreshTokenReadHookIdentityStore : INodeIdentityStore
     public Task<IDbContextTransaction> BeginSerializableTransactionAsync(CancellationToken cancellationToken) =>
         _inner.BeginSerializableTransactionAsync(cancellationToken);
 
-    public Task ReloadAsync(NodeUser user, CancellationToken cancellationToken) => _inner.ReloadAsync(user, cancellationToken);
+    public Task ReloadAsync(NodeUser user, CancellationToken cancellationToken) =>
+        _inner.ReloadAsync(user, cancellationToken);
 
     public Task<NodeRefreshToken?> FindRefreshTokenByIdAsync(string id, CancellationToken cancellationToken) =>
         _inner.FindRefreshTokenByIdAsync(id, cancellationToken);
@@ -60,9 +62,11 @@ internal sealed class RefreshTokenReadHookIdentityStore : INodeIdentityStore
     public Task RevokeRefreshTokenAsync(NodeRefreshToken token, DateTime now, CancellationToken cancellationToken) =>
         _inner.RevokeRefreshTokenAsync(token, now, cancellationToken);
 
-    public Task AddSessionAsync(NodeAuthSession session, CancellationToken cancellationToken) => _inner.AddSessionAsync(session, cancellationToken);
+    public Task AddSessionAsync(NodeAuthSession session, CancellationToken cancellationToken) =>
+        _inner.AddSessionAsync(session, cancellationToken);
 
-    public Task<NodeAuthSession?> FindSessionAsync(string id, CancellationToken cancellationToken) => _inner.FindSessionAsync(id, cancellationToken);
+    public Task<NodeAuthSession?> FindSessionAsync(string id, CancellationToken cancellationToken) =>
+        _inner.FindSessionAsync(id, cancellationToken);
 
     public Task<bool> IsSessionLiveAsync(string sessionId, string userId, CancellationToken cancellationToken) =>
         _inner.IsSessionLiveAsync(sessionId, userId, cancellationToken);
@@ -73,7 +77,9 @@ internal sealed class RefreshTokenReadHookIdentityStore : INodeIdentityStore
     public Task<bool> RevokeSessionAsync(string userId, string sessionId, DateTime now, CancellationToken cancellationToken) =>
         _inner.RevokeSessionAsync(userId, sessionId, now, cancellationToken);
 
-    public Task MigrateAsync(CancellationToken cancellationToken) => _inner.MigrateAsync(cancellationToken);
+    public Task MigrateAsync(CancellationToken cancellationToken) =>
+        _inner.MigrateAsync(cancellationToken);
 
-    public Task<bool> EnsureRoleAsync(string roleName, CancellationToken cancellationToken) => _inner.EnsureRoleAsync(roleName, cancellationToken);
+    public Task<bool> EnsureRoleAsync(string roleName, CancellationToken cancellationToken) =>
+        _inner.EnsureRoleAsync(roleName, cancellationToken);
 }

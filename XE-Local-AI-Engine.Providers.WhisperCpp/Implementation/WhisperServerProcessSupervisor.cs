@@ -711,7 +711,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     /// <summary>The same race, reporting a bool so the model-switch path can respawn instead of failing the caller.</summary>
     private async Task<bool> WaitForReadyOrExitQuietlyAsync(IProcessTreeHandle handle, Uri baseAddress, TimeSpan budget, CancellationToken ct) =>
         await ProcessReadinessRace.RunAsync(handle, token => _readinessProbe.WaitForReadyAsync(baseAddress, budget, token), _timeProvider, ct)
-            .ConfigureAwait(false) == ProcessReadinessOutcome.Ready;
+                                  .ConfigureAwait(false) == ProcessReadinessOutcome.Ready;
 
     private async Task ReapIdleLoopAsync(CancellationToken ct)
     {

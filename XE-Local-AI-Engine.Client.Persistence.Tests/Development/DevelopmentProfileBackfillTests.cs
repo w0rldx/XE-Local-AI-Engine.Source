@@ -175,7 +175,11 @@ public sealed class DevelopmentProfileBackfillTests : IDisposable
 
         var backfill = CreateBackfill(store, new StubRepositoryBindings(_repositoryRoot));
         AssertEx.Equal(expected: 0, await backfill.BackfillAllAsync());
-        foreach (var prior in new[] { priorGeneric, priorDotnet })
+        foreach (var prior in new[]
+                 {
+                     priorGeneric,
+                     priorDotnet
+                 })
         {
             var stored = await store.GetProjectAsync(prior.ProjectId);
             AssertEx.Equal(prior.CommandProfileJson!, stored.CommandProfileJson);

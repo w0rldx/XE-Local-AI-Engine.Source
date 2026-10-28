@@ -24,7 +24,7 @@ using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
-using static XE_Local_AI_Engine.Tests.Chat.NodeChatStreamServiceTestSupport;
+using static NodeChatStreamServiceTestSupport;
 
 [Category(TestCategories.Unit)]
 public sealed class NodeChatStreamServiceAgentResolutionTests

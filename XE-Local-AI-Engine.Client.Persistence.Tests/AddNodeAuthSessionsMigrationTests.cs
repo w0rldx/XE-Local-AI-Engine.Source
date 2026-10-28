@@ -25,8 +25,7 @@ public sealed class AddNodeAuthSessionsMigrationTests
             "A refresh token must point at its session.");
         AssertEx.True(await probe.IndexExistsAsync("node_refresh_tokens", "IX_node_refresh_tokens_session_id", unique: false, "session_id"),
             "Revoking a session finds its tokens through an index.");
-        AssertEx.Equal(1L, await probe.ScalarAsync(
-                "SELECT COUNT(*) FROM node_refresh_tokens WHERE id = 't1' AND revoked_at_utc IS NULL AND session_id IS NULL;"),
+        AssertEx.Equal(1L, await probe.ScalarAsync("SELECT COUNT(*) FROM node_refresh_tokens WHERE id = 't1' AND revoked_at_utc IS NULL AND session_id IS NULL;"),
             "A token issued before sessions existed stays live; its next refresh gives it a session.");
     }
 }

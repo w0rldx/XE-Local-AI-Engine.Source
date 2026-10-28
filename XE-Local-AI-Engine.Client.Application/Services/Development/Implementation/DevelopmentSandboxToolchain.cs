@@ -93,12 +93,20 @@ internal sealed record DevelopmentSandboxToolchain
                     BinaryDirectory = binaryDirectory,
                     Binary = Canonicalize(candidate)
                 });
-                hops.AddRange(Hops(candidate).Select(hop => new PendingAlias { Executable = executable, Alias = hop }));
+                hops.AddRange(Hops(candidate).Select(hop => new PendingAlias
+                {
+                    Executable = executable,
+                    Alias = hop
+                }));
                 if (VenvHome(entryRoot) is { } home)
                 {
                     var homeRoot = InstallRoot(Canonicalize(home));
                     Skip(skipped, executable, homeRoot, AddTree(trees, homeRoot, sensitiveRoots));
-                    hops.AddRange(Hops(home).Select(hop => new PendingAlias { Executable = executable, Alias = hop }));
+                    hops.AddRange(Hops(home).Select(hop => new PendingAlias
+                    {
+                        Executable = executable,
+                        Alias = hop
+                    }));
                 }
 
                 break;
@@ -131,7 +139,8 @@ internal sealed record DevelopmentSandboxToolchain
             Skip(skipped, pending.Executable, link, reason);
         }
 
-        bool IsVisible(string directory) => IsSystemTree(directory) || trees.Exists(tree => IsSameOrUnder(directory, tree));
+        bool IsVisible(string directory) =>
+            IsSystemTree(directory) || trees.Exists(tree => IsSameOrUnder(directory, tree));
 
         // Per host PATH slot, in host order: the slot where the chain shows it, else the bound real directory of each executable found
         // there (~/.local/bin/dotnet -> ~/.dotnet), so it shadows later slots as on the host; a substituted executable is not unreachable.
@@ -164,6 +173,7 @@ internal sealed record DevelopmentSandboxToolchain
             var named = Path.Combine(entry.BinaryDirectory, entry.Executable);
             return File.Exists(named) && string.Equals(Canonicalize(named), entry.Binary, StringComparison.Ordinal);
         }
+
         return new DevelopmentSandboxToolchain
         {
             ReadOnlyTrees = trees,
@@ -239,7 +249,13 @@ internal sealed record DevelopmentSandboxToolchain
             return ReservedReason;
         }
 
-        return WithoutShadowingAliases([new DevelopmentToolchainAlias { LinkPath = link, Target = target }], trees).Count == 0
+        return WithoutShadowingAliases([
+            new DevelopmentToolchainAlias
+            {
+                LinkPath = link,
+                Target = target
+            }
+        ], trees).Count == 0
             ? ShadowReason
             : Refusal(link, Path.GetDirectoryName(link) ?? "/", sensitiveRoots);
     }

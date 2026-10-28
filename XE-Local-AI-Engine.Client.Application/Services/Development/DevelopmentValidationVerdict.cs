@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Development;
 
+using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>
@@ -35,7 +36,7 @@ internal sealed class DevelopmentValidationVerdict
     /// <param name="unreachable">The toolchain trees the boundary left out (<see cref="DevelopmentWorkspaceSession.UnreachableToolchain" />).</param>
     public static DevelopmentValidationVerdict Evaluate(DevelopmentCommandProfile profile,
         IReadOnlyList<DevelopmentCommandEvidence> commands,
-        IReadOnlyList<Implementation.DevelopmentSkippedToolchainTree>? unreachable = null)
+        IReadOnlyList<DevelopmentSkippedToolchainTree>? unreachable = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(commands);
@@ -69,7 +70,7 @@ internal sealed class DevelopmentValidationVerdict
     private static DevelopmentValidationVerdict? Unreachable(DevelopmentCommandProfile profile,
         DevelopmentCommandEvidence command,
         DevelopmentValidationVerdict failure,
-        IReadOnlyList<Implementation.DevelopmentSkippedToolchainTree> unreachable)
+        IReadOnlyList<DevelopmentSkippedToolchainTree> unreachable)
     {
         var executable = profile.Commands.FirstOrDefault(candidate => string.Equals(candidate.CommandId, command.CommandId, StringComparison.Ordinal))?.Executable;
         var skipped = unreachable.Where(entry => string.Equals(entry.Executable, executable, StringComparison.Ordinal)).ToList();
@@ -84,7 +85,9 @@ internal sealed class DevelopmentValidationVerdict
             FailureCode = DevelopmentValidationFailureCodes.RunnerNotInstalled,
             FailureDetail = $"Command {command.CommandId} could not reach its runner behind the filesystem boundary. {executable} may well be installed on the host, "
                             + "but the boundary left out what the host PATH finds it through: "
-                            + string.Join("; ", skipped.Select(static entry => $"'{DevelopmentArtifactSanitizer.NeutralizeEngineText(entry.Tree)}' ({DevelopmentArtifactSanitizer.NeutralizeEngineText(entry.Reason)})"))
+                            + string.Join("; ",
+                                skipped.Select(static entry =>
+                                    $"'{DevelopmentArtifactSanitizer.NeutralizeEngineText(entry.Tree)}' ({DevelopmentArtifactSanitizer.NeutralizeEngineText(entry.Reason)})"))
                             + " (the engine log names each path in full). Install it somewhere the boundary can bind (owned by your account or root, not group- or world-writable, outside /tmp and the protected folders), then retry."
         };
     }

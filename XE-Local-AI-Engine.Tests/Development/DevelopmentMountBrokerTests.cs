@@ -281,7 +281,12 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
         var (session, _) = await PrepareAsync(sandbox, RestoringProfile);
         var warm = sandbox.Created.Single(static request => request.RuntimeProfile == "development-warm");
 
-        foreach (var name in new[] { "home", "tmp", "dotnet" })
+        foreach (var name in new[]
+                 {
+                     "home",
+                     "tmp",
+                     "dotnet"
+                 })
         {
             var mount = warm.Mounts!.Single(mount => mount.SandboxPath == "/xe-runtime/" + name);
             AssertEx.NotEqual(Path.Combine(session.RuntimePath, name), mount.HostPath);
@@ -308,7 +313,12 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
         var request = sandbox.Created[^1];
         AssertEx.Equal("development-validation", request.RuntimeProfile);
         AssertEx.Equal("read-only", PackageFolderMode(request, Path.Combine(session.RuntimePath, "nuget")));
-        foreach (var name in new[] { "home", "tmp", "dotnet" })
+        foreach (var name in new[]
+                 {
+                     "home",
+                     "tmp",
+                     "dotnet"
+                 })
         {
             var hostPath = request.Mounts!.Single(mount => mount.SandboxPath == "/xe-runtime/" + name).HostPath;
             AssertEx.NotEqual(Path.Combine(session.RuntimePath, name), hostPath);
@@ -354,7 +364,14 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
     [Test]
     public async Task OnlyAnEngineComposedLaunchFailure_CountsAsNeverStarted()
     {
-        static SandboxCommandResult Failed(string error) => new() { ExecutionId = "x", ExitCode = -1, Completed = false, StandardError = error };
+        static SandboxCommandResult Failed(string error) =>
+            new()
+            {
+                ExecutionId = "x",
+                ExitCode = -1,
+                Completed = false,
+                StandardError = error
+            };
 
         AssertEx.True(DevelopmentWorkspaceTools.NeverStarted(Failed(SandboxCommandResult.BoundaryFailurePrefix + " ('/x' is writable by group or world).")));
         AssertEx.True(DevelopmentWorkspaceTools.NeverStarted(Failed(SandboxCommandResult.LaunchFailurePrefix + ".")));

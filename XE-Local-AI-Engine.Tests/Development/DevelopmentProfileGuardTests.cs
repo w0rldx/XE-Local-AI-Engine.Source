@@ -194,17 +194,24 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
         ];
         foreach (var path in runnerPaths)
         {
-            foreach (var changeType in new[] { "added", "copied", "modified", "deleted", "renamed" })
+            foreach (var changeType in new[]
+                     {
+                         "added",
+                         "copied",
+                         "modified",
+                         "deleted",
+                         "renamed"
+                     })
             {
                 var refusal = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() =>
-                {
-                    DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile
                     {
-                        Path = path,
-                        ChangeType = changeType
-                    }), pytest);
-                    return Task.CompletedTask;
-                }, $"{changeType} '{path}' must be refused.");
+                        DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile
+                        {
+                            Path = path,
+                            ChangeType = changeType
+                        }), pytest);
+                        return Task.CompletedTask;
+                    }, $"{changeType} '{path}' must be refused.");
                 AssertEx.Equal(DevelopmentTestWritePolicy.RunnerRefusalSentence, refusal.Message);
             }
         }
@@ -222,43 +229,43 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
         });
 
         DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile
-            {
-                Path = "tests/test_new_feature.py",
-                ChangeType = "added"
-            },
-            new DevelopmentChangedFile
-            {
-                Path = "shop/cart.py",
-                ChangeType = "modified"
-            },
-            // Configuration files are inert: the launch replaces every one of them with an empty config.
-            new DevelopmentChangedFile
-            {
-                Path = "pytest.ini",
-                ChangeType = "added"
-            },
-            new DevelopmentChangedFile
-            {
-                Path = "setup.cfg",
-                ChangeType = "modified"
-            },
+                {
+                    Path = "tests/test_new_feature.py",
+                    ChangeType = "added"
+                },
+                new DevelopmentChangedFile
+                {
+                    Path = "shop/cart.py",
+                    ChangeType = "modified"
+                },
+                // Configuration files are inert: the launch replaces every one of them with an empty config.
+                new DevelopmentChangedFile
+                {
+                    Path = "pytest.ini",
+                    ChangeType = "added"
+                },
+                new DevelopmentChangedFile
+                {
+                    Path = "setup.cfg",
+                    ChangeType = "modified"
+                },
 
-            // A standard-library name inside a package, a non-module file, and a namespace directory never shadow one.
-            new DevelopmentChangedFile
-            {
-                Path = "shop/pdb.py",
-                ChangeType = "added"
-            },
-            new DevelopmentChangedFile
-            {
-                Path = "code.txt",
-                ChangeType = "added"
-            },
-            new DevelopmentChangedFile
-            {
-                Path = "test/test_pdb.py",
-                ChangeType = "added"
-            }),
+                // A standard-library name inside a package, a non-module file, and a namespace directory never shadow one.
+                new DevelopmentChangedFile
+                {
+                    Path = "shop/pdb.py",
+                    ChangeType = "added"
+                },
+                new DevelopmentChangedFile
+                {
+                    Path = "code.txt",
+                    ChangeType = "added"
+                },
+                new DevelopmentChangedFile
+                {
+                    Path = "test/test_pdb.py",
+                    ChangeType = "added"
+                }),
             pytest);
         DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile
         {

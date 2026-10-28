@@ -460,7 +460,8 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
 
         public DateTime CreatedAtUtc => Directory.GetLastWriteTimeUtc(_root);
 
-        public void Dispose() => StandaloneGitClone.TryDelete(_root);
+        public void Dispose() =>
+            StandaloneGitClone.TryDelete(_root);
     }
 
     private sealed record ExactGitResult

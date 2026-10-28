@@ -29,14 +29,14 @@ public sealed class ListNodeAuthSessionsEndpoint : EndpointWithoutRequest<IReadO
         var sessions = await _authService.ListSessionsAsync(User, ct);
 
         await Send.OkAsync(sessions.Select(session => new NodeAuthSessionResponse
-                                    {
-                                        Id = session.Id,
-                                        ClientLabel = session.ClientLabel,
-                                        // SQLite hands the instants back unspecified; marked UTC so the wire carries the Z.
-                                        CreatedAtUtc = DateTime.SpecifyKind(session.CreatedAtUtc, DateTimeKind.Utc),
-                                        LastUsedAtUtc = DateTime.SpecifyKind(session.LastUsedAtUtc, DateTimeKind.Utc),
-                                        Current = string.Equals(session.Id, currentSessionId, StringComparison.Ordinal)
-                                    })
+                                   {
+                                       Id = session.Id,
+                                       ClientLabel = session.ClientLabel,
+                                       // SQLite hands the instants back unspecified; marked UTC so the wire carries the Z.
+                                       CreatedAtUtc = DateTime.SpecifyKind(session.CreatedAtUtc, DateTimeKind.Utc),
+                                       LastUsedAtUtc = DateTime.SpecifyKind(session.LastUsedAtUtc, DateTimeKind.Utc),
+                                       Current = string.Equals(session.Id, currentSessionId, StringComparison.Ordinal)
+                                   })
                                    .ToList(),
             ct);
     }

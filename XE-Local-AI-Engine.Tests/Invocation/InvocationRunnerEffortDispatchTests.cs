@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Invocation;
 
 using System.Diagnostics;
-using Microsoft.Agents.AI;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -15,7 +14,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
-using static XE_Local_AI_Engine.Tests.Invocation.InvocationRunnerTestSupport;
+using static InvocationRunnerTestSupport;
 
 [Category(TestCategories.Unit)]
 public sealed class InvocationRunnerEffortDispatchTests

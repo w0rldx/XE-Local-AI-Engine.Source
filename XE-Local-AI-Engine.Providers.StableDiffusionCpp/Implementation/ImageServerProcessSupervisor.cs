@@ -502,7 +502,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     private async Task WaitForReadyOrExitAsync(IProcessTreeHandle handle, Uri baseAddress, TimeSpan budget, CancellationToken ct)
     {
         var outcome = await ProcessReadinessRace.RunAsync(handle, token => _readinessProbe.WaitForReadyAsync(baseAddress, budget, token), _timeProvider, ct)
-            .ConfigureAwait(false);
+                                                .ConfigureAwait(false);
 
         if (outcome == ProcessReadinessOutcome.Exited)
         {

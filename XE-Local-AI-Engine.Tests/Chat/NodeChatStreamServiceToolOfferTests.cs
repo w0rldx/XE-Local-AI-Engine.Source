@@ -22,7 +22,7 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
-using static XE_Local_AI_Engine.Tests.Chat.NodeChatStreamServiceTestSupport;
+using static NodeChatStreamServiceTestSupport;
 
 [Category(TestCategories.Unit)]
 public sealed class NodeChatStreamServiceToolOfferTests

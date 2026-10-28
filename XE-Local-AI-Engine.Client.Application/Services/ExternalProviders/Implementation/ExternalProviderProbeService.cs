@@ -174,7 +174,10 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
 
             using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
             var result = await ReadProbeResponseAsync(response, sentSecrets, timeout.Token, cancellationToken);
-            return result with { RequestedUrl = requestUri.AbsoluteUri };
+            return result with
+            {
+                RequestedUrl = requestUri.AbsoluteUri
+            };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

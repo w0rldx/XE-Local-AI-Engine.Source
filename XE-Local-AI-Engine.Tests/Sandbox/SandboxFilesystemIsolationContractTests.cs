@@ -155,12 +155,30 @@ public sealed class SandboxFilesystemIsolationContractTests
 
             var handle = await provider.CreateOrAttachAsync(IsolatedRequest() with
             {
-                TrustedHostWorkspace = new SandboxTrustedHostWorkspace { RootPath = workspace },
+                TrustedHostWorkspace = new SandboxTrustedHostWorkspace
+                {
+                    RootPath = workspace
+                },
                 Mounts =
                 [
-                    new SandboxMount { HostPath = home, SandboxPath = "/xe-runtime/home" },
-                    new SandboxMount { HostPath = gitConfig, SandboxPath = "/.git/config", ReadOnly = true },
-                    new SandboxMount { HostPath = shadow, SandboxPath = "/secrets/key.pem", TargetIsWorkspaceRelative = true, ReadOnly = true }
+                    new SandboxMount
+                    {
+                        HostPath = home,
+                        SandboxPath = "/xe-runtime/home"
+                    },
+                    new SandboxMount
+                    {
+                        HostPath = gitConfig,
+                        SandboxPath = "/.git/config",
+                        ReadOnly = true
+                    },
+                    new SandboxMount
+                    {
+                        HostPath = shadow,
+                        SandboxPath = "/secrets/key.pem",
+                        TargetIsWorkspaceRelative = true,
+                        ReadOnly = true
+                    }
                 ]
             });
 
@@ -198,7 +216,14 @@ public sealed class SandboxFilesystemIsolationContractTests
             _ = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(async () =>
                 await provider.CreateOrAttachAsync(IsolatedRequest() with
                 {
-                    Mounts = [new SandboxMount { HostPath = source, SandboxPath = target }]
+                    Mounts =
+                    [
+                        new SandboxMount
+                        {
+                            HostPath = source,
+                            SandboxPath = target
+                        }
+                    ]
                 }));
         }
         finally
@@ -223,7 +248,15 @@ public sealed class SandboxFilesystemIsolationContractTests
                 await provider.CreateOrAttachAsync(IsolatedRequest() with
                 {
                     Isolation = SandboxIsolationMode.None,
-                    Mounts = [new SandboxMount { HostPath = source, SandboxPath = "/xe-runtime/nuget", ReadOnly = true }]
+                    Mounts =
+                    [
+                        new SandboxMount
+                        {
+                            HostPath = source,
+                            SandboxPath = "/xe-runtime/nuget",
+                            ReadOnly = true
+                        }
+                    ]
                 }));
         }
         finally

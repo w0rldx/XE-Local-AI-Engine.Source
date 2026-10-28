@@ -241,7 +241,8 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     }
 
     /// <summary>The name a validation node run's published patch carries, unique per node key so clones never collide.</summary>
-    internal static string PatchArtifactName(string nodeKey) => $"{nodeKey}.patch";
+    internal static string PatchArtifactName(string nodeKey) =>
+        $"{nodeKey}.patch";
 
     /// <summary>Asks a node run's commands to stop, and answers whether there was anything to ask.</summary>
     /// <remarks>

@@ -513,7 +513,7 @@ public sealed class NodeAuthSessionTests
     {
         await using var scope = factory.Services.CreateAsyncScope();
         return AssertEx.NotNull(await scope.ServiceProvider.GetRequiredService<NodeIdentityDbContext>()
-                                          .Users.AsNoTracking().Select(user => user.SecurityStamp).SingleAsync());
+                                           .Users.AsNoTracking().Select(user => user.SecurityStamp).SingleAsync());
     }
 
     /// <summary>Mints an access token without <c>sid</c>, as one issued before the upgrade.</summary>

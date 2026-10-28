@@ -265,8 +265,9 @@ public sealed class WorkSessionRuntimeOverride
     ///     The refusal flag counts: a node that pins no model and no effort still has to have its turns judged, and
     ///     the supervisor drops an override this reports empty.
     /// </remarks>
-    public bool IsEmpty => string.IsNullOrWhiteSpace(ModelProfile) && string.IsNullOrWhiteSpace(ReasoningEffort) && !RefuseUndeclaredWrites && RepositoryRoot is null
-                           && OutputSchema is null && ReadableArtifacts.Count == 0;
+    public bool IsEmpty =>
+        string.IsNullOrWhiteSpace(ModelProfile) && string.IsNullOrWhiteSpace(ReasoningEffort) && !RefuseUndeclaredWrites && RepositoryRoot is null
+        && OutputSchema is null && ReadableArtifacts.Count == 0;
 }
 
 /// <summary>One artifact a work-session step may read back page by page: where its bytes live and the digest they must verify against.</summary>

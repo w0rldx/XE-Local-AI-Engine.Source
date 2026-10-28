@@ -131,8 +131,18 @@ public sealed class SandboxIsolatedChainTests
             HomePath = "/tmp",
             Binds =
             [
-                new SandboxIsolatedMountBinding { FileDescriptor = 40, SandboxPath = "/xe-runtime/home", ReadOnly = false },
-                new SandboxIsolatedMountBinding { FileDescriptor = 41, SandboxPath = "/work/.git/config", ReadOnly = true }
+                new SandboxIsolatedMountBinding
+                {
+                    FileDescriptor = 40,
+                    SandboxPath = "/xe-runtime/home",
+                    ReadOnly = false
+                },
+                new SandboxIsolatedMountBinding
+                {
+                    FileDescriptor = 41,
+                    SandboxPath = "/work/.git/config",
+                    ReadOnly = true
+                }
             ]
         }, "/bin/sh", []);
 

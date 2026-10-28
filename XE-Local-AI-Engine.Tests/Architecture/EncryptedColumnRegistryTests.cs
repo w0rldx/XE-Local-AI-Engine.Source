@@ -23,7 +23,13 @@ public sealed partial class EncryptedColumnRegistryTests
     private const string PersistenceRoot = "XE-Local-AI-Engine.Client.Persistence/";
 
     /// <summary>The only encrypt/decrypt-named calls an interceptor may make: its own entry points and the table's walk.</summary>
-    private static readonly HashSet<string> TableWalkMethods = new(StringComparer.Ordinal) { "EncryptTrackedPayloads", "EncryptTracked", "DecryptColumns", "Decrypt" };
+    private static readonly HashSet<string> TableWalkMethods = new(StringComparer.Ordinal)
+    {
+        "EncryptTrackedPayloads",
+        "EncryptTracked",
+        "DecryptColumns",
+        "Decrypt"
+    };
 
     private static readonly string ColumnTablePath =
         RepositoryPaths.Combine("XE-Local-AI-Engine.Client.Persistence", "NodeEncryptedColumns.cs");
@@ -46,7 +52,11 @@ public sealed partial class EncryptedColumnRegistryTests
 
         var offenders = new List<string>();
 
-        foreach (var path in new[] { SaveInterceptorPath, MaterializationInterceptorPath })
+        foreach (var path in new[]
+                 {
+                     SaveInterceptorPath,
+                     MaterializationInterceptorPath
+                 })
         {
             var source = SourceCommentStripper.StripCommentsAndLiterals(File.ReadAllText(path));
 

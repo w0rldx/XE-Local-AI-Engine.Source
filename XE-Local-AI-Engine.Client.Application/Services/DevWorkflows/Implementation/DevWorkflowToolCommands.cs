@@ -303,7 +303,7 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
             // limit they are not, and the report says so (an accepted ceiling: the limit sits below the patch maximum).
             var publishable = patch.Payload.Length <= _options.MaxArtifactBytes;
             var coder = (await _development.ListAttemptsAsync(taskId, cancellationToken))
-                        .FirstOrDefault(attempt => attempt.Id == patch.Artifact.AttemptId && attempt.Role == DevelopmentAttemptRole.Coder);
+                .FirstOrDefault(attempt => attempt.Id == patch.Artifact.AttemptId && attempt.Role == DevelopmentAttemptRole.Coder);
             return new DevWorkflowOverlay
             {
                 BasedOn = new DevWorkflowValidationBasedOn(taskId,

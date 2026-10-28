@@ -38,10 +38,10 @@ public sealed class AcknowledgeAiEndpoint : EndpointWithoutRequest<AiAcknowledge
         }
 
         await Send.OkAsync(new AiAcknowledgementResponse
-        {
-            Acknowledged = true,
-            AcknowledgedAtUtc = acknowledgedAt
-        },
+            {
+                Acknowledged = true,
+                AcknowledgedAtUtc = acknowledgedAt
+            },
             ct);
     }
 }

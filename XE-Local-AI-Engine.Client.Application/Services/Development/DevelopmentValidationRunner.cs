@@ -211,12 +211,13 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
     ///     restore/build/test runs on one task in 25 minutes, zero coder rounds. A host without the test runner is
     ///     <c>Blocked</c> at once, since every further coder round would fail on the same missing tool.
     /// </remarks>
-    internal static DevelopmentTaskStatus TargetFor(DevelopmentValidationVerdict verdict) => verdict switch
-    {
-        { Passed: true } => DevelopmentTaskStatus.InReview,
-        { StopsTask: true } => DevelopmentTaskStatus.Blocked,
-        _ => DevelopmentTaskStatus.ChangesRequested
-    };
+    internal static DevelopmentTaskStatus TargetFor(DevelopmentValidationVerdict verdict) =>
+        verdict switch
+        {
+            { Passed: true } => DevelopmentTaskStatus.InReview,
+            { StopsTask: true } => DevelopmentTaskStatus.Blocked,
+            _ => DevelopmentTaskStatus.ChangesRequested
+        };
 
     /// <summary>The task's terminal reason for a failed verdict, or null for a pass.</summary>
     /// <remarks>
@@ -224,12 +225,13 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
     ///     interpolates a parser message a future adapter could make arbitrarily long. A task-stopping verdict leads with
     ///     its code in brackets, the prefix the workflow lane classes it on.
     /// </remarks>
-    internal static string? ReasonFor(DevelopmentValidationVerdict verdict) => verdict switch
-    {
-        { Passed: true } => null,
-        { StopsTask: true, FailureCode: { } code, FailureDetail: { } detail } => DevelopmentAttemptEvidenceException.Compose(code, detail),
-        _ => Clamp($"Deterministic validation failed ({verdict.FailureCode}): {verdict.FailureDetail}")
-    };
+    internal static string? ReasonFor(DevelopmentValidationVerdict verdict) =>
+        verdict switch
+        {
+            { Passed: true } => null,
+            { StopsTask: true, FailureCode: { } code, FailureDetail: { } detail } => DevelopmentAttemptEvidenceException.Compose(code, detail),
+            _ => Clamp($"Deterministic validation failed ({verdict.FailureCode}): {verdict.FailureDetail}")
+        };
 
     /// <summary>What an operator is told when the gate has thrown twice on the same implementation.</summary>
     /// <remarks>

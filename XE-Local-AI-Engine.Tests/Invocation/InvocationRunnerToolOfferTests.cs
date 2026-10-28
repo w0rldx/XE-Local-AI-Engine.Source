@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Invocation;
 
-using Microsoft.Agents.AI;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -10,7 +7,7 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
-using static XE_Local_AI_Engine.Tests.Invocation.InvocationRunnerTestSupport;
+using static InvocationRunnerTestSupport;
 
 [Category(TestCategories.Unit)]
 public sealed class InvocationRunnerToolOfferTests

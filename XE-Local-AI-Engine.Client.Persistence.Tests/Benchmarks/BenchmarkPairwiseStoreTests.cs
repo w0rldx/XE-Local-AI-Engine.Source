@@ -256,7 +256,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
         AssertEx.True(cells.Cells.All(static cell => cell.Quality is null), "No cell takes a quality from an unreadable fit.");
         AssertEx.True(Warnings(logger).Count >= 2, "Each read warns.");
         AssertEx.True(Warnings(logger).All(message => message.Contains(fit.Id.ToString(), StringComparison.Ordinal)
-                                                     && message.Contains(project.Id.ToString(), StringComparison.Ordinal)));
+                                                      && message.Contains(project.Id.ToString(), StringComparison.Ordinal)));
         AssertEx.False(Warnings(logger).Any(static message => message.Contains("secret-blob", StringComparison.Ordinal)),
             "The Warning must not carry blob content.");
     }

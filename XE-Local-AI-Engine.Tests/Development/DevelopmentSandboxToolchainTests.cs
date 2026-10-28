@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
 using System.Runtime.Versioning;
+using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
@@ -168,10 +169,14 @@ public sealed class DevelopmentSandboxToolchainTests : IDisposable
     {
         RequireLinux();
 
-        static DevelopmentToolchainAlias Alias(string link) => new() { LinkPath = link, Target = "/opt/python/3.14.8" };
+        static DevelopmentToolchainAlias Alias(string link) =>
+            new()
+            {
+                LinkPath = link,
+                Target = "/opt/python/3.14.8"
+            };
 
-        var kept = DevelopmentSandboxToolchain.WithoutShadowingAliases(
-            [Alias("/opt/python/latest"), Alias("/home/user/.local"), Alias("/home/user/runtime/nuget"), Alias("/opt/python/latest-other")],
+        var kept = DevelopmentSandboxToolchain.WithoutShadowingAliases([Alias("/opt/python/latest"), Alias("/home/user/.local"), Alias("/home/user/runtime/nuget"), Alias("/opt/python/latest-other")],
             ["/opt/python/3.14.8", "/home/user/.local/share/mise/installs/python/3.14.8", "/home/user/runtime/nuget"]);
 
         AssertEx.Equal("/opt/python/latest,/opt/python/latest-other", string.Join(',', kept.Select(static alias => alias.LinkPath)));
@@ -314,7 +319,7 @@ public sealed class DevelopmentSandboxToolchainTests : IDisposable
         var facts = SandboxUnixMetadata.TryRead(tree);
         if (facts is not { UserId: 0, IsGroupOrWorldWritable: false })
         {
-            throw new TUnit.Core.Exceptions.SkipTestException("this host's /var is not root-owned and closed to group and world writes.");
+            throw new SkipTestException("this host's /var is not root-owned and closed to group and world writes.");
         }
 
         // Running as root (a Linux container), /var IS the engine's own tree, which a writable bind may use: there is no foreign owner here.
@@ -323,7 +328,7 @@ public sealed class DevelopmentSandboxToolchainTests : IDisposable
         await File.WriteAllTextAsync(probe, string.Empty);
         if (SandboxUnixMetadata.TryRead(probe) is { UserId: 0 })
         {
-            throw new TUnit.Core.Exceptions.SkipTestException("these tests run as root, so a root-owned tree is the engine's own and the writable refusal cannot be shown.");
+            throw new SkipTestException("these tests run as root, so a root-owned tree is the engine's own and the writable refusal cannot be shown.");
         }
 
         SandboxTrustedDescriptorOpener.OpenBindSource(tree, expectFile: false, readOnly: true).Dispose();
@@ -392,7 +397,7 @@ public sealed class DevelopmentSandboxToolchainTests : IDisposable
     {
         if (!OperatingSystem.IsLinux())
         {
-            throw new TUnit.Core.Exceptions.SkipTestException("the bubblewrap chain and its descriptor opener are Linux-only.");
+            throw new SkipTestException("the bubblewrap chain and its descriptor opener are Linux-only.");
         }
     }
 

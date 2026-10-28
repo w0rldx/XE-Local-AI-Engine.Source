@@ -478,10 +478,10 @@ public sealed class WorkSessionToolHandlerTests
 
         string result;
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
-        using (WorkSessionTurnScope.Begin(KindContract))
-        {
-            result = await handler.ExecuteAsync(arguments);
-        }
+            using (WorkSessionTurnScope.Begin(KindContract))
+            {
+                result = await handler.ExecuteAsync(arguments);
+            }
 
         AssertEx.Contains(result, "stays open");
         AssertEx.Contains(result, expected);
@@ -499,10 +499,10 @@ public sealed class WorkSessionToolHandlerTests
         var handler = Handler(factory, WorkSessionToolDefinitions.CompleteWorkSession.ToolName);
 
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
-        using (WorkSessionTurnScope.Begin(KindContract))
-        {
-            AssertEx.Contains(await handler.ExecuteAsync("""{"summary":"Triaged.","output":{"kind":"bug","rationale":"It crashes."}}"""), "close at the end of this turn");
-        }
+            using (WorkSessionTurnScope.Begin(KindContract))
+            {
+                AssertEx.Contains(await handler.ExecuteAsync("""{"summary":"Triaged.","output":{"kind":"bug","rationale":"It crashes."}}"""), "close at the end of this turn");
+            }
 
         var output = AssertEx.NotNull(ReadCompletionDetail(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId))).Output;
         AssertEx.True(output.HasValue, "a valid output is recorded on the event.");
@@ -519,10 +519,10 @@ public sealed class WorkSessionToolHandlerTests
         var handler = Handler(factory, WorkSessionToolDefinitions.CompleteWorkSession.ToolName);
 
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
-        using (WorkSessionTurnScope.Begin(KindContract))
-        {
-            AssertEx.Contains(await handler.ExecuteAsync("""{"summary":"The request names nothing I can classify.","objectiveMet":false}"""), "close at the end of this turn");
-        }
+            using (WorkSessionTurnScope.Begin(KindContract))
+            {
+                AssertEx.Contains(await handler.ExecuteAsync("""{"summary":"The request names nothing I can classify.","objectiveMet":false}"""), "close at the end of this turn");
+            }
 
         AssertEx.Equal(false, AssertEx.NotNull(ReadCompletionDetail(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId))).ObjectiveMet);
     }
@@ -537,11 +537,11 @@ public sealed class WorkSessionToolHandlerTests
         var handler = Handler(factory, WorkSessionToolDefinitions.CompleteWorkSession.ToolName);
 
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
-        using (WorkSessionTurnScope.Begin(KindContract))
-        {
-            AssertEx.Contains(await handler.ExecuteAsync("""{"summary":"Not a bug I can stand behind.","objectiveMet":false,"output":{"kind":"unclear"}}"""),
-                "close at the end of this turn");
-        }
+            using (WorkSessionTurnScope.Begin(KindContract))
+            {
+                AssertEx.Contains(await handler.ExecuteAsync("""{"summary":"Not a bug I can stand behind.","objectiveMet":false,"output":{"kind":"unclear"}}"""),
+                    "close at the end of this turn");
+            }
 
         var detail = AssertEx.NotNull(ReadCompletionDetail(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId)));
         AssertEx.Equal(false, detail.ObjectiveMet);
@@ -559,11 +559,11 @@ public sealed class WorkSessionToolHandlerTests
         var handler = Handler(factory, WorkSessionToolDefinitions.CompleteWorkSession.ToolName);
 
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
-        using (WorkSessionTurnScope.Begin(KindContract))
-        {
-            AssertEx.Contains(await handler.ExecuteAsync("""{"summary":"Could not classify it.","objectiveMet":false,"output":{"kind":"defect"}}"""),
-                "close at the end of this turn");
-        }
+            using (WorkSessionTurnScope.Begin(KindContract))
+            {
+                AssertEx.Contains(await handler.ExecuteAsync("""{"summary":"Could not classify it.","objectiveMet":false,"output":{"kind":"defect"}}"""),
+                    "close at the end of this turn");
+            }
 
         var detail = AssertEx.NotNull(ReadCompletionDetail(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId)));
         AssertEx.Equal(false, detail.ObjectiveMet);
@@ -628,12 +628,12 @@ public sealed class WorkSessionToolHandlerTests
 
         string first, second, last;
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
-        using (WorkSessionTurnScope.Begin(readableArtifacts: [artifact]))
-        {
-            first = await handler.ExecuteAsync("""{"name":"validate.patch"}""");
-            second = await handler.ExecuteAsync($$"""{"name":"validate.patch","offset":{{page}}}""");
-            last = await handler.ExecuteAsync($$"""{"name":"validate.patch","offset":{{2 * page}}}""");
-        }
+            using (WorkSessionTurnScope.Begin(readableArtifacts: [artifact]))
+            {
+                first = await handler.ExecuteAsync("""{"name":"validate.patch"}""");
+                second = await handler.ExecuteAsync($$"""{"name":"validate.patch","offset":{{page}}}""");
+                last = await handler.ExecuteAsync($$"""{"name":"validate.patch","offset":{{2 * page}}}""");
+            }
 
         AssertEx.Contains(first, $"offset=0 length={page} total={(2 * page) + 4} nextOffset={page}");
         AssertEx.Contains(first, new string('a', page));
@@ -660,13 +660,13 @@ public sealed class WorkSessionToolHandlerTests
         var handler = Handler(factory, WorkSessionToolDefinitions.ReadUpstreamArtifact.ToolName);
 
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
-        using (WorkSessionTurnScope.Begin(readableArtifacts: [artifact]))
-        {
-            _ = await handler.ExecuteAsync("""{"name":"validate.patch"}""");
-            _ = await handler.ExecuteAsync("""{"name":"validate.patch","offset":0}""");
-            _ = await handler.ExecuteAsync($$"""{"name":"validate.patch","offset":{{page}}}""");
-            _ = await handler.ExecuteAsync("""{"name":"secrets.env"}""");
-        }
+            using (WorkSessionTurnScope.Begin(readableArtifacts: [artifact]))
+            {
+                _ = await handler.ExecuteAsync("""{"name":"validate.patch"}""");
+                _ = await handler.ExecuteAsync("""{"name":"validate.patch","offset":0}""");
+                _ = await handler.ExecuteAsync($$"""{"name":"validate.patch","offset":{{page}}}""");
+                _ = await handler.ExecuteAsync("""{"name":"secrets.env"}""");
+            }
 
         var reads = (await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId))
                     .Where(static entry => entry.EventType == WorkSessionEventTypes.ArtifactRead)
@@ -693,19 +693,19 @@ public sealed class WorkSessionToolHandlerTests
         var rebuilt = new StringBuilder();
         var pages = new List<string>();
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
-        using (WorkSessionTurnScope.Begin(readableArtifacts: [artifact]))
-        using (ToolResultBudgetScope.BeginScope(budget))
-        {
-            var offset = "0";
-            while (offset is not null && pages.Count < 100)
-            {
-                var page = await handler.ExecuteAsync($$"""{"name":"validate.patch","offset":{{offset}}}""");
-                pages.Add(page);
-                rebuilt.Append(page.AsSpan(page.IndexOf(separator, StringComparison.Ordinal) + separator.Length));
-                var cursor = page[(page.IndexOf("nextOffset=", StringComparison.Ordinal) + "nextOffset=".Length)..page.IndexOf(separator, StringComparison.Ordinal)];
-                offset = cursor.StartsWith("null", StringComparison.Ordinal) ? null : cursor;
-            }
-        }
+            using (WorkSessionTurnScope.Begin(readableArtifacts: [artifact]))
+                using (ToolResultBudgetScope.BeginScope(budget))
+                {
+                    var offset = "0";
+                    while (offset is not null && pages.Count < 100)
+                    {
+                        var page = await handler.ExecuteAsync($$"""{"name":"validate.patch","offset":{{offset}}}""");
+                        pages.Add(page);
+                        rebuilt.Append(page.AsSpan(page.IndexOf(separator, StringComparison.Ordinal) + separator.Length));
+                        var cursor = page[(page.IndexOf("nextOffset=", StringComparison.Ordinal) + "nextOffset=".Length)..page.IndexOf(separator, StringComparison.Ordinal)];
+                        offset = cursor.StartsWith("null", StringComparison.Ordinal) ? null : cursor;
+                    }
+                }
 
         AssertEx.True(content.Length > WorkSessionToolDefinitions.ReadUpstreamArtifact.PageCharacters, "the artifact must need more than one full page.");
         AssertEx.True(pages.TrueForAll(static page => page.Length <= budget), "every page, header included, fits the tool-result budget.");
@@ -753,11 +753,11 @@ public sealed class WorkSessionToolHandlerTests
 
         string ambiguous, picked;
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
-        using (WorkSessionTurnScope.Begin(readableArtifacts: [left, right]))
-        {
-            ambiguous = await handler.ExecuteAsync("""{"name":"report.md"}""");
-            picked = await handler.ExecuteAsync("""{"name":"report.md","producer":"right"}""");
-        }
+            using (WorkSessionTurnScope.Begin(readableArtifacts: [left, right]))
+            {
+                ambiguous = await handler.ExecuteAsync("""{"name":"report.md"}""");
+                picked = await handler.ExecuteAsync("""{"name":"report.md","producer":"right"}""");
+            }
 
         AssertEx.Contains(ambiguous, "made by 'left', 'right'");
         AssertEx.False(ambiguous.Contains("the left report", StringComparison.Ordinal), "an ambiguous name reads neither document.");
@@ -775,10 +775,10 @@ public sealed class WorkSessionToolHandlerTests
 
         string result;
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
-        using (WorkSessionTurnScope.Begin(readableArtifacts: [artifact]))
-        {
-            result = await handler.ExecuteAsync("""{"name":"build.zip"}""");
-        }
+            using (WorkSessionTurnScope.Begin(readableArtifacts: [artifact]))
+            {
+                result = await handler.ExecuteAsync("""{"name":"build.zip"}""");
+            }
 
         AssertEx.Contains(result, "is application/zip, 9 bytes");
         AssertEx.Contains(result, "not text");
@@ -808,10 +808,10 @@ public sealed class WorkSessionToolHandlerTests
 
         string result;
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
-        using (WorkSessionTurnScope.Begin(readableArtifacts: [tampered]))
-        {
-            result = await handler.ExecuteAsync("""{"name":"validate.patch"}""");
-        }
+            using (WorkSessionTurnScope.Begin(readableArtifacts: [tampered]))
+            {
+                result = await handler.ExecuteAsync("""{"name":"validate.patch"}""");
+            }
 
         AssertEx.Contains(result, "did not verify");
         AssertEx.False(result.Contains("the real diff", StringComparison.Ordinal), "unverified bytes never reach the model.");
@@ -976,7 +976,7 @@ public sealed class WorkSessionToolHandlerTests
     {
         var runId = Guid.NewGuid();
         var artifactId = Guid.NewGuid();
-        var written = await factory.Services.GetRequiredService<IDevWorkflowArtifactBlobStore>().WriteAsync(runId, artifactId, System.Text.Encoding.UTF8.GetBytes(content));
+        var written = await factory.Services.GetRequiredService<IDevWorkflowArtifactBlobStore>().WriteAsync(runId, artifactId, Encoding.UTF8.GetBytes(content));
         return new WorkSessionReadableArtifact
         {
             RunId = runId,

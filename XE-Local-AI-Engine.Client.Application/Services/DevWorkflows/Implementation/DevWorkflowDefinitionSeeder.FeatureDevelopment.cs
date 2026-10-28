@@ -700,8 +700,8 @@ public sealed partial class DevWorkflowDefinitionSeeder
     ///     reaches <see cref="SeedAsync" /> looks right in the file and silently strands every installation on it.
     /// </remarks>
     internal static readonly string[] FeatureDevelopmentPriorRevisions =
-        [
-            FeatureDevelopmentGraphRevision1, FeatureDevelopmentGraphRevision2, FeatureDevelopmentGraphRevision3, FeatureDevelopmentGraphRevision4,
-            FeatureDevelopmentGraphRevision5, FeatureDevelopmentGraphRevision6
-        ];
+    [
+        FeatureDevelopmentGraphRevision1, FeatureDevelopmentGraphRevision2, FeatureDevelopmentGraphRevision3, FeatureDevelopmentGraphRevision4,
+        FeatureDevelopmentGraphRevision5, FeatureDevelopmentGraphRevision6
+    ];
 }

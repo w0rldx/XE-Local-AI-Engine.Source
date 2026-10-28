@@ -46,8 +46,7 @@ public abstract class SourceBuildPrerequisiteProbe
     /// <summary>The whole checklist, in the order the SPA shows it.</summary>
     /// <param name="probeBackendTools">Probes the accelerator rows the requested backend needs, shown right after the OS gate.</param>
     /// <param name="ct">Cancels the probe and kills the tool it is running.</param>
-    protected async Task<IReadOnlyList<SourceBuildPrerequisiteRow>> ProbeRowsAsync(
-        Func<CancellationToken, Task<IReadOnlyList<SourceBuildPrerequisiteRow>>> probeBackendTools,
+    protected async Task<IReadOnlyList<SourceBuildPrerequisiteRow>> ProbeRowsAsync(Func<CancellationToken, Task<IReadOnlyList<SourceBuildPrerequisiteRow>>> probeBackendTools,
         CancellationToken ct)
     {
         // The OS gate is reported as the single unsatisfied row rather than an exception, so the SPA renders one
