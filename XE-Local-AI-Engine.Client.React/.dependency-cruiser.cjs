@@ -43,18 +43,17 @@ module.exports = {
     {
       name: "no-core-to-features",
       comment:
-        "TRACKED DEBT (promote to error later): core/ is the shared foundation and must not depend on " +
-        "feature/ modules.",
-      severity: "warn",
+        "core/ is the shared foundation and must not depend on feature/ modules. Enforced as an error (codebase is clean).",
+      severity: "error",
       from: { path: "^src/core" },
       to: { path: "^src/features" },
     },
     {
       name: "no-core-to-legacy",
       comment:
-        "TRACKED DEBT (promote to error later): core/ must not reach into the legacy " +
-        "data/components/modules/pages trees. Known violation: navigation/header reach into data/components/modules.",
-      severity: "warn",
+        "core/ must not reach into the legacy data/components/modules/pages trees. " +
+        "Enforced as an error (codebase is clean).",
+      severity: "error",
       from: { path: "^src/core" },
       to: { path: "^src/(data|components|modules|pages)" },
     },
@@ -74,9 +73,9 @@ module.exports = {
     {
       name: "no-feature-to-routes",
       comment:
-        "TRACKED DEBT (promote to error later): features should be route-agnostic; the routes/ tree wires them, " +
-        "not the other way around.",
-      severity: "warn",
+        "Features should be route-agnostic; the routes/ tree wires them, not the other way around. " +
+        "Enforced as an error (codebase is clean).",
+      severity: "error",
       from: { path: "^src/features" },
       to: { path: "^src/routes" },
     },

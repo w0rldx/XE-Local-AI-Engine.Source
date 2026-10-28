@@ -88,13 +88,13 @@ internal sealed class TurnRunner
                 {
                     case CliStreamEventKind.ApprovalRequested:
                         // Also without a prompter: the deny is sent beside the loop, so Ctrl-C or a terminal abandons a stalled resolve.
-                        await StartPromptAsync(state, token => ResolveApprovalAsync(item, state, token, cancellationToken), interrupt);
+                        await StartPromptAsync(state, token => ResolveApprovalAsync(item, state, token, cancellationToken), stopRequested, interrupt);
                         break;
                     case CliStreamEventKind.QuestionRequested when _prompter is null:
                         await AnswerQuestionAsync(item, state, stopRequested, CancellationToken.None, cancellationToken);
                         break;
                     case CliStreamEventKind.QuestionRequested:
-                        await StartPromptAsync(state, token => AnswerQuestionAsync(item, state, stopRequested, token, cancellationToken), interrupt);
+                        await StartPromptAsync(state, token => AnswerQuestionAsync(item, state, stopRequested, token, cancellationToken), stopRequested, interrupt);
                         break;
                 }
             }
@@ -168,14 +168,38 @@ internal sealed class TurnRunner
     }
 
     /// <summary>Opens a prompt beside the event loop, so a terminal, a cancel or a notice is still read while it waits.</summary>
-    private static async Task StartPromptAsync(TurnState state, Func<CancellationToken, Task> prompt, CancellationToken interrupt)
+    private async Task StartPromptAsync(TurnState state, Func<CancellationToken, Task> prompt, TaskCompletionSource<StopReason> stopRequested, CancellationToken interrupt)
     {
         // The node parks one interaction at a time; a newer one supersedes any still open.
         await StopPromptAsync(state);
         state.PromptCancellation = CancellationTokenSource.CreateLinkedTokenSource(interrupt);
         // Captured now: a terminal in the same batch can stop the prompt, clearing the field, before the task starts.
         var token = state.PromptCancellation.Token;
-        state.Prompt = Task.Run(() => prompt(token), CancellationToken.None);
+        state.Prompt = Task.Run(() => RunPromptAsync(prompt, stopRequested, token), CancellationToken.None);
+    }
+
+    /// <summary>
+    ///     Runs a prompt; one that fails leaves the interaction parked until the node times it out, so it is reported
+    ///     here, once, and the turn is cancelled on the node right away.
+    /// </summary>
+    private async Task RunPromptAsync(Func<CancellationToken, Task> prompt, TaskCompletionSource<StopReason> stopRequested, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await prompt(cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            try
+            {
+                await _renderer.ClientNoticeAsync("promptFailed", $"The prompt failed: {exception.Message}; cancelling the turn.", CancellationToken.None);
+            }
+            finally
+            {
+                // Not the person's cancel: the outcome must not report one.
+                stopRequested.TrySetResult(StopReason.InteractionRequired);
+            }
+        }
     }
 
     /// <summary>Cancels the open prompt, if any, so its answer is never sent, and waits for it to wind down.</summary>

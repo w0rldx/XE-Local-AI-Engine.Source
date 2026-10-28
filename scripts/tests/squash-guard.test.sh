@@ -57,7 +57,7 @@ fixture() {
 # <tip> <tests p/f/s> <exit> [scope, default full]: one line in the shared tab-separated format, with
 # every column scripts/run-backend-tests.sh writes today.
 log_line() {
-  printf '2026-10-08T10:00:00Z\t%s\t%s\tTests=%s\tPersistence=40/0/0\tAgent=30/0/0\tContracts=skipped\tscope=%s\twall=900\treason=ok\tskips=needs-a-gpu:3\tunreported=0\tfailed=-\tflakes=-\tratchets=DbContextUser:31,PositionalRecord:314,Tuple:281,FilePlacement:251,CommentBudget:1665\texit=%s\n' \
+  printf '2026-10-08T10:00:00Z\t%s\t%s\tTests=%s\tPersistence=40/0/0\tAgent=30/0/0\tCli=20/0/0\tContracts=skipped\tscope=%s\twall=900\treason=ok\tskips=needs-a-gpu:3\tunreported=0\tfailed=-\tflakes=-\tratchets=DbContextUser:31,PositionalRecord:314,Tuple:281,FilePlacement:251,CommentBudget:1665\texit=%s\n' \
     "$WT" "$1" "$2" "${4:-full}" "$3"
 }
 
@@ -86,6 +86,12 @@ printf '2026-10-08T10:00:00Z\t%s\t%s\tTests=120/0/3\tPersistence=40/0/0\tAgent=3
   "$WT" "$TIP" >"$LOG"
 guard feature --repo "$MAIN"
 check "a happy path, twelve-field row" 0 "$status"
+# A sixteen-field row written before 2026-10-28 (no Cli=) still certifies.
+fixture a-sixteen
+printf '2026-10-08T10:00:00Z\t%s\t%s\tTests=120/0/3\tPersistence=40/0/0\tAgent=30/0/0\tContracts=skipped\tscope=full\twall=900\treason=ok\tskips=needs-a-gpu:3\tunreported=0\tfailed=-\tflakes=-\tratchets=DbContextUser:31\texit=0\n' \
+  "$WT" "$TIP" >"$LOG"
+guard feature --repo "$MAIN"
+check "a happy path, sixteen-field row" 0 "$status"
 
 # (b) dirty main tree: an untracked file counts
 fixture b

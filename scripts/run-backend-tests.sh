@@ -63,12 +63,12 @@
 # Gate history
 #   Every run that got past argument parsing appends ONE tab-separated line to the MAIN checkout's
 #   .tmp/gate-history.log (resolved like the build lock, so all worktrees share one file; never truncated):
-#     <ISO time> <worktree real path or -> <tip> Tests=p/f/s Persistence=p/f/s Agent=p/f/s
+#     <ISO time> <worktree real path or -> <tip> Tests=p/f/s Persistence=p/f/s Agent=p/f/s Cli=p/f/s
 #     Contracts=p/f/s|skipped scope=<scope> wall=<seconds> reason=<reason> skips=<slug:n,...> unreported=<n>
 #     failed=<name,...|-> flakes=<name,...|-> ratchets=<Name:n,...> exit=<code>
-#   Sixteen fields, exit= always last (scripts/squash-guard.sh keys on it; it reads the others by name, f[0..2]
-#   by position). Rows before 2026-10-23 have twelve: no unreported=, failed=, flakes= or ratchets=, and
-#   skips= carried the unreported count as "unreported:<n>". reason is ok on exit 0;
+#   Seventeen fields, exit= always last (scripts/squash-guard.sh keys on it; it reads the others by name, f[0..2]
+#   by position). Rows before 2026-10-28 have sixteen: no Cli=. Rows before 2026-10-23 have twelve: no
+#   unreported=, failed=, flakes= or ratchets=, and skips= carried the unreported count as "unreported:<n>". reason is ok on exit 0;
 #   otherwise lock-timeout (69), contaminated (75), killed (130/143), build (Release build red), fail-fast
 #   (Architecture pre-lane red), tests (a lane red, hollow or without a summary), setup (anything else).
 #   skips groups every skipped test of the finished lanes by reason: a sibling's reason is the TUnit skip
@@ -316,10 +316,10 @@ gate_history_on_exit() {
       130|143) reason=killed ;;
       *)       reason="${GATE_REASON:-setup}" ;;
     esac
-    mkdir -p "$(dirname "$file")" && printf '%s\t%s\t%s\tTests=%s\tPersistence=%s\tAgent=%s\tContracts=%s\tscope=%s\twall=%s\treason=%s\tskips=%s\tunreported=%s\tfailed=%s\tflakes=%s\tratchets=%s\texit=%s\n' \
+    mkdir -p "$(dirname "$file")" && printf '%s\t%s\t%s\tTests=%s\tPersistence=%s\tAgent=%s\tCli=%s\tContracts=%s\tscope=%s\twall=%s\treason=%s\tskips=%s\tunreported=%s\tfailed=%s\tflakes=%s\tratchets=%s\texit=%s\n' \
       "$(date -Iseconds)" "$worktree" "$sha" "$(history_lane XE-Local-AI-Engine.Tests)" \
       "$(history_lane XE-Local-AI-Engine.Client.Persistence.Tests)" "$(history_lane XE-Local-AI-Engine.AI.Agent.Tests)" \
-      "$contracts" "$scope" "$((EPOCHSECONDS - GATE_T0))" "$reason" "$(history_skips)" "$(history_unreported)" \
+      "$(history_lane XE-Local-AI-Engine.Cli.Tests)" "$contracts" "$scope" "$((EPOCHSECONDS - GATE_T0))" "$reason" "$(history_skips)" "$(history_unreported)" \
       "$(history_names ${GATE_FAILED[@]+"${GATE_FAILED[@]}"})" "$(history_names ${GATE_FLAKES[@]+"${GATE_FLAKES[@]}"})" \
       "$(history_ratchets)" "$rc" >>"$file" \
       || echo "WARN: could not append to $file" >&2

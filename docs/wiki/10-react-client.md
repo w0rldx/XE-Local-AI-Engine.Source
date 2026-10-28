@@ -63,12 +63,12 @@ growth in the app bundle. It also fails when `dist/index.html` loads or modulepr
 download the editor while the separate budget still reports it as lazy.
 
 `dependency-cruiser` runs through `scripts/CheckDependencyBaseline.mjs` (`pnpm run depcruise`): `error`-severity
-rules (`no-circular`, `not-to-test`, `not-to-dev-dep`, …) fail outright, and the `warn`-severity boundary rules
-(`no-cross-feature`, `no-core-to-features`, `no-core-to-legacy`, `no-feature-to-routes`, `no-orphans`) are TRACKED
+rules (`no-circular`, `not-to-test`, `not-to-dev-dep`, `no-core-to-features`, `no-core-to-legacy`,
+`no-feature-to-routes`) fail outright, and the `warn`-severity rules (`no-cross-feature`, `no-orphans`) are TRACKED
 DEBT gated by a no-growth fingerprint baseline, `config/dependency-baseline.json`: any rule/from/to fingerprint not
 in it fails, paying one down passes with no edit. That baseline is broad, not a short list of reviewed exceptions:
 as measured 2026-09-27 it held roughly a hundred `no-cross-feature` fingerprints across many feature pairs, plus
-the `no-core-to-*` entries. `QUALITY-GATE.md` records the policy.
+the `no-core-to-*` entries, since paid down and promoted to `error`. `QUALITY-GATE.md` records the policy.
 
 ---
 

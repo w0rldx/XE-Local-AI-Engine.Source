@@ -202,13 +202,13 @@ changes then and `+moved` when HEAD changed during the run; a suffixed tip certi
 `siblings-only` or `contracts-skipped`, the last meaning the diff needed the release contract tests but
 `XE_GATE_CONTRACT_TESTS=skip` or `GITHUB_ACTIONS=true` suppressed them; `Contracts=skipped` alone does not tell a
 bypass from a lane that was not needed), wall seconds, `reason`, `skips`, `unreported`, `failed`, `flakes`,
-`ratchets` and exit code, always last. The sixteen columns in order:
+`ratchets` and exit code, always last. The seventeen columns in order:
 
-`<time> <worktree> <tip> Tests= Persistence= Agent= Contracts= scope= wall= reason= skips= unreported= failed= flakes= ratchets= exit=`
+`<time> <worktree> <tip> Tests= Persistence= Agent= Cli= Contracts= scope= wall= reason= skips= unreported= failed= flakes= ratchets= exit=`
 
-Rows before 2026-10-23 have twelve: they lack `unreported`, `failed`, `flakes` and `ratchets`, and their `skips`
-carried the unreported count as `unreported:<n>`. `scripts/squash-guard.sh` reads the first three columns by position
-and the rest by name. `reason` is `ok`
+Rows before 2026-10-28 have sixteen: they lack `Cli`. Rows before 2026-10-23 have twelve: they lack `unreported`,
+`failed`, `flakes` and `ratchets`, and their `skips` carried the unreported count as `unreported:<n>`.
+`scripts/squash-guard.sh` reads the first three columns by position and the rest by name. `reason` is `ok`
 on exit 0, else `lock-timeout` (69), `contaminated` (75), `killed` (130/143), `build`, `fail-fast` (the Architecture
 pre-lane), `tests` (a lane red) or `setup`. `skips` groups the finished lanes' skipped tests by reason as
 `<slug>:<count>,...`: a sibling project's slug is its TUnit skip text from the TRX, cut to 24 characters.

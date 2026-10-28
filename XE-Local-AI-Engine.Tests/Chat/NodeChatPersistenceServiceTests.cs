@@ -228,7 +228,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
-    public async Task TerminalizeAssistantMessageAsync_WithThroughputAndAContextWindow_ReturnsBoth_AndRoundTripsThroughTheEncryptedBlob()
+    public async Task TerminalizeAssistantMessageAsync_WithThroughputSourcesAndAContextWindow_ReturnsThem_AndRoundTripsThroughTheEncryptedBlob()
     {
         await using var provider = await BuildProviderAsync("throughput-roundtrip.sqlite");
         var service = CreateService(provider);
@@ -268,6 +268,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
             UsableWindowTokens = 5939,
             SafetyMarginTokens = 1229
         };
+        var source = new NodeChatMessageSource(Guid.NewGuid(), Guid.NewGuid(), "Deployment Runbook", "Rollback", 0.91d, KnowledgeScoreKind.Rerank);
 
         var returned = await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
         {
@@ -276,12 +277,14 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
             UpdatedAtUtc = 2002,
             Content = "the answer",
             Throughput = throughput,
-            ContextWindow = window
+            ContextWindow = window,
+            Sources = [source]
         });
 
         // The returned row is what the pump builds the LIVE terminal event from, so it carries what this write stored.
         AssertEx.Equal(throughput, returned.Throughput);
         AssertEx.Equal(expected: 8192, returned.ContextWindow?.WindowTokens);
+        AssertEx.Equal(source, AssertEx.NotNull(returned.Sources).Single());
         var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId));
         AssertEx.Equal(throughput, loaded.Messages.Single(message => message.MessageId == correlation.MessageId).Throughput);
         AssertEx.Null(NodeChatMetadataSerializer.DeserializeMetadata("""{"model":"llama","inputCount":5}""").Throughput, "A legacy blob loads without throughput.");

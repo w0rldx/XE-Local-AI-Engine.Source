@@ -353,6 +353,36 @@ public sealed class TurnRunnerTests
         AssertEx.True(node.HangAbandoned.Task.IsCompleted, "the resolve request observed the cancellation");
     }
 
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task Run_WhenThePromptFails_RendersPromptFailedOnceAndCancelsTheTurnWithoutAUserCancel(bool approval)
+    {
+        using var node = new ScriptedNode();
+        await using var output = new StringWriter();
+        using var renderer = new JsonTurnRenderer(output);
+        var console = new GatedConsole();
+        console.Key.SetException(new IOException("stdin closed"));
+
+        // The node, parked on the interaction, ends the turn only once the client cancelled it.
+        var run = new TurnRunner(node.Api, renderer, new TurnPrompter(console), TimeProvider.System).RunAsync(
+            token => PlayAsync(node.CancelPosted.Task, afterFirst: null, [Prompt(approval), Event(CliStreamEventKind.Cancelled, ChatStreamEventTypes.AssistantCancelled)], token),
+            Turn(),
+            CancellationToken.None,
+            CancellationToken.None);
+        await AssertEx.CompletesAsync(run, TimeSpan.FromSeconds(10), "a failed prompt cancels the turn instead of waiting for the node's timeout");
+        var outcome = await run;
+
+        AssertEx.Equal(CliStreamEventKind.Cancelled, outcome.Terminal?.Kind);
+        AssertEx.False(outcome.UserCancelled);
+        AssertEx.NotEqual(ExitCodes.CancelledByUser, outcome.ExitCode);
+        AssertEx.ContainsSingle(node.Handler.Requests, static request => request.Path == "/api/local/v1/chat/cancel");
+        AssertEx.Empty(node.Handler.Requests.Where(static request => request.Path.Contains("/resolve", StringComparison.Ordinal)));
+        var notices = Lines(output).Where(static line => line.TryGetProperty("kind", out var kind) && kind.GetString() == "promptFailed").ToList();
+        AssertEx.Equal(1, notices.Count, "the fault is reported exactly once");
+        AssertEx.Contains(notices[0].GetProperty("text").GetString() ?? "", "stdin closed");
+    }
+
     private static CliStreamEvent Prompt(bool approval) =>
         approval
             ? Event(CliStreamEventKind.ApprovalRequested, ChatStreamEventTypes.ApprovalRequested, toolName: "write_file", approvalRequestId: "approval-1")

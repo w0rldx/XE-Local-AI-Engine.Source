@@ -49,11 +49,16 @@ and overlap evaluation.
 - `no-circular` — no circular dependencies.
 - `not-to-test` — production source must not import test files.
 - `not-to-dev-dep` — production source must not import devDependencies.
+- `no-core-to-features` — `core/` depending on feature-owned UI or diagnostics. The app shell (`src/AppLayout.tsx`)
+  composes the feature widgets and passes them into `core/layout` as props.
+- `no-core-to-legacy` — `core/` reaching into a top-level `pages`, `data`, `components` or `modules` tree. Shared code
+  lives under `core/`; feature-owned code under its feature.
+- `no-feature-to-routes` — features stay route-agnostic.
 
 **Informational (`warn` — surfaced but non-blocking):**
 
 - `no-orphans` — modules imported by nothing (excludes generated/`.d.ts`/config files).
-- `no-core-to-features`, `no-core-to-legacy`, `no-cross-feature`, `no-feature-to-routes` — only `no-cross-feature` holds tracked debt today (below); the rest are currently clean.
+- `no-cross-feature` — holds tracked debt today (below).
 
 ## Tracked architecture debt (warn-level rules to promote to error later)
 
@@ -67,12 +72,7 @@ deliberately does not restate their counts.
 - **`no-cross-feature`** — one feature importing another feature's internals; shared
   code belongs in `core/`. Examples: `chat` -> `graphWorkflows`/`voice`, `workSessions` -> `chat`,
   `models` -> `model-fit`, `agents` -> `assist`/`skills`.
-- **`no-core-to-legacy`** (currently clean) — `core/` reaching into a top-level `pages`, `data`, `components` or
-  `modules` tree. Shared code lives under `core/`; feature-owned code under its feature.
-- **`no-core-to-features`** (currently clean) — `core/` depending on feature-owned UI or diagnostics. The app shell
-  (`src/AppLayout.tsx`) composes the feature widgets and passes them into `core/layout` as props.
 - **`no-orphans`** (currently clean) — modules imported by nothing in the current graph.
-- **`no-feature-to-routes`** (currently clean) — features stay route-agnostic.
 
 ## Browser and bundle feedback
 
