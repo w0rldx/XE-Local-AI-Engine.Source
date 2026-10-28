@@ -452,6 +452,11 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Fixed
 
+- **A stable-diffusion.cpp source build is adopted under the same link policy as whisper.cpp** — every link in the
+  build tree must be relative and stay inside it, or the adoption fails; permissions are no longer set through a link,
+  which could change a file outside the tree. A build tree with an absolute or escaping link that was adopted before is
+  now refused: rebuild it. Acquired whisper.cpp and stable-diffusion.cpp runtimes are published by moving the old
+  directory aside and restoring it on failure, so a crash mid-publish no longer leaves no runtime.
 - **A host without the test runner stops a Development task after one validation** — when validation finds no runner
   for a profile command (no `python3`, no `dotnet`, or pytest missing for the host `python3`), the task is now
   `Blocked` at once with `[runner_not_installed]` and the install hint, and no review round is spent. Before, each

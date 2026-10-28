@@ -78,7 +78,8 @@ public static class SourceProcessHardening
         }
     }
 
-    private static void CreateOwnerOnlyDirectory(string path)
+    /// <summary>Creates <paramref name="path" /> and narrows it to mode <c>0700</c> on Unix.</summary>
+    public static void CreateOwnerOnlyDirectory(string path)
     {
         Directory.CreateDirectory(path);
         if (!OperatingSystem.IsWindows())

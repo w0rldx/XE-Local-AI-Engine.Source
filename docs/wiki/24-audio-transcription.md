@@ -1122,8 +1122,8 @@ purpose:
 
 ## Adopting a managed source build
 
-`WhisperCppRuntimeAdoption` owns the journaled directory-and-state transaction that turns a finished build tree into
-the node's managed whisper.cpp runtime. It is **journal-first**: the intent is written to disk before any directory
+`WhisperCppRuntimeAdoption` (over the shared `ManagedRuntimeAdoption` base, which stable-diffusion.cpp uses too) owns
+the journaled directory-and-state transaction that turns a finished build tree into the node's managed whisper.cpp runtime. It is **journal-first**: the intent is written to disk before any directory
 moves, so a host that dies mid-adoption can be reconciled on the next start rather than left with a record and a tree
 that disagree. `RecoverAsync` is that reconciliation, and it is the reason the journal exists.
 

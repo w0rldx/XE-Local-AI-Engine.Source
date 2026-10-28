@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 
-using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.ProcessSupervision;
@@ -8,46 +7,12 @@ using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>Linux-only detached single-flight source build for stable-diffusion.cpp.</summary>
-public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSourceBuildService, IDisposable
+public sealed class StableDiffusionCppSourceBuildService
+    : ManagedSourceBuildService<SdGpuBackend, StableDiffusionCppSourceBuildDescriptor>, IStableDiffusionCppSourceBuildService
 {
-    private const int MaxLogLines = 500;
-    private const int PublishQueueCapacity = 128;
-
-    private static readonly string[] GitHardeningArguments =
-    [
-        "-c", "protocol.allow=never",
-        "-c", "protocol.https.allow=always",
-        "-c", "credential.helper=",
-        "-c", "core.askPass="
-    ];
-
-    private readonly string _cacheRoot;
-    private readonly IManagedSourceBuildSignal<SdGpuBackend> _managedSignal;
-    private readonly IManagedRuntimeStore<SdGpuBackend> _runtimeStore;
-    private readonly IImageRuntimeActivityGate _activityGate;
     private readonly StableDiffusionCppRuntimeAdoption _adoption;
-    private readonly ILogger<StableDiffusionCppSourceBuildService> _logger;
-    private readonly IStableDiffusionCppSourceBuildEventPublisher _publisher;
     private readonly IStableDiffusionCppSourceBuildPrerequisiteProbe _prerequisiteProbe;
-    private readonly Channel<StableDiffusionCppSourceBuildStatusEvent> _publishQueue;
-    private readonly Task _publisherTask;
-    private readonly ISourceCommandRunner _runner;
-    private readonly bool _isLinux;
-    private readonly SemaphoreSlim _startGate = new(initialCount: 1, maxCount: 1);
-    private readonly Lock _stateLock = new();
-    private Task? _activeBuildTask;
-    private CancellationTokenSource? _buildCts;
-    private DateTimeOffset? _completedAtUtc;
-    private StableDiffusionCppSourceBuildDescriptor? _currentBuild;
-    private bool _isRunning;
-    private bool _isStopping;
-    private readonly List<string> _logLines = [];
-    private long _logStartSequence;
-    private long _nextLogSequence;
-    private StableDiffusionCppSourceBuildPhase _phase;
-    private string? _sanitizedError;
-    private DateTimeOffset? _startedAtUtc;
-    private readonly TimeProvider _timeProvider;
+    private readonly IStableDiffusionCppSourceBuildEventPublisher _publisher;
 
     public StableDiffusionCppSourceBuildService(IStableDiffusionCppSourceBuildPrerequisiteProbe prerequisiteProbe,
         IManagedRuntimeStore<SdGpuBackend> runtimeStore,
@@ -56,7 +21,15 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
         IStableDiffusionCppSourceBuildEventPublisher publisher,
         ILogger<StableDiffusionCppSourceBuildService> logger,
         TimeProvider timeProvider)
-        : this(prerequisiteProbe, runtimeStore, managedSignal, activityGate, publisher, logger, RuntimeCacheDirectory.Resolve(), new SourceCommandRunner(), timeProvider)
+        : this(prerequisiteProbe,
+            runtimeStore,
+            managedSignal,
+            activityGate,
+            publisher,
+            logger,
+            RuntimeCacheDirectory.Resolve(),
+            new SourceCommandRunner(),
+            timeProvider)
     {
     }
 
@@ -70,440 +43,94 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
         ISourceCommandRunner runner,
         TimeProvider timeProvider,
         bool? isLinux = null)
+        : base("stable-diffusion.cpp",
+            "image runtime",
+            "runtime",
+            "sd-server",
+            ["sd-server"],
+            runtimeStore,
+            managedSignal,
+            activityGate,
+            logger,
+            cacheRoot,
+            runner,
+            timeProvider,
+            isLinux)
     {
         _prerequisiteProbe = prerequisiteProbe ?? throw new ArgumentNullException(nameof(prerequisiteProbe));
-        _runtimeStore = runtimeStore ?? throw new ArgumentNullException(nameof(runtimeStore));
-        _managedSignal = managedSignal ?? throw new ArgumentNullException(nameof(managedSignal));
-        _activityGate = activityGate ?? throw new ArgumentNullException(nameof(activityGate));
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _publishQueue = Channel.CreateBounded<StableDiffusionCppSourceBuildStatusEvent>(new BoundedChannelOptions(PublishQueueCapacity)
-        {
-            SingleReader = true,
-            SingleWriter = false,
-            FullMode = BoundedChannelFullMode.DropOldest
-        });
-        _publisherTask = PublishLoopAsync();
-        ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
-        _cacheRoot = cacheRoot;
-        _runner = runner ?? throw new ArgumentNullException(nameof(runner));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _adoption = new StableDiffusionCppRuntimeAdoption(_cacheRoot, _runtimeStore, _managedSignal, _timeProvider, _logger);
-        _isLinux = isLinux ?? OperatingSystem.IsLinux();
+        _adoption = new StableDiffusionCppRuntimeAdoption(cacheRoot, runtimeStore, managedSignal, timeProvider, logger);
     }
 
-    private string BuildRoot => Path.Combine(_cacheRoot, "stable-diffusion.cpp", "source-build");
-    private string MarkerPath => Path.Combine(WorkRoot, ".build-in-progress");
-    private string RuntimeRoot => Path.Combine(_cacheRoot, "stable-diffusion.cpp", "managed");
-    private string WorkRoot => Path.Combine(BuildRoot, ".work");
+    protected override ManagedRuntimeAdoption<SdGpuBackend> Adoption => _adoption;
 
-    public void Dispose()
+    public Task<StableDiffusionCppSourceBuildStartResult> StartAsync(StableDiffusionCppSourceBuildRequest request, CancellationToken ct)
     {
-        try
-        {
-            _buildCts?.Cancel();
-        }
-        catch (ObjectDisposedException)
-        {
-            // Build completion may dispose concurrently with host teardown.
-        }
-
-        _buildCts?.Dispose();
-        _publishQueue.Writer.TryComplete();
-        _startGate.Dispose();
-    }
-
-    public async Task<StableDiffusionCppSourceBuildStartResult> StartAsync(StableDiffusionCppSourceBuildRequest request, CancellationToken ct)
-    {
-        if (!_isLinux)
-        {
-            throw new StableDiffusionRuntimeException("In-app source builds are available on Linux only.");
-        }
-
-        await _startGate.WaitAsync(ct).ConfigureAwait(false);
-        TaskCompletionSource? startSignal = null;
-        try
-        {
-            lock (_stateLock)
+        return StartCoreAsync(async innerCt =>
             {
-                if (_isStopping)
+                var normalized = StableDiffusionCppSourceBuildRequestValidation.Normalize(request);
+                await RecoverCoreAsync(innerCt).ConfigureAwait(false);
+                var prerequisites = await _prerequisiteProbe.ProbeAsync(normalized.Backend, innerCt).ConfigureAwait(false);
+                var revisionMode = ResolveRevisionMode(normalized.Source, normalized.Commit);
+                var descriptor = new StableDiffusionCppSourceBuildDescriptor
                 {
-                    throw new StableDiffusionRuntimeException("The image runtime source-build service is stopping.");
-                }
-
-                if (_isRunning)
-                {
-                    return new StableDiffusionCppSourceBuildStartResult
-                    {
-                        Outcome = StableDiffusionCppSourceBuildStartOutcome.AlreadyRunning
-                    };
-                }
-            }
-
-            var normalized = StableDiffusionCppSourceBuildRequestValidation.Normalize(request);
-            await RecoverCoreAsync(ct).ConfigureAwait(false);
-            var prerequisites = await _prerequisiteProbe.ProbeAsync(normalized.Backend, ct).ConfigureAwait(false);
-            if (!prerequisites.CanBuild)
-            {
-                var outcome = prerequisites.Items.Any(static item => item.Key == "free-disk" && !item.Satisfied)
-                    ? StableDiffusionCppSourceBuildStartOutcome.InsufficientDisk
-                    : StableDiffusionCppSourceBuildStartOutcome.MissingPrerequisites;
-                return new StableDiffusionCppSourceBuildStartResult
-                {
-                    Outcome = outcome,
-                    Prerequisites = prerequisites
+                    Backend = normalized.Backend,
+                    Source = normalized.Source,
+                    Repository = normalized.Repository!,
+                    RevisionMode = revisionMode,
+                    RequestedCommit = normalized.Commit,
+                    ResolvedCommit = revisionMode == ManagedSourceRevisionMode.EnginePinned
+                        ? StableDiffusionReleasePins.PinnedSourceCommitSha
+                        : null,
+                    BuildId = Guid.NewGuid()
                 };
-            }
-
-            var mutationReservation = _activityGate.TryAcquireMutationReservation();
-            if (mutationReservation is null)
-            {
-                return new StableDiffusionCppSourceBuildStartResult
+                return new StartPlan<StableDiffusionCppSourceBuildPrerequisiteReport>
                 {
-                    Outcome = StableDiffusionCppSourceBuildStartOutcome.RuntimeBusy,
                     Prerequisites = prerequisites,
-                    Activity = _activityGate.GetSnapshot()
+                    CanBuild = prerequisites.CanBuild,
+                    InsufficientDisk = prerequisites.Items.Any(static item => item.Key == "free-disk" && !item.Satisfied),
+                    Build = descriptor,
+                    BuildId = descriptor.BuildId,
+                    Repository = descriptor.Repository,
+                    CommitToFetch = revisionMode == ManagedSourceRevisionMode.EnginePinned
+                        ? StableDiffusionReleasePins.PinnedSourceCommitSha
+                        : descriptor.RequestedCommit
                 };
-            }
-
-            var revisionMode = normalized.Source == ManagedSourceSelection.Official
-                ? ManagedSourceRevisionMode.EnginePinned
-                : ManagedSourceRevisionMode.ExplicitCommit;
-            if (normalized.Source == ManagedSourceSelection.Custom && normalized.Commit is null)
+            },
+            static (outcome, prerequisites, activity) => new StableDiffusionCppSourceBuildStartResult
             {
-                revisionMode = ManagedSourceRevisionMode.DefaultBranch;
-            }
-
-            var descriptor = new StableDiffusionCppSourceBuildDescriptor
-            {
-                Backend = normalized.Backend,
-                Source = normalized.Source,
-                Repository = normalized.Repository!,
-                RevisionMode = revisionMode,
-                RequestedCommit = normalized.Commit,
-                ResolvedCommit = revisionMode == ManagedSourceRevisionMode.EnginePinned
-                    ? StableDiffusionReleasePins.PinnedSourceCommitSha
-                    : null,
-                BuildId = Guid.NewGuid()
-            };
-
-            try
-            {
-                var buildCts = new CancellationTokenSource();
-                startSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                var task = Task.Run(async () =>
-                {
-                    await startSignal.Task.ConfigureAwait(false);
-                    BuildCompletion completion;
-                    try
-                    {
-                        completion = await RunBuildAsync(descriptor, buildCts.Token).ConfigureAwait(false);
-                    }
-                    finally
-                    {
-                        mutationReservation.Dispose();
-                    }
-
-                    CompleteBuild(completion);
-                }, CancellationToken.None);
-
-                lock (_stateLock)
-                {
-                    _isRunning = true;
-                    _phase = StableDiffusionCppSourceBuildPhase.Cloning;
-                    _logLines.Clear();
-                    _logStartSequence = 0;
-                    _nextLogSequence = 0;
-                    _sanitizedError = null;
-                    _currentBuild = descriptor;
-                    _startedAtUtc = _timeProvider.GetUtcNow();
-                    _completedAtUtc = null;
-                    _buildCts?.Dispose();
-                    _buildCts = buildCts;
-                    _activeBuildTask = task;
-                }
-            }
-            catch
-            {
-                mutationReservation.Dispose();
-                throw;
-            }
-        }
-        finally
-        {
-            _startGate.Release();
-        }
-
-        startSignal.SetResult();
-        return new StableDiffusionCppSourceBuildStartResult
-        {
-            Outcome = StableDiffusionCppSourceBuildStartOutcome.Started
-        };
+                Outcome = (StableDiffusionCppSourceBuildStartOutcome)outcome,
+                Prerequisites = prerequisites,
+                Activity = activity
+            },
+            ct);
     }
 
-    public async Task<StableDiffusionCppSourceBuildRemoveResult> RemoveAsync(CancellationToken ct)
+    public Task<StableDiffusionCppSourceBuildRemoveResult> RemoveAsync(CancellationToken ct)
     {
-        await _startGate.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            lock (_stateLock)
+        return RemoveCoreAsync(static (outcome, activity) => new StableDiffusionCppSourceBuildRemoveResult
             {
-                if (_isRunning)
-                {
-                    return new StableDiffusionCppSourceBuildRemoveResult
-                    {
-                        Outcome = StableDiffusionCppSourceBuildRemoveOutcome.RuntimeBusy,
-                        Activity = _activityGate.GetSnapshot()
-                    };
-                }
-            }
-
-            await using var mutation = _activityGate.TryAcquireMutationReservation();
-            if (mutation is null)
-            {
-                return new StableDiffusionCppSourceBuildRemoveResult
-                {
-                    Outcome = StableDiffusionCppSourceBuildRemoveOutcome.RuntimeBusy,
-                    Activity = _activityGate.GetSnapshot()
-                };
-            }
-
-            var installed = await _runtimeStore.ReadAsync(ct).ConfigureAwait(false);
-            if (installed is null)
-            {
-                return new StableDiffusionCppSourceBuildRemoveResult
-                {
-                    Outcome = StableDiffusionCppSourceBuildRemoveOutcome.NotInstalled
-                };
-            }
-
-            SetPhase(StableDiffusionCppSourceBuildPhase.Removing);
-            DeleteManagedRuntime(installed);
-            await _runtimeStore.DeleteAsync(ct).ConfigureAwait(false);
-            _managedSignal.Clear();
-            SetTerminal(StableDiffusionCppSourceBuildPhase.Completed, error: null);
-            return new StableDiffusionCppSourceBuildRemoveResult
-            {
-                Outcome = StableDiffusionCppSourceBuildRemoveOutcome.Removed
-            };
-        }
-        finally
-        {
-            _startGate.Release();
-        }
+                Outcome = (StableDiffusionCppSourceBuildRemoveOutcome)outcome,
+                Activity = activity
+            },
+            ct);
     }
 
     public StableDiffusionCppSourceBuildStatus GetStatus()
     {
-        lock (_stateLock)
+        var status = ReadStatus();
+        return new StableDiffusionCppSourceBuildStatus
         {
-            return new StableDiffusionCppSourceBuildStatus
-            {
-                Phase = _phase,
-                IsRunning = _isRunning,
-                Terminal = _phase is StableDiffusionCppSourceBuildPhase.Completed
-                    or StableDiffusionCppSourceBuildPhase.Cancelled
-                    or StableDiffusionCppSourceBuildPhase.Failed,
-                LogLines = [.. _logLines],
-                LogStartSequence = _logStartSequence,
-                SanitizedError = _sanitizedError,
-                CurrentBuild = _currentBuild,
-                StartedAtUtc = _startedAtUtc,
-                CompletedAtUtc = _completedAtUtc
-            };
-        }
-    }
-
-    public bool Cancel()
-    {
-        lock (_stateLock)
-        {
-            if (!_isRunning || _buildCts is null)
-            {
-                return false;
-            }
-
-            _buildCts.Cancel();
-            return true;
-        }
-    }
-
-    public async Task RecoverAsync(CancellationToken ct)
-    {
-        await _startGate.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            await RecoverCoreAsync(ct).ConfigureAwait(false);
-        }
-        finally
-        {
-            _startGate.Release();
-        }
-    }
-
-    public async Task ShutdownAsync(CancellationToken ct)
-    {
-        Task? task;
-        CancellationTokenSource? buildCts;
-        await _startGate.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            lock (_stateLock)
-            {
-                _isStopping = true;
-                buildCts = _buildCts;
-                task = _activeBuildTask;
-            }
-        }
-        finally
-        {
-            _startGate.Release();
-        }
-
-        if (buildCts is not null)
-        {
-            try
-            {
-                await buildCts.CancelAsync().ConfigureAwait(false);
-            }
-            catch (ObjectDisposedException)
-            {
-                // Build completion won the race; the captured task below is still authoritative.
-            }
-        }
-
-        if (task is not null)
-        {
-            await task.WaitAsync(ct).ConfigureAwait(false);
-        }
-
-        _publishQueue.Writer.TryComplete();
-        await _publisherTask.WaitAsync(ct).ConfigureAwait(false);
-    }
-
-    private async Task<BuildCompletion> RunBuildAsync(StableDiffusionCppSourceBuildDescriptor descriptor, CancellationToken ct)
-    {
-        try
-        {
-            PrepareWorkTree();
-            await File.WriteAllTextAsync(MarkerPath, descriptor.BuildId.ToString("D"), ct).ConfigureAwait(false);
-            var sourceDir = Path.Combine(WorkRoot, "source");
-            var buildDir = Path.Combine(WorkRoot, "build");
-
-            SetPhase(StableDiffusionCppSourceBuildPhase.Cloning);
-            var requestedCommit = descriptor.RevisionMode == ManagedSourceRevisionMode.EnginePinned
-                ? StableDiffusionReleasePins.PinnedSourceCommitSha
-                : descriptor.RequestedCommit;
-            await RunRequiredAsync("git", GitArguments("init", sourceDir), WorkRoot, SourceBuildPolicy.ShortCommandTimeout, captureOutput: false, ct)
-                .ConfigureAwait(false);
-            await RunRequiredAsync("git", GitArguments("remote", "add", "origin", descriptor.Repository), sourceDir, SourceBuildPolicy.ShortCommandTimeout, captureOutput: false, ct)
-                .ConfigureAwait(false);
-            await RunRequiredAsync("git",
-                    GitArguments("fetch", "--depth=1", "--no-tags", "--no-recurse-submodules", "origin", requestedCommit ?? "HEAD"),
-                    sourceDir,
-                    SourceBuildPolicy.CloneTimeout,
-                    captureOutput: false,
-                    ct)
-                .ConfigureAwait(false);
-
-            SetPhase(StableDiffusionCppSourceBuildPhase.Verifying);
-            await RunRequiredAsync("git", GitArguments("checkout", "--detach", "FETCH_HEAD"), sourceDir, SourceBuildPolicy.ShortCommandTimeout, captureOutput: false, ct)
-                .ConfigureAwait(false);
-            var resolvedCommit = (await RunRequiredAsync("git",
-                    GitArguments("rev-parse", "HEAD"),
-                    sourceDir,
-                    SourceBuildPolicy.ShortCommandTimeout,
-                    captureOutput: true,
-                    ct)
-                .ConfigureAwait(false)).StandardOutput.Trim();
-            if (resolvedCommit.Length != 40 || !resolvedCommit.All(Uri.IsHexDigit)
-                                            || requestedCommit is not null && !string.Equals(resolvedCommit, requestedCommit, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new StableDiffusionRuntimeException("The source checkout did not resolve to the requested exact commit.");
-            }
-
-            await RunRequiredAsync("git",
-                    GitArguments("submodule", "update", "--init", "--recursive"),
-                    sourceDir,
-                    SourceBuildPolicy.CloneTimeout,
-                    captureOutput: false,
-                    ct)
-                .ConfigureAwait(false);
-
-            descriptor = descriptor with
-            {
-                ResolvedCommit = Convert.ToHexStringLower(Convert.FromHexString(resolvedCommit))
-            };
-            lock (_stateLock)
-            {
-                _currentBuild = descriptor;
-            }
-
-            SetPhase(StableDiffusionCppSourceBuildPhase.Configuring);
-            var cmakeArgs = BuildCMakeConfigureArguments(sourceDir, buildDir, descriptor.Backend);
-            await RunRequiredAsync("cmake", cmakeArgs, WorkRoot, SourceBuildPolicy.ConfigureTimeout, captureOutput: false, ct).ConfigureAwait(false);
-
-            SetPhase(StableDiffusionCppSourceBuildPhase.Building);
-            var buildJobs = Math.Max(1, Math.Min(Environment.ProcessorCount, SourceBuildPolicy.MaxBuildJobs));
-            await RunRequiredAsync("cmake",
-                ["--build", buildDir, "--target", "sd-server", "--config", "Release", "--parallel", buildJobs.ToString()],
-                WorkRoot,
-                SourceBuildPolicy.BuildTimeout,
-                captureOutput: false,
-                ct).ConfigureAwait(false);
-
-            var serverPath = FindServer(buildDir)
-                             ?? throw new StableDiffusionRuntimeException("The stable-diffusion.cpp build did not produce sd-server.");
-            EnsureExecutable(serverPath);
-            ValidateRequestedBackendArtifacts(buildDir, descriptor.Backend);
-
-            SetPhase(StableDiffusionCppSourceBuildPhase.SmokeTesting);
-            await RunRequiredAsync(serverPath,
-                    ["--help"],
-                    Path.GetDirectoryName(serverPath)!,
-                    SourceBuildPolicy.SmokeTimeout,
-                    captureOutput: false,
-                    ct)
-                .ConfigureAwait(false);
-
-            SetPhase(StableDiffusionCppSourceBuildPhase.Adopting);
-            await _adoption.AdoptAsync(buildDir, serverPath, descriptor, ct).ConfigureAwait(false);
-            return new BuildCompletion
-            {
-                Phase = StableDiffusionCppSourceBuildPhase.Completed,
-                Error = null
-            };
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            return new BuildCompletion
-            {
-                Phase = StableDiffusionCppSourceBuildPhase.Cancelled,
-                Error = null
-            };
-        }
-        catch (TimeoutException exception)
-        {
-            _logger.LogWarning(exception, "stable-diffusion.cpp source build timed out.");
-            return new BuildCompletion
-            {
-                Phase = StableDiffusionCppSourceBuildPhase.Failed,
-                Error = "A stable-diffusion.cpp source-build command timed out. Review the sanitized build log."
-            };
-        }
-        catch (Exception exception)
-        {
-            _logger.LogError(exception, "stable-diffusion.cpp source build failed.");
-            return new BuildCompletion
-            {
-                Phase = StableDiffusionCppSourceBuildPhase.Failed,
-                Error = "The stable-diffusion.cpp source build failed. Review the sanitized build log."
-            };
-        }
-        finally
-        {
-            BestEffortFile.TryDeleteDirectory(WorkRoot);
-        }
+            Phase = (StableDiffusionCppSourceBuildPhase)status.Phase,
+            IsRunning = status.IsRunning,
+            Terminal = status.Terminal,
+            LogLines = status.LogLines,
+            LogStartSequence = status.LogStartSequence,
+            SanitizedError = status.SanitizedError,
+            CurrentBuild = status.CurrentBuild,
+            StartedAtUtc = status.StartedAtUtc,
+            CompletedAtUtc = status.CompletedAtUtc
+        };
     }
 
     internal static IReadOnlyList<string> BuildCMakeConfigureArguments(string sourceDir, string buildDir, SdGpuBackend backend)
@@ -521,207 +148,55 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
         return ["-S", sourceDir, "-B", buildDir, "-DCMAKE_BUILD_TYPE=Release", .. backendFlags];
     }
 
-    private async Task<SourceCommandResult> RunRequiredAsync(string fileName,
-        IReadOnlyList<string> arguments,
-        string workingDirectory,
-        TimeSpan timeout,
-        bool captureOutput,
+    protected override Task<IReadOnlyList<string>> ConfigureArgumentsAsync(StableDiffusionCppSourceBuildDescriptor build,
+        string sourceDir,
+        string buildDir,
         CancellationToken ct)
     {
-        AppendLog($"> {Path.GetFileName(fileName)} {string.Join(' ', arguments)}");
-        var result = await _runner.RunAsync(fileName,
-            arguments,
-            workingDirectory,
-            line => AppendLog(SanitizeLogLine(line)),
-            timeout,
-            captureOutput,
-            ct).ConfigureAwait(false);
-        if (result.ExitCode != 0)
-        {
-            throw new StableDiffusionRuntimeException($"The source-build command '{Path.GetFileName(fileName)}' failed.");
-        }
-
-        return result;
+        return Task.FromResult(BuildCMakeConfigureArguments(sourceDir, buildDir, build.Backend));
     }
 
-    private void AppendLog(string line)
+    protected override Task ValidateBuildAsync(StableDiffusionCppSourceBuildDescriptor build, string buildDir, string serverPath, CancellationToken ct)
     {
-        StableDiffusionCppSourceBuildStatusEvent statusEvent;
-        lock (_stateLock)
-        {
-            _logLines.Add(line);
-            _nextLogSequence++;
-            if (_logLines.Count > MaxLogLines)
-            {
-                _logLines.RemoveAt(0);
-                _logStartSequence++;
-            }
-
-            statusEvent = CreateEventUnderLock([line], _nextLogSequence - 1);
-        }
-
-        QueuePublish(statusEvent);
+        ValidateRequestedBackendArtifacts(buildDir, build.Backend);
+        return Task.CompletedTask;
     }
 
-    private void SetPhase(StableDiffusionCppSourceBuildPhase phase)
+    protected override Task AdoptAsync(StableDiffusionCppSourceBuildDescriptor build, string buildDir, string serverPath, CancellationToken ct)
     {
-        StableDiffusionCppSourceBuildStatusEvent statusEvent;
-        lock (_stateLock)
-        {
-            _phase = phase;
-            statusEvent = CreateEventUnderLock([], _nextLogSequence);
-        }
-
-        QueuePublish(statusEvent);
+        return _adoption.AdoptAsync(buildDir, serverPath, build, ct);
     }
 
-    private void SetTerminal(StableDiffusionCppSourceBuildPhase phase, string? error)
+    protected override StableDiffusionCppSourceBuildDescriptor WithResolvedCommit(StableDiffusionCppSourceBuildDescriptor build, string resolvedCommit)
     {
-        StableDiffusionCppSourceBuildStatusEvent statusEvent;
-        lock (_stateLock)
+        return build with
         {
-            _phase = phase;
-            _sanitizedError = error;
-            _completedAtUtc = _timeProvider.GetUtcNow();
-            statusEvent = CreateEventUnderLock([], _nextLogSequence);
-        }
-
-        QueuePublish(statusEvent);
-    }
-
-    private void CompleteBuild(BuildCompletion completion)
-    {
-        StableDiffusionCppSourceBuildStatusEvent statusEvent;
-        lock (_stateLock)
-        {
-            _phase = completion.Phase;
-            _isRunning = false;
-            _sanitizedError = completion.Error;
-            _completedAtUtc = _timeProvider.GetUtcNow();
-            _buildCts?.Dispose();
-            _buildCts = null;
-            statusEvent = CreateEventUnderLock([], _nextLogSequence);
-        }
-
-        QueuePublish(statusEvent);
-    }
-
-    private StableDiffusionCppSourceBuildStatusEvent CreateEventUnderLock(IReadOnlyList<string> appended, long startSequence)
-    {
-        return new StableDiffusionCppSourceBuildStatusEvent
-        {
-            Phase = _phase,
-            AppendedLogLines = appended,
-            AppendedLogStartSequence = startSequence,
-            Terminal = _phase is StableDiffusionCppSourceBuildPhase.Completed
-                or StableDiffusionCppSourceBuildPhase.Cancelled
-                or StableDiffusionCppSourceBuildPhase.Failed,
-            SanitizedError = _sanitizedError,
-            CurrentBuild = _currentBuild
+            ResolvedCommit = resolvedCommit
         };
     }
 
-    private void QueuePublish(StableDiffusionCppSourceBuildStatusEvent statusEvent)
+    protected override Task PublishStatusAsync(StatusChange change, CancellationToken ct)
     {
-        if (!_publishQueue.Writer.TryWrite(statusEvent))
-        {
-            _logger.LogDebug("Dropped a stable-diffusion.cpp source-build status event because the publisher is stopping.");
-        }
-    }
-
-    private async Task PublishLoopAsync()
-    {
-        await foreach (var statusEvent in _publishQueue.Reader.ReadAllAsync(CancellationToken.None).ConfigureAwait(false))
-        {
-            try
+        return _publisher.PublishStatusAsync(new StableDiffusionCppSourceBuildStatusEvent
             {
-                await _publisher.PublishStatusAsync(statusEvent, CancellationToken.None).ConfigureAwait(false);
-            }
-            catch (Exception exception)
-            {
-                _logger.LogWarning(exception, "Failed to publish stable-diffusion.cpp source-build status.");
-            }
-        }
+                Phase = (StableDiffusionCppSourceBuildPhase)change.Phase,
+                AppendedLogLines = change.AppendedLogLines,
+                AppendedLogStartSequence = change.AppendedLogStartSequence,
+                Terminal = change.Terminal,
+                SanitizedError = change.SanitizedError,
+                CurrentBuild = change.CurrentBuild
+            },
+            ct);
     }
 
-    private async Task RecoverCoreAsync(CancellationToken ct)
+    protected override string BackendDirectoryName(SdGpuBackend backend)
     {
-        lock (_stateLock)
-        {
-            if (_isRunning)
-            {
-                return;
-            }
-        }
-
-        await _adoption.RecoverAsync(ct).ConfigureAwait(false);
-
-        if (File.Exists(MarkerPath) || Directory.Exists(WorkRoot))
-        {
-            BestEffortFile.TryDeleteDirectory(WorkRoot);
-            lock (_stateLock)
-            {
-                _phase = StableDiffusionCppSourceBuildPhase.Failed;
-                _sanitizedError = "A previously interrupted source build was recovered and its temporary files were removed.";
-                _completedAtUtc = _timeProvider.GetUtcNow();
-            }
-        }
-
-        var installed = await _runtimeStore.ReadAsync(ct).ConfigureAwait(false);
-        if (installed?.Validity == ManagedRuntimeValidity.Active)
-        {
-            _managedSignal.SetActive(installed.DesiredBackend);
-        }
-        else
-        {
-            _managedSignal.Clear();
-        }
+        return BackendSlug(backend);
     }
 
-    private void PrepareWorkTree()
+    protected override Exception RuntimeError(string message)
     {
-        BestEffortFile.TryDeleteDirectory(WorkRoot);
-        StableDiffusionCppRuntimeAdoption.CreateOwnerOnlyDirectory(BuildRoot);
-        StableDiffusionCppRuntimeAdoption.CreateOwnerOnlyDirectory(WorkRoot);
-    }
-
-    private void DeleteManagedRuntime(ManagedRuntimeState<SdGpuBackend> installed)
-    {
-        var installRoot = GetManagedInstallRoot(installed);
-        if (Directory.Exists(installRoot))
-        {
-            Directory.Delete(installRoot, recursive: true);
-        }
-
-        if (Directory.Exists(installRoot))
-        {
-            throw new StableDiffusionRuntimeException("The managed runtime could not be removed.");
-        }
-    }
-
-    private string GetManagedInstallRoot(ManagedRuntimeState<SdGpuBackend> installed)
-    {
-        if (installed.SourceCommit.Length != 40 || !installed.SourceCommit.All(Uri.IsHexDigit))
-        {
-            throw new StableDiffusionRuntimeException("The recorded managed runtime commit is invalid.");
-        }
-
-        var root = Path.GetFullPath(RuntimeRoot);
-        var installRoot = Path.GetFullPath(Path.Combine(root, BackendSlug(installed.DesiredBackend), installed.SourceCommit));
-        var rootPrefix = root + Path.DirectorySeparatorChar;
-        if (!installRoot.StartsWith(rootPrefix, StringComparison.Ordinal))
-        {
-            throw new StableDiffusionRuntimeException("The recorded managed runtime path is outside the managed cache.");
-        }
-
-        return installRoot;
-    }
-
-    private static string? FindServer(string buildDir)
-    {
-        return Directory.Exists(buildDir)
-            ? Directory.EnumerateFiles(buildDir, "sd-server", SearchOption.AllDirectories).FirstOrDefault()
-            : null;
+        return new StableDiffusionRuntimeException(message);
     }
 
     internal static void ValidateRequestedBackendArtifacts(string buildDir, SdGpuBackend backend)
@@ -762,21 +237,6 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
         }
     }
 
-    private static void EnsureExecutable(string path)
-    {
-        if (!OperatingSystem.IsWindows())
-        {
-            var mode = File.GetUnixFileMode(path);
-            File.SetUnixFileMode(path, mode | UnixFileMode.UserExecute);
-        }
-    }
-
-    private static string SanitizeLogLine(string line)
-    {
-        var value = line.Replace(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "~", StringComparison.Ordinal);
-        return value.Length <= 1000 ? value : value[..1000];
-    }
-
     private static string BackendSlug(SdGpuBackend backend)
     {
         return backend switch
@@ -785,17 +245,5 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
             SdGpuBackend.Vulkan => "vulkan",
             _ => "cpu"
         };
-    }
-
-    private static IReadOnlyList<string> GitArguments(params string[] arguments)
-    {
-        return [.. GitHardeningArguments, .. arguments];
-    }
-
-    private sealed record BuildCompletion
-    {
-        public required StableDiffusionCppSourceBuildPhase Phase { get; init; }
-
-        public required string? Error { get; init; }
     }
 }

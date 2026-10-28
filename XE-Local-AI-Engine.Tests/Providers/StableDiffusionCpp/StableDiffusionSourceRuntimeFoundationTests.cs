@@ -603,7 +603,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
             var home = Path.Combine(temp.Path, ".process-home");
             var processTemp = Path.Combine(temp.Path, ".process-tmp");
 
-            var result = await StableDiffusionCppSourceBuildPrerequisiteProbe.ProbeToolForTestsAsync("/bin/sh",
+            var result = await SourceBuildPrerequisiteProbe.ProbeToolForTestsAsync("/bin/sh",
                 [
                     "-c",
                     "test \"$CUDA_HOME\" = /opt/test-cuda-home || exit 40; test \"$CUDA_PATH\" = /opt/test-cuda-path || exit 41; test -z \"${XE_SOURCE_BUILD_POISON+x}\" || exit 42; test \"$HOME\" = \"$1\" || exit 43; test \"$TMPDIR\" = \"$2\" || exit 44; if IFS= read -r value; then exit 45; fi; printf 'hardened\\n'",
@@ -733,7 +733,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         using var temp = new TempDirectory();
         var pidPath = Path.Combine(temp.Path, "probe.pid");
         using var cancellation = new CancellationTokenSource();
-        var probe = StableDiffusionCppSourceBuildPrerequisiteProbe.ProbeToolForTestsAsync("/bin/sh",
+        var probe = SourceBuildPrerequisiteProbe.ProbeToolForTestsAsync("/bin/sh",
             ["-c", $"printf '%s' $$ > '{pidPath}'; sleep 30"],
             "test probe",
             cancellation.Token,
